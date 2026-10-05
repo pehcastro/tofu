@@ -97,7 +97,7 @@ func reloadData() reload {
 			{"claude-opus-5-5", "added", "allowed"},
 			{"claude-haiku-4-5", "changed", "context 200k to 1M"},
 		}},
-		{Source: "codex-sub", Failure: "model list refused (403)", Hint: "tofu login codex-sub"},
+		{Source: "codex-sub", Failure: "model list refused (403)", Hint: "tofu login llm codex-sub"},
 	}}
 }
 
@@ -114,14 +114,14 @@ func accountsData(now time.Time) accounts {
 				{ID: 2, Email: "lin.marsh@example.org", State: stateStandby, Login: "oauth · re-login by 3 Nov", Windows: []window{
 					{ID: "5h", Used: 0.92, ResetsAt: now.Add(51 * time.Minute)},
 				}},
-				{ID: 3, Email: "ops@example.net", State: stateSetAside, Login: "refresh failed, sign in again", Hint: "tofu login claude-sub"},
+				{ID: 3, Email: "ops@example.net", State: stateSetAside, Login: "refresh failed, sign in again", Hint: "tofu login llm claude-sub"},
 			}},
 		},
 		Keys: []key{
 			{Role: "classifier", Service: "OpenRouter", Key: widget.Mask("sk-or-v1-made-up-000000003498"), Use: "judges tool calls with jev-latest"},
 			{Role: "classifier", Service: "TypeSafe", Use: "used only without OpenRouter"},
-			{Role: "web search", Service: "Brave", Hint: "tofu login brave"},
-			{Role: "meta models", Service: "Meta", Hint: "tofu login meta"},
+			{Role: "search", Service: "Brave", Hint: "tofu login search brave"},
+			{Role: "llm", Service: "Meta", Hint: "tofu login llm meta"},
 		},
 	}
 }

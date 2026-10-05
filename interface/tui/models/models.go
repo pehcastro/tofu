@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/keyfield"
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
 	"tofu/internal/llm"
@@ -100,8 +101,9 @@ type Keys struct {
 }
 
 type keyEntry struct {
-	name, provider, slug, typed, refusal string
-	checking                             int
+	name, provider, slug, refusal string
+	field                         keyfield.Field
+	checking                      int
 }
 
 type tab int
@@ -372,16 +374,15 @@ func (m *Model) entryKey(key string) Intent {
 		}
 	case checking:
 	case key == "enter":
+		if !m.entry.field.Enter() {
+			return Intent{}
+		}
 		m.checks++
 		m.entry.checking, m.entry.refusal = m.checks, ""
 		return Intent{Action: CheckKey}
-	case key == "backspace":
-		typed := []rune(m.entry.typed)
-		m.entry.typed = string(typed[:max(len(typed)-1, 0)])
 	default:
-		if utf8.RuneCountInString(key) == 1 {
-			m.entry.typed, m.entry.refusal = m.entry.typed+key, ""
-		}
+		m.entry.field.Type(key)
+		m.entry.refusal = ""
 	}
 	return Intent{}
 }
@@ -392,7 +393,7 @@ type KeyChecked struct {
 }
 
 func (m Model) KeyCheck(ctx context.Context) KeyChecked {
-	return KeyChecked{check: m.entry.checking, err: m.keys.Save(ctx, m.entry.name, m.entry.typed)}
+	return KeyChecked{check: m.entry.checking, err: m.keys.Save(ctx, m.entry.name, m.entry.field.Value())}
 }
 
 func (m *Model) Checked(result KeyChecked) Intent {
@@ -416,12 +417,12 @@ func (m *Model) Checked(result KeyChecked) Intent {
 }
 
 func (m *Model) Paste(text string) {
-	text = strings.TrimSpace(text)
 	switch {
 	case m.entry.name == "":
-		m.setFilter(m.filter.Value() + text)
+		m.setFilter(m.filter.Value() + strings.TrimSpace(text))
 	case m.entry.checking == 0:
-		m.entry.typed, m.entry.refusal = m.entry.typed+text, ""
+		m.entry.field.Paste(text)
+		m.entry.refusal = ""
 	}
 }
 
@@ -500,7 +501,7 @@ func (m *Model) choose() Intent {
 	case row.excluded():
 		return Intent{Action: Login, Slug: row.Slug}
 	case missing != "":
-		m.entry = keyEntry{name: missing, provider: m.groupOf(row).Display, slug: row.Slug}
+		m.entry = keyEntry{name: missing, provider: m.groupOf(row).Display, slug: row.Slug, field: keyfield.New(missing)}
 		return Intent{}
 	case m.assign == nil:
 		return Intent{Action: Pick, Slug: row.Slug, Effort: m.effort}

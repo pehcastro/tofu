@@ -41,13 +41,10 @@ func statusLines(page cli.Page, data statusData, now time.Time) []string {
 	signedIn, attention := 0, 0
 	var body []string
 	for _, sub := range data.Subscriptions {
-		body = append(body, "", page.Section(sub.Source, cli.Verdict{}))
-		for i, account := range sub.Accounts {
-			if i > 0 {
-				body = append(body, "")
-			}
+		body = append(body, cli.Indent(page.Label(sub.Source))...)
+		for _, account := range sub.Accounts {
 			card, calm := accountCard(page, sub.Source, account, now)
-			body = append(body, card...)
+			body = append(append(body, card...), "")
 			signedIn++
 			if !calm {
 				attention++
@@ -67,16 +64,32 @@ func statusLines(page cli.Page, data statusData, now time.Time) []string {
 	if signedIn > 0 {
 		facts = []string{strconv.Itoa(signedIn) + " signed in"}
 	}
-	rows := make([]cli.Row, len(data.Keys))
-	for i, key := range data.Keys {
-		rows[i] = cli.Row{Mark: cli.Done, Cells: []string{spoken(key.Role), key.name, key.Key}, Detail: key.use}
-		if key.Key == "" {
-			rows[i].Mark, rows[i].Cells[2], rows[i].Hint = cli.Idle, "not set", key.hint
-		}
+	lines := append(page.Title("Accounts", facts, verdict), "", page.Section("language model", cli.Verdict{}))
+	lines = append(lines, body...)
+	lines = append(lines, keyRows(page, data.Keys, roleLLM)...)
+	for _, group := range []struct {
+		title string
+		of    role
+	}{{"classifier · jev, required", roleClassifier}, {"search", roleSearch}} {
+		lines = append(lines, "", page.Section(group.title, cli.Verdict{}))
+		lines = append(lines, keyRows(page, data.Keys, group.of)...)
 	}
-	lines := append(page.Title("Accounts", facts, verdict), body...)
-	lines = append(lines, "", page.Section("keys", cli.Verdict{}))
-	return append(lines, cli.Indent(page.Rows(rows)...)...)
+	return lines
+}
+
+func keyRows(page cli.Page, keys []keyStatus, of role) []string {
+	var rows []cli.Row
+	for _, key := range keys {
+		if key.Role != of {
+			continue
+		}
+		row := cli.Row{Mark: cli.Done, Cells: []string{key.name, key.Key}, Detail: key.use}
+		if key.Key == "" {
+			row.Mark, row.Cells[1], row.Hint = cli.Idle, "not set", key.hint
+		}
+		rows = append(rows, row)
+	}
+	return cli.Indent(page.Rows(rows)...)
 }
 
 func accountCard(page cli.Page, source string, account accountStatus, now time.Time) ([]string, bool) {
@@ -87,7 +100,7 @@ func accountCard(page cli.Page, source string, account accountStatus, now time.T
 	case account.State == stateSetAside:
 		login, hint = reason, "tofu login --enable "+id
 	case reason != "":
-		login, hint = reason, "tofu login "+source
+		login, hint = reason, loginHint(source)
 	case !account.ReloginBy.IsZero():
 		login += " · re-login by " + account.ReloginBy.UTC().Format(reloginDay)
 	}

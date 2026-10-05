@@ -2,4 +2,4 @@ exit 2
 --- stdout
 --- stderr
 ✗ tofu check: OPENROUTER_KEY is not set and .env does not exist
-  → tofu login openrouter
+  → tofu login classifier openrouter

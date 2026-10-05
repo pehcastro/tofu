@@ -2,7 +2,7 @@
 title: Claude subscription
 description: The claude-sub source, how tofu signs in to your Claude plan, and how its prompt is cached.
 order: 2
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 `claude-sub` is the source for Claude models on your Claude plan. tofu signs
@@ -23,19 +23,22 @@ neighbour.
 
 ## Signing in and managing accounts
 
-- Sign in: `tofu login claude-sub`. Add `--paste` when the browser cannot
-  reach this machine.
+- Sign in: `tofu login llm claude-sub`. Add `--paste` when the browser
+  cannot reach this machine.
 - Add a second account: sign in again with it. tofu runs on the one with
   room and moves when it runs out.
 - Set one aside or bring it back: `tofu login --disable <n>`,
   `--enable <n>`.
+- Sign one out: `tofu logout llm claude-sub`. With two accounts signed in,
+  tofu names both and asks for the number: `tofu logout llm claude-sub <n>`.
 - Pick a Claude model: **Ctrl+L**, provider `claude-sub`. `/status` shows
   each window.
 
 ## Commands
 
 ```
-tofu login claude-sub [--paste]
+tofu login llm claude-sub [--paste]
+tofu logout llm claude-sub [n]
 tofu login --status [--redact]
 tofu usage [--history]
 ```

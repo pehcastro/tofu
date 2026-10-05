@@ -55,10 +55,12 @@ The head moves to it, so `tofu --continue` after a restart carries the
 shrunk history. The old session is kept whole and marked as forked into the
 new one. The stored results are in `~/.tofu/projects/<project>/artifacts`.
 
-What `/undo` puts back is a private git folder per session,
-`sessions/<session>/undo.git`, written at the start and the end of each turn,
-with the list of turns in `undo.jsonl` beside it. The project's own `.git` is
-never read for this and never written.
+What `/undo` puts back is one private git folder per project,
+`~/.tofu/projects/<project>/undo.git`, beside `sessions/`, written at the
+start and the end of each turn. Each session keeps its list of turns in
+`sessions/<session>/undo-turns.jsonl`. A turn older than 7 days is pruned and
+can no longer be undone. The project's own `.git` is never read for this and
+never written.
 
 ## Change it
 

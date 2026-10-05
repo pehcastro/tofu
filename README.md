@@ -30,13 +30,13 @@ move to a newer release. To build it yourself instead, see
 Sign in with a subscription, then open tofu in a project:
 
 ```sh
-tofu login claude-sub      # or: tofu login codex-sub
+tofu login llm claude-sub      # or: tofu login llm codex-sub
 cd my-project
 tofu
 ```
 
 `tofu doctor` tells you if anything is missing and which command fixes it.
-`tofu login openrouter` adds the key for the safety classifier that checks
+`tofu login classifier openrouter` adds the key for the safety classifier that checks
 tool calls; without it tofu still runs, with that check off.
 
 ## What it does

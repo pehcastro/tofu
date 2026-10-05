@@ -2,7 +2,7 @@
 title: Setup
 description: Connect tofu to your subscriptions and your own keys, store the classifier key, and check the result with tofu doctor.
 order: 3
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 Setup gives tofu credentials and settings. tofu takes two kinds of
@@ -21,24 +21,28 @@ Credentials live in `~/.tofu/agent.db`. Settings live in
 ## How credentials are kept apart
 
 A model is named by what pays for it, so `claude-sub/claude-opus-5` and a
-key-paid model never look alike in the picker or the bill. A key is asked
-for unechoed, never taken as an argument, so it never lands in your shell
-history; a classifier or Meta key is checked against its provider before it
-is written. `tofu doctor` reads exactly what a run reads, so what it reports is what a turn will meet.
+key-paid model never look alike in the picker or the bill. `tofu login`
+names the role a credential serves, `llm`, `classifier` or `search`, so a
+key is never stored without saying what it is for. A key is never taken as
+an argument, so it never lands in your shell history; while you paste it,
+tofu shows its shape, `sk-or-v1-…3f9a  73 chars  prefix ok`, never the key,
+so you can see the paste worked. A classifier or Meta key is checked
+against its provider before it is written. `tofu doctor` reads exactly what a run reads, so what it reports is what a turn will meet.
 
 ## Sign in and add keys
 
 Sign in to the subscriptions you have, add the keys you want, then check:
 
 ```
-tofu login claude-sub
-tofu login codex-sub
-tofu login openrouter
-tofu login meta
+tofu login llm claude-sub
+tofu login llm codex-sub
+tofu login llm meta
+tofu login classifier openrouter
 tofu doctor
 ```
 
 - Add `--paste` to a sign-in when the browser cannot reach this machine.
+- `tofu logout <role> <provider>` removes what a login stored.
 - Without a classifier key the app still opens, and no tool call is judged.
 - `tofu login --disable <n>` sets a credential aside and `--enable <n>`
   brings it back, by the number `tofu login --status` shows.
@@ -57,9 +61,9 @@ the command that fixes each problem. On a fresh machine:
 
 ```
   ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login claude-sub
+    → tofu login llm claude-sub
   ✗ jev         there is no openrouter key, so jev judges no tool call
-    → tofu login openrouter
+    → tofu login classifier openrouter
 ```
 
 Signed in, its `access` section reads:

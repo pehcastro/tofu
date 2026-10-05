@@ -2,7 +2,7 @@
 title: Codex subscription
 description: The codex-sub source, how tofu signs in to your Codex plan, and how it mixes with Claude in one session.
 order: 3
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 `codex-sub` is the source for OpenAI models on your Codex plan. tofu signs in
@@ -21,8 +21,8 @@ line read 580,201 input tokens and took 285 s; tofu read 111,543 and took
 
 ## Signing in and using it
 
-- Sign in: `tofu login codex-sub`. Add `--paste` when port 1455 is taken or
-  the browser runs elsewhere.
+- Sign in: `tofu login llm codex-sub`. Add `--paste` when port 1455 is
+  taken or the browser runs elsewhere.
 - Run a sub-agent on Codex: `tofu agents set qa codex-sub/gpt-5.6-sol`.
 - Pick a Codex model for the lead: **Ctrl+L**, provider `codex-sub`.
 - Several accounts, `--disable` and `--enable` work as for
@@ -31,6 +31,6 @@ line read 580,201 input tokens and took 285 s; tofu read 111,543 and took
 ## Commands
 
 ```
-tofu login codex-sub [--paste]
+tofu login llm codex-sub [--paste]
 tofu agents set [--global] <name> codex-sub/<model>
 ```

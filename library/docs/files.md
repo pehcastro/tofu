@@ -51,7 +51,7 @@ Edit a file by hand, or use the command that writes it:
 
     tofu settings set <key> <value>
     tofu settings set --scope project <key> <value>
-    tofu login claude-sub
+    tofu login llm claude-sub
 
 Older versions kept sessions and logs in the project's `.tofu`. Move them
 into `~/.tofu`:

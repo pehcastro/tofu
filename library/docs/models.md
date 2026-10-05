@@ -2,7 +2,7 @@
 topic: models
 title: Models
 summary: sign in to a subscription, name a model as source/model, choose the model a task runs, and set the tiers
-verbs: models, login, usage
+verbs: models, login, logout, usage
 ---
 
 ## What it is
@@ -65,13 +65,13 @@ line per tier that no longer resolves.
 
 Sign in, once per subscription. It opens the browser:
 
-    tofu login claude-sub
-    tofu login codex-sub
+    tofu login llm claude-sub
+    tofu login llm codex-sub
 
 When the browser cannot reach tofu, add `--paste` and paste the address
-or the code it shows. `tofu login meta` asks for a Meta Model API key,
-unechoed, stores it only when Meta's model list accepts it, and prints its
-last four characters; `tofu run --model meta/muse-spark-1.3` then uses it.
+or the code it shows. `tofu login llm meta` asks for a Meta Model API key,
+shows its shape while you paste it, never the key, stores it only when
+Meta's model list accepts it, and prints its last four characters; `tofu run --model meta/muse-spark-1.3` then uses it.
 
 Run the next task on another model: in the app, type `/models`, pick a
 model. That lasts until tofu restarts. To make it stay, bind the
@@ -117,4 +117,7 @@ wins. A reload writes a deleted catalog file again while the account
 serves it, so exclude the model in `~/.tofu/models` to keep it out.
 Delete a `modelTier` line from `settings.json` to empty the tier.
 `tofu login --disable <number>` sets a credential aside without deleting it,
-and `tofu login --enable <number>` brings it back.
+and `tofu login --enable <number>` brings it back. `tofu logout llm claude-sub`
+deletes the account; with two accounts signed in it names both and wants
+the number, `tofu logout llm claude-sub 2`. `tofu logout llm meta` removes
+the Meta key.

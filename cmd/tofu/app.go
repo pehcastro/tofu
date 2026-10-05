@@ -46,11 +46,11 @@ import (
 
 const (
 	noTerminal       = "tofu: the app needs a terminal. with input redirected, use tofu run --dir <dir> <task>"
-	gateOffNote      = "gate off: no tool call is judged until tofu login openrouter stores the key"
+	gateOffNote      = "gate off: no tool call is judged until tofu login classifier openrouter stores the key"
 	noCredential     = "no subscription is signed in, so no model can answer"
-	loginFix         = "tofu login claude-sub, which opens the browser; tofu login codex-sub signs in the other subscription"
+	loginFix         = "tofu login llm claude-sub, which opens the browser, or tofu login llm codex-sub"
 	noGateKey        = "there is no openrouter key, so jev judges no tool call"
-	gateKeyFix       = "tofu login openrouter, which asks for the key and checks it reaches jev"
+	gateKeyFix       = "tofu login classifier openrouter, which asks for the key and checks it reaches jev"
 	unreadableSource = "unreadable: "
 	jevName          = "jev"
 	freshSessionNote = "the next task starts a new session and carries nothing from the last one"
@@ -305,7 +305,9 @@ func appPaths(dir string) func() []string {
 }
 
 func loginCommand(provider string) func() *exec.Cmd {
-	return func() *exec.Cmd { return exec.Command(os.Args[0], "login", provider) }
+	return func() *exec.Cmd {
+		return exec.Command(os.Args[0], append([]string{"login"}, loginWords(provider)...)...)
+	}
 }
 
 type subscriptionSource struct {
@@ -374,7 +376,7 @@ func startBlockers() []startBlocker {
 			label:   string(cred.ClaudeSub),
 			what:    noCredential,
 			fix:     loginFix,
-			command: "tofu login " + string(cred.ClaudeSub),
+			command: loginHint(string(cred.ClaudeSub)),
 			run:     loginCommand(string(cred.ClaudeSub)),
 		})
 	}
@@ -383,7 +385,7 @@ func startBlockers() []startBlocker {
 			label:   jevName,
 			what:    noGateKey,
 			fix:     gateKeyFix,
-			command: "tofu login " + openRouterName,
+			command: loginHint(openRouterName),
 			run:     loginCommand(openRouterName),
 		})
 	}
@@ -428,7 +430,7 @@ func subscriptionProvider(provider cred.Provider, store *cred.Store, path string
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
 	case !present:
-		row.Fix = "run tofu login " + string(provider)
+		row.Fix = "run " + loginHint(string(provider))
 	case stored.Unusable(now) != "":
 		row.State = stored.Unusable(now)
 	default:

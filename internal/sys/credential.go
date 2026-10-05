@@ -171,6 +171,31 @@ func SaveKey(name, value string) error {
 	return err
 }
 
+func RemoveKey(name string) (bool, error) {
+	path, err := CredentialStorePath()
+	if err != nil {
+		return false, err
+	}
+	if err := refuseOwnerCredential(path); err != nil {
+		return false, err
+	}
+	present, err := Exists(path)
+	if err != nil || !present {
+		return false, err
+	}
+	db, err := OpenCredentialStore(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = db.Close() }()
+	result, err := db.Exec(`DELETE FROM api_keys WHERE name = ?`, name)
+	if err != nil {
+		return false, err
+	}
+	removed, err := result.RowsAffected()
+	return removed > 0, err
+}
+
 func StoredKeys() (map[string]string, error) {
 	path, homeless := CredentialStorePath()
 	if homeless != nil {

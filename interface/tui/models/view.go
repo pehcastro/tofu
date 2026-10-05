@@ -69,7 +69,6 @@ const (
 	checkingHints   = "esc cancel"
 	promptGlyph     = "› "
 	caretGlyph      = "█"
-	maskGlyph       = "•"
 )
 
 type renderKey struct {
@@ -147,11 +146,14 @@ func (m Model) keyDialog(width int) string {
 	inner := width - 2*keyPanelPad
 	input, hints := look.Muted(keyChecking+m.entry.provider), checkingHints
 	if m.entry.checking == 0 {
-		shown := min(utf8.RuneCountInString(m.entry.typed), inner-keyBoxChrome-utf8.RuneCountInString(promptGlyph+caretGlyph))
-		input, hints = look.Accent(promptGlyph)+look.Title(strings.Repeat(maskGlyph, max(0, shown)))+look.Accent(caretGlyph), keyHints
+		shape := widget.Fit(m.entry.field.Shape(), inner-keyBoxChrome-utf8.RuneCountInString(promptGlyph+caretGlyph))
+		input, hints = look.Accent(promptGlyph)+look.Title(shape)+look.Accent(caretGlyph), keyHints
 	}
 	body := lipgloss.NewStyle().Width(inner).Padding(0, 1).Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(string(look.FaintColor))).Render(input)
+	if warning := m.entry.field.Warning(); warning != "" {
+		body += "\n" + look.Style(look.Amber).Width(inner).Render(warning)
+	}
 	if m.entry.refusal != "" {
 		body += "\n" + look.Style(look.Red).Width(inner).Render(m.entry.refusal)
 	}

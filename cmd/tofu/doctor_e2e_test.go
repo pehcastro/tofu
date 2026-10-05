@@ -16,9 +16,9 @@ import (
 const (
 	doctorBodyWithNoKeyAndNoProjectRule = `
   ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login claude-sub
+    → tofu login llm claude-sub
   ✗ jev         there is no openrouter key, so jev judges no tool call
-    → tofu login openrouter
+    → tofu login classifier openrouter
 
 access
   ✓ anthropic   subscription
@@ -42,7 +42,7 @@ state
 
 	doctorBodyWithAKeyAndAProjectRule = `
   ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login claude-sub
+    → tofu login llm claude-sub
 
 access
   ✓ jev         key · .env
@@ -238,8 +238,8 @@ func TestE2EDoctorJSONIsOneEnvelopeThatCarriesTheBlockersAsProblems(t *testing.T
 	}
 	oneEnvelope(t, newProject(t, "doctor").run(t, exitVerdict, "doctor", "--json"), &envelope)
 	want := []cli.Problem{
-		{What: "claude-sub: no subscription is signed in, so no model can answer", Hint: "tofu login claude-sub"},
-		{What: "jev: there is no openrouter key, so jev judges no tool call", Hint: "tofu login openrouter"},
+		{What: "claude-sub: no subscription is signed in, so no model can answer", Hint: "tofu login llm claude-sub"},
+		{What: "jev: there is no openrouter key, so jev judges no tool call", Hint: "tofu login classifier openrouter"},
 	}
 	if envelope.Tofu != konst.Version || envelope.Verb != "doctor" || envelope.OK || envelope.Data.Verdict != doctorNotReady ||
 		len(envelope.Problems) != len(want) || envelope.Problems[0] != want[0] || envelope.Problems[1] != want[1] || len(envelope.Data.Rules) != 9 {

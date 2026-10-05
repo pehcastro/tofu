@@ -34,7 +34,9 @@ Verbs:
   docs      print what you can ask tofu and the command that does it,
             a page with docs <topic>, or the closest answers with docs "a few words"
   doctor    say whether tofu can run here, and what is wrong if it cannot
-  login     mint a subscription credential for a provider
+  login     sign in or store a key by role: login llm claude-sub|codex-sub|meta,
+            login classifier openrouter|typesafe, login search brave
+  logout    remove what login stored: logout <role> <provider> [number]
   usage     print every credential's quota windows and when each resets,
             or --history for the readings already recorded, each with its moment
   models    list the models each subscription serves, and why one is excluded
@@ -130,6 +132,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return doctor(args[1:], out, errOut)
 	case "login":
 		return loginVerb(args[1:], in, out, errOut)
+	case "logout":
+		return logoutVerb(args[1:], out, errOut)
 	case "usage":
 		return usageVerb(args[1:], out, errOut)
 	case "models":

@@ -94,7 +94,7 @@ func quotaState(result pollResult, now time.Time) string {
 		}
 		return "a window is spent and no reset time was reported, so waiting is not authorized"
 	case quota.ConditionCredentialBroken:
-		return "the credential is broken, run tofu login " + string(result.report.Provider)
+		return "the credential is broken, run " + loginHint(string(result.report.Provider))
 	case quota.ConditionUnknown:
 		switch {
 		case transport.KindOf(result.err) == transport.KindRateLimit:

@@ -47,7 +47,7 @@ Docs · "change the colours"                                           41 matche
   see which skills the model is offered
     → tofu run --dir . --show-prompt "anything"
   store the openrouter key the gate needs
-    → tofu login openrouter
+    → tofu login classifier openrouter
   work one task with the gate off
     → tofu run --dir . --no-gate "<task>"
   see how full the context window got

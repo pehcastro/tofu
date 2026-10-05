@@ -68,7 +68,7 @@ files  every path tofu uses in your home and in a project, and which one wins
 gate  what jev judges before a tool call runs, when tofu asks you first, and
   where the OpenRouter key lives
   store the openrouter key the gate needs
-    → tofu login openrouter
+    → tofu login classifier openrouter
   why was a tool call refused or asked about
     → tofu why --last
   tell tofu a verdict was wrong
@@ -92,7 +92,7 @@ instructions  which AGENTS.md and CLAUDE.md files tofu sends with every task,
 models  sign in to a subscription, name a model as source/model, choose the
   model a task runs, and set the tiers
   sign in with a subscription
-    → tofu login claude-sub
+    → tofu login llm claude-sub
   see which models I can use
     → tofu models
   use a model my subscription just started serving

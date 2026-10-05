@@ -28,11 +28,11 @@ tofu. A line with `→` names the command that fixes it.
 What stops tofu, printed first:
 
     ✗ claude-sub  no subscription is signed in, so no model can answer
-      → tofu login claude-sub
+      → tofu login llm claude-sub
     ✗ jev  there is no openrouter key, so jev judges no tool call
-      → tofu login openrouter
+      → tofu login classifier openrouter
 
-`tofu login codex-sub` also clears the first. `tofu docs gate` says more
+`tofu login llm codex-sub` also clears the first. `tofu docs gate` says more
 about the second.
 
 Under `access`, what tofu can reach:
@@ -40,7 +40,7 @@ Under `access`, what tofu can reach:
 - `✓ claude-sub  5h 12% · 7d 40%`: the share of each quota window used.
 - `⚠ ... every window is spent, back at <time>`: wait, or sign in the
   other subscription.
-- `⚠ ... the credential is broken, run tofu login <source>`: run it.
+- `⚠ ... the credential is broken, run tofu login llm <source>`: run it.
 - `⚠ ... signed in, no window reported`: the subscription answered
   without a quota reading, so tofu cannot say how much is left.
 - `⚠ ... not polled, ...`: the credential cannot be used, and the rest of

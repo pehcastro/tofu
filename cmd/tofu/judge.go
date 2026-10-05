@@ -191,10 +191,10 @@ func failed(o verbOutput, err error) int {
 	switch {
 	case !errors.As(err, &refused):
 	case refused.Kind == transport.KindMissingCredential:
-		err = problemError{What: refused.Detail, Hint: "tofu login " + openRouterName}
+		err = problemError{What: refused.Detail, Hint: loginHint(openRouterName)}
 	case refused.Status == 0:
 	case refused.Kind == transport.KindAuth:
-		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: "tofu login " + openRouterName}
+		err = problemError{What: "jev refused the key (" + strconv.Itoa(refused.Status) + ")", Hint: loginHint(openRouterName)}
 	default:
 		err = problemError{What: "jev refused the call (" + strconv.Itoa(refused.Status) + " " + refused.Kind.String() + ")"}
 	}

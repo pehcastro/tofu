@@ -6,6 +6,7 @@
   "data": {
     "subscriptions": [
       {
+        "role": "llm",
         "source": "claude-sub",
         "accounts": [
           {
@@ -20,6 +21,11 @@
     ],
     "keys": [
       {
+        "role": "llm",
+        "provider": "meta",
+        "variable": "META_MUSE_API_KEY"
+      },
+      {
         "role": "classifier",
         "provider": "openrouter",
         "variable": "OPENROUTER_KEY",
@@ -31,14 +37,9 @@
         "variable": "TYPESAFE_API_KEY"
       },
       {
-        "role": "web_search",
+        "role": "search",
         "provider": "brave",
         "variable": "BRAVE_SEARCH_KEY"
-      },
-      {
-        "role": "meta_models",
-        "provider": "meta",
-        "variable": "META_MUSE_API_KEY"
       }
     ]
   },

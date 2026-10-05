@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"tofu/interface/cli"
-	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
@@ -46,6 +45,7 @@ type statusData struct {
 }
 
 type subscriptionStatus struct {
+	Role     role            `json:"role"`
 	Source   string          `json:"source"`
 	Accounts []accountStatus `json:"accounts"`
 }
@@ -68,7 +68,7 @@ type windowStatus struct {
 }
 
 type keyStatus struct {
-	Role     string `json:"role"`
+	Role     role   `json:"role"`
 	Provider string `json:"provider"`
 	Variable string `json:"variable"`
 	Key      string `json:"key,omitempty"`
@@ -79,21 +79,27 @@ type keyStatus struct {
 
 func keyStatuses(resolve func(variable string) string) []keyStatus {
 	keys := []keyStatus{
-		{Role: "classifier", Provider: openRouterName, Variable: sys.OpenRouterKeyName, name: models.OpenRouter.Display(),
-			use: "judges tool calls with jev-latest", hint: "tofu login " + openRouterName},
-		{Role: "classifier", Provider: typeSafeName, Variable: sys.TypeSafeKeyName, name: models.TypeSafe.Display(),
+		{Provider: metaName, Variable: sys.MetaMuseKeyName, name: models.Meta.Display(),
+			use: "serves the meta models", hint: loginHint(metaName)},
+		{Provider: openRouterName, Variable: sys.OpenRouterKeyName, name: models.OpenRouter.Display(),
+			use: "judges tool calls with jev-latest", hint: loginHint(openRouterName)},
+		{Provider: typeSafeName, Variable: sys.TypeSafeKeyName, name: models.TypeSafe.Display(),
 			use: "used only without OpenRouter"},
-		{Role: "web_search", Provider: braveName, Variable: sys.BraveSearchKeyName, name: braveDisplay,
-			use: "backs the web search tool", hint: "tofu login " + braveName},
-		{Role: "meta_models", Provider: metaName, Variable: sys.MetaMuseKeyName, name: models.Meta.Display(),
-			use: "serves the meta models", hint: "tofu login " + metaName},
+		{Provider: braveName, Variable: sys.BraveSearchKeyName, name: braveDisplay,
+			use: "backs the web search tool", hint: loginHint(braveName)},
 	}
 	for i := range keys {
+		keys[i].Role = roleOf(keys[i].Provider)
 		if value := resolve(keys[i].Variable); value != "" {
 			keys[i].Key = widget.Mask(value)
 		}
 	}
 	return keys
+}
+
+func keyStatusOf(provider string, resolve func(variable string) string) keyStatus {
+	keys := keyStatuses(resolve)
+	return keys[slices.IndexFunc(keys, func(key keyStatus) bool { return key.Provider == provider })]
 }
 
 func statusVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int {
@@ -123,10 +129,7 @@ func statusVerb(args []string, out, errOut io.Writer, now time.Time, urls map[qu
 }
 
 func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string) (statusData, []cli.Problem, error) {
-	data := statusData{Keys: keyStatuses(func(variable string) string {
-		key, _ := jev.KeyFor(sys.CredentialFileName, variable)
-		return key
-	})}
+	data := statusData{Keys: keyStatuses(resolvedKey)}
 	store, err := openStoredCredentials()
 	if err != nil || store == nil {
 		return data, nil, err
@@ -156,7 +159,7 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 	}
 	for _, provider := range providers {
 		chosen, _ := quota.Pick(statusCandidates(provider, rows, results, now), quota.Provider(provider), nil, now)
-		source := subscriptionStatus{Source: string(provider)}
+		source := subscriptionStatus{Role: roleLLM, Source: string(provider)}
 		for index, row := range rows {
 			if row.Credential.Provider == provider {
 				source.Accounts = append(source.Accounts, accountOf(row, results[index], row.ID == chosen.ID, redact, library, now))

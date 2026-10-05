@@ -288,10 +288,13 @@ func TestAKeyModelWithNoKeyAsksForTheKeyMaskedAndEnterStoresIt(t *testing.T) {
 	}
 	typeInto(&m, madeUp)
 	shown := ansi.Strip(m.View())
-	for at := 0; at+4 <= len(madeUp); at++ {
-		if strings.Contains(shown, madeUp[at:at+4]) {
-			t.Fatalf("the input echoes %q of the key\n%s", madeUp[at:at+4], shown)
+	for at := 0; at+5 <= len(madeUp); at++ {
+		if strings.Contains(shown, madeUp[at:at+5]) {
+			t.Fatalf("the input echoes %q of the key\n%s", madeUp[at:at+5], shown)
 		}
+	}
+	if !strings.Contains(shown, "ts-m…0b52  23 chars") {
+		t.Fatalf("the input does not show the key's shape\n%s", shown)
 	}
 	if got := m.Key("esc"); got.Action != None {
 		t.Fatalf("esc on the input returned %+v, want the picker to stay", got)
@@ -327,7 +330,7 @@ func TestAKeyCheckThatNeverAnswersLeavesThePickerLiveAndEscCancelsIt(t *testing.
 	m := classifierPicker(t, shippedLibrary(t))
 	m.keys.Save = func(context.Context, string, string) error { <-never; return nil }
 	m.Key("enter")
-	typeInto(&m, "or-made-up-silent-51c0")
+	typeInto(&m, "sk-or-v1-made-up-silent-51c0")
 	answered := make(chan Intent, 1)
 	go func() { answered <- m.Key("enter") }()
 	select {
@@ -348,7 +351,7 @@ func TestAPastedKeyIsStoredWithoutItsNewline(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv(sys.OpenRouterKeyName, "")
-	const madeUp = "or-made-up-7c2a90e1f3d4"
+	const madeUp = "sk-or-v1-made-up-7c2a90e1f3d4"
 	m := classifierPicker(t, shippedLibrary(t))
 	m.Key("enter")
 	m.Paste(madeUp + "\r\n")

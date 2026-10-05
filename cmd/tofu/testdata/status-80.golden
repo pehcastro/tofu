@@ -1,6 +1,7 @@
 Accounts · 4 signed in                                        ⚠ 2 need attention
 
-claude-sub
+language model
+  claude-sub
   ┌ #1  ada@example.com ─────────────────────────────────────────────── ● in use
   │ login     oauth · re-login by 27 Oct
   │ 5h        ░░░░░░░░░░░░   0%  resets in 4h 28m
@@ -15,18 +16,21 @@ claude-sub
 
   ┌ #3  ops@example.net ──────────────────────────────────────────── ✗ set aside
   │ login     refresh failed, sign in again
-  │ → tofu login claude-sub
+  │ → tofu login llm claude-sub
   └─────────────────────────────────────────────────────────────────────────────
 
-codex-sub
+  codex-sub
   ┌ #4  11111111-2222-3333-4444-555555555555 ─────────────────────────── ⚠ spent
   │ login     oauth
   │ plan      pro
   │ 5h        ▓▓▓▓▓▓▓▓▓▓▓▓ 100%  resets in 2h
   └─────────────────────────────────────────────────────────────────────────────
 
-keys
-  ✓ classifier   OpenRouter  ····3498  judges tool calls with jev-latest
-  ○ classifier   TypeSafe    not set   used only without OpenRouter
-  ○ web search   Brave       not set   → tofu login brave
-  ○ meta models  Meta        not set   → tofu login meta
+  ○ Meta  not set  → tofu login llm meta
+
+classifier · jev, required
+  ✓ OpenRouter  ····3498  judges tool calls with jev-latest
+  ○ TypeSafe    not set   used only without OpenRouter
+
+search
+  ○ Brave  not set  → tofu login search brave

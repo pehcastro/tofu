@@ -2,7 +2,7 @@
 topic: gate
 title: The gate
 summary: what jev judges before a tool call runs, when tofu asks you first, and where the OpenRouter key lives
-verbs: check, why, label, replay, judge, login
+verbs: check, why, label, replay, judge, login, logout
 ---
 
 ## What it is
@@ -31,7 +31,7 @@ Every verdict is kept as a row in the decision ledger.
 
 jev is reached through OpenRouter, with a key tofu reads from, in order:
 
-- the credential store, `~/.tofu/agent.db`, which `tofu login openrouter` writes
+- the credential store, `~/.tofu/agent.db`, which `tofu login classifier openrouter` writes
 - `OPENROUTER_KEY` in the environment
 - an `.env` file in the working directory, as an `OPENROUTER_KEY` line
 
@@ -43,7 +43,7 @@ An older tofu kept keys in `~/.tofu/.env`. The next start moves
 credential store, removes the file, and prints one line naming what
 moved. A line naming anything else keeps the file in place. The web
 search key reads the same way the gate key does, and
-`tofu login brave` stores it.
+`tofu login search brave` stores it.
 
 A key a tool prints never reaches the model or the session, and a key in
 a judged call never reaches the ledger. Every stored key, and the value
@@ -55,15 +55,19 @@ The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 
 ## Change it
 
-Store the key. tofu asks for it without echoing it, checks it reaches
-jev, and writes nothing if it does not:
+Store the key. tofu asks for it, checks it reaches jev, and writes
+nothing if it does not:
 
-    tofu login openrouter
+    tofu login classifier openrouter
 
-The key is never an argument, so it never lands in your shell history.
-It can come from a pipe too, `tofu login openrouter < key.txt`. Run it
-again to replace the key, and `tofu login --status` to see which one is
-set, by its last four characters.
+While you type or paste, the field shows the key's shape and never the
+key: `sk-or-v1-…3f9a  73 chars  prefix ok`. A key that does not start
+with `sk-or-v1-` is named as such, and enter must be pressed twice to
+keep it. The key is never an argument, so it never lands in your shell
+history. It can come from a pipe too,
+`tofu login classifier openrouter < key.txt`. Run it again to replace the
+key, and `tofu login --status` to see which one is set, by its last four
+characters.
 
 Wait for you before a risky call, everywhere or in one project:
 
@@ -114,4 +118,5 @@ what it should have been onto its row in the ledger:
 
 To take away a key set in the environment or an `.env`, delete the
 `OPENROUTER_KEY` line that holds it. A key in the credential store is
-replaced by `tofu login openrouter`; no verb removes it yet.
+replaced by `tofu login classifier openrouter` and removed by
+`tofu logout classifier openrouter`.

@@ -140,7 +140,7 @@ claude-sub      ✓ 3 served
   + claude-sonnet-5-5  allowed
 
 codex-sub       ✗ model list refused (403)
-  → tofu login codex-sub
+  → tofu login llm codex-sub
 `
 
 	reloadWithNobodySignedIn = `Model reload                                                  ✓ 1 version raised
@@ -149,10 +149,10 @@ codex-sub       ✗ model list refused (403)
   npm           ✓ claudeCode raised from PIN to NPM
 
 claude-sub      ○ not signed in
-  → tofu login claude-sub
+  → tofu login llm claude-sub
 
 codex-sub       ○ not signed in
-  → tofu login codex-sub
+  → tofu login llm codex-sub
 `
 
 	registryOfTwoWindows = `{"anthropic":{"models":{"claude-sonnet-5-5":{"limit":{"context":1000000},"tool_call":true},"claude-opus-5":{"limit":{"context":1000000},"tool_call":true}}}}`
@@ -287,7 +287,7 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 	}
 	var envelope envelopeOf[modelReload]
 	oneEnvelope(t, printed.String(), &envelope)
-	if envelope.Verb != "models reload" || envelope.OK || len(envelope.Problems) != 1 || envelope.Problems[0].Hint != "tofu login codex-sub" {
+	if envelope.Verb != "models reload" || envelope.OK || len(envelope.Problems) != 1 || envelope.Problems[0].Hint != "tofu login llm codex-sub" {
 		t.Errorf("the envelope does not carry one problem for the refused account with its login hint\n%s", printed.String())
 	}
 	states := map[string]string{}
@@ -339,7 +339,7 @@ func TestModelsReloadWithNobodySignedInSaysSoInTextAndInJSON(t *testing.T) {
 		t.Fatalf("the envelope is not ok with two sources\n%s", printed.String())
 	}
 	for _, source := range envelope.Data.Sources {
-		if source.State != sourceNotSignedIn || source.Hint != "tofu login "+source.Source {
+		if source.State != sourceNotSignedIn || source.Hint != "tofu login llm "+source.Source {
 			t.Errorf("%s is %q with hint %q, want %q with its login hint", source.Source, source.State, source.Hint, sourceNotSignedIn)
 		}
 	}

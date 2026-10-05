@@ -2,7 +2,7 @@
 title: Models and providers
 description: The classifier models tofu can use, the providers that serve them, how each is paid for, and how a build is pinned.
 order: 3
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 The classifier is a role, `classifier`, bound to one model the way the lead
@@ -37,7 +37,9 @@ unmeasured.
 
 ## Choosing the provider
 
-- Store a key: `tofu login openrouter` or `tofu login typesafe`.
+- Store a key: `tofu login classifier openrouter` or
+  `tofu login classifier typesafe`. Remove it with `tofu logout classifier`
+  and the same name.
 - Choose the provider: **Ctrl+K**, type `classifier`, and pick under
   **Models & roles / Classifier model**. Or write
   `model: typesafe/jev-latest` in `~/.tofu/roles/classifier.yaml`, or the

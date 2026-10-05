@@ -218,7 +218,7 @@ exit 0
       },
       {
         "ask": "sign in with a subscription",
-        "do": "tofu login claude-sub",
+        "do": "tofu login llm claude-sub",
         "check": "tofu login --status",
         "topic": "models"
       },
@@ -398,7 +398,7 @@ exit 0
       },
       {
         "ask": "store the openrouter key the gate needs",
-        "do": "tofu login openrouter",
+        "do": "tofu login classifier openrouter",
         "check": "tofu doctor",
         "topic": "gate"
       },

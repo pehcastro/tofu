@@ -8,4 +8,4 @@
   [38;2;212;173;120m~[m claude-haiku-4-5   [38;2;127;132;147mcontext 200k to 1M[m
 
 [1mcodex-sub[m       [38;2;211;139;146m✗ model list refused (403)[m
-  [38;2;143;183;204m→ tofu login codex-sub[m
+  [38;2;143;183;204m→ tofu login llm codex-sub[m

@@ -72,7 +72,11 @@ func TestVerbTableIsUnchanged(t *testing.T) {
 	}{
 		{[]string{"version"}, exitOK, "version  "},
 		{[]string{"doctor", "--nope"}, exitUsage, "tofu doctor: unknown argument"},
-		{[]string{"login", "--nope"}, exitUsage, "unknown provider --nope"},
+		{[]string{"login", "--nope"}, exitUsage, "unknown role --nope"},
+		{[]string{"login", "openrouter"}, exitUsage, "tofu login openrouter is now tofu login classifier openrouter"},
+		{[]string{"login", "claude-sub"}, exitUsage, "tofu login claude-sub is now tofu login llm claude-sub"},
+		{[]string{"login", "classifier", "meta"}, exitUsage, "meta is under llm, not classifier"},
+		{[]string{"logout", "--nope"}, exitUsage, "unknown role --nope"},
 		{[]string{"usage", "--nope"}, exitUsage, "tofu usage: unknown argument"},
 		{[]string{"models", "--nope"}, exitUsage, "tofu models: unknown flag"},
 		{[]string{"why", "--nope"}, exitUsage, "tofu why: "},
@@ -140,8 +144,8 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	if required[1].What != noGateKey || required[1].Fix != gateKeyFix {
 		t.Fatalf("requirement %+v", required[1])
 	}
-	if args := required[1].Run().Args[1:]; len(args) != 2 || args[0] != "login" || args[1] != openRouterName {
-		t.Fatalf("the second fix runs %v, want login openrouter", args)
+	if args := strings.Join(required[1].Run().Args[1:], " "); args != "login classifier openrouter" {
+		t.Fatalf("the second fix runs %v, want login classifier openrouter", args)
 	}
 	t.Log("\n" + setupScreen(t, required))
 
@@ -258,6 +262,7 @@ const loginReachableReply = `{"model":"typesafe/jev-1.13-20260917","provider":"T
 
 func assertOnlyTheTail(t *testing.T, where, body, key string) {
 	t.Helper()
+	key = strings.TrimPrefix(key, "sk-or-v1-")
 	for at := 0; at+4 < len(key); at++ {
 		if strings.Contains(body, key[at:at+5]) {
 			t.Fatalf("%s holds five characters of the key from position %d:\n%s", where, at, body)
@@ -275,7 +280,7 @@ func TestLoginOpenRouterStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *t
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{openRouterName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != exitOK {
+	if code := loginVerb([]string{"classifier", openRouterName}, strings.NewReader(key+"\r\n"), &out, &errOut); code != exitOK {
 		t.Fatalf("login openrouter exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
@@ -307,7 +312,7 @@ func TestLoginBraveStoresTheSearchKeyInTheDatabase(t *testing.T) {
 	t.Setenv(sys.BraveSearchKeyName, "")
 	const key = "Xq2Lp9Rz4Tn8Vw3Ks6Gw1"
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != exitOK {
+	if code := loginVerb([]string{"search", "brave"}, strings.NewReader(key+"\n"), &out, &errOut); code != exitOK {
 		t.Fatalf("login brave exited %d: %s", code, errOut.String())
 	}
 	stored, err := sys.StoredKeys()
@@ -541,7 +546,7 @@ func TestTheGateOffEventCarriesTheReasonTheKeyLookupFound(t *testing.T) {
 }
 
 func TestGateOffNoteNamesTheLogin(t *testing.T) {
-	const want = "gate off: no tool call is judged until tofu login openrouter stores the key"
+	const want = "gate off: no tool call is judged until tofu login classifier openrouter stores the key"
 	if gateOffNote != want {
 		t.Errorf("gateOffNote %q, want %q", gateOffNote, want)
 	}

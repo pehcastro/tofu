@@ -79,7 +79,7 @@ func (m *Manager) Token(ctx context.Context, rejected string) (string, error) {
 		return "", err
 	}
 	if !found {
-		return "", fmt.Errorf("cred: no %s credential, run tofu login %s", m.spec.Provider, m.spec.Provider)
+		return "", fmt.Errorf("cred: no %s credential, run tofu login llm %s", m.spec.Provider, m.spec.Provider)
 	}
 	if cause := row.Unusable(m.now()); cause != "" {
 		return "", fmt.Errorf("cred: the %s credential is %s", m.spec.Provider, cause)

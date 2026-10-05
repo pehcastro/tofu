@@ -9,7 +9,7 @@ exit 2
   "problems": [
     {
       "what": "jev refused the key (401)",
-      "hint": "tofu login openrouter"
+      "hint": "tofu login classifier openrouter"
     }
   ]
 }

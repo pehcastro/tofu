@@ -48,8 +48,8 @@ Continue the session you last worked in:
 
 Sign in with a subscription the first time, so tofu has a model to use:
 
-    tofu login claude-sub
-    tofu login codex-sub
+    tofu login llm claude-sub
+    tofu login llm codex-sub
 
 Work a task without the app, printing as it goes:
 

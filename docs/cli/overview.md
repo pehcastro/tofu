@@ -2,7 +2,7 @@
 title: Reference
 description: Every tofu verb and its usage line, as tofu help and each verb print them.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 `tofu` with no arguments opens the app in the current directory. `tofu <verb>`
@@ -44,7 +44,11 @@ tofu shells list|log|stop|restart <name> [--json]
 ### Accounts and models
 
 ```
-tofu login <claude-sub|codex-sub|openrouter|typesafe|meta|brave> [--paste] [--json]
+tofu login llm <claude-sub|codex-sub> [--paste] [--json]
+tofu login llm meta [--json]
+tofu login classifier <openrouter|typesafe> [--json]
+tofu login search brave [--json]
+tofu logout <llm|classifier|search> <provider> [number] [--json]
 tofu login --status [--json] [--redact]
 tofu login --disable|--enable <number from tofu login --status>
 tofu usage [--history] [--json]

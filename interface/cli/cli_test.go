@@ -34,15 +34,15 @@ func pieces(page Page) map[string][]string {
 		"bar": {page.Bar(0), page.Bar(0.49), page.Bar(0.67), page.Bar(0.95), page.Bar(1)},
 		"rows": page.Rows([]Row{
 			{Mark: Done, Cells: []string{"classifier", "OpenRouter", "····3498"}, Detail: "judges tool calls"},
-			{Mark: Idle, Cells: []string{"web search", "Brave", "not set"}, Hint: "tofu login brave"},
+			{Mark: Idle, Cells: []string{"search", "Brave", "not set"}, Hint: "tofu login search brave"},
 			{Mark: Added, Cells: []string{"claude-sonnet-5-5"}, Detail: "allowed"},
 			{Mark: Removed, Cells: []string{"claude-haiku-4"}, Detail: "gone"},
 			{Mark: Changed, Cells: []string{"claude-opus-5"}, Detail: "window 200k to 1M"},
 		}),
 		"glyph":   {page.Glyph(Done) + page.Glyph(Active) + page.Glyph(Idle) + page.Glyph(Warn) + page.Glyph(Fail) + page.Glyph(Added) + page.Glyph(Removed) + page.Glyph(Changed)},
-		"hint":    {page.Hint("tofu login codex-sub")},
+		"hint":    {page.Hint("tofu login llm codex-sub")},
 		"steps":   page.Steps([]string{"open chrome://extensions", "Load unpacked"}),
-		"error":   page.ErrorLine("model list refused (403)", "tofu login codex-sub"),
+		"error":   page.ErrorLine("model list refused (403)", "tofu login llm codex-sub"),
 		"receipt": {page.Receipt(Added, "rule no-force-push", sampleHome+"/.tofu/rules/no-force-push.md")},
 		"path":    {page.Path(sampleHome + "/.tofu"), page.Path(sampleHome + "x/.tofu"), page.Path("/elsewhere/.tofu")},
 	}

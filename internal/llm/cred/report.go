@@ -53,7 +53,7 @@ func (r Row) Unusable(now time.Time) string {
 		return ""
 	}
 	return "the login expired on " + deadline.UTC().Format(dayStamp) +
-		", run tofu login " + string(r.Credential.Provider)
+		", run tofu login llm " + string(r.Credential.Provider)
 }
 
 func (r Row) ReloginBy() (time.Time, bool) {

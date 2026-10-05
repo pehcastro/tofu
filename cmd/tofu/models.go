@@ -370,7 +370,7 @@ func (s reloadSource) failed(what string, err error) reloadSource {
 	}
 	switch transport.KindOf(err) {
 	case transport.KindAuth, transport.KindMissingCredential:
-		s.Hint = "tofu login " + s.Source
+		s.Hint = loginHint(s.Source)
 	}
 	return s
 }
@@ -399,7 +399,7 @@ func reloadSignedIn(ctx context.Context) (modelReload, error) {
 	var settled []reloadSource
 	versions, _ := subFingerprint(".")
 	for _, provider := range cred.AllProviders() {
-		source := reloadSource{Source: string(provider), State: sourceNotSignedIn, Hint: "tofu login " + string(provider)}
+		source := reloadSource{Source: string(provider), State: sourceNotSignedIn, Hint: loginHint(string(provider))}
 		credential, err := cred.Lookup(string(provider))
 		if err != nil {
 			settled = append(settled, source.failed("sign-in unreadable", err))

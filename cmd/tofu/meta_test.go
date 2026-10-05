@@ -234,7 +234,7 @@ func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {
 	heard := metaStub(t, func(heardMeta, http.ResponseWriter) {})
 	var out, errOut bytes.Buffer
 	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", siftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut)
-	if code == exitOK || !strings.Contains(errOut.String(), "tofu login meta") || len(*heard) != 0 {
+	if code == exitOK || !strings.Contains(errOut.String(), "tofu login llm meta") || len(*heard) != 0 {
 		t.Fatalf("with no key the run exited %d after %d requests and said:\n%s", code, len(*heard), errOut.String())
 	}
 }
@@ -269,7 +269,7 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	})
 
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{"meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == exitOK {
+	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\r\n"), &out, &errOut); code == exitOK {
 		t.Fatalf("a refused key was stored:\n%s%s", out.String(), errOut.String())
 	}
 	stored, _ := sys.StoredKeys()
@@ -283,7 +283,7 @@ func TestLoginMetaChecksTheKeyBeforeStoringItAndNeverPrintsIt(t *testing.T) {
 	status = http.StatusOK
 	out.Reset()
 	errOut.Reset()
-	if code := loginVerb([]string{"meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != exitOK {
+	if code := loginVerb([]string{"llm", "meta"}, strings.NewReader(madeUpMetaKey+"\n"), &out, &errOut); code != exitOK {
 		t.Fatalf("login meta exited %d:\n%s", code, errOut.String())
 	}
 	stored, _ = sys.StoredKeys()

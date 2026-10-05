@@ -9,15 +9,15 @@ const (
 	usageWithNothingSignedIn = `Usage                                                           ○ none signed in
 
   ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login claude-sub
+    → tofu login llm claude-sub
   ✗ jev         there is no openrouter key, so jev judges no tool call
-    → tofu login openrouter
+    → tofu login classifier openrouter
 `
 
 	usageWithAKeyAndNothingSignedIn = `Usage                                                           ○ none signed in
 
   ✗ claude-sub  no subscription is signed in, so no model can answer
-    → tofu login claude-sub
+    → tofu login llm claude-sub
 `
 
 	usageEnvelopeWithAKeyAndNothingSignedIn = `{
@@ -33,7 +33,7 @@ const (
       {
         "label": "claude-sub",
         "what": "no subscription is signed in, so no model can answer",
-        "command": "tofu login claude-sub"
+        "command": "tofu login llm claude-sub"
       }
     ]
   },

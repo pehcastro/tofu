@@ -236,6 +236,21 @@ func (s *Store) Enable(id int64, now time.Time) error {
 	return err
 }
 
+func (s *Store) Delete(id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`DELETE FROM refresh_leases WHERE credential_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM credentials WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) AcquireLease(id int64, owner string, until, now time.Time) (bool, error) {
 	result, err := s.db.Exec(
 		`INSERT INTO refresh_leases (credential_id, owner, expires_at_ms) VALUES (?, ?, ?)

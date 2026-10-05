@@ -8,4 +8,4 @@ claude-sub      ✓ 23 served
   ~ claude-haiku-4-5   context 200k to 1M
 
 codex-sub       ✗ model list refused (403)
-  → tofu login codex-sub
+  → tofu login llm codex-sub

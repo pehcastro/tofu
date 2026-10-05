@@ -1,5 +1,5 @@
 ✓ classifier         OpenRouter  ····3498  judges tool calls
-○ web search         Brave       not set   → tofu login brave
+○ search             Brave       not set   → tofu login search brave
 + claude-sonnet-5-5  allowed
 - claude-haiku-4     gone
 ~ claude-opus-5      window 200k to 1M

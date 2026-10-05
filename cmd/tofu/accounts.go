@@ -65,7 +65,7 @@ func (a *accounts) pick(ctx context.Context) (turn.Account, error) {
 	}
 	choice, found := quota.Pick(candidates, quota.Provider(a.provider), a.spends, a.now())
 	if !found {
-		return turn.Account{}, fmt.Errorf("no %s subscription credential, run tofu login %s", a.provider, a.provider)
+		return turn.Account{}, fmt.Errorf("no %s subscription credential, run %s", a.provider, loginHint(string(a.provider)))
 	}
 	return a.account(choice, rows)
 }
@@ -197,7 +197,7 @@ func subFingerprint(dir string) (settingspkg.Fingerprint, func(version string) e
 func metaModel(modelID string, effort llm.Effort) (turn.Model, error) {
 	key, err := jev.KeyFor(sys.CredentialFileName, sys.MetaMuseKeyName)
 	if err != nil {
-		return nil, fmt.Errorf("%w: run tofu login meta", err)
+		return nil, fmt.Errorf("%w: run %s", err, loginHint(metaName))
 	}
 	wire, err := codex.New(codex.Config{
 		BaseURL:   models.MetaBaseURL() + codex.KeyPath,

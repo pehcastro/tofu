@@ -41,7 +41,7 @@ func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 	scratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
-	for _, want := range []string{noCredential, noGateKey, "tofu login " + string(cred.ClaudeSub), "tofu login openrouter"} {
+	for _, want := range []string{noCredential, noGateKey, "tofu login llm " + string(cred.ClaudeSub), "tofu login classifier openrouter"} {
 		if !strings.Contains(narrow, want) {
 			t.Errorf("the first frame at 80 columns does not say %q\n%s", want, narrow)
 		}

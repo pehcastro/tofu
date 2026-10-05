@@ -15,11 +15,11 @@ claude-sub
 
   ┌ #3  ops@example.net ──────────────────────────────────────────────────────────────── ✗ set aside
   │ login     refresh failed, sign in again
-  │ → tofu login claude-sub
+  │ → tofu login llm claude-sub
   └─────────────────────────────────────────────────────────────────────────────────────────────────
 
 keys
-  ✓ classifier   OpenRouter  ····3498  judges tool calls with jev-latest
-  ○ classifier   TypeSafe    not set   used only without OpenRouter
-  ○ web search   Brave       not set   → tofu login brave
-  ○ meta models  Meta        not set   → tofu login meta
+  ✓ classifier  OpenRouter  ····3498  judges tool calls with jev-latest
+  ○ classifier  TypeSafe    not set   used only without OpenRouter
+  ○ search      Brave       not set   → tofu login search brave
+  ○ llm         Meta        not set   → tofu login llm meta

@@ -9,7 +9,7 @@ exit 2
   "problems": [
     {
       "what": "OPENROUTER_KEY is not set and .env does not exist",
-      "hint": "tofu login openrouter"
+      "hint": "tofu login classifier openrouter"
     }
   ]
 }

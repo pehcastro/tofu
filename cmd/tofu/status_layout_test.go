@@ -88,7 +88,7 @@ func TestLoginOpenRouterAgainstAStubPrintsOneReceiptLine(t *testing.T) {
 	scratchProject(t)
 	jevStub(t, http.StatusOK, loginReachableReply, nil)
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitOK {
+	if code := loginVerb([]string{"classifier", openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitOK {
 		t.Fatalf("login openrouter exited %d:\n%s", code, errOut.String())
 	}
 	if want := "✓ OpenRouter key ····7Qx2 checked and stored  ~/.tofu/agent.db\n"; out.String() != want {
@@ -100,11 +100,11 @@ func TestLoginOpenRouterRefusedWithA401PrintsOneErrorLineAndNoVendorBody(t *test
 	scratchProject(t)
 	jevStub(t, http.StatusUnauthorized, madeUpVendorBody, nil)
 	var out, errOut bytes.Buffer
-	if code := loginVerb([]string{openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitVerdict {
+	if code := loginVerb([]string{"classifier", openRouterName}, strings.NewReader(madeUpGateKey+"\n"), &out, &errOut); code != exitVerdict {
 		t.Fatalf("a refused key exited %d, want %d", code, exitVerdict)
 	}
 	lines := strings.Split(strings.TrimSuffix(errOut.String(), "\n"), "\n")
-	want := []string{"paste the openrouter key, it is not echoed, then press enter:", "✗ OpenRouter refused the key (401)", "  → tofu login openrouter"}
+	want := []string{"paste the OpenRouter key, then press enter:", "› sk-or-v1-…7Qx2  37 chars  prefix ok", "✗ OpenRouter refused the key (401)", "  → tofu login classifier openrouter"}
 	if out.String() != "" || strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("a 401 printed out %q and err\n%s\nwant err\n%s", out.String(), errOut.String(), strings.Join(want, "\n"))
 	}
@@ -127,7 +127,41 @@ func TestDisableAndEnablePrintOneReceiptLineEach(t *testing.T) {
 	}
 }
 
+func TestLogoutWithTwoAccountsNamesBothAndRemovesOnlyTheOneNumbered(t *testing.T) {
+	scratchProject(t)
+	savedAccount(t)
+	savedAccountAs(t, "lin.marsh@example.org")
+	var out, errOut bytes.Buffer
+	if code := logoutVerb([]string{"llm", "claude-sub"}, &out, &errOut); code != exitUsage || !strings.Contains(strings.Join(strings.Fields(errOut.String()), " "), "#1 ada@example.com, #2 lin.marsh@example.org") {
+		t.Fatalf("a logout with two accounts and no number exited %d:\n%s", code, errOut.String())
+	}
+	errOut.Reset()
+	if code := logoutVerb([]string{"llm", "codex-sub", "2"}, &out, &errOut); code != exitVerdict {
+		t.Fatalf("a logout naming a claude-sub number under codex-sub exited %d:\n%s", code, errOut.String())
+	}
+	if code := logoutVerb([]string{"llm", "claude-sub", "2"}, &out, &errOut); code != exitOK {
+		t.Fatalf("logout llm claude-sub 2 exited %d:\n%s", code, errOut.String())
+	}
+	if want := "✓ #2 claude-sub lin.marsh@example.org signed out  ~/.tofu/agent.db\n"; out.String() != want {
+		t.Fatalf("logout printed %q, want %q", out.String(), want)
+	}
+	path, _ := cred.Path()
+	store, err := cred.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	if rows, err := store.List(); err != nil || len(rows) != 1 || rows[0].Credential.Identity.Email != "ada@example.com" {
+		t.Fatalf("after the logout the store holds %+v (%v), want ada alone", rows, err)
+	}
+}
+
 func savedAccount(t *testing.T) {
+	t.Helper()
+	savedAccountAs(t, "ada@example.com")
+}
+
+func savedAccountAs(t *testing.T, email string) {
 	t.Helper()
 	path, err := cred.Path()
 	if err != nil {
@@ -139,7 +173,7 @@ func savedAccount(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	credential := cred.Credential{Provider: cred.ClaudeSub, Kind: "oauth", Access: "made-up-access", Refresh: "made-up-refresh",
-		Expires: fixtureMoment().Add(time.Hour), Authorized: fixtureMoment(), Identity: cred.Identity{Email: "ada@example.com"}}
+		Expires: fixtureMoment().Add(time.Hour), Authorized: fixtureMoment(), Identity: cred.Identity{Email: email}}
 	if err := store.Save(credential, fixtureMoment()); err != nil {
 		t.Fatal(err)
 	}
