@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -619,14 +620,15 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	if err != nil {
 		say("no framework rule fires this run: " + err.Error())
 	}
-	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: environment, ToolGuidance: runSystem(opts), Rules: rules, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
+	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: environment,
+		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
 	spec := subAgents.Prompt
-	spec.Task = opts.task
+	spec.Task, spec.ToolGuidance = opts.task, runSystem(opts)
 	if opts.agent != "" {
 		if spec.Agent, err = subAgents.Named(opts.agent); err != nil {
 			return composedRun{}, err
 		}
-		spec.Role = rule.RoleSubAgent
+		spec.Role, spec.ToolGuidance = rule.RoleSubAgent, subAgents.Prompt.ToolGuidance
 	} else if !opts.noSubAgents && opts.toolSet != toolSetThree {
 		spec.Role = rule.RoleOrchestrator
 	}
@@ -652,7 +654,14 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
 	dir := cmp.Or(opts.dir, ".")
 	run.omitThinkingSummary = settingText(dir, settingspkg.ThinkingSummary, run.notify) == settingspkg.ThinkingOmitted
+	references := map[string]string{}
+	for _, definition := range prompt.subAgents.Defined {
+		for _, reference := range definition.References {
+			references[reference.Name] = reference.Text
+		}
+	}
 	config := turn.Config{
+		References:  references,
 		Model:       run.model,
 		Now:         run.now,
 		Accounts:    run.applyThinkingSummary(run.accounts),
@@ -702,6 +711,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if settingText(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {
 		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
 	}
+	if !nodeProject(dir) {
+		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
+	}
 	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner)
 	if run.gate != nil {
 		spawner.SettingsTool = true
@@ -709,6 +721,15 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	config.Tools = turn.NewRegistry(orchestrating...)
 	return config, spawner, nil
+}
+
+func nodeProject(dir string) bool {
+	for _, pattern := range []string{"package.json", "tsconfig.json", "*/package.json", "*/tsconfig.json"} {
+		if found, _ := filepath.Glob(filepath.Join(dir, pattern)); len(found) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func leadNeverCalls() []string {

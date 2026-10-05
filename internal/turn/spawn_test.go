@@ -50,12 +50,12 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	}
 	for agent, want := range map[string]string{
 		"browser":  "browser_tabs browser_observe browser_act browser_motion",
-		"research": "read write fetch glob search symbols bash",
-		"ts-dev":   "read write edit typecheck test glob search symbols bash",
-		"rust-dev": "read write edit glob search symbols bash",
-		"go-dev":   "read write edit glob search symbols bash",
-		"py-dev":   "read write edit glob search symbols bash",
-		"qa":       "read write typecheck test glob search symbols bash",
+		"research": "read write fetch glob search symbols bash reference",
+		"ts-dev":   "read write edit typecheck test glob search symbols bash reference",
+		"rust-dev": "read write edit glob search symbols bash reference",
+		"go-dev":   "read write edit glob search symbols bash reference",
+		"py-dev":   "read write edit glob search symbols bash reference",
+		"qa":       "read write typecheck test glob search symbols bash reference",
 		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
 	} {
 		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}

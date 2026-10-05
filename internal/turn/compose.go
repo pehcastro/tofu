@@ -2,7 +2,10 @@ package turn
 
 import (
 	"cmp"
+	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"path"
 	"path/filepath"
 	"slices"
@@ -10,6 +13,7 @@ import (
 	"unicode"
 
 	"tofu/internal/konst"
+	"tofu/internal/llm"
 	"tofu/internal/prompt"
 	"tofu/internal/rule"
 	"tofu/internal/skill"
@@ -59,11 +63,32 @@ type ComposeSpec struct {
 
 const concernSkills rule.Concern = "skills"
 
+const referencesOnDemand = "your references, each read whole with the " + referenceToolName + " tool when the work reaches it:"
+
 func agentPart(definition subagent.Definition) PromptPart {
 	var text strings.Builder
 	text.WriteString("you are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions)
+	if len(definition.References) > 0 {
+		text.WriteString("\n\n" + referencesOnDemand)
+	}
 	for _, reference := range definition.References {
-		text.WriteString("\n\nthe reference " + reference.Name + ", placed here whole from " + reference.Path + ":\n" + reference.Text)
+		var title string
+		var sections []string
+		for line := range strings.Lines(reference.Text) {
+			line = strings.TrimSpace(line)
+			heading, isTitle := strings.CutPrefix(line, "# ")
+			section, isSection := strings.CutPrefix(line, "## ")
+			switch {
+			case isTitle && title == "":
+				title = heading
+			case isSection:
+				sections = append(sections, section)
+			}
+		}
+		text.WriteString("\n- " + reference.Name + ": " + cmp.Or(title, reference.Name))
+		if len(sections) > 0 {
+			text.WriteString(", on " + strings.Join(sections, "; "))
+		}
 	}
 	if len(definition.Cut) > 0 {
 		fmt.Fprintf(&text, "\n\nthese references were cut to keep them within %d bytes and are not here: %s", konst.SubAgentReferenceBytes, strings.Join(definition.Cut, ", "))
@@ -234,4 +259,38 @@ func verbNamed(word string) rule.Verb {
 		return named
 	}
 	return rule.VerbNone
+}
+
+const referenceToolName = "reference"
+
+type referenceTool struct {
+	held map[string]string
+}
+
+func (referenceTool) Name() string { return referenceToolName }
+
+func (referenceTool) Definition() llm.Tool {
+	return llm.Tool{
+		Name:        referenceToolName,
+		Description: "returns one of your references whole, named as your instructions list it, such as go-verify",
+		Parameters: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"name": map[string]any{"type": "string"}},
+			"required":   []string{"name"},
+		},
+	}
+}
+
+func (r referenceTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+	var args struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return Result{}, fmt.Errorf("reference: arguments are not the expected shape: %w", err)
+	}
+	text, held := r.held[args.Name]
+	if !held {
+		return Result{}, fmt.Errorf("reference: no reference is named %q; the references are %s", args.Name, strings.Join(slices.Sorted(maps.Keys(r.held)), ", "))
+	}
+	return Result{Content: text, Command: referenceToolName + " " + args.Name}, nil
 }

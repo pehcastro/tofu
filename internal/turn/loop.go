@@ -15,6 +15,7 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/recall"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
@@ -39,7 +40,7 @@ func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 }
 
 func gateExempt(tool string) bool {
-	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch"
+	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName
 }
 
 type Caps struct {
@@ -58,6 +59,8 @@ const theToolFailedAndPrintedNothing = "the tool ran, failed and printed nothing
 
 const theToolWasAbortedAndPrintedNothing = "this call was cancelled elsewhere in the turn before it produced output. " +
 	"it is not a failure of the command itself and does not need to be retried the same way."
+
+const theTurnEndsOnACleanReport = "this turn ends on a clean sub-agent report, so it runs no tool"
 
 const andThisIsItsLastStep = " and this is its last step: answer now from what you already have, " +
 	"saying what you did, what is left undone, and what to do next."
@@ -83,6 +86,7 @@ type Config struct {
 	Wire            string
 	SpawnedFrom     string
 	System          string
+	References      map[string]string
 	Environment     string
 	Caps            Caps
 	Sift            *ShellSift
@@ -170,6 +174,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if handles {
 			added = append(added, artifacts.FetchTool())
 		}
+		if config.SpawnedFrom != "" && strings.Contains(config.System, referencesOnDemand) {
+			added = append(added, referenceTool{held: config.References})
+		}
 		return added
 	}
 	currentTools := func() Registry {
@@ -221,7 +228,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	afterSystem := len(messages)
 	messages = append(messages, config.History...)
-	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage(), Images: config.Images})
+	first, concluding := config.FirstUserMessage(), ""
+	for _, tool := range config.Tools.tools {
+		if spawner, spawning := tool.(*SpawnTool); spawning {
+			concluding = spawner.cleanReport(config.Task)
+		}
+	}
+	if concluding != "" {
+		first += "\n\n" + concluding
+	}
+	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images})
 
 	var written, shadowed sync.WaitGroup
 	var shadows sync.Mutex
@@ -230,6 +246,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	var forkWriteErrs []string
 	sent, answering := afterSystem+len(config.History), ""
 	results := map[string]ToolCallRow{}
+	refuse := func(step *StepRow, calls []llm.ToolCall, why string) {
+		for _, call := range calls {
+			callRow, resultMessage := rejectedCall(call, time.Now(), "tool call "+strconv.Quote(call.Name)+" was not executed: "+why,
+				session.EventIDFor(origin, call.ID), step.id, row.author())
+			step.ToolCalls, results[call.ID] = append(step.ToolCalls, callRow), callRow
+			messages = append(messages, resultMessage)
+		}
+	}
 	flush := func() {
 		for _, message := range messages[min(sent, len(messages)):] {
 			recorded.message(message, answering, results)
@@ -355,18 +379,17 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				keep(stepRow)
 				return finish(OutcomeTruncated), nil
 			}
-			for _, call := range decision.ToolCalls {
-				callRow, resultMessage := rejectedCall(call, time.Now(),
-					"tool call "+strconv.Quote(call.Name)+" was not executed: "+theResponseHitTheOutputTokenLimit,
-					session.EventIDFor(origin, call.ID), stepRow.id, row.author())
-				stepRow.ToolCalls, results[call.ID] = append(stepRow.ToolCalls, callRow), callRow
-				messages = append(messages, resultMessage)
-			}
+			refuse(&stepRow, decision.ToolCalls, theResponseHitTheOutputTokenLimit)
 			keep(stepRow)
 
 		case llm.OutcomeToolCalls:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 			flush()
+			if concluding != "" {
+				refuse(&stepRow, decision.ToolCalls, theTurnEndsOnACleanReport)
+				keep(stepRow)
+				return endAt(OutcomeStopped, theTurnEndsOnACleanReport, step+1, messages), nil
+			}
 			pending, batches := decision.ToolCalls, 0
 			var tripped bool
 			var repeated ToolCallRow
@@ -470,13 +493,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				stopped := "this turn stopped itself because " + cause
 				row.Guard = &LoopGuardStop{Tool: repeated.Tool, Args: repeated.Args, Repeats: repeats}
 				row.Warnings = append(row.Warnings, "the turn stopped itself: "+cause)
-				for _, unanswered := range pending {
-					callRow, resultMessage := rejectedCall(unanswered, time.Now(),
-						"tool call "+strconv.Quote(unanswered.Name)+" was not executed: "+stopped,
-						session.EventIDFor(origin, unanswered.ID), stepRow.id, author)
-					stepRow.ToolCalls, results[unanswered.ID] = append(stepRow.ToolCalls, callRow), callRow
-					messages = append(messages, resultMessage)
-				}
+				refuse(&stepRow, pending, stopped)
 				keep(stepRow)
 				return endAt(OutcomeLoopGuard, stopped, step, messages), nil
 			}
@@ -574,6 +591,52 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			panic("turn: unknown model outcome")
 		}
 	}
+}
+
+func (t *SpawnTool) cleanReport(task string) string {
+	spawned := t.Spawned()
+	if len(spawned) != 1 {
+		return ""
+	}
+	id := spawned[0].ID
+	agents := t.roster.SubAgents()
+	at := slices.IndexFunc(agents, func(agent subagent.SubAgent) bool { return agent.ID == id })
+	definition, err := t.SubAgents.Named(spawned[0].Agent)
+	if at < 0 || agents[at].State != subagent.Finished || agents[at].Report != task || err != nil || definition.Language == "" || len(definition.Gate) == 0 {
+		return ""
+	}
+	var rows []Row
+	unseen := false
+	t.tree.mu.Lock()
+	for _, row := range t.tree.rows {
+		if row.ID == id {
+			rows = append(rows, row)
+		}
+		unseen = unseen || strings.HasPrefix(row.ID, id+"-f") || (row.ID == id && len(row.Steps) == 0)
+	}
+	t.tree.mu.Unlock()
+	if unseen || len(rows) == 0 || completionOf(subagent.Finished, findings(wholeRun(rows), subagent.Finished)) != subagent.Done ||
+		len(gateMissed(t.Project, projectRecipes(t.Project), definition, agents[at].Owns, rows)) > 0 {
+		return ""
+	}
+	edited := false
+	for _, row := range rows {
+		for _, step := range row.Steps {
+			for _, call := range step.ToolCalls {
+				path := writtenPath(call)
+				if slices.Contains([]string{".vue", ".svelte", ".tsx", ".jsx", ".html", ".css", ".scss"}, strings.ToLower(filepath.Ext(path))) {
+					return ""
+				}
+				edited = edited || (path != "" && rule.LanguageOf(path) == definition.Language)
+			}
+		}
+	}
+	if !edited {
+		return ""
+	}
+	return id + "'s report is clean, as tofu read it from the run: its completion is done, " + strings.Join(definition.Gate, " and ") +
+		" ran after its last edit and passed, it is the only sub-agent this request delegated to, and it changed no file a browser shows. " +
+		"so this turn checks nothing again: answer the person from the report in a few lines, and call no tool."
 }
 
 func registrySnapshot(registry *shell.Registry) map[string]bool {

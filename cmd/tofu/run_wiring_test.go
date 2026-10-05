@@ -953,3 +953,54 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 		t.Errorf("a run with no sub-agents has no lead and lost a tool only the lead goes without: %v", aloneTools)
 	}
 }
+
+func TestTheLeadEndsOnACleanSingleReportAndChecksAfterAReportWithConcerns(t *testing.T) {
+	spawn := `{"text":"spawning go-dev to add Extra","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"add func Extra to package stats in stats/extra.go","owns":["stats/**"]}}]}`
+	gated := []string{
+		`{"agent":"c1","tools":[{"name":"write","args":{"path":"stats/extra.go","content":"package stats\n\nfunc Extra() int { return 1 }\n"}}]}`,
+		`{"agent":"c1","tools":[{"name":"bash","args":{"command":"go vet ./stats/"}}]}`,
+		`{"agent":"c1","tools":[{"name":"bash","args":{"command":"go test ./stats/"}}]}`,
+		`{"agent":"c1","text":"VERIFIED. go vet and go test passed after the edit."}`,
+	}
+	leadChecks := []string{`{"tools":[{"name":"bash","args":{"command":"go vet ./stats/"}}]}`, `{"text":"go-dev added stats.Extra."}`}
+	for _, run := range []struct {
+		name    string
+		agent   []string
+		checked string
+	}{
+		{"clean", gated, `step 1: tool_call tool=bash command="" .*was not executed: this turn ends on a clean sub-agent report`},
+		{"done_with_concerns", append([]string{`{"agent":"c1","tools":[{"name":"read","args":{"path":"stats/missing.go"}}]}`}, gated...), `step 1: tool_call tool=bash command="[^"]*go vet \./stats/" sub_agent="" exit_code=0`},
+	} {
+		t.Run(run.name, func(t *testing.T) {
+			home, dir := t.TempDir(), t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
+			for name, body := range map[string]string{"go.mod": "module example.com/m\n\ngo 1.22\n", "stats/stats.go": "package stats\n\nfunc Count() int { return 0 }\n"} {
+				if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(name)), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			deck := filepath.Join(home, "deck.jsonl")
+			if err := os.WriteFile(deck, []byte(strings.Join(slices.Concat([]string{spawn, `{"text":"go-dev is on it"}`}, run.agent, leadChecks), "\n")), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(cassetteVariable, deck)
+			var out, errOut bytes.Buffer
+			if code := runVerb([]string{"--dir", dir, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != exitOK {
+				t.Fatalf("tofu run exited %d: %s", code, errOut.String())
+			}
+			t.Logf("tofu run printed:\n%s", out.String())
+			turns := regexp.MustCompile(`(?m)^turn turn-\S+ outcome`).FindAllStringIndex(out.String(), -1)
+			if len(turns) != 2 {
+				t.Fatalf("the lead ran %d turns, want 2: the spawn, then the report", len(turns))
+			}
+			second, _, _ := strings.Cut(out.String()[turns[1][0]:], "\nturn go-dev-1 ")
+			if !regexp.MustCompile(run.checked).MatchString(second) {
+				t.Errorf("the lead's report turn, want its first call to match %s:\n%s", run.checked, second)
+			}
+		})
+	}
+}
