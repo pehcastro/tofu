@@ -1143,3 +1143,54 @@ func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryLeadThatCanAskAPersonHoldsRuleOverrideAndTheThreeToolArmAloneStaysThree(t *testing.T) {
+	for _, arm := range []struct {
+		args   []string
+		person bool
+		holds  bool
+	}{
+		{nil, false, true},
+		{nil, true, true},
+		{[]string{"--no-subagents"}, false, true},
+		{[]string{"--no-subagents"}, true, true},
+		{[]string{"--tools", toolSetThree}, false, false},
+		{[]string{"--tools", toolSetThree}, true, true},
+	} {
+		opts := armOpts(t, arm.args...)
+		opts.gateArm = gateOff
+		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		asked := 0
+		var person turn.Person
+		if arm.person {
+			person = func(context.Context, turn.GateRequest, turn.GateDecision) (turn.PersonAnswer, error) {
+				asked++
+				return turn.PersonDenied, nil
+			}
+		}
+		call := llm.ToolCall{ID: "call-1", Name: turn.RuleOverrideToolName, Arguments: json.RawMessage(`{"rule":"tool_pick","why_now":"the person asked for find","change":"off"}`)}
+		done := llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "worked within tool_pick"}
+		model := &queuedModel{decisions: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{call}}, done, done, done}}
+		config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, leadAsks: person})
+		held := 0
+		for _, definition := range config.Tools.Definitions() {
+			if definition.Name == turn.RuleOverrideToolName {
+				held++
+			}
+		}
+		if held > 1 || (held == 1) != arm.holds {
+			t.Errorf("arms %v, a person %v: the lead holds %d rule_override, want it %v", arm.args, arm.person, held, arm.holds)
+			continue
+		}
+		if !arm.holds {
+			continue
+		}
+		leadRows(t, config)
+		if asked > 1 || arm.person != (asked == 1) {
+			t.Errorf("arms %v, a person %v: rule_override asked the person %d times", arm.args, arm.person, asked)
+		}
+	}
+}

@@ -710,8 +710,21 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if run.scorer != nil {
 		run.scorer.turnID = orchestratorID
 	}
-	if opts.noSubAgents || opts.toolSet == toolSetThree {
+	if opts.toolSet == toolSetThree && run.leadAsks == nil {
 		config.Tools = run.leadTools(built)
+		return config, nil, nil
+	}
+	layers, err := userRuleLayers(dir)
+	if err != nil {
+		return turn.Config{}, nil, err
+	}
+	running := func() ([]rule.Rule, error) {
+		rules, _, err := loadRules("", dir)
+		return rules, err
+	}
+	override := tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}
+	if opts.noSubAgents || opts.toolSet == toolSetThree {
+		config.Tools = run.leadTools(append(slices.Clone(built), override))
 		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
@@ -733,15 +746,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if !nodeProject(dir) {
 		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
 	}
-	layers, err := userRuleLayers(dir)
-	if err != nil {
-		return turn.Config{}, nil, err
-	}
-	running := func() ([]rule.Rule, error) {
-		rules, _, err := loadRules("", dir)
-		return rules, err
-	}
-	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner, tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir})
+	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner, override)
 	if run.gate != nil {
 		spawner.SettingsTool = true
 		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))
