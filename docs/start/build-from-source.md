@@ -24,18 +24,22 @@ You need Go 1.25.8 or later and git.
 
 ````tabs
 # Linux and macOS
-```
-git clone https://github.com/pehcastro/tofu
-cd tofu
-go build -o ~/.local/bin/tofu ./cmd/tofu
-```
+
+`git clone https://github.com/pehcastro/tofu`
+
+`cd tofu`
+
+`go build -o ~/.local/bin/tofu ./cmd/tofu`
+
 
 # Windows
-```
-git clone https://github.com/pehcastro/tofu
-cd tofu
-go build -o $HOME\.local\bin\tofu.exe ./cmd/tofu
-```
+
+`git clone https://github.com/pehcastro/tofu`
+
+`cd tofu`
+
+`go build -o $HOME\.local\bin\tofu.exe ./cmd/tofu`
+
 ````
 
 `go install ./cmd/tofu` also works and puts the binary in Go's bin directory.

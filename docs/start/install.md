@@ -13,16 +13,16 @@ current. Everything tofu keeps goes under `~/.tofu`.
 
 ````tabs
 # Linux and macOS
-```
-curl -fsSL https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.sh | sh
-```
+
+`curl -fsSL https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.sh | sh`
+
 
 # Windows
 In PowerShell:
 
-```
-irm https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.ps1 | iex
-```
+
+`irm https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.ps1 | iex`
+
 ````
 
 The script picks the build for your system and processor (amd64 or arm64),
@@ -47,15 +47,15 @@ The script reads three environment variables:
 
 ````tabs
 # Linux and macOS
-```
-curl -fsSL https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.sh | TOFU_VERSION=0.5.0 sh
-```
+
+`curl -fsSL https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.sh | TOFU_VERSION=0.5.0 sh`
+
 
 # Windows
-```
+`
 $env:TOFU_VERSION = '0.5.0'
 irm https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.ps1 | iex
-```
+`
 ````
 
 ## Update
@@ -80,18 +80,21 @@ sessions gone.
 
 ````tabs
 # Linux and macOS
-```
-tofu browser uninstall
-rm ~/.local/bin/tofu
-rm -rf ~/.tofu
-```
+`
+tofu browser uninstall`
+
+`rm ~/.local/bin/tofu`
+
+`rm -rf ~/.tofu`
 
 # Windows
-```
-tofu browser uninstall
-Remove-Item $HOME\.local\bin\tofu.exe
-Remove-Item -Recurse $HOME\.tofu
-```
+
+`tofu browser uninstall`
+
+`Remove-Item $HOME\.local\bin\tofu.exe`
+
+`Remove-Item -Recurse $HOME\.tofu`
+
 ````
 
 > [!WARNING]
