@@ -307,7 +307,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
-		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
+		request := llm.Request{Messages: messages, Tools: currentTools().Definitions()}
+		if len(request.Tools) > 0 {
+			request.ToolChoice = llm.ToolChoiceNone
+		}
+		decision, timing, err := askCountingAttempts(ctx, model, request)
 		row.TotalCostUSD += decision.Usage.Cost
 		if err != nil {
 			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+err.Error())

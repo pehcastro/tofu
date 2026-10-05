@@ -19,17 +19,18 @@ import (
 )
 
 type Request struct {
-	Model     string
-	System    []string
-	Messages  []llm.Message
-	Tools     []llm.Tool
-	MaxTokens int
-	Effort    llm.Effort
-	SessionID string
-	AccountID string
-	InstallID string
-	UserID    string
-	CacheTTL  string
+	Model      string
+	System     []string
+	Messages   []llm.Message
+	Tools      []llm.Tool
+	ToolChoice llm.ToolChoice
+	MaxTokens  int
+	Effort     llm.Effort
+	SessionID  string
+	AccountID  string
+	InstallID  string
+	UserID     string
+	CacheTTL   string
 
 	ClaudeCodeVersion   string
 	HistoryCacheOff     bool
@@ -108,16 +109,21 @@ type wireOutput struct {
 	Effort string `json:"effort"`
 }
 
+type wireToolChoice struct {
+	Type string `json:"type"`
+}
+
 type wireBody struct {
-	Model     string        `json:"model"`
-	Messages  []wireMessage `json:"messages"`
-	System    []systemBlock `json:"system,omitempty"`
-	Tools     []wireTool    `json:"tools,omitempty"`
-	MaxTokens int           `json:"max_tokens"`
-	Metadata  *wireMetadata `json:"metadata,omitempty"`
-	Thinking  *wireThinking `json:"thinking,omitempty"`
-	Output    *wireOutput   `json:"output_config,omitempty"`
-	Stream    bool          `json:"stream"`
+	Model      string          `json:"model"`
+	Messages   []wireMessage   `json:"messages"`
+	System     []systemBlock   `json:"system,omitempty"`
+	Tools      []wireTool      `json:"tools,omitempty"`
+	ToolChoice *wireToolChoice `json:"tool_choice,omitempty"`
+	MaxTokens  int             `json:"max_tokens"`
+	Metadata   *wireMetadata   `json:"metadata,omitempty"`
+	Thinking   *wireThinking   `json:"thinking,omitempty"`
+	Output     *wireOutput     `json:"output_config,omitempty"`
+	Stream     bool            `json:"stream"`
 }
 
 func (r Request) Encode(oauth bool) ([]byte, error) {
@@ -164,19 +170,30 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	encoder := json.NewEncoder(&out)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(wireBody{
-		Model:     r.Model,
-		Messages:  messages,
-		System:    system,
-		Tools:     tools,
-		MaxTokens: maxTokens,
-		Metadata:  metadata,
-		Thinking:  r.summarizedThinking(),
-		Output:    output,
-		Stream:    true,
+		Model:      r.Model,
+		Messages:   messages,
+		System:     system,
+		Tools:      tools,
+		ToolChoice: r.toolChoice(),
+		MaxTokens:  maxTokens,
+		Metadata:   metadata,
+		Thinking:   r.summarizedThinking(),
+		Output:     output,
+		Stream:     true,
 	}); err != nil {
 		return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, err, "encoding the request")
 	}
 	return bytes.TrimRight(out.Bytes(), "\n"), nil
+}
+
+func (r Request) toolChoice() *wireToolChoice {
+	switch r.ToolChoice {
+	case llm.ToolChoiceAuto:
+		return nil
+	case llm.ToolChoiceNone:
+		return &wireToolChoice{Type: "none"}
+	}
+	panic("anthropic: unknown tool choice")
 }
 
 func (r Request) outputConfig() (*wireOutput, error) {

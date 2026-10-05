@@ -28,6 +28,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		System:     system,
 		Messages:   messages,
 		Tools:      request.Tools,
+		ToolChoice: request.ToolChoice,
 		Effort:     s.Effort,
 		CacheTTL:   konst.SubscriptionCacheTTL,
 		OnDelta:    request.OnDelta,

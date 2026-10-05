@@ -93,9 +93,27 @@ type Tool struct {
 	Parameters  any
 }
 
+type ToolChoice int
+
+const (
+	ToolChoiceAuto ToolChoice = iota
+	ToolChoiceNone
+)
+
+func (c ToolChoice) OpenAIValue() string {
+	switch c {
+	case ToolChoiceAuto:
+		return ""
+	case ToolChoiceNone:
+		return "none"
+	}
+	panic("llm: unknown tool choice")
+}
+
 type Request struct {
 	Messages   []Message
 	Tools      []Tool
+	ToolChoice ToolChoice
 	OnDelta    func(string)
 	OnThinking func(string)
 	OnRetry    func()
@@ -129,10 +147,11 @@ func (r Request) Encode(model string) ([]byte, error) {
 	}
 
 	body, err := json.Marshal(wireRequest{
-		Model:    model,
-		Messages: messages,
-		Tools:    tools,
-		Usage:    wireUsageOption{Include: true},
+		Model:      model,
+		Messages:   messages,
+		Tools:      tools,
+		ToolChoice: r.ToolChoice.OpenAIValue(),
+		Usage:      wireUsageOption{Include: true},
 	})
 	if err != nil {
 		return nil, transport.Fail("llm.Encode", transport.KindBadRequest, err, "encoding the request")
@@ -240,8 +259,9 @@ type wireUsageOption struct {
 }
 
 type wireRequest struct {
-	Model    string          `json:"model"`
-	Messages []wireMessage   `json:"messages"`
-	Tools    []wireTool      `json:"tools,omitempty"`
-	Usage    wireUsageOption `json:"usage"`
+	Model      string          `json:"model"`
+	Messages   []wireMessage   `json:"messages"`
+	Tools      []wireTool      `json:"tools,omitempty"`
+	ToolChoice string          `json:"tool_choice,omitempty"`
+	Usage      wireUsageOption `json:"usage"`
 }
