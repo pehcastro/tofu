@@ -31,10 +31,6 @@ const (
 	OutcomeLoopGuard           = session.OutcomeLoopGuard
 )
 
-func AllOutcomes() []Outcome {
-	return session.AllOutcomes()
-}
-
 type ToolCallRow struct {
 	ID     string `json:"id,omitempty"`
 	Parent string `json:"parent,omitempty"`

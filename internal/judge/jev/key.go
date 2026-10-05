@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -30,10 +29,6 @@ const (
 	OpenRouterVariable = sys.OpenRouterKeyName
 	TypeSafeVariable   = sys.TypeSafeKeyName
 )
-
-func AllowLiveCredential(tb testing.TB) {
-	sys.AllowLiveCredential(tb)
-}
 
 func Key(envPath string) (string, error) {
 	return KeyFor(envPath, OpenRouterVariable)

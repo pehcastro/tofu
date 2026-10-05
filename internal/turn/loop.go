@@ -123,14 +123,6 @@ func (c Config) FirstUserMessage() string {
 	return c.Environment + "\n\n" + c.Task
 }
 
-func WriteSession(store *session.Store, row Row) error {
-	header, events, err := row.Record()
-	if err != nil {
-		return err
-	}
-	return store.Write(header, events)
-}
-
 func Run(ctx context.Context, config Config) (Row, error) {
 	if config.Model == nil && config.Accounts.Pick == nil {
 		return Row{}, errors.New("turn: no model")
