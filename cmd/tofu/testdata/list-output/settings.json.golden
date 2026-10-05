@@ -58,12 +58,6 @@ exit 0
         "source": "global"
       },
       {
-        "key": "compaction",
-        "category": "Context",
-        "value": "adaptive",
-        "source": "default"
-      },
-      {
         "key": "chatShowsTools",
         "category": "Context",
         "value": false,

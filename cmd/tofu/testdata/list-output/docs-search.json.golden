@@ -13,12 +13,20 @@ exit 0
         "do": "tofu settings set theme Nord"
       },
       {
+        "text": "change when a scheduled job fires",
+        "do": "/cron edit c1 --schedule \"every 30m\" --reason \"the build is stable\""
+      },
+      {
         "text": "Sub-agents",
         "do": "tofu docs agents"
       },
       {
         "text": "Browser",
         "do": "tofu docs browser"
+      },
+      {
+        "text": "Cron, loops and goals",
+        "do": "tofu docs cron"
       },
       {
         "text": "The doctor",
@@ -119,6 +127,14 @@ exit 0
       {
         "text": "let jev pick each browser step toward a whole goal instead of the model",
         "do": "tofu settings set browserDriver goal"
+      },
+      {
+        "text": "repeat a prompt every few minutes",
+        "do": "/loop 10m check the build"
+      },
+      {
+        "text": "keep working until a test passes",
+        "do": "/goal make the test pass --until \"go test ./...\""
       },
       {
         "text": "Files tofu reads and writes",

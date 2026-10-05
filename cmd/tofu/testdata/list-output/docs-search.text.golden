@@ -1,13 +1,17 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           34 matches
+Docs · "change the colours"                                           38 matches
 
   change the colours
     → tofu settings set theme Nord
+  change when a scheduled job fires
+    → /cron edit c1 --schedule "every 30m" --reason "the build is stable"
   Sub-agents
     → tofu docs agents
   Browser
     → tofu docs browser
+  Cron, loops and goals
+    → tofu docs cron
   The doctor
     → tofu docs doctor
   The gate
@@ -58,6 +62,10 @@ Docs · "change the colours"                                           34 matche
     → tofu settings set browser off
   let jev pick each browser step toward a whole goal instead of the model
     → tofu settings set browserDriver goal
+  repeat a prompt every few minutes
+    → /loop 10m check the build
+  keep working until a test passes
+    → /goal make the test pass --until "go test ./..."
   Files tofu reads and writes
     → tofu docs files
   Instruction files

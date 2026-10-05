@@ -68,3 +68,31 @@ func TestASetFromTheAppKeepsWhatWasWrittenOnDiskSinceItOpened(t *testing.T) {
 		t.Errorf("Reread shows diffContext %d and hyperlinks %v, want 9 and on", store.Int(DiffContext), store.Bool(Hyperlinks))
 	}
 }
+
+func TestARetiredCompactionKeyLoadsIsIgnoredAndSurvivesASet(t *testing.T) {
+	global := filepath.Join(t.TempDir(), FileName)
+	if err := os.WriteFile(global, []byte(`{"compaction":"off","theme":"Nord"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(global, "")
+	if err != nil {
+		t.Fatalf("a file holding the retired compaction key did not load: %v", err)
+	}
+	for _, spec := range store.Table() {
+		if spec.Key == "compaction" {
+			t.Fatalf("the settings table still declares compaction: %+v", spec)
+		}
+	}
+	if store.Text(Theme) != "Nord" {
+		t.Errorf("theme beside the retired key reads %q, want Nord", store.Text(Theme))
+	}
+	if err := store.SetText(Global, "compaction", "off"); err == nil {
+		t.Error("a set of the retired compaction key was accepted")
+	}
+	if err := store.SetText(Global, Density, "compact"); err != nil {
+		t.Fatal(err)
+	}
+	if written, _ := os.ReadFile(global); !strings.Contains(string(written), `"compaction": "off"`) {
+		t.Errorf("a set on another key dropped the person's retired key from the file:\n%s", written)
+	}
+}

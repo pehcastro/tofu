@@ -2,29 +2,29 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES            › Compaction                                                adaptive  ▾     
-    Appearance    05      Automatic transcript compaction; not built yet, so no choice changes …    
+  CATEGORIES            › Tool detail                                                      ○ off    
+    Appearance    05      chat shows every tool call                                                
     Models & rol… 02                                                                                
-    Interaction   05      Tool detail                                                      ○ off    
-  › Context       09      chat shows every tool call                                                
+    Interaction   05      Agent feeds                                                   full  ▾     
+  › Context       08      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
-    Shell         05      Agent feeds                                                   full  ▾     
-    Turn          09      full keeps every sub-agents event, summary the latest 200, off shows …    
+    Shell         05      Thinking                                                          ● on    
+    Turn          09      thinking shows in each agent's sub-agents feed; t there toggles it        
     Browser       06                                                                                
-                          Thinking                                                          ● on    
-  NAVIGATE                thinking shows in each agent's sub-agents feed; t there toggles it        
+                          Thinking summary                                        summarized  ▾     
+  NAVIGATE                summarized asks Claude for a summary of its thinking; omitted asks fo…    
   ↑↓ setting · ←→                                                                                   
-  section                 Thinking summary                                        summarized  ▾     
-  ctrl+k search ·         summarized asks Claude for a summary of its thinking; omitted asks fo…    
+  section                 Images                                                        auto  ▾     
+  ctrl+k search ·         auto sends a pasted image only to a model that can see, inline always…    
   esc chat                                                                                          
-                          Images                                                        auto  ▾     
-                          auto sends a pasted image only to a model that can see, inline always…    
-                                                                                                    
                           Project instructions                                         32768  ▾     
                           bytes of your instruction files sent each turn                            
                                                                                                     
                           Instruction files                                     agents-first  ▾     
                           a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
+                                                                                                    
+                          Skills                                                            ● on    
+                          on lists the skills in .tofu, .agents and .claude skill folders to th…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

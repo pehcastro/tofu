@@ -2,7 +2,7 @@
 title: Context
 description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry handles instead of text.
 order: 5
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -12,7 +12,7 @@ judgment:
 | Layer | What it does |
 |---|---|
 | **Prompt prefix and cache** | The tools, the system prompt and the settled history are marked for the provider's cache, so a resend reads them from cache |
-| **Bands** | Each request is measured against a 63,000 token target, split into identity, facts, working set and recent |
+| **Bands** | Each request is measured against a target taken from the model's window, 144,000 tokens on a 200,000 token model, split into identity, facts, working set and recent |
 | **Result cap and artifact handles** | A tool result over 32,768 bytes is stored whole on disk; the model gets its first and last 512 bytes and a handle |
 | **Middle elision** | What the model reads of a large result is its two ends, with a marker saying how many bytes were left out and where they are |
 | **Memo of repeated calls** | A read, glob, search or fetch repeated in a turn, with nothing written since, is answered from memory |
@@ -20,8 +20,10 @@ judgment:
 | **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task and a carry of what was read, as handles |
 | **Recall** | `artifact_fetch` reads any range of any handle, so nothing that left the conversation is lost |
 
-**Compaction** is not built. The `compaction` setting exists and no value of
-it changes a turn; forks keep sessions under the target instead.
+**A full window** is recovered in the turn. When the model says a request is
+over its window, tofu shrinks the oldest tool results to their handles and
+asks once more, and the chat says so in one line. Forks keep a session under
+the target, so this is rare, and nothing about it needs a setting.
 
 ## Why each layer exists
 
@@ -33,10 +35,13 @@ passes 4,096 characters. The cache lives one hour on a subscription. On the
 Codex wire, requests carry the session as a cache key. Over 24 turns, 88% of
 billed input was a cache read.
 
-**A fixed target, not the model's window.** A million-token window does not
-make a million-token conversation cheap. The target is the same 63,000 tokens
-on every model, a quarter of a 250,000 ceiling. Separately, a request larger
-than the model's own window is refused before it is sent.
+**A target from the model's window, with a cap.** tofu holds 20,000 tokens of
+the window for the answer and forks at 80% of the rest, so a 200,000 token
+model forks at 144,000. A million-token window does not make a million-token
+conversation cheap, so the usable window is capped at 250,000 and no model
+forks later than 200,000. A model with no known window uses 63,000, a quarter
+of that cap. Separately, a request larger than the model's own window is
+refused before it is sent.
 
 **Handles instead of text.** A full listing or a long log is mostly noise
 after the first read. Storing it and sending its ends keeps the step small,

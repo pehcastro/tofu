@@ -11,7 +11,6 @@ key down
 key down
 key down
 key down
-key down
 wait claude-first  ▾
 screen
 key enter

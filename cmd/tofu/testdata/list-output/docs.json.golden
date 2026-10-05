@@ -18,6 +18,11 @@ exit 0
         "summary": "how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there"
       },
       {
+        "topic": "cron",
+        "title": "Cron, loops and goals",
+        "summary": "jobs that post a prompt into the session on a timer or after each turn, how to change one, and the history of every change"
+      },
+      {
         "topic": "doctor",
         "title": "The doctor",
         "summary": "what tofu doctor checks, what each line it prints means, and what to do about it"
@@ -511,6 +516,30 @@ exit 0
         "do": "tofu settings set browserSteps 10",
         "check": "tofu settings get browserSteps",
         "topic": "browser"
+      },
+      {
+        "ask": "repeat a prompt every few minutes",
+        "do": "/loop 10m check the build",
+        "check": "/cron list",
+        "topic": "cron"
+      },
+      {
+        "ask": "keep working until a test passes",
+        "do": "/goal make the test pass --until \"go test ./...\"",
+        "check": "/cron history c1",
+        "topic": "cron"
+      },
+      {
+        "ask": "change when a scheduled job fires",
+        "do": "/cron edit c1 --schedule \"every 30m\" --reason \"the build is stable\"",
+        "check": "/cron history c1",
+        "topic": "cron"
+      },
+      {
+        "ask": "stop a scheduled job",
+        "do": "/cron delete c1",
+        "check": "/cron list",
+        "topic": "cron"
       }
     ]
   },

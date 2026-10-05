@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     40 declared
+Settings · 2 set                                                     39 declared
 
 Appearance
   ● theme                   Nord                project
@@ -15,7 +15,6 @@ Interaction
   ● readBeforeEdit          false               global
 
 Context
-    compaction              adaptive            default
     chatShowsTools          false               default
     agentFeeds              full                default
     showThinking            true                default

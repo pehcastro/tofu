@@ -6,7 +6,7 @@
     Appearance    05      decision cap per turn, zero means no cap                                  
     Models & rol… 02                                                                                
     Interaction   05      Sub-agents                                                        ● on    
-    Context       09      a turn may spawn a sub-agent                                              
+    Context       08      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      Sub-agents running at once                                      10  ▾     
   › Turn          09      how many sub-agents may run at once; a spawn past it is refused until…    
