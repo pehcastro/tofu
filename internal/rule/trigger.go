@@ -244,10 +244,17 @@ type Match struct {
 	Why    string
 }
 
+func (r Rule) forTheWriterOnly() bool {
+	return r.Concern == ConcernCodeRules && r.Trigger.role == RoleAny && (r.Trigger.languages != nil || r.Trigger.frameworks != nil)
+}
+
 func Index(rules []Rule, task Task) []Match {
 	index := make([]Match, len(rules))
 	for i, r := range rules {
 		fires, why := r.Trigger.firesFor(task)
+		if fires && task.Role == RoleOrchestrator && r.forTheWriterOnly() {
+			fires, why = false, "a code rule for a language or a framework reaches the agent that writes that code, and the prompt is the orchestrator's"
+		}
 		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
 	}
 	return index

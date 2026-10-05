@@ -860,3 +860,89 @@ func (m *queuedModel) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 	*queue = (*queue)[1:]
 	return next, nil
 }
+
+type leadRecording struct {
+	*queuedModel
+	leadAsked []llm.Request
+}
+
+func (m *leadRecording) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	if turn.SubAgentAsking(ctx) == "" {
+		m.mu.Lock()
+		m.leadAsked = append(m.leadAsked, request)
+		m.mu.Unlock()
+	}
+	return m.queuedModel.Ask(ctx, request)
+}
+
+func TestOnAReactProjectTheLeadCarriesNoCodeRuleAndNoUnusedToolAndItsTsDevKeepsTheRules(t *testing.T) {
+	dir := scratchProject(t)
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies": {"react": "19"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const task = "make the save button in src/components/Dialog.tsx keep its label while it saves"
+	reply := func(text string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	}
+	model := &leadRecording{queuedModel: &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"` + task + `","owns":["src/**"]}`)}}},
+		reply("ts-dev is on it"), reply("done"),
+	}, subAgents: []llm.Decision{reply("saved")}}}
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, task, driveAppOn(t, nil).emit)
+	if len(model.leadAsked) == 0 || len(model.subAgentAsked) == 0 {
+		t.Fatalf("the lead asked %d times and the sub-agent %d, and both must ask once", len(model.leadAsked), len(model.subAgentAsked))
+	}
+	sent := func(request llm.Request) (prompt string, tools []string) {
+		for _, message := range request.Messages {
+			prompt += message.Content + "\n"
+		}
+		for _, tool := range request.Tools {
+			tools = append(tools, tool.Name)
+		}
+		return prompt, tools
+	}
+	lead, leadTools := sent(model.leadAsked[0])
+	if strings.Contains(lead, "[code_rules,") {
+		t.Errorf("the lead's first request carries a code rule:\n%s", lead)
+	}
+	for _, process := range []string{"from the rule verify_sub_agents]", "from the rule verify_scoped]"} {
+		if !strings.Contains(lead, process) {
+			t.Errorf("the lead lost the process rule %q along with the code rules", process)
+		}
+	}
+	for _, unused := range leadNeverCalls() {
+		if slices.Contains(leadTools, unused) {
+			t.Errorf("the lead is offered %s, which no recorded lead ever called: %v", unused, leadTools)
+		}
+	}
+	if !slices.Contains(leadTools, "spawn") {
+		t.Errorf("the lead lost spawn: %v", leadTools)
+	}
+	writer, _ := sent(model.subAgentAsked[0])
+	for _, code := range []string{"[code_rules, from the rule fe_control_states]", "[code_rules, from the rule react_events_not_effects]", "[code_rules, from the rule ts_handled_promise]"} {
+		if !strings.Contains(writer, code) {
+			t.Errorf("the ts-dev sub-agent writing the code lost %q", code)
+		}
+	}
+
+	opts, err := parseRunArgs([]string{"--dir", dir, "--no-subagents", task})
+	if err != nil {
+		t.Fatal(err)
+	}
+	built, err := buildTestRunTools(dir, opts.toolSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alone, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+	if !strings.Contains(alone.System+alone.Environment, "[code_rules, from the rule fe_control_states]") {
+		t.Error("a run with no sub-agents writes the code itself and lost the code rules")
+	}
+	var aloneTools []string
+	for _, definition := range alone.Tools.Definitions() {
+		aloneTools = append(aloneTools, definition.Name)
+	}
+	if !slices.Contains(aloneTools, "github_pr_diff") {
+		t.Errorf("a run with no sub-agents has no lead and lost a tool only the lead goes without: %v", aloneTools)
+	}
+}

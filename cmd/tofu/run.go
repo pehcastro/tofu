@@ -626,6 +626,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		if spec.Agent, err = subAgents.Named(opts.agent); err != nil {
 			return composedRun{}, err
 		}
+		spec.Role = rule.RoleSubAgent
 	} else if !opts.noSubAgents && opts.toolSet != toolSetThree {
 		spec.Role = rule.RoleOrchestrator
 	}
@@ -697,9 +698,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner.Limits = func() turn.SubAgentLimits {
 		return turn.SubAgentLimits{Running: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify)}
 	}
-	own := built
+	own := slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return slices.Contains(leadNeverCalls(), tool.Name()) })
 	if settingText(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {
-		own = slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
+		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
 	}
 	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner)
 	if run.gate != nil {
@@ -708,6 +709,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	config.Tools = turn.NewRegistry(orchestrating...)
 	return config, spawner, nil
+}
+
+func leadNeverCalls() []string {
+	return []string{"github_pr_diff", "tofu_rules_check", "tofu_judge", "tofu_why", "tofu_replay"}
 }
 
 func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
