@@ -8,6 +8,44 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## Unreleased
+
+### Added
+
+- **Cron, loops and goals.** `/loop 10m <prompt>` repeats a prompt, `/goal <prompt> --until "<command>"` keeps working until the command passes, and `/cron` makes, lists, edits, pauses and deletes jobs. Every change to a job is kept as a version with its reason, and the lead can change a job under the `cron_edits` rule.
+- **`/compact`** shrinks old tool results to a handle between turns, and the shrink survives a restart.
+- **`/resume`** opens a picker of this project's sessions, and `/resume <name>` resumes one directly.
+- **`/keys`** lists every key the app answers to.
+- **Ctrl+G** opens the prompt in `$VISUAL` or `$EDITOR`.
+- **A dropped or pasted image path** attaches the image.
+- **Ctrl+V on Linux and macOS** reads the clipboard: `wl-paste`, `xclip` or `xsel` on Linux, `pbpaste` and `osascript` on macOS.
+- **`fetch` reads a long page 300 lines at a time**, with `offset` and `limit`, from one request.
+- **`write` takes `append: true`.**
+- **`tofu rules index --role orchestrator|sub-agent`** shows the rules each one gets.
+- **The drive's `requests` step** prints each request's tool count, tools hash and tool choice.
+
+### Changed
+
+- **A turn that fills the context window** shrinks its oldest tool results and asks once more, instead of ending.
+- **The fork point follows the model's window**: 144,000 tokens on a 200k model, where it was 63,000.
+- **An empty answer, or a stream cut by an overloaded server, is retried once.**
+- **An OAuth refresh survives Esc**, and a 401 on a token that looks fresh renews it and sends once more.
+- **A turn is warned before its step cap**, and its last step must answer. A sub-agent stops after an hour.
+- **Bash** keeps a timed-out command's output, holds tofu's keys out of the command's environment, sets `AI_AGENT=tofu`, never waits on a git prompt, and decodes a Windows console code page.
+- **`edit` keeps CRLF and a BOM.** A refused edit names the lines to read instead of pasting the file. A partial read covers only the lines read.
+- **`write` over an existing file writes in place**, so it keeps the mode and a symlink, and works while another process reads the file. A write that replaces code with a placeholder such as `// ... rest unchanged` is refused.
+- **A path whose link leads outside the project is refused**, and `glob` and `search` skip folder links.
+- **`glob`** takes `**` and `{a,b}`. **`search`** shows a match on a very long line, skips files over 16 MB, and goes on past a file it cannot read.
+- **A long tool result is stored whole**, so `artifact_fetch` can read its middle.
+- **The model picker** never offers Fable, opens on the model in use, and keeps its header in cmd and Git Bash.
+- **A plain cmd window** shows colour instead of raw escape codes.
+- **A library sub-agent** gets the skills its definition names.
+- **`tofu doctor`** reports the shell sift the way a run uses it.
+
+### Removed
+
+- **The `compaction` setting**, which changed nothing.
+
 ## 0.5.0 - 2026-10-05
 
 The first public release: install with one command on Windows, Linux or macOS, and a lead that spends far fewer tokens for the same work.
