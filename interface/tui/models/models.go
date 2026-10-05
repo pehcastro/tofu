@@ -150,6 +150,7 @@ type Model struct {
 	tab         tab
 	provider    int
 	cursor      int
+	inUse       []string
 	assign      *Target
 	effort      llm.Effort
 	width       int
@@ -209,7 +210,7 @@ func (m Model) Rebuild(loaded library.Library) Model {
 	fresh := Build(loaded, m.sources, m.keys, m.targets)
 	fresh.SetSize(m.width, m.height)
 	fresh.assign = m.assign
-	fresh.settle()
+	fresh.OpenOn(m.inUse...)
 	return fresh
 }
 
@@ -289,6 +290,26 @@ func (m Model) Picked() (Row, bool) {
 	return rows[m.cursor], true
 }
 
+func (m *Model) OpenOn(inUse ...string) {
+	m.inUse = inUse
+	m.home()
+}
+
+func (m *Model) home() {
+	m.reset()
+	if m.tab != tabModels {
+		return
+	}
+	rows := m.visible()
+	for _, slug := range m.inUse {
+		if at := slices.IndexFunc(rows, func(row Row) bool { return row.Slug == slug }); at >= 0 {
+			m.cursor = at
+			m.settle()
+			return
+		}
+	}
+}
+
 func (m Model) Effort() llm.Effort { return m.effort }
 
 func (m *Model) Key(key string) Intent {
@@ -308,7 +329,7 @@ func (m *Model) Key(key string) Intent {
 		return Intent{Action: Reload}
 	case "tab":
 		m.tab = (m.tab + 1) % tabCount
-		m.reset()
+		m.home()
 	case "left", "right":
 		count := len(m.providers())
 		switch {
@@ -319,7 +340,7 @@ func (m *Model) Key(key string) Intent {
 		default:
 			m.provider = (m.provider + 1) % count
 		}
-		m.reset()
+		m.home()
 	case "shift+left":
 		m.step(-1)
 	case "shift+right":
@@ -525,7 +546,7 @@ func (m *Model) clickSide(line string, x, row int) {
 	default:
 		return
 	}
-	m.reset()
+	m.home()
 }
 
 func (m *Model) clickList(line string, x, row int) Intent {

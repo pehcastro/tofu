@@ -281,6 +281,41 @@ func TestThePickerNeitherOffersNorSelectsFableOrAstra(t *testing.T) {
 	}
 }
 
+func TestThePickerOpensOnTheModelInUse(t *testing.T) {
+	for _, run := range []struct {
+		name  string
+		wires []Wire
+		picks bool
+		opens string
+	}{
+		{"the first signed wire's model", nil, false, "codex-sub/gpt-5.6-sol"},
+		{"a wire model that is not the default", []Wire{{Name: "anthropic", Model: "claude-sonnet-5", Provider: "claude-sub", Efforts: claudeEfforts()}}, false, sonnet},
+		{"a wire model the library does not list", []Wire{{Name: "anthropic", Model: "cassette", Provider: "claude-sub", Efforts: claudeEfforts()}}, false, "claude-sub/claude-opus-5"},
+		{"a model picked earlier, on page two", anthropicAlone(), true, sonnet},
+		{"a source with no row and no default", []Wire{{Name: "ghost", Model: "nothing", Provider: "ghost-sub"}, anthropicAlone()[0]}, false, "claude-sub/claude-haiku-4-5-20251001"},
+	} {
+		t.Run(run.name, func(t *testing.T) {
+			wires := bothWires
+			if run.wires != nil {
+				wires = func() []Wire { return run.wires }
+			}
+			app := pickerApp(t, make(chan Pick, 1), wires)
+			if run.picks {
+				pickSonnet(t, app)
+				app.openPicker("")
+			}
+			row, picked := openPicker(t, app).Picked()
+			if !picked || row.Slug != run.opens {
+				t.Fatalf("the picker opened on %q, want %s", row.Slug, run.opens)
+			}
+			_, model, _ := strings.Cut(run.opens, "/")
+			if shown := ansi.Strip(app.View().Content); !strings.Contains(shown, "› "+model) {
+				t.Errorf("the page drawn does not mark %s\n%s", model, shown)
+			}
+		})
+	}
+}
+
 func TestTheShippedLibraryIsWhatThePickerReadsWhenNobodyPassesOne(t *testing.T) {
 	loaded, err := New(Options{Repo: testRepo, Now: fixedClock()}).options.Models()
 	if err != nil {

@@ -7,15 +7,34 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/session"
 )
 
+const conhostTabStop = 8
+
 type conhost struct {
 	rows [][]rune
 	x, y int
+}
+
+func (c *conhost) lineFeed() {
+	if c.y < len(c.rows)-1 {
+		c.y++
+		return
+	}
+	c.rows = append(c.rows[1:], []rune(strings.Repeat(" ", len(c.rows[0]))))
+}
+
+func (c *conhost) text() string {
+	lines := make([]string, len(c.rows))
+	for at, row := range c.rows {
+		lines[at] = strings.TrimRight(string(row), " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (c *conhost) feed(t *testing.T, out string) {
@@ -24,14 +43,22 @@ func (c *conhost) feed(t *testing.T, out string) {
 	for len(out) > 0 {
 		seq, width, n, next := ansi.DecodeSequenceWc(out, state, parser)
 		state, out = next, out[n:]
+		last := len(c.rows[c.y]) - 1
 		switch {
 		case width > 0:
 			c.rows[c.y][c.x] = []rune(seq)[0]
-			c.x = min(c.x+width, len(c.rows[c.y])-1)
+			c.x = min(c.x+width, last)
 		case seq == "\r":
 			c.x = 0
 		case seq == "\n":
-			c.y = min(c.y+1, len(c.rows)-1)
+			c.lineFeed()
+		case seq == "\b":
+			c.x = max(c.x-1, 0)
+		case seq == "\t" && c.x == last:
+			c.x = 0
+			c.lineFeed()
+		case seq == "\t":
+			c.x = min((c.x/conhostTabStop+1)*conhostTabStop, last)
 		case ansi.HasCsiPrefix(seq):
 			c.csi(t, seq, parser)
 		default:
@@ -50,7 +77,7 @@ func (c *conhost) csi(t *testing.T, seq string, parser *ansi.Parser) {
 	case 'H':
 		second, _ := parser.Param(1, 1)
 		c.y, c.x = first-1, max(second, 1)-1
-	case 'G':
+	case 'G', '`':
 		c.x = first - 1
 	case 'd':
 		c.y = first - 1
@@ -73,60 +100,106 @@ func (c *conhost) csi(t *testing.T, seq string, parser *ansi.Parser) {
 	}
 }
 
+type windowsConsole struct {
+	conhost
+	out      bytes.Buffer
+	renderer *uv.TerminalRenderer
+	screen   uv.ScreenBuffer
+}
+
+func newWindowsConsole(environ []string, width, height int) *windowsConsole {
+	console := &windowsConsole{screen: uv.NewScreenBuffer(width, height)}
+	console.renderer = uv.NewTerminalRenderer(&console.out, consoleEnviron(environ, "windows"))
+	console.renderer.SetFullscreen(true)
+	console.renderer.SetRelativeCursor(false)
+	console.renderer.SetTabStops(width)
+	console.renderer.SetBackspace(true)
+	console.renderer.SetScrollOptim(false)
+	for range height {
+		console.rows = append(console.rows, []rune(strings.Repeat(" ", width)))
+	}
+	return console
+}
+
+func (w *windowsConsole) show(t *testing.T, view string) {
+	t.Helper()
+	w.out.Reset()
+	w.screen.Clear()
+	uv.NewStyledString(view).Draw(w.screen, w.screen.Bounds())
+	w.renderer.Render(w.screen.RenderBuffer)
+	if err := w.renderer.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	w.feed(t, w.out.String())
+}
+
 func TestTheCookedLineReachesAConsoleWithoutTermWhole(t *testing.T) {
 	const width, height = 140, 45
 	at := time.Date(2026, 10, 2, 10, 38, 0, 0, time.UTC)
 	model := session.New(func() time.Time { return at }, func(source string, _ int) []string { return []string{source} })
 	model.SetSize(width, height)
 	model.Append(session.Entry{Kind: session.User, Body: "While that runs: name the sub-agent"})
-	var out bytes.Buffer
-	renderer := uv.NewTerminalRenderer(&out, consoleEnviron([]string{"SystemRoot=C:\\Windows"}, "windows"))
-	renderer.SetFullscreen(true)
-	renderer.SetScrollOptim(false)
-	screen := uv.NewScreenBuffer(width, height)
-	console := &conhost{}
-	for range height {
-		console.rows = append(console.rows, []rune(strings.Repeat(" ", width)))
-	}
-	var want string
-	draw := func() {
-		view := model.View()
-		out.Reset()
-		screen.Clear()
-		uv.NewStyledString(view).Draw(screen, screen.Bounds())
-		renderer.Render(screen.RenderBuffer)
-		if err := renderer.Flush(); err != nil {
-			t.Fatal(err)
-		}
-		console.feed(t, out.String())
-		for _, row := range strings.Split(ansi.Strip(view), "\n") {
-			if strings.Contains(row, "cooked for") {
-				want = strings.TrimRight(row, " ")
-			}
-		}
-	}
+	console := newWindowsConsole([]string{"SystemRoot=C:\\Windows"}, width, height)
 	model.Start()
-	draw()
+	console.show(t, model.View())
 	at = at.Add(2 * time.Second)
 	model.Returned()
-	draw()
+	console.show(t, model.View())
 	model.Close("cooked for", "")
 	model.Stop()
-	draw()
+	view := model.View()
+	console.show(t, view)
+	var want string
+	for _, row := range strings.Split(ansi.Strip(view), "\n") {
+		if strings.Contains(row, "cooked for") {
+			want = strings.TrimRight(row, " ")
+		}
+	}
 	for _, row := range console.rows {
 		if got := strings.TrimRight(string(row), " "); strings.Contains(got, "cooked for") && got != want {
-			t.Fatalf("the console shows\n%q\nwhere the frame says\n%q\nbytes of the last frame %q", got, want, out.String())
+			t.Fatalf("the console shows\n%q\nwhere the frame says\n%q\nbytes of the last frame %q", got, want, console.out.String())
 		}
 	}
 }
 
-func TestATermThePersonSetIsLeftAlone(t *testing.T) {
-	for _, set := range [][]string{{"TERM=screen"}, {"TERM="}, {"TERM=dumb", "COLORTERM=truecolor"}} {
-		if got := consoleEnviron(set, "windows"); !slices.Equal(got, set) {
-			t.Errorf("%q became %q", set, got)
+func TestThePickerAndItsFilterDrawInPlaceOnAWindowsConsole(t *testing.T) {
+	const width, height = 120, 36
+	for _, environ := range [][]string{{"SystemRoot=C:\\Windows"}, {"SystemRoot=C:\\Windows", "TERM=xterm"}, {"TERM=xterm-256color"}} {
+		t.Run(strings.Join(environ, " "), func(t *testing.T) {
+			app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: anthropicAlone, Models: shippedFixture, Fresh: true})
+			app.Init()
+			app.Update(tea.WindowSizeMsg{Width: width, Height: height})
+			console := newWindowsConsole(environ, width, height)
+			console.show(t, app.View().Content)
+			app.openPicker("")
+			console.show(t, app.View().Content)
+			typeText(app, "claude-sub")
+			view := app.View().Content
+			console.show(t, view)
+			for at, want := range strings.Split(ansi.Strip(view), "\n") {
+				if got := strings.TrimRight(string(console.rows[at]), " "); got != strings.TrimRight(want, " ") {
+					t.Fatalf("row %d of the console shows\n%q\nwhere the frame says\n%q\nthe console:\n%s", at, got, strings.TrimRight(want, " "), console.text())
+				}
+			}
+		})
+	}
+}
+
+func TestOnWindowsBubbleteaAloneIsToldATermWithoutHardTabs(t *testing.T) {
+	for _, set := range [][]string{nil, {"TERM=xterm"}, {"TERM="}, {"TERM=screen", "TERM=dumb", "COLORTERM=truecolor"}} {
+		kept := slices.Clone(set)
+		got := consoleEnviron(set, "windows")
+		terms := slices.DeleteFunc(slices.Clone(got), func(entry string) bool { return !strings.HasPrefix(entry, "TERM=") })
+		if !slices.Equal(terms, []string{termWithoutHardTabs}) {
+			t.Errorf("%q gave bubbletea the TERM entries %q", set, terms)
+		}
+		if !slices.Equal(set, kept) {
+			t.Errorf("the environment read for colour became %q, was %q", set, kept)
 		}
 	}
-	if got := consoleEnviron(nil, "linux"); len(got) != 0 {
-		t.Errorf("an absent TERM off Windows became %q", got)
+	for _, set := range [][]string{nil, {"TERM=xterm"}} {
+		if got := consoleEnviron(set, "linux"); !slices.Equal(got, set) {
+			t.Errorf("%q off Windows became %q", set, got)
+		}
 	}
 }

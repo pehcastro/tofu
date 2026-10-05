@@ -2,12 +2,12 @@
 resize 140 30
 key ctrl+l
 wait f5 reloads models
-wait 16 models
+wait 14 models
 absent claude-sonnet-5-5
 screen
 key f5
 wait models reload found claude-sub/claude-sonnet-5-5
-wait 17 models
+wait 15 models
 screen
 type sonnet-5-5
 wait layer   catalog

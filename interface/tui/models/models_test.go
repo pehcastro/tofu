@@ -166,6 +166,31 @@ func TestModelsSeparateProvidersAndRoleAssignments(t *testing.T) {
 	}
 }
 
+func TestAProviderSwitchAndAReloadKeepTheModelInUse(t *testing.T) {
+	const luna = "codex-sub/gpt-5.6-luna"
+	m := testPicker(120, 36)
+	m.OpenOn(luna)
+	for _, step := range []struct {
+		does, wants string
+		do          func()
+	}{
+		{"right, to claude-sub, which does not serve it", "claude-sub/claude-opus-5", func() { m.Key("right") }},
+		{"right, to codex-sub", luna, func() { m.Key("right") }},
+		{"left twice, back to all", luna, func() { m.Key("left"); m.Key("left") }},
+		{"tab to roles and back", luna, func() { m.Key("tab"); m.Key("tab") }},
+		{"f5", luna, func() { m = m.Rebuild(testLibrary()) }},
+	} {
+		step.do()
+		if row, picked := m.Picked(); !picked || row.Slug != step.wants {
+			t.Fatalf("after %s the picker is on %q, want %s", step.does, row.Slug, step.wants)
+		}
+	}
+	m.Key("tab")
+	if m.cursor != 0 {
+		t.Fatalf("the roles tab opened on target %d, want the first", m.cursor)
+	}
+}
+
 func TestAnExcludedModelStaysListedAndChoosingItStartsLogin(t *testing.T) {
 	m := testPicker(120, 36)
 	for _, key := range strings.Split("gpt-reserve", "") {

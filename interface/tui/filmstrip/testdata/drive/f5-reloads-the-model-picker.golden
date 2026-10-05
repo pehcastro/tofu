@@ -5,22 +5,22 @@
 
                                                                                                                         
                      Select model            CATALOG                                         SELECTION                  
-                     16 models               ←→ provider · tab roles                                                    
-                                                                                             claude-fable-5             
-                     Models  Roles           > Type to filter                                claude-sub/claude-fable-5  
+                     14 models               ←→ provider · tab roles                                                    
+                                                                                             claude-opus-5              
+                     Models  Roles           > Type to filter                                claude-sub/claude-opus-5   
                                                                                                                         
-                     PROVIDERS               › claude-fable-5                                source  claude-sub         
+                     PROVIDERS               › claude-opus-5                                 source  claude-sub         
                      › all                     claude-sub                                    kind    llm                
-                       claude-sub              claude-fable-5-1                              pays    subscription       
-                       Meta · no key           claude-sub                                    window  5h and 7d and      
-                                               claude-haiku-4-5-20251001                     7d:fable                   
-                     f5 reloads models         claude-sub                                    layer   library            
-                                               claude-opus-4-5-20251101                                                 
-                                               claude-sub · excluded                         EFFORT                     
-                                               claude-opus-4-6                               medium  shift+←→           
-                                               claude-sub · excluded                                                    
-                                                                                             enter picks the model      
-                                             Page 1/4  ·  ↑↓ models                                                     
+                       claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
+                       Meta · no key           claude-sub · excluded                         window  5h and 7d          
+                                               claude-sonnet-4-6                             layer   library            
+                     f5 reloads models         claude-sub · excluded                                                    
+                                               claude-sonnet-5                               EFFORT                     
+                                               claude-sub                                    medium  shift+←→           
+                                               muse-spark-1.1                                                           
+                                               meta                                          enter picks the model      
+                                                                                                                        
+                                             Page 2/3  ·  ↑↓ models                                                     
                                                                                                                         
                                                                                                                         
 
@@ -35,22 +35,22 @@
 
                                                                                                                         
                      Select model            CATALOG                                         SELECTION                  
-                     17 models               ←→ provider · tab roles                                                    
-                                                                                             claude-fable-5             
-                     Models  Roles           > Type to filter                                claude-sub/claude-fable-5  
+                     15 models               ←→ provider · tab roles                                                    
+                                                                                             claude-opus-5              
+                     Models  Roles           > Type to filter                                claude-sub/claude-opus-5   
                                                                                                                         
-                     PROVIDERS               › claude-fable-5                                source  claude-sub         
+                     PROVIDERS               › claude-opus-5                                 source  claude-sub         
                      › all                     claude-sub                                    kind    llm                
-                       claude-sub              claude-fable-5-1                              pays    subscription       
-                       Meta · no key           claude-sub                                    window  5h and 7d and      
-                                               claude-haiku-4-5-20251001                     7d:fable                   
-                     f5 reloads models         claude-sub                                    layer   library            
-                                               claude-opus-4-5-20251101                                                 
-                                               claude-sub · excluded                         EFFORT                     
-                                               claude-opus-4-6                               medium  shift+←→           
-                                               claude-sub · excluded                                                    
-                                                                                             enter picks the model      
-                                             Page 1/4  ·  ↑↓ models                                                     
+                       claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
+                       Meta · no key           claude-sub · excluded                         window  5h and 7d          
+                                               claude-sonnet-4-6                             layer   library            
+                     f5 reloads models         claude-sub · excluded                                                    
+                                               claude-sonnet-5                               EFFORT                     
+                                               claude-sub                                    medium  shift+←→           
+                                               claude-sonnet-5-5                                                        
+                                               claude-sub                                    enter picks the model      
+                                                                                                                        
+                                             Page 2/3  ·  ↑↓ models                                                     
                                                                                                                         
                                                                                                                         
 
@@ -65,7 +65,7 @@
 
                                                                                                                         
                      Select model            CATALOG                                         SELECTION                  
-                     17 models               ←→ provider · tab roles                                                    
+                     15 models               ←→ provider · tab roles                                                    
                                                                                              claude-sonnet-5-5          
                      Models  Roles           > sonnet-5-5                                    claude-sub/claude-sonnet-  
                                                                                              5-5                        

@@ -76,6 +76,8 @@ func (a *App) openPicker(assign string) {
 		return
 	}
 	picker.SetSize(a.width, a.height)
+	fallback, _ := loaded.Default(library.Subscription(a.provider))
+	picker.OpenOn(a.slug(), fallback.Slug())
 	if at := slices.IndexFunc(rows, func(row settings.Row) bool { return row.Key == assign }); at >= 0 {
 		picker.AssignTo(at)
 	}

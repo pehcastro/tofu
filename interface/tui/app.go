@@ -358,10 +358,10 @@ func (a *App) readWires() {
 }
 
 func consoleEnviron(environ []string, goos string) []string {
-	if goos != "windows" || slices.ContainsFunc(environ, func(entry string) bool { return strings.HasPrefix(entry, "TERM=") }) {
+	if goos != "windows" {
 		return environ
 	}
-	return append(slices.Clip(environ), termWithoutHardTabs)
+	return append(slices.DeleteFunc(slices.Clone(environ), func(entry string) bool { return strings.HasPrefix(entry, "TERM=") }), termWithoutHardTabs)
 }
 
 func Run(options Options) error {
