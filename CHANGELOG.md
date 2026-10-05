@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.1 - 2026-10-05
+
+Setup by role and undo.
+
 ### Added
 
 - **Cron, loops and goals.** `/loop 10m <prompt>` repeats a prompt, `/goal <prompt> --until "<command>"` keeps working until the command passes, and `/cron` makes, lists, edits, pauses and deletes jobs. Every change to a job is kept as a version with its reason, and the lead can change a job under the `cron_edits` rule.
@@ -41,7 +45,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - **`edit` keeps CRLF and a BOM.** A refused edit names the lines to read instead of pasting the file. A partial read covers only the lines read.
 - **`write` over an existing file writes in place**, so it keeps the mode and a symlink, and works while another process reads the file. A write that replaces code with a placeholder such as `// ... rest unchanged` is refused.
 - **A path whose link leads outside the project is refused**, and `glob` and `search` skip folder links.
-- **`glob`** takes `**` and `{a,b}`. **`search`** shows a match on a very long line, skips files over 16 MB, and goes on past a file it cannot read.
+- **`glob`** takes double-star patterns and `{a,b}`. **`search`** shows a match on a very long line, skips files over 16 MB, and goes on past a file it cannot read.
 - **A long tool result is stored whole**, so `artifact_fetch` can read its middle.
 - **The model picker** never offers Fable, opens on the model in use, and keeps its header in cmd and Git Bash.
 - **A plain cmd window** shows colour instead of raw escape codes, and tofu leaves the console's code page as it found it.
