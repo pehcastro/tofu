@@ -85,7 +85,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
 		t.ledger.Mark(args.Path, content)
-		return Result{Content: capResult(repair + string(content)), Command: args.Path}, nil
+		return Result{Content: repair + string(content), Command: args.Path}, nil
 	}
 
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
@@ -105,7 +105,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
 	t.ledger.Mark(args.Path, content)
 	return Result{
-		Content: capResult(repair + span + "\n" + strings.Join(lines[start-1:end], "\n")),
+		Content: repair + span + "\n" + strings.Join(lines[start-1:end], "\n"),
 		Command: span,
 	}, nil
 }

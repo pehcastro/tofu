@@ -1,0 +1,2 @@
+{"text":"fetching the middle","tools":[{"name":"artifact_fetch","args":{"handle":"HANDLE","offset":16384,"length":192}},{"name":"artifact_fetch","args":{"handle":"HANDLE","offset":51200,"length":192}}]}
+{"text":"the fetch is done"}

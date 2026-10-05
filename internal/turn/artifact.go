@@ -50,7 +50,7 @@ func (a Artifacts) Render(content string, bytesCap int) (string, string, error) 
 	}
 	reference := elided.Reference
 	return fmt.Sprintf(
-		"artifact %s holds this result whole: %d bytes, not pasted. the first %d and the last %d bytes follow. "+
+		"artifact %s holds this result whole: %d bytes, the first %d and the last %d bytes follow. "+
 			"call artifact_fetch with this handle, an offset and a length to read any other range.\n%s%s%s",
 		reference.ID, reference.Bytes, len(reference.Head), len(reference.Tail),
 		reference.Head, truncationMarker, reference.Tail,

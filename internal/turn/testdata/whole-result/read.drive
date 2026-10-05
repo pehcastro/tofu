@@ -1,0 +1,4 @@
+type read big.txt
+key enter
+wait the read is done
+screen

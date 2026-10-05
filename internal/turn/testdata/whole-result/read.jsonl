@@ -1,0 +1,2 @@
+{"text":"reading big.txt","tools":[{"name":"read","args":{"path":"big.txt"}}]}
+{"text":"the read is done"}
