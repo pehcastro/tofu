@@ -290,3 +290,19 @@
   do: tofu settings set browserSteps 10
   check: tofu settings get browserSteps
   topic: browser
+- ask: repeat a prompt every few minutes
+  do: /loop 10m check the build
+  check: /cron list
+  topic: cron
+- ask: keep working until a test passes
+  do: /goal make the test pass --until "go test ./..."
+  check: /cron history c1
+  topic: cron
+- ask: change when a scheduled job fires
+  do: /cron edit c1 --schedule "every 30m" --reason "the build is stable"
+  check: /cron history c1
+  topic: cron
+- ask: stop a scheduled job
+  do: /cron delete c1
+  check: /cron list
+  topic: cron

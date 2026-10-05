@@ -24,6 +24,7 @@ import (
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/cron"
 	"tofu/internal/judge/jev"
 	"tofu/internal/keymap"
 	"tofu/internal/konst"
@@ -114,6 +115,7 @@ type Pick struct {
 	Wire   string
 	Model  string
 	Effort llm.Effort
+	Fired  string
 }
 
 type Turn func(ctx context.Context, pick Pick, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns)
@@ -174,6 +176,7 @@ type Options struct {
 	Resumed      []Event
 	Pose         string
 	Keymap       string
+	Cron         *cron.Book
 }
 
 type screen int
@@ -263,6 +266,9 @@ type App struct {
 	lastSelection  string
 	drawn          string
 	hits           []frame.Hit
+	cronTicking    bool
+	fired          []string
+	unread         []cron.Fire
 }
 
 type resolvedModel struct {
@@ -367,7 +373,7 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels())
+	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.armCron())
 }
 
 func (a *App) reloadStaleModels() tea.Cmd {
@@ -510,6 +516,11 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 			a.notify(string(msg))
 		}
 		return nil
+	case cronTickMsg:
+		a.cronTicking = false
+		return a.fire(msg)
+	case cronFiresMsg:
+		return a.fire(msg)
 	}
 	if cmd, open := a.toFiles(msg); open {
 		return cmd
@@ -572,13 +583,14 @@ func (a *App) clearDialogs() tea.Cmd {
 }
 
 func (a *App) closed() tea.Cmd {
+	stopped := a.view.Stopping
 	a.busy, a.leading, a.cancel, a.events, a.edits.Busy = false, false, nil, nil, false
 	a.running, a.pressedAt = 0, time.Time{}
 	a.parkSubAgentsTheTurnLeftBehind()
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()
-	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells())
+	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.cronTurnEnded(stopped))
 	task, queued := a.view.Release()
 	if !queued && len(a.handed) > 0 {
 		task, queued = strings.Join(a.handed, "\n\n"), true

@@ -1,0 +1,6 @@
+id: cron_edits
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: a cron job is the person's schedule, and you change it with the cron tool only when the job itself is wrong. you may fix a schedule that misfires, such as a 5-field line that fires at 3am instead of 3pm. you may stretch an interval when the last fires changed nothing, such as every 1m to every 10m on a build that keeps passing. you may pause a job whose prompt no longer fits the work. you never push an expiry more than one step past the one the person set, and the tool refuses it; ask the person instead. a check command, the --until a goal waits on, runs with no gate, so it is the person's to set: when a check never passes, say so in chat and propose the fixed command. every change carries a reason the person reads in one line, such as stretched to every 10m because five fires found the build unchanged.

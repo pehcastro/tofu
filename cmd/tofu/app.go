@@ -26,6 +26,7 @@ import (
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/cron"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/keymap"
@@ -123,14 +124,17 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 }
 
 func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
+	answers := make(chan tui.Answer, 1)
+	steering, stopLead := make(chan string, queuedMessages), make(chan struct{}, 1)
+	live := newAppSession(dir, wiring.open, answers, time.Now, launch.resumed)
 	notes := []string{launch.note}
 	if _, err := gateKey(); err != nil {
 		notes = append(notes, gateOffNote)
 	}
+	if err := live.loadCron(launch.resumed.Session); err != nil {
+		notes = append(notes, err.Error())
+	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
-	answers := make(chan tui.Answer, 1)
-	steering, stopLead := make(chan string, queuedMessages), make(chan struct{}, 1)
-	live := newAppSession(dir, wiring.open, answers, time.Now, launch.resumed)
 	live.steer, live.stopLead = steering, stopLead
 	live.arms = arms
 	live.shells = launch.registry
@@ -167,6 +171,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Resumed:      resumedChat(launch.resumed),
 		Keymap:       shortcuts,
 		Agents:       func() roster.Found { found, _ := discoverAgents(); return found },
+		Cron:         live.cron,
 	}
 }
 
@@ -677,6 +682,7 @@ type appSession struct {
 	shells   *shell.Registry
 	inbox    *turn.Inbox
 	roster   *roster.Roster
+	cron     *cron.Book
 }
 
 type pendingImage struct {
@@ -693,9 +699,21 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 		id:      resumed.Session,
 		shown:   map[string]bool{},
 		granted: map[string]bool{},
+		cron:    &cron.Book{Check: cronChecker(dir)},
 	}
 	live.carry(resumed.messages)
 	return live
+}
+
+func (s *appSession) loadCron(id string) error {
+	if id == "" {
+		return s.cron.Load("")
+	}
+	store, err := sessionstore.Open()
+	if err != nil {
+		return err
+	}
+	return s.cron.Load(cronFile(store, id))
 }
 
 func (s *appSession) renew() {
@@ -718,6 +736,7 @@ func (s *appSession) carry(messages []llm.Message) {
 func (s *appSession) startFresh() string {
 	s.renew()
 	s.id, s.carried, s.pending = "", nil, nil
+	_ = s.loadCron("")
 	return freshSessionNote
 }
 
@@ -835,7 +854,11 @@ func (s *appSession) resumeHead() string {
 	}
 	s.id = carry.Session
 	s.carry(carry.messages)
-	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
+	said := "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
+	if err := s.loadCron(carry.Session); err != nil {
+		said += "; " + err.Error()
+	}
+	return said
 }
 
 func gateOffEvent(gateErr error) tui.Event {
@@ -899,6 +922,12 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(err)
 		return
 	}
+	if pick.Fired != "" {
+		built = withoutPush(built)
+	}
+	if err := s.cron.Keep(cronFile(sessions, opts.session)); err != nil {
+		say("cron jobs were not written: " + err.Error())
+	}
 	if labelled, named := s.label(sessions); named {
 		emit(labelled)
 	}
@@ -943,7 +972,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		person = awaitPerson(emit, s.answers, s.granted)
 	}
 	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: s.roster, inbox: s.inbox, now: s.now,
-		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: s.tabs, leadAsks: person})
+		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: s.tabs, leadAsks: person, cron: s.cron})
 	if configErr != nil {
 		fail(configErr)
 		return
@@ -1011,6 +1040,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			s.id = row.Session
 			if headErr := sessions.SetHead(row.Session); headErr != nil {
 				fail(headErr)
+			}
+			if keepErr := s.cron.Keep(cronFile(sessions, row.Session)); keepErr != nil {
+				fail(keepErr)
 			}
 			if labelled, named := s.label(sessions); named && forked {
 				emit(labelled)

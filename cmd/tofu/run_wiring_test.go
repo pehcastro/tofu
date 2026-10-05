@@ -23,6 +23,7 @@ import (
 
 	"tofu/interface/tui"
 	tuisession "tofu/interface/tui/session"
+	"tofu/internal/cron"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -1110,6 +1111,35 @@ func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testi
 		}
 		if version == 2 && said != 0 {
 			t.Errorf("a stale override is said to be in force while the rule still runs:\n%s", system)
+		}
+	}
+}
+
+func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
+	for _, arms := range [][]string{nil, {"--no-subagents"}, {"--tools", toolSetThree}} {
+		opts := armOpts(t, arms...)
+		built, err := buildTestRunTools(opts.dir, opts.toolSet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription, cron: &cron.Book{}, now: time.Now, notify: func(string) {}})
+		var lead []string
+		for _, definition := range config.Tools.Definitions() {
+			lead = append(lead, definition.Name)
+		}
+		if !slices.Contains(lead, tools.CronToolName) {
+			t.Errorf("arms %v: the lead is not given the cron tool: %v", arms, lead)
+		}
+		if slices.ContainsFunc(built, func(tool turn.Tool) bool { return tool.Name() == tools.CronToolName }) {
+			t.Errorf("arms %v: the cron tool is in the set a sub-agent is given", arms)
+		}
+		bash := withoutPush(built)[slices.IndexFunc(built, func(tool turn.Tool) bool { return tool.Name() == "bash" })]
+		for command, refused := range map[string]bool{"git push origin main": true, "git -C . push --force": true, "git status": false} {
+			raw, _ := json.Marshal(map[string]string{"command": command})
+			_, err := bash.Run(t.Context(), raw)
+			if pushed := err != nil && strings.Contains(err.Error(), "never pushes"); pushed != refused {
+				t.Errorf("arms %v: %q on a fired turn: refused %v, want %v (%v)", arms, command, pushed, refused, err)
+			}
 		}
 	}
 }

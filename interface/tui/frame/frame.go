@@ -59,6 +59,7 @@ type Status struct {
 	Quotas    []Quota
 	InUse     []string
 	Agents    int
+	Crons     int
 	At        time.Time
 	Note      string
 	Release   string

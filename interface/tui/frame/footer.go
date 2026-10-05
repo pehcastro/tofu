@@ -100,6 +100,14 @@ func footerLeft(status Status, width int, form quotaLabel) (head, tail []span) {
 	if status.Note != "" {
 		return []span{panel(" "+status.Note, look.Text)}, nil
 	}
+	head, tail = contextAndQuota(status, width, form)
+	if status.Crons > 0 {
+		head = append(head, panel(footerSeparator+"cron "+strconv.Itoa(status.Crons), look.Mint))
+	}
+	return head, tail
+}
+
+func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []span) {
 	head = []span{panel(" ctx ", look.Blue)}
 	switch {
 	case status.Context.Budget <= 0:

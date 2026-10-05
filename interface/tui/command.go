@@ -44,6 +44,12 @@ func commands(options Options) []session.Command {
 	if options.NewSession != nil {
 		listed = append(listed, session.Command{Name: "new", What: "start fresh, carrying nothing from the last session"})
 	}
+	if options.Cron != nil {
+		listed = append(listed,
+			session.Command{Name: "cron", What: "the scheduled jobs: list, history, edit, pause, resume, delete"},
+			session.Command{Name: "loop", What: "repeat a prompt on an interval: /loop 10m <prompt>"},
+			session.Command{Name: "goal", What: `fire after each turn until a check passes: /goal <prompt> --until "<cmd>"`})
+	}
 	return append(listed, session.Command{Name: "quit", What: "leave tofu"})
 }
 
@@ -107,6 +113,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.carry(a.options.ResumeHead)
 	case "new":
 		a.carry(a.options.NewSession)
+	case "cron", "loop", "goal":
+		return a.cronLine("/" + name)
 	case "quit":
 		return tea.Quit
 	default:

@@ -257,7 +257,9 @@ func (a *App) leadTurnEnds(words string) {
 	a.leading, a.running = false, 0
 }
 
-func (a *App) start(task string) tea.Cmd {
+func (a *App) start(task string) tea.Cmd { return a.startAs(task, "") }
+
+func (a *App) startAs(task, fired string) tea.Cmd {
 	if a.options.Turn == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: noEngine})
 		return nil
@@ -266,7 +268,7 @@ func (a *App) start(task string) tea.Cmd {
 	events := make(chan Event, eventBuffer)
 	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
 	a.leadTurnBegins()
-	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}
+	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort, Fired: fired}
 	deliver := func(event Event) {
 		if !event.snapshot() {
 			events <- event
@@ -379,6 +381,7 @@ func (a *App) absorb(event Event) {
 		a.view.Resume()
 	case EventSteered:
 		a.view.Delivered(event.Text)
+		a.steerRead(event.Text)
 		if taken := slices.Index(a.handed, event.Text); taken >= 0 {
 			a.handed = slices.Delete(a.handed, taken, taken+1)
 		}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/browser/jevloop"
+	"tofu/internal/cron"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
@@ -126,8 +127,16 @@ type runtime struct {
 	orchestrator models.Model
 	tabs         *tools.BrowserTabs
 	leadAsks     turn.Person
+	cron         *cron.Book
 
 	omitThinkingSummary bool
+}
+
+func (r runtime) leadTools(lead []turn.Tool) turn.Registry {
+	if r.cron != nil {
+		lead = append(slices.Clone(lead), tools.Cron{Book: r.cron, Now: r.now, Told: r.notify})
+	}
+	return turn.NewRegistry(lead...)
 }
 
 type summaryOmitted struct{ inner turn.Model }
@@ -701,6 +710,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		run.scorer.turnID = orchestratorID
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
+		config.Tools = run.leadTools(built)
 		return config, nil, nil
 	}
 	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
@@ -735,7 +745,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		spawner.SettingsTool = true
 		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))
 	}
-	config.Tools = turn.NewRegistry(orchestrating...)
+	config.Tools = run.leadTools(orchestrating)
 	return config, spawner, nil
 }
 
