@@ -24,7 +24,6 @@ const (
 	Name                    = llm.WireAnthropic
 	MessagesPath            = "/v1/messages"
 	OAuthQuery              = "?beta=true"
-	WatchdogSeconds         = 600
 	unattestedRequestNotice = "the billing placeholder is present but not patched; sending an unattested request"
 )
 
@@ -36,7 +35,6 @@ type Config struct {
 	Token      TokenSource
 	HTTP       *http.Client
 	Transport  transport.Config
-	Watchdog   time.Duration
 	StreamIdle time.Duration
 	Proxy      bool
 	SessionID  string
@@ -68,18 +66,10 @@ func New(config Config) (*Wire, error) {
 		return nil, transport.Fail("anthropic.New", transport.KindMissingCredential, nil,
 			"%q is not the official anthropic host and the wire is not configured as a proxy", config.BaseURL)
 	}
-	if config.Watchdog <= 0 {
-		config.Watchdog = WatchdogSeconds * time.Second
-	}
 	if config.StreamIdle <= 0 {
 		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
 	}
-	client := &http.Client{}
-	if config.HTTP != nil {
-		*client = *config.HTTP
-	}
-	client.Transport = llm.Retrying(client.Transport, config.Transport)
-	return &Wire{config: config, http: client, version: cmp.Or(config.ClaudeCodeVersion, PinnedClaudeCodeVersion)}, nil
+	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle), version: cmp.Or(config.ClaudeCodeVersion, PinnedClaudeCodeVersion)}, nil
 }
 
 type Dump struct {
@@ -210,9 +200,6 @@ func (w *Wire) endpoint(oauth bool) string {
 }
 
 func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta, onThinking func(string)) (Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, w.config.Watchdog)
-	defer cancel()
-
 	request, err := http.NewRequestWithContext(ctx, dump.Method, dump.URL, strings.NewReader(string(dump.Body)))
 	if err != nil {
 		return Result{}, transport.Fail("anthropic.Ask", transport.KindBadRequest, err, "building the request")

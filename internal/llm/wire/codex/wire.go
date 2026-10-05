@@ -13,10 +13,7 @@ import (
 	"tofu/internal/transport"
 )
 
-const (
-	Name            = llm.WireCodex
-	WatchdogSeconds = 600
-)
+const Name = llm.WireCodex
 
 type TokenSource func(ctx context.Context) (string, error)
 
@@ -26,7 +23,6 @@ type Config struct {
 	Token          TokenSource
 	HTTP           *http.Client
 	Transport      transport.Config
-	Watchdog       time.Duration
 	StreamIdle     time.Duration
 	InstallationID string
 	SessionID      string
@@ -45,18 +41,10 @@ func New(config Config) (*Wire, error) {
 	if config.Token == nil {
 		return nil, transport.Fail("codex.New", transport.KindMissingCredential, nil, "the wire has no token source")
 	}
-	if config.Watchdog <= 0 {
-		config.Watchdog = WatchdogSeconds * time.Second
-	}
 	if config.StreamIdle <= 0 {
 		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
 	}
-	client := &http.Client{}
-	if config.HTTP != nil {
-		*client = *config.HTTP
-	}
-	client.Transport = llm.Retrying(client.Transport, config.Transport)
-	return &Wire{config: config, http: client}, nil
+	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle)}, nil
 }
 
 type Dump struct {
@@ -129,7 +117,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	}
 
 	sent := time.Now()
-	result, err := llm.RetryQuiet(ctx, w.config.Transport, nil, func() (Result, error) {
+	result, err := llm.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
 		return w.post(ctx, dump, request.OnThinking)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
@@ -152,9 +140,6 @@ func (w *Wire) endpoint(subscription bool) string {
 }
 
 func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, w.config.Watchdog)
-	defer cancel()
-
 	request, err := http.NewRequestWithContext(ctx, dump.Method, dump.URL, strings.NewReader(string(dump.Body)))
 	if err != nil {
 		return Result{}, transport.Fail("codex.Ask", transport.KindBadRequest, err, "building the request")

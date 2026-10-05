@@ -3,6 +3,7 @@ package codex
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -83,13 +84,16 @@ type streamEvent struct {
 				ReasoningTokens int `json:"reasoning_tokens"`
 			} `json:"output_tokens_details"`
 		} `json:"usage"`
+		Error *streamError `json:"error"`
 	} `json:"response"`
 	Headers map[string]string `json:"headers"`
-	Error   struct {
-		Type    string `json:"type"`
-		Code    string `json:"code"`
-		Message string `json:"message"`
-	} `json:"error"`
+	Error   streamError       `json:"error"`
+}
+
+type streamError struct {
+	Type    string `json:"type"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type openItem struct {
@@ -137,10 +141,10 @@ func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, err, "reading the stream")
+		return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", llm.ErrStreamBroke, err), "reading the stream")
 	}
 	if !state.terminal {
-		return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, nil,
+		return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, llm.ErrStreamBroke,
 			"the codex stream drained before a terminal event, so the turn is truncated rather than complete")
 	}
 	return state.finish(), nil
@@ -152,8 +156,16 @@ func (s *streamState) handle(event streamEvent) error {
 	}
 	switch event.Type {
 	case "error", "response.failed":
-		return transport.Fail("codex.ReadStream", transport.KindProvider, nil,
-			"the stream carried an error: %s %s: %s", event.Error.Type, event.Error.Code, event.Error.Message)
+		failed := event.Error
+		if event.Response.Error != nil {
+			failed = *event.Response.Error
+		}
+		var broke error
+		if failed.Code == "server_is_overloaded" || failed.Code == "server_error" || failed.Type == "server_error" {
+			broke = llm.ErrStreamBroke
+		}
+		return transport.Fail("codex.ReadStream", transport.KindProvider, broke,
+			"the stream carried an error: %s %s: %s", failed.Type, failed.Code, failed.Message)
 
 	case "response.output_item.added":
 		item := &openItem{kind: event.Item.Type, toolIndex: -1}

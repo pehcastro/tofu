@@ -3,6 +3,7 @@ package anthropic
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -128,7 +129,11 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (R
 
 		switch event.Type {
 		case "error":
-			return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, nil,
+			var broke error
+			if event.Error.Type == "overloaded_error" || event.Error.Type == "api_error" {
+				broke = llm.ErrStreamBroke
+			}
+			return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, broke,
 				"the stream carried an error: %s: %s", event.Error.Type, event.Error.Message)
 
 		case "message_start":
@@ -216,15 +221,15 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (R
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, err, "reading the stream")
+		return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", llm.ErrStreamBroke, err), "reading the stream")
 	}
 
 	if !sawStart {
-		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, nil,
+		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, llm.ErrStreamBroke,
 			"stream ended before message_start")
 	}
 	if !sawTerminal {
-		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, nil,
+		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, llm.ErrStreamBroke,
 			"stream ended before message_stop")
 	}
 	if !sawStop {

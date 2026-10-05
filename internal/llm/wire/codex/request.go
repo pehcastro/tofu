@@ -37,6 +37,7 @@ type Request struct {
 	MaxOutputTokens int
 	Sampling        Sampling
 	OnThinking      func(string)
+	OnRetry         func()
 }
 
 const imageDetail = "high"

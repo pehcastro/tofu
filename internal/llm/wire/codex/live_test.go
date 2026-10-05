@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -37,7 +36,6 @@ func liveWire(t *testing.T) *Wire {
 	wire, err := New(Config{
 		Model:          cmp.Or(os.Getenv("TOFU_LIVE_CODEX_MODEL"), liveModel),
 		Token:          cred.NewManager(store, spec).Access,
-		Watchdog:       2 * time.Minute,
 		InstallationID: "tofu-live-test",
 		SessionID:      "00000000-0000-4000-8000-000000000002",
 	})

@@ -880,6 +880,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Tools:        request.Tools,
 		Effort:       c.effort,
 		OnThinking:   request.OnThinking,
+		OnRetry:      request.OnRetry,
 	})
 	if err != nil {
 		return llm.Decision{}, err

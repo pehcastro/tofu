@@ -1,0 +1,4 @@
+data: {"type":"message_start","message":{"id":"msg_bad","model":"claude-test","usage":{"input_tokens":3}}}
+
+data: {"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long"}}
+

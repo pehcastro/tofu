@@ -1,0 +1,5 @@
+# a second empty end_turn ends the turn saying so
+type say something
+key enter
+wait failed after
+screen

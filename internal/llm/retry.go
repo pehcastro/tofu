@@ -16,14 +16,20 @@ type retrying struct {
 	plan transport.Config
 }
 
-func Retrying(base http.RoundTripper, plan transport.Config) http.RoundTripper {
-	if plan.Retries <= 0 {
-		return base
+func StreamingClient(given *http.Client, plan transport.Config, headersWithin time.Duration) *http.Client {
+	client := &http.Client{}
+	if given != nil {
+		*client = *given
 	}
-	if base == nil {
-		base = http.DefaultTransport
+	if client.Transport == nil {
+		bounded := http.DefaultTransport.(*http.Transport).Clone()
+		bounded.ResponseHeaderTimeout = headersWithin
+		client.Transport = bounded
 	}
-	return retrying{base: base, plan: plan}
+	if plan.Retries > 0 {
+		client.Transport = retrying{base: client.Transport, plan: plan}
+	}
+	return client
 }
 
 func (r retrying) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -54,7 +60,7 @@ func (r retrying) RoundTrip(request *http.Request) (*http.Response, error) {
 			_ = response.Body.Close()
 		}
 		if paused := r.plan.Pause(request.Context(), wait); paused != nil {
-			return nil, transport.Fail("llm.Retrying", transport.KindTimeout, paused, "waiting to send the request again")
+			return nil, transport.Fail("llm.StreamingClient", transport.KindTimeout, paused, "waiting to send the request again")
 		}
 	}
 }
@@ -63,7 +69,7 @@ func RetryQuiet[T any](ctx context.Context, plan transport.Config, onRetry func(
 	retry := plan.Retry()
 	for attempt := 1; ; attempt++ {
 		result, err := post()
-		if !errors.Is(err, ErrStreamIdle) || ctx.Err() != nil {
+		if !errors.Is(err, ErrStreamBroke) || ctx.Err() != nil {
 			return result, err
 		}
 		wait, again := retry.Next(attempt, 0, "")

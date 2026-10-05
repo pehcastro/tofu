@@ -2,6 +2,7 @@ package llm
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"sync/atomic"
 	"time"
@@ -9,7 +10,9 @@ import (
 	"tofu/internal/transport"
 )
 
-var ErrStreamIdle = errors.New("no byte of the stream arrived within the idle timeout")
+var ErrStreamBroke = errors.New("the stream broke after the response began")
+
+var ErrStreamIdle = fmt.Errorf("%w: no byte of the stream arrived within the idle timeout", ErrStreamBroke)
 
 type idleBody struct {
 	body  io.ReadCloser

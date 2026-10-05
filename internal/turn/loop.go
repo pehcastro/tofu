@@ -316,7 +316,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			reason = err.Error()
 		case decision.Outcome == llm.OutcomeTruncated:
 			reason = "it hit the output token limit partway through"
-		case decision.Outcome != llm.OutcomeMessage:
+		case decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "":
 			reason = "the model answered with no text"
 		}
 		if reason != "" {
@@ -333,6 +333,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	flush()
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants := 0, 0
+	askedAgainAfterBlank := false
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
 			return finish(OutcomeError), err
@@ -365,6 +366,19 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
+
+		if decision.Outcome == llm.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
+			if askedAgainAfterBlank {
+				keep(stepRow)
+				return finish(OutcomeError), transport.Fail("turn.Run", transport.KindInvalidAnswer, nil,
+					"the model answered twice in a row with no text and no tool call")
+			}
+			askedAgainAfterBlank = true
+			stepRow.Warnings = append(stepRow.Warnings, "the model answered with no text and no tool call, so it was asked again")
+			keep(stepRow)
+			continue
+		}
+		askedAgainAfterBlank = false
 
 		switch decision.Outcome {
 		case llm.OutcomeMessage:

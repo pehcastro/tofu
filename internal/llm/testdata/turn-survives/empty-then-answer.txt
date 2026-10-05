@@ -1,0 +1,5 @@
+# an empty end_turn is asked again, so the chat shows the answer
+type say something
+key enter
+wait cooked for
+screen
