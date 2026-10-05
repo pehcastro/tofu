@@ -875,7 +875,7 @@ func (m *leadRecording) Ask(ctx context.Context, request llm.Request) (llm.Decis
 	return m.queuedModel.Ask(ctx, request)
 }
 
-func TestOnAReactProjectTheLeadCarriesNoCodeRuleAndNoUnusedToolAndItsTsDevKeepsTheRules(t *testing.T) {
+func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevCarriesBoth(t *testing.T) {
 	dir := scratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies": {"react": "19"}}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -903,8 +903,15 @@ func TestOnAReactProjectTheLeadCarriesNoCodeRuleAndNoUnusedToolAndItsTsDevKeepsT
 		return prompt, tools
 	}
 	lead, leadTools := sent(model.leadAsked[0])
-	if strings.Contains(lead, "[code_rules,") {
-		t.Errorf("the lead's first request carries a code rule:\n%s", lead)
+	for _, writing := range []string{"from the rule react_events_not_effects]", "from the rule ts_handled_promise]", "from the rule fe_motion_properties]"} {
+		if strings.Contains(lead, writing) {
+			t.Errorf("the lead carries %q, which says how code is written", writing)
+		}
+	}
+	for _, design := range []string{"[code_rules, from the rule fe_consequential_actions]", "[code_rules, from the rule fe_control_states]", "[code_rules, from the rule fe_four_states]"} {
+		if !strings.Contains(lead, design) {
+			t.Errorf("the lead lost %q, which says what to build and so what to brief", design)
+		}
 	}
 	for _, process := range []string{"from the rule verify_sub_agents]", "from the rule verify_scoped]"} {
 		if !strings.Contains(lead, process) {
@@ -920,7 +927,7 @@ func TestOnAReactProjectTheLeadCarriesNoCodeRuleAndNoUnusedToolAndItsTsDevKeepsT
 		t.Errorf("the lead lost spawn: %v", leadTools)
 	}
 	writer, _ := sent(model.subAgentAsked[0])
-	for _, code := range []string{"[code_rules, from the rule fe_control_states]", "[code_rules, from the rule react_events_not_effects]", "[code_rules, from the rule ts_handled_promise]"} {
+	for _, code := range []string{"[code_rules, from the rule fe_control_states]", "[code_rules, from the rule fe_motion_properties]", "[code_rules, from the rule react_events_not_effects]", "[code_rules, from the rule ts_handled_promise]"} {
 		if !strings.Contains(writer, code) {
 			t.Errorf("the ts-dev sub-agent writing the code lost %q", code)
 		}

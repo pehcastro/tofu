@@ -2,6 +2,7 @@ id: fe_contrast_and_signal
 domain: dev
 kind: human
 concern: code_rules
+shapes: design
 framework: react, svelte, vue, solid, angular, astro, preact
 text: text is at least 4.5:1 against its background, or 3:1 at 24 px and above or 18.66 px bold, and an input border, an icon-only button, a focus ring and a toggle track are at least 3:1 against what sits beside them. measure the pair as rendered on its real surface, not by token name. colour is never the only signal: an error, a status or a link inside running text also has an icon, a word, a shape or an underline. the checks are axe's `color-contrast` and `link-in-text-block`.
 notes: text and controls below these ratios are unreadable with low vision or in bright light, and a signal carried by colour alone is lost to colour-blind people. it guards against measuring a token instead of what renders, and status shown only as red or green.

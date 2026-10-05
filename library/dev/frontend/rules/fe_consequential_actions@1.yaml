@@ -2,6 +2,7 @@ id: fe_consequential_actions
 domain: dev
 kind: human
 concern: code_rules
+shapes: design
 framework: react, svelte, vue, solid, angular, astro, preact
 text: a reversible destructive action happens at once and offers undo; an irreversible one asks first, and the question states the consequence, such as this deletes 12 runs and cannot be undone, never a bare are you sure. update the screen before the server answers only for a low-risk action, a toggle, a like, a reorder, and on failure roll it back and say so; a payment, a deletion or a send shows real progress and the real result. after a mutation, change the data and the actions on screen; a toast alone is not done. the project's own tests fail the request and assert the rollback and its message, and on the dev server tofu's browser tools press the control and read what the screen says after.
 notes: a person must be able to trust that what the screen says happened did happen, and to recover from a slip. it guards against irreversible actions taken on one click, optimistic updates that stay wrong without a word, and a toast standing in for the result.

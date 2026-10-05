@@ -122,6 +122,13 @@ func (r Rule) ReachesDevFor(task Task) bool {
 	panic("rule: unknown reach " + string(r.AlsoReaches))
 }
 
+type Shape string
+
+const (
+	ShapeWriting Shape = ""
+	ShapeDesign  Shape = "design"
+)
+
 type Rule struct {
 	ID           string
 	Kind         Kind
@@ -135,6 +142,7 @@ type Rule struct {
 	ModeDeclared bool
 	Except       Exception
 	AlsoReaches  Reach
+	Shapes       Shape
 	Trigger      Trigger
 	Text         string
 	Notes        string

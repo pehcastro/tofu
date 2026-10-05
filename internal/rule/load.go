@@ -219,6 +219,11 @@ func (r *Rule) setField(key, value, path string, line int) error {
 			return fmt.Errorf("%s:%d: also_reaches is %q, found %q", path, line, ReachWorkOnTests, value)
 		}
 		r.AlsoReaches = ReachWorkOnTests
+	case "shapes":
+		if Shape(value) != ShapeDesign {
+			return fmt.Errorf("%s:%d: shapes is %q, and a rule that says how code is written declares nothing, found %q", path, line, ShapeDesign, value)
+		}
+		r.Shapes = ShapeDesign
 	case "text":
 		r.Text = value
 	case "notes":

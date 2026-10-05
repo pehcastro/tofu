@@ -2,6 +2,7 @@ id: fe_control_states
 domain: dev
 kind: human
 concern: code_rules
+shapes: design
 framework: react, svelte, vue, solid, angular, astro, preact
 text: every interactive element has a default, a hover, a `:focus-visible`, an active and a disabled state, and a loading state when it starts async work; a loading button keeps its width and its label. put hover inside `@media (hover: hover) and (pointer: fine)` so a tap does not leave it stuck on; Tailwind v4's `hover:` variant already sits inside `(hover: hover)`. a disabled control has no hover effect. the first tooltip waits before it opens, and while one is open its neighbours open at once with no animation. what looks clickable is clickable. on the dev server, tofu's browser tools hover, tab to and press each control and read its state after each.
 notes: a control that does not show hover, focus, press, disabled and loading leaves the person guessing whether it heard them. it guards against hover stuck on after a tap, buttons that jump when they start loading, and things that look clickable and are not.
