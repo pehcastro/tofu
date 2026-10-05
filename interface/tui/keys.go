@@ -114,15 +114,12 @@ func (a *App) quoteSelection() tea.Cmd {
 func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	key := msg.String()
 	if a.view.TakesAnswerDigits() {
-		switch key {
-		case "1":
-			a.answer(AllowedOnce)
-			return nil, true
-		case "2":
-			a.answer(Denied)
-			return nil, true
-		case "3":
-			a.answer(AlwaysHere)
+		answers := [...]Answer{AllowedOnce, Denied, AlwaysHere}
+		if a.view.AsksWhereToOverride() {
+			answers = [...]Answer{AllowedOnce, AlwaysHere, Denied}
+		}
+		if at := slices.Index([]string{"1", "2", "3"}, key); at >= 0 {
+			a.answer(answers[at])
 			return nil, true
 		}
 	}

@@ -77,14 +77,15 @@ type Reason struct {
 }
 
 type Decision struct {
-	Tool     string
-	Verdict  Verdict
-	Answers  []Answer
-	Reason   Reason
-	Failure  string
-	Awaiting bool
-	Enforced bool
-	asked    bool
+	Tool          string
+	Verdict       Verdict
+	Answers       []Answer
+	Reason        Reason
+	Failure       string
+	Awaiting      bool
+	Enforced      bool
+	OverridesRule string
+	asked         bool
 }
 
 func (d *Decision) shown() string {
@@ -129,6 +130,11 @@ func (m *Model) openAsk() (Entry, bool) {
 	return Entry{}, false
 }
 
+func (m *Model) AsksWhereToOverride() bool {
+	entry, open := m.openAsk()
+	return open && entry.Decision.OverridesRule != ""
+}
+
 func (m *Model) askLines() []string {
 	entry, open := m.openAsk()
 	if !open {
@@ -138,12 +144,17 @@ func (m *Model) askLines() []string {
 	if tripped := entry.Decision.tripped(); tripped != "" {
 		head += askGap + tripped
 	}
+	labels := [...]string{"[1] allow once", "[2] deny", "[3] always here"}
+	if overriding := entry.Decision.OverridesRule; overriding != "" {
+		head = askMarker + "override " + overriding + "?"
+		labels = [...]string{"[1] this project", "[2] everywhere", "[3] no"}
+	}
 	id := ""
 	if short := trace.Short(entry.ID); short != "" {
 		id = askGap + look.TypedID(toolKind, short)
 	}
 	keys := ""
-	for _, label := range [...]string{"[1] allow once", "[2] deny", "[3] always here"} {
+	for _, label := range labels {
 		keys += look.DialogChoice(false, label)
 	}
 	inner := m.width - 2*askPadX

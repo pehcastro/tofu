@@ -563,7 +563,15 @@ func openAppWire(opts runOpts) (appWire, error) {
 func awaitPerson(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns, answers <-chan tui.Answer, granted map[string]bool) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
-		if granted[place] {
+		var overriding struct{ Rule, Question string }
+		if request.Tool == (tools.RuleOverride{}).Name() {
+			_ = json.Unmarshal(request.Args, &overriding)
+		}
+		switch {
+		case overriding.Question != "":
+			emit(tui.Event{Kind: tui.EventNote, Text: overriding.Question})
+			emit(tui.Event{Kind: tui.EventDecision, Decision: &session.Decision{Tool: request.Tool, Verdict: session.Ask, OverridesRule: overriding.Rule}})
+		case granted[place]:
 			return turn.PersonAlwaysHere, nil
 		}
 		emit(tui.Event{Kind: tui.EventAwaitPerson})
@@ -576,7 +584,9 @@ func awaitPerson(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns, answers
 			var out turn.PersonAnswer
 			switch answered {
 			case tui.AlwaysHere:
-				granted[place] = true
+				if overriding.Question == "" {
+					granted[place] = true
+				}
 				out = turn.PersonAlwaysHere
 			case tui.AllowedOnce:
 				out = turn.PersonAllowedOnce
@@ -928,8 +938,12 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		return watchedSubAgent{watch: watch, inner: asked}, guardErr
 	}
 	notify := func(notice string) { emit(tui.Event{Kind: tui.EventNote, Text: notice}) }
+	var person turn.Person
+	if s.answers != nil {
+		person = awaitPerson(emit, s.answers, s.granted)
+	}
 	config, spawner, configErr := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: notify, roster: s.roster, inbox: s.inbox, now: s.now,
-		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: s.tabs})
+		open: s.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: s.tabs, leadAsks: person})
 	if configErr != nil {
 		fail(configErr)
 		return
@@ -951,9 +965,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	}
 	config.History = s.carried
 	config.Images = images
-	if s.answers != nil {
-		config.Person = awaitPerson(emit, s.answers, s.granted)
-	}
+	config.Person = person
 	if s.steer != nil {
 		config.Steering = func() []string { return steered(s.steer, emit) }
 	}

@@ -54,6 +54,7 @@ type ComposeSpec struct {
 	Environment  string
 	ToolGuidance string
 	Rules        []rule.Rule
+	SwitchedOff  []rule.Overriding
 	Agent        subagent.Definition
 	Skills       []skill.Skill
 	WindowTokens int
@@ -188,6 +189,13 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			Text:    text,
 			ByTask:  !withoutTask[i].Fires || outsideAgentDomain(fired),
 		})
+	}
+	for _, off := range spec.SwitchedOff {
+		text := "the person switched this rule off on purpose, so it does not apply here"
+		if off.Rule.Override.Reason != "" {
+			text += ": " + off.Rule.Override.Reason
+		}
+		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text})
 	}
 	order := composedOrder()
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {

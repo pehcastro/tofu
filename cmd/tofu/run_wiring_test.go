@@ -21,15 +21,20 @@ import (
 	"testing"
 	"time"
 
+	"tofu/interface/tui"
+	tuisession "tofu/interface/tui/session"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 func projectSessions(t *testing.T, dir string) *session.Store {
@@ -1002,5 +1007,109 @@ func TestTheLeadEndsOnACleanSingleReportAndChecksAfterAReportWithConcerns(t *tes
 				t.Errorf("the lead's report turn, want its first call to match %s:\n%s", run.checked, second)
 			}
 		})
+	}
+}
+
+const overrideAsked = "no_unit_test_after_code"
+
+const ruleOverrideCassette = `{"text":"a rule stops me","tools":[{"name":"rule_override","args":{"rule":"no_unit_test_after_code","reason_from_rule":"tests written after the code agree with it","why_now":"you asked for unit tests on the parser","change":"off"}}]}
+{"text":"the answer is in"}
+`
+
+func TestTheLeadAsksWhereToOverrideARuleAndOnlyAYesWritesTheFile(t *testing.T) {
+	for _, answer := range []struct {
+		key             string
+		project, global bool
+	}{
+		{"1", true, false},
+		{"2", false, true},
+		{"3", false, false},
+	} {
+		t.Run(answer.key, func(t *testing.T) {
+			dir, home := drivenProject(t), t.TempDir()
+			script := written(t, dir, "override.drive", strings.Join([]string{
+				"wait " + tuisession.Placeholder,
+				"type add unit tests to the parser",
+				"key enter",
+				"wait [3] no",
+				"screen",
+				"key " + answer.key,
+				"wait cooked for",
+			}, "\n"))
+			deck := written(t, dir, "override.cassette", ruleOverrideCassette)
+			var out, errOut bytes.Buffer
+			if code := driveVerb([]string{script, "--cassette", deck, "--home", home, "--plain", "--timeout", "30s", "--gate", "off"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+				t.Fatalf("tofu drive exited %d: %s\n%s", code, errOut.String(), out.String())
+			}
+			for _, want := range []string{overrideAsked, "ordering", "[1] this project"} {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("the asking screen never shows %q:\n%s", want, out.String())
+				}
+			}
+			for _, layer := range []struct {
+				dir   string
+				wrote bool
+			}{
+				{filepath.Join(dir, ".tofu", "rules"), answer.project},
+				{filepath.Join(home, ".tofu", "rules"), answer.global},
+			} {
+				data, err := os.ReadFile(filepath.Join(layer.dir, overrideAsked+"@1.yaml"))
+				if layer.wrote != (err == nil) {
+					t.Fatalf("key %s: %s holds the override %v, want %v", answer.key, layer.dir, err == nil, layer.wrote)
+				}
+				if layer.wrote && !strings.Contains(string(data), "by: asked") {
+					t.Errorf("key %s wrote an override not marked by: asked:\n%s", answer.key, data)
+				}
+			}
+		})
+	}
+}
+
+func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing.T) {
+	request := turn.GateRequest{Tool: tools.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
+	granted := map[string]bool{askedPlace(request): true}
+	answers := make(chan tui.Answer, 1)
+	var shown []tui.Event
+	person := awaitPerson(func(event tui.Event) { shown = append(shown, event) }, answers, granted)
+	answers <- tui.Denied
+	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonDenied {
+		t.Fatalf("a rule question under a granted place answered %v, %v, want the person's no", got, err)
+	}
+	clear(granted)
+	answers <- tui.AlwaysHere
+	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonAlwaysHere || len(granted) > 0 {
+		t.Fatalf("everywhere answered %v, %v and left the cache %v, want everywhere and an empty cache", got, err, granted)
+	}
+	asked := slices.ContainsFunc(shown, func(event tui.Event) bool {
+		return event.Kind == tui.EventDecision && event.Decision != nil && event.Decision.OverridesRule == overrideAsked
+	})
+	said := slices.ContainsFunc(shown, func(event tui.Event) bool { return strings.Contains(event.Text, "A rule stops me") })
+	if !asked || !said {
+		t.Errorf("the person was asked without the rule %v or the question %v: %+v", asked, said, shown)
+	}
+}
+
+func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		project := chdirTemp(t)
+		data, err := rule.OverrideFile(overrideAsked, "", rule.Override{Of: overrideAsked, Version: version, Reason: "the SDK's unit tests are its contract", By: rule.ByAsked, At: "2026-10-05"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := sys.WriteFile(filepath.Join(project, ".tofu", "rules", overrideAsked+"@1.yaml"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		prompt, err := composeRun(runOpts{dir: project, task: "add unit tests to the parser"}, nil, runtime{open: openAppWire})
+		if err != nil {
+			t.Fatal(err)
+		}
+		system := prompt.composed.System()
+		said := strings.Count(system, "the SDK's unit tests are its contract")
+		if version == 1 && (said != 1 || strings.Contains(system, "NEVER write a unit test")) {
+			t.Errorf("an applied off override says so %d times and the rule text is there %v, want one line and no rule:\n%s", said, strings.Contains(system, "NEVER write a unit test"), system)
+		}
+		if version == 2 && said != 0 {
+			t.Errorf("a stale override is said to be in force while the rule still runs:\n%s", system)
+		}
 	}
 }

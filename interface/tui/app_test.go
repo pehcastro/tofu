@@ -1763,3 +1763,35 @@ func TestAFreshSessionOpensOnTheChatWithTheArtInTheEmptyTranscript(t *testing.T)
 		}
 	})
 }
+
+func TestARuleQuestionTakesOneForThisProjectTwoForEverywhereAndThreeForNo(t *testing.T) {
+	whereKeys := regexp.MustCompile(`\[1\] this project\s+\[2\] everywhere\s+\[3\] no`)
+	for _, pressed := range []struct {
+		key  string
+		want Answer
+	}{
+		{"1", AllowedOnce},
+		{"2", AlwaysHere},
+		{"3", Denied},
+	} {
+		answers := make(chan Answer, 1)
+		app := awaitingApp(t, answers)
+		app.Update(Event{Kind: EventResumed})
+		app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "rule_override", Text: "no_unit_test_after_code"})
+		app.Update(Event{Kind: EventDecision, Decision: &session.Decision{Tool: "rule_override", Verdict: session.Ask, OverridesRule: "no_unit_test_after_code"}})
+		app.Update(Event{Kind: EventAwaitPerson})
+		screen := ansi.Strip(app.View().Content)
+		if !whereKeys.MatchString(screen) || promptKeys.MatchString(screen) || !strings.Contains(screen, "no_unit_test_after_code") {
+			t.Fatalf("the rule question does not name its rule and offer where to override it\n%s", screen)
+		}
+		app.Update(tea.KeyPressMsg{Code: rune(pressed.key[0]), Text: pressed.key})
+		select {
+		case got := <-answers:
+			if got != pressed.want {
+				t.Errorf("%s on a rule question answered %d, want %d", pressed.key, got, pressed.want)
+			}
+		default:
+			t.Errorf("%s on a rule question sent no answer", pressed.key)
+		}
+	}
+}

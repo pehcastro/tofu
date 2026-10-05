@@ -1,8 +1,8 @@
 ---
 title: Customization
-description: Where tofu reads your own rules, sub-agents, skills and instruction files, including .claude, .agents, CLAUDE.md and AGENTS.md, and which one wins.
+description: Where tofu reads your own rules, sub-agents, skills and instruction files, including .claude, .agents, CLAUDE.md and AGENTS.md, which one wins, and how to override a rule tofu ships.
 order: 4
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 You add to the library with plain files, for every project or for one. tofu
@@ -40,8 +40,8 @@ tofu's behaviour behind your back.
 
 ## Adding your own
 
-- **Rules**: `tofu rules add [--global] <id> "<text>"`, `tofu rules off <id>`,
-  `tofu rules remove <id>`.
+- **Rules**: `tofu rules add [--global] <id> "<text>"` and
+  `tofu rules remove <id>`. Changing a rule tofu ships is an override, below.
 - **Sub-agents**: `tofu agents add`, `set` and `remove`, or a file in
   `.tofu/agents/`. `agentSources` (`tofu,agents,claude`) sets the folder order.
 - **Skills**: a folder with a `SKILL.md` under `.tofu/skills/`.
@@ -50,7 +50,49 @@ tofu's behaviour behind your back.
   `instructionSources` picks `agents-first` (default), `claude-first` or
   `both`. They're cut at `projectInstructionsCap`, 32,768 bytes.
 
+## Overriding a rule
+
+An override switches off one of tofu's rules, or replaces what it says, for
+this project or for every project. It is a file in `.tofu/rules/` or
+`~/.tofu/rules/` that names the rule and its version and says why.
+
+**The rules are written for everyone, and your project can need the
+opposite.** A public SDK wants unit tests that `no_unit_test_after_code`
+forbids. The reason is required so whoever reads the project later knows why
+the rule is off.
+
+**tofu asks before it works around a rule.** When a rule stops it doing what
+you asked, it names the rule and the rule's own reason, and waits:
+
+```text
+· A rule stops me: no_unit_test_after_code.
+  Its reason: this is the ordering that makes a test worthless rather than the test itself. ...
+  You asked: unit tests on the parser. Override it?
+? override no_unit_test_after_code?
+  [1] this project  [2] everywhere  [3] no
+```
+
+**1** writes the override into `.tofu/rules/`, **2** into `~/.tofu/rules/`,
+both marked `by: asked`. **3** writes nothing, and tofu works within the rule.
+Each question is asked fresh, never answered from an earlier one. From the
+next turn the prompt says the rule was switched off on purpose.
+
+**An override names the version it changed.** When a new tofu changes the
+rule, the override is marked stale and the rule runs as shipped until you
+look at it again.
+
 ## Commands
+
+```sh
+tofu rules off no_unit_test_after_code --project --reason "public SDK"
+tofu rules add no_unit_test_after_code --project --reason "public SDK" "<new text>"
+tofu rules overrides
+tofu rules restore no_unit_test_after_code --project
+```
+
+`off` and `add` write an override. `overrides` lists each one with its layer,
+reason and date, and whether it is stale. `restore` removes it. `tofu rules
+list` marks every overridden rule, and `tofu doctor` counts them.
 
 ```sh
 tofu settings get instructionSources

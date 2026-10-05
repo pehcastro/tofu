@@ -125,6 +125,7 @@ type runtime struct {
 	wrapSubAgent func(turn.Model) (turn.Model, error)
 	orchestrator models.Model
 	tabs         *tools.BrowserTabs
+	leadAsks     turn.Person
 
 	omitThinkingSummary bool
 }
@@ -600,9 +601,16 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	for _, broken := range discovered.Broken {
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
 	}
-	rules, _, err := loadRules("", cmp.Or(opts.dir, "."))
+	stack, err := stackRules("", cmp.Or(opts.dir, "."))
 	if err != nil {
 		return composedRun{}, err
+	}
+	rules := stack.rules
+	var switchedOff []rule.Overriding
+	for _, applied := range stack.overrides {
+		if applied.Rule.Mode == rule.ModeOff && !applied.Stale && !slices.ContainsFunc(rules, func(r rule.Rule) bool { return r.ID == applied.Base.ID }) {
+			switchedOff = append(switchedOff, applied.Overriding)
+		}
 	}
 	if opts.toolSet == toolSetThree {
 		rules = slices.DeleteFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == toolPickRule })
@@ -621,7 +629,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		say("no framework rule fires this run: " + err.Error())
 	}
 	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: environment,
-		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
+		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
 	spec := subAgents.Prompt
 	spec.Task, spec.ToolGuidance = opts.task, runSystem(opts)
 	if opts.agent != "" {
@@ -714,7 +722,15 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if !nodeProject(dir) {
 		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
 	}
-	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner)
+	layers, err := userRuleLayers(dir)
+	if err != nil {
+		return turn.Config{}, nil, err
+	}
+	running := func() ([]rule.Rule, error) {
+		rules, _, err := loadRules("", dir)
+		return rules, err
+	}
+	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner, tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir})
 	if run.gate != nil {
 		spawner.SettingsTool = true
 		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))
