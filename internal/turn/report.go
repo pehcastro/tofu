@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/recall"
 	"tofu/internal/subagent"
 )
 
@@ -189,7 +191,7 @@ func writtenPath(call ToolCallRow) string {
 	return args.Path
 }
 
-func (r SubAgentReport) Text() string {
+func (r SubAgentReport) Text(store *recall.Store) string {
 	body := &strings.Builder{}
 	forks := ""
 	if r.Forks > 0 {
@@ -215,9 +217,41 @@ func (r SubAgentReport) Text() string {
 	for _, question := range r.Asked {
 		fmt.Fprintf(body, "asks a %s: %s\n", question.Kind, question.Ask)
 	}
-	if r.ProseStep > 0 && r.ProseStep < r.Steps {
-		fmt.Fprintf(body, "it last spoke at step %d of %d:\n", r.ProseStep, r.Steps)
+	if r.Prose == "" {
+		return body.String()
 	}
-	body.WriteString(r.Prose)
+	spoke := "its last message"
+	if r.ProseStep > 0 && r.ProseStep < r.Steps {
+		spoke = fmt.Sprintf("it last spoke at step %d of %d", r.ProseStep, r.Steps)
+	}
+	if len(r.Prose) <= konst.SubAgentProseBytes {
+		fmt.Fprintf(body, "%s, each line marked >:\n%s", spoke, marked(r.Prose))
+		return body.String()
+	}
+	head, tail := runeSafeHead(r.Prose, konst.SubAgentProseEndBytes), runeSafeTail(r.Prose, konst.SubAgentProseEndBytes)
+	dropped := len(r.Prose) - len(head) - len(tail)
+	held := fmt.Sprintf("the %d bytes between were dropped and not stored anywhere", dropped)
+	if store != nil {
+		elided, err := recall.Elide(store, recall.Config{ElideAboveBytes: konst.SubAgentProseBytes}, []byte(r.Prose), true)
+		if err != nil {
+			held += ", because storing them failed: " + err.Error()
+		} else {
+			held = "artifact " + elided.Reference.ID + " holds it whole: call artifact_fetch with this handle, an offset and a length to read any other range"
+		}
+	}
+	fmt.Fprintf(body, "%s is %d bytes, each line marked >. the first %d and the last %d bytes follow, and %s:\n%s\n...(%d bytes cut)...\n%s",
+		spoke, len(r.Prose), len(head), len(tail), held, marked(head), dropped, marked(tail))
 	return body.String()
+}
+
+func marked(prose string) string {
+	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n", "\u0085", "\n").Replace(prose), "\n")
+	for i, line := range lines {
+		if line == "" {
+			lines[i] = ">"
+		} else {
+			lines[i] = "> " + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }

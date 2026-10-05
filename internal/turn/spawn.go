@@ -19,11 +19,13 @@ import (
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/settings"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -634,6 +636,20 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	return Result{Content: held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
+func (t *SpawnTool) proseStore() *recall.Store {
+	if t.base.TruncateResults {
+		return nil
+	}
+	if t.base.ArtifactDir != "" {
+		return recall.NewStore(t.base.ArtifactDir)
+	}
+	state, err := sys.ProjectStateDir()
+	if err != nil {
+		return nil
+	}
+	return recall.NewStore(filepath.Join(state, "artifacts"))
+}
+
 func (t *SpawnTool) clock() time.Time {
 	if t.base.Now == nil {
 		return time.Now()
@@ -831,7 +847,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
 	contract.Wrote = report.Wrote
-	text := report.Text() + "\n\n" + contract.Block()
+	text := report.Text(t.proseStore()) + "\n\n" + contract.Block()
 	if runs := held.runsAs(); runs != "" {
 		text = agent.ID + " ran" + runs + "\n\n" + text
 	}
@@ -1125,7 +1141,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 		decision := DoneDecision{Verdict: DoneReopen, Reason: fmt.Sprintf("you changed a %s file, and your gate is %s, each run after your last edit and passing: %s",
 			held.definition.Language, strings.Join(held.definition.Gate, " and "), why)}
 		if len(missed) == 0 {
-			t.roster.Reached(agent.ID, subagent.InReview, reportOf(agent, held.forkedSoFar(), []Row{wholeRun(claims)}, subagent.InReview).Text())
+			t.roster.Reached(agent.ID, subagent.InReview, reportOf(agent, held.forkedSoFar(), []Row{wholeRun(claims)}, subagent.InReview).Text(t.proseStore()))
 			reviewed := *last
 			reviewed.Task = agent.Brief
 			var err error

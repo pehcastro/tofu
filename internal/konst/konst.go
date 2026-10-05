@@ -155,6 +155,8 @@ const (
 	SubAgentCallsWatched    = 17
 	SubAgentMaxRounds       = 3
 	SubAgentReferenceBytes  = 16384
+	SubAgentProseBytes      = 16384
+	SubAgentProseEndBytes   = 2048
 	SubAgentWarmMillis      = 8000
 	SubAgentSleepSeconds    = 5
 	SubAgentAskMillis       = 30000

@@ -92,7 +92,7 @@ func TestASubAgentPastItsWallClockFinishesItsStepAndAnswersOnceRetired(t *testin
 	if len(model.requests) != 2 || !strings.Contains(lastUserText(model.requests[1]), "retired at its wall clock cap of 2s") {
 		t.Fatalf("the sub-agent sent %d requests, want 2 with the retirement on the second", len(model.requests))
 	}
-	if !strings.Contains(report, OutcomeRetiredWallClockCap.String()) || !strings.Contains(report, "\nslept once; the build is not started") {
+	if !strings.Contains(report, OutcomeRetiredWallClockCap.String()) || !strings.Contains(report, "\n> slept once; the build is not started") {
 		t.Errorf("the report does not carry the wall clock outcome and the last answer")
 	}
 	if tool := model.requests[1].Messages[len(model.requests[1].Messages)-2]; tool.Role != llm.RoleTool || tool.Content != "slept" {
