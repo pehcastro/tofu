@@ -30,6 +30,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 ### Changed
 
 - **`tofu login` takes a role**: `tofu login llm claude-sub|codex-sub|meta`, `tofu login classifier openrouter|typesafe`, `tofu login search brave`. The old forms exit 2 and name the new one. `tofu logout <role> <provider>` removes what a login stored. While you type or paste a key, the field shows its shape (prefix, last four, length) and never the key itself. `tofu login --status` groups by role. Breaking: in `--json`, `role` is now `llm`, `classifier` or `search`.
+- **The lead no longer re-checks a sub-agent's work by default.** It takes a finished report as the result unless the report says something failed, and a clean report ends the turn with no tool call. `tofu settings set verifySubAgents true` or `tofu rules restore verify_sub_agents` turns the check back on.
 - **A turn that fills the context window** shrinks its oldest tool results and asks once more, instead of ending.
 - **The fork point follows the model's window**: 144,000 tokens on a 200k model, where it was 63,000.
 - **An empty answer, or a stream cut by an overloaded server, is retried once.**
