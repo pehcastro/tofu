@@ -113,15 +113,15 @@ func plainWord(source string) bool {
 	return true
 }
 
-func goSymbolAttempt(root, source string, matched map[string]string) (Attempt, error) {
+func goSymbolAttempt(source string, matched map[string]string) Attempt {
 	if len(matched) == 0 {
-		return Attempt{Candidate: GoSymbol, NotRun: subsetOfTheLiteral}, nil
+		return Attempt{Candidate: GoSymbol, NotRun: subsetOfTheLiteral}
 	}
 	if !token.IsIdentifier(source) {
 		return Attempt{
 			Candidate: GoSymbol,
 			NotRun:    "the pattern is not a go identifier, and a declaration is looked up here by its name alone",
-		}, nil
+		}
 	}
 	var files []string
 	for rel := range matched {
@@ -133,14 +133,11 @@ func goSymbolAttempt(root, source string, matched map[string]string) (Attempt, e
 		return Attempt{
 			Candidate: GoSymbol,
 			NotRun:    "no go file matched, and go is the only language parsed here: a tree in another language gets the text forms and no symbol form",
-		}, nil
+		}
 	}
 	slices.Sort(files)
 	started := time.Now()
-	graph, err := Symbols(root, files, source)
-	if err != nil {
-		return Attempt{}, err
-	}
+	graph := symbolGraph(files, source, func(rel string) ([]byte, error) { return []byte(matched[rel]), nil })
 	spent := time.Since(started)
 	where := make(map[string]bool, len(graph.Definitions)+len(graph.Callers))
 	for _, definition := range graph.Definitions {
@@ -155,5 +152,5 @@ func goSymbolAttempt(root, source string, matched map[string]string) (Attempt, e
 		Lines:     len(graph.Definitions) + len(graph.Callers),
 		Files:     len(where),
 		Spent:     spent,
-	}, nil
+	}
 }

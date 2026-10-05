@@ -133,15 +133,11 @@ func Find(req Request) (Result, error) {
 	if literal.lines > 0 {
 		narrowOver = matched
 	}
-	symbol, err := goSymbolAttempt(req.Root, source, narrowOver)
-	if err != nil {
-		return Result{}, err
-	}
 	tried := []Attempt{
 		literal.attempt(),
 		wordBoundarySweep(source, literal, narrowOver).attempt(),
 		insensitive.attempt(),
-		symbol,
+		goSymbolAttempt(source, narrowOver),
 	}
 
 	stats.Units = len(found)
@@ -160,10 +156,11 @@ func Find(req Request) (Result, error) {
 		stats.Tokens += unit.Tokens
 	}
 	result := Result{Units: kept, Stats: stats, Answered: answered, Tried: tried}
-	result.Text, err = result.render()
+	text, err := result.render()
 	if err != nil {
 		return Result{}, err
 	}
+	result.Text = text
 	return result, nil
 }
 
@@ -209,7 +206,7 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 		switch {
 		case file.err != nil:
 			if stats.Unreadable == 0 {
-				stats.FirstFailed = rel + ": " + strings.TrimSuffix(cmp.Or(errors.Unwrap(file.err), file.err).Error(), ".")
+				stats.FirstFailed = failedRead(rel, file.err)
 			}
 			stats.Unreadable++
 			continue
@@ -225,6 +222,10 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 			matched[rel] = file.source
 		}
 	}
+}
+
+func failedRead(rel string, err error) string {
+	return rel + ": " + strings.TrimSuffix(cmp.Or(errors.Unwrap(err), err).Error(), ".")
 }
 
 func scanFile(full string, pattern *regexp.Regexp) scannedFile {

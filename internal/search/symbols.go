@@ -33,6 +33,8 @@ type Graph struct {
 	Callers     []Site
 	Parsed      int
 	Unparsed    int
+	Unreadable  int
+	FirstFailed string
 	Text        string
 }
 
@@ -40,14 +42,24 @@ func Symbols(root string, files []string, name string) (Graph, error) {
 	if !token.IsIdentifier(name) {
 		return Graph{}, fmt.Errorf("search: %q is not a go identifier, and the symbol graph is built over identifiers", name)
 	}
+	return symbolGraph(files, name, func(rel string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	}), nil
+}
+
+func symbolGraph(files []string, name string, read func(rel string) ([]byte, error)) Graph {
 	graph := Graph{Name: name}
 	for _, rel := range files {
 		if !strings.HasSuffix(rel, ".go") {
 			continue
 		}
-		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		body, err := read(rel)
 		if err != nil {
-			return Graph{}, fmt.Errorf("search: %w", err)
+			if graph.Unreadable == 0 {
+				graph.FirstFailed = failedRead(rel, err)
+			}
+			graph.Unreadable++
+			continue
 		}
 		fileSet := token.NewFileSet()
 		file, err := parser.ParseFile(fileSet, rel, body, parser.SkipObjectResolution)
@@ -63,7 +75,7 @@ func Symbols(root string, files []string, name string) (Graph, error) {
 	}
 	slices.SortFunc(graph.Definitions, func(left, right Definition) int { return strings.Compare(left.Path, right.Path) })
 	graph.Text = graph.render()
-	return graph, nil
+	return graph
 }
 
 func (g *Graph) read(rel string, parsed *token.File, decl ast.Decl, name string) {
@@ -137,9 +149,16 @@ func (g *Graph) render() string {
 	if g.Unparsed > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%d go files did not parse and hold no definition and no call site here", g.Unparsed)))
 	}
+	if g.Unreadable > 0 {
+		fmt.Fprintf(&out, "%s\n", Note(Partial, fmt.Sprintf("%s could not be read, the first %s", plural(g.Unreadable, "file"), g.FirstFailed)))
+	}
 	out.WriteString(Note(NameMatched, "a definition and a call site are matched on the identifier alone") + "\n")
 	if len(g.Definitions) == 0 && len(g.Callers) == 0 {
-		fmt.Fprintf(&out, "no go file under this path declares or calls %s. the files were parsed: this is an answer, not a failure\n", g.Name)
+		parsed := "the files were parsed"
+		if g.Unreadable > 0 {
+			parsed = "every readable go file was parsed, and the unreadable ones may declare or call " + g.Name
+		}
+		fmt.Fprintf(&out, "no go file under this path declares or calls %s. %s: this is an answer, not a failure\n", g.Name, parsed)
 		return out.String()
 	}
 	for _, definition := range g.Definitions {

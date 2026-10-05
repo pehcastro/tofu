@@ -49,6 +49,9 @@ func replaceDeclaration(root turn.Root, shown, symbol, before, becomes string) (
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
+	if graph.Unreadable > 0 {
+		return "", fmt.Errorf("edit: could not read %s, so no declaration in it can be named. nothing was changed", graph.FirstFailed)
+	}
 	if graph.Unparsed > 0 {
 		return "", fmt.Errorf("edit: %s does not parse as go, so no declaration in it can be named: repair it with old_string first", shown)
 	}
