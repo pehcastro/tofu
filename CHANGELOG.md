@@ -10,6 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **Ctrl+P searches every prompt you sent**, across sessions and projects. Enter puts the prompt in the composer without sending it.
+
+### Changed
+
+- **The lead's prompt carries rules about what to build, not how to write it.** Rules for writing, testing and building code reach only the sub-agent that writes it, unless the lead runs alone.
+
 ## 0.5.1 - 2026-10-05
 
 Setup by role and undo.
