@@ -423,12 +423,15 @@ func (r *record) begin(row Row) {
 	}))
 	if project := r.store.Project(); r.undoBegun == nil && project != "" {
 		header := r.log.Header()
-		r.undo = &snapshot.Repo{Dir: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
+		r.undo = &snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
 		r.undoBegun = make(chan struct{})
-		go func(repo snapshot.Repo, turn string) {
-			defer close(r.undoBegun)
+		go func(repo snapshot.Repo, turn string, sessionStart bool) {
 			r.undoErr = repo.Begin(context.Background(), turn)
-		}(*r.undo, r.turn)
+			close(r.undoBegun)
+			if r.undoErr == nil && sessionStart {
+				_ = repo.Prune(context.Background())
+			}
+		}(*r.undo, r.turn, header.Turns == 1)
 	}
 }
 

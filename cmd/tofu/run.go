@@ -492,7 +492,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		_, _ = fmt.Fprintln(errOut, "tofu run: no shell result is cut: "+err.Error())
 	}
 
-	sessions, err := session.Open()
+	sessions, err := session.OpenIn(cmp.Or(opts.dir, "."))
 	if err != nil {
 		return runFail(errOut, err)
 	}

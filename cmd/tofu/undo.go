@@ -18,15 +18,15 @@ import (
 	rewind "tofu/internal/snapshot"
 )
 
-const undoUsage = "tofu undo [N] [--session id] [--force] [--dry-run] [--json]"
+const undoUsage = "tofu undo [N] [--dir path] [--session id] [--force] [--dry-run] [--json]"
 
 func undoVerb(args []string, out, errOut io.Writer) int {
 	o := verbOutput{verb: "undo", usageLine: undoUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
-	ask, handle, err := undoArgs(withoutJSON(args))
+	ask, handle, dir, err := undoArgs(withoutJSON(args))
 	if err != nil {
 		return o.usage(err)
 	}
-	store, err := sessionstore.Open()
+	store, err := sessionstore.OpenIn(dir)
 	if err != nil {
 		return o.fail(err)
 	}
@@ -44,9 +44,9 @@ func undoVerb(args []string, out, errOut io.Writer) int {
 	return o.done(len(report.Refused) == 0, report, func(page cli.Page) []string { return undoLines(page, report) })
 }
 
-func undoArgs(args []string) (rewind.Ask, string, error) {
+func undoArgs(args []string) (rewind.Ask, string, string, error) {
 	var ask rewind.Ask
-	handle, count := "", ""
+	handle, dir, count := "", ".", ""
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; {
 		case arg == "--force":
@@ -56,15 +56,18 @@ func undoArgs(args []string) (rewind.Ask, string, error) {
 		case arg == "--session" && i+1 < len(args):
 			i++
 			handle = args[i]
+		case arg == "--dir" && i+1 < len(args):
+			i++
+			dir = args[i]
 		case strings.HasPrefix(arg, "-") || count != "":
-			return ask, "", fmt.Errorf("unknown argument %q", arg)
+			return ask, "", "", fmt.Errorf("unknown argument %q", arg)
 		default:
 			count = arg
 		}
 	}
 	turns, err := undoCount(count)
 	ask.Turns = turns
-	return ask, handle, err
+	return ask, handle, dir, err
 }
 
 func undoCount(word string) (int, error) {
@@ -86,7 +89,7 @@ func undoSession(store *sessionstore.Store, handle string, ask rewind.Ask) (rewi
 	if len(headers) > 1 {
 		return rewind.Report{}, fmt.Errorf("%s names %d sessions: give the id", handle, len(headers))
 	}
-	repo := rewind.Repo{Dir: store.Dir(cmp.Or(headers[0].Root, headers[0].ID)), Tree: store.Project()}
+	repo := rewind.Repo{State: store.State(), Session: store.Dir(cmp.Or(headers[0].Root, headers[0].ID)), Tree: store.Project()}
 	return repo.Undo(context.Background(), ask)
 }
 

@@ -43,6 +43,8 @@ func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
 func (s *Store) Project() string { return s.project }
 
+func (s *Store) State() string { return filepath.Dir(s.dir) }
+
 func (s *Store) AttachmentDir(id string) string {
 	return filepath.Join(filepath.Dir(s.dir), attachmentsName, id)
 }
@@ -67,13 +69,15 @@ func SessionsDir(state string) string { return filepath.Join(state, "sessions") 
 
 func OpenAt(state string) *Store { return NewStore(SessionsDir(state)) }
 
-func Open() (*Store, error) {
-	state, err := sys.ProjectStateDir()
+func Open() (*Store, error) { return OpenIn(".") }
+
+func OpenIn(project string) (*Store, error) {
+	state, err := sys.ProjectStateDirAt(project)
 	if err != nil {
 		return nil, err
 	}
 	store := OpenAt(state)
-	store.project, err = filepath.Abs(".")
+	store.project, err = filepath.Abs(project)
 	return store, err
 }
 

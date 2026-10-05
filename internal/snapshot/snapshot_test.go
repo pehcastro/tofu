@@ -24,8 +24,8 @@ type project struct {
 
 func newProject(t *testing.T) project {
 	t.Helper()
-	tree := t.TempDir()
-	p := project{t: t, repo: Repo{Dir: filepath.Join(t.TempDir(), "root"), Tree: tree}}
+	state := t.TempDir()
+	p := project{t: t, repo: Repo{State: state, Session: filepath.Join(state, "sessions", "root"), Tree: t.TempDir()}}
 	p.write(".gitattributes", "* text=auto eol=lf\n")
 	p.write(".gitignore", "ignored.log\n")
 	p.write("crlf.txt", crlfText)
