@@ -2,5 +2,6 @@ id: read_first
 domain: dev
 kind: human
 concern: process_discipline
+shapes: writing
 text: before you edit, read every file the change touches and the code that calls into it. find callers by searching for the call, such as `.save(`, rather than for the name, because an import alias or a re-export hides the name. a changed signature, a new variant and a deletion each own every place the thing is used, tests included.
 notes: an edit made without reading its callers breaks them, and a search by name misses a caller that imports under an alias. it guards against a change that compiles in one file and breaks another.

@@ -2,5 +2,6 @@ id: data_first
 domain: dev
 kind: human
 concern: process_discipline
+shapes: writing
 text: get the data structures right before writing logic. define the core types first, trace every way the code reads and writes them, and pick the shape that fits the common path, so the code on top becomes obvious. before two actors share state, ask what happens when the other one changes it at the same time, and isolate it unless the answer is nothing.
 notes: logic written before its data shape is settled is rewritten when the shape changes. it guards against tangled code built on the wrong structure and shared state nobody thought through.

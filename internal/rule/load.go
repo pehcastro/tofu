@@ -243,10 +243,10 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		}
 		r.AlsoReaches = ReachWorkOnTests
 	case "shapes":
-		if Shape(value) != ShapeDesign {
-			return fmt.Errorf("%s:%d: shapes is %q, and a rule that says how code is written declares nothing, found %q", path, line, ShapeDesign, value)
+		r.Shapes = Shape(value)
+		if r.Shapes != ShapeWriting && r.Shapes != ShapeDesign {
+			return fmt.Errorf("%s:%d: shapes is %q or %q, found %q", path, line, ShapeWriting, ShapeDesign, value)
 		}
-		r.Shapes = ShapeDesign
 	case "text":
 		r.Text = value
 	case "notes":

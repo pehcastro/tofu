@@ -125,8 +125,9 @@ func (r Rule) ReachesDevFor(task Task) bool {
 type Shape string
 
 const (
-	ShapeWriting Shape = ""
-	ShapeDesign  Shape = "design"
+	ShapeInferred Shape = ""
+	ShapeWriting  Shape = "writing"
+	ShapeDesign   Shape = "design"
 )
 
 type By string

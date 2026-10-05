@@ -245,7 +245,18 @@ type Match struct {
 }
 
 func (r Rule) forTheWriterOnly() bool {
-	return r.Concern == ConcernCodeRules && r.Shapes == ShapeWriting && r.Trigger.role == RoleAny && (r.Trigger.languages != nil || r.Trigger.frameworks != nil)
+	if r.Trigger.role != RoleAny {
+		return false
+	}
+	switch r.Shapes {
+	case ShapeWriting:
+		return true
+	case ShapeDesign:
+		return false
+	case ShapeInferred:
+		return r.Concern == ConcernCodeRules && (r.Trigger.languages != nil || r.Trigger.frameworks != nil)
+	}
+	panic("rule: unknown shape " + string(r.Shapes))
 }
 
 func Index(rules []Rule, task Task) []Match {
@@ -253,7 +264,7 @@ func Index(rules []Rule, task Task) []Match {
 	for i, r := range rules {
 		fires, why := r.Trigger.firesFor(task)
 		if fires && task.Role == RoleOrchestrator && r.forTheWriterOnly() {
-			fires, why = false, "a rule for how a language or a framework is written reaches the agent that writes that code, and the prompt is the orchestrator's"
+			fires, why = false, "a rule for how code is written reaches the agent that writes it, and the prompt is the orchestrator's"
 		}
 		index[i] = Match{RuleID: r.ID, Fires: fires, Why: why}
 	}

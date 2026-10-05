@@ -24,6 +24,15 @@ plus a sub-agent's `owns`. The `concern` orders rules in the prompt. A rule
 that fires for every task of an agent goes in the system prompt; one that
 fires for this task goes beside the task.
 
+The lead gets rules about what to build, not how to write it. A rule for how
+code is written, tested or built reaches the sub-agent that writes it: every
+language and framework code rule, and any rule that declares
+`shapes: writing`. A frontend rule about what the person sees, such as the
+four states of a view, declares `shapes: design` and reaches the lead too, so
+its brief can ask for it. A lead running alone, with `turnMaySpawn` off,
+writes the code itself and gets every rule. On a React task this cuts the
+lead's system prompt from 27,743 bytes to 23,297.
+
 A `human` rule is text only. A `structural` or `decision` rule names a
 checker that `tofu rules check` runs over files: in `shadow` mode a finding
 warns, in `enforced` it blocks, and `off` drops the rule.

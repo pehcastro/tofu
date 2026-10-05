@@ -2,5 +2,6 @@ id: minimal_diff
 domain: dev
 kind: human
 concern: process_discipline
+shapes: writing
 text: make the smallest change that does the job. look for something to delete before you add anything, and add no guard, option or layer the task does not need. when you replace an api, move every caller to the new one and delete the old one in the same change: no shim, no old and new path side by side. in a planned migration, aim at the end state: write no throwaway compatibility code to keep each step between working, say which step may break, and verify everything once the migration is done.
 notes: every added line is a line to review, maintain and get wrong. it guards against speculative options, old and new paths side by side and throwaway compatibility code.

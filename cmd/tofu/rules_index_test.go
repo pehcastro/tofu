@@ -70,15 +70,17 @@ func TestRulesIndexRoleFiresTheRulesOfThatRole(t *testing.T) {
 		"general/rules/everyone@1.yaml":    "id: everyone\ndomain: general\nkind: human\nconcern: output_shape\ntext: be short\n",
 		"qa/general/rules/qa_only@1.yaml":  "id: qa_only\ndomain: qa\nkind: human\nconcern: code_rules\ntext: split coverage\n",
 		"qa/general/rules/qa_tests@1.yaml": "id: qa_tests\ndomain: qa\nalso_reaches: work_on_tests\nkind: human\nconcern: code_rules\ntext: end to end first\n",
+		"dev/rules/write_small@1.yaml":     "id: write_small\ndomain: dev\nkind: human\nconcern: process_discipline\nshapes: writing\ntext: smallest diff\n",
+		"dev/go/rules/go_states@1.yaml":    "id: go_states\ndomain: dev\nkind: human\nconcern: code_rules\nlanguage: go\nshapes: design\ntext: every view has four states\n",
 	})
 	project := t.TempDir()
 	for _, c := range []struct {
 		role  string
 		fires map[string]bool
 	}{
-		{"", map[string]bool{"go_ctx": true, "everyone": true}},
-		{"orchestrator", map[string]bool{"lead_only": true, "everyone": true}},
-		{"sub-agent", map[string]bool{"go_ctx": true, "sub_only": true, "everyone": true}},
+		{"", map[string]bool{"go_ctx": true, "everyone": true, "write_small": true, "go_states": true}},
+		{"orchestrator", map[string]bool{"lead_only": true, "everyone": true, "go_states": true}},
+		{"sub-agent", map[string]bool{"go_ctx": true, "sub_only": true, "everyone": true, "write_small": true, "go_states": true}},
 	} {
 		args := []string{"rules", "index", "fix the parser", "parser.go", "--library", library, "--dir", project}
 		if c.role != "" {
@@ -108,6 +110,13 @@ func TestRulesIndexRoleFiresTheRulesOfThatRole(t *testing.T) {
 		if code != exitUsage || !strings.Contains(errOut, "orchestrator") || !strings.Contains(errOut, "sub-agent") {
 			t.Errorf("%q exited %d, want %d naming orchestrator and sub-agent:\n%s%s", bad, code, exitUsage, out, errOut)
 		}
+	}
+	misspelt := writeFixtureModule(t, map[string]string{
+		"dev/rules/write_small@1.yaml": "id: write_small\ndomain: dev\nkind: human\nconcern: process_discipline\nshapes: Writing\ntext: smallest diff\n",
+	})
+	code, out, errOut := runOutput([]string{"rules", "index", "fix the parser", "parser.go", "--library", misspelt, "--dir", project, "--role", "orchestrator"})
+	if code == exitOK || !strings.Contains(out+errOut, `"Writing"`) || !strings.Contains(out+errOut, "write_small@1.yaml") {
+		t.Errorf("a misspelt shape exited %d, want a failure naming the file and the value:\n%s%s", code, out, errOut)
 	}
 }
 
