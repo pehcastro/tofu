@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -152,9 +153,10 @@ func inCacheOrder(t *testing.T, body []byte) []cachedPiece {
 		add(fmt.Sprintf("the tool %v", tool["name"]), tool)
 	}
 	for index, block := range decoded.System {
-		if text, _ := block["text"].(string); !strings.HasPrefix(text, anthropic.BillingHeaderPrefix) {
-			add(fmt.Sprintf("system block %d", index), block)
+		if text, _ := block["text"].(string); strings.HasPrefix(text, anthropic.BillingHeaderPrefix) {
+			block["text"] = regexp.MustCompile(`cch=[0-9a-f]+`).ReplaceAllString(text, anthropic.BillingCheckPlaceholder)
 		}
+		add(fmt.Sprintf("system block %d", index), block)
 	}
 	for index, message := range decoded.Messages {
 		for part, block := range message.Content {
@@ -243,6 +245,34 @@ func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefix(t *testing.T) {
 	assertFirstMessageCarries(t, server.bodies[2], "[process_discipline, from the rule debug_loop]\nbefore you form a theory")
 	assertCachedPrefixCarriesOver(t, server.bodies[2], server.bodies[3])
 	assertFirstMessageCarries(t, server.bodies[3], "[task_shaping, from the rule design_docs]")
+}
+
+func TestTwoSessionsInOneProjectSendTheSameCachedPrefix(t *testing.T) {
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "go.mod"), []byte("module race\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatalf("writing go.mod: %v", err)
+	}
+	var bodies [][]byte
+	for _, task := range []string{firstTurnTask, secondTurnTask} {
+		config, server := sessionConfig(t)
+		bash, err := turn.NewBashTool(project)
+		if err != nil {
+			t.Fatalf("building bash: %v", err)
+		}
+		spec := sessionSpec(t, task, rule.RoleOrchestrator)
+		spec.Environment = turn.Environment(project, time.Now())
+		composed, err := turn.Compose(spec)
+		if err != nil {
+			t.Fatalf("composing: %v", err)
+		}
+		config.Tools = turn.NewRegistry(bash)
+		config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(spec.Environment), task
+		if _, err := turn.Run(context.Background(), config); err != nil {
+			t.Fatalf("running %q: %v", task, err)
+		}
+		bodies = append(bodies, server.bodies[0])
+	}
+	assertCachedPrefixCarriesOver(t, bodies[0], bodies[1])
 }
 
 func assertFirstMessageCarries(t *testing.T, body []byte, wanted ...string) {

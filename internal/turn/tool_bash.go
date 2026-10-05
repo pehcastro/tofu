@@ -308,9 +308,6 @@ func (t *BashTool) Definition() llm.Tool {
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
 	}
-	if toolchain := formatToolchain(t.probe.wait()); toolchain != "" {
-		description += " this project's toolchain, probed once: " + toolchain + "."
-	}
 	return llm.Tool{
 		Name:        bashToolName,
 		Description: description,
