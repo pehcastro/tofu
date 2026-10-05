@@ -99,7 +99,7 @@ func find(envPath, name string) (string, Located, error) {
 		abs = envPath
 	}
 	if hidden && sys.IsOwnerCredential(abs) {
-		return noKey(name, abs, WhyUnexplained, nil, "%s is hidden from tests: %s is one of the owner's credential files, and a test that means to spend calls jev.AllowLiveCredential first", name, abs)
+		return noKey(name, abs, WhyUnexplained, nil, "%s is hidden from tests: %s is one of the owner's credential files, and a test that means to spend calls sys.AllowLiveCredential first", name, abs)
 	}
 	present, err := sys.Exists(envPath)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/question"
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 const (
@@ -226,8 +227,7 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 		t.Skip("set TOFU_LIVE_STATE_RESCORE=1 to spend about $0.007 on four jev calls per recorded case")
 	}
 	pol := gateTheBenchReportDecidesThrough(t)
-	jev.AllowLiveCredential(t)
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	key, err := jev.Key("../../../.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)

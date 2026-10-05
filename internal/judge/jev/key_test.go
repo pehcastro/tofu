@@ -234,7 +234,7 @@ func TestATestThatDoesNotOptInReachesNoCredentialItPlantedFromTheOwnersOwn(t *te
 }
 
 func TestATestThatOptsInByNameReachesTheCredentialAgain(t *testing.T) {
-	AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	t.Setenv(keyName(), "")
 	root := sys.SourceRoot()
 	if _, err := os.Stat(filepath.Join(root, ".env")); err != nil {

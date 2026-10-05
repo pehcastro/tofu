@@ -177,7 +177,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to spend the subscription quota")
 	}
-	jev.AllowLiveCredential(t)
+	sys.AllowLiveCredential(t)
 	if key, err := jev.Key("../../.env"); err == nil {
 		t.Setenv("OPENROUTER_KEY", key)
 	}
@@ -1998,7 +1998,7 @@ func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
 		turn.OutcomeRetiredWallClockCap: "stopped at a cap this build no longer sets, after",
 		turn.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
 	}
-	for _, outcome := range turn.AllOutcomes() {
+	for _, outcome := range sessionstore.AllOutcomes() {
 		expected, named := want[outcome]
 		if !named {
 			t.Fatalf("%s carries no expected closing words in this test, so a new outcome can reach doneWords untested", outcome)

@@ -19,6 +19,7 @@ import (
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
 
@@ -300,7 +301,7 @@ func TestLiveGate(t *testing.T) {
 			if os.Getenv("TOFU_LIVE") != "1" {
 				t.Skip("set TOFU_LIVE=1 to call the real route")
 			}
-			jev.AllowLiveCredential(t)
+			sys.AllowLiveCredential(t)
 			key, err := jev.KeyFor("../../../../.env", r.liveVariable)
 			if err != nil {
 				t.Fatalf("no credential: %v", err)
