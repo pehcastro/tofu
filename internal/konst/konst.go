@@ -111,6 +111,7 @@ const (
 	TurnMaxSteps                    = 40
 	TurnLoopGuardRepeats            = 3
 	TurnLoopGuardWindow             = 6
+	TurnStepCapNoticeShare          = 0.1
 	SubscriptionCacheTTL            = "1h"
 	HistoryCacheTTL                 = "1h"
 
@@ -159,6 +160,8 @@ const (
 	SubAgentAskMillis       = 30000
 	SubAgentMaxForks        = 10
 	SubAgentMaxSteps        = 150
+
+	SubAgentWallClockSeconds = 3600
 
 	OrchestratorSourceLinesPerTurn = 10
 )

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
@@ -51,6 +53,7 @@ type Caps struct {
 	MaxForks         int
 	LoopGuardRepeats int
 	LoopGuardWindow  int
+	WallClock        time.Duration
 }
 
 const theResponseHitTheOutputTokenLimit = "the response hit the output token limit, so its arguments may be truncated. " +
@@ -65,8 +68,10 @@ const theToolWasAbortedAndPrintedNothing = "this call was cancelled elsewhere in
 
 const theTurnEndsOnACleanReport = "this turn ends on a clean sub-agent report, so it runs no tool"
 
-const andThisIsItsLastStep = " and this is its last step: answer now from what you already have, " +
-	"saying what you did, what is left undone, and what to do next."
+const andThisIsItsLastStep = ", and this is its last step: answer now from what you already have, " +
+	"saying what you did, what is left undone, and what to do next. no tool runs on this step."
+
+const theLastStepRunsNoTool = "this was the turn's last step, which runs no tool"
 
 type CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked func(StepRow)
 
@@ -296,31 +301,31 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		recorded.end(row)
 		return row
 	}
-	endAt := func(outcome Outcome, lead string, step int, history []llm.Message) Row {
+	endAt := func(outcome Outcome, lead string, history []llm.Message) Row {
 		messages = history
-		if config.NoLastWord || step == 1 {
+		if config.NoLastWord {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
 		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: currentTools().Definitions()})
 		row.TotalCostUSD += decision.Usage.Cost
-		reason := ""
-		switch {
-		case err != nil:
-			reason = err.Error()
-		case decision.Outcome == llm.OutcomeTruncated:
-			reason = "it hit the output token limit partway through"
-		case decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "":
-			reason = "the model answered with no text"
-		}
-		if reason != "" {
-			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+reason)
+		if err != nil {
+			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+err.Error())
 			return finish(outcome)
 		}
 		row.Model = decision.Build
 		last := stepFrom(len(row.Steps)+1, timing, decision)
 		answering = last.id
-		messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
+		if decision.Content != "" || len(decision.ToolCalls) > 0 {
+			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
+		}
+		refuse(&last, decision.ToolCalls, theLastStepRunsNoTool)
+		switch {
+		case decision.Outcome == llm.OutcomeTruncated:
+			row.Warnings = append(row.Warnings, lead+", and the last answer hit the output token limit partway through")
+		case strings.TrimSpace(decision.Content) == "":
+			row.Warnings = append(row.Warnings, lead+", and the last answer carried no text")
+		}
 		keep(last)
 		return finish(outcome)
 	}
@@ -328,6 +333,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants := 0, 0
 	askedAgainAfterBlank := false
+	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
 			return finish(OutcomeError), err
@@ -342,9 +348,19 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: item})
 			}
 		}
-		if config.Caps.MaxSteps > 0 && step > config.Caps.MaxSteps {
-			lead := "this turn reached its " + OutcomeStepCap.String() + " of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
-			return endAt(OutcomeStepCap, lead, step, messages), nil
+		capped := config.Caps.MaxSteps > 0
+		switch {
+		case config.Caps.WallClock > 0 && now().Sub(start) >= config.Caps.WallClock:
+			lead := "this sub-agent retired at its wall clock cap of " + config.Caps.WallClock.String() + ", and the work is not finished"
+			row.Warnings = append(row.Warnings, lead)
+			return endAt(OutcomeRetiredWallClockCap, lead, messages), nil
+		case capped && step >= config.Caps.MaxSteps:
+			lead := "this turn reached its step cap of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
+			return endAt(OutcomeStepCap, lead, messages), nil
+		case capped && step == noticeStep:
+			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "this turn has " + strconv.Itoa(config.Caps.MaxSteps-step+1) +
+				" steps left before its step cap of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the last of them runs no tool: " +
+				"finish what you are doing, or stop and report what is done and what is left."})
 		}
 
 		stepTools := currentTools()
@@ -426,7 +442,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			if concluding != "" {
 				refuse(&stepRow, decision.ToolCalls, theTurnEndsOnACleanReport)
 				keep(stepRow)
-				return endAt(OutcomeStopped, theTurnEndsOnACleanReport, step+1, messages), nil
+				return endAt(OutcomeStopped, theTurnEndsOnACleanReport, messages), nil
 			}
 			pending, batches := decision.ToolCalls, 0
 			var tripped bool
@@ -533,7 +549,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				row.Warnings = append(row.Warnings, "the turn stopped itself: "+cause)
 				refuse(&stepRow, pending, stopped)
 				keep(stepRow)
-				return endAt(OutcomeLoopGuard, stopped, step, messages), nil
+				return endAt(OutcomeLoopGuard, stopped, messages), nil
 			}
 			if !config.NoFork {
 				moved, moving, forced := Account{}, false, ForkKind("")
@@ -558,7 +574,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				if fork != nil && config.Caps.MaxForks > 0 && forks >= config.Caps.MaxForks {
 					keep(stepRow)
 					lead := "this turn reached its cap of " + strconv.Itoa(config.Caps.MaxForks) + " forks, and the work is not finished"
-					return endAt(OutcomeStepCap, lead, step, messages), nil
+					return endAt(OutcomeStepCap, lead, messages), nil
 				}
 				if fork != nil {
 					forks++

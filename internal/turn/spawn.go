@@ -333,8 +333,9 @@ func (s SubAgents) Named(name string) (subagent.Definition, error) {
 }
 
 type SubAgentLimits struct {
-	Running int
-	Depth   int
+	Running   int
+	Depth     int
+	WallClock time.Duration
 }
 
 type SpawnTool struct {
@@ -692,6 +693,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite) Config {
 	subAgent := t.base
 	subAgent.Tools = NewRegistry(append(owned, askTool{orchestrator: t, asking: held.agent, conversation: site.conversation})...)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
+	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	subAgent.System, subAgent.Environment, subAgent.History = held.system, held.environment, held.history
 	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
 	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
