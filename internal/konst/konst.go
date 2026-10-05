@@ -287,3 +287,15 @@ const (
 	BrowserTargetNamesShown = 3
 	BrowserGuardPollMillis  = 100
 )
+
+const (
+	CronJobsMax            = 10
+	CronFiresMax           = 50
+	CronUnchangedStop      = 3
+	CronMinIntervalSeconds = 60
+	CronExpiryHours        = 24
+	CronPollMillis         = 1000
+	CronCheckTimeoutMillis = 60000
+	CronCheckTailBytes     = 600
+	CronSearchDays         = 366
+)

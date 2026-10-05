@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 type By string
@@ -200,11 +202,11 @@ func (b *Book) Create(spec Spec, by By, reason string, now time.Time) (Job, erro
 		return Job{}, ErrNoReason
 	case by == Agent && spec.Until != "":
 		return Job{}, errAgentCheck
-	case live >= JobsMax:
-		return Job{}, fmt.Errorf("%d cron jobs are open, the most a session holds: delete one first", JobsMax)
+	case live >= konst.CronJobsMax:
+		return Job{}, fmt.Errorf("%d cron jobs are open, the most a session holds: delete one first", konst.CronJobsMax)
 	}
 	if spec.Expires.IsZero() {
-		spec.Expires = now.Add(ExpiryHours * time.Hour)
+		spec.Expires = now.Add(konst.CronExpiryHours * time.Hour)
 	}
 	schedule, err := valid(spec, now)
 	if err != nil {
@@ -235,7 +237,7 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 	if change.Paused != nil {
 		after.Paused = *change.Paused
 	}
-	stretch := personExpiry(*job).Add(ExpiryHours * time.Hour)
+	stretch := personExpiry(*job).Add(konst.CronExpiryHours * time.Hour)
 	switch {
 	case job.Ended != "":
 		return Job{}, fmt.Errorf("%s ended (%s): delete it and make a new one", id, job.Ended)
@@ -246,7 +248,7 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 	case by == Agent && after.Until != before.Until:
 		return Job{}, errAgentCheck
 	case by == Agent && after.Expires.After(stretch):
-		return Job{}, fmt.Errorf("an agent stretches an expiry at most %dh past the person's, to %s: ask the person for more (rule cron_edits)", ExpiryHours, stretch.Format(time.DateTime))
+		return Job{}, fmt.Errorf("an agent stretches an expiry at most %dh past the person's, to %s: ask the person for more (rule cron_edits)", konst.CronExpiryHours, stretch.Format(time.DateTime))
 	}
 	schedule, err := valid(after, now)
 	if err != nil {
@@ -364,15 +366,15 @@ func (b *Book) check(ctx context.Context, command string) (bool, string, error) 
 	if b.Check == nil {
 		return false, "", errors.New("no shell is wired to run it")
 	}
-	ctx, cancel := context.WithTimeout(ctx, CheckTimeoutMillis*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, konst.CronCheckTimeoutMillis*time.Millisecond)
 	defer cancel()
 	exit, output, err := b.Check(ctx, command)
 	if err != nil {
 		return false, "", err
 	}
 	tail := strings.TrimSpace(output)
-	if len(tail) > CheckTailBytes {
-		tail = "..." + tail[len(tail)-CheckTailBytes:]
+	if len(tail) > konst.CronCheckTailBytes {
+		tail = "..." + tail[len(tail)-konst.CronCheckTailBytes:]
 	}
 	return exit == 0, "`" + command + "` exited " + strconv.Itoa(exit) + "\n" + tail, nil
 }
@@ -387,8 +389,8 @@ func fire(one pending, now time.Time) Fire {
 		job.Ended = "the check could not run: " + one.failed.Error()
 	case one.passed:
 		job.Ended = "check passed: " + said
-	case job.Fires >= FiresMax:
-		job.Ended = "fired " + strconv.Itoa(FiresMax) + " times, the most one job may"
+	case job.Fires >= konst.CronFiresMax:
+		job.Ended = "fired " + strconv.Itoa(konst.CronFiresMax) + " times, the most one job may"
 	}
 	if job.Ended != "" {
 		job.waiting = false
@@ -426,8 +428,8 @@ func (b *Book) Finished(id, result string) string {
 	}
 	job.LastResult = result
 	switch {
-	case job.Unchanged >= UnchangedStop:
-		job.Ended = strconv.Itoa(UnchangedStop) + " fires in a row changed nothing"
+	case job.Unchanged >= konst.CronUnchangedStop:
+		job.Ended = strconv.Itoa(konst.CronUnchangedStop) + " fires in a row changed nothing"
 	case job.Next.IsZero() && job.Spec().Schedule != string(KindAfterTurn):
 		job.Ended = "fired once"
 	}

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 type Kind string
@@ -66,8 +68,8 @@ func Parse(text string, now time.Time) (Schedule, error) {
 		if err != nil {
 			return Schedule{}, err
 		}
-		if every < MinIntervalSeconds*time.Second {
-			return Schedule{}, fmt.Errorf("every %s is under the %ds minimum", interval, MinIntervalSeconds)
+		if every < konst.CronMinIntervalSeconds*time.Second {
+			return Schedule{}, fmt.Errorf("every %s is under the %ds minimum", interval, konst.CronMinIntervalSeconds)
 		}
 		return Schedule{Kind: KindEvery, Text: text, every: every}, nil
 	}
@@ -120,7 +122,7 @@ func parseLine(text string, now time.Time) (Schedule, error) {
 		s.weekdays |= 1
 	}
 	if s.Next(now).IsZero() {
-		return Schedule{}, fmt.Errorf("%q matches no date in the next %d days, so it never fires", text, SearchDays)
+		return Schedule{}, fmt.Errorf("%q matches no date in the next %d days, so it never fires", text, konst.CronSearchDays)
 	}
 	return s, nil
 }
@@ -184,7 +186,7 @@ func (s Schedule) Next(after time.Time) time.Time {
 		panic("cron: unknown schedule kind " + string(s.Kind))
 	}
 	at := after.Truncate(time.Minute).Add(time.Minute)
-	for end := after.AddDate(0, 0, SearchDays); at.Before(end); {
+	for end := after.AddDate(0, 0, konst.CronSearchDays); at.Before(end); {
 		switch {
 		case !s.months.has(int(at.Month())) || !s.dayMatches(at):
 			at = time.Date(at.Year(), at.Month(), at.Day()+1, 0, 0, 0, 0, at.Location())

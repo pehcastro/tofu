@@ -8,6 +8,7 @@ import (
 	"regexp"
 
 	"tofu/internal/cron"
+	"tofu/internal/konst"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
@@ -29,7 +30,7 @@ func cronChecker(dir string) cron.Checker {
 		if err != nil {
 			return 0, "", err
 		}
-		args, _ := json.Marshal(map[string]any{"command": command, "timeout_ms": cron.CheckTimeoutMillis})
+		args, _ := json.Marshal(map[string]any{"command": command, "timeout_ms": konst.CronCheckTimeoutMillis})
 		result, err := bash.Run(ctx, args)
 		switch {
 		case err != nil:

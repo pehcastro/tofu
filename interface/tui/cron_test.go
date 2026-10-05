@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/cron"
+	"tofu/internal/konst"
 )
 
 func TestAFiredJobStartsATurnWhenIdleAndSteersWhenBusy(t *testing.T) {
@@ -91,7 +92,7 @@ func quickMessages(cmd tea.Cmd) []cronFiresMsg {
 				return []cronFiresMsg{msg}
 			}
 		}
-	case <-time.After(cron.PollMillis * time.Millisecond / 4):
+	case <-time.After(konst.CronPollMillis * time.Millisecond / 4):
 	}
 	return nil
 }

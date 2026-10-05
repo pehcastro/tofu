@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 var monday = time.Date(2026, 10, 5, 14, 30, 0, 0, time.Local)
@@ -60,7 +62,7 @@ func TestCronBookKeepsItsGuards(t *testing.T) {
 		t.Fatal(err)
 	}
 	loop, err := book.Create(Spec{Schedule: "every 1m", Prompt: "check the build"}, Person, "made by /loop", monday)
-	if err != nil || !loop.Spec().Expires.Equal(monday.Add(ExpiryHours*time.Hour)) {
+	if err != nil || !loop.Spec().Expires.Equal(monday.Add(konst.CronExpiryHours*time.Hour)) {
 		t.Fatalf("a loop with no expiry: %v, expires %s, want the default", err, loop.Spec().Expires)
 	}
 	hourLater := monday.Add(time.Hour)
@@ -73,7 +75,7 @@ func TestCronBookKeepsItsGuards(t *testing.T) {
 	refusals := map[string]error{}
 	_, refusals["no reason"] = book.Update(loop.ID, Change{Schedule: "every 5m"}, Person, "", monday)
 	_, refusals["agent writes a check"] = book.Update(loop.ID, Change{Until: "rm -rf ."}, Agent, "faster", monday)
-	_, refusals["agent stretches twice"] = book.Update(loop.ID, Change{Expires: monday.Add(3 * ExpiryHours * time.Hour)}, Agent, "longer", monday)
+	_, refusals["agent stretches twice"] = book.Update(loop.ID, Change{Expires: monday.Add(3 * konst.CronExpiryHours * time.Hour)}, Agent, "longer", monday)
 	_, refusals["goal without a check"] = book.Create(Spec{Schedule: string(KindAfterTurn), Prompt: "pass"}, Person, "made by /goal", monday)
 	_, refusals["nothing changed"] = book.Update(loop.ID, Change{Schedule: "every 1m"}, Person, "same", monday)
 	for name, err := range refusals {
@@ -81,15 +83,15 @@ func TestCronBookKeepsItsGuards(t *testing.T) {
 			t.Errorf("%s was accepted", name)
 		}
 	}
-	stretched, err := book.Update(loop.ID, Change{Schedule: "every 5m", Expires: monday.Add(2 * ExpiryHours * time.Hour)}, Agent, "nothing changed in an hour", monday)
+	stretched, err := book.Update(loop.ID, Change{Schedule: "every 5m", Expires: monday.Add(2 * konst.CronExpiryHours * time.Hour)}, Agent, "nothing changed in an hour", monday)
 	if err != nil || stretched.Version() != 2 || stretched.Versions[1].By != Agent {
 		t.Fatalf("an agent's one-step stretch: %v, %+v", err, stretched.Versions)
 	}
-	for range UnchangedStop {
+	for range konst.CronUnchangedStop {
 		book.Finished(loop.ID, "the build passes")
 	}
 	if note := book.Finished(loop.ID, "the build passes"); !strings.Contains(note, "changed nothing") {
-		t.Errorf("the same answer %d times in a row left the job open: %q", UnchangedStop+1, note)
+		t.Errorf("the same answer %d times in a row left the job open: %q", konst.CronUnchangedStop+1, note)
 	}
 	goal, _ := book.Create(Spec{Schedule: string(KindAfterTurn), Prompt: "make the test pass", Until: "go test ./..."}, Person, "made by /goal", monday)
 	for turn := 1; turn <= 3; turn++ {

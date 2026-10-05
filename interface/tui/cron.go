@@ -12,6 +12,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/session"
 	"tofu/internal/cron"
+	"tofu/internal/konst"
 )
 
 const (
@@ -105,7 +106,7 @@ func (a *App) armCron() tea.Cmd {
 		return nil
 	}
 	a.cronTicking = true
-	return tea.Tick(cron.PollMillis*time.Millisecond, func(at time.Time) tea.Msg {
+	return tea.Tick(konst.CronPollMillis*time.Millisecond, func(at time.Time) tea.Msg {
 		return cronTickMsg(book.Due(context.Background(), at, cron.Tick))
 	})
 }
