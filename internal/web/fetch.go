@@ -59,6 +59,13 @@ type Client struct {
 	maxBytes int
 	mutex    sync.Mutex
 	pages    map[string]Page
+	flights  map[string]*flight
+}
+
+type flight struct {
+	done chan struct{}
+	page Page
+	err  error
 }
 
 func NewClient(config Config) *Client {
@@ -66,6 +73,7 @@ func NewClient(config Config) *Client {
 		http:     &http.Client{Timeout: time.Duration(config.TimeoutMS) * time.Millisecond},
 		maxBytes: config.MaxPageBytes,
 		pages:    map[string]Page{},
+		flights:  map[string]*flight{},
 	}
 }
 
@@ -75,10 +83,39 @@ func (c *Client) Get(ctx context.Context, address string) (Page, error) {
 		return Page{}, fmt.Errorf("%q is not an http or https address", address)
 	}
 	target.Fragment = ""
-	if held, ok := c.recall(target.String()); ok {
+	key := target.String()
+
+	c.mutex.Lock()
+	if held, ok := c.pages[key]; ok {
+		c.mutex.Unlock()
 		return held, nil
 	}
+	shared, joining := c.flights[key]
+	if !joining {
+		shared = &flight{done: make(chan struct{})}
+		c.flights[key] = shared
+		go func() {
+			shared.page, shared.err = c.fetch(context.WithoutCancel(ctx), target)
+			c.mutex.Lock()
+			if shared.err == nil {
+				c.pages[key] = shared.page
+			}
+			delete(c.flights, key)
+			c.mutex.Unlock()
+			close(shared.done)
+		}()
+	}
+	c.mutex.Unlock()
 
+	select {
+	case <-shared.done:
+		return shared.page, shared.err
+	case <-ctx.Done():
+		return Page{}, ctx.Err()
+	}
+}
+
+func (c *Client) fetch(ctx context.Context, target *url.URL) (Page, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
 		return Page{}, err
@@ -106,22 +143,7 @@ func (c *Client) Get(ctx context.Context, address string) (Page, error) {
 		return Page{}, NotTextError{URL: target.String(), ContentType: kind, Bytes: len(body), Why: why}
 	}
 
-	page := Page{URL: target.String(), ContentType: kind, RawBytes: len(body), Units: Units(kind, body, target)}
-	c.keep(page)
-	return page, nil
-}
-
-func (c *Client) recall(address string) (Page, bool) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	held, ok := c.pages[address]
-	return held, ok
-}
-
-func (c *Client) keep(page Page) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.pages[page.URL] = page
+	return Page{URL: target.String(), ContentType: kind, RawBytes: len(body), Units: Units(kind, body, target)}, nil
 }
 
 func mimeOf(response *http.Response, body []byte) string {
