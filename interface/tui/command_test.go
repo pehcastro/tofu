@@ -22,7 +22,8 @@ func commandApp(t *testing.T, entered chan<- string) *App {
 		Wires:      anthropicAlone,
 		Copy:       func(string) error { return nil },
 		Paths:      repoPaths,
-		ResumeHead: func() string { return "continuing turn-19a2b3c4d5, 12 messages from 3 steps" },
+		Sessions:   func() ([]SessionRow, error) { return nil, nil },
+		Resume:     func(id string) (string, []Event) { return "continuing " + id, nil },
 		NewSession: func() string { return "the next task starts a new session" },
 		Compact:    func() string { return "compacted 2 old tool result(s)" },
 		Turn: func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
@@ -156,16 +157,9 @@ func TestEveryListedCommandRunsAndNoneIsAName(t *testing.T) {
 	}
 }
 
-func TestSlashResumeSaysWhatItTookAndSlashNewIsRefusedWhileATurnRuns(t *testing.T) {
+func TestSlashNewIsRefusedWhileATurnRuns(t *testing.T) {
 	entered := make(chan string, 1)
 	app := commandApp(t, entered)
-	typeText(app, "/resume")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if content := ansi.Strip(app.View().Content); !strings.Contains(content, "continuing turn-19a2b3c4d5") {
-		t.Errorf("/resume does not say what it took\n%s", content)
-	}
-	nothingEntered(t, entered)
-
 	typeText(app, "write a note")
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if task := <-entered; task != "write a note" {

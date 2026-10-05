@@ -49,6 +49,10 @@ inside the 16.7 ms of a 60 Hz frame.
 - **Answer the gate** when `gatePrompt` is `ask`: `1` allows once, `2`
   refuses, `3` always allows that tool on that file this session.
 - **Open on the last session**: `tofu --continue`.
+- **Go back to any session without leaving**: `/resume` lists this
+  project's sessions, newest first, with the one in use marked. Type a word
+  of its name or first line, press `Enter`, and the chat shows that session
+  and the next task carries it. `/resume <name or id>` skips the list.
 
 ## Keys
 

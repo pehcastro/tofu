@@ -167,7 +167,8 @@ type Options struct {
 	Paste        paste.Board
 	Copy         func(text string) error
 	Paths        func() []string
-	ResumeHead   func() string
+	Sessions     func() ([]SessionRow, error)
+	Resume       func(id string) (string, []Event)
 	NewSession   func() string
 	Compact      func() string
 	Now          func() time.Time

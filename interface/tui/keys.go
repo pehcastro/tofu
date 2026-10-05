@@ -215,6 +215,9 @@ func (a *App) submit() tea.Cmd {
 	if cmd, asked := a.cronCommand(); asked {
 		return cmd
 	}
+	if cmd, asked := a.resumeCommand(); asked {
+		return cmd
+	}
 	if name, asked := a.view.Command(); asked {
 		return a.runCommand(name)
 	}

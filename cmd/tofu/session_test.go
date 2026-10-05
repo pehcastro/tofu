@@ -214,7 +214,7 @@ func liveAppSession(dir string, model turn.Model) *appSession {
 	}, nil, time.Now, sessionResume{})
 }
 
-func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheHeadBack(t *testing.T) {
+func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.T) {
 	dir := scratchProject(t)
 	first := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
 	live := liveAppSession(dir, first)
@@ -224,13 +224,14 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheHeadBack(t *testing.T) 
 		t.Fatalf("one turn left session %q carrying %d messages", live.id, len(live.carried))
 	}
 
+	ran := live.id
 	if note := live.startFresh(); live.id != "" || len(live.carried) != 0 {
 		t.Fatalf("/new said %q and left session %q carrying %d messages", note, live.id, len(live.carried))
 	}
 
-	note := live.resumeHead()
-	if live.id == "" || len(live.carried) == 0 {
-		t.Fatalf("/resume said %q and carried nothing back", note)
+	note, chat := live.resume(ran)
+	if live.id != ran || len(live.carried) == 0 || len(chat) == 0 {
+		t.Fatalf("/resume %s said %q, took %q and carried %d messages and %d chat events back", ran, note, live.id, len(live.carried), len(chat))
 	}
 	if !strings.Contains(note, live.id) {
 		t.Errorf("/resume said %q and does not name the session it took", note)

@@ -163,7 +163,8 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Steering:     steering,
 		StopLead:     stopLead,
 		Paths:        appPaths(dir),
-		ResumeHead:   live.resumeHead,
+		Sessions:     live.sessions,
+		Resume:       live.resume,
 		NewSession:   live.startFresh,
 		Compact:      live.compact,
 		Shells:       appShells(dir, launch.registry, launch.registryErr),
@@ -844,22 +845,39 @@ func (s *appSession) label(store *sessionstore.Store) (tui.Event, bool) {
 	return labelled, true
 }
 
-func (s *appSession) resumeHead() string {
+func (s *appSession) resume(handle string) (string, []tui.Event) {
 	store, err := sessionstore.Open()
 	if err != nil {
-		return "the session store does not open, so nothing is carried: " + err.Error()
+		return "the session store does not open, so nothing is carried: " + err.Error(), nil
 	}
-	carry := continueCarry(store)
-	if carry.Fresh != "" {
-		return carry.Fresh
+	carry, err := resumeOf(store, handle)
+	if err != nil {
+		return err.Error(), nil
 	}
-	s.id = carry.Session
+	s.id, s.pending = carry.Session, nil
 	s.carry(carry.messages)
 	said := "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
 	if err := s.loadCron(carry.Session); err != nil {
 		said += "; " + err.Error()
 	}
-	return said
+	return said, resumedChat(carry)
+}
+
+func (s *appSession) sessions() ([]tui.SessionRow, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	report, err := sessionListing(store, sessionstore.DefaultSettings().Lifetime, now)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]tui.SessionRow, len(report.Sessions))
+	for i, row := range report.Sessions {
+		rows[i] = tui.SessionRow{ID: row.ID, Name: row.Name, Task: oneLine(row.Task), Facts: sessionWhen(row.At, now) + " · " + countOf(row.Turns, "turn"), InUse: row.ID == s.id}
+	}
+	return rows, nil
 }
 
 func gateOffEvent(gateErr error) tui.Event {
@@ -1095,8 +1113,10 @@ func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) string {
 		return "stopped on a reply it could not finish, after"
 	case turn.OutcomeError:
 		return "failed after"
-	case turn.OutcomeRetiredCostCap, turn.OutcomeRetiredWallClockCap:
+	case turn.OutcomeRetiredCostCap:
 		return "stopped at a cap this build no longer sets, after"
+	case turn.OutcomeRetiredWallClockCap:
+		return "stopped at the wall clock cap after"
 	case turn.OutcomeLoopGuard:
 		return loopGuardWords(guard) + ", after"
 	}

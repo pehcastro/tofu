@@ -1995,7 +1995,7 @@ func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
 		turn.OutcomeError:               "failed after",
 		turn.OutcomeTruncated:           "stopped on a reply it could not finish, after",
 		turn.OutcomeRetiredCostCap:      "stopped at a cap this build no longer sets, after",
-		turn.OutcomeRetiredWallClockCap: "stopped at a cap this build no longer sets, after",
+		turn.OutcomeRetiredWallClockCap: "stopped at the wall clock cap after",
 		turn.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
 	}
 	for _, outcome := range sessionstore.AllOutcomes() {

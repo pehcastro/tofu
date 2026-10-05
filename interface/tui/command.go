@@ -38,8 +38,8 @@ func commands(options Options) []session.Command {
 	if options.Reload != nil {
 		listed = append(listed, session.Command{Name: "reload", What: "re-read settings, rules, skills, sub-agents, models, instructions and keys from disk"})
 	}
-	if options.ResumeHead != nil {
-		listed = append(listed, session.Command{Name: "resume", What: "carry the last session into the next task"})
+	if options.Resume != nil {
+		listed = append(listed, session.Command{Name: "resume", What: "pick a session of this project to carry into the next task"})
 	}
 	if options.NewSession != nil {
 		listed = append(listed, session.Command{Name: "new", What: "start fresh, carrying nothing from the last session"})
@@ -113,7 +113,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "reload":
 		a.reload()
 	case "resume":
-		a.carry(a.options.ResumeHead)
+		return a.resumePicker()
 	case "new":
 		a.carry(a.options.NewSession)
 	case "compact":
@@ -259,9 +259,14 @@ func (a *App) repick(slug string) string {
 }
 
 func (a *App) carry(change func() string) {
+	if !a.refusedMidTurn() {
+		a.view.Append(session.Entry{Kind: session.Note, Body: change()})
+	}
+}
+
+func (a *App) refusedMidTurn() bool {
 	if a.busy {
 		a.view.Append(session.Entry{Kind: session.Note, Body: turnRunningNote})
-		return
 	}
-	a.view.Append(session.Entry{Kind: session.Note, Body: change()})
+	return a.busy
 }

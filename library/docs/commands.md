@@ -21,7 +21,10 @@ command never reaches the model.
   its result, on the clipboard
 - `/reload`: read settings, rules, skills, sub-agents, models,
   instructions and keys from disk again
-- `/resume`: carry the last session into the next task
+- `/resume`: pick a session of this project, newest first, and carry it
+  into the next task; typing filters by name and first line, the one in use
+  is marked, and the chat shows the chosen session's turns; `/resume <name
+  or id>` takes that session straight away
 - `/new`: start fresh, carrying nothing from the last session
 - `/compact`: shrink the old tool results the next turn carries
 - `/cron`, `/loop`, `/goal`: scheduled and repeated prompts
