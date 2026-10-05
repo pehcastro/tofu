@@ -1,6 +1,6 @@
 # Where questions.jsonl came from
 
-**Written, 98 of 100**, and each row says so in its own `source` field: 98 `written`, 2 `recorded` from turns in `.tofu/sessions`. 25,694 bytes, added 2026-09-21, six answers repinned on 2026-09-22 by TOFU-404 and a seventh on 2026-09-23 by TOFU-462.
+**Written, 98 of 100**, and each row says so in its own `source` field: 98 `written`, 2 `recorded` from turns in `.tofu/sessions`. 25,694 bytes, added 2026-09-21, six answers repinned on 2026-09-22 by TOFU-404 and a seventh on 2026-09-23 by TOFU-462. On 2026-10-05 TOFU-1083 repinned `tofu-09` from `glob.go:124` to `glob.go:90`, because f029a81 deleted `matchesPattern` and the whole path or last segment choice moved into `Glob.Run`, and moved 16 line hints to where their unchanged fingerprints had already followed.
 
 **Written is right for this one, and it is the clearest case in `bench/`.** The corpus it replaced was the argument for it: a 30 question set, of which **25 named a component of their own answer**, on which three arms all scored 14 of 30. The tie measured the corpus, not the tools. A question that does not name its answer has to be composed against a rule, and no recorded session produces one by accident: a person asking a real question names the file they are looking for.
 
