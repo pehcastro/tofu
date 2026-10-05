@@ -66,6 +66,19 @@ const theToolFailedAndPrintedNothing = "the tool ran, failed and printed nothing
 const theToolWasAbortedAndPrintedNothing = "this call was cancelled elsewhere in the turn before it produced output. " +
 	"it is not a failure of the command itself and does not need to be retried the same way."
 
+const aRepeatRunsAgainNothing = "cached: the same call earlier in this turn, and nothing written since, so it was not run again\n"
+
+func pointAtCopy(answer llm.Message, held ...[]llm.Message) string {
+	for _, messages := range held {
+		for _, message := range messages {
+			if message.Role == llm.RoleTool && (message.Content == answer.Content || message.Content == aRepeatRunsAgainNothing+answer.Content) {
+				return "unchanged: the same call as " + message.ToolCallID + " earlier in this turn, with nothing written since, so its result above is this result word for word"
+			}
+		}
+	}
+	return aRepeatRunsAgainNothing + answer.Content
+}
+
 const theTurnEndsOnACleanReport = "this turn ends on a clean sub-agent report, so it runs no tool"
 
 const andThisIsItsLastStep = ", and this is its last step: answer now from what you already have, " +
@@ -501,8 +514,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]llm.Message, len(wave))
+				memoHits := make([]bool, len(wave))
 				if len(wave) == 1 {
-					rows[0], answers[0] = wave[0].run(ctx, stepTools, config.ResultBytesCap, artifacts, 0)
+					rows[0], answers[0], memoHits[0] = wave[0].run(ctx, stepTools, config.ResultBytesCap, artifacts, 0)
 				} else {
 					batches++
 					var running sync.WaitGroup
@@ -510,10 +524,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					for i, gated := range wave {
 						go func() {
 							defer running.Done()
-							rows[i], answers[i] = gated.run(ctx, stepTools, config.ResultBytesCap, artifacts, batches)
+							rows[i], answers[i], memoHits[i] = gated.run(ctx, stepTools, config.ResultBytesCap, artifacts, batches)
 						}()
 					}
 					running.Wait()
+				}
+				for i := range answers {
+					if memoHits[i] {
+						answers[i].Content = pointAtCopy(answers[i], messages, answers[:i])
+						rows[i].RenderedBytes = len(answers[i].Content)
+					}
 				}
 				stepRow.ToolCalls = append(stepRow.ToolCalls, rows...)
 				for i, gated := range wave {
@@ -787,10 +807,11 @@ type shadowVerdict struct {
 	err      string
 }
 
-func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, llm.Message) {
+func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, llm.Message, bool) {
 	row, answer := rejectedCall(g.call, time.Now(), g.refusal, g.id, g.parent, g.author)
+	repeat := false
 	if g.refusal == "" {
-		row, answer = g.execute(ctx, tools, resultBytesCap, artifacts)
+		row, answer, repeat = g.execute(ctx, tools, resultBytesCap, artifacts)
 	}
 	verdict, gateErr := g.verdict, g.gateErr
 	select {
@@ -805,16 +826,17 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	if len(row.Args) > 0 {
 		row.Args = json.RawMessage(g.redact.Redact(string(row.Args)))
 	}
-	return row, answer
+	return row, answer, repeat
 }
 
-func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message) {
+func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message, bool) {
 	call := g.call
 	started := time.Now()
 	ctx = context.WithValue(context.WithValue(context.WithValue(ctx, shellOwnerKey{}, g.author), spawnSiteKey{}, g.site), runningModelKey{}, g.model)
 	tool, ok := tools.byName[call.Name]
 	if !ok {
-		return rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
+		row, answer := rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
+		return row, answer, false
 	}
 
 	result, err := tool.Run(ctx, call.Arguments)
@@ -825,7 +847,8 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		result, err = tool.Run(ctx, call.Arguments)
 	}
 	if err != nil {
-		return rejectedCall(call, started, g.redact.Redact(err.Error()), g.id, g.parent, g.author)
+		row, answer := rejectedCall(call, started, g.redact.Redact(err.Error()), g.id, g.parent, g.author)
+		return row, answer, false
 	}
 	result.Content, result.FailureText = g.redact.Redact(result.Content), g.redact.Redact(result.FailureText)
 
@@ -881,7 +904,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		Content:         body,
 		ToolOutcome:     outcome,
 		ToolResultBytes: row.ResultBytes,
-	}
+	}, result.Repeat
 }
 
 func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {

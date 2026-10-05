@@ -124,11 +124,8 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 			answers = append(answers, message.Content)
 		}
 	}
-	if len(answers) != 2 || !strings.HasPrefix(answers[1], "cached: ") {
-		t.Fatalf("the second answer does not say it came from the first: %q", answers)
-	}
-	if !strings.HasSuffix(answers[1], answers[0]) {
-		t.Fatalf("the cached answer carries something other than what the first read returned: %q", answers[1])
+	if len(answers) != 2 || strings.Contains(answers[1], "\n") || !strings.Contains(answers[1], "call-1") {
+		t.Fatalf("the second answer is not one line pointing at the first read, call-1: %q", answers)
 	}
 	t.Logf("the file was deleted between the two reads and the second answered %d bytes: %q", second.ResultBytes, answers[1])
 }

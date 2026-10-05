@@ -2,67 +2,19 @@ package turn
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 
-	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/sys"
 	"tofu/internal/transform"
 )
 
 const writePerm = 0o644
-
-type ReadLedger struct {
-	mutex sync.Mutex
-	seen  map[string][sha256.Size]byte
-}
-
-func NewReadLedger() *ReadLedger {
-	return &ReadLedger{seen: map[string][sha256.Size]byte{}}
-}
-
-func ledgerKey(path string) string {
-	return filepath.ToSlash(filepath.Clean(path))
-}
-
-func (l *ReadLedger) Mark(path string, body []byte) {
-	if l == nil {
-		return
-	}
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	l.seen[ledgerKey(path)] = sha256.Sum256(body)
-}
-
-func (l *ReadLedger) Saw(path string, body []byte) bool {
-	if l == nil {
-		return true
-	}
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	read, ok := l.seen[ledgerKey(path)]
-	return ok && read == sha256.Sum256(body)
-}
-
-func (l *ReadLedger) Refuse(path string, body []byte) string {
-	if len(body) <= konst.TurnResultBytesCap {
-		l.Mark(path, body)
-		return string(body)
-	}
-	head := konst.TurnResultBytesCap / 2
-	tailFrom := len(body) - (konst.TurnResultBytesCap - head)
-	return string(body[:head]) +
-		fmt.Sprintf("\n...(%d bytes cut from the middle, too large for a refusal to carry whole)...\n", tailFrom-head) +
-		string(body[tailFrom:])
-}
 
 type WriteTool struct {
 	root     Root
@@ -138,6 +90,11 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			"its current content follows, so write it again with that content folded in.\n%s", args.Path, t.ledger.Refuse(args.Path, held))
 	}
 	if readErr == nil {
+		if err := t.ledger.Unshown(args.Path, held, ChangeOf(string(held), args.Content)); err != nil {
+			return Result{}, fmt.Errorf("write: %w", err)
+		}
+	}
+	if readErr == nil {
 		err = overwrite(resolved, held, []byte(args.Content))
 	} else {
 		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
@@ -178,10 +135,14 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	}
 	added := strings.ReplaceAll(args.Content, "\r\n", "\n")
 	after := endings.Restore(lead + added)
+	change := ChangeOf(string(held), after)
+	if err := t.ledger.Unshown(args.Path, held, change); err != nil {
+		return Result{}, fmt.Errorf("write: %w", err)
+	}
 	if err := overwrite(resolved, held, []byte(after)); err != nil {
 		return Result{}, fmt.Errorf("write: %w", err)
 	}
-	t.ledger.Mark(args.Path, []byte(after))
+	t.ledger.Rewrote(args.Path, []byte(after), change)
 	first := strings.Count(lead, "\n") + 1
 	lines := strings.Split(strings.TrimSuffix(added, "\n"), "\n")
 	shown := fmt.Sprintf("appended %d lines to %s, lines %d-%d:", len(lines), args.Path, first, first+len(lines)-1)

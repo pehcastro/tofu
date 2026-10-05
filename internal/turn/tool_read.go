@@ -103,7 +103,7 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 		return Result{}, fmt.Errorf("read: %s end_line %d is before start_line %d", args.Path, end, start)
 	}
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
-	t.ledger.Mark(args.Path, content)
+	t.ledger.MarkLines(args.Path, content, start, end)
 	return Result{
 		Content: repair + span + "\n" + strings.Join(lines[start-1:end], "\n"),
 		Command: span,

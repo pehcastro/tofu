@@ -133,6 +133,10 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	if err != nil {
 		return turn.Result{}, err
 	}
+	change := turn.ChangeOf(text, after)
+	if err := e.ledger.Unshown(target, body, change); err != nil {
+		return turn.Result{}, fmt.Errorf("edit: %w", err)
+	}
 	after = endings.Restore(after)
 	if note != "" {
 		repairs = append(repairs, note)
@@ -156,7 +160,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		}
 		return turn.Result{}, fmt.Errorf("edit: %w", err)
 	}
-	e.ledger.Mark(target, []byte(preview.After))
+	e.ledger.Rewrote(target, []byte(preview.After), change)
 	return turn.Result{
 		Content: e.checkers.Typechecked(ctx, resolved, strings.Join(append(repairs, preview.Diff), "\n")),
 		Command: target,

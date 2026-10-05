@@ -30,6 +30,7 @@ type Result struct {
 	FailureText string
 	Outcome     ResultOutcome
 	SubAgent    string
+	Repeat      bool
 }
 
 func runeSafeHead(s string, n int) string {

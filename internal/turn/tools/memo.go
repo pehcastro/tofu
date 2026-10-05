@@ -126,7 +126,7 @@ func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		return t.tool.Run(ctx, raw)
 	}
 	if held, ok := t.memo.recall(key); ok {
-		held.Content = "cached: the same call earlier in this turn, and nothing written since, so it was not run again\n" + held.Content
+		held.Repeat = true
 		return held, nil
 	}
 	result, err := t.tool.Run(ctx, raw)
