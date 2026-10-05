@@ -314,8 +314,63 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.id), outcome.Name)); err != nil {
 		t.Fatalf("%s is not kept for the session send created: %v", outcome.Name, err)
 	}
-	if held, err := os.ReadDir(store.Dir(live.id)); err != nil || len(held) != 2 {
-		t.Fatalf("the session folder holds %d entries, want session.json and events.jsonl alone: %v", len(held), err)
+	held, err := os.ReadDir(store.Dir(live.id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range held {
+		names = append(names, entry.Name())
+	}
+	if want := []string{"events.jsonl", "session.json"}; !slices.Equal(names, want) {
+		t.Fatalf("the session folder holds %v, want %v alone", names, want)
+	}
+}
+
+func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
+	dir := scratchProject(t)
+	model := &sendModel{queued: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "first"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second"},
+	}}
+	live := newAppSession(dir, func(runOpts) (appWire, error) {
+		return wireOn(model), nil
+	}, nil, time.Now, sessionResume{})
+	var first eventLog
+	live.run(t.Context(), onTheSubscription, "first task", first.add)
+
+	store, err := sessionstore.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	book := cronFile(store, live.id)
+	corrupt := "{not json"
+	if err := os.WriteFile(book, []byte(corrupt), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := live.loadCron(live.id); err == nil {
+		t.Fatal("a corrupt cron.json loaded")
+	}
+
+	var second eventLog
+	live.run(t.Context(), onTheSubscription, "second task", second.add)
+	body, err := os.ReadFile(book)
+	t.Logf("cron.json after the send: %q", body)
+	if err != nil || string(body) != corrupt {
+		t.Fatalf("the send overwrote a cron.json that did not load: %q, %v", body, err)
+	}
+	if len(model.requests) != 2 {
+		t.Fatalf("the model was asked %d times, want the second send to run", len(model.requests))
+	}
+	said := false
+	for _, event := range second.all() {
+		if event.Kind == tui.EventFailure {
+			t.Fatalf("the refused write failed the turn: %s", event.Text)
+		}
+		said = said || event.Kind == tui.EventNote && strings.Contains(event.Text, book)
+	}
+	if !said {
+		t.Fatalf("no note names %s as left as it is: %+v", book, second.all())
 	}
 }
 

@@ -119,25 +119,34 @@ func (b *Book) Load(path string) error {
 	if path == "" {
 		return nil
 	}
-	body, err := os.ReadFile(path)
+	read, err := readKept(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	var read kept
-	if err == nil {
-		err = json.Unmarshal(body, &read)
+	if err != nil {
+		b.path = ""
+		return err
 	}
+	b.made, b.jobs = read.Made, read.Jobs
+	return nil
+}
+
+func readKept(path string) (kept, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return kept{}, err
+	}
+	var read kept
+	err = json.Unmarshal(body, &read)
 	for _, job := range read.Jobs {
 		if err == nil && len(job.Versions) == 0 {
 			err = errors.New(job.ID + " has no version")
 		}
 	}
 	if err != nil {
-		b.path = ""
-		return fmt.Errorf("cron jobs in %s are unreadable, so none is kept and the file is left as it is: %w", path, err)
+		return kept{}, fmt.Errorf("cron jobs in %s are unreadable, so none is kept and the file is left as it is: %w", path, err)
 	}
-	b.made, b.jobs = read.Made, read.Jobs
-	return nil
+	return read, nil
 }
 
 func (b *Book) Keep(path string) error {
@@ -149,6 +158,12 @@ func (b *Book) Keep(path string) error {
 
 func (b *Book) save() error {
 	if b.path == "" {
+		return nil
+	}
+	if _, err := readKept(b.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if b.made == 0 {
 		return nil
 	}
 	body, err := json.MarshalIndent(kept{Made: b.made, Jobs: b.jobs}, "", "  ")

@@ -127,6 +127,48 @@ func TestCronBookKeepsItsGuards(t *testing.T) {
 	}
 }
 
+func TestCronBookWritesNothingEmptyAndNeverOverAFileItCannotRead(t *testing.T) {
+	dir := t.TempDir()
+	corrupt, fork := filepath.Join(dir, "a", "cron.json"), filepath.Join(dir, "b", "cron.json")
+	book := &Book{}
+	if err := book.Keep(fork); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(fork); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("an empty book wrote %s: %v", fork, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(corrupt), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(corrupt, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.Load(corrupt); err == nil {
+		t.Fatal("a corrupt file loaded")
+	}
+	if _, err := book.Create(Spec{Schedule: "every 1m", Prompt: "after"}, Person, "made after a failed load", monday); err != nil {
+		t.Fatal(err)
+	}
+	for name, keeping := range map[string]*Book{"a book holding a job": book, "an empty book": {}} {
+		if err := keeping.Keep(corrupt); err == nil || !strings.Contains(err.Error(), corrupt) {
+			t.Errorf("%s kept over the unreadable file: %v, want a refusal naming it", name, err)
+		}
+	}
+	if body, _ := os.ReadFile(corrupt); string(body) != "{not json" {
+		t.Fatalf("the unreadable file was overwritten: %q", body)
+	}
+	if err := book.Keep(fork); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.Delete("c1"); err != nil {
+		t.Fatal(err)
+	}
+	reread := &Book{}
+	if err := reread.Load(fork); err != nil || len(reread.Jobs()) != 0 || reread.made != 1 {
+		t.Fatalf("a fork after deleting its only job reads back %v, %d jobs, made %d, want no jobs and made 1", err, len(reread.Jobs()), reread.made)
+	}
+}
+
 func TestCronOnceFiresOnceAndNotAgainTomorrow(t *testing.T) {
 	book := &Book{}
 	once, err := book.Create(Spec{Schedule: "once at 15:00", Prompt: "remind me to push"}, Person, "made by /cron", monday)

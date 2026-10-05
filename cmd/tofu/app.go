@@ -1041,8 +1041,8 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			if headErr := sessions.SetHead(row.Session); headErr != nil {
 				fail(headErr)
 			}
-			if keepErr := s.cron.Keep(cronFile(sessions, row.Session)); keepErr != nil {
-				fail(keepErr)
+			if keepErr := s.cron.Keep(cronFile(sessions, row.Session)); keepErr != nil && forked {
+				say("cron jobs were not written: " + keepErr.Error())
 			}
 			if labelled, named := s.label(sessions); named && forked {
 				emit(labelled)

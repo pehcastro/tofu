@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -809,14 +810,35 @@ func settingsKeys(app *App, keys ...string) {
 	}
 }
 
-func switchOnToolDetail(app *App) {
-	settingsKeys(app, "right", "right", "right", "down", "enter", "down", "enter")
+func settingsWalk(t *testing.T, app *App, key string) []string {
+	t.Helper()
+	rows := app.settings.Rows
+	at := slices.IndexFunc(rows, func(row settings.Row) bool { return row.Key == key })
+	if at < 0 {
+		t.Fatalf("the settings screen has no %s row", key)
+	}
+	var categories []string
+	downs := 0
+	for index, row := range rows[:at+1] {
+		if !slices.Contains(categories, row.Category) {
+			categories = append(categories, row.Category)
+		}
+		if index < at && row.Category == rows[at].Category {
+			downs++
+		}
+	}
+	walk := slices.Repeat([]string{"right"}, slices.Index(categories, rows[at].Category))
+	return append(walk, slices.Repeat([]string{"down"}, downs)...)
+}
+
+func switchOnToolDetail(t *testing.T, app *App) {
+	settingsKeys(app, append(settingsWalk(t, app, isettings.ChatShowsTools), "enter", "down", "enter")...)
 }
 
 func TestASettingChangedInTheRunningInterfaceIsOnDiskBeforeTheNextKeystroke(t *testing.T) {
 	globalPath := filepath.Join(t.TempDir(), "settings.json")
 	app := settingsStoreApp(t, globalPath)
-	switchOnToolDetail(app)
+	switchOnToolDetail(t, app)
 
 	raw, err := os.ReadFile(globalPath)
 	if err != nil {
@@ -830,7 +852,7 @@ func TestASettingChangedInTheRunningInterfaceIsOnDiskBeforeTheNextKeystroke(t *t
 func TestASettingSurvivesARestartOfTheInterface(t *testing.T) {
 	globalPath := filepath.Join(t.TempDir(), "settings.json")
 	app := settingsStoreApp(t, globalPath)
-	settingsKeys(app, "right", "right", "right", "right", "right", "right", "+", "+", "+")
+	settingsKeys(app, append(settingsWalk(t, app, isettings.DecisionCap), "+", "+", "+")...)
 	if got := app.store.Int(isettings.DecisionCap); got != 3 {
 		t.Fatalf("decisionCap after three increments = %d, want 3", got)
 	}
@@ -844,7 +866,7 @@ func TestASettingSurvivesARestartOfTheInterface(t *testing.T) {
 func TestChatShowsToolsPersistsAcrossARestart(t *testing.T) {
 	globalPath := filepath.Join(t.TempDir(), "settings.json")
 	app := settingsStoreApp(t, globalPath)
-	switchOnToolDetail(app)
+	switchOnToolDetail(t, app)
 	if !app.settings.ChatShowsTools {
 		t.Fatal("choosing on did not update the model's effective flag")
 	}
@@ -861,10 +883,10 @@ func TestSpacePressedOnTheKeyboardChoosesASettingsValue(t *testing.T) {
 		t.Fatalf("a space press stringifies to %q, so this test is not sending what a keyboard sends", got)
 	}
 	app := settingsStoreApp(t, filepath.Join(t.TempDir(), "settings.json"))
-	for range 3 {
-		app.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	arrows := map[string]rune{"right": tea.KeyRight, "down": tea.KeyDown}
+	for _, key := range settingsWalk(t, app, isettings.ChatShowsTools) {
+		app.Update(tea.KeyPressMsg{Code: arrows[key]})
 	}
-	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	app.Update(spacePress)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	app.Update(spacePress)
@@ -884,7 +906,7 @@ func TestFoldHidesShellIsASettingThatDropsTheShellCountFromTheRunningLine(t *tes
 	}
 
 	app.runCommand("settings")
-	settingsKeys(app, "right", "right", "right", "right", "right", "down", "down", "down", "down", "enter", "down", "enter")
+	settingsKeys(app, append(settingsWalk(t, app, isettings.FoldHidesShell), "enter", "down", "enter")...)
 	if !app.store.Bool(isettings.FoldHidesShell) {
 		t.Fatal("choosing on did not flip foldHidesShell on disk")
 	}
