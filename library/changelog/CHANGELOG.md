@@ -16,6 +16,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - **`/compact`** shrinks old tool results to a handle between turns, and the shrink survives a restart.
 - **`/resume`** opens a picker of this project's sessions, and `/resume <name>` resumes one directly.
 - **`/keys`** lists every key the app answers to.
+- **`tofu undo [N]` and `/undo [N]`** put back the files the last turns changed, including changes made through bash. A file you edited since is left alone unless `--force`, and `--dry-run` shows what would change.
 - **Ctrl+G** opens the prompt in `$VISUAL` or `$EDITOR`.
 - **A dropped or pasted image path** attaches the image.
 - **Ctrl+V on Linux and macOS** reads the clipboard: `wl-paste`, `xclip` or `xsel` on Linux, `pbpaste` and `osascript` on macOS.
