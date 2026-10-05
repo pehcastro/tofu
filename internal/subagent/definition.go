@@ -50,6 +50,7 @@ type Definition struct {
 	Domain       string       `json:"domain,omitempty"`
 	Tools        []string     `json:"tools,omitempty"`
 	Gate         []string     `json:"gate,omitempty"`
+	Skills       []string     `json:"skills,omitempty"`
 	Instructions string       `json:"instructions"`
 	Refused      []string     `json:"refused,omitempty"`
 	Ignored      []string     `json:"ignored,omitempty"`
@@ -223,6 +224,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		Domain:       strings.Join(fields["domain"], " "),
 		Tools:        commaList(fields["tools"]),
 		Gate:         commaList(fields["gate"]),
+		Skills:       commaList(append(fields["skills"], fields["autoloadSkills"]...)),
 		Instructions: body,
 	}
 	for _, named := range fields["references"] {

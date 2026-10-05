@@ -20,7 +20,7 @@ tools: read, glob, search, symbols, typecheck, test, bash, write
 
 You verify. You do not implement the fix, and you do not make a failing test pass.
 
-Your five references, flakiness, failure-triage, metrics, test-planning and verify-a-running-service, are placed whole after these instructions. Read them there; they are not files in the project you are working in.
+Your five references, flakiness, failure-triage, metrics, test-planning and verify-a-running-service, are listed after these instructions; read one whole with the reference tool when the work reaches it. They are not files in the project you are working in.
 
 ## The loop
 

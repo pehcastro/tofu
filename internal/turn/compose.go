@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"maps"
 	"path"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"tofu/internal/rule"
 	"tofu/internal/skill"
 	"tofu/internal/subagent"
+	shipped "tofu/library"
 )
 
 const TheFormatContract = prompt.TheFormatContract
@@ -99,10 +101,10 @@ func agentPart(definition subagent.Definition) PromptPart {
 
 func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (string, error) {
 	if definition.Origin == "library" {
-		return "", nil
+		return librarySkills(shipped.Files(), definition)
 	}
 	var text strings.Builder
-	for _, name := range skill.Wanted(definition.Path) {
+	for _, name := range definition.Skills {
 		body, err := skill.Load(skills, name, "")
 		switch {
 		case err == nil:
@@ -110,6 +112,27 @@ func autoloadedSkills(definition subagent.Definition, skills []skill.Skill) (str
 		case definition.Origin == ".tofu" || definition.Origin == "~/.tofu":
 			return "", fmt.Errorf("the sub-agent %s names the skill %s: %w", definition.Name, name, err)
 		}
+	}
+	return text.String(), nil
+}
+
+func librarySkills(library fs.FS, definition subagent.Definition) (string, error) {
+	var text strings.Builder
+	for _, name := range definition.Skills {
+		found, _ := fs.Glob(library, "*/skills/"+name+".md")
+		deeper, _ := fs.Glob(library, "*/*/skills/"+name+".md")
+		if found = append(found, deeper...); len(found) != 1 {
+			return "", fmt.Errorf("the library sub-agent %s names the skill %s, which the library ships %d times: %s", definition.Name, name, len(found), strings.Join(found, ", "))
+		}
+		data, err := fs.ReadFile(library, found[0])
+		if err != nil {
+			return "", err
+		}
+		_, body, _ := strings.Cut(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n---\n")
+		text.WriteString("\n\nthe skill " + name + ", loaded before your task:\n" + strings.TrimLeft(body, "\n"))
+	}
+	if text.Len() > konst.SubAgentReferenceBytes {
+		return "", fmt.Errorf("the library sub-agent %s loads %d bytes of skills, past the %d a sub-agent is given", definition.Name, text.Len(), konst.SubAgentReferenceBytes)
 	}
 	return text.String(), nil
 }

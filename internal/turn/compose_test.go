@@ -7,6 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"tofu/internal/konst"
 	"tofu/internal/rule"
 	"tofu/internal/subagent"
 	shipped "tofu/library"
@@ -258,6 +259,84 @@ func TestASubAgentOwningAMonorepoAppGetsThatAppsFrameworkRules(t *testing.T) {
 		if got := strings.Contains(system, "vue rule"); got != c.vueRule {
 			t.Errorf("owning %v with the lead's %v: vue rule = %v, want %v", c.owns, c.lead, got, c.vueRule)
 		}
+	}
+}
+
+func TestEveryLibraryAgentGetsEachSkillItNamesWhole(t *testing.T) {
+	found := subagent.Definitions(subagent.Scan{Library: shipped.Files()})
+	if len(found.Broken) > 0 {
+		t.Fatalf("library agents do not read: %+v", found.Broken)
+	}
+	named := 0
+	for _, definition := range found.Definitions {
+		composed, err := Compose(ComposeSpec{Task: "t", Environment: "e", ToolGuidance: "g", Agent: definition})
+		if err != nil {
+			t.Fatalf("%s: %v", definition.Path, err)
+		}
+		onDisk := filepath.Join("..", "..", "library")
+		for _, name := range definition.Skills {
+			named++
+			files, _ := filepath.Glob(filepath.Join(onDisk, "*", "skills", name+".md"))
+			deeper, _ := filepath.Glob(filepath.Join(onDisk, "*", "*", "skills", name+".md"))
+			if files = append(files, deeper...); len(files) != 1 {
+				t.Fatalf("%s names the skill %s, which the library holds %d times on disk", definition.Path, name, len(files))
+			}
+			data, err := os.ReadFile(files[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			at := strings.Index(string(data), "\n# ")
+			heading, _, _ := strings.Cut(string(data)[at+1:], "\n")
+			if wanted := "the skill " + name + ", loaded before your task:\n" + strings.TrimSpace(heading); at < 0 || !strings.Contains(composed.System(), wanted) {
+				t.Fatalf("%s names the skill %s and its prompt lacks %q:\n%s", definition.Path, name, wanted, composed.System())
+			}
+		}
+	}
+	if named == 0 {
+		t.Fatal("no library agent names a skill, so nothing here was at risk")
+	}
+}
+
+func TestALibraryAgentsSkillsFailLoudly(t *testing.T) {
+	library := fstest.MapFS{
+		"qa/skills/one.md":          {Data: []byte("---\r\nname: one\r\ndomain: qa\r\n---\r\n# One\r\nfirst\r\n")},
+		"qa/general/skills/two.md":  {Data: []byte("---\nname: two\n---\n\n# Two\n")},
+		"dev/skills/twin.md":        {Data: []byte("---\nname: twin\n---\n# Twin\n")},
+		"qa/general/skills/twin.md": {Data: []byte("---\nname: twin\n---\n# Twin\n")},
+		"qa/skills/huge.md":         {Data: []byte("---\nname: huge\n---\n" + strings.Repeat("x", konst.SubAgentReferenceBytes))},
+	}
+	for _, c := range []struct {
+		name   string
+		skills []string
+		loads  []string
+		fails  string
+	}{
+		{name: "crlf at two depths", skills: []string{"one", "two"}, loads: []string{"one, loaded before your task:\n# One\n", "two, loaded before your task:\n# Two"}},
+		{name: "missing", skills: []string{"ghost"}, fails: "ghost"},
+		{name: "shipped twice", skills: []string{"twin"}, fails: "twin"},
+		{name: "over the limit", skills: []string{"huge"}, fails: "16384"},
+		{name: "none named"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			text, err := librarySkills(library, subagent.Definition{Name: "x", Origin: "library", Skills: c.skills})
+			if c.fails != "" {
+				if err == nil || !strings.Contains(err.Error(), c.fails) {
+					t.Fatalf("want a failure naming %q, got %v with %q", c.fails, err, text)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, wanted := range c.loads {
+				if !strings.Contains(text, wanted) || strings.Contains(text, "name:") {
+					t.Fatalf("want %q and no front matter in:\n%q", wanted, text)
+				}
+			}
+			if len(c.loads) == 0 && text != "" {
+				t.Fatalf("a definition naming no skill loaded %q", text)
+			}
+		})
 	}
 }
 

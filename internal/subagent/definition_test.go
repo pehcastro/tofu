@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm/models"
@@ -347,6 +348,13 @@ func TestToolsTheModeDoesNotBuild(t *testing.T) {
 		if row.why != "" && (browser.Runs != RunsRefused || !strings.Contains(refused, row.why)) {
 			t.Fatalf("%s: want the browser sub-agent refused with %q, got %v offering %v refused %q", row.mode, row.why, browser.Runs, browser.Tools, refused)
 		}
+	}
+}
+
+func TestBothSkillKeysAreRead(t *testing.T) {
+	definition, err := read(fstest.MapFS{"a.md": {Data: []byte("---\r\nname: a\r\ndescription: d\r\nskills: [commit, header]\r\nautoloadSkills:\r\n  - tests\r\n---\r\nbody")}}, "a.md")
+	if err != nil || strings.Join(definition.Skills, ",") != "commit,header,tests" || slices.Contains(definition.Ignored, "skills") {
+		t.Fatalf("skills %v, ignored %v, err %v; want both keys read", definition.Skills, definition.Ignored, err)
 	}
 }
 

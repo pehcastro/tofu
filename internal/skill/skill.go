@@ -208,17 +208,3 @@ func Load(skills []Skill, name, path string) (string, error) {
 	data, err := os.ReadFile(target)
 	return string(data), err
 }
-
-func Wanted(agentFile string) []string {
-	data, _ := os.ReadFile(agentFile)
-	fields, _ := frontMatter(string(data))
-	var names []string
-	for _, item := range append(fields["skills"], fields["autoloadSkills"]...) {
-		for name := range strings.SplitSeq(item, ",") {
-			if name = unquote(strings.TrimSpace(name)); name != "" {
-				names = append(names, name)
-			}
-		}
-	}
-	return names
-}

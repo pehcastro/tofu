@@ -142,11 +142,3 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("an unknown name fails without naming what exists: %v", err)
 	}
 }
-
-func TestWanted(t *testing.T) {
-	agent := filepath.Join(t.TempDir(), "a.md")
-	write(t, agent, "---\nname: a\nskills: [commit, header]\nautoloadSkills:\n  - tests\n---\nbody")
-	if got := Wanted(agent); strings.Join(got, ",") != "commit,header,tests" {
-		t.Fatalf("wanted %v, want both fields read", got)
-	}
-}
