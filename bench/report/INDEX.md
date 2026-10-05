@@ -42,7 +42,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 
 ## What decides what today
 
-4 of 11 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
+5 of 12 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
 
 | What decides | Switched on | What it costs | Why | Called by | Measured |
 |---|---|---|---|---|---|
@@ -56,6 +56,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 | `tool_gate` | not wired | nothing, and no call is made | the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six | not stated | not stated |
 | `instruction_trust` | not wired | nothing, and no call is made | jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs | not stated | not stated |
 | `spawn_gate` | not wired | nothing, and no call is made | nothing is measured, and it waits on one recorded orchestrator and sub-agent | not stated | not stated |
+| `memory_offer` | yes, through the cheap method | nothing for the rule. the shadow jev call is one ledger row per typed message while memory is on, and no recorded session reports its cost yet | the app offers a memory when a sentence starts with remember, precision 1.00 and recall 0.12 on a made-up corpus of 54 messages, where jev memory_offer@1 owes a run. jev is asked in shadow on every typed message while memory is on and decides nothing | interface/tui/memory.go | not stated |
 | `thrift` | not wired | nothing, and no call is made | the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it | not stated | not stated |
 
 ## Which decisions Jev wins, which it loses, and by how much
@@ -79,10 +80,11 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-63 dated reports over 38 benches. 6 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+64 dated reports over 39 benches. 8 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
+| planspawn | 2026-10-05 | `bench/planspawn/report-2026-10-05.md` | Summed over the four requests in the tables below, the new wording spent 831150 lead tokens against the old wording's 710834, 16.9% more, on the same 21 lead requests and the same sub-agent count per request. | four requests, feature-small, medium-glob, hard-duration and hard-ls, one app session per wording on claude-sub, one run each | stands |
 | nativetools | 2026-10-04 | `bench/nativetools/report-2026-10-04.md` | Hand read from bench/report/handread.json: Tool against tool with no model in the loop, tofu edit is right or refuses with a reason on 40 of 40 recorded edits, and changes no file wrongly without saying so. sed on the changed line gets 24 right and changes 16 files wrongly in silence, sed -z with the whole old_string 36 and 4, and a here-doc rewrite 36 and 0 while sending 587,287 bytes against tofu edit's 19,001. tofu read returns 57,522 bytes on 40 reads and never needs a second call, against 54,997 for sed -n and head and tail and 785,105 for cat, which needs a second call on 11. On 20 listings find returns 19,631 bytes, glob 20,989 and ls -R 125,828, and glob and find return different paths on 3 of 20. | every edit, read and glob call a model issued in 74 recorded runs, 2,330 tool calls read, of which 40 edits, 40 ranged reads and 20 glob patterns valid at the seed commit 09e048f were run on every arm, one run on DESKTOP-AHUN9RO | stands |
 | browser | 2026-09-28 | `bench/browser/report-2026-09-28.md` | Hand read from bench/report/handread.json: Jev picked the right next browser action on 8 of 8 recorded pages, with a median of 316 ms and 1,340 input tokens a decision, against jev-ultrafast's 178 ms and 5.3k tokens. The whole pass cost $0.000496. The model arm, the turn's own model calling browser_act, is not measured. | 8 recorded pages, jev-ultrafast's hotel form and seven fastbrowse fixtures converted by hand, one live pass through OpenRouter on jev-1.13-20260917 | stands |
 | skills | 2026-09-26 | `bench/skills/report-2026-09-26.md` | Hand read from bench/report/handread.json: With the skill listing on, the model loaded the matching skill in 2 of 3 tasks and followed it both times. On the third it never loaded the skill and silently ignored the convention. With the listing off, 0 of 3 followed. The listing costs 247 cached tokens per request. Skills earn a place for a person's own conventions, not for library content that must always apply. | three throwaway skills, three tasks, one live run each with the listing on and off, on claude-sub/claude-sonnet-5 at low effort | stands |
@@ -173,13 +175,15 @@ Why the rest are not compared:
 
 ### Benches with no dated report
 
+- `bench/cache`, measurement with no dated report: two offline replays over ~/.tofu/projects, rerun 2026-10-05 at 7afccaa under TOFU-1083, 0 dated reports so far. cache/shrink: shrinking browser pages only when the batch pays is 427.67 USD against 445.57 at list price, 4.0% less over 11,801 requests, with 10 requests over the context target against 1. cache/ttl: history at 5 minutes is 14.93% less than all at 1 hour and all at 5 minutes 20.51% less, over 14,934 requests whose record holds no person pausing; the layout is open in TOFU-1064.
 - `bench/cmd`, runner: the bench command, package main. Runs the other benches, measures 0 things of its own.
 - `bench/corpus`, library: the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here.
+- `bench/learn`, measurement with no dated report: TOFU-1176, 2026-10-07, owing a run. labels.txt holds 50 made-up example labels since TOFU-1185, so a run names its own chain with --chain and its own labels with --labels, and needs Jev and claude. No measured number is committed.
+- `bench/memory`, measurement with no dated report: TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. Offering to keep a message, TOFU-1185, 2026-10-07, offline over 54 made-up messages, 24 labelled offer by the agent that wrote them and that knew the rules being scored when it did: regular expression precision 0.67 recall 0.33, the trigger the app uses 1.00 and 0.12, remember anywhere 0.60 and 0.12. Jev memory_offer@1 owes a run on this corpus.
 - `bench/orchestrator`, runner: reads 1 session folder and prints where its time went, with 0 dated reports of its own.
-- `bench/prompts`, measurement with no dated report: a correlation over recorded prompts, owed by TOFU-380, 0 dated reports so far.
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own.
 - `bench/stat`, library: median, p95 and p99 over a slice of floats, called by every bench that reports a spread.
 
 ### Where these reports came from
 
-5 of 63 reports are built by running the package's own code again and 58 of 63 from the markdown's own text, which is weaker evidence, and every one of those says so.
+5 of 64 reports are built by running the package's own code again and 59 of 64 from the markdown's own text, which is weaker evidence, and every one of those says so.

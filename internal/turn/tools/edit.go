@@ -77,11 +77,39 @@ type editArgs struct {
 	Symbol string `json:"symbol"`
 }
 
+const byteOrderMark = "\xef\xbb\xbf"
+
+type lineEndings struct{ bom, crlf bool }
+
+func endingsOf(body string) (string, lineEndings) {
+	text := strings.TrimPrefix(body, byteOrderMark)
+	crlf := strings.Contains(text, "\r\n") && strings.Count(text, "\r\n") == strings.Count(text, "\n")
+	if crlf {
+		text = strings.ReplaceAll(text, "\r\n", "\n")
+	}
+	return text, lineEndings{bom: strings.HasPrefix(body, byteOrderMark), crlf: crlf}
+}
+
+func (l lineEndings) restore(text string) string {
+	if l.crlf {
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+	}
+	if l.bom {
+		text = byteOrderMark + text
+	}
+	return text
+}
+
+func asLF(text string) string {
+	return strings.ReplaceAll(strings.TrimPrefix(text, byteOrderMark), "\r\n", "\n")
+}
+
 func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args editArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("edit: arguments are not the expected shape: %w", err)
 	}
+	args.Old, args.New = asLF(args.Old), asLF(args.New)
 	if args.Old == "" && args.Symbol == "" {
 		return turn.Result{}, errors.New("edit: say what is replaced, either old_string for a stretch of text copied from the file or symbol for the whole of one go declaration: write creates a file")
 	}
@@ -122,15 +150,17 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 
 	before := string(body)
+	text, endings := endingsOf(before)
 	var after, note string
 	if args.Symbol != "" {
-		after, err = replaceDeclaration(e.root, target, args.Symbol, before, args.New)
+		after, err = replaceDeclaration(e.root, target, args.Symbol, text, args.New)
 	} else {
-		after, note, err = replaceOnce(before, target, args.Old, args.New)
+		after, note, err = replaceOnce(text, target, args.Old, args.New)
 	}
 	if err != nil {
 		return turn.Result{}, err
 	}
+	after = endings.restore(after)
 	if note != "" {
 		repairs = append(repairs, note)
 	}

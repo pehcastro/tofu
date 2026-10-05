@@ -1,7 +1,6 @@
 package turn
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -16,12 +15,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/sys"
 )
 
 type BashTool struct {
@@ -295,7 +296,7 @@ func (t *BashTool) Name() string { return bashToolName }
 func (t *BashTool) Definition() llm.Tool {
 	description := fmt.Sprintf(
 		"runs one command in %s and waits for it to exit. cwd is already the working directory named in the environment block: spell paths that way, no cd. a nonzero exit is reported with its code. "+
-			"a command is killed after %d ms and its output is lost, so a long one has to be narrowed or given a larger timeout_ms, up to %d. "+
+			"a command is killed after %d ms and returns the output it printed until then, so a long one has to be narrowed or given a larger timeout_ms, up to %d. "+
 			"do not use it to walk the tree: find, ls -R and wc descend into every ignored directory and take minutes here, "+
 			"while glob, search and project_report skip what .gitignore skips and answer in milliseconds. "+
 			"background: true is for long work that keeps running and nothing else: a dev server, a watcher, a long-running script. "+
@@ -358,9 +359,12 @@ func (t *BashTool) checkPort(ctx context.Context, port int) Result {
 }
 
 func (t *BashTool) command(ctx context.Context, command string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, t.choice.Path, "-c", command)
+	cmd := exec.CommandContext(ctx, t.choice.Path, t.choice.Args(command)...)
 	cmd.Dir = string(t.root)
-	cmd.Env = append(os.Environ(), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
+	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(entry string) bool {
+		name, _, _ := strings.Cut(entry, "=")
+		return slices.ContainsFunc(sys.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
+	}), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
 	return cmd
 }
@@ -520,24 +524,27 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 
 	started := time.Now()
 	cmd := t.command(ctx, args.Command)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	output := &heldOutput{}
+	cmd.Stdout, cmd.Stderr = output, output
 	tracked, startErr := shell.StartTracked(cmd)
 	if startErr != nil {
 		return Result{}, fmt.Errorf("bash: %w", startErr)
 	}
 	defer tracked.Release()
 	runErr := cmd.Wait()
+	text, dropped := output.text()
+	note := corrected + dropped
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return Result{}, errors.New(corrected + "bash: " + search.Note(search.Stopped, fmt.Sprintf(
-			"%q ran %d ms, past the %d ms deadline. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
+		killed := "bash: " + search.Note(search.Truncated, fmt.Sprintf(
+			"%q ran %d ms and was killed at its deadline of %d ms: its output until then is above. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
 				"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
-			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis)))
+			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis))
+		return Result{Content: note + capResult(text) + "\n" + killed, Command: args.Command, Outcome: ResultFailed, FailureText: killed}, nil
 	}
 	if ctx.Err() != nil {
 		return Result{
-			Content: capResult(output.String()),
+			Content: note + capResult(text),
 			Command: args.Command,
 			Outcome: ResultAborted,
 			FailureText: fmt.Sprintf("bash: %q was cancelled elsewhere in this turn while it was running, not because the command itself failed. "+
@@ -547,5 +554,43 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if cmd.ProcessState == nil {
 		return Result{}, fmt.Errorf("bash: %w", runErr)
 	}
-	return exitedResult(args.Command, output.String(), cmd.ProcessState.ExitCode(), corrected), nil
+	return exitedResult(args.Command, text, cmd.ProcessState.ExitCode(), note), nil
+}
+
+type heldOutput struct {
+	head, tail []byte
+	total      int
+}
+
+func (h *heldOutput) Write(p []byte) (int, error) {
+	h.total += len(p)
+	half := konst.BashOutputHeldBytes / 2
+	taken := min(half-len(h.head), len(p))
+	h.head = append(h.head, p[:taken]...)
+	h.tail = append(h.tail, p[taken:]...)
+	if len(h.tail) > 2*half {
+		h.tail = append(h.tail[:0], h.tail[len(h.tail)-half:]...)
+	}
+	return len(p), nil
+}
+
+func (h *heldOutput) text() (string, string) {
+	head, tail := h.head, h.tail[max(0, len(h.tail)-konst.BashOutputHeldBytes/2):]
+	if len(head)+len(tail) == h.total {
+		return shell.Decode(slices.Concat(head, tail)), ""
+	}
+	for cut := len(head) - 1; cut >= max(0, len(head)-utf8.UTFMax); cut-- {
+		if utf8.RuneStart(head[cut]) {
+			if !utf8.FullRune(head[cut:]) {
+				head = head[:cut]
+			}
+			break
+		}
+	}
+	for skipped := 0; skipped < utf8.UTFMax-1 && len(tail) > 0 && !utf8.RuneStart(tail[0]); skipped++ {
+		tail = tail[1:]
+	}
+	return shell.Decode(slices.Concat(head, tail)), fmt.Sprintf(
+		"bash: the command printed %d bytes and a call holds %d while it runs, so the %d in the middle were dropped as they arrived\n",
+		h.total, konst.BashOutputHeldBytes, h.total-len(head)-len(tail))
 }

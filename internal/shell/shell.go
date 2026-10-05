@@ -158,7 +158,7 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	cmd := exec.Command(choice.Path, "-c", command)
+	cmd := exec.Command(choice.Path, choice.Args(command)...)
 	cmd.Dir = root
 	spawned, waited, err := r.spawn(cmd, logFile)
 	if err != nil {
@@ -226,7 +226,7 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 			_ = os.Remove(r.logPath(name))
 			ended, code := time.Now(), exitCode(waitErr)
 			got.Shell.State, got.Shell.Ended, got.Shell.ExitCode = Exited, &ended, &code
-			got.Output, got.Ready, got.Took = string(output), ReadyExited, time.Since(got.Shell.Started)
+			got.Output, got.Ready, got.Took = Decode(output), ReadyExited, time.Since(got.Shell.Started)
 			return got, readErr
 		case <-gaveUp:
 			got.Ready = ReadyWaited
@@ -239,7 +239,7 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 	got.Took = time.Since(got.Shell.Started)
 	err = r.keep(got.Shell, spawned, waited, logFile)
 	output, _ := os.ReadFile(r.logPath(name))
-	got.Output = string(output)
+	got.Output = Decode(output)
 	return got, err
 }
 

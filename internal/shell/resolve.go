@@ -21,6 +21,16 @@ type Choice struct {
 	Note  string
 }
 
+const powerShellUTF8Output = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n"
+
+func (c Choice) Args(command string) []string {
+	switch strings.TrimSuffix(strings.ToLower(filepath.Base(c.Path)), ".exe") {
+	case "pwsh", "powershell":
+		return []string{"-NoProfile", "-NonInteractive", "-Command", powerShellUTF8Output + command}
+	}
+	return []string{"-c", command}
+}
+
 const posixSyntaxDoesNotApply = "this project's tools assume a posix shell: heredocs, $VAR, forward slashes and /dev/null do not work here, " +
 	"and && and || are a parse error in Windows PowerShell 5.1"
 

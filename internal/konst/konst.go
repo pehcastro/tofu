@@ -113,6 +113,7 @@ const (
 	BashDeadlineMillis    = 120000
 	BashMaxDeadlineMillis = 600000
 	BashWaitDelayMillis   = 1000
+	BashOutputHeldBytes   = 65536
 	BackgroundYieldMillis = 10000
 
 	TypecheckDeadlineMillis    = 15000
