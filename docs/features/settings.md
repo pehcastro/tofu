@@ -2,7 +2,7 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
@@ -48,6 +48,7 @@ Turn
     turnMaySpawn            true                             default
     subAgentsPerTurn        10                               default
     subAgentDepth           2                                default
+    subAgentCheckSeconds    1800                             default
     agentSources            tofu,agents,claude               default
 ```
 

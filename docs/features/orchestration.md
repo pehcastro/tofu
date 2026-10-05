@@ -2,7 +2,7 @@
 title: Sub-agents
 description: You talk to one lead. It plans, splits the work, and checks it. Sub-agents write the code in the background, each in its own paths and with the rules for its language.
 order: 2
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 You talk to one model, the **lead**. The lead does not write the code. It
@@ -29,7 +29,9 @@ Each piece goes to a sub-agent with four things:
 # Sub-agents work in the background
 `spawn` returns at once. Sub-agents whose paths do not overlap run side by
 side. Each one gets its own conversation, its own model, and only the rules
-for its language and framework.
+for its language and framework. Every 30 minutes the lead is sent a check on
+each one still running: its steps, the files it changed, its gate, its last
+tool and its cost. tofu builds it from what it records, with no model call.
 
 # The gate holds them to their checks
 A language agent that changed a file in its language is sent back until its
@@ -110,4 +112,5 @@ To run the lead alone: `tofu settings set turnMaySpawn false`.
 | `chatShowsTools` (off) | Show every tool call in the chat too |
 | `subAgentsPerTurn` (10) | Sub-agents running at once |
 | `subAgentDepth` (2) | How deep sub-agents may spawn their own |
+| `subAgentCheckSeconds` (1800) | Seconds between checks on a running sub-agent; 0 sends none |
 | `turnMaySpawn` (`true`) | Whether the lead may spawn at all |

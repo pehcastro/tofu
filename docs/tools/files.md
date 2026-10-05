@@ -2,7 +2,7 @@
 title: Files
 description: read, write, edit, glob, search, symbols and project_report, tofu's own Go tools for finding, reading and changing files.
 order: 2
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 Seven tools, all tofu's own Go code, none of them a wrapper around `cat`,
@@ -90,8 +90,12 @@ broke.
 declaration around each match within a 4,000-token budget. There is no `grep`
 tool.
 
-A Go match comes back as the entire function, marked as code,
-comment or string, so the model rarely needs a `read` after it. When nothing
+A match in a `.go`, `.ts`, `.tsx`, `.js`, `.jsx`, `.py` or `.rs` file comes
+back as the entire function, method, class or type, marked as code, comment
+or string, so the model rarely needs a `read` after it. Over 30 searches per
+corpus, that cut what the model read from 87k tokens to about 40k in Python,
+from 154k to 52k in TypeScript, and from 83k to 52k in Rust. A file in any
+other language comes back as the lines around the match. When nothing
 matches, a case-insensitive retry tells an absence from a wrong pattern.
 
 | Parameter | Type | What it does |

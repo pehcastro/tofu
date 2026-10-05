@@ -16,7 +16,10 @@ The environment keeps your variables, with three changes:
 
 On Windows, output a native tool prints in the console's code page, such as
 437 or 850, is turned into UTF-8 before the model reads it, so `Página` stays
-`Página`. PowerShell runs with `-NoProfile` and UTF-8 output.
+`Página`. PowerShell runs with `-NoProfile` and UTF-8 output. A command that
+switches the console to another code page, as some installers do, does not
+outlast tofu: when tofu exits, the console gets back the code page it had
+when tofu started, so `cmd` or PowerShell after it prints as before.
 
 On Windows the shell is Git Bash, then a `bash` on `PATH` that isn't WSL, then
 PowerShell. Elsewhere it's `$SHELL`, or `/bin/sh`. The `shell` setting or
