@@ -18,6 +18,7 @@ import (
 const (
 	turnRunningNote = "a turn is running. stop it with ctrl+c first"
 	noRecordYet     = "nothing is recorded under this repository yet"
+	undoWithCount   = "/undo "
 )
 
 func commands(options Options) []session.Command {
@@ -47,6 +48,9 @@ func commands(options Options) []session.Command {
 	}
 	if options.Compact != nil {
 		listed = append(listed, session.Command{Name: "compact", What: "shrink the old tool results the next turn carries to an artifact handle each"})
+	}
+	if options.Undo != nil {
+		listed = append(listed, session.Command{Name: "undo", What: "put back the files the last turn changed, or the last N with /undo N"})
 	}
 	if options.Cron != nil {
 		listed = append(listed,
@@ -121,6 +125,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.carry(a.options.NewSession)
 	case "compact":
 		a.carry(a.options.Compact)
+	case "undo":
+		a.carry(func() string { return a.options.Undo("") })
 	case "cron", "loop", "goal":
 		return a.cronLine("/" + name)
 	case "quit":
@@ -265,6 +271,16 @@ func (a *App) carry(change func() string) {
 	if !a.refusedMidTurn() {
 		a.view.Append(session.Entry{Kind: session.Note, Body: change()})
 	}
+}
+
+func (a *App) undoCommand() bool {
+	count, asked := strings.CutPrefix(a.view.Draft(), undoWithCount)
+	if !asked || a.options.Undo == nil {
+		return false
+	}
+	a.view.Reset()
+	a.carry(func() string { return a.options.Undo(strings.TrimSpace(count)) })
+	return true
 }
 
 func (a *App) refusedMidTurn() bool {

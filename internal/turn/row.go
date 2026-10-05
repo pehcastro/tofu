@@ -2,6 +2,7 @@ package turn
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/snapshot"
 	"tofu/internal/subagent"
 )
 
@@ -343,6 +345,9 @@ type record struct {
 	spawnedBy string
 	said      map[string]string
 	failed    []string
+	undo      *snapshot.Repo
+	undoBegun chan struct{}
+	undoErr   error
 }
 
 type resultRow struct {
@@ -416,6 +421,29 @@ func (r *record) begin(row Row) {
 		header.Wire, header.Account = row.Wire, row.Account
 		header.ContextCeiling, header.ContextTarget, header.AutoCompaction = start.ContextCeiling, start.ContextTarget, start.AutoCompaction
 	}))
+	if project := r.store.Project(); r.undoBegun == nil && project != "" {
+		header := r.log.Header()
+		r.undo = &snapshot.Repo{Dir: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
+		r.undoBegun = make(chan struct{})
+		go func(repo snapshot.Repo, turn string) {
+			defer close(r.undoBegun)
+			r.undoErr = repo.Begin(context.Background(), turn)
+		}(*r.undo, r.turn)
+	}
+}
+
+func (r *record) undoStarted() bool {
+	if r.undo == nil {
+		return false
+	}
+	<-r.undoBegun
+	if r.undoErr != nil {
+		if !errors.Is(r.undoErr, snapshot.ErrNoGit) {
+			r.note(errors.New("the files at the start of the turn, for undo: " + r.undoErr.Error()))
+		}
+		r.undo = nil
+	}
+	return r.undo != nil
 }
 
 func (r *record) message(message llm.Message, request string, results map[string]ToolCallRow) {
@@ -433,6 +461,9 @@ func (r *record) message(message llm.Message, request string, results map[string
 		r.add(session.Event{Kind: session.EventToolResult, Call: message.ToolCallID, Request: request},
 			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome)})
 	case llm.RoleAssistant:
+		if len(message.ToolCalls) > 0 {
+			r.undoStarted()
+		}
 		body := messageRowOf(message)
 		body.ToolCalls = nil
 		r.said[request] = message.Content
@@ -474,6 +505,11 @@ func (r *record) end(row Row) {
 	r.note(r.log.Edit(func(header *session.Header) {
 		header.Outcome, header.Model = row.Outcome.String(), cmp.Or(row.Model, header.Model)
 	}))
+	if r.undoStarted() {
+		if err := r.undo.End(context.Background()); err != nil {
+			r.note(errors.New("the files at the end of the turn, for undo: " + err.Error()))
+		}
+	}
 	r.note(r.inbox.release(r.log))
 }
 

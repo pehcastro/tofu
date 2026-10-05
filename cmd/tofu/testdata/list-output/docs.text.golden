@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 78 asks                                                         15 topics
+Docs · 79 asks                                                         15 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -32,10 +32,12 @@ browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
   allow fewer actions in one browser task
     → tofu settings set browserSteps 10
 
-commands  every slash command the app's composer takes, and how /compact
-  shrinks the history the next turn carries
+commands  every slash command the app's composer takes, how /compact shrinks
+  the history the next turn carries, and how /undo puts files back
   free room in the context before the next turn
     → /compact in the app, between turns
+  undo what the last turn changed
+    → tofu undo, or /undo in the app
 
 cron  jobs that post a prompt into the session on a timer or after each turn,
   how to change one, and the history of every change

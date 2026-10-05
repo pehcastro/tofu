@@ -41,6 +41,8 @@ func (s *Store) Use(settings Settings) { s.settings = settings }
 
 func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
+func (s *Store) Project() string { return s.project }
+
 func (s *Store) AttachmentDir(id string) string {
 	return filepath.Join(filepath.Dir(s.dir), attachmentsName, id)
 }

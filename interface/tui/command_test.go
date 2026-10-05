@@ -26,6 +26,7 @@ func commandApp(t *testing.T, entered chan<- string) *App {
 		Resume:     func(id string) (string, []Event) { return "continuing " + id, nil },
 		NewSession: func() string { return "the next task starts a new session" },
 		Compact:    func() string { return "compacted 2 old tool result(s)" },
+		Undo:       func(count string) string { return "undid " + count },
 		Turn: func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			entered <- task
 		},

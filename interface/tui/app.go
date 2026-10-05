@@ -171,6 +171,7 @@ type Options struct {
 	Resume       func(id string) (string, []Event)
 	NewSession   func() string
 	Compact      func() string
+	Undo         func(count string) string
 	Now          func() time.Time
 	Shells       func() []shells.Entry
 	KillShell    func(name string) error

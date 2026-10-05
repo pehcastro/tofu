@@ -250,6 +250,10 @@
   do: /compact in the app, between turns
   check: tofu session info <name|id>
   topic: commands
+- ask: undo what the last turn changed
+  do: tofu undo, or /undo in the app
+  check: tofu undo --dry-run
+  topic: commands
 - ask: stop a server an agent left running
   do: tofu shells stop <name>
   check: tofu shells list

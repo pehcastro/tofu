@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           40 matches
+Docs · "change the colours"                                           41 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -54,6 +54,8 @@ Docs · "change the colours"                                           40 matche
     → tofu context
   free room in the context before the next turn
     → /compact in the app, between turns
+  undo what the last turn changed
+    → tofu undo, or /undo in the app
   read the output of a running shell
     → tofu shells log <name>
   check the library files and these pages

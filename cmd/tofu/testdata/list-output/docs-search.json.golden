@@ -113,6 +113,10 @@ exit 0
         "do": "/compact in the app, between turns"
       },
       {
+        "text": "undo what the last turn changed",
+        "do": "tofu undo, or /undo in the app"
+      },
+      {
         "text": "read the output of a running shell",
         "do": "tofu shells log <name>"
       },

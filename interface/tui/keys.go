@@ -220,6 +220,9 @@ func (a *App) submit() tea.Cmd {
 	if cmd, asked := a.resumeCommand(); asked {
 		return cmd
 	}
+	if a.undoCommand() {
+		return nil
+	}
 	if name, asked := a.view.Command(); asked {
 		return a.runCommand(name)
 	}

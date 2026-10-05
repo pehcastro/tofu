@@ -20,7 +20,7 @@ exit 0
       {
         "topic": "commands",
         "title": "Commands in the app",
-        "summary": "every slash command the app's composer takes, and how /compact shrinks the history the next turn carries"
+        "summary": "every slash command the app's composer takes, how /compact shrinks the history the next turn carries, and how /undo puts files back"
       },
       {
         "topic": "cron",
@@ -460,6 +460,12 @@ exit 0
         "ask": "free room in the context before the next turn",
         "do": "/compact in the app, between turns",
         "check": "tofu session info <name|id>",
+        "topic": "commands"
+      },
+      {
+        "ask": "undo what the last turn changed",
+        "do": "tofu undo, or /undo in the app",
+        "check": "tofu undo --dry-run",
         "topic": "commands"
       },
       {

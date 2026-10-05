@@ -47,6 +47,8 @@ Verbs:
   check     run the tool gate on a shell command, in shadow, and log it
   session   list the recorded sessions, read one, rename one, or continue one
   shells    list the persistent processes an agent left running, read one's log, kill one
+  undo      put back the files the last turn changed, or the last N turns,
+            and refuse by name a file changed after the turn
   context   print the context bands of a recorded session and what fills them
   sift      mark what is worth reading in a message and elide the rest
   label     attach an outcome to a ledger row, by id or the last one
@@ -114,6 +116,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return sessionVerb(args[1:], in, out, errOut)
 	case "shells":
 		return shellsVerb(args[1:], out, errOut)
+	case "undo":
+		return undoVerb(args[1:], out, errOut)
 	case "version":
 		return version(args[1:], out, errOut)
 	case "update":
