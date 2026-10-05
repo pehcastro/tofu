@@ -1,0 +1,4 @@
+type run seq 1 40000
+key enter
+wait the run is done
+screen

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -20,6 +21,8 @@ const unstoredMarker = "\n...(%s dropped from the middle of this result. the who
 	"run a narrower command to read the part you need.)...\n"
 
 const artifactHandleBytes = 16
+
+const heldDropLead = "bash: the command printed "
 
 type Artifacts struct {
 	store   *recall.Store
@@ -48,11 +51,15 @@ func (a Artifacts) Render(content string, bytesCap int) (string, string, error) 
 	if err != nil {
 		return cutOnRuneBoundary(content, bytesCap, unstoredMarker), "", err
 	}
+	holds := "this result whole"
+	if strings.HasPrefix(content, heldDropLead) {
+		holds = "what tofu kept of this result"
+	}
 	reference := elided.Reference
 	return fmt.Sprintf(
-		"artifact %s holds this result whole: %d bytes, the first %d and the last %d bytes follow. "+
+		"artifact %s holds %s: %d bytes, the first %d and the last %d bytes follow. "+
 			"call artifact_fetch with this handle, an offset and a length to read any other range.\n%s%s%s",
-		reference.ID, reference.Bytes, len(reference.Head), len(reference.Tail),
+		reference.ID, holds, reference.Bytes, len(reference.Head), len(reference.Tail),
 		reference.Head, truncationMarker, reference.Tail,
 	), reference.ID, nil
 }

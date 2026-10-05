@@ -15,6 +15,25 @@ import (
 
 const bigLinePad = "............................................"
 
+func runOneTool(t *testing.T, tool Tool, args string, truncate bool) (string, string) {
+	t.Helper()
+	model := &stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: tool.Name(), Arguments: json.RawMessage(args)}),
+		messageDecision(),
+	}}
+	dir := t.TempDir()
+	config := Config{Model: model, Spend: SpendSubscription, Task: "run " + tool.Name(), ResultBytesCap: konst.TurnResultBytesCap,
+		ArtifactDir: dir, NoLastWord: true, TruncateResults: truncate, Tools: NewRegistry(tool)}
+	if _, err := Run(context.Background(), config); err != nil {
+		t.Fatal(err)
+	}
+	results := toolResults(model.requests[len(model.requests)-1].Messages)
+	if len(results) != 1 {
+		t.Fatalf("the last request holds %d tool results, want 1", len(results))
+	}
+	return results[0], dir
+}
+
 func readBigFile(t *testing.T, args string, truncate bool) (string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -29,28 +48,14 @@ func readBigFile(t *testing.T, args string, truncate bool) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(args)}),
-		messageDecision(),
-	}}
-	dir := t.TempDir()
-	config := Config{Model: model, Spend: SpendSubscription, Task: "read big.txt", ResultBytesCap: konst.TurnResultBytesCap,
-		ArtifactDir: dir, NoLastWord: true, TruncateResults: truncate, Tools: NewRegistry(read)}
-	if _, err := Run(context.Background(), config); err != nil {
-		t.Fatal(err)
-	}
-	results := toolResults(model.requests[len(model.requests)-1].Messages)
-	if len(results) != 1 {
-		t.Fatalf("the last request holds %d tool results, want 1", len(results))
-	}
-	return results[0], dir
+	return runOneTool(t, read, args, truncate)
 }
 
 func fetchAt(t *testing.T, dir, rendered string, offset int) string {
 	t.Helper()
 	words := strings.Fields(rendered)
 	if len(words) < 2 || words[0] != "artifact" {
-		t.Fatalf("the read did not render an artifact handle:\n%.300s", rendered)
+		t.Fatalf("the result did not render an artifact handle:\n%.300s", rendered)
 	}
 	artifacts, err := NewArtifacts(dir, true)
 	if err != nil {
@@ -92,6 +97,38 @@ func TestWithHandlesOffAReadIsCutOnceAtTheCap(t *testing.T) {
 	rendered, _ := readBigFile(t, `{"path":"big.txt"}`, true)
 	if cuts := strings.Count(rendered, "dropped from the middle"); cuts != 1 || len(rendered) > konst.TurnResultBytesCap+len(droppedMarker)+16 {
 		t.Errorf("with handles off a 100 KB read reached the model as %d bytes with %d cut markers, want one cut to the %d byte cap",
+			len(rendered), cuts, konst.TurnResultBytesCap)
+	}
+}
+
+func TestABashResultUnderItsHoldIsStoredWholeSoItsMiddleCanBeFetched(t *testing.T) {
+	rendered, dir := runOneTool(t, newBash(t), `{"command":"seq 1 12000"}`, false)
+	if !strings.Contains(rendered, "holds this result whole: 60894 bytes,") {
+		t.Errorf("a 60894 byte seq rendered as:\n%.300s", rendered)
+	}
+	if middle := fetchAt(t, dir, rendered, 30447); !strings.Contains(middle, "\n6312\n") {
+		t.Errorf("the fetch at the middle of seq 1 12000 returned %q, want the numbers around 6000", middle)
+	}
+}
+
+func TestABashResultOverItsHoldDoesNotClaimToBeWhole(t *testing.T) {
+	rendered, dir := runOneTool(t, newBash(t), `{"command":"seq 1 40000","timeout_ms":-1}`, false)
+	header, _, _ := strings.Cut(rendered, "\n")
+	if strings.Contains(header, "whole") || !strings.Contains(rendered, "dropped as they arrived") {
+		t.Errorf("a seq bash dropped bytes from rendered as:\n%.600s", rendered)
+	}
+	if stored := fetchAt(t, dir, rendered, 0); !strings.HasPrefix(stored, "bash: the command printed 228894 bytes") {
+		t.Errorf("the artifact does not open with the drop note: %q", stored)
+	}
+	if seam := fetchAt(t, dir, rendered, 32900); !strings.Contains(seam, "bytes dropped here as they arrived") {
+		t.Errorf("the fetch across the seam of the held halves returned %q, want the drop marker", seam)
+	}
+}
+
+func TestWithHandlesOffABashResultIsCutOnceAtTheCap(t *testing.T) {
+	rendered, _ := runOneTool(t, newBash(t), `{"command":"seq 1 12000"}`, true)
+	if cuts := strings.Count(rendered, "dropped from the middle"); cuts != 1 || len(rendered) > konst.TurnResultBytesCap+len(droppedMarker)+16 {
+		t.Errorf("with handles off a 60894 byte seq reached the model as %d bytes with %d cut markers, want one cut to the %d byte cap",
 			len(rendered), cuts, konst.TurnResultBytesCap)
 	}
 }

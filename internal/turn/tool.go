@@ -32,22 +32,6 @@ type Result struct {
 	SubAgent    string
 }
 
-const resultCapMarker = "\n...(%s dropped from the middle of this result, cut at a %d byte cap.)...\n"
-
-func capResult(content string) string {
-	if len(content) <= konst.TurnResultBytesCap {
-		return content
-	}
-	head := runeSafeHead(content, konst.TurnResultBytesCap/2)
-	tail := runeSafeTail(content, konst.TurnResultBytesCap-len(head))
-	dropped := len(content) - len(head) - len(tail)
-	amount := fmt.Sprintf("%d bytes", dropped)
-	if dropped == 1 {
-		amount = "1 byte"
-	}
-	return head + fmt.Sprintf(resultCapMarker, amount, konst.TurnResultBytesCap) + tail
-}
-
 func runeSafeHead(s string, n int) string {
 	if n >= len(s) {
 		return s

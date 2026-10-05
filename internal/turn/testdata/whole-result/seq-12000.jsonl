@@ -1,0 +1,2 @@
+{"text":"running seq","tools":[{"name":"bash","args":{"command":"seq 1 12000"}}]}
+{"text":"the run is done"}

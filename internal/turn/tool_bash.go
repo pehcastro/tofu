@@ -44,8 +44,6 @@ func ShellRegistryFrom(ctx context.Context) *shell.Registry {
 	return registry
 }
 
-func shellRegistryFrom(ctx context.Context) *shell.Registry { return ShellRegistryFrom(ctx) }
-
 type shellOwnerKey struct{}
 
 func shellOwnerFrom(ctx context.Context) string {
@@ -373,11 +371,11 @@ func exitedResult(command, output string, code int, note string) Result {
 		output += fmt.Sprintf(commandExited, code)
 		outcome = ResultFailed
 	}
-	return Result{Content: note + capResult(output), Command: command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}
+	return Result{Content: note + output, Command: command, ExitCode: &code, FailureText: bashFailureText(code), Outcome: outcome}
 }
 
 func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, error) {
-	registry := shellRegistryFrom(ctx)
+	registry := ShellRegistryFrom(ctx)
 	if registry == nil {
 		return Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
@@ -393,8 +391,8 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	ran := got.Shell
 	if ran.State == shell.Running {
 		return Result{
-			Content: capResult(fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. this call returned after %d ms because %s. its output so far:\n%s",
-				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready, got.Output)),
+			Content: fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. this call returned after %d ms because %s. its output so far:\n%s",
+				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready, got.Output),
 			Command: "background " + ran.Name + ": " + args.Command,
 			Outcome: ResultSucceeded,
 		}, nil
@@ -405,7 +403,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 }
 
 func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
-	registry := shellRegistryFrom(ctx)
+	registry := ShellRegistryFrom(ctx)
 	var args struct {
 		Command string `json:"command"`
 		Name    string `json:"name"`
@@ -493,7 +491,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	owner := shellOwnerFrom(ctx)
 	subAgent := owner != "" && owner != session.AuthorOrchestrator
-	if registry := shellRegistryFrom(ctx); registry != nil {
+	if registry := ShellRegistryFrom(ctx); registry != nil {
 		owned := registry.Owning(args.Command)
 		startedElsewhere := slices.ContainsFunc(owned, func(one shell.Shell) bool { return one.Owner != owner })
 		if len(owned) > 0 && (!subAgent || !startedElsewhere) {
@@ -527,18 +525,18 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	defer tracked.Release()
 	runErr := cmd.Wait()
 	text, dropped := output.text()
-	note := corrected + dropped
+	note := dropped + corrected
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		killed := "bash: " + search.Note(search.Truncated, fmt.Sprintf(
 			"%q ran %d ms and was killed at its deadline of %d ms: its output until then is above. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
 				"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
 			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis))
-		return Result{Content: note + capResult(text) + "\n" + killed, Command: args.Command, Outcome: ResultFailed, FailureText: killed}, nil
+		return Result{Content: note + text + "\n" + killed, Command: args.Command, Outcome: ResultFailed, FailureText: killed}, nil
 	}
 	if ctx.Err() != nil {
 		return Result{
-			Content: note + capResult(text),
+			Content: note + text,
 			Command: args.Command,
 			Outcome: ResultAborted,
 			FailureText: fmt.Sprintf("bash: %q was cancelled elsewhere in this turn while it was running, not because the command itself failed. "+
@@ -584,7 +582,8 @@ func (h *heldOutput) text() (string, string) {
 	for skipped := 0; skipped < utf8.UTFMax-1 && len(tail) > 0 && !utf8.RuneStart(tail[0]); skipped++ {
 		tail = tail[1:]
 	}
-	return shell.Decode(slices.Concat(head, tail)), fmt.Sprintf(
-		"bash: the command printed %d bytes and a call holds %d while it runs, so the %d in the middle were dropped as they arrived\n",
-		h.total, konst.BashOutputHeldBytes, h.total-len(head)-len(tail))
+	dropped := h.total - len(head) - len(tail)
+	return shell.Decode(slices.Concat(head, fmt.Appendf(nil, "\n...(%d bytes dropped here as they arrived)...\n", dropped), tail)), fmt.Sprintf(
+		heldDropLead+"%d bytes and a call holds %d while it runs, so the %d in the middle were dropped as they arrived\n",
+		h.total, konst.BashOutputHeldBytes, dropped)
 }
