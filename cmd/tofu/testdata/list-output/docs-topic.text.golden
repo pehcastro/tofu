@@ -177,6 +177,13 @@ Turn
       at least 1 levels of sub-agents
       how deep a sub-agent may spawn its own sub-agents; the next spawn reads
       the new value
+    subAgentCheckSeconds    1800
+      at least 0 seconds between checks on a running sub-agent, where 0 sends
+      none
+      every this many seconds the lead is sent a check on each running
+      sub-agent, built from what tofu records with no model call: its steps, the
+      files it changed, its gate and its last tool. 0 sends none; the next spawn
+      reads the new value
     agentSources            tofu,agents,claude
       a comma list of tofu, agents, claude
       the folders sub-agents are read from, in order, as a comma list of tofu,

@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"tofu/internal/session"
 )
@@ -36,6 +38,28 @@ func (b *Inbox) post(item string) {
 	b.items = append(b.items, item)
 	b.mu.Unlock()
 	b.signal()
+}
+
+func (b *Inbox) attach(held *heldSubAgent, check *checkIn) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	held.check = check
+}
+
+func (b *Inbox) postCheck(held *heldSubAgent, check *checkIn, gate []string, now time.Time) {
+	b.mu.Lock()
+	defer b.signal()
+	defer b.mu.Unlock()
+	if held.check != check {
+		return
+	}
+	unread := slices.Index(b.items, check.posted)
+	text := check.compose(unread < 0, gate, now)
+	if unread >= 0 {
+		b.items[unread] = text
+		return
+	}
+	b.items = append(b.items, text)
 }
 
 func (b *Inbox) Take() []string {
@@ -141,7 +165,7 @@ func (b *Inbox) ended(held *heldSubAgent, report string, stopping bool, log *ses
 	if next := held.inbox.Take(); len(next) > 0 && !stopping {
 		return next
 	}
-	held.running = false
+	held.running, held.check = false, nil
 	b.running--
 	if report != "" {
 		b.items = append(b.items, report)

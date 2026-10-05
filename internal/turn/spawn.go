@@ -338,6 +338,7 @@ type SubAgentLimits struct {
 	Running   int
 	Depth     int
 	WallClock time.Duration
+	CheckIn   time.Duration
 }
 
 type SpawnTool struct {
@@ -479,7 +480,7 @@ func writesPaths(tool string) bool { return tool == "write" || tool == "edit" ||
 
 func (t *SpawnTool) limits() SubAgentLimits {
 	if t.Limits == nil {
-		return SubAgentLimits{Running: konst.SubAgentsPerTurnDefault, Depth: konst.SubAgentDepthDefault}
+		return SubAgentLimits{Running: konst.SubAgentsPerTurnDefault, Depth: konst.SubAgentDepthDefault, CheckIn: konst.SubAgentCheckSecondsDefault * time.Second}
 	}
 	return t.Limits()
 }
@@ -666,8 +667,12 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		defer opened.Close()
 	}
 	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
+	check := &checkIn{id: held.agent.ID, started: t.clock(), missed: func(run Row) []string {
+		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns, []Row{run})
+	}}
+	defer t.watch(held, check)()
 	for {
-		subAgent := opened.onto(t.subAgentConfig(held, site))
+		subAgent := opened.onto(t.subAgentConfig(held, site, check))
 		subAgent.Task, subAgent.NewID = task, func() string { return held.agent.ID }
 		report := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
 		next, _ := held.inbox.next(ctx, nil)
@@ -686,7 +691,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	}
 }
 
-func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite) Config {
+func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn) Config {
 	offered := func(name string) bool {
 		return len(held.definition.Tools) == 0 || slices.Contains(held.definition.Tools, name)
 	}
@@ -721,7 +726,9 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite) Config {
 		for i, call := range step.ToolCalls {
 			called[i] = call.Tool
 		}
-		t.roster.Stepped(held.agent.ID, step.Index, t.clock(), called...)
+		now := t.clock()
+		t.roster.Stepped(held.agent.ID, step.Index, now, called...)
+		check.stepped(step, now)
 		if t.base.Step != nil {
 			t.tree.mu.Lock()
 			t.base.Step(step)
@@ -742,6 +749,7 @@ type heldSubAgent struct {
 	trace       spawnTrace
 	history     []llm.Message
 	running     bool
+	check       *checkIn
 	cancel      context.CancelFunc
 	forking     sync.Mutex
 	forked      []Row

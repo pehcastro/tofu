@@ -236,6 +236,14 @@ exit 0
         "description": "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value"
       },
       {
+        "key": "subAgentCheckSeconds",
+        "category": "Turn",
+        "default": "1800",
+        "takes": "at least 0 seconds between checks on a running sub-agent, where 0 sends none",
+        "restart": false,
+        "description": "every this many seconds the lead is sent a check on each running sub-agent, built from what tofu records with no model call: its steps, the files it changed, its gate and its last tool. 0 sends none; the next spawn reads the new value"
+      },
+      {
         "key": "agentSources",
         "category": "Turn",
         "default": "tofu,agents,claude",

@@ -178,6 +178,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "subAgentCheckSeconds",
+        "category": "Turn",
+        "value": 1800,
+        "source": "default"
+      },
+      {
         "key": "agentSources",
         "category": "Turn",
         "value": "tofu,agents,claude",

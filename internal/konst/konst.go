@@ -147,8 +147,9 @@ const (
 
 	ProjectSectionCap = 12
 
-	SubAgentDepthDefault    = 2
-	SubAgentsPerTurnDefault = 10
+	SubAgentDepthDefault        = 2
+	SubAgentsPerTurnDefault     = 10
+	SubAgentCheckSecondsDefault = 1800
 
 	SubAgentRetainedRows    = 4
 	SubAgentMissionChars    = 60

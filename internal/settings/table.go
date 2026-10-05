@@ -67,6 +67,7 @@ const (
 	TurnMaySpawn           = "turnMaySpawn"
 	SubAgentsPerTurn       = "subAgentsPerTurn"
 	SubAgentDepth          = "subAgentDepth"
+	SubAgentCheckSeconds   = "subAgentCheckSeconds"
 	AgentSources           = "agentSources"
 	Skills                 = "skills"
 	Browser                = "browser"
@@ -244,6 +245,8 @@ func Default() []Spec {
 			Least: 1, Most: math.MaxInt32, Unit: "sub-agents running at once"},
 		{Key: SubAgentDepth, Label: "Sub-agent depth", Description: "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentDepthDefault,
 			Least: 1, Most: math.MaxInt32, Unit: "levels of sub-agents"},
+		{Key: SubAgentCheckSeconds, Label: "Sub-agent check", Description: "every this many seconds the lead is sent a check on each running sub-agent, built from what tofu records with no model call: its steps, the files it changed, its gate and its last tool. 0 sends none; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentCheckSecondsDefault,
+			Least: 0, Most: math.MaxInt32, Unit: "seconds between checks on a running sub-agent, where 0 sends none"},
 		{Key: AgentSources, Label: "Agent folders", Description: "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude, inside the project; the home directory gives only ~/.tofu/agents, and the library is always read", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
 			ListOf: []string{"tofu", "agents", "claude"}},
 		{Key: subagent.TierGenius.Setting(), Label: "Genius tier", Description: "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
