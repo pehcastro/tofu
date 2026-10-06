@@ -20,7 +20,6 @@ import (
 	"tofu/internal/konst"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
-	"tofu/internal/sys"
 )
 
 const (
@@ -314,11 +313,6 @@ func (a *App) absorb(event Event) {
 		return
 	}
 	at := a.options.Now()
-	switch event.Kind {
-	case EventToolCall, EventToolResult, EventFailure, EventAwaitPerson:
-		redactor := sys.LoadKeyRedactor()
-		event.Text, event.Detail, event.Diff = redactor.Redact(event.Text), redactor.Redact(event.Detail), redactor.Redact(event.Diff)
-	}
 	switch event.Kind {
 	case EventRequesting:
 		if !a.leading {

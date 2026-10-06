@@ -983,7 +983,37 @@ func pickedOpts(dir, session, task string, pick tui.Pick, maxSteps int) runOpts 
 	})
 }
 
+func redacting(emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) tui.CalledFromInsideTheTurnAndNeverAfterItReturns {
+	mask := sys.LoadKeyRedactor().Redact
+	return func(event tui.Event) {
+		event.Text, event.Detail, event.Diff, event.Created = mask(event.Text), mask(event.Detail), mask(event.Diff), mask(event.Created)
+		if event.Decision != nil {
+			decided := *event.Decision
+			decided.Failure, decided.OverridesRule = mask(decided.Failure), mask(decided.OverridesRule)
+			event.Decision = &decided
+		}
+		event.Plan = slices.Clone(event.Plan)
+		for i := range event.Plan {
+			event.Plan[i].Phase, event.Plan[i].Text = mask(event.Plan[i].Phase), mask(event.Plan[i].Text)
+		}
+		event.SubAgents = slices.Clone(event.SubAgents)
+		for i := range event.SubAgents {
+			row := &event.SubAgents[i]
+			row.Doing, row.Report = mask(row.Doing), mask(row.Report)
+			row.Owns, row.Calls = slices.Clone(row.Owns), slices.Clone(row.Calls)
+			for j := range row.Owns {
+				row.Owns[j] = mask(row.Owns[j])
+			}
+			for j := range row.Calls {
+				row.Calls[j].Text, row.Calls[j].Result = mask(row.Calls[j].Text), mask(row.Calls[j].Result)
+			}
+		}
+		emit(event)
+	}
+}
+
 func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+	emit = redacting(emit)
 	fail := func(err error) { emit(tui.Event{Kind: tui.EventFailure, Text: err.Error()}) }
 	task += s.takeRan()
 	images, imagesErr := s.takePendingImages(task)
@@ -1471,7 +1501,7 @@ func resumedChat(carry sessionResume) []tui.Event {
 		return nil
 	}
 	var chat []tui.Event
-	watch := &appWatcher{emit: func(event tui.Event) { chat = append(chat, event) }, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
+	watch := &appWatcher{emit: redacting(func(event tui.Event) { chat = append(chat, event) }), turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
 	root := carry.Session
 	if store, err := sessionstore.Open(); err == nil {
 		if header, err := store.Header(carry.Session); err == nil {

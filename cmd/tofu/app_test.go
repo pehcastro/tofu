@@ -877,6 +877,30 @@ func TestAToolResultThatArrivesAfterTheTurnIsStoppedStillReachesTheView(t *testi
 	}
 }
 
+func TestEveryEventTheAppSendsHasTheStoredKeyMasked(t *testing.T) {
+	dir := scratchProject(t)
+	const key = "sk-or-v1-made-up-Wq7Tn3Kd"
+	if err := sys.SaveKey(sys.OpenRouterKeyName, key); err != nil {
+		t.Fatalf("storing the key: %v", err)
+	}
+	model := &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "write", Arguments: json.RawMessage(`{"path":"key.txt","content":"` + key + `"}`)}}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the key is " + key},
+	}}
+	var sent []tui.Event
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "write the key down", func(event tui.Event) { sent = append(sent, event) })
+	encoded, err := json.Marshal(sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if events := string(encoded); strings.Contains(events, key[9:20]) {
+		t.Fatalf("an event the app sent carries the key:\n%s", strings.ReplaceAll(events, key, "<THE KEY>"))
+	}
+	if !strings.Contains(string(encoded), "the key is "+sys.KeyRedactedMark) {
+		t.Fatalf("the model's text never reached the frontend masked:\n%s", encoded)
+	}
+}
+
 const shellStartGraceMillis = 1000
 
 func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
