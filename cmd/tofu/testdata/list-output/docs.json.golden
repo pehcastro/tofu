@@ -48,6 +48,11 @@ exit 0
         "summary": "which AGENTS.md and CLAUDE.md files tofu sends with every task, in what order, and how to change that"
       },
       {
+        "topic": "keys",
+        "title": "Keys",
+        "summary": "the keys the app answers to, which ones you can rebind, and finding a prompt you sent before with ctrl+p"
+      },
+      {
         "topic": "models",
         "title": "Models",
         "summary": "sign in to a subscription, name a model as source/model, choose the model a task runs, and set the tiers"
@@ -557,6 +562,12 @@ exit 0
         "do": "/cron delete c1",
         "check": "/cron list",
         "topic": "cron"
+      },
+      {
+        "ask": "find a prompt I sent in another session",
+        "do": "ctrl+p in the app, type part of it, then enter",
+        "check": "/keys",
+        "topic": "keys"
       }
     ]
   },

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 79 asks                                                         15 topics
+Docs · 80 asks                                                         16 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -88,6 +88,11 @@ instructions  which AGENTS.md and CLAUDE.md files tofu sends with every task,
     → tofu run --dir . --show-prompt "anything"
   work one task without my instruction files
     → tofu run --dir . --no-instructions "<task>"
+
+keys  the keys the app answers to, which ones you can rebind, and finding a
+  prompt you sent before with ctrl+p
+  find a prompt I sent in another session
+    → ctrl+p in the app, type part of it, then enter
 
 models  sign in to a subscription, name a model as source/model, choose the
   model a task runs, and set the tiers

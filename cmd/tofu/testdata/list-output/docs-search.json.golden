@@ -41,6 +41,10 @@ exit 0
         "do": "tofu docs gate"
       },
       {
+        "text": "Keys",
+        "do": "tofu docs keys"
+      },
+      {
         "text": "Models",
         "do": "tofu docs models"
       },
@@ -147,6 +151,10 @@ exit 0
       {
         "text": "keep working until a test passes",
         "do": "/goal make the test pass --until \"go test ./...\""
+      },
+      {
+        "text": "find a prompt I sent in another session",
+        "do": "ctrl+p in the app, type part of it, then enter"
       },
       {
         "text": "Files tofu reads and writes",

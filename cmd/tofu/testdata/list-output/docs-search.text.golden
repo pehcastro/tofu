@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           41 matches
+Docs · "change the colours"                                           43 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -18,6 +18,8 @@ Docs · "change the colours"                                           41 matche
     → tofu docs doctor
   The gate
     → tofu docs gate
+  Keys
+    → tofu docs keys
   Models
     → tofu docs models
   Start here
@@ -72,6 +74,8 @@ Docs · "change the colours"                                           41 matche
     → /loop 10m check the build
   keep working until a test passes
     → /goal make the test pass --until "go test ./..."
+  find a prompt I sent in another session
+    → ctrl+p in the app, type part of it, then enter
   Files tofu reads and writes
     → tofu docs files
   Instruction files
