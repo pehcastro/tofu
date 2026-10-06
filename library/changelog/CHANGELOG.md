@@ -22,6 +22,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Changed
 
+- **A reply that only starts sub-agents ends the lead's turn**, with no extra request to announce them. Sub-agents started in one reply are named in the order the reply lists them.
 - **A frontend sub-agent carries only the rules its task touches.** A rule can declare `touches:`, and a sub-agent working on something else does not get it. About 8 KB less per frontend sub-agent request.
 - **The lead's prompt carries rules about what to build, not how to write it.** Rules for writing, testing and building code reach only the sub-agent that writes it, unless the lead runs alone.
 
