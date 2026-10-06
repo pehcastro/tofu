@@ -10,7 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Changed
+
+- **A `write`, `edit` or `bash` call that changes tofu's settings, the hooks files it reads, or the hook trust file waits for you**, in auto mode too, and a sub-agent's is refused.
+
 ### Fixed
+
+- **`ping` runs as asked, without rtk.** rtk's ping filter garbled accented output on Windows and cut the reply lines.
+- **A link in the chat no longer leaves an underline running to the screen's edge.**
 
 - **Sub-agents spawned after earlier ones each get their own report row.** A new turn's spawns no longer take the names of sub-agents from earlier turns, so stopped sub-agents show as parked and old reports are not drawn twice.
 
