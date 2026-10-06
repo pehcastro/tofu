@@ -23,3 +23,5 @@ bench/harness/testdata/gates/
 rtk/
 .zed/
 /Microsoft/
+
+apps/desk/**/.scratch/
