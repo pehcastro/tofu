@@ -73,14 +73,18 @@ func (c *conhost) csi(t *testing.T, seq string, parser *ansi.Parser) {
 	row := c.rows[c.y]
 	blanks := []rune(strings.Repeat(" ", len(row)))
 	switch ansi.Cmd(parser.Command()).Final() {
-	case 'm', 'h', 'l':
+	case 'm', 'h', 'l', '`':
 	case 'H':
 		second, _ := parser.Param(1, 1)
 		c.y, c.x = first-1, max(second, 1)-1
-	case 'G', '`':
+	case 'G':
 		c.x = first - 1
 	case 'd':
 		c.y = first - 1
+	case 'A':
+		c.y -= first
+	case 'B':
+		c.y += first
 	case 'C':
 		c.x += first
 	case 'D':
@@ -94,7 +98,15 @@ func (c *conhost) csi(t *testing.T, seq string, parser *ansi.Parser) {
 	case 'X':
 		copy(row[c.x:min(c.x+first, len(row))], blanks)
 	case 'K':
-		copy(row[c.x:], blanks)
+		erased, _ := parser.Param(0, 0)
+		switch erased {
+		case 0:
+			copy(row[c.x:], blanks)
+		case 1:
+			copy(row[:c.x+1], blanks)
+		default:
+			copy(row, blanks)
+		}
 	default:
 		t.Fatalf("conhost stand-in cannot read %q", seq)
 	}
@@ -130,7 +142,7 @@ func (w *windowsConsole) show(t *testing.T, view string) {
 	if err := w.renderer.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	w.feed(t, w.out.String())
+	w.feed(t, string(columnMovesAsCHA(w.out.Bytes())))
 }
 
 func TestTheCookedLineReachesAConsoleWithoutTermWhole(t *testing.T) {
@@ -170,15 +182,25 @@ func TestThePickerAndItsFilterDrawInPlaceOnAWindowsConsole(t *testing.T) {
 			app.Init()
 			app.Update(tea.WindowSizeMsg{Width: width, Height: height})
 			console := newWindowsConsole(environ, width, height)
-			console.show(t, app.View().Content)
-			app.openPicker("")
-			console.show(t, app.View().Content)
-			typeText(app, "claude-sub")
-			view := app.View().Content
-			console.show(t, view)
-			for at, want := range strings.Split(ansi.Strip(view), "\n") {
-				if got := strings.TrimRight(string(console.rows[at]), " "); got != strings.TrimRight(want, " ") {
-					t.Fatalf("row %d of the console shows\n%q\nwhere the frame says\n%q\nthe console:\n%s", at, got, strings.TrimRight(want, " "), console.text())
+			esc, enter := tea.KeyPressMsg{Code: tea.KeyEscape}, tea.KeyPressMsg{Code: tea.KeyEnter}
+			for _, step := range []func(){
+				func() {},
+				func() { app.openPicker("") },
+				func() { typeText(app, "claude-sub") },
+				func() { app.Update(esc) },
+				func() { typeText(app, "/keys") },
+				func() { app.Update(enter) },
+				func() { typeText(app, "history") },
+				func() { app.Update(esc) },
+				func() { pressCtrlP(app) },
+			} {
+				step()
+				view := app.View().Content
+				console.show(t, view)
+				for at, want := range strings.Split(ansi.Strip(view), "\n") {
+					if got := strings.TrimRight(string(console.rows[at]), " "); got != strings.TrimRight(want, " ") {
+						t.Fatalf("row %d of the console shows\n%q\nwhere the frame says\n%q\nthe console:\n%s", at, got, strings.TrimRight(want, " "), console.text())
+					}
 				}
 			}
 		})

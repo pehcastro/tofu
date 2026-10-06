@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -233,7 +234,12 @@ const (
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
 )
 
-const termWithoutHardTabs = "TERM=linux"
+const (
+	termWithoutHardTabs  = "TERM=linux"
+	controlSequenceStart = "\x1b["
+	absoluteColumnFinal  = '`'
+	columnFromStartFinal = 'G'
+)
 
 type App struct {
 	options        Options
@@ -403,10 +409,42 @@ func consoleEnviron(environ []string, goos string) []string {
 	return append(slices.DeleteFunc(slices.Clone(environ), func(entry string) bool { return strings.HasPrefix(entry, "TERM=") }), termWithoutHardTabs)
 }
 
+type conhostOutput struct{ *os.File }
+
+func (c conhostOutput) Write(frame []byte) (int, error) {
+	if _, err := c.File.Write(columnMovesAsCHA(frame)); err != nil {
+		return 0, err
+	}
+	return len(frame), nil
+}
+
+func columnMovesAsCHA(frame []byte) []byte {
+	out := make([]byte, 0, len(frame))
+	for {
+		at := bytes.Index(frame, []byte(controlSequenceStart))
+		if at < 0 {
+			return append(out, frame...)
+		}
+		end := at + len(controlSequenceStart)
+		for end < len(frame) && frame[end] >= '0' && frame[end] <= '9' {
+			end++
+		}
+		out = append(out, frame[:end]...)
+		if end < len(frame) && frame[end] == absoluteColumnFinal {
+			out, end = append(out, columnFromStartFinal), end+1
+		}
+		frame = frame[end:]
+	}
+}
+
 func Run(options Options) error {
 	environ := os.Environ()
 	profile := colorprofile.Detect(os.Stdout, environ)
-	program := tea.NewProgram(New(options), tea.WithEnvironment(consoleEnviron(environ, runtime.GOOS)), tea.WithColorProfile(profile))
+	programOptions := []tea.ProgramOption{tea.WithEnvironment(consoleEnviron(environ, runtime.GOOS)), tea.WithColorProfile(profile)}
+	if runtime.GOOS == "windows" {
+		programOptions = append(programOptions, tea.WithOutput(conhostOutput{os.Stdout}))
+	}
+	program := tea.NewProgram(New(options), programOptions...)
 	_, err := program.Run()
 	_, _ = io.WriteString(os.Stdout, exitReset)
 	return err
