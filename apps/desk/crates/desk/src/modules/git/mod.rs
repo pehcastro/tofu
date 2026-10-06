@@ -14,16 +14,24 @@ const GAP: f32 = 6.0;
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     kit::load_fonts(cx)?;
-    let pane = match board {
-        None | Some("IGIT-1") => Pane::Changes,
-        Some("IGIT-2") => Pane::History,
+    let (pane, branches, blocked) = match board {
+        None | Some("IGIT-1") => (Pane::Changes, false, false),
+        Some("IGIT-2") => (Pane::History, false, false),
+        Some("S-GIT-1") => (Pane::History, true, false),
+        Some("S-GIT-2") => (Pane::History, false, true),
         Some(other) => {
             return Err(format!(
-                "the git module draws IGIT-1 and IGIT-2, not {other}"
+                "the git module draws IGIT-1, IGIT-2, S-GIT-1 and S-GIT-2, not {other}"
             ));
         }
     };
-    Ok(cx.new(|_| Git::new(pane)).into())
+    Ok(cx
+        .new(|_| Git {
+            branches,
+            blocked,
+            ..Git::new(pane)
+        })
+        .into())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

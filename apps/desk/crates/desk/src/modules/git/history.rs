@@ -274,7 +274,7 @@ impl Git {
                         .bg(rgba(0xe8c98a12))
                         .shadow(vec![edge(rgba(0xe8c98a38), 1.0)])
                         .text_size(px(13.0))
-                        .line_height(px(18.0))
+                        .line_height(px(23.0))
                         .child(
                             div()
                                 .flex_1()
