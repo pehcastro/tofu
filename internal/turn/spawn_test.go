@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -241,22 +243,51 @@ func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *tes
 	led.wait(t)
 }
 
-func TestABrowserSpawnWithNoOwnsStartsAndAWriterWithNoOwnsIsStillRefused(t *testing.T) {
-	names := []string{"browser_tabs", "browser_observe", "browser_act", "browser_motion", "read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "fetch", "spawn"}
+func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testing.T) {
+	names := []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "spawn"}
 	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
-	for agent, starts := range map[string]bool{"browser": true, "ts-dev": false} {
-		model := &stubModel{decisions: []llm.Decision{claimDecision("done")}}
-		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("browser_observe"), namedTool("write")), ResultBytesCap: 4096,
+	for spawned, nested := range map[string]string{
+		`{"agent":"ts-dev","task":"run ping and report"}`: `unknown tool "spawn"`,
+		`{"task":"run ping and report","owns":[]}`:        "spawned without owns, so a sub-agent you spawn holds none either",
+	} {
+		root := t.TempDir()
+		write, err := NewWriteTool(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		model := &stubModel{decisions: []llm.Decision{toolCallDecision(
+			llm.ToolCall{ID: "w", Name: "write", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","content":"placeholder"}`)},
+			llm.ToolCall{ID: "e", Name: "edit", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","old_string":"a","new_string":"b"}`)},
+			llm.ToolCall{ID: "s", Name: "spawn", Arguments: json.RawMessage(`{"task":"write it for me","owns":["**"]}`)}),
+			claimDecision("ping answered three times")}}
+		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, namedTool("edit"), namedTool("bash")), ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
 		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
 		spawn.SubAgents = SubAgents{Defined: found.Definitions}
-		_, err := spawn.Run(context.Background(), json.RawMessage(`{"agent":"`+agent+`","task":"read the tab"}`))
-		t.Logf("%s spawned with no owns: %v", agent, err)
-		if started := err == nil; started != starts {
-			t.Errorf("%s spawned with no owns: started %v, want %v: %v", agent, started, starts, err)
+		if _, err := spawn.Run(context.Background(), json.RawMessage(spawned)); err != nil {
+			t.Fatalf("%s did not start: %v", spawned, err)
 		}
-		if err == nil {
-			reported(t, spawn)
+		reported(t, spawn)
+		if len(model.requests) != 2 {
+			t.Fatalf("%s: the sub-agent asked %d times, want 2", spawned, len(model.requests))
+		}
+		said := map[string]string{}
+		for _, message := range model.requests[1].Messages {
+			if message.Role == llm.RoleTool {
+				said[message.ToolCallID] = message.Content
+			}
+		}
+		t.Logf("%s:\nwrite: %s\nedit: %s\nspawn: %s", spawned, said["w"], said["e"], said["s"])
+		for _, call := range []string{"w", "e"} {
+			if !strings.Contains(said[call], "spawned without owns, so you write nothing") {
+				t.Errorf("%s: call %s was not refused as a sub-agent spawned without owns: %q", spawned, call, said[call])
+			}
+		}
+		if !strings.Contains(said["s"], nested) {
+			t.Errorf("%s: a nested spawn holding ** says %q, want %q", spawned, said["s"], nested)
+		}
+		if _, err := os.Stat(filepath.Join(root, "ping-run-1.txt")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s: the placeholder file exists or could not be checked: %v", spawned, err)
 		}
 	}
 }

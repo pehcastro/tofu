@@ -52,7 +52,7 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 		{name: "text in the spawn reply is said once, on the spawn's own message", first: announcing, subAgentRuns: true, leadRequests: 1, endsOn: announcing.Content},
 		{name: "no text ends on the line tofu writes", first: spawnCall("call-spawn", usersRoute, "src/users.ts"), subAgentRuns: true, leadRequests: 1, endsOn: "sub-1 running: " + usersRoute},
 		{name: "a read beside the spawn asks again", first: besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), subAgentRuns: true, leadRequests: 2, endsOn: "sub-1 is on it"},
-		{name: "a spawn that fails to start asks again", first: spawnCall("call-spawn", usersRoute), leadRequests: 2, endsOn: "sub-1 is on it"},
+		{name: "a spawn that fails to start asks again", first: spawnCall("call-spawn", ""), leadRequests: 2, endsOn: "sub-1 is on it"},
 		{name: "a sub-agent's own spawn asks again", spawnedFrom: "turn-parent", first: announcing, subAgentRuns: true, leadRequests: 2, endsOn: "sub-1 is on it"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

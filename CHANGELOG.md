@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Changed
+
+- **A sub-agent that only runs a command, reads or researches is spawned without owns** and starts at once. Any write or edit it tries is refused with the reason, so the lead no longer invents placeholder files to start one.
+
 ## 0.5.4 - 2026-10-06
 
 Sub-agents that ask the orchestrator, forks at the right point, long builds in the background, and a trace that keeps everything.

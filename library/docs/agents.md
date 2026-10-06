@@ -12,6 +12,10 @@ planner or a reviewer. Each one has a name, a description the model reads
 to decide when to use it, the model it runs on, and the tools it may use.
 tofu ships a few, and you can add your own.
 
+When the model hands one a piece of work, it names the paths that
+sub-agent may change. A sub-agent given no paths still starts: it reads,
+runs commands and reports, and every write or edit it tries is refused.
+
 A name is one plain lower-case word: letters, digits and `-`, starting
 with a letter, like `planner` or `ts-dev`.
 

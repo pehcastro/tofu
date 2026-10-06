@@ -97,6 +97,11 @@ next step. When idle, a new message or report starts a turn.
 A sub-agent may change only the paths it owns, and two running
 sub-agents never hold the same path. See [Ownership](./ownership).
 
+A sub-agent that only runs a command, reads or researches is spawned with
+no `owns`. It starts at once, and every `write` or `edit` it tries is
+refused with the reason, so it reports what it found instead of inventing a
+file to hold. A sub-agent it spawns holds no paths either.
+
 ## What you see
 
 The chat stays on the conversation with the lead. A running

@@ -276,6 +276,9 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 		system += "\n\n" + agentPart(definition).Text
 	}
 	held := "the paths you hold, and the only ones write, edit and bash may change: " + strings.Join(owns, ", ")
+	if len(owns) == 0 {
+		held = "you were spawned without owns, so you hold no paths: write and edit are refused, a bash command may write only under the temp directory, and what you find goes in your report"
+	}
 	return system, strings.TrimSpace(environment + "\n\n" + held), nil
 }
 
@@ -352,6 +355,7 @@ type SpawnTool struct {
 	Inbox          *Inbox
 	orchestratorID string
 	depth          int
+	writesNothing  bool
 	mu             sync.Mutex
 	tree           *spawnTree
 	base           Config
@@ -518,8 +522,6 @@ func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
 	return width
 }
 
-func writesPaths(tool string) bool { return tool == "write" || tool == "edit" || tool == "bash" }
-
 func startedSpawnsOnly(tools Registry, calls []ToolCallRow) []string {
 	var started []string
 	for _, call := range calls {
@@ -567,7 +569,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Description: duties + ", and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
 			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. " +
 			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start, so spawn every piece you know in that one reply. " +
-			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; a sub-agent offered no write, edit or bash needs none. " +
+			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
 		Parameters: map[string]any{
@@ -610,6 +612,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if strings.TrimSpace(args.Task) == "" {
 		return Result{}, errors.New("spawn: task is required")
 	}
+	if t.writesNothing && len(args.Owns) > 0 {
+		return Result{}, ReadOnlyError{Tool: t.Name()}
+	}
 	limits := t.limits()
 	if t.depth+1 > limits.Depth {
 		return Result{}, DepthLimitError{Depth: t.depth + 1, Limit: limits.Depth}
@@ -631,9 +636,6 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
 		return Result{}, err
-	}
-	if len(args.Owns) == 0 && (len(definition.Tools) == 0 || slices.ContainsFunc(definition.Tools, writesPaths)) {
-		return Result{}, errors.New("spawn: owns is required, and a sub-agent holding no paths could write nothing")
 	}
 	system, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {
@@ -772,7 +774,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox,
-			orchestratorID: held.agent.ID, depth: t.depth + 1, base: t.base, roster: t.roster, tree: t.tree})
+			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns) == 0, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
 	subAgent.Tools = NewRegistry(append(owned, askTool{orchestrator: t, asking: held.agent, conversation: site.conversation})...)
@@ -1492,10 +1494,24 @@ func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
+	if len(t.boundary.Owns) == 0 {
+		return Result{}, ReadOnlyError{Tool: t.Name()}
+	}
 	if err := t.boundary.Write(args.Path); err != nil {
 		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
 	}
 	return t.tool.Run(ctx, raw)
+}
+
+type ReadOnlyError struct {
+	Tool string
+}
+
+func (e ReadOnlyError) Error() string {
+	if e.Tool == "spawn" {
+		return "spawn refused: you were spawned without owns, so a sub-agent you spawn holds none either: leave owns out, or put the work in your report for the orchestrator"
+	}
+	return e.Tool + " refused: you were spawned without owns, so you write nothing: put what you found in your report, and the orchestrator writes it or spawns a sub-agent that holds the path"
 }
 
 type ownedShell struct {
