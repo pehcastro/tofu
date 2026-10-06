@@ -12,6 +12,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Added
 
+- **A prompt starting with `!` runs as a shell command** in the project, with no model call. The chat shows its output, keys masked, and the next prompt carries it to the model. Esc stops it.
 - **Ctrl+P searches every prompt you sent**, across sessions and projects. Enter puts the prompt in the composer without sending it.
 
 ### Changed
