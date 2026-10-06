@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	codeRule   = "│ "
-	codeIndent = "    "
+	codeRule       = "│ "
+	codeIndent     = "    "
+	hyperlinkStart = "\x1b]8;"
 )
 
 type Renderer struct {
@@ -168,18 +169,27 @@ func guessLanguage(code string) string {
 
 func trimRight(line string) string {
 	state, read, kept := byte(0), 0, 0
+	linked, linkedAtKept := false, false
 	for read < len(line) {
 		seq, width, size, next := ansi.DecodeSequence(line[read:], state, nil)
 		read, state = read+size, next
+		if link, isLink := strings.CutPrefix(seq, hyperlinkStart); isLink {
+			_, target, _ := strings.Cut(link, ";")
+			linked = strings.TrimRight(target, "\a\x1b\\") != ""
+		}
 		if width > 0 && strings.TrimSpace(seq) != "" {
-			kept = read
+			kept, linkedAtKept = read, linked
 		}
 	}
 	if kept == 0 {
 		return ""
 	}
+	trimmed := line[:kept]
 	if kept < len(line) {
-		return line[:kept] + ansi.ResetStyle
+		trimmed += ansi.ResetStyle
 	}
-	return line
+	if linkedAtKept {
+		trimmed += ansi.ResetHyperlink()
+	}
+	return trimmed
 }
