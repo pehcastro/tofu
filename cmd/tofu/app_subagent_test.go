@@ -140,6 +140,29 @@ func TestTheSpawnersRecordedCallsWinOverTheRostersNamesWheneverItHasAny(t *testi
 	}
 }
 
+func TestACallOpenedAfterRecordedCallsKeepsItsRowAndItsStart(t *testing.T) {
+	start := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	var asked, recorded []subagent.Call
+	for index := range konst.SubAgentCallsWatched + 2 {
+		id := "e" + strconv.Itoa(index)
+		asked = append(asked, subagent.Call{ID: id, At: start.Add(time.Duration(index) * time.Second), Tool: "read"})
+		recorded = append(recorded, subagent.Call{ID: id, Tool: "read", Text: "a.go", Result: "1 KB"})
+	}
+	open := subagent.Call{ID: "open", At: start.Add(time.Minute), Tool: "bash"}
+	watched := recordedOrCalling(recorded, append(asked, open), nil, 0)
+	if last := watched[len(watched)-1]; last != open {
+		t.Fatalf("a bash call opened after %d recorded calls drew %+v last, want the open call with its start", len(recorded), last)
+	}
+	for _, call := range watched {
+		if call.ID != "open" && call.ID != "" && call.Result == "" {
+			t.Errorf("a recorded call came back open: %+v", call)
+		}
+	}
+	if len(watched) != konst.SubAgentCallsWatched {
+		t.Errorf("the pane holds %d calls, want %d", len(watched), konst.SubAgentCallsWatched)
+	}
+}
+
 func subAgentCallsWhileRunningAndOnceFinished(t *testing.T, dir, planted string) (running, finished []subagent.Call) {
 	t.Helper()
 	_ = os.Remove(filepath.Join(dir, "note.txt"))
@@ -213,7 +236,7 @@ func TestAFinishedSubAgentDrawsNoMoreCallsThanTheWatchPaneHoldsAndSaysHowManyItH
 	for index := range ran {
 		ran[index] = "tool" + strconv.Itoa(index)
 	}
-	calls := recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1")
+	calls := recordedOrCalling(recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1"), nil, nil, 0)
 
 	if len(calls) != konst.SubAgentCallsWatched {
 		t.Fatalf("a sub-agent that ran %d tools drew %d calls, want at most the %d the pane holds", len(ran), len(calls), konst.SubAgentCallsWatched)
@@ -259,7 +282,7 @@ func TestARunningSubAgentAndAFinishedOneHideTheSameCallsInTheSameWords(t *testin
 	subAgents, ran := runningThroughCalls(t, konst.SubAgentCallsWatched*2)
 
 	running := subAgents[0].Calls
-	finished := recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1")
+	finished := recordedOrCalling(recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1"), nil, nil, 0)
 	if len(running) != len(finished) {
 		t.Fatalf("the same %d calls draw %d lines while the sub-agent runs and %d once it stops", len(ran), len(running), len(finished))
 	}

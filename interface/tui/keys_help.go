@@ -35,7 +35,7 @@ func (a *App) keyRows() []keyRow {
 	}
 	tabs := "1-" + strconv.Itoa(len(tabNames()))
 	rows = append(rows, []keyRow{
-		{anywhereGroup, []string{"ctrl+c"}, "stop; twice to quit", nil},
+		{anywhereGroup, []string{"ctrl+c"}, "stop the lead; twice stops sub-agents, or quits", nil},
 		{anywhereGroup, []string{"ctrl+c"}, "copy a dragged selection", nil},
 	}...)
 	rows = append(rows, composerRows()...)

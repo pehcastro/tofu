@@ -8,8 +8,8 @@
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.
     [tool#9d4f10] is the loop I read.
                                                                                     
-                  Search                                                       esc  
-                  Screens, agents and events · enter opens                          
+    ⟩ report [&c  Search                                                       esc  ew  [expand]
+    ⟩ report [&c  Screens, agents and events · enter opens                          ed  [expand]
                                                                                     
                   > ledger                                                          
                                                                                     

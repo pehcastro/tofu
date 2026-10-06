@@ -58,6 +58,10 @@ inside the 16.7 ms of a 60 Hz frame.
   jpg, gif or webp file attaches the image. Any other path stays text.
 - **Answer the gate** when `gatePrompt` is `ask`: `1` allows once, `2`
   refuses, `3` always allows that tool on that file this session.
+- **See a sub-agent that stopped moving**: a sub-agent whose tool call has
+  been open for 11 minutes, a minute past the longest bash deadline, is
+  shown as stalled under the turn line, with the call and how long it has
+  been open. The call says so on the Sub-agents tab too.
 - **Open on the last session**: `tofu --continue`.
 - **Go back to any session without leaving**: `/resume` lists this
   project's sessions, newest first, with the one in use marked. Type a word
@@ -84,4 +88,6 @@ the key each rebindable action is bound to now. Type to filter it.
 | `Ctrl+X`, `Alt+Up`, `Alt+Down` | Remove or pick a queued message |
 | `!` at the start | Run a shell command, read by the next prompt |
 | `Esc` | Stop the turn, or a running `!` command |
-| `Ctrl+C` twice | Quit |
+| `Ctrl+C` | Stop the lead at once; its sub-agents keep running |
+| `Ctrl+C` twice in 3 s, lead idle | Stop the running sub-agents, after a line naming how many |
+| `Ctrl+C` twice, nothing running | Quit |

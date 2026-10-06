@@ -33,6 +33,12 @@ back as the same text chip it was sent as.
 `up` and `down` in an empty composer walk the prompts of the session you
 are in, without a search.
 
+`ctrl+c` while the lead works stops the lead at once, and its sub-agents
+keep running. With the lead idle and sub-agents working, the first press
+shows "this will stop 2 sub-agents, press Ctrl+C again to confirm" for 3
+seconds; a second press in that time stops them, and otherwise nothing
+stops. With nothing running, a second press quits tofu.
+
 ## Where it lives
 
 - `~/.tofu/keybindings.json`: the actions you rebound. Only what you

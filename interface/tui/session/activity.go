@@ -11,6 +11,7 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
+	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
@@ -21,6 +22,8 @@ const (
 	runningWord  = "running"
 	reportHead   = "report"
 	readingWords = "reading the reports"
+	stalledWord  = "stalled"
+	stopAskTail  = ", press Ctrl+C again to confirm"
 	doneMark     = "✓ "
 	failedMark   = "✗ "
 	stoppedMark  = "○ "
@@ -79,14 +82,48 @@ func (m *Model) WaitOn(working int) {
 	m.waitingOn = working
 }
 
-func (m *Model) leadIdleWords() string {
-	switch m.waitingOn {
-	case 0:
-		return readingWords
-	case 1:
-		return "waiting on 1 sub-agent"
+func subAgentCount(count int) string {
+	if count == 1 {
+		return "1 sub-agent"
 	}
-	return "waiting on " + strconv.Itoa(m.waitingOn) + " sub-agents"
+	return strconv.Itoa(count) + " sub-agents"
+}
+
+func (m *Model) leadIdleWords() string {
+	if m.waitingOn == 0 {
+		return readingWords
+	}
+	return "waiting on " + subAgentCount(m.waitingOn)
+}
+
+func (m *Model) AskToStop(subAgents int, until time.Time) {
+	m.stopAsked, m.stopAskedUntil = subAgents, until
+}
+
+func (m *Model) AskedToStop() bool { return m.now().Before(m.stopAskedUntil) }
+
+func Stalled(call subagent.Call, now time.Time) bool {
+	return call.Result == "" && !call.At.IsZero() && now.Sub(call.At) >= konst.SubAgentStallMillis*time.Millisecond
+}
+
+func (m *Model) turnLines() []string {
+	var lines []string
+	if line := m.requestLine(); line != "" {
+		lines = append(lines, line)
+	}
+	if m.AskedToStop() {
+		lines = append(lines, margin+look.Style(look.Amber).Render("this will stop "+subAgentCount(m.stopAsked)+stopAskTail))
+	}
+	for _, row := range m.SubAgents {
+		at := slices.IndexFunc(row.Calls, func(call subagent.Call) bool { return row.State == roster.Working && Stalled(call, m.now()) })
+		if at < 0 {
+			continue
+		}
+		call := row.Calls[at]
+		open := requestSeparator + "open " + widget.Until(m.now().Sub(call.At))
+		lines = append(lines, widget.Fit(margin+look.AgentRef(row.Name)+" "+look.Style(look.Amber).Render(stalledWord)+" "+look.Muted(oneLine(call.Tool+" "+call.Text)+open), m.width))
+	}
+	return lines
 }
 
 func (m *Model) settle() {

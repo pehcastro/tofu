@@ -1,16 +1,16 @@
  tofu        chat   agents   edits   shells   0s [settings] 
                                                             
-    You                          14:32  [message#672866]   │
-    why does the gate read the policy first?               ┃
-                                                           ┃
-                                                           ┃
-    ✓ [&c2]  ✗ [&c3]  ○ [&c1]                              ┃
-    · (1) tools · 0s             [tool#9d4f10]  [expand]   ┃
+                                                           │
+    ✓ [&c2]  ✗ [&c3]  ○ [&c1]                              │
+    · (1) tools · 0s             [tool#9d4f10]  [expand]   │
                                                            ┃
     [&orchestrator]              14:32  [message#9d4f11]   ┃
     three sub-agents run: [&c1] reads the loader, [&c2]    ┃
     waits on review, [&c3] failed its suite.               ┃
     [tool#9d4f10] is the loop I read.                      ┃
+                                                           ┃
+    ⟩ report [&c2]                   in_review  [expand]   ┃
+    ⟩ report [&c3]                     errored  [expand]   ┃
                                                             
   cooked for 0s  |  waited 0s  [request#9d4f10]             
                                                             

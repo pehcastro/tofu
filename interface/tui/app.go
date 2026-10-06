@@ -284,6 +284,7 @@ type App struct {
 	leading        bool
 	handed         []string
 	reports        map[string]string
+	heldReports    []subagent.Row
 	forking        bool
 	gateOff        bool
 	running        int
@@ -510,6 +511,9 @@ func (a *App) resize(width, height int) {
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmd := a.update(msg)
+	if a.busy {
+		a.flagStalls()
+	}
 	a.flushFeed()
 	a.syncFeed()
 	return a, tea.Batch(cmd, a.startPulse())
@@ -681,6 +685,7 @@ func (a *App) closed() tea.Cmd {
 	a.busy, a.leading, a.cancel, a.events, a.edits.Busy = false, false, nil, nil, false
 	a.running, a.pressedAt = 0, time.Time{}
 	a.parkSubAgentsTheTurnLeftBehind()
+	a.drawHeldReports()
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()

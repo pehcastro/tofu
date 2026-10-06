@@ -1955,6 +1955,72 @@ func TestASubAgentsCallNeverMarksTheLeadsRequestAnswered(t *testing.T) {
 	}
 }
 
+func TestCtrlCWhileTheLeadIsIdleAsksBeforeItStopsTheSubAgents(t *testing.T) {
+	at := fixedStart()
+	turned := make(chan context.Context, 1)
+	app := newTestApp(Options{
+		Repo: testRepo, Now: func() time.Time { return at }, Wires: anthropicAlone, StopLead: make(chan struct{}, 1),
+		Turn: func(ctx context.Context, _ Pick, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
+			turned <- ctx
+			<-ctx.Done()
+		},
+	})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	typeText(app, "audit the loader and write the floor test")
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	ctx := <-turned
+	app.Update(Event{Kind: EventDone, Text: "cooked for", SubAgents: twoWorking(2)})
+	confirm := "this will stop 2 sub-agents, press Ctrl+C again to confirm"
+	interrupt(app, 1)
+	if plain := ansi.Strip(app.View().Content); !strings.Contains(plain, confirm) || ctx.Err() != nil {
+		t.Fatalf("the first ctrl+c with the lead idle: cancelled %v, screen\n%s", ctx.Err(), plain)
+	}
+	at = at.Add(4 * time.Second)
+	if plain := ansi.Strip(app.View().Content); strings.Contains(plain, confirm) || strings.Contains(plain, quitAgainNote) {
+		t.Fatalf("the confirm line outlived its window, or a quit was offered\n%s", plain)
+	}
+	interrupt(app, 1)
+	if ctx.Err() != nil || !strings.Contains(ansi.Strip(app.View().Content), confirm) {
+		t.Fatalf("a press after the window lapsed stopped the sub-agents or asked nothing: %v", ctx.Err())
+	}
+	at = at.Add(2 * time.Second)
+	interrupt(app, 1)
+	if ctx.Err() == nil {
+		t.Fatal("a second ctrl+c inside the window did not stop the sub-agents")
+	}
+}
+
+func TestACallOpenPastTheStallThresholdIsFlaggedInChatAndInSubAgents(t *testing.T) {
+	at := fixedStart()
+	app := leadIdleOnTwo(t, &at)
+	rows := twoWorking(2)
+	rows[0].Calls = []subagent.Call{{ID: "k1", At: at.Add(-15 * time.Minute), Tool: "bash", Text: "go test ./internal/shell/..."}}
+	rows[1].Calls = []subagent.Call{{Tool: "read"}, {ID: "k2", At: at, Tool: "read", Text: "floor.go"}}
+	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
+	chat := ansi.Strip(app.View().Content)
+	if !regexp.MustCompile(`sub-1.*stalled.*bash go test ./internal/shell/\.\.\..*15m`).MatchString(chat) || strings.Count(chat, "stalled") != 1 {
+		t.Fatalf("chat does not flag sub-1 alone, with its call and how long it has been open\n%s", chat)
+	}
+	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
+	if agents := ansi.Strip(app.View().Content); !strings.Contains(agents, "stalled") {
+		t.Fatalf("the sub-agents screen does not flag the stalled call\n%s", agents)
+	}
+}
+
+func TestAReportThatArrivesWhileTheLeadRequestsIsDrawnOnceAfterItsWords(t *testing.T) {
+	at := fixedStart()
+	app := leadIdleOnTwo(t, &at)
+	app.Update(Event{Kind: EventRequesting})
+	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(1)})
+	app.Update(Event{Kind: EventText, ID: "w2", Text: "the loader reads the lock first."})
+	app.Update(Event{Kind: EventDone, Text: "cooked for"})
+	chat := ansi.Strip(app.View().Content)
+	if strings.Count(chat, "report [&sub-2]") != 1 || strings.Index(chat, "the loader reads the lock first.") > strings.Index(chat, "report [&sub-2]") {
+		t.Fatalf("the report is not drawn once, after the lead's words\n%s", chat)
+	}
+}
+
 func TestTheLeadRunningOnlySpawnsNeverReadsAsThinking(t *testing.T) {
 	at := fixedStart()
 	app := spawnedTwo(t, &at)

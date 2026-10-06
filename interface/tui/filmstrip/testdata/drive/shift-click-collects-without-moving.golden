@@ -42,8 +42,8 @@
     three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite.    
     [tool#9d4f10] is the loop I read.                                                               
                                                                                                     
-                                                                                                    
-                                                                                                    
+    ⟩ report [&c2]                                                           in_review  [expand]    
+    ⟩ report [&c3]                                                             errored  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     

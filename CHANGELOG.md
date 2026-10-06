@@ -12,6 +12,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Fixed
 
+- **Ctrl+C with the lead idle and sub-agents working asks first**: "this will stop 2 sub-agents, press Ctrl+C again to confirm". A second press within 3 s stops them; otherwise nothing stops. Ctrl+C while the lead works still stops only the lead, at once.
+- **A sub-agent whose tool call has been open past the longest bash deadline shows as stalled**, with the call and how long it has been open.
+- **A sub-agent's report that arrives while the lead is requesting is drawn**, once, after the lead's words. It used to be lost.
+
 - **While the lead's sub-agents work, the app says "waiting on N sub-agents"** with a live count, instead of "cooked for". "Thinking" shows only when the lead's own model answers, not while it waits on a request or runs spawns, and a sub-agent's stats no longer rename the lead's model.
 
 ### Changed

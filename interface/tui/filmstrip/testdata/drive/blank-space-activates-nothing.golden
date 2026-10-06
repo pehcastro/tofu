@@ -42,8 +42,8 @@
     three sub-ag    the conversation and the composer                               d its suite.
     [tool#9d4f10                                                                    
                     sub-agents                                         /sub-agents  
-                    every tool call and every sub-agent, in one feed                
-                                                                                    
+    ⟩ report [&c    every tool call and every sub-agent, in one feed                ew  [expand]
+    ⟩ report [&c                                                                    ed  [expand]
                     file-edits                                         /file-edits  
                     every changed line, who made it and where                       
                                                                                     

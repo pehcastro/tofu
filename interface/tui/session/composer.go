@@ -45,10 +45,7 @@ func (m *Model) transcriptRows() int {
 }
 
 func (m *Model) statusRows() int {
-	rows := 0
-	if m.Busy || m.cooked != "" {
-		rows++
-	}
+	rows := len(m.turnLines())
 	if _, open := m.openAsk(); open {
 		rows += askBlockRows
 	}
@@ -59,11 +56,7 @@ func (m *Model) statusRows() int {
 }
 
 func (m *Model) footer() []string {
-	var lines []string
-	if line := m.requestLine(); line != "" {
-		lines = append(lines, line)
-	}
-	lines = append(lines, m.askLines()...)
+	lines := append(m.turnLines(), m.askLines()...)
 	if len(lines) > 0 {
 		lines = append([]string{""}, lines...)
 	}

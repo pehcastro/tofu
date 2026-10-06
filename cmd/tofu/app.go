@@ -1684,7 +1684,12 @@ func recordedOrCalling(recorded, asked []subagent.Call, calling []string, droppe
 	}
 	switch {
 	case len(recorded) > 0:
-		return recorded
+		for _, call := range asked {
+			if !slices.ContainsFunc(recorded, func(done subagent.Call) bool { return done.ID == call.ID }) {
+				recorded = append(recorded, call)
+			}
+		}
+		return inThePane(recorded)
 	case len(asked) > 0:
 		return inThePane(asked)
 	}
@@ -1720,7 +1725,7 @@ func recordedCalls(rows []turn.Row, id string) []subagent.Call {
 			}
 		}
 	}
-	return inThePane(calls)
+	return calls
 }
 
 func inThePane(calls []subagent.Call) []subagent.Call {

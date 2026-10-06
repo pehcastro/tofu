@@ -8,8 +8,8 @@
     three sub-ag  Search                                                       esc  d its suite.
     [tool#9d4f10  Screens, agents and events · enter opens                          
                                                                                     
-                  > Type to filter                                                  
-                                                                                    
+    ⟩ report [&c  > Type to filter                                                  ew  [expand]
+    ⟩ report [&c                                                                    ed  [expand]
                   › chat                                                            
                     sub-agents                                                      
                     file edits                                                      

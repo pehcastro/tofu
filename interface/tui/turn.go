@@ -41,6 +41,7 @@ const (
 	orchestrator       = "orchestrator"
 	verdictLine        = "verdict "
 	noEngine           = "no engine is wired to this app"
+	stalledDetail      = "stalled: open longer than the longest bash deadline"
 )
 
 func gateOffNote(why jev.Why) string {
@@ -167,13 +168,17 @@ func (a *App) turnEventID() string {
 
 func (a *App) interrupt() tea.Cmd {
 	subAgentsRun := a.status.Agents > 0
-	if a.view.Stopping && !subAgentsRun {
+	if a.busy && subAgentsRun && (!a.leading || a.view.Stopping) {
+		a.askToStopSubAgents()
+		return nil
+	}
+	if a.view.Stopping {
 		return nil
 	}
 	withinQuitWindow := a.options.Now().Sub(a.pressedAt) <= konst.QuitAgainMillis*time.Millisecond
 	a.pressedAt = a.options.Now()
 	switch {
-	case !a.busy, subAgentsRun && (!a.leading || a.view.Stopping):
+	case !a.busy:
 		if withinQuitWindow {
 			return tea.Quit
 		}
@@ -207,6 +212,19 @@ func (a *App) stopTurn() {
 		a.stopLead()
 		return
 	}
+	a.stopEverything()
+}
+
+func (a *App) askToStopSubAgents() {
+	if !a.view.AskedToStop() {
+		a.view.AskToStop(a.status.Agents, a.options.Now().Add(konst.StopSubAgentsMillis*time.Millisecond))
+		return
+	}
+	a.view.AskToStop(0, time.Time{})
+	a.stopEverything()
+}
+
+func (a *App) stopEverything() {
 	a.view.LettingToolsFinish, a.view.Stopping = false, true
 	a.cancel()
 	a.dropSteering()
@@ -263,6 +281,14 @@ func (a *App) leadTurnEnds(words string) {
 	a.view.Stop()
 	a.leading, a.running = false, 0
 	a.view.WaitOn(a.status.Agents)
+	a.drawHeldReports()
+}
+
+func (a *App) drawHeldReports() {
+	for _, held := range a.heldReports {
+		a.view.Reported(a.mintID(), held)
+	}
+	a.heldReports = nil
 }
 
 func (a *App) start(task string) tea.Cmd { return a.startAs(task, "") }
@@ -562,8 +588,28 @@ func (a *App) drawReport(subAgent subagent.Row) {
 		return
 	}
 	a.reports[subAgent.Name] = subAgent.Report
-	if !a.leading {
-		a.view.Reported(a.mintID(), subAgent)
+	if a.leading {
+		a.heldReports = append(a.heldReports, subAgent)
+		return
+	}
+	a.view.Reported(a.mintID(), subAgent)
+}
+
+func (a *App) flagStalls() {
+	now := a.options.Now()
+	for _, subAgent := range a.subAgents {
+		if subAgent.State != roster.Working {
+			continue
+		}
+		for _, call := range subAgent.Calls {
+			at := a.happenedAt(short(call.ID))
+			if !session.Stalled(call, now) || at < 0 || a.happened[at].State != feed.StateRunning || slices.Contains(a.happened[at].Detail, stalledDetail) {
+				continue
+			}
+			held := a.happened[at]
+			held.Detail = append(slices.Clone(held.Detail), stalledDetail)
+			a.record(held)
+		}
 	}
 }
 

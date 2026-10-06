@@ -123,6 +123,8 @@ type Model struct {
 	now                func() time.Time
 	leadIdleSince      time.Time
 	waitingOn          int
+	stopAsked          int
+	stopAskedUntil     time.Time
 	waiting            time.Time
 	requested          time.Time
 	answered           time.Time
@@ -482,7 +484,7 @@ func (m *Model) Stop() {
 	interrupted := m.Stopping || m.LettingToolsFinish
 	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
-	m.leadIdleSince, m.waitingOn = time.Time{}, 0
+	m.leadIdleSince, m.waitingOn, m.stopAskedUntil = time.Time{}, 0, time.Time{}
 	m.seal()
 	m.revision++
 	for index := range m.entries {

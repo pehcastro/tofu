@@ -72,6 +72,8 @@ const (
 	ProgressTickMillis   = 80
 	SubAgentRedrawMillis = 250
 	QuitAgainMillis      = 3000
+	StopSubAgentsMillis  = 3000
+	SubAgentStallMillis  = BashMaxDeadlineMillis + 60000
 	FeedRecentEvents     = 200
 
 	DriveTimeoutMillis = 60000
