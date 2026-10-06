@@ -11,7 +11,7 @@ Appearance
 
 Interaction
     composer                standard            default
-    gatePrompt              run                 default
+    gatePrompt              auto                default
   ● readBeforeEdit          false               global
 
 Context

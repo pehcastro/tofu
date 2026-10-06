@@ -11,8 +11,8 @@
     Shell         TOFU ACTIONS                                                      pect Zed  ▾ 
     Turn          These work after the terminal sends the key to tofu.              
     Browser       >  Search         ctrl+k                                          
-                    Commands       alt+k                                                 run  ▾ 
-  NAVIGATE          Settings       not set                                          ow or enfor…
+                    Commands       alt+k                                                auto  ▾ 
+  NAVIGATE          Settings       not set                                          r you: only…
   ↑↓ setting · ←    Models         ctrl+l                                           
   section           Quote selection  ctrl+r                                                 ● on
   ctrl+k search     Edit in editor  ctrl+g                                           that chang…

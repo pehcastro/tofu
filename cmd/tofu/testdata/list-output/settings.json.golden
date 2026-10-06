@@ -48,7 +48,7 @@ exit 0
       {
         "key": "gatePrompt",
         "category": "Interaction",
-        "value": "run",
+        "value": "auto",
         "source": "default"
       },
       {

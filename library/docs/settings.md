@@ -20,6 +20,17 @@ The settings come in groups:
 - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth, subAgentCheckSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor
 
+`gatePrompt` is `auto` by default, which is auto mode: Jev decides at every
+gate and the work does not stop for you. Only a call it denies is refused,
+and the model is told why. A call it would ask about runs, and shows in the
+chat with its verdict. Every decision is a ledger row `tofu why` reads.
+`tofu settings set gatePrompt ask` turns asking on: a call Jev would ask
+about waits for your answer, `1` to allow it once, `2` to deny it, `3` to
+allow it here from now on. A project hook that asks, a rule override and
+the model changing a setting ask you in both modes: no classifier answers
+the first two, and the last could otherwise turn its own gate off.
+`tofu run` has nobody to ask, so there an ask is refused in both modes.
+
 ## Where it lives
 
 - `~/.tofu/settings.json`: yours, in every project

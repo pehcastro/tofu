@@ -2,7 +2,7 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
@@ -25,6 +25,18 @@ next message. Only `persistentRegistry` waits for a restart.
 
 **A bad value never lands.** A value a setting doesn't take is refused, and
 nothing is written.
+
+## Auto mode is the default
+
+**Work does not stop to ask.** With `gatePrompt` on `auto`, Jev decides at
+every gate, and only a call it denies is refused. A call it would ask about
+runs and shows in the chat with its verdict, and every decision is a row
+`tofu why` reads, so nothing happens out of sight. The model changing a
+setting always waits for you, so it can never turn its own gate off.
+
+**Asking is one setting away.** `tofu settings set gatePrompt ask` makes a
+call Jev would ask about wait for you: allow once, deny, or allow here from
+now on.
 
 ## Changing a setting
 

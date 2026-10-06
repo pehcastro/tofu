@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Changed
+
+- **Auto mode is the default.** Jev decides at every gate and the work does not stop for you: a call it would ask about runs and is recorded, and a call it denies is refused. `tofu settings set gatePrompt ask` makes it wait for you. A hook that asks, a rule override, and the model changing a setting still ask you in both modes.
+
 ### Fixed
 
 - **A stored key is masked in every event tofu sends to the interface**, not only in tool calls, results, failures and asks.

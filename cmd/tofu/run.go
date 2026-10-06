@@ -316,7 +316,7 @@ Arguments:
                         the default is %s. the anthropic wire takes %s,
                         and refuses the rest rather than picking a neighbour.
                         the openrouter wire sends no level and takes no --effort
-  --gate <arm>          off, shadow or enforce, otherwise the rule's own mode decides
+  --gate <arm>          off, shadow or enforce, and enforce when not given
   --no-gate             the arm that turns the tool gate off
   --sift <arm>          free or judged, otherwise the method table decides which
                         one cuts a bash result before the model reads it. free
@@ -712,7 +712,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	if run.gate != nil {
 		config.Gate = run.gate
-		config.GateMode = gateMode(opts.gateArm, settingText(dir, settingspkg.GatePrompt, run.notify))
+		config.GateMode = gateMode(opts.gateArm)
 	}
 	config.NewID = func() string { return orchestratorID }
 	if run.scorer != nil {
@@ -814,14 +814,12 @@ func scanSubAgents(dir string, built []turn.Tool) subagent.Found {
 
 func gateArms() []string { return []string{gateOff, gateShadow, gateEnforce} }
 
-func gateMode(arm string, prompt string) turn.GateMode {
+func gateMode(arm string) turn.GateMode {
 	switch arm {
-	case gateEnforce:
+	case gateEnforce, gateFollowsTheRule:
 		return turn.GateEnforce
 	case gateShadow, gateOff:
 		return turn.GateShadow
-	case gateFollowsTheRule:
-		return turn.GateModeFromPrompt(prompt)
 	}
 	panic("tofu run: unknown gate arm " + arm)
 }
@@ -1392,7 +1390,7 @@ func parseRunArgs(args []string) (runOpts, error) {
 		opts.effort = cmp.Or(opts.effort, llm.EffortDefault)
 	}
 	if opts.gateArm != gateFollowsTheRule && !slices.Contains(gateArms(), opts.gateArm) {
-		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate the rule's own mode decides",
+		return runOpts{}, fmt.Errorf("--gate %q is none of %s: with no --gate jev's verdict is enforced",
 			opts.gateArm, strings.Join(gateArms(), ", "))
 	}
 	if opts.siftArm != siftFollowsTheTable && !slices.Contains(siftArms(), opts.siftArm) {

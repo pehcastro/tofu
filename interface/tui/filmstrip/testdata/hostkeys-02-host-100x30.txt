@@ -11,8 +11,8 @@
     Shell  ALT+K  Commands · ensure tofu receives this shortcut                            d  ▾ 
     Turn   CTRL+L  Models · ensure tofu receives this shortcut                             
     Brows  CTRL+R  Quote selection · ensure tofu receives this shortcut                    
-           CTRL+G  Edit in editor · ensure tofu receives this shortcut                     n  ▾ 
-  NAVIGAT  CTRL+P  Prompt history · ensure tofu receives this shortcut                     nfor…
+           CTRL+G  Edit in editor · ensure tofu receives this shortcut                     o  ▾ 
+  NAVIGAT  CTRL+P  Prompt history · ensure tofu receives this shortcut                     only…
   ↑↓ sett  Change: forward these keys only while the terminal is focused.                  
   section                                                                                   ● on
   ctrl+k   SHORTCUT CONFLICTS                                                              hang…

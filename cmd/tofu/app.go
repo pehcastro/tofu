@@ -1127,6 +1127,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	config.History = s.carried
 	config.Images = images
 	config.Person = person
+	if settingText(s.dir, settingspkg.GatePrompt, say) != settingspkg.GatePromptAsk {
+		config.Person = person.RunsWhatJevAsks()
+	}
 	if s.steer != nil {
 		config.Steering = func() []string { return steered(s.steer, emit) }
 	}

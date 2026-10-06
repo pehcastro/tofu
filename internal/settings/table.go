@@ -115,8 +115,8 @@ const (
 )
 
 const (
-	GatePromptRun = "run"
-	GatePromptAsk = "ask"
+	GatePromptAuto = "auto"
+	GatePromptAsk  = "ask"
 )
 
 const (
@@ -210,8 +210,8 @@ func Default() []Spec {
 			Choices: []string{"auto", "truecolor", "256 colors", "ANSI 16"}},
 		{Key: Composer, Label: "Composer", Description: "Enter sends; Shift+Enter inserts a line break", Category: "Interaction", Kind: Text, DefaultText: "standard",
 			Choices: []string{"standard", "compact", "expanded"}},
-		{Key: GatePrompt, Label: "Confirmations", Description: "run lets a gated call go, ask waits for you; a rule's shadow or enforced is a different switch", Category: "Interaction", Kind: Text, DefaultText: GatePromptRun,
-			Choices: []string{GatePromptRun, GatePromptAsk}},
+		{Key: GatePrompt, Label: "Confirmations", Description: "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer. A project hook, a rule override and the model changing a setting ask you in both", Category: "Interaction", Kind: Text, DefaultText: GatePromptAuto,
+			Choices: []string{GatePromptAuto, GatePromptAsk}, Aliases: map[string]string{"run": GatePromptAuto}},
 		{Key: ReadBeforeEdit, Label: "Read before edit", Description: "an edit or a write to a file this session has not read, or that changed since it was read, is refused", Category: "Interaction", Kind: Bool, Default: 1},
 		{Key: ChatShowsTools, Label: "Tool detail", Description: "chat shows every tool call", Category: "Context", Kind: Bool},
 		{Key: AgentFeeds, Label: "Agent feeds", Description: "full keeps every sub-agents event, summary the latest 200, off shows only the list of agents", Category: "Context", Kind: Text, DefaultText: FeedsFull,

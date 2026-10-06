@@ -183,8 +183,8 @@ func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.G
 	if err != nil {
 		decision = turn.GateDecision{Verdict: ledger.VerdictAsk}
 	}
-	if request.Tool == (tools.Settings{}).Name() && decision.Verdict == ledger.VerdictAllow {
-		decision.Verdict = ledger.VerdictAsk
+	if request.Tool == (tools.Settings{}).Name() && decision.Verdict != ledger.VerdictDeny {
+		decision.Verdict, decision.PersonOnly = ledger.VerdictAsk, true
 	}
 	if g.watch != nil {
 		g.watch(ctx, request.Tool, decision, err)

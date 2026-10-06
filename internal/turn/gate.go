@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/settings"
 )
 
 type GateRequest struct {
@@ -17,10 +16,11 @@ type GateRequest struct {
 }
 
 type GateDecision struct {
-	ID      string
-	Verdict ledger.Verdict
-	Answers []ledger.Answer
-	Reason  *ledger.Reason
+	ID         string
+	Verdict    ledger.Verdict
+	Answers    []ledger.Answer
+	Reason     *ledger.Reason
+	PersonOnly bool
 }
 
 type Gate interface {
@@ -33,13 +33,6 @@ const (
 	GateShadow GateMode = iota
 	GateEnforce
 )
-
-func GateModeFromPrompt(prompt string) GateMode {
-	if prompt == settings.GatePromptAsk {
-		return GateEnforce
-	}
-	return GateShadow
-}
 
 func (m GateMode) String() string {
 	switch m {
@@ -82,6 +75,18 @@ func (a PersonAnswer) Outcome() ledger.Outcome {
 }
 
 type Person func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error)
+
+func (p Person) RunsWhatJevAsks() Person {
+	if p == nil {
+		return nil
+	}
+	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
+		if decision.ID != "" && !decision.PersonOnly {
+			return PersonAllowedOnce, nil
+		}
+		return p(ctx, request, decision)
+	}
+}
 
 const (
 	refusedHead = "the tool gate refused this call under an enforced policy: "
