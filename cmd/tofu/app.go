@@ -1141,7 +1141,11 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		if said, ended := wordsAfterLastCalls(row); ended && strings.TrimSpace(row.Steps[len(row.Steps)-1].AssistantText) == "" {
 			emit(tui.Event{Kind: tui.EventText, Text: said})
 		}
-		emit(tui.Event{Kind: tui.EventDone, Text: words, SubAgents: watch.subAgents()})
+		done := tui.Event{Kind: tui.EventDone, Text: words}
+		if ctx.Err() == nil {
+			done.SubAgents = watch.subAgents()
+		}
+		emit(done)
 	})
 	stopClocks()
 	stopListening()

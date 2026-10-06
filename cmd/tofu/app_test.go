@@ -2237,12 +2237,11 @@ func TestTheEndOfASessionSaysNothingExtraWhenNothingWasRunning(t *testing.T) {
 type modelStoppingTheTurnWhileTheSubAgentIsAnswering struct {
 	stop    context.CancelFunc
 	spawn   llm.ToolCall
-	spawned bool
+	spawned atomic.Bool
 }
 
 func (m *modelStoppingTheTurnWhileTheSubAgentIsAnswering) Ask(context.Context, llm.Request) (llm.Decision, error) {
-	if !m.spawned {
-		m.spawned = true
+	if m.spawned.CompareAndSwap(false, true) {
 		read := llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{m.spawn, read}}, nil
 	}
@@ -2267,8 +2266,8 @@ func TestAParkedSubAgentsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAg
 	driver := subAgentStoppedWhileItAnswered(t)
 
 	done := driver.of(tui.EventDone)
-	if len(done) != 1 || len(done[0].SubAgents) == 0 {
-		t.Fatalf("the stopped turn closed with %+v, want one close carrying the sub-agent", done)
+	if len(done) != 1 || done[0].SubAgents != nil {
+		t.Fatalf("the stopped turn closed with %+v, want one close carrying no sub-agent, since they are still unwinding", done)
 	}
 	told := driver.of(tui.EventSubAgent)
 	if len(told) == 0 || len(told[len(told)-1].SubAgents) == 0 {
