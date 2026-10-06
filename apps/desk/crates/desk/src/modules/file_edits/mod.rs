@@ -10,7 +10,9 @@ use gpui::{
     Rgba, SharedString, Stateful, Window, div, prelude::*, px,
 };
 
-use fixture::{AGENTS, Agent, CHANGES, Change, FILES, File, Kin, Lang, Mark, Op, State};
+use fixture::{
+    AGENTS, Agent, CHANGES, Change, FILES, File, Kin, Lang, Mark, Op, STORIES, State, Story,
+};
 use paint::{
     ADD, DEL, GO, MONO, REACT, SHELL, T2, T3, WARN, black, file_icon, glyph, hex, medium, mono,
     ringed, spacer, stroked, text, tint, white,
@@ -30,6 +32,8 @@ const FILE_MARK: &str = r#"<path d="M5 3h4l3 3v7H5z M9 3v3h3"/>"#;
 const TRACE: &str = r#"<circle cx="8" cy="8" r="2.5"/><path d="M10.5 8v1a1.75 1.75 0 0 0 3.5 0V8a6 6 0 1 0-2.4 4.8"/>"#;
 const CHECK: &str = r#"<path d="M3.5 8.5l3 3 6-7"/>"#;
 const BACK: &str = r#"<path d="M10 4L6 8l4 4"/>"#;
+const OPEN: &str = r#"<path d="M4 6l4 4 4-4"/>"#;
+const CLOSED: &str = r#"<path d="M6 4l4 4-4 4"/>"#;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Pick {
@@ -40,21 +44,24 @@ enum Pick {
 
 struct FileEdits {
     pick: Pick,
+    folded: bool,
     backdrop: Arc<Image>,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    match board {
-        None | Some("IWY-8") => {}
-        Some(other) => return Err(format!("file edits draws IWY-8, not {other}")),
-    }
+    let pick = match board {
+        None | Some("IWY-8") => Pick::All,
+        Some("S-WORK-6") => Pick::File(FILES[0].base),
+        Some(other) => return Err(format!("file edits draws IWY-8 and S-WORK-6, not {other}")),
+    };
     cx.text_system()
         .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
         .map_err(|error| format!("file edits cannot load the Geist fonts: {error}"))?;
     let backdrop = Arc::new(Image::from_bytes(ImageFormat::Jpeg, BACKDROP.to_vec()));
     Ok(cx
         .new(|_| FileEdits {
-            pick: Pick::All,
+            pick,
+            folded: false,
             backdrop,
         })
         .into())
@@ -290,6 +297,13 @@ impl FileEdits {
     }
 
     fn feed(&self, scale: f32, cx: &mut Context<Self>) -> Div {
+        let story = STORIES
+            .iter()
+            .find(|story| self.pick == Pick::File(story.file));
+        let file = FILES.iter().find(|file| self.pick == Pick::File(file.base));
+        if let (Some(story), Some(file)) = (story, file) {
+            return self.story(story, file, scale, cx);
+        }
         let title: SharedString = match self.pick {
             Pick::All => "Every change in this session".into(),
             Pick::Agent(id) => format!("Changes by {id}").into(),
@@ -340,6 +354,145 @@ impl FileEdits {
                     .into_iter()
                     .map(|change| self.entry(change, scale, cx)),
             )
+    }
+
+    fn story(&self, story: &Story, file: &File, scale: f32, cx: &mut Context<Self>) -> Div {
+        let back = cx.listener(|this: &mut Self, _: &gpui::ClickEvent, _, cx| {
+            this.pick = Pick::All;
+            cx.notify();
+        });
+        let fold = cx.listener(|this: &mut Self, _: &gpui::ClickEvent, _, cx| {
+            this.folded = !this.folded;
+            cx.notify();
+        });
+        let icon = match file.lang {
+            Lang::Go => GO,
+            Lang::React => REACT,
+        };
+        let button = |id: &'static str, label: &'static str| {
+            div()
+                .id(id)
+                .h(px(28.0))
+                .px(px(12.0))
+                .flex()
+                .items_center()
+                .rounded(px(8.0))
+                .bg(white(0.07))
+                .cursor_pointer()
+                .child(medium(12.5, 12.5, white(0.9), label))
+        };
+        let chevron = if self.folded { CLOSED } else { OPEN };
+        div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .overflow_hidden()
+            .px(px(28.0))
+            .pt(px(16.0))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .child(
+                        div()
+                            .id("back")
+                            .size(px(26.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_pointer()
+                            .on_click(back)
+                            .child(glyph(BACK, 13.0, white(0.45), scale)),
+                    )
+                    .child(file_icon(icon, 18.0, scale))
+                    .child(
+                        text(17.0, 17.0, op_ink(file.op), file.base)
+                            .font_weight(FontWeight::SEMIBOLD),
+                    )
+                    .child(text(13.0, 17.0, white(T3), file.dir))
+                    .child(spacer())
+                    .child(mono(12.5, 17.0, ADD, file.add))
+                    .child(mono(12.5, 17.0, DEL, file.del))
+                    .child(glyph(
+                        TRACE,
+                        13.0,
+                        Rgba {
+                            alpha: 0.7,
+                            ..kin_ink(Kin::Ts)
+                        },
+                        scale,
+                    ))
+                    .child(button("open-in-editor", "Open in editor"))
+                    .child(button("undo", "Undo")),
+            )
+            .child(
+                text(12.5, 20.0, white(T3), story.note)
+                    .mt(px(6.0))
+                    .mb(px(18.0))
+                    .ml(px(36.0)),
+            )
+            .child(
+                div()
+                    .id("edit")
+                    .flex()
+                    .items_center()
+                    .gap(px(9.0))
+                    .py(px(6.0))
+                    .cursor_pointer()
+                    .on_click(fold)
+                    .child(glyph(chevron, 13.0, white(T3), scale))
+                    .child(avatar(story.by, 22.0, 11.0))
+                    .child(
+                        text(13.0, 20.0, kin_ink(kin_of(story.by)), story.by)
+                            .font_weight(FontWeight::SEMIBOLD),
+                    )
+                    .child(text(
+                        13.0,
+                        20.0,
+                        white(T3),
+                        format!("edited \u{b7} {}", story.ago),
+                    ))
+                    .child(spacer())
+                    .child(text(12.0, 20.0, white(T3), story.summary)),
+            )
+            .when(!self.folded, |view| {
+                view.child(
+                    ringed(10.0, white(0.06))
+                        .mt(px(4.0))
+                        .ml(px(22.0))
+                        .bg(black(0.26))
+                        .overflow_hidden()
+                        .child(div().px(px(12.0)).py(px(6.0)).bg(white(0.024)).child(mono(
+                            11.5,
+                            23.0,
+                            white(T3),
+                            story.head,
+                        )))
+                        .child(div().py(px(4.0)).children(story.added.iter().zip(1..).map(
+                            |(code, number)| {
+                                div()
+                                    .h(px(20.0))
+                                    .flex()
+                                    .bg(tint(0x52c68e, 0.1))
+                                    .child(
+                                        div().w(px(54.0)).pr(px(12.0)).flex().justify_end().child(
+                                            mono(12.0, 20.0, white(0.22), number.to_string()),
+                                        ),
+                                    )
+                                    .child(div().w(px(14.0)).child(mono(
+                                        12.0,
+                                        20.0,
+                                        tint(0xc6ecd6, 0.7),
+                                        "+",
+                                    )))
+                                    .child(
+                                        mono(12.0, 20.0, hex(0xc6ecd6), *code).whitespace_nowrap(),
+                                    )
+                            },
+                        ))),
+                )
+            })
     }
 
     fn entry(&self, change: &'static Change, scale: f32, cx: &mut Context<Self>) -> Div {
