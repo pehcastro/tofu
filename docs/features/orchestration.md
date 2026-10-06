@@ -84,6 +84,11 @@ next step. When idle, a new message or report starts a turn.
   A finished sub-agent starts again with its conversation kept.
 - **A sub-agent to the lead**: `ask` sends one question with a default. With
   no reply in 30 seconds, the default stands, and the report says so.
+- **A sub-agent's call the gate asks about**: it goes to the lead, never to
+  you, with the call, jev's verdict and its risk. The lead answers with
+  `message` and `answer` allow or deny, and the sub-agent waits up to 5
+  minutes. With no answer the call is refused. A sub-agent's own sub-agent
+  asks the sub-agent that started it.
 - **Progress**: `subagents` lists each sub-agent's state and its last tool
   call.
 

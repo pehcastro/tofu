@@ -777,6 +777,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	subAgent.System, subAgent.Environment, subAgent.History = held.system, held.environment, held.history
 	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
+	subAgent.Person = t.orchestratorAnswers(held, site)
 	subAgent.AgentType = held.definition.Name
 	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
 	if site.log == nil {
@@ -812,6 +813,7 @@ type heldSubAgent struct {
 	running     bool
 	check       *checkIn
 	cancel      context.CancelFunc
+	answer      chan bool
 	forking     sync.Mutex
 	forked      []Row
 }
@@ -932,9 +934,10 @@ type messageTool struct {
 }
 
 type messageArgs struct {
-	To   string `json:"to"`
-	Text string `json:"text"`
-	Stop bool   `json:"stop,omitempty"`
+	To     string `json:"to"`
+	Text   string `json:"text"`
+	Stop   bool   `json:"stop,omitempty"`
+	Answer string `json:"answer,omitempty"`
 }
 
 func (messageTool) Name() string { return "message" }
@@ -947,10 +950,11 @@ func (messageTool) Definition() llm.Tool {
 			"a running sub-agent reads it at its next step; one that has ended resumes in the background with its whole conversation and the paths it held, " +
 			"so use it rather than spawning a new sub-agent for those paths. either way its answer comes to you later as a report, as spawn's does. " +
 			"to is the sub-agent's name as its report gives it, such as ts-dev-1. " +
-			"stop true, with no text, stops a running sub-agent instead: it reports where it stopped and keeps its conversation, so a later message resumes it",
+			"stop true, with no text, stops a running sub-agent instead: it reports where it stopped and keeps its conversation, so a later message resumes it. " +
+			"answer allow or deny answers a sub-agent's call that waits on you because the gate asked; any text goes to the sub-agent with it",
 		Parameters: map[string]any{
 			"type":       "object",
-			"properties": map[string]any{"to": text, "text": text, "stop": map[string]any{"type": "boolean"}},
+			"properties": map[string]any{"to": text, "text": text, "stop": map[string]any{"type": "boolean"}, "answer": map[string]any{"type": "string", "enum": []string{"allow", "deny"}}},
 			"required":   []string{"to"},
 		},
 	}
@@ -962,6 +966,22 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		return Result{}, fmt.Errorf("message: arguments are not the expected shape: %w", err)
 	}
 	t := m.orchestrator
+	if args.Answer != "" {
+		if args.Answer != "allow" && args.Answer != "deny" {
+			return Result{}, fmt.Errorf("message refused: answer is allow or deny, not %q", args.Answer)
+		}
+		held, waiting := t.Inbox.answer(args.To, args.Answer == "allow")
+		switch {
+		case held == nil:
+			return Result{}, t.unknown(args.To)
+		case !waiting:
+			return Result{}, fmt.Errorf("message refused: no call of %s waits for an answer", args.To)
+		}
+		if strings.TrimSpace(args.Text) != "" {
+			held.inbox.post(args.Text)
+		}
+		return Result{Content: args.To + "'s call is answered " + args.Answer + ", and it goes on.", Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
+	}
 	if args.Stop {
 		held, stopped := t.Inbox.stop(args.To)
 		switch {

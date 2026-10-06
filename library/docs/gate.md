@@ -25,6 +25,13 @@ The `gatePrompt` setting says what a verdict does:
   for the rest of the session.
   When jev cannot answer at all, the call is refused rather than run.
 
+A sub-agent never asks you, under either setting. When jev's verdict on a
+sub-agent's call is ask, the lead that started it gets the call, the
+verdict and the risk, and answers allow or deny. The sub-agent waits up to
+5 minutes, and with no answer the call is refused. A deny from jev is
+refused outright. `tofu session trace` shows the ask, the answer and how
+long it took.
+
 Every verdict is kept as a row in the decision ledger.
 
 ## Where it lives

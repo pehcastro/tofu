@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Changed
+
+- **A sub-agent never asks you.** When Jev would ask about a sub-agent's call, the ask goes to the orchestrator, which answers allow or deny with the verdict in hand. The sub-agent waits up to 5 minutes for it.
+
 ### Added
 
 - **A second app on a session another tofu is writing opens read only** and fires no cron job, so a loop fires once per interval however many apps are open.

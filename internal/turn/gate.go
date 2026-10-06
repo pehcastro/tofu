@@ -3,9 +3,14 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
+	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/session"
+	"tofu/internal/subagent"
 )
 
 type GateRequest struct {
@@ -114,16 +119,62 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 		if person == nil {
 			return "the verdict is ask" + standing(decision.Reason) + ", and no person was available to answer"
 		}
+		who := "the person"
+		if SubAgentAsking(ctx) != "" {
+			who = "the orchestrator"
+		}
 		answer, err := person(ctx, request, decision)
 		switch {
 		case err != nil:
-			return "the verdict is ask and the person could not be asked: " + err.Error()
+			return "the verdict is ask and " + who + " could not be asked: " + err.Error()
 		case answer.allows():
 			return ""
 		}
-		return "the verdict is ask" + standing(decision.Reason) + ", and the person did not allow it"
+		return "the verdict is ask" + standing(decision.Reason) + ", and " + who + " did not allow it"
 	}
 	panic("turn: unknown verdict " + string(decision.Verdict))
+}
+
+const orchestratorAnswerWait = 5 * time.Minute
+
+func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Person {
+	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
+		id := held.agent.ID
+		if decision.Verdict != ledger.VerdictAsk || decision.PersonOnly {
+			return PersonDenied, errors.New("only the person answers this " + request.Tool + " question, and a sub-agent never asks the person")
+		}
+		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because the gate's verdict is ask%s. it waits up to %s for you: call message with to %s and answer allow or deny. with no answer the call is refused.",
+			id, request.Tool, request.Args, standing(decision.Reason), orchestratorAnswerWait, id)
+		t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
+		defer t.roster.Reached(id, subagent.Working, "")
+		site.notice(id, asked)
+		started, answer := t.clock(), t.Inbox.ask(held, asked)
+		within, cancel := context.WithTimeout(ctx, orchestratorAnswerWait)
+		defer cancel()
+		var allowed bool
+		select {
+		case allowed = <-answer:
+		case <-within.Done():
+			if t.Inbox.withdraw(held, answer, asked) {
+				unanswered := fmt.Errorf("the orchestrator did not answer within %s: %w", t.clock().Sub(started).Round(time.Millisecond), context.Cause(within))
+				site.notice(id, id+"'s "+request.Tool+" call is refused: "+unanswered.Error())
+				return PersonDenied, unanswered
+			}
+			allowed = <-answer
+		}
+		said, verdict := "deny", PersonDenied
+		if allowed {
+			said, verdict = "allow", PersonAllowedOnce
+		}
+		site.notice(id, "the orchestrator answered "+said+" to "+id+"'s "+request.Tool+" call after "+t.clock().Sub(started).Round(time.Millisecond).String())
+		return verdict, nil
+	}
+}
+
+func (s spawnSite) notice(agent, text string) {
+	if s.log != nil {
+		_, _ = s.log.Append(session.Event{Turn: s.turn, Agent: agent, Kind: session.EventNotice}, session.NoticeBody{Text: text})
+	}
 }
 
 func standing(reason *ledger.Reason) string {

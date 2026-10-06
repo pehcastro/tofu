@@ -26,6 +26,7 @@ const (
 	sourceCheck         = "sub-agent check"
 	sourceReport        = "sub-agent report"
 	sourceMessage       = "message to this sub-agent"
+	sourceGateAsk       = "sub-agent gate ask"
 )
 
 type inboxItem struct {
@@ -200,6 +201,39 @@ func (b *Inbox) stop(to string) (*heldSubAgent, bool) {
 	}
 	held.cancel()
 	return held, true
+}
+
+func (b *Inbox) ask(held *heldSubAgent, asked string) chan bool {
+	answer := make(chan bool, 1)
+	b.mu.Lock()
+	held.answer = answer
+	b.items = append(b.items, inboxItem{text: asked, source: sourceGateAsk, posted: time.Now()})
+	b.mu.Unlock()
+	b.signal()
+	return answer
+}
+
+func (b *Inbox) answer(to string, allowed bool) (*heldSubAgent, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	held := b.held[to]
+	if held == nil || held.answer == nil {
+		return held, false
+	}
+	held.answer <- allowed
+	held.answer = nil
+	return held, true
+}
+
+func (b *Inbox) withdraw(held *heldSubAgent, answer chan bool, asked string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if held.answer != answer {
+		return false
+	}
+	held.answer = nil
+	b.items = slices.DeleteFunc(b.items, func(item inboxItem) bool { return item.source == sourceGateAsk && item.text == asked })
+	return true
 }
 
 func (b *Inbox) ended(held *heldSubAgent, report string, stopping bool, log *session.Log) []inboxItem {
