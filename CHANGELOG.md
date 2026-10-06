@@ -10,7 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.5 - 2026-10-06
+
+Sub-agents you can trust across turns and resumes, and config the model cannot change alone.
+
 ### Changed
+
+- **`--continue` and `/resume` restore the session's sub-agents.** `subagents` lists the ones that ran before the resume, with how each ended, and `message` can resume a finished or parked one with its conversation.
 
 - **A `write`, `edit` or `bash` call that changes tofu's settings, the hooks files it reads, or the hook trust file waits for you**, in auto mode too, and a sub-agent's is refused.
 
