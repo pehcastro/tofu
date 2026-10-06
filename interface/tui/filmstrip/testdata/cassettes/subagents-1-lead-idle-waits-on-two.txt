@@ -1,0 +1,17 @@
+# moment 1: the lead spawns two background sub-agents and its turn ends, then the sub-agents think, call and report usage
+requesting
+spawn 5e01aa audit the policy loader
+row c1 working audit the policy loader
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+text 9d4f11 two sub-agents run: [&c1] audits the loader and [&c2] writes the floor test.
+done cooked for
+@c1 thinking c1th01 the loader reads the lock first
+@c1 call 7a1c02 read internal/judge/policy/resolve.go
+@c1 stats 300000 62000
+@c2 thinking c2th01 the floor needs one row
+@c2 call 7b2d01 edit internal/judge/ledger/floor.go
+@c1 result 7a1c02 209 lines, 6.2 KB
+hold

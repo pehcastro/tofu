@@ -1,0 +1,19 @@
+# moment 7: c1 reports while the lead is idle, c2 reports while the lead is answering c1, then the lead answers both and the turn ends
+requesting
+spawn 5e01aa audit the policy loader
+row c1 working audit the policy loader
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+text 9d4f11 two sub-agents run and I wait for both reports.
+done cooked for
+pause
+report c1 finished the policy loader reads the lock before the mode
+requesting
+report c2 finished the floor test fails on an empty ledger
+text 9d4f20 the loader reads the lock first.
+done cooked for
+requesting
+text 9d4f30 both are in: the lock comes first and the floor test fails empty.
+done cooked for

@@ -1,0 +1,13 @@
+# moment 4: two sub-agents work and the lead is requesting when the person presses ctrl+c; a lead-only stop answers with its own done
+requesting
+spawn 5e01aa audit the policy loader
+row c1 working audit the policy loader
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+text 9d4f11 two sub-agents run: [&c1] audits the loader and [&c2] writes the floor test.
+done cooked for
+pause
+requesting
+hold

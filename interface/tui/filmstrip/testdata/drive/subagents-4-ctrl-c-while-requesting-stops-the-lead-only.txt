@@ -1,0 +1,14 @@
+# moment 4: ctrl+c while the lead is requesting stops the lead only, at once, and both sub-agents keep running.
+type subagents-4-ctrl-c-while-requesting-stops-the-lead-only
+key enter
+wait waiting on 2 sub-agents
+release
+wait requesting  |
+key ctrl+c
+absent stopping  |
+absent quit
+absent ○
+wait waiting on 2 sub-agents
+clock 2s
+absent ○
+wait waiting on 2 sub-agents

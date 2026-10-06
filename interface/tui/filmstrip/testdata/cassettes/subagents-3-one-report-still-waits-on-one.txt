@@ -1,0 +1,18 @@
+# moment 3: c1 reports and the lead answers it while c2 still works
+requesting
+spawn 5e01aa audit the policy loader
+row c1 working audit the policy loader
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+text 9d4f11 two sub-agents run: [&c1] audits the loader and [&c2] writes the floor test.
+done cooked for
+pause
+report c1 finished the policy loader reads the lock before the mode
+requesting
+text 9d4f20 [&c1] is in: the loader reads the lock first, and [&c2] still writes the floor test.
+done cooked for
+@c2 thinking c2th01 the floor needs one row
+@c2 stats 310000 64000
+hold

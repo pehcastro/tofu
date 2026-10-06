@@ -1,0 +1,12 @@
+# moment 5a: ctrl+c while the lead is idle and sub-agents work asks to confirm, and a second press within 3 s stops both.
+type subagents-5a-ctrl-c-twice-while-idle-stops-both
+key enter
+wait waiting on 2 sub-agents
+key ctrl+c
+wait this will stop 2 sub-agents, press Ctrl+C again to confirm
+absent ○
+clock 2s
+key ctrl+c
+wait ○
+absent waiting on 2 sub-agents
+absent quit

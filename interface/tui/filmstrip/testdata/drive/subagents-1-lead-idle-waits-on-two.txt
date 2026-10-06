@@ -1,0 +1,8 @@
+# moment 1: the lead spawned two background sub-agents and its turn ended. While they work the lead waits on 2, and never says cooked or thinking.
+type subagents-1-lead-idle-waits-on-two
+key enter
+wait waiting on 2 sub-agents
+clock 2s
+absent cooked
+absent thinking
+wait waiting on 2 sub-agents

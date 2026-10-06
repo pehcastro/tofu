@@ -1,0 +1,8 @@
+# moment 6: a sub-agent whose tool call does not return within its deadline is shown as stalled, not working.
+type subagents-6-a-call-past-its-deadline-is-flagged
+key enter
+wait waiting on 2 sub-agents
+clock 1s
+wait stalled
+key alt+2
+wait stalled

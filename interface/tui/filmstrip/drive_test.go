@@ -1,6 +1,7 @@
 package filmstrip
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/golden"
+	"tofu/internal/konst"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
@@ -29,6 +31,8 @@ import (
 
 const (
 	driveDir         = "drive"
+	cassetteDir      = "cassettes"
+	stoppedLeadWords = "cancelled at"
 	scriptSuffix     = ".txt"
 	settingsSuffix   = ".settings.json"
 	freshPrefix      = "fresh-"
@@ -42,8 +46,9 @@ const (
 )
 
 type transcript struct {
-	mutex sync.Mutex
-	text  strings.Builder
+	mutex   sync.Mutex
+	text    strings.Builder
+	release chan struct{}
 }
 
 func (t *transcript) Write(p []byte) (int, error) {
@@ -85,9 +90,122 @@ func seeds(at time.Time) map[string][]tui.Event {
 	}
 }
 
-func seededTurn(at time.Time) tui.Turn {
+type cassette struct {
+	at       time.Time
+	release  <-chan struct{}
+	stopLead <-chan struct{}
+	ended    context.Context
+	emit     tui.CalledFromInsideTheTurnAndNeverAfterItReturns
+	rows     []subagent.Row
+}
+
+func (c *cassette) row(name string) *subagent.Row {
+	at := slices.IndexFunc(c.rows, func(row subagent.Row) bool { return row.Name == name })
+	if at < 0 {
+		c.rows = append(c.rows, subagent.Row{Name: name, Total: konst.TurnMaxSteps})
+		at = len(c.rows) - 1
+	}
+	return &c.rows[at]
+}
+
+func (c *cassette) snapshot() []subagent.Row {
+	rows := slices.Clone(c.rows)
+	for index := range rows {
+		rows[index].Calls = slices.Clone(rows[index].Calls)
+	}
+	return rows
+}
+
+func (c *cassette) released(ctx context.Context, release <-chan struct{}) bool {
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-c.ended.Done():
+			return false
+		case <-release:
+			return true
+		case <-c.stopLead:
+			c.emit(tui.Event{Kind: tui.EventDone, Text: stoppedLeadWords})
+		}
+	}
+}
+
+func rosterState(name string) roster.State {
+	states := roster.States()
+	at := slices.IndexFunc(states, func(state roster.State) bool { return state.String() == name })
+	if at < 0 {
+		panic("cassette: no sub-agent state is named " + name)
+	}
+	return states[at]
+}
+
+func (c *cassette) play(ctx context.Context, body string) {
+	for _, step := range ReadScript(body) {
+		agent, verb, text := "", step.Verb, step.Text
+		if name, tagged := strings.CutPrefix(verb, "@"); tagged {
+			agent = name
+			verb, text, _ = strings.Cut(text, " ")
+		}
+		id, rest, _ := strings.Cut(text, " ")
+		word, tail, _ := strings.Cut(rest, " ")
+		switch verb {
+		case "requesting":
+			c.emit(tui.Event{Kind: tui.EventRequesting})
+		case "spawn":
+			c.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: "spawn", Text: rest, Promote: true})
+		case "call":
+			c.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: word, Text: tail, Agent: agent})
+		case "result":
+			c.emit(tui.Event{Kind: tui.EventToolResult, ID: id, Text: rest, Agent: agent})
+		case "thinking":
+			c.emit(tui.Event{Kind: tui.EventThinking, ID: id, Text: rest, Agent: agent})
+		case "stats":
+			in, _ := strconv.Atoi(id)
+			out, _ := strconv.Atoi(rest)
+			c.emit(tui.Event{Kind: tui.EventStats, Agent: agent, TokensIn: in, TokensOut: out})
+		case "text":
+			c.emit(tui.Event{Kind: tui.EventText, ID: id, Text: rest})
+		case "done":
+			c.emit(tui.Event{Kind: tui.EventDone, Text: text, SubAgents: c.snapshot()})
+		case "row", "report", "pending":
+			row := c.row(id)
+			switch verb {
+			case "row":
+				row.State, row.Doing = rosterState(word), cmp.Or(tail, row.Doing)
+			case "report":
+				row.State, row.Report = rosterState(word), tail
+			case "pending":
+				ago, err := time.ParseDuration(word)
+				if err != nil {
+					panic("cassette line " + strconv.Itoa(step.Line) + ": " + err.Error())
+				}
+				callID, call, _ := strings.Cut(tail, " ")
+				tool, what, _ := strings.Cut(call, " ")
+				row.Calls = append(row.Calls, subagent.Call{ID: callID, At: c.at.Add(-ago), Tool: tool, Text: what})
+			}
+			c.emit(tui.Event{Kind: tui.EventSubAgent, SubAgents: c.snapshot()})
+		case "pause":
+			if !c.released(ctx, c.release) {
+				return
+			}
+		case "hold":
+			c.released(ctx, nil)
+			return
+		default:
+			panic("cassette line " + strconv.Itoa(step.Line) + ": no event is named " + strconv.Quote(verb))
+		}
+	}
+}
+
+func seededTurn(at time.Time, played cassette) tui.Turn {
 	planned := seeds(at)
-	return func(_ context.Context, _ tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+	return func(ctx context.Context, _ tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+		if body, err := os.ReadFile(filepath.Join("testdata", cassetteDir, task+scriptSuffix)); err == nil {
+			played.at, played.emit = at, emit
+			played.play(ctx, string(body))
+			return
+		}
 		events, known := planned[task]
 		if !known {
 			events = append([]tui.Event{{Kind: tui.EventText, ID: "a0" + strconv.Itoa(len(task)), Text: "noted: " + task}}, done()...)
@@ -125,7 +243,8 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	}))
 	t.Cleanup(metaModels.Close)
 	t.Setenv(library.MetaBaseURLVariable, metaModels.URL)
-	out := &transcript{}
+	out := &transcript{release: make(chan struct{}, 1)}
+	stopLead := make(chan struct{}, 1)
 	r := newReel(fixture.Width, fixture.Height, home, func(options *tui.Options) {
 		signed := options.Wires
 		options.Wires = func() []tui.Wire {
@@ -135,7 +254,8 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 			return signed()
 		}
 		options.Fresh = strings.HasPrefix(name, freshPrefix)
-		options.Turn = seededTurn(options.Now())
+		options.StopLead = stopLead
+		options.Turn = seededTurn(options.Now(), cassette{release: out.release, stopLead: stopLead, ended: t.Context()})
 		options.Copy = func(text string) error {
 			_, err := out.Write([]byte("clipboard: " + text + "\n"))
 			return err
@@ -153,6 +273,37 @@ func playAll(t *testing.T, r *reel, script string, plain bool, out *transcript) 
 	t.Helper()
 	width, height := fixture.Width, fixture.Height
 	for _, step := range ReadScript(script) {
+		switch step.Verb {
+		case "clock", "release", "once", "before":
+			if err := r.driver.settle(driveTimeout); err != nil {
+				t.Fatalf("line %d: %v\n%s", step.Line, err, r.driver.Plain())
+			}
+			screen := r.driver.Plain()
+			switch step.Verb {
+			case "clock":
+				passed, err := time.ParseDuration(step.Text)
+				if err != nil {
+					t.Fatalf("line %d: %v", step.Line, err)
+				}
+				r.at = r.at.Add(passed)
+			case "release":
+				select {
+				case out.release <- struct{}{}:
+				case <-time.After(driveTimeout):
+					t.Fatalf("line %d: the cassette never took the last release", step.Line)
+				}
+			case "once":
+				if count := strings.Count(screen, step.Text); count != 1 {
+					t.Fatalf("line %d: %s is on the screen %d times, not once\n%s", step.Line, step.Text, count, screen)
+				}
+			case "before":
+				above, below, _ := strings.Cut(step.Text, " | ")
+				if at, later := strings.Index(screen, above), strings.Index(screen, below); at < 0 || later < 0 || at > later {
+					t.Fatalf("line %d: %s is not drawn above %s\n%s", step.Line, above, below, screen)
+				}
+			}
+			continue
+		}
 		if err := r.driver.Play(step, driveTimeout, plain, out); err != nil {
 			t.Fatalf("line %d: %v\n%s", step.Line, err, r.driver.Plain())
 		}

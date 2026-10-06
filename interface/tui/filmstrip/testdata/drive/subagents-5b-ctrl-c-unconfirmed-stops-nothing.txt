@@ -1,0 +1,14 @@
+# moment 5b: ctrl+c while the lead is idle and sub-agents work asks to confirm; with no second press within 3 s nothing stops, and a later press asks again.
+type subagents-5b-ctrl-c-unconfirmed-stops-nothing
+key enter
+wait waiting on 2 sub-agents
+key ctrl+c
+wait this will stop 2 sub-agents, press Ctrl+C again to confirm
+clock 4s
+absent ○
+wait waiting on 2 sub-agents
+key ctrl+c
+wait this will stop 2 sub-agents, press Ctrl+C again to confirm
+absent ○
+absent quit
+wait waiting on 2 sub-agents

@@ -1,0 +1,12 @@
+# moment 3: one report arrives and the lead answers it while the other sub-agent still works. The lead still waits on 1.
+type subagents-3-one-report-still-waits-on-one
+key enter
+wait waiting on 2 sub-agents
+release
+wait the loader reads the lock first
+wait waiting on 1 sub-agent
+clock 2s
+absent cooked
+absent thinking
+absent waiting on 2 sub-agents
+wait waiting on 1 sub-agent

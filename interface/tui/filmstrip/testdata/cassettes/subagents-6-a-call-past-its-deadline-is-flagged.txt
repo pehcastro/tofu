@@ -1,0 +1,13 @@
+# moment 6: c1's bash call started 15 minutes ago and never returned, past even the 10 minute bash ceiling; c2's call is fresh
+requesting
+spawn 5e01aa run the shell suite
+row c1 working run the shell suite
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+pending c1 15m 7a1c09 bash go test ./internal/shell/...
+pending c2 0s 7b2d02 read internal/judge/ledger/floor.go
+text 9d4f11 two sub-agents run: [&c1] runs the shell suite and [&c2] writes the floor test.
+done cooked for
+hold

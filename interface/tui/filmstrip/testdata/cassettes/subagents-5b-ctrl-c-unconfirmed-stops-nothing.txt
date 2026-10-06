@@ -1,0 +1,11 @@
+# moment 5b: the lead is idle and two sub-agents work; the turn holds until the app cancels it
+requesting
+spawn 5e01aa audit the policy loader
+row c1 working audit the policy loader
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+text 9d4f11 two sub-agents run: [&c1] audits the loader and [&c2] writes the floor test.
+done cooked for
+hold
