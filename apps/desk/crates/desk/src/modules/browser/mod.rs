@@ -70,10 +70,16 @@ struct Told {
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    match board {
-        None | Some("IBROWSER-1") => {}
-        Some(other) => return Err(format!("the browser draws IBROWSER-1, not {other}")),
-    }
+    let (tab, picking) = match board {
+        None | Some("IBROWSER-1") => (Tab::Page, false),
+        Some("S-BROWSER-1") => (Tab::Page, true),
+        Some("S-BROWSER-2") => (Tab::Console, false),
+        Some(other) => {
+            return Err(format!(
+                "the browser draws IBROWSER-1, S-BROWSER-1 and S-BROWSER-2, not {other}"
+            ));
+        }
+    };
     cx.text_system()
         .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
         .map_err(|error| format!("the browser cannot load the Geist fonts: {error}"))?;
@@ -86,10 +92,10 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             bell: false,
             account: false,
             engine: Engine::Built,
-            tab: Tab::Page,
+            tab,
             step: FIRST_STEP,
             took: false,
-            picking: false,
+            picking,
             picked: false,
             told: None,
         })
