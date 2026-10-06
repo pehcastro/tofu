@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.3 - 2026-10-06
+
+Sub-agents you can follow and stop, hooks, and auto mode.
+
 ### Fixed
 
 - **Ctrl+C with the lead idle and sub-agents working asks first**: "this will stop 2 sub-agents, press Ctrl+C again to confirm". A second press within 3 s stops them; otherwise nothing stops. Ctrl+C while the lead works still stops only the lead, at once.
