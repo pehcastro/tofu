@@ -88,7 +88,8 @@ func TestEstimateForksFromTheModelsWindowAndKeepsTheCeilingWithoutOne(t *testing
 		{"a window under the answer's reserve keeps the ceiling", 1000, "", shipped, konst.ContextCeilingTokens},
 		{"a 200k window", 200000, "", usable * konst.ContextForkPercentOfUsable / 100, usable},
 		{"a 1M window stops at the ceiling", 1000000, "", konst.ContextCeilingTokens * konst.ContextForkPercentOfUsable / 100, konst.ContextCeilingTokens},
-		{"a set ceiling wins over the window", 200000, "20000", recall.BandsOf(20000).Target(), 20000},
+		{"a set ceiling wins over the window", 200000, "20000", 20000 * konst.ContextForkPercentOfUsable / 100, 20000},
+		{"a set ceiling forks where the same window would", 0, "180000", usable * konst.ContextForkPercentOfUsable / 100, usable},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -102,6 +103,9 @@ func TestEstimateForksFromTheModelsWindowAndKeepsTheCeilingWithoutOne(t *testing
 			}
 			if c.window > konst.ContextOutputReserveTokens && budget.Bands.Target() >= c.window {
 				t.Fatalf("the fork comes at %d, at or past the %d token window", budget.Bands.Target(), c.window)
+			}
+			if flag := budget.At(budget.CeilingTokens, "--context-ceiling"); (c.ceiling != "" || c.window > konst.ContextOutputReserveTokens) && flag.Bands != budget.Bands {
+				t.Fatalf("--context-ceiling %d forks at %d and the same ceiling found here forks at %d", budget.CeilingTokens, flag.Bands.Target(), budget.Bands.Target())
 			}
 			t.Logf("%s", budget.Record())
 		})

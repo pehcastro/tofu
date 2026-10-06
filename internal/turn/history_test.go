@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -276,7 +277,7 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 }
 
 func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing.T) {
-	budget := recall.Budget{}.At(20000, "a small budget to fork under")
+	budget := recall.Budget{}.At(6300, "a small budget to fork under")
 	small, large := strings.Repeat("a line of the parser\n", 10), strings.Repeat("a line of the parser\n", 300)
 	head := []llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "fix the parser", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}
 	history := func(steps ...[]llm.Message) []llm.Message {
@@ -321,6 +322,31 @@ func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing
 			t.Errorf("the second fork kept %d messages and the first carry among them is %v", fork.TailMessages, slices.ContainsFunc(again[3:], func(m llm.Message) bool { return m.Content == begun[2].Content }))
 		}
 	})
+}
+
+func TestForkAtTheDefaultCeilingRecordsTheCountThatDecidedAndKeepsANewestStepOverTheTailCap(t *testing.T) {
+	cfg, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget := recall.Budget{}.At(konst.ContextCeilingTokens, "the default ceiling").Sending(cfg, strings.Repeat(`{"name":"read"}`, 2000))
+	table := strings.Repeat("0001 func parser(lexer token) window { return budget.carry(1) }\n", 480)
+	messages := slices.Concat(
+		[]llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "read the tables"}},
+		forkStep("old", strings.Repeat(table, 15)),
+		forkStep("read two generated tables at once", table, table))
+	newest := HistoryTokens(cfg, messages[len(messages)-3:])
+	if newest <= konst.ForkTailTokens {
+		t.Fatalf("the newest step is %d tokens, under the %d tail cap, so it proves nothing", newest, konst.ForkTailTokens)
+	}
+	fork, _ := checkedFork(t, budget, "", messages)
+	if decided := budget.Tokens(cfg, historyOf(messages)); fork.TokensBefore != decided {
+		t.Errorf("the fork records %d tokens before and the count that decided it was %d against a %d target", fork.TokensBefore, decided, budget.Bands.Target())
+	}
+	if fork.TailMessages != 3 {
+		t.Errorf("kept %d messages after the carry, want the newest step of %d tokens whole, 3 messages, with %d of room under the target",
+			fork.TailMessages, newest, budget.Bands.Target()-fork.TokensAfter)
+	}
 }
 
 func TestCompactCarriedShrinksEveryOldResultAndTheNewSessionReadsBackShrunk(t *testing.T) {

@@ -34,17 +34,16 @@ func BudgetFor(model string, windowTokens int) (Budget, error) {
 		return budget.At(set, fmt.Sprintf("%s=%d in the environment of this run", CeilingVariable, set)), nil
 	}
 	if windowTokens <= konst.ContextOutputReserveTokens {
-		return budget.At(konst.ContextCeilingTokens, "the ceiling tofu operates under, which is ours and the same on every model"), nil
+		budget.CeilingTokens, budget.Bands, budget.Source = konst.ContextCeilingTokens, ShippedBands(), "the ceiling tofu operates under, which is ours and the same on every model"
+		return budget, nil
 	}
 	usable := min(windowTokens-konst.ContextOutputReserveTokens, konst.ContextCeilingTokens)
-	budget.CeilingTokens, budget.Bands = usable, bandsOf(usable*konst.ContextForkPercentOfUsable/100, bandShareOfWindow)
-	budget.Source = fmt.Sprintf("the model's window less %d tokens held for the answer, and never over tofu's own %d",
-		konst.ContextOutputReserveTokens, konst.ContextCeilingTokens)
-	return budget, nil
+	return budget.At(usable, fmt.Sprintf("the model's window less %d tokens held for the answer, and never over tofu's own %d",
+		konst.ContextOutputReserveTokens, konst.ContextCeilingTokens)), nil
 }
 
 func (b Budget) At(ceilingTokens int, source string) Budget {
-	b.CeilingTokens, b.Bands, b.Source = ceilingTokens, BandsOf(ceilingTokens), source
+	b.CeilingTokens, b.Bands, b.Source = ceilingTokens, bandsOf(ceilingTokens*konst.ContextForkPercentOfUsable/100, bandShareOfWindow), source
 	return b
 }
 

@@ -398,7 +398,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 		return nil, nil, err
 	}
 	room := (budget.Bands.Target() - budget.Tokens(artifacts.preview, historyOf(begun))) * konst.ForkTailRoomPercent / 100
-	if tail := messages[tailStart(artifacts.preview, messages, min(room, konst.ForkTailTokens)):]; len(tail) > 0 {
+	if tail := messages[tailStart(artifacts.preview, messages, room):]; len(tail) > 0 {
 		kept, keptCarry, err := carried(tail)
 		if err != nil {
 			return nil, nil, err
@@ -409,8 +409,8 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 	}
 	return &Fork{
 		Kind:          kind,
-		TokensBefore:  recall.Measure(artifacts.preview, budget.Bands, ended).Total(),
-		TokensAfter:   recall.Measure(artifacts.preview, budget.Bands, historyOf(begun)).Total(),
+		TokensBefore:  budget.Tokens(artifacts.preview, ended),
+		TokensAfter:   budget.Tokens(artifacts.preview, historyOf(begun)),
 		BlockedMicros: time.Since(started).Microseconds(),
 		TailMessages:  len(begun) - len(opening) - 1,
 		Carry:         carry,
@@ -423,9 +423,16 @@ func tailStart(preview recall.Config, messages []llm.Message, room int) int {
 	if floor < 0 {
 		return start
 	}
-	for i := len(messages) - 1; i >= floor && len(messages[i].Images) == 0 && HistoryTokens(preview, messages[i:]) <= room; i-- {
-		if messages[i].Role != llm.RoleTool {
-			start = i
+	for i := len(messages) - 1; i >= floor && len(messages[i].Images) == 0; i-- {
+		if messages[i].Role == llm.RoleTool {
+			continue
+		}
+		if HistoryTokens(preview, messages[i:]) > room {
+			break
+		}
+		start = i
+		if messages[i].Role == llm.RoleAssistant {
+			room = min(room, konst.ForkTailTokens)
 		}
 	}
 	return start

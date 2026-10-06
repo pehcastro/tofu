@@ -813,7 +813,7 @@ func TestAForkLeavesALineOnTheScreenAPersonCanRead(t *testing.T) {
 	t.Log("\n" + screen)
 }
 
-func forkingStep(t *testing.T, store *sessionstore.Store) turn.StepRow {
+func forkingStep(t *testing.T, store *sessionstore.Store) (string, turn.StepRow) {
 	t.Helper()
 	listing, err := store.Listing()
 	if err != nil {
@@ -830,12 +830,12 @@ func forkingStep(t *testing.T, store *sessionstore.Store) turn.StepRow {
 		}
 		for _, step := range steps {
 			if step.Fork != nil && step.Occupancy != nil {
-				return step
+				return header.ID, step
 			}
 		}
 	}
 	t.Fatal("no recorded step both measured the request it sent and forked, so there is nothing to compare the bar against")
-	return turn.StepRow{}
+	return "", turn.StepRow{}
 }
 
 func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *testing.T) {
@@ -848,7 +848,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	if err != nil {
 		t.Fatalf("open the sessions the turn wrote: %v", err)
 	}
-	forking := forkingStep(t, store)
+	id, forking := forkingStep(t, store)
 	cfg, err := recall.LoadConfig()
 	if err != nil {
 		t.Fatalf("read the recall library: %v", err)
@@ -862,10 +862,23 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	}
 	appended += onWire.MessageTokens(asked)
 
+	exchanges, err := store.Exchanges(id)
+	if err != nil || len(exchanges) == 0 {
+		t.Fatalf("read the requests %s sent: %d, %v", id, len(exchanges), err)
+	}
+	blobs, err := store.Blobs(id)
+	if err != nil {
+		t.Fatalf("read the bodies %s kept: %v", id, err)
+	}
+	schemas := onWire.Tokens(string(blobs[exchanges[0].Tools]))
+	if schemas == 0 || forking.PromptTokens != 0 {
+		t.Fatalf("the stub sent %d tokens of tool schemas and reported %d prompt tokens, want schemas and no usage", schemas, forking.PromptTokens)
+	}
+
 	asSent, decided := forking.Occupancy.Total(), forking.Fork.TokensBefore
-	if decided-asSent != appended {
-		t.Fatalf("step %d sent %d tokens and the fork decided on %d, a gap of %d, where the call and its %d results are %d",
-			forking.Index, asSent, decided, decided-asSent, len(forking.ToolCalls), appended)
+	if decided-asSent != schemas+appended {
+		t.Fatalf("step %d sent %d tokens and the fork decided on %d, a gap of %d, where the tool schemas are %d and the call and its %d results are %d",
+			forking.Index, asSent, decided, decided-asSent, schemas, len(forking.ToolCalls), appended)
 	}
 
 	var shown []int
@@ -878,7 +891,7 @@ func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *te
 	if slices.Contains(shown, decided) {
 		t.Fatalf("the bar was shown %d, the conversation after step %d's results, rather than the request it sent", decided, forking.Index)
 	}
-	t.Logf("step %d sent %d tokens, the fork decided on %d, and the %d between them are the call and its results", forking.Index, asSent, decided, appended)
+	t.Logf("step %d sent %d tokens, the fork decided on %d, and between them are %d of tool schemas and %d of the call and its results", forking.Index, asSent, decided, schemas, appended)
 }
 
 func TestASpawnedSubAgentShowsInTheSubAgentViewWithTheGlobsItHolds(t *testing.T) {

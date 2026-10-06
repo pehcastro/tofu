@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Fixed
+
+- **A fork happens near the target, and keeps the steps the model was in.** A ceiling set with `TOFU_CONTEXT_CEILING` or `--context-ceiling` used to fork at 25% of it; it now forks at 80%, as a ceiling taken from the model's window does. A fork keeps the newest step whole when it fits, and the trace records the count that decided it.
+
 ### Added
 
 - **`tofu serve --stdio`** lets another program drive tofu over JSON-RPC on standard input and output (`tofu.host/1`). It sends typed items with session, turn, agent and seq, carries approvals when asking is on, and refuses a second writer with `session.busy`. `tofu serve --schema` prints the schema.

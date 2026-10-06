@@ -2,7 +2,7 @@
 title: Context
 description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry handles instead of text.
 order: 5
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -65,8 +65,10 @@ first request read 9,457 and 6,105 tokens from the cache and wrote none.
   status bar.
 - **See the cache at work**: `tofu session trace <name> --json` gives each
   request's `cache_read_tokens` and `cache_write_tokens`.
-- **Change the target for one run**: set `TOFU_CONTEXT_CEILING`, for example
-  `TOFU_CONTEXT_CEILING=20000 tofu`. The bands scale with it.
+- **Change the ceiling for one run**: set `TOFU_CONTEXT_CEILING`, for example
+  `TOFU_CONTEXT_CEILING=100000 tofu`. It replaces the ceiling taken from the
+  model's window, and the fork comes at 80% of it, 80,000 here, the same as a
+  window that size.
 - **Read back a stored result**: the model calls `artifact_fetch` with the
   handle, an offset and a length. You don't need to.
 - **Free room before the next turn**: type `/compact` in the app. Every old

@@ -11,8 +11,8 @@ import (
 	"tofu/internal/sys"
 )
 
-const stressForkCeiling = 20000
-const realForkCeiling = 50000
+const stressForkCeiling = 6300
+const realForkCeiling = 15750
 
 type checkpointCase struct {
 	name   string
