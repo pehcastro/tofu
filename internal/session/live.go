@@ -189,5 +189,5 @@ func (l *Log) save() error {
 	if kept, err := l.store.read(l.header.ID); err == nil && kept.Name != nil {
 		l.header.Name = kept.Name
 	}
-	return l.store.writeHeader(l.header)
+	return l.store.writeHeader(l.header, l.redact)
 }

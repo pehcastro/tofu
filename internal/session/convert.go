@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 const convertingPrefix = ".converting-"
@@ -295,7 +297,9 @@ func (s *Store) writeConverted(converted Converted) error {
 	}
 	body, err := json.MarshalIndent(converted.Header, "", "  ")
 	if err == nil {
-		err = errors.Join(appendLines(filepath.Join(staging, eventsName), lines), os.WriteFile(filepath.Join(staging, headerName), body, 0o644))
+		redact := sys.LoadKeyRedactor()
+		err = errors.Join(appendLines(filepath.Join(staging, eventsName), []byte(redact.Redact(string(lines)))),
+			os.WriteFile(filepath.Join(staging, headerName), []byte(redact.Redact(string(body))), 0o644))
 	}
 	for _, id := range converted.From {
 		if err == nil {

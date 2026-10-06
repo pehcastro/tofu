@@ -120,12 +120,12 @@ func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
 	return errors.Join(err, log.Close())
 }
 
-func (s *Store) writeHeader(header Header) error {
+func (s *Store) writeHeader(header Header, redact sys.KeyRedactor) error {
 	body, err := json.MarshalIndent(header, "", "  ")
 	if err != nil {
 		return err
 	}
-	return s.writeWhole(filepath.Join(s.Dir(header.ID), headerName), body)
+	return s.writeWhole(filepath.Join(s.Dir(header.ID), headerName), []byte(redact.Redact(string(body))))
 }
 
 func appendLines(path string, lines []byte) error {
@@ -170,11 +170,11 @@ func (s *Store) edit(id string, change func(*Header)) (Header, error) {
 		return Header{}, err
 	}
 	change(&header)
-	return header, s.writeHeader(header)
+	return header, s.writeHeader(header, sys.LoadKeyRedactor())
 }
 
 func (s *Store) SetName(id, given string) (Header, error) {
-	name, err := slugOf(given)
+	name, err := slugOf(sys.LoadKeyRedactor().Redact(given))
 	if err != nil {
 		return Header{}, err
 	}
