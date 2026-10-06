@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Fixed
+
+- **Dialogs in a Windows 10 console draw in place.** `/keys`, ctrl+p and the model picker no longer leave stray text at the left edge or push their title out of the box.
+
 ### Added
 
 - **A prompt starting with `!` runs as a shell command** in the project, with no model call. The chat shows its output, keys masked, and the next prompt carries it to the model. Esc stops it.
