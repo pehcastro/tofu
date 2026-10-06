@@ -255,7 +255,7 @@ func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
 		if !named {
 			t.Fatalf("%s carries no expected closing words in this test, so a new outcome can reach doneWords untested", outcome)
 		}
-		got := doneWords(outcome, nil)
+		got, _ := doneWords(outcome, nil)
 		if got != expected {
 			t.Errorf("%s closes the turn with %q, want %q", outcome, got, expected)
 		}
@@ -317,9 +317,12 @@ func gateRowFixture(t *testing.T) (string, ledger.Row) {
 
 func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 	dir, row := gateRowFixture(t)
-	answers := make(chan Answer, 1)
-	answers <- AllowedOnce
-	person := awaitPerson(func(Event) {}, answers, map[string]bool{})
+	book := &asks{standing: map[string]Answer{}}
+	person := awaitPerson(func(event Event) {
+		if event.Kind == EventAwaitPerson {
+			book.answer(event.ID, AllowedOnce)
+		}
+	}, book)
 
 	answer, err := person(context.Background(), turn.GateRequest{Tool: "write"}, turn.GateDecision{ID: row.ID})
 	if err != nil || answer != turn.PersonAllowedOnce {
@@ -338,8 +341,7 @@ func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 	dir, row := gateRowFixture(t)
 	request := turn.GateRequest{Tool: "write", Args: json.RawMessage(`{"path":"a.txt"}`)}
-	granted := map[string]bool{askedPlace(request): true}
-	person := awaitPerson(func(Event) {}, make(chan Answer), granted)
+	person := awaitPerson(func(Event) {}, &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}})
 
 	answer, err := person(context.Background(), request, turn.GateDecision{ID: row.ID})
 	if err != nil || answer != turn.PersonAlwaysHere {
@@ -357,18 +359,22 @@ func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 
 func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing.T) {
 	request := turn.GateRequest{Tool: tools.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
-	granted := map[string]bool{askedPlace(request): true}
-	answers := make(chan Answer, 1)
+	book := &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}}
+	next := Denied
 	var shown []Event
-	person := awaitPerson(func(event Event) { shown = append(shown, event) }, answers, granted)
-	answers <- Denied
+	person := awaitPerson(func(event Event) {
+		shown = append(shown, event)
+		if event.Kind == EventAwaitPerson {
+			book.answer(event.ID, next)
+		}
+	}, book)
 	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonDenied {
 		t.Fatalf("a rule question under a granted place answered %v, %v, want the person's no", got, err)
 	}
-	clear(granted)
-	answers <- AlwaysHere
-	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonAlwaysHere || len(granted) > 0 {
-		t.Fatalf("everywhere answered %v, %v and left the cache %v, want everywhere and an empty cache", got, err, granted)
+	clear(book.standing)
+	next = AlwaysHere
+	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonAlwaysHere || len(book.standing) > 0 {
+		t.Fatalf("everywhere answered %v, %v and left the cache %v, want everywhere and an empty cache", got, err, book.standing)
 	}
 	asked := slices.ContainsFunc(shown, func(event Event) bool {
 		return event.Kind == EventDecision && event.Decision != nil && event.Decision.OverridesRule == overrideAsked

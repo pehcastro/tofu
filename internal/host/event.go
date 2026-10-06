@@ -2,11 +2,13 @@ package host
 
 import (
 	"cmp"
+	"encoding/json"
 	"time"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 )
 
@@ -38,6 +40,7 @@ const (
 	EventThinking
 	EventTurnStarted
 	EventTurnEnded
+	EventPersisted
 )
 
 type Event struct {
@@ -63,11 +66,32 @@ type Event struct {
 	Root      string
 	Promote   bool
 	GateWhy   jev.Why
+	Args      json.RawMessage
+	ExitCode  *int
+	Logged    *session.Event
+	Status    Status
+	Fork      *Fork
+}
+
+type Status string
+
+const (
+	StatusFinished Status = "finished"
+	StatusStopped  Status = "stopped"
+	StatusFailed   Status = "failed"
+)
+
+type Fork struct {
+	From   string
+	To     string
+	Kind   string
+	Before int
+	After  int
 }
 
 func (e Event) snapshot() bool {
 	switch e.Kind {
-	case EventContext, EventSubAgent:
+	case EventContext, EventSubAgent, EventPersisted:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
@@ -103,21 +127,21 @@ func (v Verdict) String() string {
 }
 
 type GateAnswer struct {
-	Question string
-	Choice   string
-	Value    float64
-	Max      float64
+	Question string  `json:"question"`
+	Choice   string  `json:"choice,omitempty"`
+	Value    float64 `json:"value"`
+	Max      float64 `json:"max"`
 }
 
 type Reason struct {
-	Question  string
-	Limit     string
-	Levels    []string
-	Threshold float64
-	Value     float64
-	DeadBand  bool
-	RelaxedBy string
-	Blocked   bool
+	Question  string   `json:"question"`
+	Limit     string   `json:"limit"`
+	Levels    []string `json:"levels"`
+	Threshold float64  `json:"threshold"`
+	Value     float64  `json:"value"`
+	DeadBand  bool     `json:"deadBand"`
+	RelaxedBy string   `json:"relaxedBy,omitempty"`
+	Blocked   bool     `json:"blocked"`
 }
 
 type Decision struct {
@@ -154,18 +178,19 @@ type Call struct {
 }
 
 type SubAgentRow struct {
-	Name   string
-	Agent  string
-	Model  string
-	Owns   []string
-	Doing  string
-	Since  time.Duration
-	Steps  int
-	Total  int
-	Tokens int
-	State  roster.State
-	Calls  []Call
-	Report string
+	Started time.Time
+	Name    string
+	Agent   string
+	Model   string
+	Owns    []string
+	Doing   string
+	Since   time.Duration
+	Steps   int
+	Total   int
+	Tokens  int
+	State   roster.State
+	Calls   []Call
+	Report  string
 }
 
 func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[string]int, calls func(roster.SubAgent) []Call) []SubAgentRow {
@@ -180,18 +205,19 @@ func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[
 			watched = calls(agent)
 		}
 		rows[index] = SubAgentRow{
-			Name:   agent.ID,
-			Agent:  agent.Agent,
-			Model:  agent.Model,
-			Owns:   agent.Owns,
-			Doing:  agent.Mission,
-			Since:  since,
-			Steps:  agent.Steps,
-			Total:  cmp.Or(steps, konst.TurnMaxSteps),
-			Tokens: spent[agent.ID],
-			State:  agent.State,
-			Calls:  watched,
-			Report: agent.Report,
+			Started: agent.Started,
+			Name:    agent.ID,
+			Agent:   agent.Agent,
+			Model:   agent.Model,
+			Owns:    agent.Owns,
+			Doing:   agent.Mission,
+			Since:   since,
+			Steps:   agent.Steps,
+			Total:   cmp.Or(steps, konst.TurnMaxSteps),
+			Tokens:  spent[agent.ID],
+			State:   agent.State,
+			Calls:   watched,
+			Report:  agent.Report,
 		}
 	}
 	return rows
@@ -210,4 +236,5 @@ const (
 	Denied Answer = iota
 	AllowedOnce
 	AlwaysHere
+	NeverHere
 )

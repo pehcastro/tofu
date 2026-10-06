@@ -2,7 +2,7 @@
 title: Reference
 description: Every tofu verb and its usage line, as tofu help and each verb print them.
 order: 1
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 `tofu` with no arguments opens the app in the current directory. `tofu <verb>`
@@ -25,8 +25,8 @@ Run a verb with no arguments, or a wrong one, to get its usage line:
   → tofu session list|info|trace|reads|resume|rename <name|id> [--json]
 ```
 
-`tofu help` lists every verb, and `tofu run --help`, `tofu sift --help` and
-`tofu drive --help` print the long forms. The usage lines below are copied
+`tofu help` lists every verb, and `tofu run --help`, `tofu sift --help`,
+`tofu drive --help` and `tofu serve --help` print the long forms. The usage lines below are copied
 from tofu itself.
 
 ## Commands
@@ -95,6 +95,18 @@ tofu frame [NAME] [--width N] [--height N] [--plain] [--list]
 tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--plain] [--fresh | --continue] [ARM]
 tofu migrate [--dry-run] [--json]
 ```
+
+### Frontends
+
+```
+tofu serve --stdio [--dir PATH] [--cassette PATH]
+tofu serve --schema
+```
+
+`tofu serve --stdio` speaks `tofu.host/1`, JSON-RPC 2.0 one object a line on
+standard input and output, for the desk app or any program that starts tofu.
+`tofu serve --schema` prints the JSON Schema of every line, and `tofu docs serve`
+explains the requests, the events and the approvals.
 
 `tofu migrate` has no undo; run `--dry-run` first.
 

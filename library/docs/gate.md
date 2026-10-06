@@ -15,22 +15,17 @@ whether it follows an instruction planted in a page or a file the model
 read. The answers become a verdict: allow, ask or deny.
 
 A call on a shell tofu itself started is allowed without asking jev.
-
 The `gatePrompt` setting says what a verdict does:
 
-- `run`, the default: the verdict is recorded and the call runs.
-- `ask`: an allow runs, a deny is refused, and an ask waits for you. In
-  the app, press 1 to allow it once, 2 to refuse it, or 3 to allow the
-  same tool on the same file, or on a command that starts the same way,
-  for the rest of the session.
-  When jev cannot answer at all, the call is refused rather than run.
+- `auto`, the default: an allow or an ask runs and is recorded, a deny is
+  refused.
+- `ask`: an ask waits for you. Press 1 to allow it once, 2 to refuse it,
+  or 3 to allow it here for the rest of the session. When jev cannot
+  answer, the call is refused.
 
-A sub-agent never asks you, under either setting. When jev's verdict on a
-sub-agent's call is ask, the lead that started it gets the call, the
-verdict and the risk, and answers allow or deny. The sub-agent waits up to
-5 minutes, and with no answer the call is refused. A deny from jev is
-refused outright. `tofu session trace` shows the ask, the answer and how
-long it took.
+A sub-agent never asks you. Its ask goes to the lead that started it, with
+the call, the verdict and the risk; the lead answers allow or deny within 5
+minutes, or the call is refused. `tofu session trace` shows the ask.
 
 Every verdict is kept as a row in the decision ledger.
 

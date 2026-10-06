@@ -1,0 +1,124 @@
+# 36 sub-agents, spawned one at a time so each takes the replies addressed to it: 36 files created, 4 of them edited, 6 background shells
+{"text": "spawning agent 1", "tools": [{"name": "spawn", "args": {"task": "agent 1: write a01/note.txt and report", "mission": "note 1", "owns": ["a01/**"]}}]}
+{"text": "spawning agent 2", "tools": [{"name": "spawn", "args": {"task": "agent 2: write a02/note.txt and report", "mission": "note 2", "owns": ["a02/**"]}}]}
+{"text": "spawning agent 3", "tools": [{"name": "spawn", "args": {"task": "agent 3: write a03/note.txt and report", "mission": "note 3", "owns": ["a03/**"]}}]}
+{"text": "spawning agent 4", "tools": [{"name": "spawn", "args": {"task": "agent 4: write a04/note.txt and report", "mission": "note 4", "owns": ["a04/**"]}}]}
+{"text": "spawning agent 5", "tools": [{"name": "spawn", "args": {"task": "agent 5: write a05/note.txt and report", "mission": "note 5", "owns": ["a05/**"]}}]}
+{"text": "spawning agent 6", "tools": [{"name": "spawn", "args": {"task": "agent 6: write a06/note.txt and report", "mission": "note 6", "owns": ["a06/**"]}}]}
+{"text": "spawning agent 7", "tools": [{"name": "spawn", "args": {"task": "agent 7: write a07/note.txt and report", "mission": "note 7", "owns": ["a07/**"]}}]}
+{"text": "spawning agent 8", "tools": [{"name": "spawn", "args": {"task": "agent 8: write a08/note.txt and report", "mission": "note 8", "owns": ["a08/**"]}}]}
+{"text": "spawning agent 9", "tools": [{"name": "spawn", "args": {"task": "agent 9: write a09/note.txt and report", "mission": "note 9", "owns": ["a09/**"]}}]}
+{"text": "spawning agent 10", "tools": [{"name": "spawn", "args": {"task": "agent 10: write a10/note.txt and report", "mission": "note 10", "owns": ["a10/**"]}}]}
+{"text": "spawning agent 11", "tools": [{"name": "spawn", "args": {"task": "agent 11: write a11/note.txt and report", "mission": "note 11", "owns": ["a11/**"]}}]}
+{"text": "spawning agent 12", "tools": [{"name": "spawn", "args": {"task": "agent 12: write a12/note.txt and report", "mission": "note 12", "owns": ["a12/**"]}}]}
+{"text": "spawning agent 13", "tools": [{"name": "spawn", "args": {"task": "agent 13: write a13/note.txt and report", "mission": "note 13", "owns": ["a13/**"]}}]}
+{"text": "spawning agent 14", "tools": [{"name": "spawn", "args": {"task": "agent 14: write a14/note.txt and report", "mission": "note 14", "owns": ["a14/**"]}}]}
+{"text": "spawning agent 15", "tools": [{"name": "spawn", "args": {"task": "agent 15: write a15/note.txt and report", "mission": "note 15", "owns": ["a15/**"]}}]}
+{"text": "spawning agent 16", "tools": [{"name": "spawn", "args": {"task": "agent 16: write a16/note.txt and report", "mission": "note 16", "owns": ["a16/**"]}}]}
+{"text": "spawning agent 17", "tools": [{"name": "spawn", "args": {"task": "agent 17: write a17/note.txt and report", "mission": "note 17", "owns": ["a17/**"]}}]}
+{"text": "spawning agent 18", "tools": [{"name": "spawn", "args": {"task": "agent 18: write a18/note.txt and report", "mission": "note 18", "owns": ["a18/**"]}}]}
+{"text": "spawning agent 19", "tools": [{"name": "spawn", "args": {"task": "agent 19: write a19/note.txt and report", "mission": "note 19", "owns": ["a19/**"]}}]}
+{"text": "spawning agent 20", "tools": [{"name": "spawn", "args": {"task": "agent 20: write a20/note.txt and report", "mission": "note 20", "owns": ["a20/**"]}}]}
+{"text": "spawning agent 21", "tools": [{"name": "spawn", "args": {"task": "agent 21: write a21/note.txt and report", "mission": "note 21", "owns": ["a21/**"]}}]}
+{"text": "spawning agent 22", "tools": [{"name": "spawn", "args": {"task": "agent 22: write a22/note.txt and report", "mission": "note 22", "owns": ["a22/**"]}}]}
+{"text": "spawning agent 23", "tools": [{"name": "spawn", "args": {"task": "agent 23: write a23/note.txt and report", "mission": "note 23", "owns": ["a23/**"]}}]}
+{"text": "spawning agent 24", "tools": [{"name": "spawn", "args": {"task": "agent 24: write a24/note.txt and report", "mission": "note 24", "owns": ["a24/**"]}}]}
+{"text": "spawning agent 25", "tools": [{"name": "spawn", "args": {"task": "agent 25: write a25/note.txt and report", "mission": "note 25", "owns": ["a25/**"]}}]}
+{"text": "spawning agent 26", "tools": [{"name": "spawn", "args": {"task": "agent 26: write a26/note.txt and report", "mission": "note 26", "owns": ["a26/**"]}}]}
+{"text": "spawning agent 27", "tools": [{"name": "spawn", "args": {"task": "agent 27: write a27/note.txt and report", "mission": "note 27", "owns": ["a27/**"]}}]}
+{"text": "spawning agent 28", "tools": [{"name": "spawn", "args": {"task": "agent 28: write a28/note.txt and report", "mission": "note 28", "owns": ["a28/**"]}}]}
+{"text": "spawning agent 29", "tools": [{"name": "spawn", "args": {"task": "agent 29: write a29/note.txt and report", "mission": "note 29", "owns": ["a29/**"]}}]}
+{"text": "spawning agent 30", "tools": [{"name": "spawn", "args": {"task": "agent 30: write a30/note.txt and report", "mission": "note 30", "owns": ["a30/**"]}}]}
+{"text": "spawning agent 31", "tools": [{"name": "spawn", "args": {"task": "agent 31: write a31/note.txt and report", "mission": "note 31", "owns": ["a31/**"]}}]}
+{"text": "spawning agent 32", "tools": [{"name": "spawn", "args": {"task": "agent 32: write a32/note.txt and report", "mission": "note 32", "owns": ["a32/**"]}}]}
+{"text": "spawning agent 33", "tools": [{"name": "spawn", "args": {"task": "agent 33: write a33/note.txt and report", "mission": "note 33", "owns": ["a33/**"]}}]}
+{"text": "spawning agent 34", "tools": [{"name": "spawn", "args": {"task": "agent 34: write a34/note.txt and report", "mission": "note 34", "owns": ["a34/**"]}}]}
+{"text": "spawning agent 35", "tools": [{"name": "spawn", "args": {"task": "agent 35: write a35/note.txt and report", "mission": "note 35", "owns": ["a35/**"]}}]}
+{"text": "spawning agent 36", "tools": [{"name": "spawn", "args": {"task": "agent 36: write a36/note.txt and report", "mission": "note 36", "owns": ["a36/**"]}}]}
+{"text": "all 36 sub-agents reported"}
+{"agent": "c1", "text": "writing", "tools": [{"name": "write", "args": {"path": "a01/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 1\n"}}]}
+{"agent": "c1", "tools": [{"name": "read", "args": {"path": "a01/note.txt"}}]}
+{"agent": "c1", "tools": [{"name": "edit", "args": {"path": "a01/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
+{"agent": "c1", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 1 done", "background": true}}]}
+{"agent": "c1", "text": "agent 1 done: wrote a01/note.txt"}
+{"agent": "c2", "text": "writing", "tools": [{"name": "write", "args": {"path": "a02/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 2\n"}}]}
+{"agent": "c2", "tools": [{"name": "read", "args": {"path": "a02/note.txt"}}]}
+{"agent": "c2", "tools": [{"name": "edit", "args": {"path": "a02/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
+{"agent": "c2", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 2 done", "background": true}}]}
+{"agent": "c2", "text": "agent 2 done: wrote a02/note.txt"}
+{"agent": "c3", "text": "writing", "tools": [{"name": "write", "args": {"path": "a03/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 3\n"}}]}
+{"agent": "c3", "tools": [{"name": "read", "args": {"path": "a03/note.txt"}}]}
+{"agent": "c3", "tools": [{"name": "edit", "args": {"path": "a03/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
+{"agent": "c3", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 3 done", "background": true}}]}
+{"agent": "c3", "text": "agent 3 done: wrote a03/note.txt"}
+{"agent": "c4", "text": "writing", "tools": [{"name": "write", "args": {"path": "a04/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 4\n"}}]}
+{"agent": "c4", "tools": [{"name": "read", "args": {"path": "a04/note.txt"}}]}
+{"agent": "c4", "tools": [{"name": "edit", "args": {"path": "a04/note.txt", "old_string": "line three\n", "new_string": "line three, edited\n"}}]}
+{"agent": "c4", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 4 done", "background": true}}]}
+{"agent": "c4", "text": "agent 4 done: wrote a04/note.txt"}
+{"agent": "c5", "text": "writing", "tools": [{"name": "write", "args": {"path": "a05/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 5\n"}}]}
+{"agent": "c5", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 5 done", "background": true}}]}
+{"agent": "c5", "text": "agent 5 done: wrote a05/note.txt"}
+{"agent": "c6", "text": "writing", "tools": [{"name": "write", "args": {"path": "a06/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 6\n"}}]}
+{"agent": "c6", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 1; echo shell 6 done", "background": true}}]}
+{"agent": "c6", "text": "agent 6 done: wrote a06/note.txt"}
+{"agent": "c7", "text": "writing", "tools": [{"name": "write", "args": {"path": "a07/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 7\n"}}]}
+{"agent": "c7", "text": "agent 7 done: wrote a07/note.txt"}
+{"agent": "c8", "text": "writing", "tools": [{"name": "write", "args": {"path": "a08/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 8\n"}}]}
+{"agent": "c8", "text": "agent 8 done: wrote a08/note.txt"}
+{"agent": "c9", "text": "writing", "tools": [{"name": "write", "args": {"path": "a09/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 9\n"}}]}
+{"agent": "c9", "text": "agent 9 done: wrote a09/note.txt"}
+{"agent": "c10", "text": "writing", "tools": [{"name": "write", "args": {"path": "a10/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 10\n"}}]}
+{"agent": "c10", "text": "agent 10 done: wrote a10/note.txt"}
+{"agent": "c11", "text": "writing", "tools": [{"name": "write", "args": {"path": "a11/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 11\n"}}]}
+{"agent": "c11", "text": "agent 11 done: wrote a11/note.txt"}
+{"agent": "c12", "text": "writing", "tools": [{"name": "write", "args": {"path": "a12/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 12\n"}}]}
+{"agent": "c12", "text": "agent 12 done: wrote a12/note.txt"}
+{"agent": "c13", "text": "writing", "tools": [{"name": "write", "args": {"path": "a13/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 13\n"}}]}
+{"agent": "c13", "text": "agent 13 done: wrote a13/note.txt"}
+{"agent": "c14", "text": "writing", "tools": [{"name": "write", "args": {"path": "a14/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 14\n"}}]}
+{"agent": "c14", "text": "agent 14 done: wrote a14/note.txt"}
+{"agent": "c15", "text": "writing", "tools": [{"name": "write", "args": {"path": "a15/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 15\n"}}]}
+{"agent": "c15", "text": "agent 15 done: wrote a15/note.txt"}
+{"agent": "c16", "text": "writing", "tools": [{"name": "write", "args": {"path": "a16/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 16\n"}}]}
+{"agent": "c16", "text": "agent 16 done: wrote a16/note.txt"}
+{"agent": "c17", "text": "writing", "tools": [{"name": "write", "args": {"path": "a17/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 17\n"}}]}
+{"agent": "c17", "text": "agent 17 done: wrote a17/note.txt"}
+{"agent": "c18", "text": "writing", "tools": [{"name": "write", "args": {"path": "a18/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 18\n"}}]}
+{"agent": "c18", "text": "agent 18 done: wrote a18/note.txt"}
+{"agent": "c19", "text": "writing", "tools": [{"name": "write", "args": {"path": "a19/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 19\n"}}]}
+{"agent": "c19", "text": "agent 19 done: wrote a19/note.txt"}
+{"agent": "c20", "text": "writing", "tools": [{"name": "write", "args": {"path": "a20/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 20\n"}}]}
+{"agent": "c20", "text": "agent 20 done: wrote a20/note.txt"}
+{"agent": "c21", "text": "writing", "tools": [{"name": "write", "args": {"path": "a21/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 21\n"}}]}
+{"agent": "c21", "text": "agent 21 done: wrote a21/note.txt"}
+{"agent": "c22", "text": "writing", "tools": [{"name": "write", "args": {"path": "a22/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 22\n"}}]}
+{"agent": "c22", "text": "agent 22 done: wrote a22/note.txt"}
+{"agent": "c23", "text": "writing", "tools": [{"name": "write", "args": {"path": "a23/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 23\n"}}]}
+{"agent": "c23", "text": "agent 23 done: wrote a23/note.txt"}
+{"agent": "c24", "text": "writing", "tools": [{"name": "write", "args": {"path": "a24/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 24\n"}}]}
+{"agent": "c24", "text": "agent 24 done: wrote a24/note.txt"}
+{"agent": "c25", "text": "writing", "tools": [{"name": "write", "args": {"path": "a25/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 25\n"}}]}
+{"agent": "c25", "text": "agent 25 done: wrote a25/note.txt"}
+{"agent": "c26", "text": "writing", "tools": [{"name": "write", "args": {"path": "a26/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 26\n"}}]}
+{"agent": "c26", "text": "agent 26 done: wrote a26/note.txt"}
+{"agent": "c27", "text": "writing", "tools": [{"name": "write", "args": {"path": "a27/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 27\n"}}]}
+{"agent": "c27", "text": "agent 27 done: wrote a27/note.txt"}
+{"agent": "c28", "text": "writing", "tools": [{"name": "write", "args": {"path": "a28/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 28\n"}}]}
+{"agent": "c28", "text": "agent 28 done: wrote a28/note.txt"}
+{"agent": "c29", "text": "writing", "tools": [{"name": "write", "args": {"path": "a29/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 29\n"}}]}
+{"agent": "c29", "text": "agent 29 done: wrote a29/note.txt"}
+{"agent": "c30", "text": "writing", "tools": [{"name": "write", "args": {"path": "a30/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 30\n"}}]}
+{"agent": "c30", "text": "agent 30 done: wrote a30/note.txt"}
+{"agent": "c31", "text": "writing", "tools": [{"name": "write", "args": {"path": "a31/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 31\n"}}]}
+{"agent": "c31", "text": "agent 31 done: wrote a31/note.txt"}
+{"agent": "c32", "text": "writing", "tools": [{"name": "write", "args": {"path": "a32/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 32\n"}}]}
+{"agent": "c32", "text": "agent 32 done: wrote a32/note.txt"}
+{"agent": "c33", "text": "writing", "tools": [{"name": "write", "args": {"path": "a33/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 33\n"}}]}
+{"agent": "c33", "text": "agent 33 done: wrote a33/note.txt"}
+{"agent": "c34", "text": "writing", "tools": [{"name": "write", "args": {"path": "a34/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 34\n"}}]}
+{"agent": "c34", "text": "agent 34 done: wrote a34/note.txt"}
+{"agent": "c35", "text": "writing", "tools": [{"name": "write", "args": {"path": "a35/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 35\n"}}]}
+{"agent": "c35", "text": "agent 35 done: wrote a35/note.txt"}
+{"agent": "c36", "text": "writing", "tools": [{"name": "write", "args": {"path": "a36/note.txt", "content": "line one\nline two\nline three\nline four\nline five\nagent 36\n"}}]}
+{"agent": "c36", "text": "agent 36 done: wrote a36/note.txt"}

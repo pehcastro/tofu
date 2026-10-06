@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           46 matches
+Docs · "change the colours"                                           47 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -26,6 +26,8 @@ Docs · "change the colours"                                           46 matche
     → tofu docs keys
   Models
     → tofu docs models
+  Serving a project to another program
+    → tofu docs serve
   Start here
     → tofu docs start
   Updating tofu

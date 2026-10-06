@@ -203,7 +203,7 @@ func (a *watcher) called(call llm.ToolCall, asker string) {
 	}
 	a.noteWholeFile(call)
 	a.marks.Unlock()
-	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker})
+	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker, Args: call.Arguments})
 }
 
 func resumedChat(carry Carry, dir string) []Event {
@@ -261,13 +261,14 @@ func (a *watcher) result(message llm.Message, asker string) {
 	}
 	a.seen[message.ToolCallID] = true
 	result := Event{
-		Kind:   EventToolResult,
-		ID:     a.eventID(asker, message.ToolCallID),
-		Text:   resultSummary(message.Content),
-		Detail: message.Content,
-		Bytes:  message.ToolResultBytes,
-		Failed: message.ToolOutcome.Failed(),
-		Agent:  asker,
+		Kind:     EventToolResult,
+		ID:       a.eventID(asker, message.ToolCallID),
+		Text:     resultSummary(message.Content),
+		Detail:   message.Content,
+		Bytes:    message.ToolResultBytes,
+		ExitCode: message.ToolExitCode,
+		Failed:   message.ToolOutcome.Failed(),
+		Agent:    asker,
 	}
 	if verdict, spawned := a.verdictOf(result.ID, message.Content); spawned {
 		result.Text = verdict

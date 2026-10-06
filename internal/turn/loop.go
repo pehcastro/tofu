@@ -134,6 +134,7 @@ type Config struct {
 	Inbox           *Inbox
 	Step            CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked
 	ToolResult      CalledAsEachToolCallAnswersAndBeforeTheNextRequest
+	Appended        func(session.Event)
 	EndedSession    func(Row) error
 	Notify          func(string)
 	Now             func() time.Time
@@ -238,6 +239,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	recorded, err := openRecord(config, row)
 	if err != nil {
 		return Row{}, err
+	}
+	if recorded != nil && config.Appended != nil {
+		recorded.log.Observe(config.Appended)
 	}
 	row.Session = recorded.session()
 	recorded.begin(row)
@@ -1028,6 +1032,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		Content:         body,
 		ToolOutcome:     outcome,
 		ToolResultBytes: row.ResultBytes,
+		ToolExitCode:    row.ExitCode,
 	}, result.Repeat
 }
 

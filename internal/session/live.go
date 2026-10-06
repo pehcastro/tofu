@@ -27,6 +27,13 @@ type Log struct {
 	redact  sys.KeyRedactor
 	blobs   map[string]bool
 	side    map[string]*os.File
+	watch   func(Event)
+}
+
+func (l *Log) Observe(watch func(Event)) {
+	l.mu.Lock()
+	l.watch = watch
+	l.mu.Unlock()
 }
 
 func (s *Store) Open(header Header) (log *Log, err error) {
@@ -165,6 +172,11 @@ func (l *Log) Append(event Event, body any) (Event, error) {
 	l.last[event.Agent], l.header.Head = event.ID, event.ID
 	if event.Kind == EventPrompt {
 		l.prompts[event.Agent] = string(event.Body)
+	}
+	if l.watch != nil {
+		bodiless := event
+		bodiless.Body = nil
+		l.watch(bodiless)
 	}
 	return event, nil
 }

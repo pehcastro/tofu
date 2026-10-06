@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/json"
 	"maps"
 	"os"
 	"slices"
@@ -123,6 +124,9 @@ func (h *Host) heard(event Event) {
 
 func redacted(event Event, mask func(string) string) Event {
 	event.Text, event.Detail, event.Diff, event.Created = mask(event.Text), mask(event.Detail), mask(event.Diff), mask(event.Created)
+	if event.Args != nil {
+		event.Args = json.RawMessage(mask(string(event.Args)))
+	}
 	if event.Decision != nil {
 		decided := *event.Decision
 		decided.Failure, decided.OverridesRule = mask(decided.Failure), mask(decided.OverridesRule)

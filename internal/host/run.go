@@ -83,14 +83,15 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		fail(err)
 		return
 	}
-	watch := &watcher{held: h.roster, emit: emit, now: h.now, turnID: turn.NewID(h.now()), seen: h.shown, stop: &leadStop{}}
+	watch := &watcher{held: h.roster, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
+	person := awaitPerson(emit, h.asks)
 	var prepared Prepared
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
 		Lead:     func(model turn.Model) turn.Model { watch.inner = model; return watch },
 		SubAgent: func(model turn.Model) turn.Model { return watchedSubAgent{watch: watch, inner: model} },
 		Say:      say,
 		Now:      h.now,
-		Person:   awaitPerson(emit, live.Answers, h.granted),
+		Person:   person,
 		Gate: func(ctx context.Context, tool string, gated turn.GateDecision, err error) {
 			decided := Decision{Tool: tool, Verdict: Ask}
 			switch {
@@ -102,7 +103,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 			default:
 				return
 			}
-			emit(Event{Kind: EventDecision, Decision: &decided, Agent: turn.SubAgentAsking(ctx), Promote: watch.spawning(tool)})
+			emit(Event{Kind: EventDecision, ID: gated.ID, Decision: &decided, Agent: turn.SubAgentAsking(ctx), Promote: watch.spawning(tool)})
 		},
 		Roster: h.roster,
 		Inbox:  h.inbox,
@@ -130,9 +131,18 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
 	config.History = h.carried
+	switch h.asking {
+	case AskingAsk:
+		config.Person = person
+	case AskingAuto:
+		config.Person = person.RunsWhatJevAsks()
+	}
 	h.mu.Unlock()
 	config.Steering = func() []string { return steered(live.Steering, emit) }
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
+	config.Appended = func(logged session.Event) {
+		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
+	}
 	config.Step = func(step turn.StepRow) {
 		if prepared.Plan != nil {
 			emit(Event{Kind: EventPlan, Plan: statedPlan(prepared.Plan.Items())})
@@ -142,9 +152,10 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		}
 	}
 	config.EndedSession = func(ended turn.Row) error {
+		forked := forkOf(ended)
 		emit(Event{Kind: EventForkStart})
-		emit(Event{Kind: EventNote, Text: endedForkWords(ended)})
-		emit(Event{Kind: EventForkEnd})
+		emit(Event{Kind: EventNote, Text: forkWords(forked)})
+		emit(Event{Kind: EventForkEnd, Fork: &forked})
 		return nil
 	}
 	stopClocks := watch.clockRunningSubAgents()
@@ -156,11 +167,12 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		if err != nil {
 			reported = append(reported, err)
 		}
-		words := doneWords(row.Outcome, row.Guard)
+		words, status := doneWords(row.Outcome, row.Guard)
 		switch {
 		case errors.Is(err, context.Canceled):
-			words = cancelledAt
+			words, status = cancelledAt, StatusStopped
 		case err != nil:
+			status = StatusFailed
 			fail(err)
 		}
 		h.mu.Lock()
@@ -187,7 +199,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		if said, ended := WordsAfterLastCalls(row); ended && strings.TrimSpace(row.Steps[len(row.Steps)-1].AssistantText) == "" {
 			emit(Event{Kind: EventText, Text: said})
 		}
-		done := Event{Kind: EventDone, Text: words}
+		done := Event{Kind: EventDone, Text: words, Status: status}
 		if ctx.Err() == nil {
 			done.SubAgents = watch.subAgents()
 		}
@@ -253,37 +265,44 @@ func gateOffEvent(gateErr error) Event {
 	return Event{Kind: EventGateOff, Text: gateErr.Error(), GateWhy: missing.Why}
 }
 
-func awaitPerson(emit func(Event), answers <-chan Answer, granted map[string]bool) turn.Person {
+func awaitPerson(emit func(Event), book *asks) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
 		var overriding struct{ Rule, Question string }
 		if request.Tool == (tools.RuleOverride{}).Name() {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
+		stood, stands := book.stood(place)
 		switch {
 		case overriding.Question != "":
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})
-		case granted[place]:
+		case stands && stood == AlwaysHere:
 			return turn.PersonAlwaysHere, nil
+		case stands:
+			return turn.PersonDenied, nil
 		}
-		emit(Event{Kind: EventAwaitPerson})
-		defer emit(Event{Kind: EventResumed})
+		asked := Event{Kind: EventAwaitPerson, ID: cmp.Or(decision.ID, session.NewEventID()), Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx)}
+		if decision.Verdict != ledger.VerdictUnset {
+			judged := gateDecision(request.Tool, decision)
+			asked.Decision = &judged
+		}
+		reply, forget := book.wait(asked.ID)
+		defer forget()
+		emit(asked)
+		defer emit(Event{Kind: EventResumed, ID: asked.ID, Agent: asked.Agent})
 		select {
-		case answered, open := <-answers:
-			if !open {
-				return turn.PersonDenied, errors.New("the app stopped taking answers")
+		case answered := <-reply:
+			if (answered == AlwaysHere || answered == NeverHere) && overriding.Question == "" {
+				book.stand(place, answered)
 			}
 			var out turn.PersonAnswer
 			switch answered {
 			case AlwaysHere:
-				if overriding.Question == "" {
-					granted[place] = true
-				}
 				out = turn.PersonAlwaysHere
 			case AllowedOnce:
 				out = turn.PersonAllowedOnce
-			case Denied:
+			case Denied, NeverHere:
 				out = turn.PersonDenied
 			default:
 				panic("host: unknown answer from the person")
@@ -362,13 +381,20 @@ func unreported(err error, reported []error) error {
 	return errors.Join(unseen...)
 }
 
-func endedForkWords(ended turn.Row) string {
-	last := len(ended.Steps) - 1
-	if last < 0 || ended.Steps[last].Fork == nil {
-		return "forked into " + ended.ForkedInto + ", and no step in this session recorded the counts"
+func forkOf(ended turn.Row) Fork {
+	forked := Fork{From: ended.Session, To: ended.ForkedInto}
+	if last := len(ended.Steps) - 1; last >= 0 && ended.Steps[last].Fork != nil {
+		step := ended.Steps[last].Fork
+		forked.Kind, forked.Before, forked.After = string(step.Kind), step.TokensBefore, step.TokensAfter
 	}
-	fork := ended.Steps[last].Fork
-	return fmt.Sprintf("forked into %s as a %s at %d tokens, which began at %d", ended.ForkedInto, fork.Kind, fork.TokensBefore, fork.TokensAfter)
+	return forked
+}
+
+func forkWords(forked Fork) string {
+	if forked.Kind == "" {
+		return "forked into " + forked.To + ", and no step in this session recorded the counts"
+	}
+	return fmt.Sprintf("forked into %s as a %s at %d tokens, which began at %d", forked.To, forked.Kind, forked.Before, forked.After)
 }
 
 func WordsAfterLastCalls(row turn.Row) (string, bool) {
@@ -383,26 +409,26 @@ func WordsAfterLastCalls(row turn.Row) (string, bool) {
 	return step.AssistantText, onlySpawned && strings.TrimSpace(step.AssistantText) != ""
 }
 
-func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) string {
+func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) (string, Status) {
 	switch outcome {
 	case turn.OutcomeUnset, turn.OutcomeForked:
-		return "finished in"
+		return "finished in", StatusFinished
 	case turn.OutcomeStopped:
-		return "cooked for"
+		return "cooked for", StatusFinished
 	case turn.OutcomeStepCap:
-		return "stopped at the step cap after"
+		return "stopped at the step cap after", StatusStopped
 	case turn.OutcomeDecisionCap:
-		return "stopped at the decision cap after"
+		return "stopped at the decision cap after", StatusStopped
 	case turn.OutcomeTruncated:
-		return "stopped on a reply it could not finish, after"
+		return "stopped on a reply it could not finish, after", StatusStopped
 	case turn.OutcomeError:
-		return "failed after"
+		return "failed after", StatusFailed
 	case turn.OutcomeRetiredCostCap:
-		return "stopped at a cap this build no longer sets, after"
+		return "stopped at a cap this build no longer sets, after", StatusStopped
 	case turn.OutcomeRetiredWallClockCap:
-		return "stopped at the wall clock cap after"
+		return "stopped at the wall clock cap after", StatusStopped
 	case turn.OutcomeLoopGuard:
-		return loopGuardWords(guard) + ", after"
+		return loopGuardWords(guard) + ", after", StatusStopped
 	}
 	panic("host: unknown outcome " + outcome.String())
 }

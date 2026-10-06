@@ -57,6 +57,10 @@ exit 0
         "do": "tofu docs models"
       },
       {
+        "text": "Serving a project to another program",
+        "do": "tofu docs serve"
+      },
+      {
         "text": "Start here",
         "do": "tofu docs start"
       },

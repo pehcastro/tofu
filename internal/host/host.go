@@ -37,6 +37,7 @@ var errTurnRunning = errors.New("a turn is running: wait for it to end, or stop 
 type Play func(ctx context.Context, pick Pick, task string, live Live)
 
 type Live struct {
+	Turn     string
 	Emit     func(Event)
 	Steering <-chan string
 	LeadStop <-chan struct{}
@@ -92,12 +93,14 @@ type Host struct {
 	ran       []string
 	release   func() error
 	heldID    string
+	turn      string
+	asking    AskingMode
 
-	reads   *turn.ReadLedger
-	inbox   *turn.Inbox
-	roster  *roster.Roster
-	shown   map[string]bool
-	granted map[string]bool
+	reads  *turn.ReadLedger
+	inbox  *turn.Inbox
+	roster *roster.Roster
+	shown  map[string]bool
+	asks   *asks
 }
 
 type pendingImage struct {
@@ -120,7 +123,7 @@ func New(cfg Config) (*Host, []string) {
 		id:       cfg.Resumed.Session,
 		started:  SourceStartup,
 		shown:    map[string]bool{},
-		granted:  map[string]bool{},
+		asks:     &asks{standing: map[string]Answer{}},
 	}
 	if h.now == nil {
 		h.now = time.Now
@@ -178,14 +181,38 @@ func (h *Host) Send(pick Pick, task string) bool {
 
 func (h *Host) begin(pick Pick, task string) {
 	ctx, cancel := context.WithCancel(context.Background())
-	h.running, h.stopped, h.cancel = true, false, cancel
+	h.running, h.stopped, h.cancel, h.turn = true, false, cancel, turn.NewID(h.now())
+	live := Live{Turn: h.turn, Steering: h.steering, LeadStop: h.stopLead, Answers: h.answers}
 	go func() {
 		out := h.emitter()
-		out.emit(Event{Kind: EventTurnStarted, Text: task})
-		h.play(ctx, pick, task, Live{Emit: out.emit, Steering: h.steering, LeadStop: h.stopLead, Answers: h.answers})
+		live.Emit = out.emit
+		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task})
+		h.play(ctx, pick, task, live)
 		cancel()
 		h.ended(out)
 	}()
+}
+
+func (h *Host) Turn() (string, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.turn, h.running
+}
+
+func (h *Host) SetAsking(asking AskingMode) {
+	h.mu.Lock()
+	h.asking = asking
+	h.mu.Unlock()
+}
+
+func (h *Host) OpenFresh() (string, error) {
+	if err := h.Fresh(); err != nil {
+		return "", err
+	}
+	id := h.pendingID()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return id, h.hold(id)
 }
 
 func (h *Host) Steer(text string) {
@@ -225,6 +252,9 @@ func (h *Host) StopLead() {
 }
 
 func (h *Host) Answer(answer Answer) bool {
+	if h.asks.answer(oldestAsk, answer) {
+		return true
+	}
 	select {
 	case h.answers <- answer:
 		return true
@@ -232,6 +262,8 @@ func (h *Host) Answer(answer Answer) bool {
 		return false
 	}
 }
+
+func (h *Host) AnswerAsk(id string, answer Answer) bool { return h.asks.answer(id, answer) }
 
 func (h *Host) Close() {
 	h.mu.Lock()

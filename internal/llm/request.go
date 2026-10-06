@@ -85,6 +85,7 @@ type Message struct {
 	ToolCalls       []ToolCall
 	ToolOutcome     ToolOutcome
 	ToolResultBytes int
+	ToolExitCode    *int `json:"-"`
 	Thinking        Thinking
 	Origin          Origin `json:"-"`
 }

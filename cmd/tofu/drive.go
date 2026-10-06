@@ -23,6 +23,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/wire/anthropic"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -286,7 +287,24 @@ func readCassette(path string) (*cassette, error) {
 	return deck, nil
 }
 
+func anthropicRefuses(request llm.Request) error {
+	var system []string
+	messages := make([]llm.Message, 0, len(request.Messages))
+	for _, message := range request.Messages {
+		if message.Role == llm.RoleSystem {
+			system = append(system, message.Content)
+			continue
+		}
+		messages = append(messages, message)
+	}
+	_, err := anthropic.Request{Model: cassetteBuild, System: system, Messages: messages, Tools: request.Tools, ToolChoice: request.ToolChoice}.Encode(true)
+	return err
+}
+
 func (c *cassette) take(request llm.Request) (recordedReply, error) {
+	if err := anthropicRefuses(request); err != nil {
+		return recordedReply{}, fmt.Errorf("%s: the anthropic wire would refuse this request: %w", c.name, err)
+	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.last = request

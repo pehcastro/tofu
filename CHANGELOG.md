@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **`tofu serve --stdio`** lets another program drive tofu over JSON-RPC on standard input and output (`tofu.host/1`). It sends typed items with session, turn, agent and seq, carries approvals when asking is on, and refuses a second writer with `session.busy`. `tofu serve --schema` prints the schema.
+
 ### Changed
 
 - **A sub-agent never asks you.** When Jev would ask about a sub-agent's call, the ask goes to the orchestrator, which answers allow or deny with the verdict in hand. The sub-agent waits up to 5 minutes for it.

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 83 asks                                                         18 topics
+Docs · 84 asks                                                         19 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -141,6 +141,11 @@ rules  add your own rules for every project or for one, switch a rule off, and
     → tofu rules remove <id>
   see which rules run and where each one comes from
     → tofu rules list
+
+serve  tofu serve --stdio speaks tofu.host/1, JSON-RPC over standard input and
+  output, for the desk app or any script
+  drive tofu from another program over standard input and output
+    → tofu serve --stdio
 
 sessions  continue where you left off, find an old session, and where sessions
   and running shells are kept

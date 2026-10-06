@@ -330,3 +330,7 @@
   do: ctrl+p in the app, type part of it, then enter
   check: /keys
   topic: keys
+- ask: drive tofu from another program over standard input and output
+  do: tofu serve --stdio
+  check: tofu serve --schema
+  topic: serve

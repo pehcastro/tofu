@@ -348,3 +348,10 @@ const (
 	HostEventBuffer   = 256
 	HostSteeringQueue = 64
 )
+
+const (
+	ServeQueue           = 128
+	ServeLineBytes       = 16 << 20
+	ServeShellPollMillis = 250
+	ServeStopMillis      = 10000
+)

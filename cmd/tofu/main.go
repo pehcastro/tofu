@@ -63,6 +63,8 @@ Verbs:
   frame     print one recorded interface frame, at a width and a height
   drive     run a script of what a person would do against the real app,
             with no terminal and no model call, and print the screens it asks for
+  serve     serve this project to a frontend: --stdio speaks tofu.host/1,
+            JSON-RPC on standard input and output, and --schema prints its schema
   settings  list, get or set a declared setting, global or project
   reload    re-read settings, rules, skills, sub-agents, models, roles, tiers,
             instruction files and keys, and print what changed since the last reload
@@ -150,6 +152,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return frameVerb(args[1:], out, errOut)
 	case "drive":
 		return driveVerb(args[1:], in, out, errOut)
+	case "serve":
+		return serveVerb(args[1:], in, out, errOut)
 	case "run":
 		return runVerb(args[1:], out, errOut)
 	case "judge":

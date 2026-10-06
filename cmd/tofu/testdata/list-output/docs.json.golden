@@ -73,6 +73,11 @@ exit 0
         "summary": "add your own rules for every project or for one, switch a rule off, and see which rules run"
       },
       {
+        "topic": "serve",
+        "title": "Serving a project to another program",
+        "summary": "tofu serve --stdio speaks tofu.host/1, JSON-RPC over standard input and output, for the desk app or any script"
+      },
+      {
         "topic": "sessions",
         "title": "Sessions",
         "summary": "continue where you left off, find an old session, and where sessions and running shells are kept"
@@ -596,6 +601,12 @@ exit 0
         "do": "ctrl+p in the app, type part of it, then enter",
         "check": "/keys",
         "topic": "keys"
+      },
+      {
+        "ask": "drive tofu from another program over standard input and output",
+        "do": "tofu serve --stdio",
+        "check": "tofu serve --schema",
+        "topic": "serve"
       }
     ]
   },
