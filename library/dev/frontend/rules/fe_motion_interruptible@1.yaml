@@ -3,5 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: react, svelte, vue, solid, angular, astro, preact
+touches: (?i)animat|motion|transition|keyframe|spring|drag|swipe|gesture|starting-style
 text: motion a person can trigger again before it ends, a panel toggled twice, toasts added in a burst, a drag, uses a CSS transition or a spring, which turn around from where they are. a `@keyframes` animation restarts from zero, so keep keyframes for motion that runs once or loops, such as a shimmer. animate between two measured values, never to or from `auto`. for an entry with no script, write the start state in `@starting-style`. a drag commits on velocity rather than distance alone, calls `setPointerCapture` when it starts, ignores a second pointer, and slows past its bounds rather than stopping dead. on the dev server, tofu's browser tools record the motion triggered twice inside its duration and show the transform never jumping back to its start value.
 notes: motion a person can trigger again must turn around where it is, or the interface snaps and jumps under their hand. it guards against keyframes restarting at zero, animating to auto, and drags that ignore velocity or a second finger.

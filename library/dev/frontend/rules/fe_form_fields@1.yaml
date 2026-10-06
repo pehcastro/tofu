@@ -4,5 +4,6 @@ kind: human
 concern: code_rules
 shapes: writing
 framework: react, svelte, vue, solid, angular, astro, preact
+touches: (?i)\bforms?\b|field|input|(?:^|[^-])\blabels?\b|textbox|text box|password|e-?mail|sign[ -]?(in|up)|log[ -]?in|checkout|autocomplete|<select|textarea
 text: every field has a visible `<label>` tied to it, never a placeholder standing in for one. give it the right `type`, `inputmode`, `name` and `autocomplete`, such as `email`, `current-password`, `new-password` or `one-time-code`, and constrain what it accepts with `min`, `max`, `step` or a select rather than reporting the mistake later. never block paste. autofocus only the first field of a form that is the page's single purpose. the checks are axe's `label` and `autocomplete-valid`, jsx-a11y's `label-has-associated-control`, `autocomplete-valid` and `no-autofocus`, the Svelte compiler's `a11y_label_has_associated_control`, `a11y_autocomplete_valid` and `a11y_autofocus`, and eslint-plugin-vuejs-accessibility's `form-control-has-label` and `no-autofocus`.
 notes: a field without a real label, the right type and autocomplete is slow to fill, defeats password managers and becomes unreadable once its placeholder is gone. it guards against placeholder labels, blocked paste and forms that accept a value only to reject it later.

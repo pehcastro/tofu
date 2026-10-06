@@ -931,7 +931,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 		t.Errorf("the lead lost spawn: %v", leadTools)
 	}
 	writer, _ := sent(model.subAgentAsked[0])
-	for _, code := range []string{"[code_rules, from the rule fe_control_states]", "[code_rules, from the rule fe_motion_properties]", "[code_rules, from the rule react_events_not_effects]", "[code_rules, from the rule ts_handled_promise]"} {
+	for _, code := range []string{"[code_rules, from the rule fe_control_states]", "[code_rules, from the rule fe_dialog]", "[code_rules, from the rule react_events_not_effects]", "[code_rules, from the rule ts_handled_promise]"} {
 		if !strings.Contains(writer, code) {
 			t.Errorf("the ts-dev sub-agent writing the code lost %q", code)
 		}

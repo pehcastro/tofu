@@ -3,5 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: react
+touches: (?i)\bssr\b|server[ -]?render|server[ -]side|server component|hydrat|next\.?js|remix|prerender|use (server|client)
 text: in a server-rendered app the first client render matches the server's HTML. never format a date, a time or a number by locale or timezone, read `window`, `localStorage` or `matchMedia`, or branch on `typeof window` during render: render a stable value first, or read the client value through `useSyncExternalStore` with a server snapshot, and apply a theme that must not flash from a small inline script before hydration. `suppressHydrationWarning` goes only on the one element whose text is expected to differ, such as a timestamp, never to quiet a real mismatch. an input never loses its focus or its typed value when hydration finishes. open the page on the dev server with a timezone and a locale unlike the server's and read the browser console, where React prints `Hydration failed because the server rendered` and `A tree hydrated but some attributes of the server rendered HTML didn't match`.
 notes: a first client render that differs from the server's HTML discards the server render, flashes content and can drop typed input. it guards against reading the locale, the time or a browser API during render.

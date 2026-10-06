@@ -77,6 +77,8 @@ func parseRule(data []byte, path string) (Rule, error) {
 		switch key {
 		case "condition":
 			declares.condition = value
+		case "touches":
+			declares.touches = value
 		case "scope":
 			declares.scope = value
 		case "language":

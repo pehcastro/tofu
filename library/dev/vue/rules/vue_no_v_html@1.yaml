@@ -3,5 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: vue
+touches: (?i)v-html|\bhtml\b|markup|markdown|rich[ -]?text|saniti[sz]|innerhtml|dompurify
 text: text from a person, a request or a file is rendered with `{{ }}`, which escapes it, never with `v-html`, which inserts it as markup and runs any script an event attribute in it carries. HTML that must render, such as converted markdown, passes through a sanitiser such as DOMPurify in the same module that hands it to `v-html`. eslint-plugin-vue's recommended `no-v-html` flags every use, so each one kept is a reviewed line with the sanitiser beside it.
 notes: v-html renders input as markup, so a crafted string runs script in the page. it guards against cross-site scripting through unsanitised HTML.

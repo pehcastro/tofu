@@ -96,6 +96,7 @@ func LanguageOf(file string) string {
 
 type Trigger struct {
 	condition  *regexp.Regexp
+	touches    *regexp.Regexp
 	scope      string
 	languages  []string
 	frameworks []string
@@ -104,7 +105,7 @@ type Trigger struct {
 }
 
 func (t Trigger) AlwaysOn() bool {
-	return t.condition == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
+	return t.condition == nil && t.touches == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
 }
 
 func anyOf(declared string, known []string, field, file, id string) ([]string, error) {
@@ -121,8 +122,20 @@ func anyOf(declared string, known []string, field, file, id string) ([]string, e
 	return values, nil
 }
 
+func regexpOf(declared, field, file, id string) (*regexp.Regexp, error) {
+	if declared == "" {
+		return nil, nil
+	}
+	pattern, err := regexp.Compile(declared)
+	if err != nil {
+		return nil, fmt.Errorf("%s: rule %q declares the %s %q and it is not a regular expression: %v", file, id, field, declared, err)
+	}
+	return pattern, nil
+}
+
 type declaredTrigger struct {
 	condition string
+	touches   string
 	scope     string
 	language  string
 	framework string
@@ -137,19 +150,18 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 	default:
 		return Trigger{}, fmt.Errorf("%s: rule %q declares the role %q, and a role is %s or %s", file, id, d.role, RoleOrchestrator, RoleSubAgent)
 	}
-	if d.condition != "" {
-		pattern, err := regexp.Compile(d.condition)
-		if err != nil {
-			return Trigger{}, fmt.Errorf("%s: rule %q declares the condition %q and it is not a regular expression: %v", file, id, d.condition, err)
-		}
-		t.condition = pattern
+	var err error
+	if t.condition, err = regexpOf(d.condition, "condition", file, id); err != nil {
+		return Trigger{}, err
+	}
+	if t.touches, err = regexpOf(d.touches, "touches", file, id); err != nil {
+		return Trigger{}, err
 	}
 	if d.scope != "" {
 		if _, err := subagent.Matches("a/path/the/scope/is/tested/against", []string{d.scope}); err != nil {
 			return Trigger{}, fmt.Errorf("%s: rule %q declares the scope %q and it is not a path glob: %v", file, id, d.scope, err)
 		}
 	}
-	var err error
 	if t.languages, err = anyOf(d.language, slices.Sorted(maps.Keys(languageExtensions())), "language", file, id); err != nil {
 		return Trigger{}, err
 	}
@@ -181,6 +193,13 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 			return false, fmt.Sprintf("the condition %s matches nothing in the task", t.condition)
 		}
 		why = append(why, fmt.Sprintf("the condition %s matched %q", t.condition, found))
+	}
+	if t.touches != nil && task.Role == RoleSubAgent {
+		found := t.touches.FindString(strings.Join(append([]string{task.Text}, task.Paths...), "\n"))
+		if found == "" {
+			return false, fmt.Sprintf("the touches %s matches nothing in the sub-agent's task or paths", t.touches)
+		}
+		why = append(why, fmt.Sprintf("the sub-agent's task touches %q", found))
 	}
 	if t.scope != "" {
 		reached := ""

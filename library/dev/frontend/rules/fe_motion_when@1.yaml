@@ -4,5 +4,6 @@ kind: human
 concern: code_rules
 shapes: design
 framework: react, svelte, vue, solid, angular, astro, preact
+touches: (?i)animat|motion|transition|keyframe|entrance|fade|slide
 text: before you animate, ask how often the person sees it. an action reached by keyboard or repeated many times a session, such as a command palette, a tab switch, list navigation, a counter, live data or a validation error, gets no entrance or exit animation: it appears at once, and only the immediate response to the press stays. animate an occasional surface, a modal, a drawer, a toast, a page change, only for a reason you can say in one sentence: continuity, feedback, or preventing a jump. looking nice is a reason only for something seen once. on the dev server, tofu's browser tools record the surface opened by its shortcut and show it complete in one frame, with `document.getAnimations().length` at 0.
 notes: animation on something seen many times a session becomes a delay the person pays every time. it guards against decorative motion on frequent, keyboard-driven actions and motion added with no reason to give.

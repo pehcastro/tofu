@@ -3,5 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: react, svelte, vue, solid, angular, astro, preact
+touches: (?i)animat|motion|transition|keyframe|easing|ease-|duration
 text: interface motion lasts under 300 ms and nothing lasts over 1 s, and an exit is faster than its entrance, such as 240 ms in and 160 ms out. enter and exit with ease-out, move between two places on screen with ease-in-out, run constant motion linear, and never put `ease-in` on an interface: it holds still at the moment the person is watching. a modal and its backdrop share one curve and one duration. stylelint's `declaration-property-value-disallowed-list` refuses `/\bease-in(?!-)/` on `transition`, `transition-timing-function`, `animation` and `animation-timing-function`, and in a test `el.getAnimations()[0].effect.getComputedTiming().duration` reads the duration the browser actually runs.
 notes: motion that is slow or eased in makes the interface feel sluggish at the moment the person is waiting on it. it guards against long durations, ease-in on an interface and a modal whose backdrop and panel move out of step.

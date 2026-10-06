@@ -16,6 +16,7 @@ reaches a prompt only when all of them match:
 | `framework` | A `package.json` the task reaches lists it (`next` counts as `react`, `nuxt` as `vue`) |
 | `scope` | A named path falls inside the glob |
 | `condition` | The regular expression matches the task |
+| `touches` | For a sub-agent, the regular expression matches its task or a path it owns |
 | `task` | The task contains `debug`, `explore`, `review` or `write` |
 | `role` | The prompt is the `orchestrator`'s or a `sub-agent`'s |
 
@@ -32,6 +33,16 @@ four states of a view, declares `shapes: design` and reaches the lead too, so
 its brief can ask for it. A lead running alone, with `turnMaySpawn` off,
 writes the code itself and gets every rule. On a React task this cuts the
 lead's system prompt from 27,743 bytes to 23,297.
+
+`touches:` is a regular expression read against a sub-agent's task and the
+paths it owns. A rule that declares it reaches a sub-agent only when the task
+or a path matches; the lead and a single agent ignore it and get the rule as
+before. Use it for a rule about one subject, such as dialogs, motion, the URL
+or server rendering, so a sub-agent working on something else does not carry
+it. The task names it by a word, such as `dialog` or `router`, or by a path,
+such as `src/router/index.ts`, and `tofu rules index "<task>" --role sub-agent`
+says which word matched. On the two frontend tasks it measured, this cuts a
+sub-agent's prompt by about 8,000 bytes.
 
 A `human` rule is text only. A `structural` or `decision` rule names a
 checker that `tofu rules check` runs over files: in `shadow` mode a finding

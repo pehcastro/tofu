@@ -3,5 +3,6 @@ domain: dev
 kind: human
 concern: code_rules
 framework: react
+touches: (?i)error ?boundar|suspense|\buse\(|crash|\bthrow|\blazy\b|fallback|blank (page|screen)
 text: an error thrown while a child renders, and a rejected promise read with `use`, reach the nearest error boundary, never a `try`/`catch` around JSX or around `use`, whose `catch` never runs. put an error boundary with a retry around each region that can fail on its own, and a `Suspense` fallback inside it for each region that loads on its own, so one failing panel leaves the rest of the page usable. eslint-plugin-react-hooks reports the `try`/`catch` as `error-boundaries`, and a test that makes one child throw asserts its fallback and the text of a sibling region.
 notes: one component that throws while rendering takes the whole page down unless a boundary catches it, and a try around JSX catches nothing. it guards against a blank screen caused by one failing panel.

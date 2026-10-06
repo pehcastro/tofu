@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -160,6 +161,83 @@ func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
 			slices.Sort(listed)
 			if !slices.Equal(sent, listed) {
 				t.Errorf("%q as %q: the composer sends %v\nand the index fires %v", task, role, sent, listed)
+			}
+		}
+	}
+}
+
+func vueAndReactProjects(t *testing.T) (string, string) {
+	vue, react := t.TempDir(), t.TempDir()
+	for dir, body := range map[string]string{vue: `{"dependencies": {"vue": "3"}}`, react: `{"dependencies": {"react": "19"}}`} {
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return vue, react
+}
+
+func TestRulesIndexFiresATouchesRuleForASubAgentOnlyWhenItsTaskOrPathsNameIt(t *testing.T) {
+	library := writeFixtureModule(t, map[string]string{
+		"dev/vue/rules/vue_guard@1.yaml": "id: vue_guard\ndomain: dev\nkind: human\nconcern: code_rules\nshapes: design\nframework: vue\ntouches: (?i)router|guard\ntext: guards return\n",
+	})
+	vue, react := vueAndReactProjects(t)
+	for _, c := range []struct {
+		role, task, dir string
+		paths           []string
+		fires           bool
+	}{
+		{"sub-agent", "make delete undoable", vue, nil, false},
+		{"sub-agent", "add a Router guard", vue, nil, true},
+		{"sub-agent", "fix it", vue, []string{"src/router/index.ts"}, true},
+		{"orchestrator", "make delete undoable", vue, nil, true},
+		{"", "make delete undoable", vue, nil, true},
+		{"sub-agent", "add a router guard", react, nil, false},
+	} {
+		args := append(append([]string{"rules", "index", c.task}, c.paths...), "--library", library, "--dir", c.dir, jsonFlag)
+		if c.role != "" {
+			args = append(args, "--role", c.role)
+		}
+		code, out, errOut := runOutput(args)
+		var printed struct{ Data ruleIndexReport }
+		if err := json.Unmarshal([]byte(out), &printed); code != exitOK || err != nil || len(printed.Data.Rules) != 1 {
+			t.Fatalf("%q %q exited %d (%v):\n%s%s", c.role, c.task, code, err, out, errOut)
+		}
+		if listed := printed.Data.Rules[0]; listed.Fires != c.fires {
+			t.Errorf("%q %q %v: vue_guard fires = %v, want %v: %s", c.role, c.task, c.paths, listed.Fires, c.fires, listed.Why)
+		}
+	}
+	for name, body := range map[string]string{
+		"dev/rules/broken@1.yaml": "id: broken\ndomain: dev\nkind: human\nconcern: code_rules\ntouches: (\ntext: x\n",
+		"dev/rules/shape@1.yaml":  "id: shape\ndomain: dev\nkind: human\nconcern: output_shape\ntouches: x\ntext: x\n",
+	} {
+		code, out, errOut := runOutput([]string{"rules", "index", "x", "--library", writeFixtureModule(t, map[string]string{name: body}), "--dir", vue})
+		if code == exitOK || !strings.Contains(out+errOut, path.Base(name)) {
+			t.Errorf("%s exited %d, want a failure naming it:\n%s%s", name, code, out, errOut)
+		}
+	}
+}
+
+func TestRulesIndexKeepsTheShippedFrontendRulesASubAgentTaskNames(t *testing.T) {
+	vue, react := vueAndReactProjects(t)
+	for _, c := range []struct {
+		task, dir string
+		fires     map[string]bool
+	}{
+		{"Deleting an item takes one click, and people lose items by mistake. Fix that. Add tests and run them.", vue,
+			map[string]bool{"fe_consequential_actions": true, "fe_motion_timing": false, "fe_dialog": false, "vue_router_guards": false, "vue_ssr_state": false}},
+		{"Add a Save button above the list that sends the current items to `store.save` from src/store.ts, and tell the person how it went.", react,
+			map[string]bool{"fe_control_states": true, "fe_consequential_actions": true, "react_hydration": false, "fe_reduced_motion": false}},
+		{"Ask before leaving the settings page with unsaved changes: open a dialog from a router guard.", vue,
+			map[string]bool{"fe_dialog": true, "vue_router_guards": true, "fe_form_validation": true, "vue_ssr_state": false}},
+	} {
+		code, out, errOut := runOutput([]string{"rules", "index", c.task, "--role", "sub-agent", "--library", filepath.Join("..", "..", "library"), "--dir", c.dir, jsonFlag})
+		var printed struct{ Data ruleIndexReport }
+		if err := json.Unmarshal([]byte(out), &printed); code != exitOK || err != nil {
+			t.Fatalf("%q exited %d (%v):\n%s%s", c.task, code, err, out, errOut)
+		}
+		for _, listed := range printed.Data.Rules {
+			if want, named := c.fires[listed.RuleID]; named && listed.Fires != want {
+				t.Errorf("%q: %s fires = %v, want %v: %s", c.task, listed.RuleID, listed.Fires, want, listed.Why)
 			}
 		}
 	}

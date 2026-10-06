@@ -4,5 +4,6 @@ kind: human
 concern: code_rules
 shapes: design
 framework: react, svelte, vue, solid, angular, astro, preact
+touches: (?i)\burls?\b|query ?string|search ?params|router|\broutes?\b|routing|history|back button|deep[ -]?link|share(able)? link|permalink|filter|\bsort|\btabs?\b|paginat|bookmark
 text: a discrete choice, a category, a tab, a sort, a page or an expanded panel, pushes a history entry with `history.pushState` or the router's navigate, never `replaceState`, so Back returns the view before it. typing in a search replaces the current entry instead, so Back does not step through every key. both live in the URL, so a reload and a shared link open the same view, and Back restores the scroll position. changing them keeps focus where it was and does not replay an entrance or reopen a dialog. on the dev server, set a filter with tofu's browser tools, load the same url again, and read that the filter and its results held; pick two categories in turn, go back, and read that the first is selected again.
 notes: people expect Back to undo a navigation and a shared link to open what they saw. it guards against view state held only in memory, a history that steps through every keystroke, and a reload that loses the view.
