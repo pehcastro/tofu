@@ -33,6 +33,9 @@ command never reaches the model.
   turns, changed
 - `/cron`, `/loop`, `/goal`: scheduled and repeated prompts
 - `/quit`: leave tofu
+- `!git status`, or any `!` prompt: runs in the project as the `bash` tool
+  does, sends nothing; the next prompt carries its output, keys redacted.
+  `Esc` stops it, and a stopped one is not carried. Refused mid-turn
 
 `/compact` replaces every old tool result in the history the next turn
 carries with a short note and an artifact handle. It is the same shrink tofu

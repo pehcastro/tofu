@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
 
 	"tofu/interface/tui"
@@ -88,6 +89,7 @@ const (
 	askAssumed          = "the orchestrator did not answer, so your default stands, assumed and not confirmed: "
 	answeredReply       = "orchestrator: "
 	assumedReply        = "orchestrator did not answer, assumed: "
+	ranPreface          = "before sending this, the person ran a command in the project with !, outside any turn, and it printed:\n$ "
 )
 
 type appWiring struct {
@@ -173,6 +175,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Undo:         live.undo,
 		Shells:       appShells(dir, launch.registry, launch.registryErr),
 		KillShell:    appKillShell(launch.registry, launch.registryErr),
+		RunCommand:   live.runCommand,
 		Fresh:        launch.fresh,
 		Resumed:      resumedChat(launch.resumed),
 		Keymap:       shortcuts,
@@ -706,6 +709,8 @@ type appSession struct {
 	inbox    *turn.Inbox
 	roster   *roster.Roster
 	cron     *cron.Book
+	ranLock  sync.Mutex
+	ran      []string
 }
 
 type pendingImage struct {
@@ -744,6 +749,47 @@ func (s *appSession) renew() {
 	s.warm = newWarmProcesses(s.tabs)
 	s.warm.checkers.Warm(s.dir)
 	s.reads, s.inbox, s.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
+	s.takeRan()
+}
+
+func (s *appSession) runCommand(ctx context.Context, command string) (string, bool) {
+	output, stopped := s.shellCommand(ctx, command)
+	redactor := sys.LoadKeyRedactor()
+	output = ansi.Strip(redactor.Redact(output))
+	if !stopped {
+		s.ranLock.Lock()
+		s.ran = append(s.ran, redactor.Redact(ranPreface+command+"\n"+output))
+		s.ranLock.Unlock()
+	}
+	return output, stopped
+}
+
+func (s *appSession) shellCommand(ctx context.Context, command string) (string, bool) {
+	chosen, err := turn.ResolveRunShell(settingText(s.dir, settingspkg.Shell, nil))
+	if err != nil {
+		return err.Error(), false
+	}
+	bash, err := turn.NewBashToolFromShell(s.dir, chosen)
+	if err != nil {
+		return err.Error(), false
+	}
+	args, _ := json.Marshal(map[string]string{"command": command})
+	result, err := bash.Run(turn.WithShellRegistry(ctx, s.shells), args)
+	if err != nil {
+		return err.Error(), false
+	}
+	return result.Content, result.Outcome == turn.ResultAborted
+}
+
+func (s *appSession) takeRan() string {
+	s.ranLock.Lock()
+	defer s.ranLock.Unlock()
+	taken := s.ran
+	s.ran = nil
+	if len(taken) == 0 {
+		return ""
+	}
+	return "\n\n" + strings.Join(taken, "\n\n")
 }
 
 func (s *appSession) carry(messages []llm.Message) {
@@ -925,6 +971,7 @@ func pickedOpts(dir, session, task string, pick tui.Pick, maxSteps int) runOpts 
 
 func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 	fail := func(err error) { emit(tui.Event{Kind: tui.EventFailure, Text: err.Error()}) }
+	task += s.takeRan()
 	images, imagesErr := s.takePendingImages(task)
 	if imagesErr != nil {
 		fail(imagesErr)

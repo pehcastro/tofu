@@ -40,6 +40,7 @@ func (a *App) keyRows() []keyRow {
 	}...)
 	rows = append(rows, composerRows()...)
 	return append(rows, []keyRow{
+		{composerGroup, []string{"!"}, "run a shell command, read by the next prompt", nil},
 		{composerGroup, []string{"pgup", "pgdown"}, "scroll the chat", nil},
 		{composerGroup, []string{"home", "end"}, "top or bottom, if empty", nil},
 		{turnGroup, []string{"1", "2", "3"}, "answer the gate's ask", nil},

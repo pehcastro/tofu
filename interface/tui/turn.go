@@ -72,8 +72,15 @@ func (a *App) send() tea.Cmd {
 		a.jumpToID(prefix)
 		return nil
 	}
+	if a.stopCommand != nil {
+		a.view.Append(session.Entry{Kind: session.Note, Body: bangStillRunning})
+		return nil
+	}
 	chips := a.view.Remember(task)
 	whole := session.Expand(task, chips)
+	if command, isBang := strings.CutPrefix(whole, bangPrefix); isBang {
+		return a.runBang(task, chips, whole, strings.TrimSpace(command))
+	}
 	a.rememberPrompt(whole)
 	a.view.Reset()
 	if a.busy {

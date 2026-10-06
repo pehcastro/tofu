@@ -178,11 +178,15 @@ func composerRows() []keyRow {
 			call, found := a.view.LastCall()
 			return a.copy(callUnit, call, found), true
 		}},
-		{turnGroup, []string{"esc"}, "stop, if composer empty", func(a *App) (tea.Cmd, bool) {
-			if !a.busy || a.view.Value() != "" {
+		{turnGroup, []string{"esc"}, "stop a ! command, or a turn if composer empty", func(a *App) (tea.Cmd, bool) {
+			switch {
+			case a.stopCommand != nil:
+				a.stopCommand()
+			case a.busy && a.view.Value() == "":
+				a.stopTurn()
+			default:
 				return nil, false
 			}
-			a.stopTurn()
 			return nil, true
 		}},
 		{turnGroup, []string{"ctrl+x"}, "drop the queued prompt", done(func(a *App) { a.view.Unqueue() })},

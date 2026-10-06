@@ -41,6 +41,12 @@ inside the 16.7 ms of a 60 Hz frame.
   sent from the app, in every session and project, newest first. Type part
   of it, press `Enter`, and it lands in the composer without being sent.
   The history lives in `~/.tofu/prompts.jsonl`, with known keys redacted.
+- **Run a command without asking the model**: a prompt that starts with
+  `!` runs the rest in the project, the way the `bash` tool does, and costs
+  no request. `!git status` shows its output in the chat, and your next
+  prompt carries the command and its output to the model. `Esc` stops a
+  command; a stopped one is not carried. Known keys in the output are
+  redacted.
 - **Change a shortcut**: Search, Commands, Models, Quote selection, Edit in
   editor, Prompt history and Settings can be rebound; they're saved in
   `~/.tofu/keybindings.json`.
@@ -76,5 +82,6 @@ the key each rebindable action is bound to now. Type to filter it.
 | `Ctrl+O` | Expand the last tool call |
 | `Ctrl+Y`, `Alt+Y` | Copy the last answer, or the last tool call |
 | `Ctrl+X`, `Alt+Up`, `Alt+Down` | Remove or pick a queued message |
-| `Esc` | Stop the turn |
+| `!` at the start | Run a shell command, read by the next prompt |
+| `Esc` | Stop the turn, or a running `!` command |
 | `Ctrl+C` twice | Quit |

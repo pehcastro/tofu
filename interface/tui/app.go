@@ -198,6 +198,7 @@ type Options struct {
 	Now           func() time.Time
 	Shells        func() []shells.Entry
 	KillShell     func(name string) error
+	RunCommand    func(ctx context.Context, command string) (output string, stopped bool)
 	Fresh         bool
 	Resumed       []Event
 	Pose          string
@@ -282,6 +283,7 @@ type App struct {
 	running        int
 	pressedAt      time.Time
 	cancel         context.CancelFunc
+	stopCommand    context.CancelFunc
 	events         chan Event
 	subAgentCalls  []string
 	subAgents      []subagent.Row
@@ -522,6 +524,9 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return nil
 	case editedMsg:
 		a.edited(msg)
+		return nil
+	case ranMsg:
+		a.ran(msg)
 		return nil
 	case copiedMsg:
 		a.notify(msg.note())
