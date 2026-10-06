@@ -1,0 +1,3227 @@
+{
+  "$defs": {
+    "Ack": {
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "type": "object"
+    },
+    "AgentEnded": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "working",
+            "waiting_answer",
+            "in_review",
+            "reopened",
+            "parked",
+            "errored",
+            "finished"
+          ],
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "instance",
+        "state",
+        "report"
+      ],
+      "type": "object"
+    },
+    "AgentStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "working",
+            "waiting_answer",
+            "in_review",
+            "reopened",
+            "parked",
+            "errored",
+            "finished"
+          ],
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "instance",
+        "kind",
+        "number",
+        "task",
+        "owns",
+        "model",
+        "state",
+        "startedAt"
+      ],
+      "type": "object"
+    },
+    "AgentUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "working",
+            "waiting_answer",
+            "in_review",
+            "reopened",
+            "parked",
+            "errored",
+            "finished"
+          ],
+          "type": "string"
+        },
+        "steps": {
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "instance"
+      ],
+      "type": "object"
+    },
+    "ApprovalAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow_once",
+            "allow_always",
+            "reject_once",
+            "reject_always",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "type": "object"
+    },
+    "ApprovalRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "approval": {
+          "type": "string"
+        },
+        "args": {},
+        "item": {
+          "type": "string"
+        },
+        "judged": {
+          "$ref": "#/$defs/Judgement"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "approval",
+        "tool",
+        "target",
+        "args"
+      ],
+      "type": "object"
+    },
+    "ApprovalResolved": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "approval": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allow_once",
+            "allow_always",
+            "reject_once",
+            "reject_always",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "approval",
+        "decision",
+        "by"
+      ],
+      "type": "object"
+    },
+    "ContextUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "budget": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "used": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "used",
+        "budget"
+      ],
+      "type": "object"
+    },
+    "DecisionMade": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/GateAnswer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "enforced": {
+          "type": "boolean"
+        },
+        "failure": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "overridesRule": {
+          "type": "string"
+        },
+        "point": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/Reason"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "allow",
+            "ask",
+            "deny"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "verdict",
+        "answers",
+        "enforced",
+        "point",
+        "tool"
+      ],
+      "type": "object"
+    },
+    "FileEdit": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "hunks": {
+          "items": {
+            "$ref": "#/$defs/Hunk"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "item": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "create",
+            "modify"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "path",
+        "op",
+        "hunks"
+      ],
+      "type": "object"
+    },
+    "GateAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "choice": {
+          "type": "string"
+        },
+        "max": {
+          "type": "number"
+        },
+        "question": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "question",
+        "value",
+        "max"
+      ],
+      "type": "object"
+    },
+    "Hunk": {
+      "additionalProperties": false,
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/HunkLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "newLines": {
+          "type": "integer"
+        },
+        "newStart": {
+          "type": "integer"
+        },
+        "oldLines": {
+          "type": "integer"
+        },
+        "oldStart": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "oldStart",
+        "oldLines",
+        "newStart",
+        "newLines",
+        "lines"
+      ],
+      "type": "object"
+    },
+    "HunkLine": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "context",
+            "removed",
+            "added"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "InitializeParams": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "client": {
+          "type": "string"
+        },
+        "versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "client",
+        "versions",
+        "capabilities"
+      ],
+      "type": "object"
+    },
+    "InitializeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "tofu": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocol",
+        "tofu",
+        "project",
+        "capabilities"
+      ],
+      "type": "object"
+    },
+    "Judgement": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/GateAnswer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "enforced": {
+          "type": "boolean"
+        },
+        "failure": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/Reason"
+        },
+        "verdict": {
+          "enum": [
+            "allow",
+            "ask",
+            "deny"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "answers",
+        "enforced"
+      ],
+      "type": "object"
+    },
+    "LabelParams": {
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "row": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "LoginParams": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "provider"
+      ],
+      "type": "object"
+    },
+    "Marker": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq"
+      ],
+      "type": "object"
+    },
+    "NoParams": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "Persisted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "logId": {
+          "type": "string"
+        },
+        "logSeq": {
+          "type": "integer"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "logSeq",
+        "logId",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "PlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "running",
+            "done",
+            "dropped"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase",
+        "text",
+        "state"
+      ],
+      "type": "object"
+    },
+    "PlanUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/PlanStep"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "items"
+      ],
+      "type": "object"
+    },
+    "Problem": {
+      "additionalProperties": false,
+      "properties": {
+        "hint": {
+          "type": "string"
+        },
+        "what": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "what"
+      ],
+      "type": "object"
+    },
+    "QuotaUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "windows": {
+          "items": {
+            "$ref": "#/$defs/QuotaWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "windows"
+      ],
+      "type": "object"
+    },
+    "QuotaWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "percent": {
+          "type": "number"
+        },
+        "reported": {
+          "type": "boolean"
+        },
+        "resetsAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account",
+        "window",
+        "percent",
+        "reported"
+      ],
+      "type": "object"
+    },
+    "Reason": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked": {
+          "type": "boolean"
+        },
+        "deadBand": {
+          "type": "boolean"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "limit": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "relaxedBy": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "question",
+        "limit",
+        "levels",
+        "threshold",
+        "value",
+        "deadBand",
+        "blocked"
+      ],
+      "type": "object"
+    },
+    "Refusal": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "data": {},
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "Resync": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "dropped": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "dropped"
+      ],
+      "type": "object"
+    },
+    "Said": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "note",
+            "gate_off",
+            "failure"
+          ],
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "SessionForked": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "before": {
+          "type": "integer"
+        },
+        "from": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "from",
+        "to",
+        "kind",
+        "before",
+        "after"
+      ],
+      "type": "object"
+    },
+    "SessionOpenParams": {
+      "additionalProperties": false,
+      "properties": {
+        "asking": {
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "SessionOpenResult": {
+      "additionalProperties": false,
+      "properties": {
+        "fresh": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "fresh"
+      ],
+      "type": "object"
+    },
+    "SessionUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "name",
+        "root"
+      ],
+      "type": "object"
+    },
+    "SettingsSetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ShellExited": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "endedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "killed": {
+          "type": "boolean"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "shell",
+        "killed"
+      ],
+      "type": "object"
+    },
+    "ShellOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "shell",
+        "offset",
+        "text"
+      ],
+      "type": "object"
+    },
+    "ShellParams": {
+      "additionalProperties": false,
+      "properties": {
+        "offset": {
+          "type": "integer"
+        },
+        "shell": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell"
+      ],
+      "type": "object"
+    },
+    "ShellReadResult": {
+      "additionalProperties": false,
+      "properties": {
+        "next": {
+          "type": "integer"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "offset",
+        "text",
+        "next"
+      ],
+      "type": "object"
+    },
+    "ShellStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "shell",
+        "command",
+        "pid",
+        "startedAt"
+      ],
+      "type": "object"
+    },
+    "Text": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "text"
+      ],
+      "type": "object"
+    },
+    "ToolCompleted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "durationMs": {
+          "type": "integer"
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "boolean"
+        },
+        "item": {
+          "type": "string"
+        },
+        "lines": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "tool",
+        "failed",
+        "bytes",
+        "lines",
+        "durationMs",
+        "output"
+      ],
+      "type": "object"
+    },
+    "ToolStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "args": {},
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "tool",
+        "args",
+        "startedAt"
+      ],
+      "type": "object"
+    },
+    "TurnCompleted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "finished",
+            "stopped",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "workedForMs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "status",
+        "startedAt",
+        "workedForMs"
+      ],
+      "type": "object"
+    },
+    "TurnParams": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn"
+      ],
+      "type": "object"
+    },
+    "TurnResult": {
+      "additionalProperties": false,
+      "properties": {
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn"
+      ],
+      "type": "object"
+    },
+    "TurnSendParams": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "type": "string"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "text"
+      ],
+      "type": "object"
+    },
+    "TurnStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "task",
+        "startedAt"
+      ],
+      "type": "object"
+    },
+    "TurnSteerParams": {
+      "additionalProperties": false,
+      "properties": {
+        "expectedTurnId": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "expectedTurnId",
+        "text"
+      ],
+      "type": "object"
+    },
+    "UndoParams": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "turns"
+      ],
+      "type": "object"
+    },
+    "UsageUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "cacheRead": {
+          "type": "integer"
+        },
+        "decisions": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "tokensIn": {
+          "type": "integer"
+        },
+        "tokensOut": {
+          "type": "integer"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "model",
+        "tokensIn",
+        "tokensOut",
+        "cacheRead",
+        "decisions"
+      ],
+      "type": "object"
+    },
+    "VerbResult": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "data": {},
+        "ok": {
+          "type": "boolean"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/Problem"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "tofu": {
+          "type": "string"
+        },
+        "verb": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tofu",
+        "verb",
+        "ok",
+        "at",
+        "data",
+        "problems"
+      ],
+      "type": "object"
+    },
+    "clientMessage": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "initialize"
+            },
+            "params": {
+              "$ref": "#/$defs/InitializeParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.list"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.open"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionOpenParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "turn.send"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnSendParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "turn.steer"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnSteerParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "turn.stop"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "undo"
+            },
+            "params": {
+              "$ref": "#/$defs/UndoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.read"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.kill"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "label"
+            },
+            "params": {
+              "$ref": "#/$defs/LabelParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "settings.set"
+            },
+            "params": {
+              "$ref": "#/$defs/SettingsSetParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "login.start"
+            },
+            "params": {
+              "$ref": "#/$defs/LoginParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.usage"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.context"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.rules"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.agents"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.models"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.ledger"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.settings"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.library"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "$ref": "#/$defs/ApprovalAnswer"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "result"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "tofu.host/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "turn.started"
+        },
+        "params": {
+          "$ref": "#/$defs/TurnStarted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "turn.completed"
+        },
+        "params": {
+          "$ref": "#/$defs/TurnCompleted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "turn.steered"
+        },
+        "params": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "message.user"
+        },
+        "params": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "message.started"
+        },
+        "params": {
+          "$ref": "#/$defs/Marker"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "message.delta"
+        },
+        "params": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "message.completed"
+        },
+        "params": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "message.reset"
+        },
+        "params": {
+          "$ref": "#/$defs/Marker"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "thinking.delta"
+        },
+        "params": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "tool.started"
+        },
+        "params": {
+          "$ref": "#/$defs/ToolStarted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "tool.completed"
+        },
+        "params": {
+          "$ref": "#/$defs/ToolCompleted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "file.edit"
+        },
+        "params": {
+          "$ref": "#/$defs/FileEdit"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "agent.started"
+        },
+        "params": {
+          "$ref": "#/$defs/AgentStarted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "agent.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/AgentUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "agent.ended"
+        },
+        "params": {
+          "$ref": "#/$defs/AgentEnded"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "shell.started"
+        },
+        "params": {
+          "$ref": "#/$defs/ShellStarted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "shell.output"
+        },
+        "params": {
+          "$ref": "#/$defs/ShellOutput"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "shell.exited"
+        },
+        "params": {
+          "$ref": "#/$defs/ShellExited"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "decision"
+        },
+        "params": {
+          "$ref": "#/$defs/DecisionMade"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "note"
+        },
+        "params": {
+          "$ref": "#/$defs/Said"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "failure"
+        },
+        "params": {
+          "$ref": "#/$defs/Said"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "plan.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/PlanUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "context.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/ContextUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "usage.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/UsageUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "quota.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/QuotaUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "session.forked"
+        },
+        "params": {
+          "$ref": "#/$defs/SessionForked"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "session.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/SessionUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "approval.resolved"
+        },
+        "params": {
+          "$ref": "#/$defs/ApprovalResolved"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "item.persisted"
+        },
+        "params": {
+          "$ref": "#/$defs/Persisted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "resync"
+        },
+        "params": {
+          "$ref": "#/$defs/Resync"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "tofu/requestApproval"
+        },
+        "params": {
+          "$ref": "#/$defs/ApprovalRequest"
+        }
+      },
+      "required": [
+        "id",
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InitializeResult"
+            },
+            {
+              "$ref": "#/$defs/VerbResult"
+            },
+            {
+              "$ref": "#/$defs/SessionOpenResult"
+            },
+            {
+              "$ref": "#/$defs/TurnResult"
+            },
+            {
+              "$ref": "#/$defs/Ack"
+            },
+            {
+              "$ref": "#/$defs/ShellReadResult"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "jsonrpc",
+        "result"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/Refusal"
+        },
+        "id": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ]
+        },
+        "jsonrpc": {
+          "const": "2.0"
+        }
+      },
+      "required": [
+        "error",
+        "id",
+        "jsonrpc"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "tofu.host/1, every line tofu serve --stdio writes; clientMessage is every line it reads",
+  "x-notifications": {
+    "agent.ended": {
+      "$ref": "#/$defs/AgentEnded"
+    },
+    "agent.started": {
+      "$ref": "#/$defs/AgentStarted"
+    },
+    "agent.updated": {
+      "$ref": "#/$defs/AgentUpdated"
+    },
+    "approval.resolved": {
+      "$ref": "#/$defs/ApprovalResolved"
+    },
+    "context.updated": {
+      "$ref": "#/$defs/ContextUpdated"
+    },
+    "decision": {
+      "$ref": "#/$defs/DecisionMade"
+    },
+    "failure": {
+      "$ref": "#/$defs/Said"
+    },
+    "file.edit": {
+      "$ref": "#/$defs/FileEdit"
+    },
+    "item.persisted": {
+      "$ref": "#/$defs/Persisted"
+    },
+    "message.completed": {
+      "$ref": "#/$defs/Text"
+    },
+    "message.delta": {
+      "$ref": "#/$defs/Text"
+    },
+    "message.reset": {
+      "$ref": "#/$defs/Marker"
+    },
+    "message.started": {
+      "$ref": "#/$defs/Marker"
+    },
+    "message.user": {
+      "$ref": "#/$defs/Text"
+    },
+    "note": {
+      "$ref": "#/$defs/Said"
+    },
+    "plan.updated": {
+      "$ref": "#/$defs/PlanUpdated"
+    },
+    "quota.updated": {
+      "$ref": "#/$defs/QuotaUpdated"
+    },
+    "resync": {
+      "$ref": "#/$defs/Resync"
+    },
+    "session.forked": {
+      "$ref": "#/$defs/SessionForked"
+    },
+    "session.updated": {
+      "$ref": "#/$defs/SessionUpdated"
+    },
+    "shell.exited": {
+      "$ref": "#/$defs/ShellExited"
+    },
+    "shell.output": {
+      "$ref": "#/$defs/ShellOutput"
+    },
+    "shell.started": {
+      "$ref": "#/$defs/ShellStarted"
+    },
+    "thinking.delta": {
+      "$ref": "#/$defs/Text"
+    },
+    "tool.completed": {
+      "$ref": "#/$defs/ToolCompleted"
+    },
+    "tool.started": {
+      "$ref": "#/$defs/ToolStarted"
+    },
+    "turn.completed": {
+      "$ref": "#/$defs/TurnCompleted"
+    },
+    "turn.started": {
+      "$ref": "#/$defs/TurnStarted"
+    },
+    "turn.steered": {
+      "$ref": "#/$defs/Text"
+    },
+    "usage.updated": {
+      "$ref": "#/$defs/UsageUpdated"
+    }
+  },
+  "x-requests": {
+    "initialize": {
+      "params": {
+        "$ref": "#/$defs/InitializeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/InitializeResult"
+      }
+    },
+    "label": {
+      "params": {
+        "$ref": "#/$defs/LabelParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "login.start": {
+      "params": {
+        "$ref": "#/$defs/LoginParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.agents": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.context": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.ledger": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.library": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.models": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.rules": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.settings": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.usage": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "session.list": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "session.open": {
+      "params": {
+        "$ref": "#/$defs/SessionOpenParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionOpenResult"
+      }
+    },
+    "settings.set": {
+      "params": {
+        "$ref": "#/$defs/SettingsSetParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "shell.kill": {
+      "params": {
+        "$ref": "#/$defs/ShellParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
+    "shell.read": {
+      "params": {
+        "$ref": "#/$defs/ShellParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ShellReadResult"
+      }
+    },
+    "turn.send": {
+      "params": {
+        "$ref": "#/$defs/TurnSendParams"
+      },
+      "result": {
+        "$ref": "#/$defs/TurnResult"
+      }
+    },
+    "turn.steer": {
+      "params": {
+        "$ref": "#/$defs/TurnSteerParams"
+      },
+      "result": {
+        "$ref": "#/$defs/TurnResult"
+      }
+    },
+    "turn.stop": {
+      "params": {
+        "$ref": "#/$defs/TurnParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
+    "undo": {
+      "params": {
+        "$ref": "#/$defs/UndoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/VerbResult"
+      }
+    }
+  },
+  "x-serverRequests": {
+    "tofu/requestApproval": {
+      "params": {
+        "$ref": "#/$defs/ApprovalRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/ApprovalAnswer"
+      }
+    }
+  }
+}

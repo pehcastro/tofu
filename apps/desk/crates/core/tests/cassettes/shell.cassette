@@ -1,0 +1,2 @@
+{"text": "starting a long shell", "tools": [{"name": "bash", "args": {"command": "echo ready; sleep 300", "background": true}}]}
+{"text": "the shell runs in the background"}
