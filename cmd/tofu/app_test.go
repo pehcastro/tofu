@@ -692,7 +692,7 @@ func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
 		t.Fatal(err)
 	}
 	whole := strings.Repeat("a line of the file it read\n", 460)
-	message, handle, err := artifacts.Render(whole, 1024)
+	message, handle, err := artifacts.Render("read", nil, whole, 1024)
 	if err != nil {
 		t.Fatal(err)
 	}

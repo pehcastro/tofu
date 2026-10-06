@@ -873,7 +873,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		text = thriftCut.Text
 		saved += thriftCut.Saved
 	}
-	rendered, handle, storeErr := artifacts.Render(text, resultBytesCap)
+	rendered, handle, storeErr := artifacts.Render(call.Name, call.Arguments, text, resultBytesCap)
 	sum := sha256.Sum256([]byte(result.Content))
 	row := ToolCallRow{
 		ID:             g.id,
