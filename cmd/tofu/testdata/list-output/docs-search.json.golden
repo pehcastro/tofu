@@ -61,6 +61,10 @@ exit 0
         "do": "tofu docs serve"
       },
       {
+        "text": "Shells and long commands",
+        "do": "tofu docs shells"
+      },
+      {
         "text": "Start here",
         "do": "tofu docs start"
       },
@@ -191,10 +195,6 @@ exit 0
       {
         "text": "Settings",
         "do": "tofu docs settings"
-      },
-      {
-        "text": "Shells and long commands",
-        "do": "tofu docs shells"
       },
       {
         "text": "Skills",

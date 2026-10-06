@@ -28,6 +28,8 @@ Docs · "change the colours"                                           48 matche
     → tofu docs models
   Serving a project to another program
     → tofu docs serve
+  Shells and long commands
+    → tofu docs shells
   Start here
     → tofu docs start
   Updating tofu
@@ -94,8 +96,6 @@ Docs · "change the colours"                                           48 matche
     → tofu docs sessions
   Settings
     → tofu docs settings
-  Shells and long commands
-    → tofu docs shells
   Skills
     → tofu docs skills
 --- stderr

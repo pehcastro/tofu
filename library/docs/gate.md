@@ -23,9 +23,15 @@ The `gatePrompt` setting says what a verdict does:
   or 3 to allow it here for the rest of the session. When jev cannot
   answer, the call is refused.
 
+A call that changes tofu's settings, hooks or hook trust files waits for
+you in both modes unless jev denies it: through `settings`, `write`,
+`edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
+
 A sub-agent never asks you. Its ask goes to the lead that started it, with
 the call, the verdict and the risk; the lead answers allow or deny within 5
-minutes, or the call is refused. `tofu session trace` shows the ask.
+minutes, or the call is refused. A sub-agent's call that would wait for
+you is refused outright, and the lead is not asked. `tofu session trace`
+shows the ask.
 
 Every verdict is kept as a row in the decision ledger.
 
@@ -40,12 +46,8 @@ jev is reached through OpenRouter, with a key tofu reads from, in order:
 tofu never prints more of the key than its last four characters. With no
 key the gate is off: no tool call is judged, and the app says so.
 
-An older tofu kept keys in `~/.tofu/.env`. The next start moves
-`OPENROUTER_KEY`, `TYPESAFE_API_KEY` and `BRAVE_SEARCH_KEY` into the
-credential store, removes the file, and prints one line naming what
-moved. A line naming anything else keeps the file in place. The web
-search key reads the same way the gate key does, and
-`tofu login search brave` stores it.
+An older `~/.tofu/.env` is moved into the credential store on the next
+start. `tofu login search brave` stores the web search key the same way.
 
 A key a tool prints never reaches the model or the session, and a key in
 a judged call never reaches the ledger. Every stored key, and the value
@@ -81,9 +83,7 @@ Judge one shell command without running it, and log the verdict:
 
     tofu check "git push --force"
 
-`tofu check` reads the key the same way the gate does, and prints one
-line, the verdict, the command and the ledger row, like
-`⚠ ask  git push --force  <row>`.
+It prints the verdict, the command and the ledger row.
 
 ## Check it
 

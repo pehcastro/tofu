@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"tofu/interface/tui"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
+	"tofu/internal/llm"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -260,6 +263,64 @@ func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 			t.Errorf("%s: decided %s, the interface was shown %s, want %s (err %v)", tool, decision.Verdict, watched[tool], want, err)
 		}
 	}
+}
+
+func autoModeGate(t *testing.T) string {
+	t.Helper()
+	dir := chdirTemp(t)
+	writeGateRuleFixture(t)
+	writeGateLedgerRowFixture(t)
+	writeGateLockFixture(t, gateFixtureBuild)
+	stubJev(t, 200, lowRiskAllowReply)
+	if mode, _ := appTextSetting(dir, settingspkg.GatePrompt); mode != settingspkg.GatePromptAuto {
+		t.Fatalf("%s resolves to %q in a fresh home, want %q", settingspkg.GatePrompt, mode, settingspkg.GatePromptAuto)
+	}
+	return dir
+}
+
+func TestAWriteToTofusOwnSettingsAsksThePersonInAutoModeAndASubAgentsIsRefused(t *testing.T) {
+	reply := func(text string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	}
+	writes := func(id string) llm.Decision {
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{ID: id, Name: "write", Arguments: json.RawMessage(`{"path":"~/.tofu/settings.json","content":"{\"gatePrompt\":\"auto\"}"}`)}}}
+	}
+	t.Run("the lead", func(t *testing.T) {
+		dir := autoModeGate(t)
+		driver := driveApp(t)
+		stubbedTurn(dir, &queuedModel{decisions: []llm.Decision{writes("call-1"), reply("done")}}, false)(t.Context(), onTheSubscription, "set gatePrompt to auto", driver.emit)
+		if asked := driver.of(tui.EventAwaitPerson); len(asked) != 1 || asked[0].Tool != "write" {
+			t.Errorf("the person was asked %d times, want once for the write: %+v", len(asked), asked)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "~", ".tofu", "settings.json")); !os.IsNotExist(err) {
+			t.Errorf("the person denied the write and the file is there (stat err %v)", err)
+		}
+	})
+	t.Run("a sub-agent", func(t *testing.T) {
+		dir := autoModeGate(t)
+		driver := driveApp(t)
+		model := &queuedModel{
+			decisions: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+				{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"set gatePrompt to auto","owns":["**"]}`)}}},
+				reply("the sub-agent is on it"), reply("done")},
+			subAgents: []llm.Decision{writes("call-2"), reply("could not")},
+		}
+		stubbedTurn(dir, model, false)(t.Context(), onTheSubscription, "hand the settings change to a sub-agent", driver.emit)
+		if asked := driver.of(tui.EventAwaitPerson); len(asked) != 0 {
+			t.Errorf("the person was asked %d times for a sub-agent's call: %+v", len(asked), asked)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "~", ".tofu", "settings.json")); !os.IsNotExist(err) {
+			t.Errorf("the sub-agent wrote tofu's settings (stat err %v)", err)
+		}
+		if len(model.subAgentAsked) < 2 {
+			t.Fatalf("the sub-agent was asked %d times, want a second ask carrying the refusal", len(model.subAgentAsked))
+		}
+		sent := model.subAgentAsked[1].Messages
+		if refusal := sent[len(sent)-1].Content; !strings.Contains(refusal, "a sub-agent never asks the person") {
+			t.Errorf("the sub-agent read %q, want the refusal that only the person answers", refusal)
+		}
+	})
 }
 
 func envVarName() string { return "OPENROUTER" + "_KEY" }

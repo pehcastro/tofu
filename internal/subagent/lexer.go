@@ -327,6 +327,39 @@ func (c simpleCommand) targets() []shellWord {
 	return targets
 }
 
+func (c simpleCommand) relinks() []shellWord {
+	switch tool, args := c.named(); tool {
+	case "rm", "rmdir", "unlink", "mv", "ln":
+		return operands(args)
+	}
+	return nil
+}
+
+type ShellStep struct {
+	Program string
+	Args    []string
+	Changes []string
+}
+
+func ShellSteps(command string) []ShellStep {
+	var steps []ShellStep
+	for _, command := range shellCommands(command) {
+		if len(command.words)+len(command.writes) == 0 {
+			continue
+		}
+		tool, args := command.named()
+		step := ShellStep{Program: tool}
+		for _, arg := range args {
+			step.Args = append(step.Args, arg.text)
+		}
+		for _, changed := range append(command.targets(), command.relinks()...) {
+			step.Changes = append(step.Changes, changed.text)
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
+
 func (c simpleCommand) treeWide() error {
 	tool, args := c.named()
 	var rest []string
