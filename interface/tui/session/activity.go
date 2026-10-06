@@ -298,8 +298,8 @@ func (m *Model) TakesAnswerDigits() bool { return m.Awaiting() && m.composer.Val
 
 func (m *Model) markAsked(awaiting bool) {
 	for index := len(m.entries) - 1; index >= 0; index-- {
-		if decision := m.entries[index].Decision; decision != nil && decision.Verdict == Ask {
-			decision.Awaiting, decision.asked = awaiting, decision.asked || awaiting
+		if entry := &m.entries[index]; entry.Decision != nil && entry.Decision.Verdict == Ask {
+			entry.asking, entry.asked = awaiting, entry.asked || awaiting
 			return
 		}
 	}

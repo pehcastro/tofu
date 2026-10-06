@@ -242,11 +242,3 @@ func forkFact(fork *contextForkReport) string {
 	}
 	return "into " + fork.Into + " · " + fork.Kind + " · " + strconv.Itoa(fork.Counts.TokensBefore) + " → " + strconv.Itoa(fork.Counts.TokensAfter) + " tokens"
 }
-
-func forkWords(into, kind string, counts *contextForkCounts) string {
-	if counts == nil {
-		return "forked into " + into + ", and no step in this session recorded the counts"
-	}
-	return fmt.Sprintf("forked into %s as a %s at %d tokens, which began at %d",
-		into, kind, counts.TokensBefore, counts.TokensAfter)
-}

@@ -21,10 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"tofu/interface/tui"
 	tuisession "tofu/interface/tui/session"
 	"tofu/internal/cron"
-	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
@@ -205,7 +203,7 @@ func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testin
 			}
 		},
 		"app": func(t *testing.T, dir string) {
-			t.Cleanup(newAppSession(dir, nil, nil, time.Now, sessionResume{}).warm.Close)
+			t.Cleanup(newAppSession(dir, nil, nil, time.Now, sessionResume{}).engine.warm.Close)
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1066,30 +1064,6 @@ func TestTheLeadAsksWhereToOverrideARuleAndOnlyAYesWritesTheFile(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing.T) {
-	request := turn.GateRequest{Tool: tools.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
-	granted := map[string]bool{askedPlace(request): true}
-	answers := make(chan tui.Answer, 1)
-	var shown []tui.Event
-	person := awaitPerson(func(event tui.Event) { shown = append(shown, event) }, answers, granted)
-	answers <- tui.Denied
-	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonDenied {
-		t.Fatalf("a rule question under a granted place answered %v, %v, want the person's no", got, err)
-	}
-	clear(granted)
-	answers <- tui.AlwaysHere
-	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonAlwaysHere || len(granted) > 0 {
-		t.Fatalf("everywhere answered %v, %v and left the cache %v, want everywhere and an empty cache", got, err, granted)
-	}
-	asked := slices.ContainsFunc(shown, func(event tui.Event) bool {
-		return event.Kind == tui.EventDecision && event.Decision != nil && event.Decision.OverridesRule == overrideAsked
-	})
-	said := slices.ContainsFunc(shown, func(event tui.Event) bool { return strings.Contains(event.Text, "A rule stops me") })
-	if !asked || !said {
-		t.Errorf("the person was asked without the rule %v or the question %v: %+v", asked, said, shown)
 	}
 }
 

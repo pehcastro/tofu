@@ -166,6 +166,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "oneTurnPerProject",
+        "category": "Turn",
+        "value": true,
+        "source": "default"
+      },
+      {
         "key": "subAgentsPerTurn",
         "category": "Turn",
         "value": 10,

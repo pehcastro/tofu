@@ -114,7 +114,7 @@ func undoLines(page cli.Page, report rewind.Report) []string {
 	return lines
 }
 
-func (s *appSession) undo(count string) string {
+func undoTurns(id, count string) string {
 	turns, err := undoCount(count)
 	if err != nil {
 		return "/undo: " + err.Error()
@@ -123,8 +123,8 @@ func (s *appSession) undo(count string) string {
 	if err != nil {
 		return "/undo: " + err.Error()
 	}
-	report, err := undoSession(store, s.id, rewind.Ask{Turns: turns})
-	if s.id == "" || errors.Is(err, fs.ErrNotExist) {
+	report, err := undoSession(store, id, rewind.Ask{Turns: turns})
+	if id == "" || errors.Is(err, fs.ErrNotExist) {
 		err = rewind.NothingRecorded{Asked: turns}
 	}
 	if err != nil {

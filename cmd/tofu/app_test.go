@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -15,7 +14,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,13 +27,12 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/frame"
-	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
+	"tofu/internal/host"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
@@ -511,210 +508,11 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 	t.Log("\n" + settingsScreen(t, providers))
 }
 
-func TestTheGateOffEventCarriesTheReasonTheKeyLookupFound(t *testing.T) {
-	t.Setenv(envVarName(), "")
-	dir := t.TempDir()
-	unnamed := filepath.Join(dir, "unnamed", ".env")
-	unreadable := filepath.Join(dir, "unreadable", ".env")
-	if err := os.MkdirAll(filepath.Dir(unnamed), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(unnamed, []byte("OTHER=1\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(unreadable, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, state := range []struct {
-		name string
-		path string
-		want jev.Why
-	}{
-		{"no file", filepath.Join(dir, "gone", ".env"), jev.WhyNoFile},
-		{"a file without the name in it", unnamed, jev.WhyFileLacksName},
-		{"a file that will not read", unreadable, jev.WhyUnreadable},
-	} {
-		_, err := jev.Key(state.path)
-		if err == nil {
-			t.Fatalf("%s was accepted as a key", state.name)
-		}
-		event := gateOffEvent(err)
-		if event.Kind != tui.EventGateOff || event.Text != err.Error() {
-			t.Errorf("%s produced %+v, want the gate-off event carrying %q", state.name, event, err.Error())
-		}
-		if event.GateWhy != state.want {
-			t.Errorf("%s reads as reason %d, want %d: %v", state.name, event.GateWhy, state.want, err)
-		}
-	}
-}
-
 func TestGateOffNoteNamesTheLogin(t *testing.T) {
 	const want = "gate off: no tool call is judged until tofu login classifier openrouter stores the key"
 	if gateOffNote != want {
 		t.Errorf("gateOffNote %q, want %q", gateOffNote, want)
 	}
-}
-
-func recordedGateDecision() turn.GateDecision {
-	modeReason := "the rule came from the library as tool_gate@3.yaml"
-	return turn.GateDecision{
-		ID:      "2026-09-19-6f1c",
-		Verdict: ledger.VerdictAsk,
-		Answers: []ledger.Answer{
-			{Question: "approval", Kind: ledger.AnswerNoul, Noul: 0.75},
-			{Question: "from_untrusted", Kind: ledger.AnswerNoul, Noul: 0.02},
-			{Question: "risk", Kind: ledger.AnswerScore, Score: 2, Dist: []ledger.Slice{
-				{Option: "0", P: 0.01}, {Option: "1", P: 0.08}, {Option: "2", P: 0.88}, {Option: "3", P: 0.03},
-			}},
-			{Question: "user_requested", Kind: ledger.AnswerNoul, Noul: 0.11},
-		},
-		Reason: &ledger.Reason{
-			Question:   "risk",
-			Comparison: "risk_ask_at",
-			Threshold:  1.5,
-			Value:      2,
-			Mode:       ledger.ModeShadow,
-			ModeReason: &modeReason,
-		},
-	}
-}
-
-func TestTheInterfaceIsHandedNumbersAndNotFormattedText(t *testing.T) {
-	decision := gateDecision("write", recordedGateDecision())
-	if decision.Verdict != session.Ask || decision.Tool != "write" {
-		t.Fatalf("decision %+v", decision)
-	}
-	if len(decision.Answers) != 4 {
-		t.Fatalf("answers %+v, want the four the row carries", decision.Answers)
-	}
-	for _, want := range []session.Answer{
-		{Question: "approval", Value: 0.75, Max: 1},
-		{Question: "from_untrusted", Value: 0.02, Max: 1},
-		{Question: "risk", Value: 2, Max: 3},
-		{Question: "user_requested", Value: 0.11, Max: 1},
-	} {
-		if !slices.Contains(decision.Answers, want) {
-			t.Errorf("answer %+v is missing from %+v", want, decision.Answers)
-		}
-	}
-	if decision.Reason.Value != 2 || decision.Reason.Threshold != 1.5 || decision.Reason.Limit != "risk_ask_at" {
-		t.Errorf("reason %+v", decision.Reason)
-	}
-	for _, text := range stringsIn(reflect.ValueOf(decision)) {
-		if strings.ContainsAny(text, "0123456789%▓░") {
-			t.Errorf("the decision carries formatted text %q", text)
-		}
-	}
-}
-
-func stringsIn(value reflect.Value) []string {
-	var out []string
-	switch value.Kind() {
-	case reflect.String:
-		return []string{value.String()}
-	case reflect.Struct:
-		for index := range value.NumField() {
-			out = append(out, stringsIn(value.Field(index))...)
-		}
-	case reflect.Slice:
-		for index := range value.Len() {
-			out = append(out, stringsIn(value.Index(index))...)
-		}
-	}
-	return out
-}
-
-func TestTheSessionFormatsTheNumbersItWasHanded(t *testing.T) {
-	view := session.New(time.Now, new(markdown.Renderer).Lines)
-	view.SetSize(100, 20)
-	view.Append(session.Entry{Kind: session.Tool, ID: "w1", Head: "write", Body: "README.md"})
-	view.Decide(gateDecision("write", recordedGateDecision()))
-	head, body, found := view.Expansion("w1", 100)
-	if !found {
-		t.Fatalf("the call has no expansion\n%s", view.View())
-	}
-	content := head + "\n" + strings.Join(body, "\n")
-	for _, want := range []string{"ask", "risk", "2.00", "approval", "0.75", "▓", "risk 2.00 is over risk_ask_at 1.50"} {
-		if !strings.Contains(content, want) {
-			t.Errorf("the session view does not render %q\n%s", want, content)
-		}
-	}
-}
-
-func TestACallReadsAsIntentAndKeepsTheWholeCommandBehindIt(t *testing.T) {
-	long := `cd /mnt/q/code/ephem-sh/bob; for d in internal/* interface/* cmd/*; ` +
-		`do n=$(find "$d" -name '*.go' | wc -l); echo "$d $n"; done`
-	for _, want := range []struct {
-		arguments string
-		intent    string
-		detail    string
-	}{
-		{`{"command":"go test ./...","timeout":30}`, "go test ./...", "go test ./..."},
-		{`{"command":"` + strings.ReplaceAll(long, `"`, `\"`) + `"}`, "for d in internal/* interface/* cmd/* +3 more", long},
-		{`{"path":"internal/turn/loop.go"}`, "internal/turn/loop.go", ""},
-		{`{"pattern":"Decide","glob":"*.go"}`, "Decide in *.go", ""},
-		{`{"pattern":"Decide"}`, "Decide in " + workingDirectory, ""},
-		{`{"task":"rename the judge\n\nkeep the wire","owns":["internal/judge/**"]}`, "rename the judge", "rename the judge\n\nkeep the wire"},
-		{`{"task":"rename the judge","mission":"judge rename","owns":["internal/judge/**"]}`, "judge rename", "rename the judge"},
-		{`{"handle":"99248324d40bbf11be9cd47093978332","offset":0,"length":512}`, moreOfAStoredResult, ""},
-	} {
-		intent, detail := callIntent(llm.ToolCall{Arguments: []byte(want.arguments)})
-		if intent != want.intent || detail != want.detail {
-			t.Errorf("%s reads as %q with %q behind it, want %q and %q", want.arguments, intent, detail, want.intent, want.detail)
-		}
-	}
-}
-
-func TestAResultSaysSomethingOrSaysNothing(t *testing.T) {
-	for _, want := range []struct {
-		content string
-		summary string
-	}{
-		{"ok  tofu/internal/turn\n", "ok tofu/internal/turn"},
-		{"", noOutput},
-		{"a\nb\nc\n", "3 lines, 6 bytes"},
-		{strings.Repeat("x", 40), "1 line, 40 bytes"},
-		{strings.Repeat("a line of it\n", 200), "200 lines, 2.5 KB"},
-	} {
-		if got := resultSummary(want.content); got != want.summary {
-			t.Errorf("a result of %d bytes reads as %q, want %q", len(want.content), got, want.summary)
-		}
-	}
-}
-
-func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
-	state, err := sys.ProjectStateDirAt(scratchProject(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	artifacts, err := turn.NewArtifacts(filepath.Join(state, "artifacts"), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	whole := strings.Repeat("a line of the file it read\n", 460)
-	message, handle, err := artifacts.Render("read", nil, whole, 1024)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if handle == "" || !strings.Contains(message, "artifact_fetch") {
-		t.Fatalf("the turn did not compose a handle preamble, so this test proves nothing:\n%s", message)
-	}
-
-	driver := driveApp(t)
-	driver.emit(tui.Event{Kind: tui.EventToolCall, ID: "c1", Tool: "read", Text: "CLAUDE.md"})
-	driver.emit(tui.Event{Kind: tui.EventToolResult, ID: "c1", Text: resultSummary(message)})
-	screen := driver.view(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
-	for _, forbidden := range []string{"artifact_fetch", "not pasted", "holds this result whole", handle} {
-		if strings.Contains(screen, forbidden) {
-			t.Errorf("the screen carries %q, which is written for the model\n%s", forbidden, screen)
-		}
-	}
-	for _, want := range []string{"read", "CLAUDE.md", "12.1 KB" + storedNote} {
-		if !strings.Contains(screen, want) {
-			t.Errorf("the screen does not name the file and its size with %q\n%s", want, screen)
-		}
-	}
-	t.Log("\n" + screen)
 }
 
 type appDriver struct {
@@ -1462,25 +1260,27 @@ func TestASubAgentThatHasHandedBackKeepsTheClockItStoppedAt(t *testing.T) {
 func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	const kept, dropped = 200, 4096
 	finished := make(chan struct{})
+	playing, _ := host.New(host.Config{Play: func(_ context.Context, _ tui.Pick, _ string, live host.Live) {
+		for step := range kept {
+			live.Emit(tui.Event{Kind: tui.EventText, Text: "step " + strconv.Itoa(step)})
+		}
+		for carried := range dropped {
+			live.Emit(tui.Event{Kind: tui.EventContext, Context: frame.Context{Used: carried + 1, Budget: konst.ContextCeilingTokens}})
+		}
+		close(finished)
+	}})
+	t.Cleanup(playing.Close)
 	app := tui.New(tui.Options{
 		Repo:  "scratch",
 		Wires: func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
-		Turn: func(_ context.Context, _ tui.Pick, _ string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
-			for step := range kept {
-				emit(tui.Event{Kind: tui.EventText, Text: "step " + strconv.Itoa(step)})
-			}
-			for carried := range dropped {
-				emit(tui.Event{Kind: tui.EventContext, Context: frame.Context{Used: carried + 1, Budget: konst.ContextCeilingTokens}})
-			}
-			close(finished)
-		},
+		Host:  playing,
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	for _, letter := range "fill the channel and never read it" {
 		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
 	}
-	_, started := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	select {
 	case <-finished:
@@ -1489,23 +1289,17 @@ func TestAFullEventChannelDropsTheSnapshotsAndNeverBlocksTheTurn(t *testing.T) {
 	}
 
 	texts, contexts := 0, 0
-	for pending := []tea.Cmd{started}; len(pending) > 0; pending = pending[1:] {
-		if pending[0] == nil {
-			continue
+	for msg := range playing.Events() {
+		if msg.Kind == host.EventTurnEnded {
+			break
 		}
-		switch msg := pending[0]().(type) {
-		case tea.BatchMsg:
-			pending = append(pending, msg...)
-		case tui.Event:
-			if msg.Kind == tui.EventText {
-				texts++
-			}
-			if msg.Kind == tui.EventContext {
-				contexts++
-			}
-			_, next := app.Update(msg)
-			pending = append(pending, next)
+		if msg.Kind == tui.EventText {
+			texts++
 		}
+		if msg.Kind == tui.EventContext {
+			contexts++
+		}
+		app.Update(msg)
 	}
 	if texts != kept {
 		t.Errorf("the channel carried %d of the %d text events: an increment may never be dropped", texts, kept)
@@ -1793,12 +1587,12 @@ func TestAFailedWriteIsNotAnEdit(t *testing.T) {
 
 func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) []tui.Event {
 	t.Helper()
-	answers := make(chan tui.Answer, 1)
+	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	t.Cleanup(live.Close)
 	app := tui.New(tui.Options{
-		Repo:    "scratch",
-		Wires:   func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
-		Answers: answers,
-		Turn:    resumedTurn(dir, model, answers, sessionResume{}),
+		Repo:  "scratch",
+		Wires: func() []tui.Wire { return []tui.Wire{{Name: wireSubscription, Model: "stub-model"}} },
+		Host:  live.Host,
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
@@ -1807,29 +1601,27 @@ func answeredByKeys(t *testing.T, dir string, model turn.Model, keys ...string) 
 	}
 	var seen []tui.Event
 	waits, unanswered := 0, ""
-	_, started := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	for pending := []tea.Cmd{started}; len(pending) > 0; pending = pending[1:] {
-		if pending[0] == nil {
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for msg := range live.Events() {
+		if msg.Kind == host.EventTurnEnded {
+			app.Update(tui.Closed{})
+			break
+		}
+		if msg.Kind == host.EventTurnStarted {
 			continue
 		}
-		switch msg := pending[0]().(type) {
-		case tea.BatchMsg:
-			pending = append(pending, msg...)
-		case tui.Event:
-			seen = append(seen, msg)
-			_, next := app.Update(msg)
-			pending = append(pending, next)
-			if msg.Kind != tui.EventAwaitPerson || unanswered != "" {
-				continue
-			}
-			key := keys[min(waits, len(keys)-1)]
-			app.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
-			if strings.Contains(app.View().Content, "[1] allow once") {
-				unanswered = key
-				app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-			}
-			waits++
+		seen = append(seen, msg)
+		app.Update(msg)
+		if msg.Kind != tui.EventAwaitPerson || unanswered != "" {
+			continue
 		}
+		key := keys[min(waits, len(keys)-1)]
+		app.Update(tea.KeyPressMsg{Code: rune(key[0]), Text: key})
+		if strings.Contains(app.View().Content, "[1] allow once") {
+			unanswered = key
+			app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+		}
+		waits++
 	}
 	if unanswered != "" {
 		t.Fatalf("%q did not answer the open question and the turn waited until it was stopped", unanswered)
@@ -1880,7 +1672,7 @@ func TestATurnThatFailsForAnotherReasonStillReportsTheError(t *testing.T) {
 		t.Fatalf("the failure was reported as %+v, want the error text", failures)
 	}
 	done := driver.of(tui.EventDone)
-	if len(done) != 1 || done[0].Text != doneWords(turn.OutcomeError, nil) {
+	if len(done) != 1 || done[0].Text != "failed after" {
 		t.Fatalf("the closing line reads %+v, want a turn that reports as an error", done)
 	}
 }
@@ -1975,161 +1767,6 @@ func TestAlwaysHereAnswersTheSamePlaceAndNothingElse(t *testing.T) {
 	t.Logf("four asked calls, %d waits, and the grant held only for write note.txt", waits)
 }
 
-func TestTheDrainTakesEveryQueuedMessageInOrderAndSaysSoOnce(t *testing.T) {
-	queue := make(chan string, 4)
-	queue <- "read the policy first"
-	queue <- "and leave the changelog alone"
-	var told []string
-	taken := steered(queue, func(event tui.Event) {
-		if event.Kind != tui.EventSteered {
-			t.Errorf("the drain emitted kind %v, want a steered event", event.Kind)
-		}
-		told = append(told, event.Text)
-	})
-	want := []string{"read the policy first", "and leave the changelog alone"}
-	if !slices.Equal(taken, want) || !slices.Equal(told, want) {
-		t.Fatalf("the drain took %q and said %q, want %q for both", taken, told, want)
-	}
-	if again := steered(queue, func(tui.Event) { t.Error("an empty queue said something") }); again != nil {
-		t.Fatalf("a second drain took %q from an empty queue", again)
-	}
-}
-
-func TestThePlaceAGrantCoversIsTheToolAndItsSubject(t *testing.T) {
-	for _, one := range []struct {
-		tool  string
-		args  string
-		place string
-	}{
-		{"write", `{"path":"note.txt","content":"a"}`, "write note.txt"},
-		{"read", `{"path":"note.txt"}`, "read note.txt"},
-		{"bash", `{"command":"git push --force origin main"}`, "bash git push --force"},
-		{"bash", `{"command":"git push --force origin develop"}`, "bash git push --force"},
-		{"bash", `{"command":"rm -rf build"}`, "bash rm -rf build"},
-		{"glob", `{"pattern":"*.go"}`, `glob {"pattern":"*.go"}`},
-	} {
-		got := askedPlace(turn.GateRequest{Tool: one.tool, Args: json.RawMessage(one.args)})
-		if got != one.place {
-			t.Errorf("%s %s is the place %q, want %q", one.tool, one.args, got, one.place)
-		}
-	}
-}
-
-func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
-	want := map[turn.Outcome]string{
-		turn.OutcomeUnset:               "finished in",
-		turn.OutcomeForked:              "finished in",
-		turn.OutcomeStopped:             "cooked for",
-		turn.OutcomeStepCap:             "stopped at the step cap after",
-		turn.OutcomeDecisionCap:         "stopped at the decision cap after",
-		turn.OutcomeError:               "failed after",
-		turn.OutcomeTruncated:           "stopped on a reply it could not finish, after",
-		turn.OutcomeRetiredCostCap:      "stopped at a cap this build no longer sets, after",
-		turn.OutcomeRetiredWallClockCap: "stopped at the wall clock cap after",
-		turn.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
-	}
-	for _, outcome := range sessionstore.AllOutcomes() {
-		expected, named := want[outcome]
-		if !named {
-			t.Fatalf("%s carries no expected closing words in this test, so a new outcome can reach doneWords untested", outcome)
-		}
-		got := doneWords(outcome, nil)
-		if got != expected {
-			t.Errorf("%s closes the turn with %q, want %q", outcome, got, expected)
-		}
-		if strings.Contains(got, "_") {
-			t.Errorf("%s closes the turn with its own enum name: %q", outcome, got)
-		}
-	}
-}
-
-func TestSessionVerdictNamesEveryLedgerVerdict(t *testing.T) {
-	want := map[ledger.Verdict]session.Verdict{
-		ledger.VerdictUnset: session.Ask,
-		ledger.VerdictAllow: session.Allow,
-		ledger.VerdictAsk:   session.Ask,
-		ledger.VerdictDeny:  session.Deny,
-	}
-	for _, v := range ledger.AllVerdicts() {
-		expected, named := want[v]
-		if !named {
-			t.Fatalf("%s carries no expected session verdict, so a new ledger verdict can reach sessionVerdict untested", v)
-		}
-		if got := sessionVerdict(v); got != expected {
-			t.Errorf("sessionVerdict(%s) = %s, want %s", v, got, expected)
-		}
-	}
-}
-
-func TestTheSubAgentBarFollowsTheCapTheTurnWasGiven(t *testing.T) {
-	for _, one := range []struct{ maxSteps, total int }{{0, konst.TurnMaxSteps}, {12, 12}} {
-		var sent []tui.Event
-		watch := &appWatcher{
-			emit:     func(event tui.Event) { sent = append(sent, event) },
-			now:      time.Now,
-			maxSteps: one.maxSteps,
-			held:     rosterHolding(t, roster.SubAgent{ID: "parent-c1", Mission: "do it", Owns: []string{"x"}}),
-		}
-		watch.sendSubAgents()
-		if got := sent[0].SubAgents[0].Total; got != one.total {
-			t.Fatalf("a bar under a cap of %d draws %d steps, want %d", one.maxSteps, got, one.total)
-		}
-	}
-}
-
-func gateRowFixture(t *testing.T) (string, ledger.Row) {
-	t.Helper()
-	dir, err := sys.LogDir()
-	if err != nil {
-		t.Fatalf("sys.LogDir: %v", err)
-	}
-	row, err := ledger.NewWriter(dir).Append(ledger.Row{Point: "tool_gate"})
-	if err != nil {
-		t.Fatalf("writing the row fixture: %v", err)
-	}
-	return dir, row
-}
-
-func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
-	dir, row := gateRowFixture(t)
-	answers := make(chan tui.Answer, 1)
-	answers <- tui.AllowedOnce
-	person := awaitPerson(func(tui.Event) {}, answers, map[string]bool{})
-
-	answer, err := person(context.Background(), turn.GateRequest{Tool: "write"}, turn.GateDecision{ID: row.ID})
-	if err != nil || answer != turn.PersonAllowedOnce {
-		t.Fatalf("person returned %v, %v", answer, err)
-	}
-
-	read, ok, err := ledger.NewReader(dir).ByID(row.ID)
-	if err != nil || !ok {
-		t.Fatalf("reading the row back: ok=%v err=%v", ok, err)
-	}
-	if read.Outcome == nil || read.Outcome.Kind != turn.OutcomeKindGateAnswer || read.Outcome.Detail != "allow" {
-		t.Fatalf("the row's outcome is %+v, want kind %q detail allow", read.Outcome, turn.OutcomeKindGateAnswer)
-	}
-}
-
-func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
-	dir, row := gateRowFixture(t)
-	request := turn.GateRequest{Tool: "write", Args: json.RawMessage(`{"path":"a.txt"}`)}
-	granted := map[string]bool{askedPlace(request): true}
-	person := awaitPerson(func(tui.Event) {}, make(chan tui.Answer), granted)
-
-	answer, err := person(context.Background(), request, turn.GateDecision{ID: row.ID})
-	if err != nil || answer != turn.PersonAlwaysHere {
-		t.Fatalf("person returned %v, %v", answer, err)
-	}
-
-	read, ok, err := ledger.NewReader(dir).ByID(row.ID)
-	if err != nil || !ok {
-		t.Fatalf("reading the row back: ok=%v err=%v", ok, err)
-	}
-	if read.Outcome != nil {
-		t.Fatalf("a decision nobody was asked about must stay unlabelled, got %+v", read.Outcome)
-	}
-}
-
 func TestTheAppsBashToolResolvesThroughTheSameShellSettingAsTofuRun(t *testing.T) {
 	dir := scratchProject(t)
 	bogus := filepath.Join(dir, "no-such-shell.exe")
@@ -2164,22 +1801,22 @@ func TestTheAppResolvesTheShellOnceAndSharesItWithTheEnvironmentBlock(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := strings.Index(string(source), "func (s *appSession) run(")
+	start := strings.Index(string(source), "func (e *appEngine) Prepare(")
 	if start < 0 {
-		t.Fatal("app.go no longer defines appSession.run, so this test cannot check its wiring")
+		t.Fatal("app.go no longer defines appEngine.Prepare, so this test cannot check its wiring")
 	}
 	body := string(source)[start:]
 	if end := strings.Index(body, "\nfunc "); end >= 0 {
 		body = body[:end]
 	}
 	if calls := strings.Count(body, "turn.ResolveRunShell("); calls != 1 {
-		t.Fatalf("appSession.run calls turn.ResolveRunShell %d times, want 1: a second call resolves the shell again instead of sharing the first", calls)
+		t.Fatalf("appEngine.Prepare calls turn.ResolveRunShell %d times, want 1: a second call resolves the shell again instead of sharing the first", calls)
 	}
 	if !strings.Contains(body, "opts.shell = shell") {
-		t.Fatal("appSession.run resolves a shell but never carries it on opts, so buildRunToolsForRun and the environment block cannot share it")
+		t.Fatal("appEngine.Prepare resolves a shell but never carries it on opts, so buildRunToolsForRun and the environment block cannot share it")
 	}
 	if !strings.Contains(body, "buildRunToolsForRun(") {
-		t.Fatal("appSession.run still builds its tools through a path that resolves its own shell instead of the one already carried on opts")
+		t.Fatal("appEngine.Prepare still builds its tools through a path that resolves its own shell instead of the one already carried on opts")
 	}
 }
 
@@ -2459,7 +2096,7 @@ func TestTofuDriveTakesNoDocsAndTheAppItDrivesOffersNoDocs(t *testing.T) {
 		}
 		model := &offeredModel{}
 		live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
-		live.arms = plan.arms
+		live.engine.arms = plan.arms
 		driver := driveApp(t)
 		live.run(t.Context(), onTheSubscription, "say done", driver.emit)
 		offered := slices.Contains(model.tools, tools.DocsToolName)
@@ -3160,10 +2797,9 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 	model := &leadStoppedWhileItsSubAgentWaits{queuedModel: noteSubAgent(writeNote("call-2")), asking: make(chan struct{}), subAgentGo: make(chan struct{})}
 	spawnAndRead := &model.decisions[0]
 	spawnAndRead.ToolCalls = append(spawnAndRead.ToolCalls, llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)})
-	stops, firstClose := make(chan struct{}, 1), make(chan struct{})
+	firstClose := make(chan struct{})
 	var once sync.Once
 	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
-	live.stopLead = stops
 	ran := make(chan struct{})
 	go func() {
 		defer close(ran)
@@ -3179,7 +2815,7 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 	case <-time.After(5 * time.Second):
 		t.Fatal("the lead never asked a second time")
 	}
-	stops <- struct{}{}
+	live.StopLead()
 	<-firstClose
 	close(model.subAgentGo)
 	<-ran
@@ -3191,20 +2827,6 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 	last := done[1].SubAgents
 	if len(last) != 1 || last[0].State != roster.Finished || last[0].Report == "" {
 		t.Fatalf("the sub-agent ended as %+v, want it finished with its report after the lead's turn was stopped", last)
-	}
-}
-
-func TestTheLeadsLogCloseErrorReachesTheChatOnceAndATurnsErrorIsNotRepeated(t *testing.T) {
-	turnErr := fmt.Errorf("turn: %w", context.Canceled)
-	closeErr := errors.New("session: closing the log of sub-1: the disk is full")
-	if shown := unreported(errors.Join(turnErr, nil, errors.Join(closeErr)), []error{turnErr}); shown == nil || shown.Error() != closeErr.Error() {
-		t.Errorf("the lead loop's error was shown as %v, want the log close error alone", shown)
-	}
-	if shown := unreported(errors.Join(turnErr), []error{turnErr}); shown != nil {
-		t.Errorf("a turn's own error, already in the chat, was shown again as %v", shown)
-	}
-	if shown := unreported(nil, nil); shown != nil {
-		t.Errorf("a loop that ended clean showed %v", shown)
 	}
 }
 
@@ -3220,7 +2842,7 @@ func TestEverySessionEventOfAContinuationForkCarriesTheRootOfItsLine(t *testing.
 			t.Fatal(err)
 		}
 	}
-	if resumed := resumedChat(sessionResume{Session: fork}); len(resumed) == 0 || resumed[0].Root != root {
+	if resumed := newAppSession(dir, nil, nil, time.Now, sessionResume{}).Opening(sessionResume{Session: fork}.hosted()); len(resumed) == 0 || resumed[0].Root != root {
 		t.Fatalf("the resumed chat names the line %+v, want the root %s", resumed, root)
 	}
 	driver := driveApp(t)

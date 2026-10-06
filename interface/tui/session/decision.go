@@ -11,6 +11,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/trace"
+	"tofu/internal/host"
 	"tofu/internal/widget"
 )
 
@@ -26,27 +27,21 @@ const (
 	askBlockRows     = 2
 )
 
-type Verdict int
+type Verdict = host.Verdict
 
 const (
-	Allow Verdict = iota
-	Ask
-	Deny
+	Allow = host.Allow
+	Ask   = host.Ask
+	Deny  = host.Deny
 )
 
-func (v Verdict) String() string {
-	switch v {
-	case Allow:
-		return "allow"
-	case Ask:
-		return "ask"
-	case Deny:
-		return "deny"
-	}
-	panic("session: unknown verdict")
-}
+type Answer = host.GateAnswer
 
-func (v Verdict) style() lipgloss.Style {
+type Reason = host.Reason
+
+type Decision = host.Decision
+
+func verdictStyle(v Verdict) lipgloss.Style {
 	switch v {
 	case Allow:
 		return look.Style(look.MutedColor)
@@ -58,59 +53,29 @@ func (v Verdict) style() lipgloss.Style {
 	panic("session: unknown verdict")
 }
 
-type Answer struct {
-	Question string
-	Choice   string
-	Value    float64
-	Max      float64
-}
-
-type Reason struct {
-	Question  string
-	Limit     string
-	Levels    []string
-	Threshold float64
-	Value     float64
-	DeadBand  bool
-	RelaxedBy string
-	Blocked   bool
-}
-
-type Decision struct {
-	Tool          string
-	Verdict       Verdict
-	Answers       []Answer
-	Reason        Reason
-	Failure       string
-	Awaiting      bool
-	Enforced      bool
-	OverridesRule string
-	asked         bool
-}
-
-func (d *Decision) shown() string {
-	if d == nil || d.Verdict == Allow || !d.asked && !d.Enforced {
+func (e *Entry) verdictShown() string {
+	if e.Decision == nil || e.Decision.Verdict == Allow || !e.asked && !e.Decision.Enforced {
 		return ""
 	}
-	return d.Verdict.String()
+	return e.Decision.Verdict.String()
 }
 
-func (d Decision) lines(width int) []string {
+func decisionLines(d Decision, width int) []string {
 	if d.Verdict == Allow {
 		return nil
 	}
 	body := max(width-widget.Cells(continuation), 1)
-	label := widget.Column(d.Answers, Answer.label, 0)
+	label := widget.Column(d.Answers, answerLabel, 0)
 	bars := min(barColumns, body-label-valueColumns-2*widget.Cells(gap))
 	var lines []string
 	for _, answer := range d.Answers {
-		row := widget.Pad(answer.label(), label) + gap + widget.Lead(number(answer.Value), valueColumns)
+		row := widget.Pad(answerLabel(answer), label) + gap + widget.Lead(number(answer.Value), valueColumns)
 		if bars > 0 {
-			row += gap + widget.Bar(answer.fraction(), bars)
+			row += gap + widget.Bar(answerFraction(answer), bars)
 		}
 		lines = append(lines, look.Muted(continuation+widget.Fit(row, body)))
 	}
-	for _, sentence := range d.sentences() {
+	for _, sentence := range sentences(d) {
 		for _, line := range widget.Wrap(sentence, body) {
 			lines = append(lines, look.Faint(continuation+line))
 		}
@@ -123,7 +88,7 @@ func (m *Model) openAsk() (Entry, bool) {
 		return Entry{}, false
 	}
 	for index := len(m.entries) - 1; index >= 0; index-- {
-		if entry := m.entries[index]; entry.Decision != nil && entry.Decision.Awaiting {
+		if entry := m.entries[index]; entry.Decision != nil && entry.asking {
 			return entry, true
 		}
 	}
@@ -141,7 +106,7 @@ func (m *Model) askLines() []string {
 		return nil
 	}
 	head := askMarker + entry.Decision.Tool + wantsWord + entry.Body
-	if tripped := entry.Decision.tripped(); tripped != "" {
+	if tripped := tripped(*entry.Decision); tripped != "" {
 		head += askGap + tripped
 	}
 	labels := [...]string{"[1] allow once", "[2] deny", "[3] always here"}
@@ -171,13 +136,13 @@ func spread(left, right string, width int) string {
 	return widget.Pad(widget.Fit(left, room), room) + right
 }
 
-func (d Decision) sentences() []string {
+func sentences(d Decision) []string {
 	if d.Failure != "" {
 		return []string{"the gate could not answer, so the call is an ask: " + d.Failure}
 	}
 	var out []string
 	if d.Reason.Question != "" {
-		out = append(out, d.threshold())
+		out = append(out, threshold(d))
 	}
 	if d.Reason.RelaxedBy != "" {
 		out = append(out, "relaxed one step by "+d.Reason.RelaxedBy)
@@ -188,9 +153,9 @@ func (d Decision) sentences() []string {
 	return out
 }
 
-func (d Decision) tripped() string {
+func tripped(d Decision) string {
 	if d.Reason.Question == "" || d.Failure != "" {
-		if reasons := d.sentences(); len(reasons) > 0 {
+		if reasons := sentences(d); len(reasons) > 0 {
 			return reasons[0]
 		}
 		return ""
@@ -205,8 +170,8 @@ func (d Decision) tripped() string {
 	return d.Reason.Question + " " + number(d.Reason.Value) + " " + crossed + " " + number(d.Reason.Threshold)
 }
 
-func (d Decision) threshold() string {
-	word := d.Reason.word()
+func threshold(d Decision) string {
+	word := reasonWord(d.Reason)
 	numeric, worded := "is over", ""
 	switch {
 	case d.Reason.DeadBand:
@@ -218,10 +183,10 @@ func (d Decision) threshold() string {
 		return d.Reason.Question + " " + number(d.Reason.Value) + " " + numeric + " " +
 			d.Reason.Limit + " " + number(d.Reason.Threshold)
 	}
-	return d.Reason.Question + " is " + word + worded + ", so the call is " + d.Verdict.outcome()
+	return d.Reason.Question + " is " + word + worded + ", so the call is " + verdictOutcome(d.Verdict)
 }
 
-func (v Verdict) outcome() string {
+func verdictOutcome(v Verdict) string {
 	switch v {
 	case Allow:
 		return "allowed"
@@ -233,7 +198,7 @@ func (v Verdict) outcome() string {
 	panic("session: unknown verdict")
 }
 
-func (r Reason) word() string {
+func reasonWord(r Reason) string {
 	level := int(math.Round(r.Value))
 	if len(r.Levels) < 2 || level < 0 || level >= len(r.Levels) {
 		return ""
@@ -250,14 +215,14 @@ func (r Reason) word() string {
 	return string(unicode.ToLower(first)) + head[size:]
 }
 
-func (a Answer) label() string {
+func answerLabel(a Answer) string {
 	if a.Choice == "" {
 		return a.Question
 	}
 	return a.Question + " " + a.Choice
 }
 
-func (a Answer) fraction() float64 {
+func answerFraction(a Answer) float64 {
 	if a.Max <= 0 {
 		return 0
 	}

@@ -13,7 +13,7 @@ import (
 const riskSentence = "risk is hard to undo or reaches outside the workspace, so the call is asked about"
 
 func TestAGateAskDrawsTheWordTheLegendGaveTheScore(t *testing.T) {
-	app := awaitingApp(t, make(chan Answer, 1))
+	app, _ := awaitingApp(t)
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
 	content := app.View().Content
 	plain := ansi.Strip(content)

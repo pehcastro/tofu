@@ -9,6 +9,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/paste"
+	"tofu/internal/host"
 	"tofu/internal/widget"
 )
 
@@ -43,8 +44,6 @@ type pendingPaste struct {
 
 func pastingToken(index int) string { return pastingTokenHead + strconv.Itoa(index) + "]" }
 
-func ImageToken(index int) string { return imageTokenHead + strconv.Itoa(index) + "]" }
-
 func textToken(chars int) string { return textTokenHead + strconv.Itoa(chars) + textTokenTail }
 
 func (m *Model) Paste(board paste.Board) tea.Cmd {
@@ -64,7 +63,7 @@ func (m *Model) Attached(outcome paste.Outcome) {
 	m.pending = slices.Delete(m.pending, at, at+1)
 	switch outcome.State {
 	case paste.Ready:
-		token := ImageToken(outcome.Index)
+		token := host.ImageToken(outcome.Index)
 		m.replaceToken(held.token, token)
 		m.chips = append(m.chips, Chip{Kind: ImageChip, Name: outcome.Name, Format: outcome.Format(), Bytes: outcome.Bytes, Token: token})
 	case paste.Textual:

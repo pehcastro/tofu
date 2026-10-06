@@ -14,7 +14,7 @@ import (
 	"sync"
 	"testing"
 
-	"tofu/interface/tui"
+	"tofu/internal/host"
 	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -220,7 +220,7 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if len(*heard) == 0 || !strings.Contains((*heard)[0].body, `"model":"muse-spark-1.3-contributor"`) {
 		t.Errorf("the bound meta model was not what the run asked for: %d requests", len(*heard))
 	}
-	if opts := pickedOpts(project, "", "say ok", tui.Pick{Wire: wireSubscription}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
+	if opts := pickedOpts(project, host.Turn{Task: "say ok", Pick: host.Pick{Wire: wireSubscription}}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
 		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.wire, opts.model)
 	}
 	wires := keyWires()

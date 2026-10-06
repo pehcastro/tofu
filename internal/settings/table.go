@@ -65,6 +65,7 @@ const (
 	FoldHidesShell         = "foldHidesShell"
 	DecisionCap            = "decisionCap"
 	TurnMaySpawn           = "turnMaySpawn"
+	OneTurnPerProject      = "oneTurnPerProject"
 	SubAgentsPerTurn       = "subAgentsPerTurn"
 	SubAgentDepth          = "subAgentDepth"
 	SubAgentCheckSeconds   = "subAgentCheckSeconds"
@@ -242,6 +243,7 @@ func Default() []Spec {
 		{Key: DecisionCap, Label: "Decision cap", Description: "decision cap per turn, zero means no cap", Category: "Turn", Kind: Int,
 			Least: 0, Most: konst.DecisionCapMost, Unit: "decisions a turn, where 0 means no cap"},
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1},
+		{Key: OneTurnPerProject, Label: "One turn per project", Description: "while one session runs a turn in this project, a turn from any other session is refused; off lets several sessions run turns in one repository at once", Category: "Turn", Kind: Bool, Default: 1},
 		{Key: SubAgentsPerTurn, Label: "Sub-agents running at once", Description: "how many sub-agents may run at once; a spawn past it is refused until one ends, and the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentsPerTurnDefault,
 			Least: 1, Most: math.MaxInt32, Unit: "sub-agents running at once"},
 		{Key: SubAgentDepth, Label: "Sub-agent depth", Description: "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentDepthDefault,

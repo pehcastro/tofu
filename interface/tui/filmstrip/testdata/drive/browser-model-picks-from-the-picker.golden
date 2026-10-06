@@ -69,7 +69,7 @@
     Context       08      subagent gives the browser steps to a browser sub-agent on browserMod…    
     Files         03                                                                                
     Shell         05      Browser steps                                                   30  ▾     
-    Turn          11      how many actions one browser task may take                                
+    Turn          12      how many actions one browser task may take                                
   › Browser       06                                                                                
                         › Browser model                                  meta/muse-spark-1.3  ▾     
   NAVIGATE                the subscription model a browser task asks for the text to type and f…    

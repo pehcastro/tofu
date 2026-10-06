@@ -85,7 +85,7 @@ func TestHooksTheAppFiresSessionStartForStartupClearAndResumeAndSessionEndAtExit
 	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	var events eventLog
 	live.run(t.Context(), onTheSubscription, "first", events.add)
-	first := live.id
+	first := live.ID()
 	live.run(t.Context(), onTheSubscription, "second, same session", events.add)
 	live.startFresh()
 	live.run(t.Context(), onTheSubscription, "after clear", events.add)

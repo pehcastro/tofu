@@ -220,25 +220,25 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.
 	live := liveAppSession(dir, first)
 	var events eventLog
 	live.run(t.Context(), onTheSubscription, "write a note", events.add)
-	if live.id == "" || len(live.carried) == 0 {
-		t.Fatalf("one turn left session %q carrying %d messages", live.id, len(live.carried))
+	if live.ID() == "" || len(live.Carried()) == 0 {
+		t.Fatalf("one turn left session %q carrying %d messages", live.ID(), len(live.Carried()))
 	}
 
-	ran := live.id
-	if note := live.startFresh(); live.id != "" || len(live.carried) != 0 {
-		t.Fatalf("/new said %q and left session %q carrying %d messages", note, live.id, len(live.carried))
+	ran := live.ID()
+	if note := live.startFresh(); live.ID() != "" || len(live.Carried()) != 0 {
+		t.Fatalf("/new said %q and left session %q carrying %d messages", note, live.ID(), len(live.Carried()))
 	}
 
 	note, chat := live.resume(ran)
-	if live.id != ran || len(live.carried) == 0 || len(chat) == 0 {
-		t.Fatalf("/resume %s said %q, took %q and carried %d messages and %d chat events back", ran, note, live.id, len(live.carried), len(chat))
+	if live.ID() != ran || len(live.Carried()) == 0 || len(chat) == 0 {
+		t.Fatalf("/resume %s said %q, took %q and carried %d messages and %d chat events back", ran, note, live.ID(), len(live.Carried()), len(chat))
 	}
-	if !strings.Contains(note, live.id) {
+	if !strings.Contains(note, live.ID()) {
 		t.Errorf("/resume said %q and does not name the session it took", note)
 	}
 
 	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
-	live.open = func(runOpts) (appWire, error) {
+	live.engine.open = func(runOpts) (appWire, error) {
 		return wireOn(second), nil
 	}
 	live.run(t.Context(), onTheSubscription, "what did you write", events.add)

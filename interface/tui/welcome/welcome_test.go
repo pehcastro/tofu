@@ -1,7 +1,6 @@
 package welcome_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,6 @@ func freshApp(t *testing.T, requirements []tui.Requirement) *tui.App {
 		Keymap:       filepath.Join(t.TempDir(), "keybindings.json"),
 		Requirements: requirements,
 		Recheck:      func() []tui.Requirement { return nil },
-		Turn:         func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 	})
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	return app

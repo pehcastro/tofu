@@ -11,21 +11,25 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/subagent"
+	"tofu/internal/host"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
 
-const steerBuffer = 8
+type played struct {
+	task string
+	live host.Live
+}
 
-func steeringTurn(steering chan string, started, taken chan<- string, release <-chan struct{}) Turn {
-	return func(_ context.Context, _ Pick, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
-		started <- task
+func steeringTurn(started chan<- played, taken chan<- string, release <-chan struct{}) host.Play {
+	return func(_ context.Context, _ Pick, task string, live host.Live) {
+		started <- played{task: task, live: live}
 		<-release
 		for {
 			select {
-			case steered := <-steering:
+			case steered := <-live.Steering:
 				taken <- steered
-				emit(Event{Kind: EventSteered, Text: steered})
+				live.Emit(Event{Kind: EventSteered, Text: steered})
 			default:
 				return
 			}
@@ -33,15 +37,16 @@ func steeringTurn(steering chan string, started, taken chan<- string, release <-
 	}
 }
 
-func steerApp(t *testing.T, steering chan string, turn Turn) *App {
+func steerApp(t *testing.T, play host.Play) *App {
 	t.Helper()
+	playing, _ := host.New(host.Config{Now: fixedClock(), Play: play})
+	t.Cleanup(playing.Close)
 	app := newTestApp(Options{
-		Repo:     testRepo,
-		Branch:   "develop",
-		Now:      fixedClock(),
-		Wires:    anthropicAlone,
-		Turn:     turn,
-		Steering: steering,
+		Repo:   testRepo,
+		Branch: "develop",
+		Now:    fixedClock(),
+		Wires:  anthropicAlone,
+		Host:   playing,
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -49,9 +54,8 @@ func steerApp(t *testing.T, steering chan string, turn Turn) *App {
 }
 
 func TestAQueuedRowIsUnmarkedWhenTheModelTakesItAndNotWhenItWasQueued(t *testing.T) {
-	steering := make(chan string, steerBuffer)
-	started, release := make(chan string, 2), make(chan struct{})
-	app := steerApp(t, steering, steeringTurn(steering, started, make(chan string, 2), release))
+	started, release := make(chan played, 2), make(chan struct{})
+	app := steerApp(t, steeringTurn(started, make(chan string, 2), release))
 	typeAndSend(app, firstTask)
 	<-started
 	typeAndSend(app, secondTask)
@@ -82,51 +86,48 @@ func TestAQueuedRowIsUnmarkedWhenTheModelTakesItAndNotWhenItWasQueued(t *testing
 }
 
 func TestAMessageQueuedAfterTheLastStepStartsTheNextTurn(t *testing.T) {
-	steering := make(chan string, steerBuffer)
-	started := make(chan string, 2)
+	started := make(chan played, 2)
 	ended := make(chan struct{})
-	app := steerApp(t, steering, func(_ context.Context, _ Pick, task string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
-		started <- task
+	app := steerApp(t, func(_ context.Context, _ Pick, task string, live host.Live) {
+		started <- played{task: task, live: live}
 		<-ended
 	})
 	typeAndSend(app, firstTask)
-	<-started
+	first := <-started
 	typeAndSend(app, secondTask)
 	close(ended)
 	endTurn(t, app)
 
 	select {
 	case next := <-started:
-		if next != secondTask {
-			t.Fatalf("the next turn was given %q, want the message nobody drained", next)
+		if next.task != secondTask {
+			t.Fatalf("the next turn was given %q, want the message nobody drained", next.task)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("a message queued after the last step was dropped instead of starting the next turn")
 	}
-	if held := len(steering); held != 0 {
+	if held := len(first.live.Steering); held != 0 {
 		t.Errorf("%d messages are still in the steering channel, so the next turn would be given one twice", held)
 	}
 }
 
 func TestStoppingTheTurnEmptiesTheSteeringChannelToo(t *testing.T) {
-	steering := make(chan string, steerBuffer)
-	started, release := make(chan string, 2), make(chan struct{})
+	started, release := make(chan played, 2), make(chan struct{})
 	defer close(release)
-	app := steerApp(t, steering, steeringTurn(steering, started, make(chan string, 2), release))
+	app := steerApp(t, steeringTurn(started, make(chan string, 2), release))
 	typeAndSend(app, firstTask)
-	<-started
+	first := <-started
 	typeAndSend(app, secondTask)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
-	if held := len(steering); held != 0 {
+	if held := len(first.live.Steering); held != 0 {
 		t.Errorf("ctrl+c left %d messages in the steering channel", held)
 	}
 }
 
 func TestALongQueuedMessageIsCutOnScreenAndReachesTheModelWhole(t *testing.T) {
-	steering := make(chan string, steerBuffer)
-	started, taken, release := make(chan string, 2), make(chan string, 2), make(chan struct{})
-	app := steerApp(t, steering, steeringTurn(steering, started, taken, release))
+	started, taken, release := make(chan played, 2), make(chan string, 2), make(chan struct{})
+	app := steerApp(t, steeringTurn(started, taken, release))
 	long := strings.Repeat("read the policy before the wire, ", 8) + "and say so"
 	typeAndSend(app, firstTask)
 	<-started
@@ -168,24 +169,17 @@ func pumpUntil(t *testing.T, app *App, kind EventKind) {
 	}
 }
 
-func subAgentLoopApp(t *testing.T, steering chan string, stops chan struct{}, turn Turn) *App {
-	t.Helper()
-	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone, Turn: turn, Steering: steering, StopLead: stops})
-	app.Init()
-	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	return app
-}
-
 func runningSubAgent() []subagent.Row {
 	return []subagent.Row{{Name: "ts-dev-1", State: roster.Working}}
 }
 
 func TestEscAndCtrlCWhileOnlyASubAgentRunsLeaveItRunning(t *testing.T) {
-	stops, alive, release := make(chan struct{}, 1), make(chan bool, 1), make(chan struct{})
-	app := subAgentLoopApp(t, make(chan string, steerBuffer), stops, func(ctx context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
-		emit(Event{Kind: EventRequesting})
-		emit(Event{Kind: EventText, Text: "ts-dev-1 is on the routes"})
-		emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
+	alive, release, stops := make(chan bool, 1), make(chan struct{}), make(chan (<-chan struct{}), 1)
+	app := steerApp(t, func(ctx context.Context, _ Pick, _ string, live host.Live) {
+		stops <- live.LeadStop
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventText, Text: "ts-dev-1 is on the routes"})
+		live.Emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
 		<-release
 		alive <- ctx.Err() == nil
 	})
@@ -198,27 +192,27 @@ func TestEscAndCtrlCWhileOnlyASubAgentRunsLeaveItRunning(t *testing.T) {
 	if !<-alive {
 		t.Error("esc and one ctrl+c with the lead idle cancelled the loop, and the sub-agent with it")
 	}
-	if len(stops) != 0 {
+	if len(<-stops) != 0 {
 		t.Error("a stop was sent to a lead that runs no turn")
 	}
 	endTurn(t, app)
 }
 
 func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
-	steering := make(chan string, steerBuffer)
-	stops, alive, told, release := make(chan struct{}, 1), make(chan bool, 1), make(chan bool, 1), make(chan struct{})
-	app := subAgentLoopApp(t, steering, stops, func(ctx context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
-		emit(Event{Kind: EventRequesting})
-		emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
-		emit(Event{Kind: EventRequesting})
-		emit(Event{Kind: EventText, Text: "the lead keeps going"})
+	alive, told, release, steering := make(chan bool, 1), make(chan bool, 1), make(chan struct{}), make(chan (<-chan string), 1)
+	app := steerApp(t, func(ctx context.Context, _ Pick, _ string, live host.Live) {
+		steering <- live.Steering
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventText, Text: "the lead keeps going"})
 		select {
-		case <-stops:
+		case <-live.LeadStop:
 			told <- true
 		case <-time.After(2 * time.Second):
 			told <- false
 		}
-		emit(Event{Kind: EventDone, Text: "cancelled at", SubAgents: runningSubAgent()})
+		live.Emit(Event{Kind: EventDone, Text: "cancelled at", SubAgents: runningSubAgent()})
 		select {
 		case <-release:
 		case <-time.After(2 * time.Second):
@@ -234,8 +228,8 @@ func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
 	if !<-told {
 		t.Error("esc mid lead turn never told the lead to stop")
 	}
-	if len(steering) != 1 || len(app.view.Queued()) != 1 {
-		t.Errorf("the stop dropped the message typed before it: %d steered, queue %q", len(steering), app.view.Queued())
+	if held := len(<-steering); held != 1 || len(app.view.Queued()) != 1 {
+		t.Errorf("the stop dropped the message typed before it: %d steered, queue %q", held, app.view.Queued())
 	}
 	close(release)
 	if !<-alive {
@@ -245,16 +239,15 @@ func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
 }
 
 func TestAMessageTypedWhileOnlySubAgentsRunStartsALeadTurnAndIsNeverDrawnWaiting(t *testing.T) {
-	steering := make(chan string, steerBuffer)
 	release := make(chan struct{})
-	app := steerApp(t, steering, func(_ context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
-		emit(Event{Kind: EventRequesting})
-		emit(Event{Kind: EventText, Text: "ts-dev-1 is on the routes"})
-		emit(Event{Kind: EventDone, Text: "finished in", SubAgents: []subagent.Row{{Name: "ts-dev-1", State: roster.Working}}})
-		typed := <-steering
-		emit(Event{Kind: EventSteered, Text: typed})
-		emit(Event{Kind: EventRequesting})
-		emit(Event{Kind: EventText, Text: "the lead answers while ts-dev-1 works"})
+	app := steerApp(t, func(_ context.Context, _ Pick, _ string, live host.Live) {
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventText, Text: "ts-dev-1 is on the routes"})
+		live.Emit(Event{Kind: EventDone, Text: "finished in", SubAgents: []subagent.Row{{Name: "ts-dev-1", State: roster.Working}}})
+		typed := <-live.Steering
+		live.Emit(Event{Kind: EventSteered, Text: typed})
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventText, Text: "the lead answers while ts-dev-1 works"})
 		<-release
 	})
 	typeAndSend(app, firstTask)

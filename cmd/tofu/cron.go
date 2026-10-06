@@ -4,21 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"regexp"
 
 	"tofu/internal/cron"
 	"tofu/internal/konst"
-	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
 )
 
 var gitPush = regexp.MustCompile(`\bgit\b[^;&|\n]*\bpush\b`)
-
-func cronFile(sessions *sessionstore.Store, id string) string {
-	return filepath.Join(sessions.Dir(id), "cron.json")
-}
 
 func cronChecker(dir string) cron.Checker {
 	return func(ctx context.Context, command string) (int, string, error) {

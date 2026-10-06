@@ -118,7 +118,7 @@ func (m *Model) blockLines(start, end int) []string {
 func (m *Model) drawKey(start, end int) (drawKey, bool) {
 	entry := &m.entries[start]
 	key := drawKey{
-		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status, verdict: entry.Decision.shown(),
+		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status, verdict: entry.verdictShown(),
 		streaming: entry.streaming, waiting: entry.waiting, failed: entry.Failed, promoted: entry.Promoted,
 	}
 	if m.folds(start) {
@@ -341,8 +341,8 @@ func (m *Model) toolLine(entry Entry) string {
 	if status = widget.Fit(oneLine(status), max(m.textWidth()/statusShare-widget.Cells(right), 0)); status != "" {
 		right = gap + statusStyle.Render(status) + right
 	}
-	if word := entry.Decision.shown(); word != "" {
-		right = gap + entry.Decision.Verdict.style().Render(word) + right
+	if word := entry.verdictShown(); word != "" {
+		right = gap + verdictStyle(entry.Decision.Verdict).Render(word) + right
 	}
 	room := max(m.textWidth()-widget.Cells(right), 1)
 	return style.Render(widget.Pad(widget.Fit(marker+oneLine(entry.label()), room), room)) + right

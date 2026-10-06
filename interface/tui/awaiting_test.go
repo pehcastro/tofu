@@ -11,20 +11,22 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/golden"
+	"tofu/internal/host"
 )
 
 var promptKeys = regexp.MustCompile(`\[1\] allow once\s+\[2\] deny\s+\[3\] always here`)
 
-func awaitingApp(t *testing.T, answers chan Answer) *App {
+func awaitingApp(t *testing.T) (*App, <-chan Answer) {
 	t.Helper()
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	given := make(chan (<-chan Answer), 1)
+	playing, _ := host.New(host.Config{Now: func() time.Time { return at }, Play: func(_ context.Context, _ Pick, _ string, live host.Live) { given <- live.Answers }})
 	app := newTestApp(Options{
-		Repo:    testRepo,
-		Branch:  "develop",
-		Now:     func() time.Time { return at },
-		Wires:   anthropicAlone,
-		Answers: answers,
-		Turn:    func(context.Context, Pick, string, CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Repo:   testRepo,
+		Branch: "develop",
+		Now:    func() time.Time { return at },
+		Wires:  anthropicAlone,
+		Host:   playing,
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -33,11 +35,11 @@ func awaitingApp(t *testing.T, answers chan Answer) *App {
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "git push --force origin main"})
 	app.Update(Event{Kind: EventDecision, Decision: asked()})
 	app.Update(Event{Kind: EventAwaitPerson})
-	return app
+	return app, <-given
 }
 
 func TestAnAwaitingAskDrawsTheThreeKeysItTakes(t *testing.T) {
-	app := awaitingApp(t, make(chan Answer, 1))
+	app, _ := awaitingApp(t)
 	content := app.View().Content
 	if !promptKeys.MatchString(ansi.Strip(content)) {
 		t.Fatalf("the awaiting ask does not offer its keys\n%s", ansi.Strip(content))
@@ -54,8 +56,7 @@ func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {
 		{tea.KeyPressMsg{Code: '2', Text: "2"}, Denied},
 		{tea.KeyPressMsg{Code: '3', Text: "3"}, AlwaysHere},
 	} {
-		answers := make(chan Answer, 1)
-		app := awaitingApp(t, answers)
+		app, answers := awaitingApp(t)
 		app.Update(pressed.key)
 		select {
 		case got := <-answers:
@@ -73,8 +74,7 @@ func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {
 
 func TestAnAskingTurnStillTakesTypingInChat(t *testing.T) {
 	const sentence = "and open the changelog after that"
-	answers := make(chan Answer, 1)
-	app := awaitingApp(t, answers)
+	app, answers := awaitingApp(t)
 	typeText(app, sentence)
 	if len(answers) != 0 {
 		t.Errorf("typing a sentence under an open ask answered it with %d", <-answers)
@@ -88,8 +88,7 @@ func TestAnAskingTurnStillTakesTypingInChat(t *testing.T) {
 }
 
 func TestADigitUnderAnOpenAskTypesOnceTheComposerHasWords(t *testing.T) {
-	answers := make(chan Answer, 1)
-	app := awaitingApp(t, answers)
+	app, answers := awaitingApp(t)
 	typeText(app, "read 1 file")
 	if len(answers) != 0 {
 		t.Fatalf("a digit inside a sentence answered the ask with %d", <-answers)
@@ -100,8 +99,7 @@ func TestADigitUnderAnOpenAskTypesOnceTheComposerHasWords(t *testing.T) {
 }
 
 func TestInterruptStillReachesTheTurnWhileItWaits(t *testing.T) {
-	answers := make(chan Answer, 1)
-	app := awaitingApp(t, answers)
+	app, answers := awaitingApp(t)
 	app.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if len(answers) != 0 {
 		t.Fatal("ctrl+c was taken as an answer to the ask")

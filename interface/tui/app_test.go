@@ -24,6 +24,7 @@ import (
 	"tofu/interface/tui/subagent"
 	"tofu/internal/golden"
 	"tofu/internal/judge/jev"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
@@ -672,7 +673,7 @@ func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
 	app := newTestApp(Options{
 		Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires,
 		Turn: func(_ context.Context, _ Pick, _ string, emit CalledFromInsideTheTurnAndNeverAfterItReturns) {
-			for range eventBuffer * 2 {
+			for range konst.HostEventBuffer * 2 {
 				emit(Event{Kind: EventContext, Context: fixture.Context()})
 			}
 			close(filled)
@@ -686,23 +687,18 @@ func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
 	for _, letter := range "read the note" {
 		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
 	}
-	_, started := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	<-filled
 	var delivered []Event
-	for pending := []tea.Cmd{started}; len(pending) > 0; pending = pending[1:] {
-		if pending[0] == nil {
-			continue
+	for {
+		msg := app.waitForEvent()()
+		app.Update(msg)
+		event, isEvent := msg.(Event)
+		if !isEvent {
+			return app, delivered
 		}
-		switch msg := pending[0]().(type) {
-		case tea.BatchMsg:
-			pending = append(pending, msg...)
-		case Event:
-			delivered = append(delivered, msg)
-			_, next := app.Update(msg)
-			pending = append(pending, next)
-		}
+		delivered = append(delivered, event)
 	}
-	return app, delivered
 }
 
 func TestTheLastSubAgentStateReachesThePanelEvenWhenTheChannelIsFull(t *testing.T) {
@@ -733,8 +729,8 @@ func TestASupersededContextValueIsStillDroppedWhenTheChannelIsFull(t *testing.T)
 			kept++
 		}
 	}
-	if kept != eventBuffer {
-		t.Fatalf("the turn sent %d context values and %d reached the app, want the %d the channel holds", eventBuffer*2, kept, eventBuffer)
+	if held := konst.HostEventBuffer - 1; kept != held {
+		t.Fatalf("the turn sent %d context values and %d reached the app, want the %d the channel holds beside the turn's start", konst.HostEventBuffer*2, kept, held)
 	}
 }
 
@@ -1850,8 +1846,7 @@ func TestARuleQuestionTakesOneForThisProjectTwoForEverywhereAndThreeForNo(t *tes
 		{"2", AlwaysHere},
 		{"3", Denied},
 	} {
-		answers := make(chan Answer, 1)
-		app := awaitingApp(t, answers)
+		app, answers := awaitingApp(t)
 		app.Update(Event{Kind: EventResumed})
 		app.Update(Event{Kind: EventToolCall, ID: "c2", Tool: "rule_override", Text: "no_unit_test_after_code"})
 		app.Update(Event{Kind: EventDecision, Decision: &session.Decision{Tool: "rule_override", Verdict: session.Ask, OverridesRule: "no_unit_test_after_code"}})
@@ -1959,7 +1954,7 @@ func TestCtrlCWhileTheLeadIsIdleAsksBeforeItStopsTheSubAgents(t *testing.T) {
 	at := fixedStart()
 	turned := make(chan context.Context, 1)
 	app := newTestApp(Options{
-		Repo: testRepo, Now: func() time.Time { return at }, Wires: anthropicAlone, StopLead: make(chan struct{}, 1),
+		Repo: testRepo, Now: func() time.Time { return at }, Wires: anthropicAlone,
 		Turn: func(ctx context.Context, _ Pick, _ string, _ CalledFromInsideTheTurnAndNeverAfterItReturns) {
 			turned <- ctx
 			<-ctx.Done()

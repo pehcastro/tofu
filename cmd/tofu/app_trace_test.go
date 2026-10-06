@@ -37,19 +37,8 @@ func (d *appDriver) hashesDrawn() []string {
 }
 
 func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
+	dir := scratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	opts := armOpts(t)
-	opts.dir, opts.task, opts.turnID = dir, "read the note", turn.NewID(time.Now())
-	built, err := buildTestRunTools(dir, opts.toolSet)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sessions, err := sessionstore.Open()
-	if err != nil {
 		t.Fatal(err)
 	}
 	driver := driveApp(t)
@@ -59,9 +48,9 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 		}},
 		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"},
 	}}
-	watch := &appWatcher{inner: model, emit: driver.emit, now: time.Now, turnID: opts.turnID, seen: map[string]bool{}}
-	config, _ := mustConfig(t, opts, built, runtime{model: watch, spend: turn.SpendSubscription, sessions: sessions})
-	row, err := turn.Run(context.Background(), config)
+	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
+	live.run(t.Context(), onTheSubscription, "read the note", driver.emit)
+	sessions, err := sessionstore.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +60,7 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 		t.Fatal("no frame drew a hash for the call")
 	}
 
-	events, err := sessions.Body(row.ID)
+	events, err := sessions.Body(live.ID())
 	if err != nil {
 		t.Fatal(err)
 	}

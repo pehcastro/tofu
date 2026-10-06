@@ -15,7 +15,8 @@ import (
 
 	"tofu/interface/tui"
 	"tofu/interface/tui/paste"
-	"tofu/interface/tui/session"
+	"tofu/internal/cron"
+	"tofu/internal/host"
 	"tofu/internal/llm"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/sys"
@@ -281,8 +282,8 @@ func screenshotBoard(t *testing.T, live *appSession) paste.Board {
 		Read: func() (sys.Clipboard, error) {
 			return sys.Clipboard{Kind: sys.ClipboardImage, PNG: []byte("pretend this is a screenshot")}, nil
 		},
-		Dir:      live.pendingSessionDir,
-		Recorded: live.recordAttachment,
+		Dir:      live.AttachmentDir,
+		Recorded: live.Attached,
 	})
 }
 
@@ -299,22 +300,22 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 	if !ok || outcome.State != paste.Ready {
 		t.Fatalf("the paste returned %#v before any send, want a ready image", msg)
 	}
-	pending := live.pendingID()
+	pending := live.ID()
 
 	var events eventLog
 	live.run(t.Context(), onTheSubscription, "look at what I pasted", events.add)
-	if live.id != pending {
-		t.Fatalf("send minted %s, want the id the paste already used: %s", live.id, pending)
+	if live.ID() != pending {
+		t.Fatalf("send minted %s, want the id the paste already used: %s", live.ID(), pending)
 	}
 
 	store, err := sessionstore.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.id), outcome.Name)); err != nil {
+	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.ID()), outcome.Name)); err != nil {
 		t.Fatalf("%s is not kept for the session send created: %v", outcome.Name, err)
 	}
-	if _, err := os.Stat(filepath.Join(store.Dir(live.id), "session.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(store.Dir(live.ID()), "session.json")); err != nil {
 		t.Fatalf("the send did not write the session the image is kept for: %v", err)
 	}
 }
@@ -335,12 +336,12 @@ func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	book := cronFile(store, live.id)
+	book := filepath.Join(store.Dir(live.ID()), "cron.json")
 	corrupt := "{not json"
 	if err := os.WriteFile(book, []byte(corrupt), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := live.loadCron(live.id); err == nil {
+	if err := new(cron.Book).Load(book); err == nil {
 		t.Fatal("a corrupt cron.json loaded")
 	}
 
@@ -378,7 +379,7 @@ func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
 	outcome := msg.(paste.Outcome)
 
 	var events eventLog
-	live.run(t.Context(), onTheSubscription, "look at "+session.ImageToken(1), events.add)
+	live.run(t.Context(), onTheSubscription, "look at "+host.ImageToken(1), events.add)
 
 	if len(model.requests) != 1 {
 		t.Fatalf("the model was asked %d times, want one", len(model.requests))
@@ -404,7 +405,7 @@ func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testin
 	board.Attach(2)()
 
 	var events eventLog
-	task := "compare " + session.ImageToken(1)
+	task := "compare " + host.ImageToken(1)
 	live.run(t.Context(), onTheSubscription, task, events.add)
 
 	if len(model.requests) != 1 {
@@ -432,7 +433,7 @@ func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.pendingID()), outcome.Name)); err != nil {
+	if _, err := os.Stat(filepath.Join(store.AttachmentDir(live.ID()), outcome.Name)); err != nil {
 		t.Fatalf("the pasted image was not kept for the pending session: %v", err)
 	}
 }
@@ -455,7 +456,7 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := store.Body(live.id)
+	body, err := store.Body(live.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,15 +469,15 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 		if err := json.Unmarshal(event.Body, &attachment); err != nil {
 			t.Fatal(err)
 		}
-		if attachment.File == sessionstore.AttachmentPath(live.id, outcome.Name) && attachment.Bytes == outcome.Bytes && attachment.Format == "PNG" {
+		if attachment.File == sessionstore.AttachmentPath(live.ID(), outcome.Name) && attachment.Bytes == outcome.Bytes && attachment.Format == "PNG" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("the body of %s carries no attachment event naming %s, %d bytes, PNG", live.id, outcome.Name, outcome.Bytes)
+		t.Fatalf("the body of %s carries no attachment event naming %s, %d bytes, PNG", live.ID(), outcome.Name, outcome.Bytes)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(store.Dir(live.id), "events.jsonl"))
+	raw, err := os.ReadFile(filepath.Join(store.Dir(live.ID()), "events.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}

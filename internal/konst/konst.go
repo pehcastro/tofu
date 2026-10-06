@@ -343,3 +343,8 @@ const (
 	HookStopContinuations     = 8
 	HookSessionEndMillis      = 1500
 )
+
+const (
+	HostEventBuffer   = 256
+	HostSteeringQueue = 64
+)

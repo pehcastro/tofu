@@ -12,6 +12,7 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/subagent"
+	"tofu/internal/host"
 	roster "tofu/internal/subagent"
 )
 
@@ -146,7 +147,7 @@ func TestASubAgentSentBackByItsGateKeepsItsOneChatLineAndSaysWhy(t *testing.T) {
 	model.Spawned("ts-dev-1")
 	held := roster.SubAgent{ID: "ts-dev-1", Agent: "ts-dev", State: roster.Working, Round: 1, Started: at, Calling: []string{"edit"}}
 	named := func() []string {
-		model.SubAgents = subagent.Rows([]roster.SubAgent{held}, at, 0, nil, nil)
+		model.SubAgents = host.SubAgentRows([]roster.SubAgent{held}, at, 0, nil, nil)
 		var lines []string
 		for _, row := range strings.Split(ansi.Strip(model.View()), "\n") {
 			if strings.Contains(row, "ts-dev-1") {

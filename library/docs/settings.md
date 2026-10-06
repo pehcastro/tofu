@@ -17,7 +17,7 @@ The settings come in groups:
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
-- Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth, subAgentCheckSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn, subAgentDepth, subAgentCheckSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor
 
 `gatePrompt` is `auto` by default, which is auto mode: Jev decides at every

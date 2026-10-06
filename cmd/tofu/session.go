@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/turn"
@@ -256,17 +257,8 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	return carry, nil
 }
 
-func (carry sessionResume) taskIn(content string) string {
-	if !strings.HasPrefix(content, envOpen) {
-		return content
-	}
-	for _, task := range carry.tasks {
-		if task != "" && strings.HasSuffix(content, task) {
-			return task
-		}
-	}
-	_, after, _ := strings.Cut(content, envClose)
-	return strings.TrimSpace(after)
+func (carry sessionResume) hosted() host.Carry {
+	return host.Carry{Session: carry.Session, Name: carry.Name, Messages: carry.messages, Tasks: carry.tasks}
 }
 
 func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error) {

@@ -22,6 +22,7 @@ import (
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/golden"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
@@ -95,7 +96,7 @@ type cassette struct {
 	release  <-chan struct{}
 	stopLead <-chan struct{}
 	ended    context.Context
-	emit     tui.CalledFromInsideTheTurnAndNeverAfterItReturns
+	emit     func(tui.Event)
 	rows     []subagent.Row
 }
 
@@ -198,11 +199,11 @@ func (c *cassette) play(ctx context.Context, body string) {
 	}
 }
 
-func seededTurn(at time.Time, played cassette) tui.Turn {
+func seededTurn(at time.Time, played cassette) host.Play {
 	planned := seeds(at)
-	return func(ctx context.Context, _ tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+	return func(ctx context.Context, _ tui.Pick, task string, live host.Live) {
 		if body, err := os.ReadFile(filepath.Join("testdata", cassetteDir, task+scriptSuffix)); err == nil {
-			played.at, played.emit = at, emit
+			played.at, played.emit, played.stopLead = at, live.Emit, live.LeadStop
 			played.play(ctx, string(body))
 			return
 		}
@@ -211,7 +212,7 @@ func seededTurn(at time.Time, played cassette) tui.Turn {
 			events = append([]tui.Event{{Kind: tui.EventText, ID: "a0" + strconv.Itoa(len(task)), Text: "noted: " + task}}, done()...)
 		}
 		for _, event := range events {
-			emit(event)
+			live.Emit(event)
 		}
 	}
 }
@@ -244,7 +245,6 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	t.Cleanup(metaModels.Close)
 	t.Setenv(library.MetaBaseURLVariable, metaModels.URL)
 	out := &transcript{release: make(chan struct{}, 1)}
-	stopLead := make(chan struct{}, 1)
 	r := newReel(fixture.Width, fixture.Height, home, func(options *tui.Options) {
 		signed := options.Wires
 		options.Wires = func() []tui.Wire {
@@ -254,8 +254,8 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 			return signed()
 		}
 		options.Fresh = strings.HasPrefix(name, freshPrefix)
-		options.StopLead = stopLead
-		options.Turn = seededTurn(options.Now(), cassette{release: out.release, stopLead: stopLead, ended: t.Context()})
+		options.Host, _ = host.New(host.Config{Now: options.Now, Play: seededTurn(options.Now(), cassette{release: out.release, ended: t.Context()})})
+		t.Cleanup(options.Host.Close)
 		options.Copy = func(text string) error {
 			_, err := out.Write([]byte("clipboard: " + text + "\n"))
 			return err

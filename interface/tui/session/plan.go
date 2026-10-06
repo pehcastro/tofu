@@ -1,18 +1,16 @@
 package session
 
-type PlanState int
+import "tofu/internal/host"
+
+type PlanState = host.PlanState
 
 const (
-	PlanPending PlanState = iota
-	PlanRunning
-	PlanDone
-	PlanDropped
+	PlanPending = host.PlanPending
+	PlanRunning = host.PlanRunning
+	PlanDone    = host.PlanDone
+	PlanDropped = host.PlanDropped
 )
 
-type PlanItem struct {
-	Phase string
-	Text  string
-	State PlanState
-}
+type PlanItem = host.PlanItem
 
 func (m *Model) SetPlan([]PlanItem) {}

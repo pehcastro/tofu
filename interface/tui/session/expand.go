@@ -21,7 +21,7 @@ func (m *Model) Expansion(id string, width int) (string, []string, bool) {
 	head := look.Sides(look.Title(entry.Head), look.TypedID(toolKind, trace.Short(entry.ID)), width)
 	body := hardWrapped(cmp.Or(entry.Detail, entry.Body), width, look.Muted)
 	if decision := entry.Decision; decision != nil {
-		body = append(append(body, "", decision.Verdict.style().Render(decision.Verdict.String())), decision.lines(width)...)
+		body = append(append(body, "", verdictStyle(decision.Verdict).Render(decision.Verdict.String())), decisionLines(*decision, width)...)
 	}
 	status, statusStyle := m.callStatus(entry)
 	if entry.running() {

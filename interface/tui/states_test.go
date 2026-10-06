@@ -36,8 +36,7 @@ func reachesTheFeed(t *testing.T, app *App, id string) {
 }
 
 func TestAnAskingTurnClosesWithADurationAndAnIDThatReachesTheFeed(t *testing.T) {
-	answers := make(chan Answer, 1)
-	app := awaitingApp(t, answers)
+	app, _ := awaitingApp(t)
 	app.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
 	app.Update(Event{Kind: EventToolResult, ID: "c1", Text: "everything up to date"})
 	app.Update(Event{Kind: EventDone, Text: "cooked for"})

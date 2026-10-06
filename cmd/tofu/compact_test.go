@@ -38,15 +38,16 @@ func TestCompactShrinksTheCarriedHistoryAndARestartCarriesItShrunk(t *testing.T)
 		t.Fatal(err)
 	}
 	resumed := continueCarry(store)
-	live := &appSession{dir: t.TempDir(), id: resumed.Session, carried: resumed.messages, now: time.Now}
+	live := newAppSession(t.TempDir(), nil, nil, time.Now, resumed)
+	t.Cleanup(live.Close)
 
 	said := live.compact()
-	if !strings.Contains(said, "2 old tool result(s)") || live.id == log.ID() {
-		t.Fatalf("/compact said %q and left the session at %s, want two results shrunk into a new session", said, live.id)
+	if !strings.Contains(said, "2 old tool result(s)") || live.ID() == log.ID() {
+		t.Fatalf("/compact said %q and left the session at %s, want two results shrunk into a new session", said, live.ID())
 	}
 	restarted := continueCarry(store)
-	if restarted.Session != live.id || len(restarted.messages) != len(resumed.messages) {
-		t.Fatalf("a restart carries %s with %d messages, want %s with %d", restarted.Session, len(restarted.messages), live.id, len(resumed.messages))
+	if restarted.Session != live.ID() || len(restarted.messages) != len(resumed.messages) {
+		t.Fatalf("a restart carries %s with %d messages, want %s with %d", restarted.Session, len(restarted.messages), live.ID(), len(resumed.messages))
 	}
 	for _, at := range []int{2, 4} {
 		if content := restarted.messages[at].Content; content == big || !strings.Contains(content, "artifact ") {
@@ -56,7 +57,7 @@ func TestCompactShrinksTheCarriedHistoryAndARestartCarriesItShrunk(t *testing.T)
 	if again := live.compact(); !strings.Contains(again, "nothing") {
 		t.Errorf("a second /compact said %q, want that nothing was left to shrink", again)
 	}
-	if none := (&appSession{now: time.Now}).compact(); none != compactNothingCarried {
+	if none := newAppSession(t.TempDir(), nil, nil, time.Now, sessionResume{}).compact(); none != compactNothingCarried {
 		t.Errorf("/compact with nothing carried said %q", none)
 	}
 }

@@ -16,9 +16,6 @@ import (
 const hooksSubcommands = "tofu hooks [trust] [--json]"
 
 const (
-	sessionStartup  = "startup"
-	sessionCleared  = "clear"
-	sessionResumed  = "resume"
 	sessionEndOther = "other"
 	sessionEndExit  = "prompt_input_exit"
 )

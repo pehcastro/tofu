@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/browser/jevloop"
 	"tofu/internal/cron"
+	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
@@ -691,7 +692,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Spend:         run.spend,
 		Tools:         turn.NewRegistry(built...),
 		Project:       dir,
-		SessionSource: sessionStartup,
+		SessionSource: host.SourceStartup,
 		Task:          opts.task,
 		Wire:          opts.wire,
 		System:        composed.Head(),
@@ -1231,18 +1232,6 @@ func askedAsOf(row turn.Row, spawned []turn.Spawned, slug, windows string) (stri
 	return slug, windows
 }
 
-func wordsAfterLastCalls(row turn.Row) (string, bool) {
-	if len(row.Steps) == 0 || len(row.Steps[len(row.Steps)-1].ToolCalls) == 0 || len(row.Conversation) == 0 {
-		return "", false
-	}
-	if last := row.Conversation[len(row.Conversation)-1]; last.Role == llm.RoleAssistant {
-		return last.Content, strings.TrimSpace(last.Content) != ""
-	}
-	step := row.Steps[len(row.Steps)-1]
-	onlySpawned := !slices.ContainsFunc(step.ToolCalls, func(call turn.ToolCallRow) bool { return call.SubAgentID == "" })
-	return step.AssistantText, onlySpawned && strings.TrimSpace(step.AssistantText) != ""
-}
-
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 	spend := "spend subscription windows " + windows + ", no money"
 	if row.Spend != turn.SpendSubscription {
@@ -1276,7 +1265,7 @@ func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 				step.Index, call.Tool, call.Command, call.SubAgentID, exitCode, call.GateVerdict, call.Error)
 		}
 	}
-	if said, ended := wordsAfterLastCalls(row); ended {
+	if said, ended := host.WordsAfterLastCalls(row); ended {
 		_, _ = fmt.Fprintf(out, "step %d: assistant_text %q\n", row.Steps[len(row.Steps)-1].Index, said)
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/session"
-	"tofu/interface/tui/subagent"
+	"tofu/internal/host"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
@@ -103,7 +103,6 @@ func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
 			return []tui.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider, Efforts: []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}}}
 		},
 		Turn:         func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
-		Answers:      make(chan tui.Answer, 1),
 		Copy:         func(string) error { return nil },
 		ReloadModels: servedInCatalog,
 	}
@@ -404,7 +403,7 @@ func subAgentTurn() scenario {
 		held.Stepped(subAgentID, steps, r.at)
 		held.Reached(subAgentID, state, "")
 		spent[subAgentID] = tokens
-		return tui.Event{Kind: tui.EventSubAgent, SubAgents: subagent.Rows(held.SubAgents(), r.at, 0, spent, nil)}
+		return tui.Event{Kind: tui.EventSubAgent, SubAgents: host.SubAgentRows(held.SubAgents(), r.at, 0, spent, nil)}
 	}
 	return scenario{name: "sub-agent", beats: append(opening(),
 		beat{"spawned", func(r *reel) {

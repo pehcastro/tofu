@@ -2,7 +2,6 @@ package tui
 
 import (
 	"cmp"
-	"context"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
+	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	isettings "tofu/internal/settings"
@@ -94,7 +94,8 @@ func (a *App) send() tea.Cmd {
 		return nil
 	}
 	a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
-	return a.start(whole)
+	a.start(whole)
+	return nil
 }
 
 func idPrefix(task string) (string, bool) {
@@ -122,30 +123,20 @@ func (a *App) jumpToID(typed string) {
 }
 
 func (a *App) steer(task string) {
-	select {
-	case a.options.Steering <- task:
-	default:
+	if a.options.Host != nil {
+		a.options.Host.Steer(task)
 	}
 }
 
 func (a *App) dropSteering() {
-	for {
-		select {
-		case <-a.options.Steering:
-		default:
-			return
-		}
+	if a.options.Host != nil {
+		a.options.Host.DropSteering()
 	}
 }
 
 func (a *App) answer(answer Answer) {
-	if a.options.Answers == nil {
-		return
-	}
-	select {
-	case a.options.Answers <- answer:
+	if a.options.Host != nil && a.options.Host.Answer(answer) {
 		a.view.Resume()
-	default:
 	}
 }
 
@@ -226,7 +217,7 @@ func (a *App) askToStopSubAgents() {
 
 func (a *App) stopEverything() {
 	a.view.LettingToolsFinish, a.view.Stopping = false, true
-	a.cancel()
+	a.options.Host.Stop()
 	a.dropSteering()
 	a.handed = nil
 	a.noteStop(stoppingNote + a.queueTail())
@@ -237,10 +228,7 @@ func (a *App) stopLead() {
 		return
 	}
 	a.view.LettingToolsFinish, a.view.Stopping = false, true
-	select {
-	case a.options.StopLead <- struct{}{}:
-	default:
-	}
+	a.options.Host.StopLead()
 	a.noteStop(stoppingNote + a.queueTail())
 }
 
@@ -291,49 +279,46 @@ func (a *App) drawHeldReports() {
 	a.heldReports = nil
 }
 
-func (a *App) start(task string) tea.Cmd { return a.startAs(task, "") }
-
-func (a *App) startAs(task, fired string) tea.Cmd {
-	if a.options.Turn == nil {
+func (a *App) start(task string) {
+	if a.options.Host == nil {
 		a.view.Append(session.Entry{Kind: session.Failure, Body: noEngine})
-		return nil
+		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	events := make(chan Event, eventBuffer)
-	a.busy, a.cancel, a.events, a.edits.Busy = true, cancel, events, true
+	a.busy, a.edits.Busy = true, true
 	a.leadTurnBegins()
-	turn, pick := a.options.Turn, Pick{Wire: a.wire, Model: a.picked, Effort: a.effort, Fired: fired}
-	deliver := func(event Event) {
-		if !event.snapshot() {
-			events <- event
-			return
-		}
-		select {
-		case events <- event:
-		default:
-		}
+	if !a.options.Host.Send(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort}, task) {
+		a.steer(task)
 	}
-	go func() {
-		turn(ctx, pick, task, deliver)
-		cancel()
-		close(events)
-	}()
-	return a.waitForEvent()
 }
 
 func (a *App) waitForEvent() tea.Cmd {
-	events := a.events
+	if a.options.Host == nil {
+		return nil
+	}
+	events := a.options.Host.Events()
 	return func() tea.Msg {
-		event, open := <-events
-		if !open {
+		event := <-events
+		if event.Kind == host.EventTurnEnded {
 			return Closed{}
 		}
 		return event
 	}
 }
 
+func (a *App) listen() tea.Cmd {
+	read := a.waitForEvent()
+	if read == nil || !a.listening.CompareAndSwap(false, true) {
+		return nil
+	}
+	return func() tea.Msg {
+		msg := read()
+		a.listening.Store(false)
+		return msg
+	}
+}
+
 func (a *App) absorb(event Event) {
-	if event.answered() && event.Agent == "" {
+	if answered(event) && event.Agent == "" {
 		a.view.Returned()
 	}
 	if len(a.subAgentCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
@@ -341,6 +326,12 @@ func (a *App) absorb(event Event) {
 	}
 	at := a.options.Now()
 	switch event.Kind {
+	case EventTurnStarted:
+		if !a.busy {
+			a.busy, a.edits.Busy = true, true
+			a.leadTurnBegins()
+		}
+		a.countCrons()
 	case EventRequesting:
 		if !a.leading {
 			a.leadTurnBegins()
@@ -368,6 +359,7 @@ func (a *App) absorb(event Event) {
 		a.answered(event, at)
 	case EventNote:
 		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+		a.countCrons()
 	case EventDone:
 		a.leadTurnEnds(event.Text)
 		if event.SubAgents != nil {
@@ -410,7 +402,6 @@ func (a *App) absorb(event Event) {
 		a.view.Resume()
 	case EventSteered:
 		a.view.Delivered(event.Text)
-		a.steerRead(event.Text)
 		if taken := slices.Index(a.handed, event.Text); taken >= 0 {
 			a.handed = slices.Delete(a.handed, taken, taken+1)
 		}

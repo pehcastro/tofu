@@ -52,7 +52,7 @@ func commands(options Options) []session.Command {
 	if options.Undo != nil {
 		listed = append(listed, session.Command{Name: "undo", What: "put back the files the last turn changed, or the last N with /undo N"})
 	}
-	if options.Cron != nil {
+	if options.Host != nil {
 		listed = append(listed,
 			session.Command{Name: "cron", What: "the scheduled jobs: list, history, edit, pause, resume, delete"},
 			session.Command{Name: "loop", What: "repeat a prompt on an interval: /loop 10m <prompt>"},

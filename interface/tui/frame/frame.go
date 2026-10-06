@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"tofu/interface/tui/look"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
@@ -37,10 +38,7 @@ type Quota struct {
 	ResetsAt time.Time
 }
 
-type Context struct {
-	Used   int
-	Budget int
-}
+type Context = host.Context
 
 type StatusMode string
 

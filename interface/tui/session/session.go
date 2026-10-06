@@ -65,6 +65,8 @@ type Entry struct {
 	intoTurn  time.Duration
 	streaming bool
 	waiting   bool
+	asking    bool
+	asked     bool
 	rendered  []string
 	tail      []string
 	stable    int
@@ -105,7 +107,7 @@ func (e Entry) returned() bool { return e.Status != "" }
 func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && !e.returned() }
 
 func (e Entry) sticky() bool {
-	return e.Failed || e.Promoted || e.Decision.shown() != ""
+	return e.Failed || e.Promoted || e.verdictShown() != ""
 }
 
 func (e Entry) label() string { return strings.TrimSpace(e.Head + " " + e.Body) }

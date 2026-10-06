@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"tofu/interface/tui"
 	"tofu/internal/llm"
@@ -222,13 +221,10 @@ func TestTheBottomBarIsGivenFreshTokensOnBothWires(t *testing.T) {
 			PromptAccounting: llm.PromptAccountingFor(each.wire),
 			CacheReadTokens:  5120,
 		}}
-		watch := &appWatcher{inner: model, emit: driver.emit, now: time.Now}
-		if _, err := watch.Ask(t.Context(), llm.Request{}); err != nil {
-			t.Fatal(err)
-		}
+		stubbedTurn(scratchProject(t), model)(t.Context(), onTheSubscription, "say what you hold", driver.emit)
 		stats := driver.of(tui.EventStats)
-		if len(stats) != 1 {
-			t.Fatalf("%s: stats events %d, want one", each.wire, len(stats))
+		if len(stats) == 0 {
+			t.Fatalf("%s: no stats event reached the bar", each.wire)
 		}
 		if stats[0].TokensIn != 2896 || stats[0].CacheRead != 5120 {
 			t.Errorf("%s: the bar was given %d in and %d cached, want 2896 fresh and 5120 cached",

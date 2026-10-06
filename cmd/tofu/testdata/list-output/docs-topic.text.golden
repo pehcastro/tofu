@@ -16,9 +16,9 @@ What it is
     projectInstructionsCap, instructionSources, skills
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
-  - Turn: decisionCap, turnMaySpawn, subAgentsPerTurn, subAgentDepth,
-    subAgentCheckSeconds, verifySubAgents, agentSources, modelTier.genius,
-    modelTier.smart, modelTier.worker, modelTier.dumb
+  - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
+    subAgentDepth, subAgentCheckSeconds, verifySubAgents, agentSources,
+    modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor
 
@@ -183,6 +183,11 @@ Turn
     turnMaySpawn            true
       true or false
       a turn may spawn a sub-agent
+    oneTurnPerProject       true
+      true or false
+      while one session runs a turn in this project, a turn from any other
+      session is refused; off lets several sessions run turns in one repository
+      at once
     subAgentsPerTurn        10
       at least 1 sub-agents running at once
       how many sub-agents may run at once; a spawn past it is refused until one

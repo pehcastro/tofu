@@ -58,10 +58,16 @@ tofu settings
 Turn
     decisionCap             0                                default
     turnMaySpawn            true                             default
+    oneTurnPerProject       true                             default
     subAgentsPerTurn        10                               default
     subAgentDepth           2                                default
     subAgentCheckSeconds    1800                             default
     agentSources            tofu,agents,claude               default
 ```
+
+`oneTurnPerProject` keeps one orchestrator per project: while one
+session runs a turn, a turn from another session in the same project
+is refused. Turn it off to run several sessions in one repository at
+once: `tofu settings set oneTurnPerProject false`.
 
 `tofu settings get <key>` prints one value. Both take `--json`.

@@ -10,6 +10,15 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **A second app on a session another tofu is writing opens read only** and fires no cron job, so a loop fires once per interval however many apps are open.
+- **`oneTurnPerProject`**, on by default, refuses a turn while another session in the same project runs one. Turn it off to run several sessions in one repository at once.
+
+### Fixed
+
+- **A stored key split across two streamed pieces of a reply is masked.**
+
 ## 0.5.3 - 2026-10-06
 
 Sub-agents you can follow and stop, hooks, and auto mode.

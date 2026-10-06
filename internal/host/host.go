@@ -1,0 +1,450 @@
+package host
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"tofu/internal/cron"
+	"tofu/internal/konst"
+	"tofu/internal/llm"
+	"tofu/internal/session"
+	"tofu/internal/shell"
+	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
+	"tofu/internal/turn"
+)
+
+const (
+	SourceStartup  = "startup"
+	SourceCleared  = "clear"
+	SourceResumed  = "resume"
+	ImageTokenHead = "[Image #"
+	ranPreface     = "before sending this, the person ran a command in the project with !, outside any turn, and it printed:\n$ "
+)
+
+func ImageToken(index int) string { return ImageTokenHead + strconv.Itoa(index) + "]" }
+
+var errTurnRunning = errors.New("a turn is running: wait for it to end, or stop it")
+
+type Play func(ctx context.Context, pick Pick, task string, live Live)
+
+type Live struct {
+	Emit     func(Event)
+	Steering <-chan string
+	LeadStop <-chan struct{}
+	Answers  <-chan Answer
+}
+
+type Carry struct {
+	Session  string
+	Name     string
+	Messages []llm.Message
+	Tasks    []string
+}
+
+type Config struct {
+	Dir     string
+	Engine  Engine
+	Play    Play
+	Now     func() time.Time
+	Shells  *shell.Registry
+	Check   cron.Checker
+	Resumed Carry
+}
+
+type Host struct {
+	dir      string
+	engine   Engine
+	play     Play
+	now      func() time.Time
+	shells   *shell.Registry
+	events   chan Event
+	answers  chan Answer
+	steering chan string
+	stopLead chan struct{}
+	cron     *cron.Book
+	readOnly error
+
+	mu        sync.Mutex
+	closed    bool
+	running   bool
+	stopped   bool
+	cancel    context.CancelFunc
+	pick      Pick
+	fired     []string
+	unread    []cron.Fire
+	answer    string
+	previous  string
+	streaming bool
+	ticking   *time.Timer
+	id        string
+	started   string
+	carried   []llm.Message
+	pending   []pendingImage
+	ran       []string
+	release   func() error
+	heldID    string
+
+	reads   *turn.ReadLedger
+	inbox   *turn.Inbox
+	roster  *roster.Roster
+	shown   map[string]bool
+	granted map[string]bool
+}
+
+type pendingImage struct {
+	index int
+	name  string
+}
+
+func New(cfg Config) (*Host, []string) {
+	h := &Host{
+		dir:      cfg.Dir,
+		engine:   cfg.Engine,
+		play:     cfg.Play,
+		now:      cfg.Now,
+		shells:   cfg.Shells,
+		events:   make(chan Event, konst.HostEventBuffer),
+		answers:  make(chan Answer, 1),
+		steering: make(chan string, konst.HostSteeringQueue),
+		stopLead: make(chan struct{}, 1),
+		cron:     &cron.Book{Check: cfg.Check},
+		id:       cfg.Resumed.Session,
+		started:  SourceStartup,
+		shown:    map[string]bool{},
+		granted:  map[string]bool{},
+	}
+	if h.now == nil {
+		h.now = time.Now
+	}
+	if h.play == nil {
+		h.play = h.run
+	}
+	h.carry(cfg.Resumed.Messages)
+	if h.id == "" {
+		return h, nil
+	}
+	h.started = SourceResumed
+	if h.readOnly = h.hold(h.id); h.readOnly != nil {
+		return h, []string{h.readOnly.Error()}
+	}
+	if err := h.loadCron(h.id); err != nil {
+		return h, []string{err.Error()}
+	}
+	h.armCron()
+	return h, nil
+}
+
+func (h *Host) Events() <-chan Event { return h.events }
+
+func (h *Host) Cron() *cron.Book { return h.cron }
+
+func (h *Host) ID() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.id
+}
+
+func (h *Host) Carried() []llm.Message {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.carried
+}
+
+func (h *Host) Choose(pick Pick) {
+	h.mu.Lock()
+	h.pick = pick
+	h.mu.Unlock()
+}
+
+func (h *Host) Send(pick Pick, task string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.running {
+		return false
+	}
+	h.pick = Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort}
+	h.begin(pick, task)
+	return true
+}
+
+func (h *Host) begin(pick Pick, task string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	h.running, h.stopped, h.cancel = true, false, cancel
+	go func() {
+		out := h.emitter()
+		out.emit(Event{Kind: EventTurnStarted, Text: task})
+		h.play(ctx, pick, task, Live{Emit: out.emit, Steering: h.steering, LeadStop: h.stopLead, Answers: h.answers})
+		cancel()
+		h.ended(out)
+	}()
+}
+
+func (h *Host) Steer(text string) {
+	select {
+	case h.steering <- text:
+	default:
+	}
+}
+
+func (h *Host) DropSteering() {
+	for {
+		select {
+		case <-h.steering:
+		default:
+			return
+		}
+	}
+}
+
+func (h *Host) Stop() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cancel != nil {
+		h.stopped = true
+		h.cancel()
+	}
+}
+
+func (h *Host) StopLead() {
+	h.mu.Lock()
+	h.stopped = true
+	h.mu.Unlock()
+	select {
+	case h.stopLead <- struct{}{}:
+	default:
+	}
+}
+
+func (h *Host) Answer(answer Answer) bool {
+	select {
+	case h.answers <- answer:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Host) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.closed = true
+	if h.ticking != nil {
+		h.ticking.Stop()
+	}
+	if h.cancel != nil {
+		h.cancel()
+	}
+	h.letGo()
+}
+
+func (h *Host) deliver(event Event) {
+	if !event.snapshot() {
+		h.events <- event
+		return
+	}
+	select {
+	case h.events <- event:
+	default:
+	}
+}
+
+func (h *Host) note(text string) {
+	h.emitter().emit(Event{Kind: EventNote, Text: text})
+}
+
+func (h *Host) hold(id string) error {
+	if id == h.heldID || h.closed {
+		return nil
+	}
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return err
+	}
+	release, err := store.Hold(id)
+	if err != nil {
+		return err
+	}
+	h.letGo()
+	h.release, h.heldID = release, id
+	return nil
+}
+
+func (h *Host) letGo() {
+	if h.release != nil {
+		_ = h.release()
+	}
+	h.release, h.heldID = nil, ""
+}
+
+func (h *Host) loadCron(id string) error {
+	if id == "" {
+		return h.cron.Load("")
+	}
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return err
+	}
+	return h.cron.Load(cronFile(store, id))
+}
+
+func cronFile(store *session.Store, id string) string {
+	return filepath.Join(store.Dir(id), "cron.json")
+}
+
+func (h *Host) carry(messages []llm.Message) {
+	if h.engine != nil {
+		h.engine.Renew()
+	}
+	h.reads, h.inbox, h.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
+	h.ran, h.carried = nil, messages
+	for _, message := range messages {
+		if message.ToolCallID != "" {
+			h.shown[message.ToolCallID] = true
+		}
+	}
+}
+
+func (h *Host) Fresh() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.running {
+		return errTurnRunning
+	}
+	h.letGo()
+	h.carry(nil)
+	h.id, h.pending, h.started, h.readOnly = "", nil, SourceCleared, nil
+	return h.cron.Load("")
+}
+
+func (h *Host) Resume(carry Carry) ([]Event, error) {
+	h.mu.Lock()
+	if h.running {
+		h.mu.Unlock()
+		return nil, errTurnRunning
+	}
+	if err := h.hold(carry.Session); err != nil {
+		h.mu.Unlock()
+		return nil, err
+	}
+	h.readOnly = nil
+	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
+	h.carry(carry.Messages)
+	h.mu.Unlock()
+	chat := resumedChat(carry, h.dir)
+	if err := h.loadCron(carry.Session); err != nil {
+		chat = append(chat, Event{Kind: EventNote, Text: err.Error()})
+	}
+	h.armCron()
+	return chat, nil
+}
+
+func (h *Host) Opening(carry Carry) []Event { return resumedChat(carry, h.dir) }
+
+func (h *Host) Compacted(into string, messages []llm.Message) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.id, h.carried = into, messages
+	return h.hold(into)
+}
+
+func (h *Host) Ran(command, output string, stopped bool) string {
+	redactor := sys.LoadKeyRedactor()
+	output = ansi.Strip(redactor.Redact(output))
+	if !stopped {
+		h.mu.Lock()
+		h.ran = append(h.ran, redactor.Redact(ranPreface+command+"\n"+output))
+		h.mu.Unlock()
+	}
+	return output
+}
+
+func (h *Host) takeRan() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	taken := h.ran
+	h.ran = nil
+	if len(taken) == 0 {
+		return ""
+	}
+	return "\n\n" + strings.Join(taken, "\n\n")
+}
+
+func (h *Host) pendingID() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.id == "" {
+		h.id = session.NewEventID()
+	}
+	return h.id
+}
+
+func (h *Host) AttachmentDir() (string, error) {
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return "", err
+	}
+	return store.AttachmentDir(h.pendingID()), nil
+}
+
+func (h *Host) Attached(index int, name string, bytes int, format string) {
+	store, err := session.OpenIn(h.dir)
+	if err != nil {
+		return
+	}
+	id := h.pendingID()
+	_ = store.AppendEvent(id, session.EventAttachment, session.Attachment{File: session.AttachmentPath(id, name), Bytes: bytes, Format: format})
+	h.mu.Lock()
+	h.pending = append(h.pending, pendingImage{index: index, name: name})
+	h.mu.Unlock()
+}
+
+func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
+	h.mu.Lock()
+	var wanted []pendingImage
+	for _, image := range h.pending {
+		if strings.Contains(task, ImageToken(image.index)) {
+			wanted = append(wanted, image)
+		}
+	}
+	h.mu.Unlock()
+	if len(wanted) == 0 {
+		return nil, nil
+	}
+	dir, err := h.AttachmentDir()
+	if err != nil {
+		return nil, err
+	}
+	images := make([]llm.Image, 0, len(wanted))
+	for _, image := range wanted {
+		data, err := os.ReadFile(filepath.Join(dir, image.name))
+		if err != nil {
+			return nil, err
+		}
+		images = append(images, llm.Image{MediaType: imageMediaType(image.name), Data: data})
+	}
+	return images, nil
+}
+
+func imageMediaType(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	}
+	return "image/" + strings.TrimPrefix(ext, ".")
+}

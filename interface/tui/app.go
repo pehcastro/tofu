@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -26,8 +27,7 @@ import (
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
-	"tofu/internal/cron"
-	"tofu/internal/judge/jev"
+	"tofu/internal/host"
 	"tofu/internal/keymap"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -38,72 +38,38 @@ import (
 	"tofu/internal/sys"
 )
 
-type EventKind int
+type EventKind = host.EventKind
 
 const (
-	EventText EventKind = iota
-	EventTextDelta
-	EventToolCall
-	EventToolResult
-	EventNote
-	EventFailure
-	EventStats
-	EventDone
-	EventDecision
-	EventGateOff
-	EventContext
-	EventForkStart
-	EventForkEnd
-	EventSubAgent
-	EventAwaitPerson
-	EventResumed
-	EventSteered
-	EventRequesting
-	EventPlan
-	EventSession
-	EventTask
-	EventStreamReset
-	EventThinking
+	EventText        = host.EventText
+	EventTextDelta   = host.EventTextDelta
+	EventToolCall    = host.EventToolCall
+	EventToolResult  = host.EventToolResult
+	EventNote        = host.EventNote
+	EventFailure     = host.EventFailure
+	EventStats       = host.EventStats
+	EventDone        = host.EventDone
+	EventDecision    = host.EventDecision
+	EventGateOff     = host.EventGateOff
+	EventContext     = host.EventContext
+	EventForkStart   = host.EventForkStart
+	EventForkEnd     = host.EventForkEnd
+	EventSubAgent    = host.EventSubAgent
+	EventAwaitPerson = host.EventAwaitPerson
+	EventResumed     = host.EventResumed
+	EventSteered     = host.EventSteered
+	EventRequesting  = host.EventRequesting
+	EventPlan        = host.EventPlan
+	EventSession     = host.EventSession
+	EventTask        = host.EventTask
+	EventStreamReset = host.EventStreamReset
+	EventThinking    = host.EventThinking
+	EventTurnStarted = host.EventTurnStarted
 )
 
-type Event struct {
-	Kind      EventKind
-	ID        string
-	Tool      string
-	Text      string
-	Detail    string
-	Bytes     int
-	Failed    bool
-	Model     string
-	TokensIn  int
-	TokensOut int
-	CacheRead int
-	Decisions int
-	Decision  *session.Decision
-	Context   frame.Context
-	SubAgents []subagent.Row
-	Diff      string
-	Plan      []session.PlanItem
-	Created   string
-	Agent     string
-	Root      string
-	Promote   bool
-	GateWhy   jev.Why
-}
+type Event = host.Event
 
-func (e Event) snapshot() bool {
-	switch e.Kind {
-	case EventContext, EventSubAgent:
-		return true
-	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
-		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset, EventThinking:
-		return false
-	}
-	panic("tui: unknown event kind")
-}
-
-func (e Event) answered() bool {
+func answered(e Event) bool {
 	switch e.Kind {
 	case EventText, EventTextDelta, EventToolCall, EventThinking, EventStats:
 		return true
@@ -113,21 +79,16 @@ func (e Event) answered() bool {
 
 type CalledFromInsideTheTurnAndNeverAfterItReturns func(Event)
 
-type Pick struct {
-	Wire   string
-	Model  string
-	Effort llm.Effort
-	Fired  string
-}
+type Pick = host.Pick
 
 type Turn func(ctx context.Context, pick Pick, task string, emit CalledFromInsideTheTurnAndNeverAfterItReturns)
 
-type Answer int
+type Answer = host.Answer
 
 const (
-	Denied Answer = iota
-	AllowedOnce
-	AlwaysHere
+	Denied      = host.Denied
+	AllowedOnce = host.AllowedOnce
+	AlwaysHere  = host.AlwaysHere
 )
 
 type Requirement struct {
@@ -184,10 +145,8 @@ type Options struct {
 	Reload        func() string
 	ReloadModels  func() string
 	ModelsStale   bool
+	Host          *host.Host
 	Turn          Turn
-	Answers       chan<- Answer
-	Steering      chan string
-	StopLead      chan struct{}
 	Paste         paste.Board
 	Copy          func(text string) error
 	Paths         func() []string
@@ -205,7 +164,6 @@ type Options struct {
 	Pose          string
 	Keymap        string
 	PromptHistory string
-	Cron          *cron.Book
 }
 
 type screen int
@@ -219,7 +177,6 @@ const (
 )
 
 const (
-	eventBuffer   = 256
 	defaultWidth  = 80
 	defaultHeight = 24
 	chromeRows    = 3
@@ -289,9 +246,7 @@ type App struct {
 	gateOff        bool
 	running        int
 	pressedAt      time.Time
-	cancel         context.CancelFunc
 	stopCommand    context.CancelFunc
-	events         chan Event
 	subAgentCalls  []string
 	subAgents      []subagent.Row
 	happened       []feed.Event
@@ -307,9 +262,7 @@ type App struct {
 	lastSelection  string
 	drawn          string
 	hits           []frame.Hit
-	cronTicking    bool
-	fired          []string
-	unread         []cron.Fire
+	listening      atomic.Bool
 }
 
 type resolvedModel struct {
@@ -352,6 +305,12 @@ func New(options Options) *App {
 	}
 	if options.PromptHistory == "" {
 		options.PromptHistory, _ = sys.HomeConfigDir()
+	}
+	if options.Host == nil && options.Turn != nil {
+		turn := options.Turn
+		options.Host, _ = host.New(host.Config{Now: options.Now, Play: func(ctx context.Context, pick Pick, task string, live host.Live) {
+			turn(ctx, pick, task, live.Emit)
+		}})
 	}
 	app := &App{
 		options:      options,
@@ -452,7 +411,7 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.armCron())
+	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen())
 }
 
 func (a *App) reloadStaleModels() tea.Cmd {
@@ -511,6 +470,9 @@ func (a *App) resize(width, height int) {
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmd := a.update(msg)
+	if a.options.Host != nil {
+		a.options.Host.Choose(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort})
+	}
 	if a.busy {
 		a.flagStalls()
 	}
@@ -557,10 +519,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return nil
 	case Event:
 		a.absorb(msg)
-		if a.events == nil {
-			return nil
-		}
-		return a.waitForEvent()
+		return a.listen()
 	case paste.Outcome:
 		a.view.Attached(msg)
 		return nil
@@ -614,11 +573,6 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 			a.notify(string(msg))
 		}
 		return nil
-	case cronTickMsg:
-		a.cronTicking = false
-		return a.fire(msg)
-	case cronFiresMsg:
-		return a.fire(msg)
 	}
 	if cmd, open := a.toFiles(msg); open {
 		return cmd
@@ -681,22 +635,22 @@ func (a *App) clearDialogs() tea.Cmd {
 }
 
 func (a *App) closed() tea.Cmd {
-	stopped := a.view.Stopping
-	a.busy, a.leading, a.cancel, a.events, a.edits.Busy = false, false, nil, nil, false
+	a.busy, a.leading, a.edits.Busy = false, false, false
 	a.running, a.pressedAt = 0, time.Time{}
 	a.parkSubAgentsTheTurnLeftBehind()
 	a.drawHeldReports()
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.dropSteering()
-	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.cronTurnEnded(stopped))
+	a.countCrons()
+	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
 	task, queued := a.view.Release()
 	if !queued && len(a.handed) > 0 {
 		task, queued = strings.Join(a.handed, "\n\n"), true
 	}
 	a.handed = nil
 	if queued {
-		return tea.Batch(a.start(task), next)
+		a.start(task)
 	}
 	return next
 }

@@ -110,6 +110,9 @@ the way a model's does, in deltas, so a reply is half written until it returns:
   {"text":"half an answer","unfinished":true}
   {"thinking":"the note is short","text":"it says a note"}
 
+A reply's text can arrive in the deltas it names instead, joined into its text:
+  {"deltas":["the answer arrives in ","two parts"]}
+
 A reply's thinking streams before its text and shows only on the sub-agents screen.
 
 A reply can report the usage a provider would, in tokens, the way anthropic
@@ -156,10 +159,11 @@ const (
 )
 
 type cassetteReply struct {
-	Text       string `json:"text"`
-	Thinking   string `json:"thinking"`
-	Agent      string `json:"agent"`
-	Unfinished bool   `json:"unfinished"`
+	Text       string   `json:"text"`
+	Deltas     []string `json:"deltas"`
+	Thinking   string   `json:"thinking"`
+	Agent      string   `json:"agent"`
+	Unfinished bool     `json:"unfinished"`
 	Refused    *struct {
 		Status int    `json:"status"`
 		Detail string `json:"detail"`
@@ -177,6 +181,7 @@ type cassetteReply struct {
 
 type recordedReply struct {
 	decision   llm.Decision
+	deltas     []string
 	thinking   string
 	unfinished bool
 	refused    error
@@ -255,7 +260,10 @@ func readCassette(path string) (*cassette, error) {
 		if reply.Agent != orchestratorCaller && !subAgentNumber(reply.Agent) {
 			return nil, fmt.Errorf("%s line %d: agent %q is none of c1, c2 and so on, counting the callers after the orchestrator in the order they first ask", path, number+1, reply.Agent)
 		}
-		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: reply.Text, FirstTokenMS: recordedFlight.Milliseconds(),
+		if len(reply.Deltas) == 0 && reply.Text != "" {
+			reply.Deltas = []string{reply.Text}
+		}
+		decision := llm.Decision{Build: cassetteBuild, Outcome: llm.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
 			Usage: llm.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: llm.PromptExcludesCacheReads,
 			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite}
 		for index, one := range reply.Tools {
@@ -266,7 +274,7 @@ func readCassette(path string) (*cassette, error) {
 				Arguments: one.Args,
 			})
 		}
-		recorded := recordedReply{decision: decision, thinking: reply.Thinking, unfinished: reply.Unfinished}
+		recorded := recordedReply{decision: decision, deltas: reply.Deltas, thinking: reply.Thinking, unfinished: reply.Unfinished}
 		if refused := reply.Refused; refused != nil {
 			recorded.refused = &transport.Error{Kind: transport.StatusKind(refused.Status), Op: "cassette.Ask", Status: refused.Status, Detail: refused.Detail}
 		}
@@ -377,8 +385,10 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	if request.OnThinking != nil && reply.thinking != "" {
 		request.OnThinking(reply.thinking)
 	}
-	if request.OnDelta != nil && reply.decision.Content != "" {
-		request.OnDelta(reply.decision.Content)
+	for _, delta := range reply.deltas {
+		if request.OnDelta != nil {
+			request.OnDelta(delta)
+		}
 	}
 	if !reply.unfinished {
 		return reply.decision, nil
@@ -713,6 +723,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	defer leaveShells(launch.registry)
 	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, quotas), plan.width, plan.height)
 	defer driver.Close()
+	defer (*launch.release)()
 	for _, step := range steps {
 		err := playStep(driver, deck, step, plan, out)
 		if err == nil {

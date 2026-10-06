@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     41 declared
+Settings · 2 set                                                     42 declared
 
 Appearance
   ● theme                   Nord                project
@@ -39,6 +39,7 @@ Shell
 Turn
     decisionCap             0                   default
     turnMaySpawn            true                default
+    oneTurnPerProject       true                default
     subAgentsPerTurn        10                  default
     subAgentDepth           2                   default
     subAgentCheckSeconds    1800                default

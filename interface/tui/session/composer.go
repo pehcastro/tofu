@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/look"
+	"tofu/internal/host"
 	"tofu/internal/widget"
 )
 
@@ -23,7 +24,6 @@ const (
 	fileToken         = "[File @"
 	agentToken        = "[&"
 	textTokenHead     = "[Text "
-	imageTokenHead    = "[Image #"
 	pastingTokenHead  = "[pasting "
 	escape            = '\x1b'
 )
@@ -121,7 +121,7 @@ func paintToken(token string) string {
 		return look.Accent(token)
 	case strings.HasPrefix(token, textTokenHead) && strings.HasSuffix(token, textTokenTail):
 		return look.Style(look.Amber).Render(token)
-	case strings.HasPrefix(token, imageTokenHead):
+	case strings.HasPrefix(token, host.ImageTokenHead):
 		return look.Style(look.Blue).Render(token)
 	case strings.HasPrefix(token, pastingTokenHead):
 		return look.Faint(token)
