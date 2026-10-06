@@ -126,7 +126,7 @@ func TestThreeRunningSubAgentsShareOneBatchLineAndLeaveTheStatusLineToTheLead(t 
 			above = append(above, strings.TrimSpace(row))
 		}
 	}
-	if len(above) != 1 || !strings.Contains(above[0], "thinking") || strings.Contains(above[0], "sub-agent") || strings.Contains(above[0], "[&") {
+	if len(above) != 1 || !strings.Contains(above[0], "working") || strings.Contains(above[0], "sub-agent") || strings.Contains(above[0], "[&") {
 		t.Fatalf("the rows above the composer are %q, want one status line saying what the lead does and nothing of its sub-agents\n%s", above, strings.Join(rows, "\n"))
 	}
 	spawn := slices.IndexFunc(rows[:model.transcriptRows()], func(row string) bool {

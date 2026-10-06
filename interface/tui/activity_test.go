@@ -263,8 +263,8 @@ func TestTheRunningRowNamesTheStateAndNotTheWordTurn(t *testing.T) {
 	}
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "14 lines, 64 bytes"})
 	at = at.Add(time.Second)
-	if row := turnRow(t, app); !strings.Contains(row, "thinking") {
-		t.Errorf("a turn waiting on the model does not read as thinking: %q", row)
+	if row := turnRow(t, app); !strings.Contains(row, "working") || strings.Contains(row, "thinking") {
+		t.Errorf("a turn whose model sent no thinking does not read as working: %q", row)
 	}
 	app.Update(Event{Kind: EventToolCall, ID: "c3", Tool: "bash", Text: "go test ./internal/..."})
 	app.Update(Event{Kind: EventAwaitPerson})

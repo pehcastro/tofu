@@ -131,6 +131,7 @@ type Model struct {
 	requested          time.Time
 	answered           time.Time
 	respondedOnce      bool
+	leadThinks         bool
 	waited             time.Duration
 	phase              phase
 	shown              time.Time
@@ -449,7 +450,7 @@ func (m *Model) Start() {
 	m.Busy, m.Stopping, m.LettingToolsFinish, m.began = true, false, false, at
 	m.leadIdleSince, m.waitingOn = time.Time{}, 0
 	m.waited, m.phase, m.shown = 0, requesting, at
-	m.requested, m.answered, m.respondedOnce = at, time.Time{}, false
+	m.requested, m.answered, m.respondedOnce, m.leadThinks = at, time.Time{}, false, false
 }
 
 func (m *Model) dropGreeting() {

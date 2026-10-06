@@ -10,7 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.4 - 2026-10-06
+
+Sub-agents that ask the orchestrator, forks at the right point, long builds in the background, and a trace that keeps everything.
+
 ### Fixed
+
+- **"Thinking" shows only while the lead's model thinks.** An open turn where only sub-agents work, or the lead writes, says "working".
 
 - **A long command moves to a background shell instead of being killed.** A bash call still running after 30 s returns with the shell's name and its output so far, and the command keeps running. `shell wait` waits for it to end. Sub-agents get the `shell` tool wherever they get `bash`. A shell's row shows the tail of a log file the command names.
 

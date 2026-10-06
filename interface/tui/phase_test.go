@@ -233,7 +233,7 @@ func TestTheRunningRowHoldsItsPlaceWhenAStepEndsAndNoStepIsSummarised(t *testing
 	if joined := strings.Join(after, "\n"); strings.Contains(joined, " tools") {
 		t.Errorf("the turn summarises itself once the step ends\n%s", joined)
 	}
-	if moved := rowOf(t, after, "thinking"); moved != running {
+	if moved := rowOf(t, after, "working"); moved != running {
 		t.Errorf("the running row moved from %d to %d when the step ended\n%s", running, moved, strings.Join(after, "\n"))
 	}
 }

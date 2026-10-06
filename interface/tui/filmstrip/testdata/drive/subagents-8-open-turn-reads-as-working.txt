@@ -1,0 +1,10 @@
+# moment 8: the lead's turn is open and does nothing while two sub-agents think. The bottom status says working, never thinking, until the lead's own model thinks.
+type subagents-8-open-turn-reads-as-working
+key enter
+wait spawning [&c1] [&c2]
+clock 2s
+absent thinking
+wait working
+release
+clock 2s
+wait thinking

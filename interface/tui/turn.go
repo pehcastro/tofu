@@ -352,6 +352,9 @@ func (a *App) absorb(event Event) {
 			a.feedStale = true
 		}
 	case EventThinking:
+		if event.Agent == "" {
+			a.view.Thinks()
+		}
 		a.thought(event, at)
 	case EventToolCall:
 		a.called(event, at)

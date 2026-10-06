@@ -1,0 +1,13 @@
+# moment 8: the lead's turn stays open after both spawns return while the two sub-agents think; then the lead's own model thinks
+requesting
+spawn 5e01aa audit the policy loader
+row c1 working audit the policy loader
+result 5e01aa spawned [&c1]
+spawn 5e02aa write the ledger floor test
+row c2 working write the ledger floor test
+result 5e02aa spawned [&c2]
+@c1 thinking c1th01 the loader reads the lock first
+@c2 thinking c2th01 the floor needs one row
+pause
+thinking ld01 both run, so the lead weighs what it reads next
+hold

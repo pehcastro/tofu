@@ -57,20 +57,20 @@ func (p phase) drawn() (string, lipgloss.Style) {
 }
 
 func (m *Model) reached() phase {
-	if m.Awaiting() {
+	switch {
+	case m.Awaiting():
 		return waitingOnYou
-	}
-	if m.inFlight() && !m.respondedOnce {
+	case m.inFlight() && !m.respondedOnce:
 		return requesting
-	}
-	if slices.ContainsFunc(m.entries, Entry.running) {
-		return working
-	}
-	if m.Spawns > 0 {
+	case m.leadThinks:
+		return thinking
+	case m.Spawns > 0 && !slices.ContainsFunc(m.entries, Entry.running):
 		return spawning
 	}
-	return thinking
+	return working
 }
+
+func (m *Model) Thinks() { m.leadThinks = m.Busy }
 
 func (m *Model) WaitOn(working int) {
 	if m.Busy || m.leadIdleSince.IsZero() && working == 0 {
@@ -344,6 +344,7 @@ func (m *Model) Requesting() {
 }
 
 func (m *Model) Returned() {
+	m.leadThinks = false
 	if !m.inFlight() {
 		return
 	}
