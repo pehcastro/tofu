@@ -114,6 +114,19 @@ pub fn ring(color: Rgba) -> BoxShadow {
     }
 }
 
+pub fn pop_shadow() -> Vec<BoxShadow> {
+    vec![
+        ring(white(0.12)),
+        BoxShadow {
+            color: black(0.6).into(),
+            offset: point(px(0.0), px(22.0)),
+            blur_radius: px(50.0),
+            spread_radius: px(0.0),
+            inset: false,
+        },
+    ]
+}
+
 fn raster(bytes: Vec<u8>, size: f32) -> Img {
     img(Arc::new(Image::from_bytes(ImageFormat::Svg, bytes)))
         .flex_none()

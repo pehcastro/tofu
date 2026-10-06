@@ -9,7 +9,7 @@ use super::fixture::{
 use super::kit::{
     ADD, AGENT, AGENT_FILL, AGENT_TEXT, CHAT, COLLAPSE, DANGER, DEL, DOWN, MARK, MODIFIED, MONO,
     PLUS, POP, PREFS, ROBOT, SEND, SPLIT, T2, T3, TRACE, black, cap, file_icon, glyph, hex, inner,
-    medium, ring, shell, square, text, tint, white,
+    medium, pop_shadow, ring, shell, square, text, tint, white,
 };
 use super::parts::{close_mark, code, dot, kbd, number, quiet, row, runs, tab, tree_row};
 use super::{Editor, File, Mode};
@@ -115,6 +115,9 @@ fn person_blame() -> Div {
         .child("pehcastro, 3 weeks ago · a88092d")
 }
 
+const POP_LINE: f32 = 22.75;
+const POP_ROW: f32 = POP_LINE + 14.0;
+
 fn pop_row(label: &'static str, color: gpui::Rgba, key: Option<&'static str>) -> Div {
     div()
         .flex()
@@ -205,9 +208,7 @@ impl Editor {
             .child(
                 icon_button("prefs", PREFS, 26.0, scale)
                     .mb(px(5.0))
-                    .on_click(cx.listener(Self::tell(
-                        "Opens the editor options: wrap, minimap, blame, whitespace and font size.",
-                    ))),
+                    .on_click(cx.listener(Self::update(|this| this.prefs = !this.prefs))),
             );
 
         let selected = |file: File| self.file == file;
@@ -420,8 +421,55 @@ impl Editor {
             shell()
                 .flex_1()
                 .child(header)
-                .child(inner().flex_row().child(side).child(editor)),
+                .child(inner().flex_row().child(side).child(editor))
+                .when(self.prefs, |shell| shell.child(self.prefs_pop(cx))),
         )
+    }
+
+    fn prefs_pop(&self, cx: &mut Context<Self>) -> Div {
+        let rows: [(&'static str, &'static str, bool); 4] = [
+            (
+                "Git blame",
+                "Turns git blame on the current line off.",
+                true,
+            ),
+            (
+                "Agent blame",
+                "Turns agent blame on the current line off.",
+                true,
+            ),
+            (
+                "Change marks",
+                "Turns the gutter marks for changed lines off.",
+                true,
+            ),
+            ("Word wrap", "Turns word wrap on for this file.", false),
+        ];
+        div()
+            .absolute()
+            .right(px(10.0))
+            .top(px(40.0))
+            .w(px(240.0))
+            .p(px(6.0))
+            .rounded(px(12.0))
+            .bg(POP)
+            .shadow(pop_shadow())
+            .children(
+                rows.into_iter()
+                    .enumerate()
+                    .map(|(index, (label, tell, on))| {
+                        pop_row(label, white(0.9), None)
+                            .h(px(POP_ROW))
+                            .child(if on {
+                                div().text_color(ADD).child("on")
+                            } else {
+                                div().text_color(white(T3)).child("off")
+                            })
+                            .id(("prefs-row", index))
+                            .cursor_pointer()
+                            .on_click(cx.listener(Self::tell(tell)))
+                    }),
+            )
     }
 
     fn trace_pop(&self, cx: &mut Context<Self>) -> Div {
@@ -459,13 +507,14 @@ impl Editor {
             .p(px(6.0))
             .rounded(px(12.0))
             .bg(POP)
-            .shadow(vec![ring(white(0.12))])
+            .shadow(pop_shadow())
             .child(
                 div()
                     .px(px(10.0))
                     .py(px(6.0))
                     .font_family(MONO)
                     .text_size(px(13.0))
+                    .line_height(px(POP_LINE))
                     .text_color(white(T3))
                     .child("tr#4e19a2"),
             )
@@ -474,6 +523,7 @@ impl Editor {
                     .enumerate()
                     .map(|(index, (label, tell, key, color))| {
                         pop_row(label, color, key)
+                            .h(px(POP_ROW))
                             .id(("trace-row", index))
                             .cursor_pointer()
                             .on_click(cx.listener(Self::tell(tell)))

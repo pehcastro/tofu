@@ -10,17 +10,27 @@ use gpui::{
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     kit::load_fonts(cx)?;
-    let board = match board {
-        None | Some("IEDITOR-1") => Board::Edit,
-        Some("IEDITOR-2") => Board::Changes,
-        Some("IEDITOR-3") => Board::Split,
+    let editor = match board {
+        None | Some("IEDITOR-1") => Editor::new(Board::Edit),
+        Some("IEDITOR-2") => Editor::new(Board::Changes),
+        Some("IEDITOR-3") => Editor::new(Board::Split),
+        Some("S-EDIT-1") => Editor {
+            prefs: true,
+            trace: true,
+            filtering: true,
+            ..Editor::new(Board::Edit)
+        },
+        Some("S-EDIT-2") => Editor {
+            mode: Mode::Who,
+            ..Editor::new(Board::Changes)
+        },
         Some(other) => {
             return Err(format!(
-                "the editor draws IEDITOR-1, IEDITOR-2 and IEDITOR-3, not {other}"
+                "the editor draws IEDITOR-1, IEDITOR-2, IEDITOR-3, S-EDIT-1 and S-EDIT-2, not {other}"
             ));
         }
     };
-    Ok(cx.new(|_| Editor::new(board)).into())
+    Ok(cx.new(|_| editor).into())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -52,6 +62,7 @@ pub struct Editor {
     cursor: usize,
     trace: bool,
     filtering: bool,
+    prefs: bool,
     mode: Mode,
     menu: bool,
     told: Option<SharedString>,
@@ -67,6 +78,7 @@ impl Editor {
             cursor: 13,
             trace: false,
             filtering: false,
+            prefs: false,
             mode: Mode::Changes,
             menu: board == Board::Split,
             told: None,
