@@ -49,6 +49,9 @@ Sessions · 123 sessions                                 ● head clear-sable-ea
     repository to me
 ```
 
-`tofu session info <name>` prints one session with its model, cost and
-context budget, `tofu session trace <name>` every request with its tokens,
-and `tofu session reads <name>` every file it read. Each takes `--json`.
+`tofu session info <name>` prints one session with its model, cost,
+context budget and the error it ended on, `tofu session trace <name>` every
+request, tool call, message tofu added, fork and failure, `tofu session
+request <name> <request id>` one request exactly as it was sent with its
+response or error body, and `tofu session reads <name>` every file it read.
+Each takes `--json`.

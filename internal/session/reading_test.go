@@ -52,10 +52,12 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 		asked(eventOf(t, EventCompaction, map[string]any{"compaction": map[string]int{"step": 1}}), ""),
 		eventOf(t, EventAttachment, Attachment{File: "shot.png", Bytes: 9, Format: "png"}),
 		eventOf(t, EventTurnEnd, map[string]string{"outcome": "stopped"}),
+		eventOf(t, EventNotice, NoticeBody{Text: "the gate is off"}),
+		eventOf(t, EventListChange, ListChangeBody{Kind: "fork", After: []string{"a1"}}),
 	}
 }
 
-var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd}
+var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange}
 
 func readingOf(t *testing.T, reading Reading, kind EventKind) int {
 	t.Helper()

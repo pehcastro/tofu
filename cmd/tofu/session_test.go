@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/session"
 	"tofu/internal/sys"
+	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
@@ -671,6 +673,111 @@ func TestTheForkSentenceReadsTheSameInSessionInfoAndInContext(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(strings.Fields(info), " "), sentence) {
 		t.Fatalf("tofu context says\n%s\nand tofu session info says\n%s", sentence, info)
+	}
+}
+
+func TestAFailedCallAndAFailedTurnKeepTheirReasonInTraceAndInfo(t *testing.T) {
+	dir := scratchProject(t)
+	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+		{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"echo first; echo the disk is gone >&2; exit 3"}`)},
+	}}}}
+	var events eventLog
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "fail twice", events.add)
+	store, err := session.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := store.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	traced, _, _ := sessionRun(t, "session", "trace", head.ID, jsonFlag)
+	var trace sessionTraceReport
+	envelopeData(t, traced, &trace)
+	if len(trace.Calls) != 1 || trace.Calls[0].Outcome != session.ToolOutcomeFailed {
+		t.Fatalf("the trace carries %+v, want the one failed bash call", trace.Calls)
+	}
+	if reason := trace.Calls[0].Reason; !strings.Contains(reason, "exit 3") || !strings.Contains(reason, "the disk is gone") {
+		t.Errorf("the failed call carries the reason %q, want the exit code and the last line it printed", reason)
+	}
+	if !strings.Contains(trace.Error, "no more decisions queued") {
+		t.Errorf("the trace carries the session error %q, want the model's error", trace.Error)
+	}
+	if len(trace.Failures) != 1 || !strings.Contains(trace.Failures[0].Error, "no more decisions queued") || trace.Failures[0].Turn == "" {
+		t.Errorf("the trace lists the failures %+v, want the one turn that ended in error", trace.Failures)
+	}
+
+	info, _, _ := sessionRun(t, "session", "info", head.ID, jsonFlag)
+	var row sessionRow
+	envelopeData(t, info, &row)
+	if row.Outcome != "error" || !strings.Contains(row.Error, "no more decisions queued") {
+		t.Errorf("info carries outcome %q and error %q, want the error and its reason", row.Outcome, row.Error)
+	}
+}
+
+type thenRefused struct {
+	sendModel
+	refused error
+}
+
+func (m *thenRefused) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+	if len(m.queued) == 0 {
+		m.requests = append(m.requests, request)
+		return llm.Decision{}, m.refused
+	}
+	return m.sendModel.Ask(ctx, request)
+}
+
+func TestSessionRequestPrintsTheFailingRequestAsSentAndTheWholeErrorBody(t *testing.T) {
+	dir := scratchProject(t)
+	detail := `{"type":"error","error":{"type":"invalid_request_error","message":"messages.3: tool_use ids were found without tool_result blocks immediately after: call-a"}}`
+	model := &thenRefused{sendModel: sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+		{ID: "call-a", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
+		{ID: "call-b", Name: "read", Arguments: json.RawMessage(`{"path":"b.txt"}`)},
+	}}}}, refused: &transport.Error{Kind: transport.KindBadRequest, Op: "anthropic.Ask", Status: 400, Detail: detail}}
+	var events eventLog
+	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "read both", events.add)
+	store, err := session.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := store.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	traced, _, _ := sessionRun(t, "session", "trace", head.ID, jsonFlag)
+	var trace sessionTraceReport
+	envelopeData(t, traced, &trace)
+	failing := ""
+	for _, request := range trace.Requests {
+		if request.Error != "" {
+			failing = request.Request
+		}
+	}
+	if len(trace.Requests) != 2 || failing == "" {
+		t.Fatalf("the trace lists the requests %+v, want the two sent and the second marked failed", trace.Requests)
+	}
+
+	printed, _, code := sessionRun(t, "session", "request", head.ID, failing[len(failing)-6:], jsonFlag)
+	if code != exitOK {
+		t.Fatalf("tofu session request exited %d", code)
+	}
+	var sent sessionRequestReport
+	envelopeData(t, printed, &sent)
+	var shape []string
+	for _, message := range sent.Messages {
+		shape = append(shape, strings.Join(strings.Fields(message.Role+" "+strings.Join(message.Calls, ",")+" "+message.Answers), " "))
+	}
+	if got := strings.Join(shape, " | "); !strings.HasSuffix(got, "user | assistant call-a,call-b | tool call-a | tool call-b") {
+		t.Errorf("the request as sent reads %q, want the task, the two calls and both results in order", got)
+	}
+	if !strings.Contains(sent.Error, detail) {
+		t.Errorf("the request carries the error %q, want the whole provider body", sent.Error)
+	}
+	if text, _, _ := sessionRun(t, "session", "request", head.ID, failing); !strings.Contains(text, "call-a") || !strings.Contains(text, "invalid_request_error") {
+		t.Errorf("tofu session request does not print the calls and the error body:\n%s", text)
 	}
 }
 

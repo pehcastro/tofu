@@ -730,9 +730,10 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns, []Row{run})
 	}}
 	defer t.watch(held, check)()
+	var taskOrigin llm.Origin
 	for {
 		subAgent := opened.onto(t.subAgentConfig(held, site, check))
-		subAgent.Task, subAgent.NewID = task, func() string { return held.agent.ID }
+		subAgent.Task, subAgent.TaskOrigin, subAgent.NewID = task, taskOrigin, func() string { return held.agent.ID }
 		report := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
 		next, _ := held.inbox.next(ctx, nil)
 		stopping := ctx.Err() != nil
@@ -745,7 +746,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		if len(next) == 0 {
 			return
 		}
-		task, warm = strings.Join(next, "\n\n"), nil
+		task, taskOrigin, warm = strings.Join(textsOf(next), "\n\n"), originOf(next), nil
 		t.roster.Reached(held.agent.ID, subagent.Working, resumedWords)
 	}
 }

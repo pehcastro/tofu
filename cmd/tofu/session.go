@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/turn"
@@ -20,7 +22,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session list|info|trace|reads|resume|rename <name|id> [--json]"
+	sessionSubcommands = "tofu session list|info|trace|reads|resume|rename|request <name|id> [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -43,6 +45,7 @@ type sessionRow struct {
 	Steps            int       `json:"steps"`
 	Carried          int       `json:"carried_messages"`
 	Outcome          string    `json:"outcome,omitempty"`
+	Error            string    `json:"error,omitempty"`
 	Wire             string    `json:"wire,omitempty"`
 	Model            string    `json:"model,omitempty"`
 	Parent           string    `json:"parent,omitempty"`
@@ -107,6 +110,8 @@ func sessionOperands(subcommand string) (string, int, bool) {
 		return "<name|id>", 1, true
 	case "rename":
 		return "<name|id> <new name>", 2, true
+	case "request":
+		return "<name|id> <request id>", 2, true
 	}
 	return "", 0, false
 }
@@ -163,6 +168,12 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			return o.fail(err)
 		}
 		return o.done(true, report, func(page cli.Page) []string { return sessionReadsLines(page, report) })
+	case "request":
+		report, err := sessionRequest(store, handles[0], handles[1])
+		if err != nil {
+			return o.fail(err)
+		}
+		return o.done(true, report, func(page cli.Page) []string { return sessionRequestLines(page, report) })
 	case "rename":
 		row, err := sessionRenamed(store, handles[0], handles[1])
 		if err != nil {
@@ -344,6 +355,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		Reads:            len(reading.Reads),
 		Carried:          len(messages),
 		Outcome:          header.Outcome,
+		Error:            header.Error,
 		Wire:             header.Wire,
 		Model:            header.Model,
 		Parent:           header.Parent,
@@ -508,6 +520,7 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 		{Label: "counts", Text: strings.Join(counts, " · ")},
 		{Label: "carried", Text: carried},
 		{Label: "ended", Text: ended},
+		{Label: "error", Text: oneLine(row.Error)},
 		{Label: "wire", Text: strings.TrimSpace(row.Wire + " " + row.Model)},
 		{Label: "parent", Text: parent},
 	}
@@ -581,6 +594,15 @@ type traceRequest struct {
 	Model   string        `json:"model,omitempty"`
 	Usage   session.Usage `json:"usage"`
 	CostUSD float64       `json:"cost_usd"`
+
+	Why               string `json:"why,omitempty"`
+	Messages          int    `json:"messages,omitempty"`
+	New               int    `json:"new_messages,omitempty"`
+	Attempts          int    `json:"attempts,omitempty"`
+	Status            int    `json:"status,omitempty"`
+	ProviderRequestID string `json:"provider_request_id,omitempty"`
+	DurationMS        int64  `json:"duration_ms,omitempty"`
+	Error             string `json:"error,omitempty"`
 }
 
 type traceCall struct {
@@ -592,15 +614,94 @@ type traceCall struct {
 	Result  string `json:"result,omitempty"`
 	Outcome string `json:"outcome,omitempty"`
 	Bytes   int    `json:"result_bytes"`
+	Reason  string `json:"reason,omitempty"`
+
+	Args       json.RawMessage `json:"args,omitempty"`
+	DurationMS int64           `json:"duration_ms,omitempty"`
+	Refused    bool            `json:"refused,omitempty"`
+	Gate       string          `json:"gate,omitempty"`
+	Hooks      []turn.HookRun  `json:"hooks,omitempty"`
+}
+
+type traceFailure struct {
+	Agent string `json:"agent,omitempty"`
+	Turn  string `json:"turn"`
+	Error string `json:"error"`
 }
 
 type sessionTraceReport struct {
 	Session  string             `json:"session"`
 	Name     string             `json:"name,omitempty"`
+	Error    string             `json:"error,omitempty"`
 	Events   int                `json:"events"`
 	Agents   []session.AgentRun `json:"agents"`
 	Requests []traceRequest     `json:"requests"`
 	Calls    []traceCall        `json:"calls"`
+	Failures []traceFailure     `json:"failures,omitempty"`
+
+	Sizes    *session.Sizes         `json:"sizes,omitempty"`
+	Inserted []session.TracedInsert `json:"inserted,omitempty"`
+	Changes  []session.TracedChange `json:"list_changes,omitempty"`
+	Notices  []session.TracedNotice `json:"notices,omitempty"`
+}
+
+type traceResult struct {
+	session.ResultBody
+	DurationMS int64          `json:"duration_ms"`
+	Refused    bool           `json:"refused"`
+	Verdict    string         `json:"gate_verdict"`
+	GateError  string         `json:"gate_error"`
+	Reason     *ledger.Reason `json:"gate_reason"`
+	Hooks      []turn.HookRun `json:"hooks"`
+}
+
+func gateWords(result traceResult) string {
+	words := result.Verdict
+	if reason := result.Reason; reason != nil {
+		words += fmt.Sprintf(" (%s %.2f %s %.2f)", reason.Question, reason.Value, reason.Comparison, reason.Threshold)
+	}
+	return strings.TrimSpace(strings.TrimSpace(words + " " + result.GateError))
+}
+
+func tracedRequests(steps []traceRequest, exchanges []session.Exchange) []traceRequest {
+	if len(exchanges) == 0 {
+		return steps
+	}
+	used := map[string]traceRequest{}
+	for _, step := range steps {
+		used[step.Request] = step
+	}
+	requests := make([]traceRequest, 0, len(exchanges))
+	before := map[string][]string{}
+	for _, exchange := range exchanges {
+		request := used[exchange.Request]
+		request.Request, request.Agent, request.Turn, request.Model = exchange.Request, exchange.Agent, exchange.Turn, cmp.Or(request.Model, exchange.Model)
+		request.Why, request.Messages, request.Attempts, request.DurationMS, request.Error = exchange.Why, len(exchange.Messages), len(exchange.Attempts), exchange.DurationMS, exchange.Error
+		for _, hash := range exchange.Messages {
+			if !slices.Contains(before[exchange.Agent], hash) {
+				request.New++
+			}
+		}
+		before[exchange.Agent] = exchange.Messages
+		if last := len(exchange.Attempts) - 1; last >= 0 {
+			var attempt llm.Attempt
+			if json.Unmarshal(exchange.Attempts[last].Detail, &attempt) == nil {
+				request.Status, request.ProviderRequestID = attempt.Status, attempt.RequestID
+			}
+		}
+		requests = append(requests, request)
+	}
+	return requests
+}
+
+func callReason(result session.ResultBody) string {
+	if result.Error != "" || result.ExitCode == nil || *result.ExitCode == 0 {
+		return result.Error
+	}
+	code := strconv.Itoa(*result.ExitCode)
+	printed := strings.TrimSuffix(strings.TrimSpace(result.Content), "the command exited "+code)
+	lines := strings.Split(strings.TrimSpace(printed), "\n")
+	return strings.TrimSpace("exit " + code + ": " + lines[len(lines)-1])
 }
 
 func sessionTrace(store *session.Store, handle string) (sessionTraceReport, error) {
@@ -612,7 +713,8 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	report := sessionTraceReport{Session: header.ID, Events: len(events), Agents: append([]session.AgentRun{}, header.Agents...), Requests: []traceRequest{}, Calls: []traceCall{}}
+	report := sessionTraceReport{Session: header.ID, Error: header.Error, Events: len(events), Agents: append([]session.AgentRun{}, header.Agents...),
+		Requests: []traceRequest{}, Calls: []traceCall{}}
 	if header.Name != nil {
 		report.Name = *header.Name
 	}
@@ -628,15 +730,34 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 			var call session.CallBody
 			_ = json.Unmarshal(event.Body, &call)
 			placed[event.Call] = len(report.Calls)
-			report.Calls = append(report.Calls, traceCall{Call: event.Call, Agent: event.Agent, Turn: event.Turn, Request: event.Request, Tool: call.Tool})
+			report.Calls = append(report.Calls, traceCall{Call: event.Call, Agent: event.Agent, Turn: event.Turn, Request: event.Request, Tool: call.Tool, Args: call.Args})
 		case session.EventToolResult:
-			var result session.ResultBody
+			var result traceResult
 			_ = json.Unmarshal(event.Body, &result)
 			if at, known := placed[event.Call]; known {
-				report.Calls[at].Result, report.Calls[at].Outcome, report.Calls[at].Bytes = event.ID, result.ToolOutcome, result.ResultBytes
+				called := &report.Calls[at]
+				called.Result, called.Outcome, called.Bytes, called.Reason = event.ID, result.ToolOutcome, result.ResultBytes, callReason(result.ResultBody)
+				called.DurationMS, called.Refused, called.Gate, called.Hooks = result.DurationMS, result.Refused, gateWords(result), result.Hooks
+			}
+		case session.EventTurnEnd:
+			var ended struct {
+				Error string `json:"error"`
+			}
+			if json.Unmarshal(event.Body, &ended) == nil && ended.Error != "" {
+				report.Failures = append(report.Failures, traceFailure{Agent: event.Agent, Turn: event.Turn, Error: ended.Error})
 			}
 		}
 	}
+	traced, err := store.Traced(header.ID, events)
+	if err != nil {
+		return sessionTraceReport{}, err
+	}
+	report.Requests = tracedRequests(report.Requests, traced.Exchanges)
+	if len(traced.Exchanges) > 0 {
+		sizes := store.Sizes(header.ID)
+		report.Sizes = &sizes
+	}
+	report.Inserted, report.Changes, report.Notices = traced.Inserted, traced.Changes, traced.Notices
 	return report, nil
 }
 
@@ -654,26 +775,242 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	}
 	requests := make([]cli.Row, len(report.Requests))
 	for i, request := range report.Requests {
-		requests[i] = cli.Row{Mark: cli.Idle, Cells: []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model,
-			"in " + strconv.Itoa(request.Usage.InputTokens) + " · out " + strconv.Itoa(request.Usage.OutputTokens), dollars(request.CostUSD)}}
+		cells := []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model}
+		if request.Messages > 0 {
+			cells = append(cells, countOf(request.Messages, "message")+", "+strconv.Itoa(request.New)+" new")
+		}
+		cells = append(cells, "in "+strconv.Itoa(request.Usage.InputTokens)+" · out "+strconv.Itoa(request.Usage.OutputTokens), dollars(request.CostUSD))
+		requests[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: request.Why}
+		if request.Error != "" {
+			requests[i].Mark, requests[i].Detail = cli.Fail, oneLine(request.Error)
+		}
 	}
 	calls := make([]cli.Row, len(report.Calls))
 	for i, call := range report.Calls {
-		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, widget.Size(call.Bytes)}, Detail: call.Result}
-		if call.Result == "" {
+		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, widget.Size(call.Bytes)},
+			Detail: strings.TrimSpace(call.Gate + " " + oneLine(string(call.Args)))}
+		switch {
+		case call.Result == "":
 			calls[i].Mark, calls[i].Cells[3] = cli.Warn, "unanswered"
+		case call.Refused:
+			calls[i].Mark, calls[i].Cells[3], calls[i].Detail = cli.Fail, "refused", oneLine(call.Reason)
+		case call.Outcome == session.ToolOutcomeFailed:
+			calls[i].Mark, calls[i].Detail = cli.Fail, oneLine(call.Reason)
+		case call.Outcome == session.ToolOutcomeAborted:
+			calls[i].Mark = cli.Warn
+		}
+		for _, ran := range call.Hooks {
+			calls[i].Detail += " · " + ran.Event + " hook ran " + strconv.Itoa(ran.Ran) + strings.TrimSuffix(" "+cmp.Or(ran.Block, ran.Ask), " ")
 		}
 	}
-	lines := page.Title("Trace", []string{sessionHandle(report.Session, report.Name), countOf(report.Events, "event")}, cli.Verdict{})
+	inserted := make([]cli.Row, len(report.Inserted))
+	for i, insert := range report.Inserted {
+		when := ""
+		if insert.PostedAt != nil {
+			when = "posted " + insert.PostedAt.Format(time.TimeOnly) + ", "
+		}
+		if insert.TakenAt != nil {
+			when += "taken " + insert.TakenAt.Format(time.TimeOnly)
+		}
+		inserted[i] = cli.Row{Mark: cli.Idle, Cells: []string{cmp.Or(insert.Agent, session.AuthorOrchestrator), insert.Origin, when, "into " + cmp.Or(insert.Request, "no request yet")},
+			Detail: widget.Fit(oneLine(insert.Text), page.Width)}
+	}
+	changes := make([]cli.Row, len(report.Changes))
+	for i, change := range report.Changes {
+		changes[i] = cli.Row{Mark: cli.Changed, Cells: []string{cmp.Or(change.Agent, session.AuthorOrchestrator), change.Kind,
+			strconv.Itoa(change.Before) + " to " + countOf(change.After, "message")}, Detail: change.Why}
+	}
+	notices := make([]cli.Row, len(report.Notices))
+	for i, notice := range report.Notices {
+		notices[i] = cli.Row{Mark: cli.Warn, Cells: []string{cmp.Or(notice.Agent, session.AuthorOrchestrator), notice.At.Format(time.TimeOnly)}, Detail: oneLine(notice.Text)}
+	}
+	failures := make([]cli.Row, len(report.Failures))
+	for i, failure := range report.Failures {
+		failures[i] = cli.Row{Mark: cli.Fail, Cells: []string{cmp.Or(failure.Agent, session.AuthorOrchestrator), failure.Turn}, Detail: oneLine(failure.Error)}
+	}
+	var verdict cli.Verdict
+	if report.Error != "" {
+		verdict = cli.Verdict{Mark: cli.Fail, Text: "ended in error"}
+	}
+	facts := []string{sessionHandle(report.Session, report.Name), countOf(report.Events, "event")}
+	if sizes := report.Sizes; sizes != nil {
+		facts = append(facts, "events "+widget.Size(int(sizes.Events))+", requests "+widget.Size(int(sizes.Requests))+", bodies "+widget.Size(int(sizes.Blobs)))
+	}
+	lines := page.Title("Trace", facts, verdict)
 	for _, section := range []struct {
 		name string
 		rows []cli.Row
-	}{{"sub-agents", agents}, {"requests", requests}, {"calls", calls}} {
+	}{{"sub-agents", agents}, {"requests", requests}, {"messages tofu added", inserted}, {"calls", calls}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
 		if len(section.rows) > 0 {
 			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
 		}
 	}
 	return lines
+}
+
+type requestMessage struct {
+	Index    int                       `json:"index"`
+	Role     string                    `json:"role"`
+	Origin   string                    `json:"origin,omitempty"`
+	PostedAt *time.Time                `json:"posted_at,omitempty"`
+	TakenAt  *time.Time                `json:"taken_at,omitempty"`
+	Calls    []string                  `json:"calls,omitempty"`
+	Called   []session.MessageToolCall `json:"call_details,omitempty"`
+	Answers  string                    `json:"answers,omitempty"`
+	Outcome  string                    `json:"tool_outcome,omitempty"`
+	Text     string                    `json:"text,omitempty"`
+}
+
+type requestAttempt struct {
+	llm.Attempt
+	Body json.RawMessage `json:"body,omitempty"`
+}
+
+type sessionRequestReport struct {
+	Session    string           `json:"session"`
+	Request    string           `json:"request"`
+	Agent      string           `json:"agent,omitempty"`
+	Turn       string           `json:"turn,omitempty"`
+	At         time.Time        `json:"at"`
+	Why        string           `json:"why,omitempty"`
+	Wire       string           `json:"wire,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	ToolChoice string           `json:"tool_choice,omitempty"`
+	DurationMS int64            `json:"duration_ms"`
+	Messages   []requestMessage `json:"messages"`
+	Tools      json.RawMessage  `json:"tools,omitempty"`
+	Attempts   []requestAttempt `json:"attempts,omitempty"`
+	Response   json.RawMessage  `json:"response,omitempty"`
+	Error      string           `json:"error,omitempty"`
+}
+
+func sessionRequest(store *session.Store, handle, request string) (sessionRequestReport, error) {
+	header, err := sessionHeader(store, handle)
+	if err != nil {
+		return sessionRequestReport{}, err
+	}
+	view, err := store.Request(header.ID, request)
+	if err != nil {
+		return sessionRequestReport{}, problemError{What: err.Error(), Hint: "tofu session trace " + handle}
+	}
+	report := sessionRequestReport{Session: header.ID, Request: view.Request, Agent: view.Agent, Turn: view.Turn, At: view.At, Why: view.Why, Wire: view.Wire,
+		Model: view.Model, ToolChoice: view.ToolChoice, DurationMS: view.DurationMS, Tools: view.Tools, Response: view.Response, Error: view.Error}
+	for i, message := range view.Messages {
+		shown := requestMessage{Index: i, Role: message.Role, Origin: message.Origin, PostedAt: message.PostedAt, TakenAt: message.TakenAt,
+			Called: message.ToolCalls, Answers: message.ToolCallID, Outcome: message.ToolOutcome, Text: message.Content}
+		for _, call := range message.ToolCalls {
+			shown.Calls = append(shown.Calls, call.ID)
+		}
+		report.Messages = append(report.Messages, shown)
+	}
+	for _, attempt := range view.Attempts {
+		var shown requestAttempt
+		_ = json.Unmarshal(attempt.Detail, &shown.Attempt)
+		shown.Body = attempt.Body
+		report.Attempts = append(report.Attempts, shown)
+	}
+	return report, nil
+}
+
+func wireMessageLines(body json.RawMessage, width int) []string {
+	var sent struct {
+		Messages []json.RawMessage `json:"messages"`
+		Input    []json.RawMessage `json:"input"`
+	}
+	if json.Unmarshal(body, &sent) != nil {
+		return nil
+	}
+	var lines []string
+	for i, raw := range append(sent.Messages, sent.Input...) {
+		var item struct {
+			Role    string          `json:"role"`
+			Type    string          `json:"type"`
+			CallID  string          `json:"call_id"`
+			Content json.RawMessage `json:"content"`
+		}
+		_ = json.Unmarshal(raw, &item)
+		var blocks []struct {
+			Type      string `json:"type"`
+			ID        string `json:"id"`
+			ToolUseID string `json:"tool_use_id"`
+			Text      string `json:"text"`
+		}
+		_ = json.Unmarshal(item.Content, &blocks)
+		parts, said := []string{strings.TrimSpace(item.Role + " " + item.Type + " " + item.CallID)}, ""
+		for _, block := range blocks {
+			if block.Type == "text" {
+				said += " " + oneLine(block.Text)
+				continue
+			}
+			parts = append(parts, strings.TrimSpace(block.Type+" "+block.ID+block.ToolUseID))
+		}
+		line := "messages." + strconv.Itoa(i) + " " + strings.Join(parts, " | ")
+		if said != "" {
+			line += " | text" + widget.Fit(said, max(width-widget.Cells(line)-len(" | text"), 0))
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
+	verdict := cli.Verdict{Mark: cli.Done, Text: "answered"}
+	if report.Error != "" {
+		verdict = cli.Verdict{Mark: cli.Fail, Text: "failed"}
+	}
+	lines := append(page.Title("Request", []string{report.Request, countOf(len(report.Messages), "message")}, verdict), "")
+	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{
+		{Label: "agent", Text: cmp.Or(report.Agent, session.AuthorOrchestrator)},
+		{Label: "turn", Text: report.Turn},
+		{Label: "why", Text: report.Why},
+		{Label: "at", Text: report.At.Format(time.DateTime) + " · " + strconv.FormatInt(report.DurationMS, 10) + " ms"},
+		{Label: "wire", Text: strings.TrimSpace(report.Wire + " " + report.Model + " " + report.ToolChoice)},
+	})...)...)
+	rows := make([]cli.Row, len(report.Messages))
+	for i, message := range report.Messages {
+		cells := []string{strconv.Itoa(message.Index), message.Role}
+		if len(message.Calls) > 0 {
+			cells = append(cells, "calls "+strings.Join(message.Calls, ", "))
+		}
+		if message.Answers != "" {
+			cells = append(cells, "answers "+message.Answers+" "+message.Outcome)
+		}
+		if message.Origin != "" {
+			cells = append(cells, "added by tofu: "+message.Origin)
+		}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: widget.Fit(oneLine(message.Text), page.Width)}
+		if message.Role == session.RoleSystem {
+			rows[i].Detail = widget.Size(len(message.Text)) + " of system prompt, whole in --json"
+		}
+	}
+	lines = append(append(lines, "", page.Section("messages tofu built", cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)
+	for i, attempt := range report.Attempts {
+		facts := []cli.Fact{
+			{Label: "status", Text: strconv.Itoa(attempt.Status) + " · " + attempt.RequestID},
+			{Label: "timing", Text: strconv.FormatInt(attempt.HeadersMS, 10) + " ms to headers, " + strconv.FormatInt(attempt.StreamMS, 10) + " ms streaming, " + widget.Size(int(attempt.Received))},
+			{Label: "retry after", Text: attempt.RetryAfter},
+			{Label: "error", Text: attempt.Error},
+			{Label: "error body", Text: attempt.ErrorBody},
+		}
+		lines = append(append(lines, "", page.Section("attempt "+strconv.Itoa(i+1)+" "+attempt.URL, cli.Verdict{})), cli.Indent(page.Facts(facts)...)...)
+		lines = append(lines, cli.Indent(wireMessageLines(attempt.Body, page.Width)...)...)
+	}
+	if report.Error != "" {
+		return append(append(lines, "", page.Section("error", cli.Verdict{Mark: cli.Fail})), cli.Indent(report.Error)...)
+	}
+	var answer llm.Decision
+	_ = json.Unmarshal(report.Response, &answer)
+	var calls []string
+	for _, call := range answer.ToolCalls {
+		calls = append(calls, call.ID+" "+call.Name)
+	}
+	return append(append(lines, "", page.Section("response", cli.Verdict{})), cli.Indent(page.Facts([]cli.Fact{
+		{Label: "stop", Text: answer.Stop + " · " + answer.RequestID},
+		{Label: "usage", Text: fmt.Sprintf("in %d · out %d · cache read %d · cache write %d · first token %d ms",
+			answer.Usage.InputTokens, answer.Usage.OutputTokens, answer.CacheReadTokens, answer.CacheWriteTokens, answer.FirstTokenMS)},
+		{Label: "calls", Text: strings.Join(calls, ", ")},
+		{Label: "text", Text: oneLine(answer.Content)},
+	})...)...)
 }
 
 func sessionWhen(at, now time.Time) string {

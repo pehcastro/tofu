@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"tofu/internal/transport"
 )
@@ -85,6 +86,13 @@ type Message struct {
 	ToolOutcome     ToolOutcome
 	ToolResultBytes int
 	Thinking        Thinking
+	Origin          Origin `json:"-"`
+}
+
+type Origin struct {
+	Source   string
+	PostedAt time.Time
+	TakenAt  time.Time
 }
 
 type Tool struct {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -140,13 +141,14 @@ func TestAStoredBlankAssistantMessageIsNotSent(t *testing.T) {
 			t.Fatalf("Sendable kept the blank assistant message %q", message.Content)
 		}
 	}
-	sent := encodedMessages(t, stored)
+	answered := slices.Insert(slices.Clone(stored), 2, llm.Message{Role: llm.RoleTool, ToolCallID: "toolu_lost", Content: "found"})
+	sent := encodedMessages(t, answered)
 	assertNoBlankTextBlock(t, sent)
 	var roles []string
 	for _, message := range sent {
 		roles = append(roles, message.Role)
 	}
-	if got := strings.Join(roles, " "); got != "user assistant user user" {
+	if got := strings.Join(roles, " "); got != "user assistant user user user" {
 		t.Fatalf("the encoder sent %s, want the blank assistant message left out", got)
 	}
 }

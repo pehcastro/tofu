@@ -25,6 +25,8 @@ type Log struct {
 	last    map[string]string
 	prompts map[string]string
 	redact  sys.KeyRedactor
+	blobs   map[string]bool
+	side    map[string]*os.File
 }
 
 func (s *Store) Open(header Header) (log *Log, err error) {
@@ -49,7 +51,7 @@ func (s *Store) Open(header Header) (log *Log, err error) {
 			err = errors.Join(err, unlock(lock))
 		}
 	}()
-	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string]string{}, redact: sys.LoadKeyRedactor()}
+	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string]string{}, redact: sys.LoadKeyRedactor(), side: map[string]*os.File{}}
 	kept, err := s.read(header.ID)
 	switch {
 	case err == nil:
@@ -189,7 +191,10 @@ func (l *Log) Edit(change func(*Header)) error {
 }
 
 func (l *Log) Close() error {
-	closed := errors.Join(l.save(), l.file.Close())
+	l.mu.Lock()
+	side := l.closeSide()
+	l.mu.Unlock()
+	closed := errors.Join(l.save(), l.file.Close(), side)
 	if l.lock == nil {
 		return closed
 	}

@@ -134,6 +134,9 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := everyToolUseAnswered(messages); err != nil {
+		return nil, err
+	}
 	if len(messages) == 0 {
 		return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil, "the request carries no messages")
 	}
@@ -315,6 +318,41 @@ func firstUserText(messages []llm.Message) string {
 		}
 	}
 	return ""
+}
+
+func everyToolUseAnswered(messages []wireMessage) error {
+	asked := map[string]bool{}
+	for index, message := range messages {
+		answered := map[string]bool{}
+		for _, block := range message.Content {
+			if block.Type != "tool_result" {
+				continue
+			}
+			if !asked[block.ToolUseID] {
+				return transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
+					"messages.%d answers tool_use %s, which messages.%d did not ask", index, block.ToolUseID, index-1)
+			}
+			answered[block.ToolUseID] = true
+		}
+		var unanswered []string
+		for id := range asked {
+			if !answered[id] {
+				unanswered = append(unanswered, id)
+			}
+		}
+		if len(unanswered) > 0 {
+			slices.Sort(unanswered)
+			return transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
+				"messages.%d asks tool_use %s, and messages.%d does not answer them first", index-1, strings.Join(unanswered, ", "), index)
+		}
+		asked = map[string]bool{}
+		for _, block := range message.Content {
+			if message.Role == "assistant" && block.Type == "tool_use" {
+				asked[block.ID] = true
+			}
+		}
+	}
+	return nil
 }
 
 func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {

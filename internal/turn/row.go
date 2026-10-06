@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/internal/hook"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
@@ -58,6 +60,26 @@ type ToolCallRow struct {
 	GateError      string `json:"gate_error,omitempty"`
 	DurationMS     int64  `json:"duration_ms"`
 	Error          string `json:"error,omitempty"`
+
+	GateReason *ledger.Reason `json:"gate_reason,omitempty"`
+	Refused    bool           `json:"refused,omitempty"`
+	Hooks      []HookRun      `json:"hooks,omitempty"`
+}
+
+type HookRun struct {
+	Event   string `json:"event"`
+	Ran     int    `json:"ran"`
+	Block   string `json:"block,omitempty"`
+	Ask     string `json:"ask,omitempty"`
+	Context string `json:"context,omitempty"`
+	Rewrote bool   `json:"rewrote_args,omitempty"`
+}
+
+func hookRunOf(event hook.Event, verdict hook.Verdict) []HookRun {
+	if verdict.Ran == 0 {
+		return nil
+	}
+	return []HookRun{{Event: string(event), Ran: verdict.Ran, Block: verdict.Block, Ask: verdict.Ask, Context: verdict.Context, Rewrote: verdict.Args != nil}}
 }
 
 func (r ToolCallRow) Outcome() llm.ToolOutcome {
@@ -120,6 +142,7 @@ type Row struct {
 	Warnings     []string     `json:"warnings,omitempty"`
 	SubAgentIDs  []string     `json:"sub_agent_ids"`
 	Outcome      Outcome      `json:"outcome"`
+	Error        string       `json:"error,omitempty"`
 	TotalCostUSD float64      `json:"total_cost_usd"`
 	WallClockMS  int64        `json:"wall_clock_ms"`
 	DecisionIDs  []string     `json:"decision_ids,omitempty"`
@@ -165,6 +188,13 @@ func messageRowOf(message llm.Message) MessageRow {
 		ToolOutcome:     toolOutcomeName(message.ToolOutcome),
 		ToolResultBytes: message.ToolResultBytes,
 		Thinking:        message.Thinking.Text,
+		Origin:          message.Origin.Source,
+	}
+	if !message.Origin.PostedAt.IsZero() {
+		row.PostedAt = &message.Origin.PostedAt
+	}
+	if !message.Origin.TakenAt.IsZero() {
+		row.TakenAt = &message.Origin.TakenAt
 	}
 	if id, encrypted, ok := codex.DecodeReasoning(message.Thinking.Signature); ok {
 		row.Reasoning = &session.ReasoningItem{ID: id, EncryptedContent: encrypted}
@@ -270,6 +300,7 @@ func (r Row) Header() session.Header {
 		ForkedInto: r.ForkedInto,
 		ForkKind:   string(r.ForkKind),
 		Outcome:    r.Outcome.String(),
+		Error:      r.Error,
 		CostUSD:    r.TotalCostUSD,
 	}
 	if parent := cmp.Or(r.ForkedFrom, r.SpawnedFrom); parent != "" {
@@ -467,6 +498,9 @@ func (r *record) message(message llm.Message, request string, results map[string
 		if len(message.ToolCalls) > 0 {
 			r.undoStarted()
 		}
+		if _, alreadySaid := r.said[request]; alreadySaid || request == "" {
+			request = session.NewEventID()
+		}
 		body := messageRowOf(message)
 		body.ToolCalls = nil
 		r.said[request] = message.Content
@@ -478,6 +512,59 @@ func (r *record) message(message llm.Message, request string, results map[string
 	default:
 		r.add(session.Event{Kind: session.EventMessage}, messageRowOf(message))
 	}
+}
+
+func (r *record) keptList(messages []llm.Message) []string {
+	hashes := make([]string, 0, len(messages))
+	for _, message := range messages {
+		hash, err := r.log.Keep(messageRowOf(message))
+		r.note(err)
+		hashes = append(hashes, hash)
+	}
+	return hashes
+}
+
+func (r *record) exchange(id, why, wire string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
+	if r == nil {
+		return
+	}
+	exchange := session.Exchange{Request: id, Agent: r.agent, Turn: r.turn, At: started, Why: why, Wire: wire, Model: decision.Build,
+		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: r.keptList(request.Messages), DurationMS: time.Since(started).Milliseconds()}
+	var err error
+	exchange.Tools, err = r.log.Keep(request.Tools)
+	r.note(err)
+	for _, attempt := range attempts {
+		body, err := r.log.KeepBody(attempt.Body)
+		r.note(err)
+		detail, err := json.Marshal(attempt)
+		r.note(err)
+		exchange.Attempts = append(exchange.Attempts, session.ExchangeAttempt{Body: body, Detail: detail})
+	}
+	if failed != nil {
+		exchange.Error = failed.Error()
+	} else {
+		exchange.Response, err = r.log.Keep(decision)
+		r.note(err)
+	}
+	r.note(r.log.Exchanged(exchange))
+}
+
+func (r *record) listChange(kind, why string, before, after []llm.Message) {
+	if r == nil {
+		return
+	}
+	change := session.ListChangeBody{Kind: kind, Why: why, After: r.keptList(after)}
+	if before != nil {
+		change.Before = r.keptList(before)
+	}
+	r.add(session.Event{Kind: session.EventListChange}, change)
+}
+
+func (r *record) notice(text string) {
+	if r == nil {
+		return
+	}
+	r.add(session.Event{Kind: session.EventNotice}, session.NoticeBody{Text: text})
 }
 
 func (r *record) step(step StepRow) {
@@ -506,7 +593,7 @@ func (r *record) end(row Row) {
 		return
 	}
 	r.note(r.log.Edit(func(header *session.Header) {
-		header.Outcome, header.Model = row.Outcome.String(), cmp.Or(row.Model, header.Model)
+		header.Outcome, header.Error, header.Model = row.Outcome.String(), row.Error, cmp.Or(row.Model, header.Model)
 	}))
 	if r.undoStarted() {
 		if err := r.undo.End(context.Background()); err != nil {

@@ -386,12 +386,12 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 			opening = append(opening, message)
 		}
 	}
-	opening = append(opening, llm.Message{Role: llm.RoleUser, Content: task})
+	opening = append(opening, llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: sourceForkTask, TakenAt: started}})
 	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, error) {
 		ended.HeldWhole = len(tail)
 		carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
 		carry.Text = counted + ".\n" + carry.Text
-		return slices.Concat(opening, []llm.Message{{Role: llm.RoleUser, Content: carry.Text}}, tail), carry, err
+		return slices.Concat(opening, []llm.Message{{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: sourceForkCarry, TakenAt: started}}}, tail), carry, err
 	}
 	begun, carry, err := carried(nil)
 	if err != nil {

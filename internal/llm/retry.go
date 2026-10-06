@@ -26,6 +26,7 @@ func StreamingClient(given *http.Client, plan transport.Config, headersWithin ti
 		bounded.ResponseHeaderTimeout = headersWithin
 		client.Transport = bounded
 	}
+	client.Transport = tapping{base: client.Transport}
 	if plan.Retries > 0 {
 		client.Transport = retrying{base: client.Transport, plan: plan}
 	}

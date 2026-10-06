@@ -219,7 +219,7 @@ func reported(t *testing.T, spawn *SpawnTool) string {
 	if len(reports) != 1 {
 		t.Fatalf("the spawn's inbox holds %d reports, want 1", len(reports))
 	}
-	return reports[0]
+	return reports[0].text
 }
 
 func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *testing.T) {

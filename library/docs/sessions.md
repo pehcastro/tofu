@@ -80,9 +80,20 @@ A session that cannot be read goes under `unreadable` with a `✗`.
     tofu session info <name|id>
 
 prints one session: its id, task, counts, whether it ended, its model and
-cost, and the command that continues it, `→ tofu --continue` for the head. `tofu session trace
-<name|id>` lists every request and tool call in it, and `tofu session
-reads <name|id>` every file it read.
+cost, why it ended in an error when it did, and the command that continues
+it, `→ tofu --continue` for the head. `tofu session reads <name|id>` lists
+every file it read.
+
+    tofu session trace <name|id>
+
+lists every request and its new messages, every tool call with its
+arguments, gate verdict and hooks, a failed one marked `✗` with its reason,
+each message tofu added (a steer, a sub-agent check or report, a fork's
+carry) with when it was posted and taken, each fork, compaction and resume,
+and each turn that ended in an error. `tofu session request <name|id>
+<request id>` prints one request exactly as sent: its messages, each wire
+attempt with status, provider request id, body and error body, then the
+response. A request id is any ending of the id the trace prints.
 
     tofu context
 

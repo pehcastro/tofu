@@ -9,12 +9,34 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/llm"
 	"tofu/internal/session"
 )
 
+const (
+	sourceTask          = "task"
+	sourceTyped         = "typed by the person"
+	sourceSteer         = "steer"
+	sourceStepCapNotice = "step cap notice"
+	sourceStopHook      = "stop hook"
+	sourceLastWord      = "last word"
+	sourceSpawnLine     = "spawn line"
+	sourceForkTask      = "fork task"
+	sourceForkCarry     = "fork carry"
+	sourceCheck         = "sub-agent check"
+	sourceReport        = "sub-agent report"
+	sourceMessage       = "message to this sub-agent"
+)
+
+type inboxItem struct {
+	text   string
+	source string
+	posted time.Time
+}
+
 type Inbox struct {
 	mu       sync.Mutex
-	items    []string
+	items    []inboxItem
 	running  int
 	wake     chan struct{}
 	held     map[string]*heldSubAgent
@@ -35,7 +57,7 @@ func (b *Inbox) signal() {
 
 func (b *Inbox) post(item string) {
 	b.mu.Lock()
-	b.items = append(b.items, item)
+	b.items = append(b.items, inboxItem{text: item, source: sourceMessage, posted: time.Now()})
 	b.mu.Unlock()
 	b.signal()
 }
@@ -53,16 +75,38 @@ func (b *Inbox) postCheck(held *heldSubAgent, check *checkIn, gate []string, now
 	if held.check != check {
 		return
 	}
-	unread := slices.Index(b.items, check.posted)
+	unread := slices.IndexFunc(b.items, func(item inboxItem) bool { return item.text == check.posted })
 	text := check.compose(unread < 0, gate, now)
 	if unread >= 0 {
-		b.items[unread] = text
+		b.items[unread] = inboxItem{text: text, source: sourceCheck, posted: now}
 		return
 	}
-	b.items = append(b.items, text)
+	b.items = append(b.items, inboxItem{text: text, source: sourceCheck, posted: now})
 }
 
 func (b *Inbox) Take() []string {
+	return textsOf(b.takeItems())
+}
+
+func originOf(items []inboxItem) llm.Origin {
+	var sources []string
+	for _, item := range items {
+		if !slices.Contains(sources, item.source) {
+			sources = append(sources, item.source)
+		}
+	}
+	return llm.Origin{Source: strings.Join(sources, " and "), PostedAt: items[0].posted}
+}
+
+func textsOf(items []inboxItem) []string {
+	var texts []string
+	for _, item := range items {
+		texts = append(texts, item.text)
+	}
+	return texts
+}
+
+func (b *Inbox) takeItems() []inboxItem {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	taken := b.items
@@ -70,7 +114,7 @@ func (b *Inbox) Take() []string {
 	return taken
 }
 
-func (b *Inbox) next(ctx context.Context, typed <-chan string) ([]string, string) {
+func (b *Inbox) next(ctx context.Context, typed <-chan string) ([]inboxItem, string) {
 	for {
 		b.mu.Lock()
 		taken, running := b.items, b.running
@@ -158,17 +202,17 @@ func (b *Inbox) stop(to string) (*heldSubAgent, bool) {
 	return held, true
 }
 
-func (b *Inbox) ended(held *heldSubAgent, report string, stopping bool, log *session.Log) []string {
+func (b *Inbox) ended(held *heldSubAgent, report string, stopping bool, log *session.Log) []inboxItem {
 	b.mu.Lock()
 	defer b.signal()
 	defer b.mu.Unlock()
-	if next := held.inbox.Take(); len(next) > 0 && !stopping {
+	if next := held.inbox.takeItems(); len(next) > 0 && !stopping {
 		return next
 	}
 	held.running, held.check = false, nil
 	b.running--
 	if report != "" {
-		b.items = append(b.items, report)
+		b.items = append(b.items, inboxItem{text: report, source: sourceReport, posted: time.Now()})
 	}
 	if err := b.releasing(log); err != nil {
 		b.unclosed = append(b.unclosed, err)
@@ -233,7 +277,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		failed = append(failed, err)
 		next, said := config.Inbox.next(ctx, typed)
 		if said != "" {
-			next = append(next, said)
+			next = append(next, inboxItem{text: said, source: sourceTyped, posted: time.Now()})
 			if heard != nil {
 				heard(said)
 			}
@@ -244,7 +288,8 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		if row.Conversation != nil {
 			config.History = Sendable(row.Conversation)
 		}
-		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(next, "\n\n"), nil, nil, ""
+		config.TaskOrigin = originOf(next)
+		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(textsOf(next), "\n\n"), nil, nil, ""
 		config.Session = cmp.Or(row.Session, config.Session)
 	}
 }

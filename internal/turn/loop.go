@@ -104,6 +104,7 @@ type Config struct {
 	Boundary        *subagent.Boundary
 	Person          Person
 	Task            string
+	TaskOrigin      llm.Origin
 	Images          []llm.Image
 	History         []llm.Message
 	Wire            string
@@ -240,6 +241,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	row.Session = recorded.session()
 	recorded.begin(row)
+	if len(config.History) > 0 {
+		recorded.listChange("carried", "the turn starts on the conversation the last turn or the resume left", nil, config.History)
+	}
 
 	hooks, untrustedHooks := hookEngine(ctx, config, origin)
 	ctx = context.WithValue(ctx, hookEngineKey{}, hooks)
@@ -287,7 +291,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if note := strings.TrimSpace(concluding + taken + "\n\n" + hookContext); note != "" {
 		first += "\n\n" + note
 	}
-	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images})
+	taskOrigin := config.TaskOrigin
+	taskOrigin.Source, taskOrigin.TakenAt = cmp.Or(taskOrigin.Source, sourceTask), start
+	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images, Origin: taskOrigin})
 
 	var written, shadowed sync.WaitGroup
 	var shadows sync.Mutex
@@ -300,6 +306,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		for _, call := range calls {
 			callRow, resultMessage := rejectedCall(call, time.Now(), "tool call "+strconv.Quote(call.Name)+" was not executed: "+why,
 				session.EventIDFor(origin, call.ID), step.id, row.author())
+			callRow.Refused = true
 			step.ToolCalls, results[call.ID] = append(step.ToolCalls, callRow), callRow
 			messages = append(messages, resultMessage)
 		}
@@ -309,6 +316,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			recorded.message(message, answering, results)
 		}
 		sent = max(sent, len(messages))
+	}
+	ask := func(why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
+		id, started := session.NewEventID(), time.Now()
+		tapped, tap := llm.Tapped(ctx)
+		decision, timing, err := askCountingAttempts(tapped, model, request)
+		recorded.exchange(id, why, config.Wire, request, started, tap.Attempts(), decision, err)
+		return decision, timing, id, err
+	}
+	inserted := func(source, text string, posted time.Time) llm.Message {
+		return llm.Message{Role: llm.RoleUser, Content: text, Origin: llm.Origin{Source: source, PostedAt: posted, TakenAt: now()}}
 	}
 	keep := func(step StepRow) {
 		flush()
@@ -350,24 +367,28 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		recorded.end(row)
 		return row
 	}
+	fail := func(err error) (Row, error) {
+		row.Error = redactor.Redact(err.Error())
+		return finish(OutcomeError), err
+	}
 	endAt := func(outcome Outcome, lead string, history []llm.Message) Row {
 		messages = history
 		if config.NoLastWord {
 			return finish(outcome)
 		}
-		messages = append(slices.Clone(history), llm.Message{Role: llm.RoleUser, Content: lead + andThisIsItsLastStep})
+		messages = append(slices.Clone(history), inserted(sourceLastWord, lead+andThisIsItsLastStep, time.Time{}))
 		request := llm.Request{Messages: messages, Tools: currentTools().Definitions()}
 		if len(request.Tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
-		decision, timing, err := askCountingAttempts(ctx, model, request)
+		decision, timing, id, err := ask("the last word: "+lead, request)
 		row.TotalCostUSD += decision.Usage.Cost
 		if err != nil {
 			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+err.Error())
 			return finish(outcome)
 		}
 		row.Model = decision.Build
-		last := stepFrom(len(row.Steps)+1, timing, decision)
+		last := stepFrom(id, len(row.Steps)+1, timing, decision)
 		answering = last.id
 		if decision.Content != "" || len(decision.ToolCalls) > 0 {
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
@@ -384,7 +405,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	flush()
 	if promptRefused != "" {
-		return finish(OutcomeError), errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused)
+		return fail(errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused))
 	}
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants, stopContinuations := 0, 0, 0
@@ -392,16 +413,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
-			return finish(OutcomeError), err
+			return fail(err)
 		}
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
-				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: steered})
+				messages = append(messages, inserted(sourceSteer, steered, time.Time{}))
 			}
 		}
 		if config.Inbox != nil {
-			for _, item := range config.Inbox.Take() {
-				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: item})
+			for _, item := range config.Inbox.takeItems() {
+				messages = append(messages, inserted(item.source, item.text, item.posted))
 			}
 		}
 		capped := config.Caps.MaxSteps > 0
@@ -414,22 +435,24 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			lead := "this turn reached its step cap of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
 			return endAt(OutcomeStepCap, lead, messages), nil
 		case capped && step == noticeStep:
-			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "this turn has " + strconv.Itoa(config.Caps.MaxSteps-step+1) +
-				" steps left before its step cap of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the last of them runs no tool: " +
-				"finish what you are doing, or stop and report what is done and what is left."})
+			messages = append(messages, inserted(sourceStepCapNotice, "this turn has "+strconv.Itoa(config.Caps.MaxSteps-step+1)+
+				" steps left before its step cap of "+strconv.Itoa(config.Caps.MaxSteps)+", and the last of them runs no tool: "+
+				"finish what you are doing, or stop and report what is done and what is left.", time.Time{}))
 		}
 
 		stepTools := currentTools()
 		definitions := stepTools.Definitions()
 		schemas, err := json.Marshal(definitions)
 		if err != nil {
-			return finish(OutcomeError), err
+			return fail(err)
 		}
 		budget = budget.Sending(artifacts.preview, string(schemas))
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-		decision, timing, err := askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: definitions})
+		decision, timing, requestID, err := ask("step "+strconv.Itoa(step), llm.Request{Messages: messages, Tools: definitions})
 		if overflowed(err) {
+			before := slices.Clone(messages)
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
+			recorded.listChange("overflow shrink", "the context window overflowed on step "+strconv.Itoa(step), before, messages)
 			switch {
 			case shrinkErr != nil:
 				err = shrinkErr
@@ -438,25 +461,26 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			default:
 				told := "the context window overflowed, so tofu " + shrink.String() + ", and asked once more"
 				row.Warnings = append(row.Warnings, told)
+				recorded.notice(told)
 				if config.Notify != nil {
 					config.Notify(told)
 				}
 				asSent = recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-				decision, timing, err = askCountingAttempts(ctx, model, llm.Request{Messages: messages, Tools: definitions})
+				decision, timing, requestID, err = ask("step "+strconv.Itoa(step)+", asked again after the overflow shrink", llm.Request{Messages: messages, Tools: definitions})
 				if overflowed(err) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
 				}
 			}
 		}
 		if err != nil {
-			return finish(OutcomeError), err
+			return fail(err)
 		}
 		row.Model = decision.Build
 		row.TotalCostUSD += decision.Usage.Cost
 		reported := decision.PromptAccounting.BilledTokens(decision.Usage.InputTokens, decision.CacheReadTokens) + decision.CacheWriteTokens
 		budget = budget.Reported(reported, asSent)
 
-		stepRow := stepFrom(step, timing, decision)
+		stepRow := stepFrom(requestID, step, timing, decision)
 		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
@@ -464,8 +488,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if decision.Outcome == llm.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
 			if askedAgainAfterBlank {
 				keep(stepRow)
-				return finish(OutcomeError), transport.Fail("turn.Run", transport.KindInvalidAnswer, nil,
-					"the model answered twice in a row with no text and no tool call")
+				return fail(transport.Fail("turn.Run", transport.KindInvalidAnswer, nil,
+					"the model answered twice in a row with no text and no tool call"))
 			}
 			askedAgainAfterBlank = true
 			stepRow.Warnings = append(stepRow.Warnings, "the model answered with no text and no tool call, so it was asked again")
@@ -484,7 +508,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			blocked := fire(hook.Input{Event: stop, LastMessage: decision.Content, StopActive: stopContinuations > 0}).Block
 			if blocked != "" && stopContinuations < konst.HookStopContinuations {
 				stopContinuations++
-				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "a " + string(stop) + " hook kept this turn going: " + blocked})
+				messages = append(messages, inserted(sourceStopHook, "a "+string(stop)+" hook kept this turn going: "+blocked, time.Time{}))
 				keep(stepRow)
 				continue
 			}
@@ -531,7 +555,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						call.Arguments = pre.Args
 					}
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre)}
 					if gated.refusal = hookRefusal(ctx, config, request, pre); gated.refusal != "" {
 						wave = append(wave, gated)
 						continue
@@ -625,7 +649,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 			if err := ctx.Err(); err != nil {
 				keep(stepRow)
-				return finish(OutcomeError), err
+				return fail(err)
 			}
 			if tripped {
 				cause := loopGuardCause(repeated, repeats, guard.window)
@@ -638,7 +662,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 			if started := startedSpawnsOnly(stepTools, stepRow.ToolCalls); config.SpawnedFrom == "" && len(started) > 0 {
 				if strings.TrimSpace(decision.Content) == "" {
-					messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: strings.Join(started, "\n")})
+					messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: strings.Join(started, "\n"), Origin: llm.Origin{Source: sourceSpawnLine, TakenAt: now()}})
 				}
 				keep(stepRow)
 				return finish(OutcomeStopped), nil
@@ -655,13 +679,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						moved, moving, forced = next, true, ForkAccountSpent
 					}
 				}
+				beforeFork := slices.Clone(messages)
 				fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, forced, forks+1, config.Caps.MaxForks)
 				if err == nil {
 					err = ctx.Err()
 				}
 				if err != nil {
 					keep(stepRow)
-					return finish(OutcomeError), err
+					return fail(err)
 				}
 				if fork != nil && config.Caps.MaxForks > 0 && forks >= config.Caps.MaxForks {
 					keep(stepRow)
@@ -715,23 +740,30 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					}
 					recorded.fork(ended, row, fork, row.At)
 					row.Session = recorded.session()
-					messages, sent = begun, 0
+					recorded.listChange("fork", string(fork.Kind)+" fork "+strconv.Itoa(forks)+" after step "+strconv.Itoa(step)+" from "+ended.Session+", "+
+						strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
+					messages, sent, answering = begun, 0, ""
+					flush()
 					continue
 				}
 			}
 			if !config.NoCompaction && budget.Automatic {
+				beforeCompaction := slices.Clone(messages)
 				compaction, err := compactHistory(artifacts, budget, step, messages)
 				if err != nil {
 					keep(stepRow)
-					return finish(OutcomeError), err
+					return fail(err)
 				}
 				stepRow.Compaction = compaction
+				if compaction != nil {
+					recorded.listChange("compaction", "after step "+strconv.Itoa(step), beforeCompaction, messages)
+				}
 			}
 			keep(stepRow)
 
 		case llm.OutcomeRefusal:
 			keep(stepRow)
-			return finish(OutcomeError), transport.Fail("turn.Run", transport.KindProvider, nil, "the model refused: %s", decision.Refusal)
+			return fail(transport.Fail("turn.Run", transport.KindProvider, nil, "the model refused: %s", decision.Refusal))
 
 		default:
 			panic("turn: unknown model outcome")
@@ -841,9 +873,9 @@ func NewID(at time.Time) string {
 	return session.IDPrefix + strconv.FormatInt(at.UnixNano(), 16)
 }
 
-func stepFrom(index int, timing requestTiming, decision llm.Decision) StepRow {
+func stepFrom(id string, index int, timing requestTiming, decision llm.Decision) StepRow {
 	return StepRow{
-		id:               session.NewEventID(),
+		id:               id,
 		attempt:          timing.attempt,
 		DurationMS:       timing.durationMS,
 		FirstTokenMS:     decision.FirstTokenMS,
@@ -879,6 +911,7 @@ type gatedCall struct {
 	shadow  <-chan shadowVerdict
 	refusal string
 	fire    func(hook.Input) hook.Verdict
+	hooks   []HookRun
 }
 
 type shadowVerdict struct {
@@ -898,7 +931,8 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 		verdict, gateErr = judged.decision, judged.err
 	default:
 	}
-	row.GateDecisionID, row.GateVerdict, row.GateError = verdict.ID, string(verdict.Verdict), gateErr
+	row.GateDecisionID, row.GateVerdict, row.GateError, row.GateReason = verdict.ID, string(verdict.Verdict), gateErr, verdict.Reason
+	row.Refused, row.Hooks = g.refusal != "", append(g.hooks, row.Hooks...)
 	row.ParallelBatch = batch
 	row.Proxy = g.proxy
 	row.Command = g.redact.Redact(row.Command)
@@ -962,6 +996,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		DurationMS:     time.Since(started).Milliseconds(),
 		Error:          result.FailureText,
 		SubAgentID:     result.SubAgent,
+		Hooks:          hookRunOf(hook.PostToolUse, post),
 	}
 	if storeErr != nil {
 		row.ResultHandleError = storeErr.Error()

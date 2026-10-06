@@ -1,6 +1,9 @@
 package session
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
 	RoleSystem    = "system"
@@ -36,6 +39,9 @@ type MessageBody struct {
 	Thinking          string            `json:"thinking,omitempty"`
 	ThinkingSignature string            `json:"thinking_signature,omitempty"`
 	Reasoning         *ReasoningItem    `json:"reasoning,omitempty"`
+	Origin            string            `json:"origin,omitempty"`
+	PostedAt          *time.Time        `json:"posted_at,omitempty"`
+	TakenAt           *time.Time        `json:"taken_at,omitempty"`
 }
 
 type StepToolCall struct {

@@ -35,7 +35,20 @@ const (
 	EventOutcome    EventKind = "outcome"
 	EventStep       EventKind = "step"
 	EventRead       EventKind = "read"
+	EventNotice     EventKind = "notice"
+	EventListChange EventKind = "list_change"
 )
+
+type NoticeBody struct {
+	Text string `json:"text"`
+}
+
+type ListChangeBody struct {
+	Kind   string   `json:"kind"`
+	Why    string   `json:"why,omitempty"`
+	Before []string `json:"before,omitempty"`
+	After  []string `json:"after"`
+}
 
 type PromptBody struct {
 	System string   `json:"system"`
@@ -67,6 +80,8 @@ type ResultBody struct {
 	Content     string `json:"content"`
 	ToolOutcome string `json:"tool_outcome,omitempty"`
 	ResultBytes int    `json:"result_bytes"`
+	ExitCode    *int   `json:"exit_code,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 type SpawnBody struct {
@@ -215,6 +230,7 @@ type Header struct {
 	Model            string     `json:"model,omitempty"`
 	Models           []string   `json:"models,omitempty"`
 	Outcome          string     `json:"outcome,omitempty"`
+	Error            string     `json:"error,omitempty"`
 	Account          int64      `json:"account,omitempty"`
 	ContextCeiling   int        `json:"context_ceiling,omitempty"`
 	ContextTarget    int        `json:"context_target,omitempty"`

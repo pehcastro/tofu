@@ -8,6 +8,8 @@ import (
 func (s Settings) view(events []Event) ([]Event, error) {
 	calls := map[string]Event{}
 	asked := map[string][]string{}
+	madeBy := map[string][]string{}
+	latestAssistant := map[string]string{}
 	results := map[string]Event{}
 	said := map[string]string{}
 	compacted := map[string][]Event{}
@@ -16,6 +18,9 @@ func (s Settings) view(events []Event) ([]Event, error) {
 		case EventToolCall:
 			calls[event.Call] = event
 			asked[event.Request] = append(asked[event.Request], event.Call)
+			if maker, found := latestAssistant[event.Request]; found {
+				madeBy[maker] = append(madeBy[maker], event.Call)
+			}
 		case EventToolResult:
 			results[event.Call] = event
 		case EventCompaction:
@@ -23,7 +28,7 @@ func (s Settings) view(events []Event) ([]Event, error) {
 		case EventMessage:
 			var message MessageBody
 			if json.Unmarshal(event.Body, &message) == nil && message.Role == RoleAssistant && event.Request != "" {
-				said[event.Request] = message.Content
+				said[event.Request], latestAssistant[event.Request] = message.Content, event.ID
 			}
 		}
 	}
@@ -33,10 +38,10 @@ func (s Settings) view(events []Event) ([]Event, error) {
 		switch event.Kind {
 		case EventToolCall, EventCompaction, EventTurnStart, EventSpawn, EventAgentEnd:
 		case EventMessage:
-			if event.Request != "" && len(asked[event.Request]) > 0 {
+			if made := madeBy[event.ID]; event.Request != "" && len(made) > 0 {
 				message := objectOf(event.Body)
 				var folded []MessageToolCall
-				for _, call := range asked[event.Request] {
+				for _, call := range made {
 					var body CallBody
 					_ = json.Unmarshal(calls[call].Body, &body)
 					folded = append(folded, MessageToolCall{ID: call, Name: body.Tool, Arguments: body.Args})
