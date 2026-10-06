@@ -224,17 +224,17 @@ func reported(t *testing.T, spawn *SpawnTool) string {
 
 func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
-		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)
 	defer release()
 	lead := crewLead(t, model)
 	led := startLead(context.Background(), lead, nil)
-	waitFor(t, "the lead's request after its spawn", func() bool { return len(model.requests(leadKey)) >= 2 })
-	asked := model.requests(leadKey)[1].Messages
-	if result := asked[len(asked)-1]; result.ToolCallID != "call-spawn" || !strings.HasPrefix(result.Content, "sub-1 is running") || model.answered(usersRoute) != 0 {
-		t.Fatalf("the lead's request after its spawn ends on %q with the sub-agent answered %d times, want the spawn result while it runs",
+	waitFor(t, "the lead's spawn turn to end", func() bool { return len(led.turns()) == 1 })
+	held := led.turns()[0].Conversation
+	if result := held[len(held)-2]; result.ToolCallID != "call-spawn" || !strings.HasPrefix(result.Content, "sub-1 is running") || model.answered(usersRoute) != 0 {
+		t.Fatalf("the lead's spawn turn holds %q before its last line with the sub-agent answered %d times, want the spawn result while it runs",
 			result.Content, model.answered(usersRoute))
 	}
 	release()

@@ -357,6 +357,43 @@ type SpawnTool struct {
 	base           Config
 	roster         *subagent.Roster
 	warmups        map[string]*warmup
+	naming         *namingOrder
+}
+
+type namingOrder struct {
+	mu     sync.Mutex
+	turned *sync.Cond
+	calls  []string
+	named  map[string]bool
+}
+
+func newNamingOrder(calls []string) *namingOrder {
+	order := &namingOrder{calls: calls, named: map[string]bool{}}
+	order.turned = sync.NewCond(&order.mu)
+	return order
+}
+
+func (o *namingOrder) waitForEarlier(call string) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, earlier := range o.calls[:max(slices.Index(o.calls, call), 0)] {
+		for !o.named[earlier] {
+			o.turned.Wait()
+		}
+	}
+}
+
+func (o *namingOrder) passed(call string) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.named[call] = true
+	o.mu.Unlock()
+	o.turned.Broadcast()
 }
 
 type spawnTree struct {
@@ -471,13 +508,28 @@ func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
 			firsts[args.Agent] = &warmup{leader: call.ID, ready: make(chan struct{})}
 		}
 	}
+	var called []string
+	for _, call := range calls[:width] {
+		called = append(called, call.ID)
+	}
 	t.mu.Lock()
-	t.warmups = warmups
+	t.warmups, t.naming = warmups, newNamingOrder(called)
 	t.mu.Unlock()
 	return width
 }
 
 func writesPaths(tool string) bool { return tool == "write" || tool == "edit" || tool == "bash" }
+
+func startedSpawnsOnly(tools Registry, calls []ToolCallRow) []string {
+	var started []string
+	for _, call := range calls {
+		if _, spawning := tools.byName[call.Tool].(*SpawnTool); !spawning || call.SubAgentID == "" || call.Error != "" {
+			return nil
+		}
+		started = append(started, call.Command)
+	}
+	return started
+}
 
 func (t *SpawnTool) limits() SubAgentLimits {
 	if t.Limits == nil {
@@ -514,7 +566,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Name: "spawn",
 		Description: duties + ", and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
 			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. " +
-			"its report, rather than its transcript, comes to you later as a message naming it, and your turn may end before it does. " +
+			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start, so spawn every piece you know in that one reply. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; a sub-agent offered no write, edit or bash needs none. " +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
@@ -552,8 +604,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.mu.Lock()
-	warm := t.warmups[site.call]
+	warm, naming := t.warmups[site.call], t.naming
 	t.mu.Unlock()
+	defer naming.passed(site.call)
 	if strings.TrimSpace(args.Task) == "" {
 		return Result{}, errors.New("spawn: task is required")
 	}
@@ -601,6 +654,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			recorded = append(recorded, run.Agent)
 		}
 	}
+	naming.waitForEarlier(site.call)
 	t.tree.mu.Lock()
 	agent := subagent.SubAgent{
 		ID:      t.roster.NextID(definition.Name, recorded),
@@ -613,6 +667,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	subAgentID, holding := agent.ID, t.roster.Hold(agent)
 	t.tree.mu.Unlock()
+	naming.passed(site.call)
 	if err := holding; err != nil {
 		var collision subagent.CollisionError
 		if errors.As(err, &collision) && collision.HolderReport != "" {

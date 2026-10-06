@@ -36,9 +36,9 @@ func TestASpawnRunsItsSubAgentAtTheEffortItNames(t *testing.T) {
 		wantAsked []llm.Effort
 		wantSaid  string
 	}{
-		{"low", []llm.Decision{claimDecision("ts-dev-1 is on it"), messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
+		{"low", []llm.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
 			[]llm.Decision{claimDecision("done"), claimDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "at effort low"},
-		{"", []llm.Decision{claimDecision("ts-dev-1 is on it"), claimDecision("done")}, []llm.Decision{claimDecision("done")}, []llm.Effort{""}, "at effort medium"},
+		{"", []llm.Decision{claimDecision("done")}, []llm.Decision{claimDecision("done")}, []llm.Effort{""}, "at effort medium"},
 		{"minimal", []llm.Decision{messageDecision()}, nil, []llm.Effort{llm.EffortMinimal}, "it takes low, medium, high"},
 		{"turbo", []llm.Decision{messageDecision()}, nil, nil, "is no thinking effort"},
 	} {

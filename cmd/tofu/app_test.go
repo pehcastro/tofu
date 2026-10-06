@@ -1342,8 +1342,7 @@ func TestASubAgentRunningForTenSecondsIsHandedToTheViewAsTenSeconds(t *testing.T
 			{waited: 10 * time.Second, decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
 			{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"}},
 		},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent is on it"}},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{spawnCall}}},
 		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"}},
 	)
 	driver := driveApp(t)
@@ -1376,8 +1375,7 @@ func subAgentHeldInsideOneCall(t *testing.T) *appDriver {
 			{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}},
 			{waited: subAgentHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent wrote it")},
 		},
-		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}},
-		clockedStep{decision: reply("the sub-agent is on it")},
+		clockedStep{decision: llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{spawnCall}}},
 		clockedStep{waited: orchestratorHeldFor, holds: heldInsideOneCall, decision: reply("the sub-agent did it")},
 	)
 	driver := driveApp(t)
@@ -2245,7 +2243,8 @@ type modelStoppingTheTurnWhileTheSubAgentIsAnswering struct {
 func (m *modelStoppingTheTurnWhileTheSubAgentIsAnswering) Ask(context.Context, llm.Request) (llm.Decision, error) {
 	if !m.spawned {
 		m.spawned = true
-		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{m.spawn}}, nil
+		read := llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}
+		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{m.spawn, read}}, nil
 	}
 	m.stop()
 	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-2")}}, nil
@@ -3132,6 +3131,8 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	model := &leadStoppedWhileItsSubAgentWaits{queuedModel: noteSubAgent(writeNote("call-2")), asking: make(chan struct{}), subAgentGo: make(chan struct{})}
+	spawnAndRead := &model.decisions[0]
+	spawnAndRead.ToolCalls = append(spawnAndRead.ToolCalls, llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)})
 	stops, firstClose := make(chan struct{}, 1), make(chan struct{})
 	var once sync.Once
 	live := newAppSession(dir, func(runOpts) (appWire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})

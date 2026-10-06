@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +28,72 @@ type timedModel struct {
 func (m *timedModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	m.asked = append(m.asked, time.Now())
 	return m.stubModel.Ask(ctx, request)
+}
+
+func besideARead(spawning llm.Decision) llm.Decision {
+	spawning.ToolCalls = append(slices.Clone(spawning.ToolCalls), llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"notes.txt"}`)})
+	return spawning
+}
+
+func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *testing.T) {
+	announcing := spawnCall("call-spawn", usersRoute, "src/users.ts")
+	announcing.Content = "spawning a sub-agent to add the users route"
+	for _, c := range []struct {
+		name, spawnedFrom, endsOn string
+		first                     llm.Decision
+		subAgentRuns              bool
+		leadRequests              int
+	}{
+		{name: "text in the spawn reply ends on that text", first: announcing, subAgentRuns: true, leadRequests: 1, endsOn: announcing.Content},
+		{name: "no text ends on the line tofu writes", first: spawnCall("call-spawn", usersRoute, "src/users.ts"), subAgentRuns: true, leadRequests: 1, endsOn: "sub-1 running: " + usersRoute},
+		{name: "a read beside the spawn asks again", first: besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), subAgentRuns: true, leadRequests: 2, endsOn: "sub-1 is on it"},
+		{name: "a spawn that fails to start asks again", first: spawnCall("call-spawn", usersRoute), leadRequests: 2, endsOn: "sub-1 is on it"},
+		{name: "a sub-agent's own spawn asks again", spawnedFrom: "turn-parent", first: announcing, subAgentRuns: true, leadRequests: 2, endsOn: "sub-1 is on it"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			model := newCrew(map[string][]llm.Decision{
+				leadKey:    {c.first, claimDecision("sub-1 is on it")},
+				usersRoute: {claimDecision("the users route is added")},
+			})
+			lead := crewLead(t, model)
+			lead.SpawnedFrom = c.spawnedFrom
+			row, err := Run(context.Background(), lead)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.subAgentRuns {
+				waitFor(t, "the sub-agent's answer", func() bool { return model.answered(usersRoute) == 1 })
+			}
+			last := row.Conversation[len(row.Conversation)-1]
+			if got := len(model.requests(leadKey)); got != c.leadRequests || last.Role != llm.RoleAssistant || last.Content != c.endsOn {
+				t.Errorf("the lead was asked %d times and ended on %s %q, want %d and %q", got, last.Role, last.Content, c.leadRequests, c.endsOn)
+			}
+		})
+	}
+}
+
+func TestSpawnsInOneReplyAreNamedInTheOrderOfTheirCalls(t *testing.T) {
+	routes := []string{"add the users route", "add the orders route", "add the items route", "add the carts route"}
+	var calls []llm.ToolCall
+	scripts := map[string][]llm.Decision{leadKey: nil}
+	for i, route := range routes {
+		calls = append(calls, spawnCall("call-"+strconv.Itoa(i+1), route, "src/"+strconv.Itoa(i+1)+".ts").ToolCalls[0])
+		scripts[route] = []llm.Decision{claimDecision("done")}
+	}
+	scripts[leadKey] = []llm.Decision{toolCallDecision(calls...)}
+	model := newCrew(scripts)
+	lead := crewLead(t, model)
+	if _, err := Run(context.Background(), lead); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range routes {
+		waitFor(t, route, func() bool { return model.answered(route) == 1 })
+	}
+	for _, spawned := range lead.Tools.byName["spawn"].(*SpawnTool).Spawned() {
+		if want := "sub-" + strings.TrimPrefix(spawned.Call, "call-"); spawned.ID != want {
+			t.Errorf("%s was named %s, want %s, the order of its call in the reply", spawned.Call, spawned.ID, want)
+		}
+	}
 }
 
 func TestAShadowGateThatTakes300MillisecondsAddsNoTimeToAStep(t *testing.T) {

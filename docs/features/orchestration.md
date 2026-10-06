@@ -71,6 +71,11 @@ lead's tool call, and a message you typed waited 9 minutes for the lead.
 
 ## Talking while they work
 
+When the lead's reply only starts sub-agents, its turn ends right there, on
+its own words, or on one line per sub-agent saying what it is doing. It costs
+no request to announce the work. Sub-agents started in one reply are named in
+the order the reply lists them.
+
 The lead has one inbox. Your messages and finished
 reports both go into it. In the middle of a turn, the lead reads it at its
 next step. When idle, a new message or report starts a turn.

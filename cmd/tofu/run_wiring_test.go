@@ -704,10 +704,9 @@ func TestAProjectCarryingNoWebLibraryGetsFetchFromTheShippedOne(t *testing.T) {
 func oneNoteSubAgent() *queuedModel {
 	return &queuedModel{
 		decisions: []llm.Decision{
-			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{
 				{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
 			}},
-			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent is on it"},
 			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
 		},
 		subAgents: []llm.Decision{
@@ -994,7 +993,7 @@ func TestTheLeadEndsOnACleanSingleReportWhetherOrNotItChecksSubAgents(t *testing
 				}
 			}
 			deck := filepath.Join(home, "deck.jsonl")
-			if err := os.WriteFile(deck, []byte(strings.Join(slices.Concat([]string{spawn, `{"text":"go-dev is on it"}`}, run.agent, leadChecks), "\n")), 0o644); err != nil {
+			if err := os.WriteFile(deck, []byte(strings.Join(slices.Concat([]string{spawn}, run.agent, leadChecks), "\n")), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			t.Setenv(cassetteVariable, deck)

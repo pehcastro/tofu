@@ -1228,6 +1228,14 @@ func askedAsOf(row turn.Row, spawned []turn.Spawned, slug, windows string) (stri
 	return slug, windows
 }
 
+func wordsAfterLastCalls(row turn.Row) (string, bool) {
+	if len(row.Steps) == 0 || len(row.Steps[len(row.Steps)-1].ToolCalls) == 0 || len(row.Conversation) == 0 {
+		return "", false
+	}
+	last := row.Conversation[len(row.Conversation)-1]
+	return last.Content, last.Role == llm.RoleAssistant && strings.TrimSpace(last.Content) != ""
+}
+
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 	spend := "spend subscription windows " + windows + ", no money"
 	if row.Spend != turn.SpendSubscription {
@@ -1260,6 +1268,9 @@ func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {
 			_, _ = fmt.Fprintf(out, "step %d: tool_call tool=%s command=%q sub_agent=%q exit_code=%s gate=%s error=%q\n",
 				step.Index, call.Tool, call.Command, call.SubAgentID, exitCode, call.GateVerdict, call.Error)
 		}
+	}
+	if said, ended := wordsAfterLastCalls(row); ended {
+		_, _ = fmt.Fprintf(out, "step %d: assistant_text %q\n", row.Steps[len(row.Steps)-1].Index, said)
 	}
 }
 

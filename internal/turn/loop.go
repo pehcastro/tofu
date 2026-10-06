@@ -578,6 +578,15 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				keep(stepRow)
 				return endAt(OutcomeLoopGuard, stopped, messages), nil
 			}
+			if started := startedSpawnsOnly(stepTools, stepRow.ToolCalls); config.SpawnedFrom == "" && len(started) > 0 {
+				announced := decision.Content
+				if strings.TrimSpace(announced) == "" {
+					announced = strings.Join(started, "\n")
+				}
+				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: announced})
+				keep(stepRow)
+				return finish(OutcomeStopped), nil
+			}
 			if !config.NoFork {
 				moved, moving, forced := Account{}, false, ForkKind("")
 				if config.Accounts.Next != nil {

@@ -42,8 +42,7 @@ func noteSubAgent(write llm.ToolCall) *queuedModel {
 	spawnCall := llm.ToolCall{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)}
 	return &queuedModel{
 		decisions: []llm.Decision{
-			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}},
-			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent is on it"},
+			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{spawnCall}},
 			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent did it"},
 		},
 		subAgents: []llm.Decision{

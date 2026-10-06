@@ -324,7 +324,6 @@ func TestACassetteGivesACancelledTurnNoDeltaAndNoReply(t *testing.T) {
 }
 
 const addressedCassette = `{"text":"handing it to a sub-agent","tools":[{"name":"spawn","args":{"task":"read note.txt and say what it holds","owns":["note.txt"]}}]}
-{"text":"a sub-agent is reading the note"}
 {"text":"the sub-agent read it and the note says a note"}
 {"agent":"c1","text":"reading the note","tools":[{"name":"read","args":{"path":"note.txt"}}]}
 {"agent":"c1","text":"the note says a note"}
@@ -352,7 +351,7 @@ func TestAnOrchestratorAndASubAgentEachTakeTheRepliesAddressedToThem(t *testing.
 		{orchestratorTask, "handing it to a sub-agent"},
 		{subAgentBrief, "reading the note"},
 		{subAgentBrief, "the note says a note"},
-		{orchestratorTask, "a sub-agent is reading the note"},
+		{orchestratorTask, "the sub-agent read it and the note says a note"},
 	} {
 		if got := asked(t, deck, want.conversation); got != want.reply {
 			t.Errorf("%q was handed %q, which belongs to the other caller, wanted %q", want.conversation, got, want.reply)
@@ -569,7 +568,6 @@ func TestDriveTakesTheRunArmsThatChangeWhatATurnDoes(t *testing.T) {
 
 const subAgentOnCodexCassette = `{"text":"reading the note first","tools":[{"name":"read","args":{"path":"note.txt"}}]}
 {"text":"handing it to go-dev","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"wait a moment, then say done","owns":["note.txt"]}}]}
-{"text":"go-dev is waiting"}
 {"text":"go-dev is done"}
 {"agent":"c1","text":"waiting","tools":[{"name":"bash","args":{"command":"sleep 5"}}]}
 {"agent":"c1","text":"done"}

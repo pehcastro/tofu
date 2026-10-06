@@ -164,7 +164,7 @@ func lastUser(request llm.Request) string {
 
 func TestAPersonsMessageReachesTheLeadAtItsNextStepWhileASubAgentRuns(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
-		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("noted, sub-1 is on it"), claimDecision("sub-1 is done")},
+		leadKey:    {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("noted, sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)
@@ -192,7 +192,7 @@ func TestAPersonsMessageReachesTheLeadAtItsNextStepWhileASubAgentRuns(t *testing
 
 func TestAPersonsMessageStartsALeadTurnWhenTheLeadIsIdleAndASubAgentRuns(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
-		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("noted"), claimDecision("sub-1 is done")},
+		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("noted"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)
@@ -212,7 +212,7 @@ func TestAPersonsMessageStartsALeadTurnWhenTheLeadIsIdleAndASubAgentRuns(t *test
 
 func TestASubAgentEndingAfterTheLeadsTurnStartsALeadTurnWithItsReport(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
-		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)

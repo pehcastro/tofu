@@ -12,7 +12,7 @@ import (
 
 func TestASubAgentWritingAfterTheLeadForksKeepsEveryEventInTheSessionLog(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
-		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		leadKey:    {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)

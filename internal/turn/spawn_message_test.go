@@ -35,7 +35,7 @@ func answerTo(t *testing.T, model *crew, call string) string {
 func TestAMessageToASubAgentSpawnedInAnEarlierTurnReachesIt(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
 		leadKey: {
-			spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"),
+			spawnCall("call-spawn", usersRoute, "src/users.ts"),
 			messageTo("call-running", "sub-1", "use port 3003"), claimDecision("told sub-1"),
 			messageTo("call-ended", "sub-1", "also add /health"), claimDecision("asked sub-1 for more"),
 			claimDecision("all done"),
@@ -88,8 +88,7 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 		t.Fatal(err)
 	}
 	model := newCrew(map[string][]llm.Decision{
-		leadKey: {spawnCall("call-users", usersRoute, "src/users.ts"), spawnCall("call-orders", ordersRoute, "src/orders.ts"),
-			toolCallDecision(llm.ToolCall{ID: "call-stop", Name: "message", Arguments: stop}), claimDecision("sub-1 is stopped"), claimDecision("noted"), claimDecision("done")},
+		leadKey:     {besideARead(spawnCall("call-users", usersRoute, "src/users.ts")), spawnCall("call-orders", ordersRoute, "src/orders.ts"), toolCallDecision(llm.ToolCall{ID: "call-stop", Name: "message", Arguments: stop}), claimDecision("sub-1 is stopped"), claimDecision("noted"), claimDecision("done")},
 		usersRoute:  {claimDecision("the users route is added")},
 		ordersRoute: {claimDecision("the orders route is added")},
 	})
@@ -98,7 +97,8 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 	defer orders()
 	lead := crewLead(t, model)
 	spawn := lead.Tools.byName["spawn"].(*SpawnTool)
-	led := startLead(context.Background(), lead, nil)
+	typed := make(chan string, 1)
+	led := startLead(context.Background(), lead, typed)
 	states := func() map[string]subagent.State {
 		held := map[string]subagent.State{}
 		for _, agent := range spawn.roster.SubAgents() {
@@ -106,6 +106,8 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 		}
 		return held
 	}
+	waitFor(t, "the lead's spawn turn to end", func() bool { return len(led.turns()) == 1 })
+	typed <- "stop sub-1"
 	waitFor(t, "sub-1 to stop", func() bool { return states()["sub-1"] == subagent.Parked })
 	if said := answerTo(t, model, "call-stop"); strings.HasPrefix(said, "error:") || states()["sub-2"] != subagent.Working || model.answered(ordersRoute) != 0 {
 		t.Fatalf("stopping sub-1 answered %q and left sub-2 %s, want sub-1 stopped and sub-2 still running", said, states()["sub-2"])
