@@ -12,6 +12,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Fixed
 
+- **A key typed into a prompt is masked in `session.json` too**, and in sessions converted by `tofu migrate`, as it already was in `events.jsonl`.
 - **Dialogs in a Windows 10 console draw in place.** `/keys`, ctrl+p and the model picker no longer leave stray text at the left edge or push their title out of the box.
 
 ### Added
