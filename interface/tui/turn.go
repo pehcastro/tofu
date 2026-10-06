@@ -623,10 +623,10 @@ func (a *App) rosterCall(actor string, call subagent.Call) {
 }
 
 func (a *App) linkSpawn(subAgent subagent.Row) {
-	turn := a.happened[min(a.happenedAtTurn, len(a.happened)):]
-	if slices.ContainsFunc(turn, func(held feed.Event) bool { return held.Kind == feed.KindSpawn && held.Target == subAgent.Name }) {
+	if slices.ContainsFunc(a.happened, func(held feed.Event) bool { return held.Kind == feed.KindSpawn && held.Target == subAgent.Name }) {
 		return
 	}
+	turn := a.happened[min(a.happenedAtTurn, len(a.happened)):]
 	at := slices.IndexFunc(turn, func(held feed.Event) bool {
 		return held.Kind == feed.KindSpawn && held.State != feed.StateFailed && held.Target == ""
 	})

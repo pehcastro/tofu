@@ -192,7 +192,9 @@ func (c *cassette) play(ctx context.Context, body string) {
 			}
 		case "hold":
 			c.released(ctx, nil)
-			return
+			if c.ended.Err() != nil {
+				return
+			}
 		default:
 			panic("cassette line " + strconv.Itoa(step.Line) + ": no event is named " + strconv.Quote(verb))
 		}

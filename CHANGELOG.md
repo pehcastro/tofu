@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Fixed
+
+- **Sub-agents spawned after earlier ones each get their own report row.** A new turn's spawns no longer take the names of sub-agents from earlier turns, so stopped sub-agents show as parked and old reports are not drawn twice.
+
 ### Changed
 
 - **A sub-agent that only runs a command, reads or researches is spawned without owns** and starts at once. Any write or edit it tries is refused with the reason, so the lead no longer invents placeholder files to start one.

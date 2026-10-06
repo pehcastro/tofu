@@ -1,0 +1,8 @@
+# moment 9, first turn: one sub-agent runs and reports, so the roster still holds it when the next turn spawns two more
+requesting
+spawn 5e00aa read the policy loader
+row c1 working read the policy loader
+result 5e00aa spawned [&c1]
+report c1 finished the loader reads the lock before the mode
+text 9d4f01 c1 read the loader.
+done cooked for

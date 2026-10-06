@@ -1,0 +1,18 @@
+# moment 9: a sub-agent from an earlier turn has reported; two presses of ctrl+c stop the two spawned next, and each gets one report row after the stop note.
+type subagents-9-earlier-turn
+key enter
+wait c1 read the loader.
+once report [&c1]
+type subagents-9-ctrl-c-twice-draws-each-parked-report
+key enter
+wait waiting on 2 sub-agents
+key ctrl+c
+wait this will stop 2 sub-agents, press Ctrl+C again to confirm
+key ctrl+c
+wait stopping the turn
+clock 1s
+once report [&c1]
+once report [&c2]
+once report [&c3]
+before stopping the turn | report [&c2]
+before stopping the turn | report [&c3]

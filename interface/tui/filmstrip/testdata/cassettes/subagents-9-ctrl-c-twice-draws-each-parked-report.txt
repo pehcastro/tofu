@@ -1,0 +1,13 @@
+# moment 9: the lead is idle and two sub-agents work; once the app cancels the turn both unwind and are parked with a report each, as the host settles them
+requesting
+spawn 5e01aa audit the policy loader
+row c2 working audit the policy loader
+result 5e01aa spawned [&c2]
+spawn 5e02aa write the ledger floor test
+row c3 working write the ledger floor test
+result 5e02aa spawned [&c3]
+text 9d4f11 two sub-agents run: [&c2] audits the loader and [&c3] writes the floor test.
+done cooked for
+hold
+report c2 parked the orchestrator stopped c2 before the loader audit ended
+report c3 parked the orchestrator stopped c3 before the floor test ran
