@@ -397,14 +397,48 @@ func TestARealProxyMeasuresWhatTheModelSawWithTheSettingOnAndOff(t *testing.T) {
 	}
 }
 
-func TestAVerbThatDownloadsACompilerIsRefused(t *testing.T) {
-	for _, verb := range []string{"tsc", "npx"} {
-		if found := fetchingVerb("rtk " + verb + " --noEmit"); found != verb {
-			t.Fatalf("rtk %s was not refused, got %q", verb, found)
+func TestARewriteWhoseFilterLosesOutputRunsTheCommandAsAsked(t *testing.T) {
+	fakeProxyOnPath(t)
+	proxy := proxyFrom(t, t.TempDir(), proxyOn)
+	treeKept := runtime.GOOS == "windows"
+	for _, row := range []struct {
+		command, note string
+		kept          bool
+	}{
+		{"ping -n 3 127.0.0.1", "U+FFFD", true},
+		{"tree", "not found", treeKept},
+		{"echo ping", "", false},
+		{"go test ./pkg/", "", false},
+	} {
+		asked, _ := json.Marshal(map[string]string{"command": row.command})
+		ran, proxied := proxy.rewrite(context.Background(), llm.ToolCall{Name: bashToolName, Arguments: asked})
+		if kept := string(ran) == string(asked); kept != row.kept {
+			t.Errorf("%q ran as %s, kept as asked %v, want %v", row.command, ran, kept, row.kept)
+			continue
 		}
+		if row.kept && (proxied.Ran != "" || !strings.Contains(proxied.Note, row.note)) {
+			t.Errorf("%q: the row says ran %q, note %q, want no run and a note naming %q", row.command, proxied.Ran, proxied.Note, row.note)
+		}
+		t.Logf("%q ran as %s, note %q", row.command, ran, proxied.Note)
 	}
-	if found := fetchingVerb("echo tsc && rtk go vet ./internal/turn"); found != "" {
-		t.Fatalf("a command that only mentions a verb was refused: %q", found)
+}
+
+func TestAFilterThatLosesOutputIsFoundAnywhereInWhatRtkRewroteTo(t *testing.T) {
+	treeVerb := map[bool]string{true: "tree"}[runtime.GOOS == "windows"]
+	for rewritten, want := range map[string]string{
+		"rtk ping -n 3 127.0.0.1":                   "ping",
+		"rtk git status && rtk ping -n 1 127.0.0.1": "ping",
+		"rtk tree":                 treeVerb,
+		"cd x && rtk tree":         treeVerb,
+		"rtk grep ping src":        "",
+		"rtk go test ./pkg/":       "",
+		"rtk tsc --noEmit":         "tsc",
+		"rtk npx eslint .":         "npx",
+		"echo tsc && rtk go vet .": "",
+	} {
+		if verb, _ := refusedVerb(rewritten); verb != want {
+			t.Errorf("%q: refused %q, want %q", rewritten, verb, want)
+		}
 	}
 }
 

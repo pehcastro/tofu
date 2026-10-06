@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -100,8 +101,8 @@ func (p *CommandProxy) rewrite(ctx context.Context, call llm.ToolCall) (json.Raw
 	if rewritten == "" || rewritten == args.Command {
 		return call.Arguments, row
 	}
-	if verb := fetchingVerb(rewritten); verb != "" {
-		row.Note = proxyUseRTK + " " + verb + " downloads a compiler when the project has none, which is the one network fetch in it, so the command ran as it was asked for"
+	if verb, reason := refusedVerb(rewritten); verb != "" {
+		row.Note = "the command ran as it was asked for, without " + proxyUseRTK + ": " + proxyUseRTK + " " + verb + " would " + reason + ". its output is whole and was not filtered"
 		return call.Arguments, row
 	}
 	var fields map[string]json.RawMessage
@@ -142,18 +143,22 @@ func (p *CommandProxy) InstalledVersion(ctx context.Context) (string, error) {
 	return strings.TrimPrefix(strings.TrimSpace(string(out)), proxyUseRTK+" "), nil
 }
 
-func fetchingVerb(rewritten string) string {
+func refusedVerb(rewritten string) (string, string) {
 	fields := strings.Fields(rewritten)
 	for index, field := range fields {
 		if field != proxyUseRTK || index+1 == len(fields) {
 			continue
 		}
-		switch verb := fields[index+1]; verb {
-		case "tsc", "npx":
-			return verb
+		switch verb := fields[index+1]; {
+		case verb == "tsc" || verb == "npx":
+			return verb, "download a compiler when the project has none, which is the one network fetch in it"
+		case verb == "ping":
+			return verb, "drop every reply line and keep the last 4 behind a (N lines omitted) marker, and on Windows read ping's OEM code page bytes as UTF-8, writing U+FFFD for every accented letter"
+		case verb == "tree" && runtime.GOOS == "windows":
+			return verb, "find no tree on a Windows shell's PATH and print nothing with exit 0, where tree alone says not found"
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func proxyPanicked(content string) bool {
