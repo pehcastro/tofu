@@ -309,23 +309,33 @@ impl Studio {
                 cx.notify();
             })
         };
-        let field = |label: &'static str, value: &'static str| {
+        let field = |label: &'static str, value: Div| {
             div()
                 .flex()
                 .gap(px(12.0))
                 .child(div().w(px(80.0)).text_color(ink(theme, T3)).child(label))
                 .child(value)
         };
-        pop.px(px(16.0))
+        let icon = |id: &'static str| {
+            div()
+                .id(id)
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(24.0))
+                .cursor_pointer()
+        };
+        pop.w(px(470.0))
+            .px(px(16.0))
             .py(px(14.0))
             .gap(px(12.0))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .child(div().id("url-back").w(px(24.0)).mr(px(4.0)).cursor_pointer().child("‹").on_click(set(Conn::List)))
+                    .child(icon("url-back").mr(px(4.0)).text_color(ink(theme, T3)).child("‹").on_click(set(Conn::List)))
                     .child(div().flex_1().font_weight(FontWeight::SEMIBOLD).child("Connect with a URL"))
-                    .child(div().id("url-close").w(px(24.0)).cursor_pointer().child("×").on_click(set(Conn::Closed))),
+                    .child(icon("url-close").child("×").on_click(set(Conn::Closed))),
             )
             .child(
                 kit::mono(theme, 13.0)
@@ -334,7 +344,10 @@ impl Studio {
                     .rounded(px(8.0))
                     .bg(rgba(0x0000_004d))
                     .shadow(vec![kit::edge(ink(theme, 0.12), 1.0)])
-                    .child("postgres://app:••••••@staging.internal:5432/notes"),
+                    .flex()
+                    .child("postgres://app:")
+                    .child(div().text_color(ink(theme, T3)).child("••••••"))
+                    .child("@staging.internal:5432/notes"),
             )
             .child(
                 div()
@@ -342,10 +355,10 @@ impl Studio {
                     .flex_col()
                     .gap(px(4.0))
                     .text_size(px(12.5))
-                    .child(field("driver", "postgres"))
-                    .child(field("host", "staging.internal:5432"))
-                    .child(field("database", "notes"))
-                    .child(field("password", "kept in agent.db, never shown again")),
+                    .child(field("driver", div().child("postgres")))
+                    .child(field("host", kit::mono(theme, 12.5).child("staging.internal:5432")))
+                    .child(field("database", kit::mono(theme, 12.5).child("notes")))
+                    .child(field("password", div().child("kept in agent.db, never shown again"))),
             )
             .child(
                 div()

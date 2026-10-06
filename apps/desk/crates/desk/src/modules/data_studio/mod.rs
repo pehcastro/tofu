@@ -14,10 +14,29 @@ use fixture::{BLANK_ID, NEW_ID, NEW_NOTE, NOTES, Note};
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     kit::load_fonts(cx)?;
-    match board {
-        None | Some("IDATA-1") => Ok(cx.new(|_| Studio::new()).into()),
-        Some(other) => Err(format!("the data studio draws IDATA-1, not {other}")),
-    }
+    let studio = Studio::new();
+    let studio = match board {
+        None | Some("IDATA-1") => studio,
+        Some("S-DATA-1") => Studio {
+            conn: Conn::List,
+            ..studio
+        },
+        Some("S-DATA-2") => Studio {
+            conn: Conn::Url,
+            ..studio
+        },
+        Some("S-DATA-3") => Studio {
+            edit: Edit::Insert,
+            selected: None,
+            ..studio
+        },
+        Some(other) => {
+            return Err(format!(
+                "the data studio draws IDATA-1 and S-DATA-1 to 3, not {other}"
+            ));
+        }
+    };
+    Ok(cx.new(|_| studio).into())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
