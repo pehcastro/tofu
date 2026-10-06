@@ -45,6 +45,10 @@ exit 0
         "do": "tofu docs gate"
       },
       {
+        "text": "Hooks",
+        "do": "tofu docs hooks"
+      },
+      {
         "text": "Keys",
         "do": "tofu docs keys"
       },
@@ -127,6 +131,10 @@ exit 0
       {
         "text": "read the output of a running shell",
         "do": "tofu shells log <name>"
+      },
+      {
+        "text": "see the Claude Code and codex hooks tofu runs here",
+        "do": "tofu hooks"
       },
       {
         "text": "check the library files and these pages",

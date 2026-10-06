@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **Hooks.** Claude Code's and codex's hooks run under tofu as they are, read from `.claude/settings.json` and `~/.claude/settings.json`, plus tofu's own `.tofu/hooks.json`. PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop, SessionStart and SessionEnd fire for the lead and every sub-agent. A project's hooks run only after you trust them once, and are asked about again when they change. `tofu hooks` lists every hook, its source, its trust and its last result.
+
 ## 0.5.2 - 2026-10-06
 
 Faster handoffs and a frontend that can trust what it is sent.

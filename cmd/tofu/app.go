@@ -109,12 +109,13 @@ type appLaunch struct {
 	note        string
 	tabs        *tools.BrowserTabs
 	stopWarm    *func()
+	endSession  *func() []string
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), stopWarm: new(func())}
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), stopWarm: new(func()), endSession: new(func() []string)}
 	if registryErr != nil {
 		return launch
 	}
@@ -143,6 +144,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	live.shells = launch.registry
 	live.tabs, live.warm.tabs = launch.tabs, launch.tabs
 	*launch.stopWarm = func() { live.warm.Close() }
+	*launch.endSession = live.end
 	settingsStore, _ := openSettings(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
 	return tui.Options{
@@ -264,6 +266,9 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
 	(*launch.stopWarm)()
+	for _, warning := range (*launch.endSession)() {
+		_, _ = fmt.Fprintln(errOut, "tofu: "+warning)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: %v\n", err)
 		return exitVerdict
@@ -711,6 +716,7 @@ type appSession struct {
 	cron     *cron.Book
 	ranLock  sync.Mutex
 	ran      []string
+	started  string
 }
 
 type pendingImage struct {
@@ -728,9 +734,17 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 		shown:   map[string]bool{},
 		granted: map[string]bool{},
 		cron:    &cron.Book{Check: cronChecker(dir)},
+		started: sessionStartup,
+	}
+	if resumed.Session != "" {
+		live.started = sessionResumed
 	}
 	live.carry(resumed.messages)
 	return live
+}
+
+func (s *appSession) end() []string {
+	return turn.EndSession(context.Background(), s.dir, s.id, sessionEndExit)
 }
 
 func (s *appSession) loadCron(id string) error {
@@ -804,7 +818,7 @@ func (s *appSession) carry(messages []llm.Message) {
 
 func (s *appSession) startFresh() string {
 	s.renew()
-	s.id, s.carried, s.pending = "", nil, nil
+	s.id, s.carried, s.pending, s.started = "", nil, nil, sessionCleared
 	_ = s.loadCron("")
 	return freshSessionNote
 }
@@ -921,7 +935,7 @@ func (s *appSession) resume(handle string) (string, []tui.Event) {
 	if err != nil {
 		return err.Error(), nil
 	}
-	s.id, s.pending = carry.Session, nil
+	s.id, s.pending, s.started = carry.Session, nil, sessionResumed
 	s.carry(carry.messages)
 	said := "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps)
 	if err := s.loadCron(carry.Session); err != nil {
@@ -1064,6 +1078,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		fail(configErr)
 		return
 	}
+	config.SessionSource, s.started = s.started, ""
 	if gate != nil {
 		gate.watch = func(ctx context.Context, tool string, gated turn.GateDecision, err error) {
 			decided := session.Decision{Tool: tool, Verdict: session.Ask}

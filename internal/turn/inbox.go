@@ -244,7 +244,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		if row.Conversation != nil {
 			config.History = Sendable(row.Conversation)
 		}
-		config.Task, config.Images, config.NewID = strings.Join(next, "\n\n"), nil, nil
+		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(next, "\n\n"), nil, nil, ""
 		config.Session = cmp.Or(row.Session, config.Session)
 	}
 }

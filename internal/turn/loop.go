@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/hook"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -106,6 +108,9 @@ type Config struct {
 	History         []llm.Message
 	Wire            string
 	SpawnedFrom     string
+	AgentType       string
+	Project         string
+	SessionSource   string
 	System          string
 	References      map[string]string
 	Environment     string
@@ -236,6 +241,26 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	row.Session = recorded.session()
 	recorded.begin(row)
 
+	hooks, untrustedHooks := hookEngine(ctx, config, origin)
+	ctx = context.WithValue(ctx, hookEngineKey{}, hooks)
+	row.Warnings = append(row.Warnings, untrustedHooks...)
+	var hookWarnings sync.Mutex
+	fire := func(in hook.Input) hook.Verdict {
+		in.Session, in.Turn = row.Session, row.ID
+		if config.SpawnedFrom != "" {
+			in.Agent, in.AgentType = origin, config.AgentType
+		}
+		verdict := hooks.Fire(ctx, in)
+		hookWarnings.Lock()
+		defer hookWarnings.Unlock()
+		for _, warning := range verdict.Warnings {
+			if !slices.Contains(row.Warnings, warning) {
+				row.Warnings = append(row.Warnings, warning)
+			}
+		}
+		return verdict
+	}
+
 	messages := make([]llm.Message, 0, len(config.History)+2)
 	if config.System != "" {
 		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: config.System})
@@ -251,7 +276,15 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 		}
 	}
-	if note := concluding + taken; note != "" {
+	var promptRefused, hookContext string
+	if config.SpawnedFrom == "" {
+		if config.SessionSource != "" {
+			hookContext = fire(hook.Input{Event: hook.SessionStart, Source: config.SessionSource}).Context
+		}
+		prompted := fire(hook.Input{Event: hook.UserPromptSubmit, Prompt: config.Task})
+		promptRefused, hookContext = prompted.Block, strings.TrimSpace(hookContext+"\n\n"+prompted.Context)
+	}
+	if note := strings.TrimSpace(concluding + taken + "\n\n" + hookContext); note != "" {
 		first += "\n\n" + note
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images})
@@ -350,8 +383,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return finish(outcome)
 	}
 	flush()
+	if promptRefused != "" {
+		return finish(OutcomeError), errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused)
+	}
 	guard := newLoopGuard(config.Caps)
-	forks, recordedGrants := 0, 0
+	forks, recordedGrants, stopContinuations := 0, 0, 0
 	askedAgainAfterBlank := false
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
@@ -441,6 +477,20 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		switch decision.Outcome {
 		case llm.OutcomeMessage:
 			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
+			stop := hook.Stop
+			if config.SpawnedFrom != "" {
+				stop = hook.SubagentStop
+			}
+			blocked := fire(hook.Input{Event: stop, LastMessage: decision.Content, StopActive: stopContinuations > 0}).Block
+			if blocked != "" && stopContinuations < konst.HookStopContinuations {
+				stopContinuations++
+				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "a " + string(stop) + " hook kept this turn going: " + blocked})
+				keep(stepRow)
+				continue
+			}
+			if blocked != "" {
+				row.Warnings = append(row.Warnings, "the turn ended with a "+string(stop)+" hook still blocking after "+strconv.Itoa(stopContinuations)+" continuations: "+blocked)
+			}
 			keep(stepRow)
 			return finish(OutcomeStopped), nil
 
@@ -476,8 +526,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					call := asked
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
+					pre := fire(hook.Input{Event: hook.PreToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID})
+					if pre.Args != nil {
+						call.Arguments = pre.Args
+					}
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model}
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire}
+					if gated.refusal = hookRefusal(ctx, config, request, pre); gated.refusal != "" {
+						wave = append(wave, gated)
+						continue
+					}
 					switch {
 					case config.Gate == nil || gateExempt(call.Name):
 					case config.GateMode == GateShadow:
@@ -820,6 +878,7 @@ type gatedCall struct {
 	gateErr string
 	shadow  <-chan shadowVerdict
 	refusal string
+	fire    func(hook.Input) hook.Verdict
 }
 
 type shadowVerdict struct {
@@ -871,6 +930,10 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		return row, answer, false
 	}
 	result.Content, result.FailureText = g.redact.Redact(result.Content), g.redact.Redact(result.FailureText)
+	var post hook.Verdict
+	if !result.Repeat {
+		post = g.fire(hook.Input{Event: hook.PostToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID, Response: result.Content, Failed: result.FailureText != ""})
+	}
 
 	cut := g.cutShellResult(ctx, call.Name, result)
 	thriftCut := g.cutThriftResult(ctx, call.Name, result)
@@ -918,6 +981,12 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 			body = theToolSucceededAndPrintedNothing
 		}
 	}
+	if post.Block != "" {
+		body += "\n\na PostToolUse hook says: " + post.Block
+	}
+	if post.Context != "" {
+		body += "\n\n" + post.Context
+	}
 	return row, llm.Message{
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,
@@ -925,6 +994,83 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ToolOutcome:     outcome,
 		ToolResultBytes: row.ResultBytes,
 	}, result.Repeat
+}
+
+type hookEngineKey struct{}
+
+func EndSession(ctx context.Context, project, session, reason string) []string {
+	verdict := hook.Load(project, shell.Choice{}).Fire(ctx, hook.Input{Event: hook.SessionEnd, Session: session, Reason: reason})
+	return verdict.Warnings
+}
+
+func hookEngine(ctx context.Context, config Config, turnID string) (*hook.Engine, []string) {
+	if held, inherited := ctx.Value(hookEngineKey{}).(*hook.Engine); inherited {
+		return held, nil
+	}
+	root, choice := config.Project, shell.Choice{}
+	if bash, found := config.Tools.byName[bashToolName].(*BashTool); found {
+		root, choice = cmp.Or(root, string(bash.root)), bash.choice
+	}
+	root, _ = filepath.Abs(cmp.Or(root, "."))
+	engine := hook.Load(root, choice)
+	warnings, untrusted := engine.Problems(), engine.Untrusted()
+	if len(untrusted) == 0 {
+		return engine, warnings
+	}
+	listed := make([]string, len(untrusted))
+	for i, unknown := range untrusted {
+		file, _ := filepath.Rel(root, unknown.File)
+		listed[i] = string(unknown.Event) + " " + cmp.Or(unknown.Matcher, "*") + ": " + unknown.Command + " (" + string(unknown.Trust) + ", " + file + ")"
+	}
+	told := config.Notify
+	if told == nil {
+		told = func(said string) { warnings = append(warnings, said) }
+	}
+	if config.Person == nil {
+		told(strconv.Itoa(len(untrusted)) + " project hooks are not trusted, so they did not run: " + strings.Join(listed, "; ") +
+			". run tofu hooks trust in the project to trust them")
+		return engine, warnings
+	}
+	told("this project has hooks tofu has not run, and each runs a command on this machine:\n" + strings.Join(listed, "\n") +
+		"\n1 runs them in this turn only, 2 refuses them until they change, 3 trusts them until they change")
+	asked, _ := json.Marshal(map[string]string{"command": strings.Join(listed, "\n")})
+	answer, err := config.Person(ctx, GateRequest{TurnID: turnID, Task: config.Task, Tool: "hooks", Args: asked}, GateDecision{})
+	switch {
+	case err != nil:
+		return engine, append(warnings, "the person could not be asked about this project's hooks, so they did not run: "+err.Error())
+	case answer == PersonAllowedOnce:
+		err = engine.Answer(untrusted, hook.AnswerOnce)
+	case answer == PersonAlwaysHere:
+		err = engine.Answer(untrusted, hook.AnswerAlways)
+	default:
+		err = engine.Answer(untrusted, hook.AnswerRefuse)
+	}
+	if err != nil {
+		warnings = append(warnings, "the answer about this project's hooks was not saved, so it is asked again next turn: "+err.Error())
+	}
+	return engine, warnings
+}
+
+func hookRefusal(ctx context.Context, config Config, request GateRequest, pre hook.Verdict) string {
+	switch {
+	case pre.Block != "":
+		return "this call did not run: a PreToolUse hook refused it: " + pre.Block
+	case pre.Ask == "":
+		return ""
+	case config.Person == nil:
+		return "this call did not run: a PreToolUse hook asks the person first, and no person was available to answer: " + pre.Ask
+	}
+	if config.Notify != nil {
+		config.Notify("a PreToolUse hook asks you before " + request.Tool + " runs: " + pre.Ask)
+	}
+	answer, err := config.Person(ctx, request, GateDecision{})
+	switch {
+	case err != nil:
+		return "this call did not run: a PreToolUse hook asks the person first, and the person could not be asked: " + err.Error()
+	case answer.allows():
+		return ""
+	}
+	return "this call did not run: a PreToolUse hook asked the person, and the person did not allow it: " + pre.Ask
 }
 
 func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {

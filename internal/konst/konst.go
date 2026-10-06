@@ -328,3 +328,16 @@ const (
 	RefusalCarriesWholeUpToBytes = 4096
 	OmissionRefusedOverLostLines = 3
 )
+
+const (
+	HookTimeoutSecondsDefault = 60
+	HookTimeoutSecondsCeiling = 600
+	HookProcessesAtOnce       = 4
+	HookSlotPollMillis        = 50
+	HookKillWaitMillis        = 2000
+	HookOutputBytes           = 64 << 10
+	HookContextBytes          = 10000
+	HookSaidBytes             = 200
+	HookStopContinuations     = 8
+	HookSessionEndMillis      = 1500
+)

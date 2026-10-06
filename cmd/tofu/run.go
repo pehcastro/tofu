@@ -523,6 +523,9 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head = cmp.Or(row.Session, head)
 	})
+	for _, warning := range turn.EndSession(context.Background(), cmp.Or(opts.dir, "."), head, sessionEndOther) {
+		_, _ = fmt.Fprintln(errOut, "tofu run: "+warning)
+	}
 	leaveShells(registry)
 	for _, subAgent := range subAgentRows(spawner) {
 		askedAs, windows := askedAsOf(subAgent, spawner.Spawned(), selected.Slug(), selected.WindowText())
@@ -681,16 +684,18 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		}
 	}
 	config := turn.Config{
-		References:  references,
-		Model:       run.model,
-		Now:         run.now,
-		Accounts:    run.applyThinkingSummary(run.accounts),
-		Spend:       run.spend,
-		Tools:       turn.NewRegistry(built...),
-		Task:        opts.task,
-		Wire:        opts.wire,
-		System:      composed.Head(),
-		Environment: composed.WithTaskRules(environment),
+		References:    references,
+		Model:         run.model,
+		Now:           run.now,
+		Accounts:      run.applyThinkingSummary(run.accounts),
+		Spend:         run.spend,
+		Tools:         turn.NewRegistry(built...),
+		Project:       dir,
+		SessionSource: sessionStartup,
+		Task:          opts.task,
+		Wire:          opts.wire,
+		System:        composed.Head(),
+		Environment:   composed.WithTaskRules(environment),
 		Caps: turn.Caps{
 			MaxSteps:         opts.maxSteps,
 			LoopGuardRepeats: opts.loopGuardRepeats,

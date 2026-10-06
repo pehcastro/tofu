@@ -3,6 +3,8 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -11,7 +13,9 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 )
 
 type slowGate struct{ took time.Duration }
@@ -130,6 +134,105 @@ func TestTheTextBesideAToolCallIsInTheNextRequestAndMovesNoEarlierMessage(t *tes
 	}
 	if got := third[len(third)-2].Content; got != blank.Content {
 		t.Errorf("request 3 carried the blank reply's text as %q, want %q left for the wire to drop", got, blank.Content)
+	}
+}
+
+func hookedProject(t *testing.T, hooks string) (string, *BashTool) {
+	t.Helper()
+	project := t.TempDir()
+	if err := sys.WriteFile(filepath.Join(project, ".claude", "settings.json"), []byte(`{"hooks":`+hooks+`}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bash, err := NewBashTool(project)
+	if err != nil || strings.Contains(bash.choice.Label, "powershell") {
+		t.Skip("no bash resolved on this machine")
+	}
+	return project, bash
+}
+
+func alwaysTrusting(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {
+	return PersonAlwaysHere, nil
+}
+
+func TestHooksPreToolUseExitTwoIsTheRefusalTheModelSeesAndNothingRuns(t *testing.T) {
+	project, bash := hookedProject(t, `{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo 'pushing is not allowed here' >&2; exit 2"}]}]}`)
+	model := &stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo ran > ran.txt"}`)}),
+		messageDecision(),
+	}}
+	if _, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Task: "push it", Person: alwaysTrusting,
+		ResultBytesCap: 4096, ArtifactDir: t.TempDir(), NoLastWord: true}); err != nil {
+		t.Fatal(err)
+	}
+	sent := model.requests[1].Messages
+	if seen := sent[len(sent)-1].Content; !strings.Contains(seen, "pushing is not allowed here") || !strings.Contains(seen, "PreToolUse hook refused it") {
+		t.Errorf("the model saw %q, want the hook's refusal", seen)
+	}
+	if _, err := os.Stat(filepath.Join(project, "ran.txt")); err == nil {
+		t.Error("the refused command ran")
+	}
+}
+
+func TestHooksAStopHookThatBlocksForeverEndsTheTurnAtItsCap(t *testing.T) {
+	_, bash := hookedProject(t, `{"Stop":[{"hooks":[{"type":"command","command":"echo 'the tests are not run yet' >&2; exit 2"}]}]}`)
+	answers := make([]llm.Decision, konst.HookStopContinuations+2)
+	for i := range answers {
+		answers[i] = messageDecision()
+	}
+	model := &stubModel{decisions: answers}
+	row, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Task: "finish", Person: alwaysTrusting,
+		ResultBytesCap: 4096, ArtifactDir: t.TempDir(), NoLastWord: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.calls != konst.HookStopContinuations+1 || row.Outcome != OutcomeStopped {
+		t.Fatalf("the model was asked %d times and the turn ended %s, want %d and %s", model.calls, row.Outcome, konst.HookStopContinuations+1, OutcomeStopped)
+	}
+	if sent := model.requests[1].Messages; !strings.Contains(sent[len(sent)-1].Content, "the tests are not run yet") {
+		t.Errorf("the continuation said %q, want the Stop hook's reason", sent[len(sent)-1].Content)
+	}
+	if !slices.ContainsFunc(row.Warnings, func(warning string) bool { return strings.Contains(warning, "still blocking") }) {
+		t.Errorf("the row's warnings %v do not say the Stop hook was still blocking", row.Warnings)
+	}
+}
+
+func TestHooksAProjectHookWithNoPersonToAskDoesNotRunAndSaysHowToTrustIt(t *testing.T) {
+	project, bash := hookedProject(t, `{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"echo ran > hooked.txt"}]}]}`)
+	model := &stubModel{decisions: []llm.Decision{
+		toolCallDecision(llm.ToolCall{ID: "call-1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo hi"}`)}),
+		messageDecision(),
+	}}
+	var told []string
+	if _, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Task: "say hi", Notify: func(said string) { told = append(told, said) },
+		ResultBytesCap: 4096, ArtifactDir: t.TempDir(), NoLastWord: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(project, "hooked.txt")); err == nil {
+		t.Error("an untrusted project hook ran with no person to ask")
+	}
+	if !slices.ContainsFunc(told, func(said string) bool { return strings.Contains(said, "tofu hooks trust") }) {
+		t.Errorf("the person was told %v, want how to trust the hook", told)
+	}
+}
+
+func TestHooksSubagentStopFiresForATofuSubAgentWithItsID(t *testing.T) {
+	project, bash := hookedProject(t, `{"SubagentStop":[{"hooks":[{"type":"command","command":"cat >> subagent-stop.log"}]}]}`)
+	model := newCrew(map[string][]llm.Decision{
+		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it")},
+		usersRoute: {claimDecision("the users route is added")},
+	})
+	lead := crewLead(t, model)
+	lead.Tools, lead.Person = NewRegistry(append(lead.Tools.tools, bash)...), alwaysTrusting
+	if _, err := Run(context.Background(), lead); err != nil {
+		t.Fatal(err)
+	}
+	logged := filepath.Join(project, "subagent-stop.log")
+	waitFor(t, "the SubagentStop hook", func() bool {
+		said, _ := os.ReadFile(logged)
+		return strings.Contains(string(said), `"agent_id":"sub-1"`)
+	})
+	if said, _ := os.ReadFile(logged); !strings.Contains(string(said), `"hook_event_name":"SubagentStop"`) || !strings.Contains(string(said), "the users route is added") {
+		t.Errorf("the SubagentStop hook read %s, want the event and the sub-agent's last message", said)
 	}
 }
 

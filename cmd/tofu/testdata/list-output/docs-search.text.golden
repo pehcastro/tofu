@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           44 matches
+Docs · "change the colours"                                           46 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -20,6 +20,8 @@ Docs · "change the colours"                                           44 matche
     → tofu docs drive
   The gate
     → tofu docs gate
+  Hooks
+    → tofu docs hooks
   Keys
     → tofu docs keys
   Models
@@ -62,6 +64,8 @@ Docs · "change the colours"                                           44 matche
     → tofu undo, or /undo in the app
   read the output of a running shell
     → tofu shells log <name>
+  see the Claude Code and codex hooks tofu runs here
+    → tofu hooks
   check the library files and these pages
     → tofu library
   let the model read the Chrome tabs tofu can reach

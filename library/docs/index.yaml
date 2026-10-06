@@ -262,6 +262,18 @@
   do: tofu shells log <name>
   check: tofu shells list
   topic: sessions
+- ask: see the Claude Code and codex hooks tofu runs here
+  do: tofu hooks
+  check: tofu hooks --json
+  topic: hooks
+- ask: trust this project's hooks
+  do: tofu hooks trust
+  check: tofu hooks
+  topic: hooks
+- ask: turn every hook off in this project
+  do: write "disableAllHooks" true in .claude/settings.local.json
+  check: tofu hooks
+  topic: hooks
 - ask: check that tofu can run here
   do: tofu doctor
   check: tofu doctor --json

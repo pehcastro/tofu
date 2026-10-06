@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 80 asks                                                         17 topics
+Docs · 83 asks                                                         18 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -82,6 +82,15 @@ gate  what jev judges before a tool call runs, when tofu asks you first, and
     → tofu replay --point tool_gate --set risk_ask_at=1.5
   work one task with the gate off
     → tofu run --dir . --no-gate "<task>"
+
+hooks  the Claude Code and codex hooks tofu runs around a tool call, a prompt
+  and a turn's end, and how a project's hooks are trusted
+  see the Claude Code and codex hooks tofu runs here
+    → tofu hooks
+  trust this project's hooks
+    → tofu hooks trust
+  turn every hook off in this project
+    → write "disableAllHooks" true in .claude/settings.local.json
 
 instructions  which AGENTS.md and CLAUDE.md files tofu sends with every task,
   in what order, and how to change that

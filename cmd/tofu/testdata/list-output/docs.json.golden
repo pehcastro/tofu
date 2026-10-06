@@ -48,6 +48,11 @@ exit 0
         "summary": "what jev judges before a tool call runs, when tofu asks you first, and where the OpenRouter key lives"
       },
       {
+        "topic": "hooks",
+        "title": "Hooks",
+        "summary": "the Claude Code and codex hooks tofu runs around a tool call, a prompt and a turn's end, and how a project's hooks are trusted"
+      },
+      {
         "topic": "instructions",
         "title": "Instruction files",
         "summary": "which AGENTS.md and CLAUDE.md files tofu sends with every task, in what order, and how to change that"
@@ -489,6 +494,24 @@ exit 0
         "do": "tofu shells log <name>",
         "check": "tofu shells list",
         "topic": "sessions"
+      },
+      {
+        "ask": "see the Claude Code and codex hooks tofu runs here",
+        "do": "tofu hooks",
+        "check": "tofu hooks --json",
+        "topic": "hooks"
+      },
+      {
+        "ask": "trust this project's hooks",
+        "do": "tofu hooks trust",
+        "check": "tofu hooks",
+        "topic": "hooks"
+      },
+      {
+        "ask": "turn every hook off in this project",
+        "do": "write \"disableAllHooks\" true in .claude/settings.local.json",
+        "check": "tofu hooks",
+        "topic": "hooks"
       },
       {
         "ask": "check that tofu can run here",

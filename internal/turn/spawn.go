@@ -776,6 +776,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	subAgent.System, subAgent.Environment, subAgent.History = held.system, held.environment, held.history
 	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
+	subAgent.AgentType = held.definition.Name
 	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
 	if site.log == nil {
 		subAgent.Sessions = nil
