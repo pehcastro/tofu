@@ -11,6 +11,7 @@ pub fn four_turns() -> Vec<Row> {
         Row::Tools {
             count: "7 tools".into(),
             detail: "· classifier 1 · shell 1 · 16s".into(),
+            calls: Vec::new(),
         },
         Row::Lead {
             time: "14:32".into(),
@@ -96,7 +97,15 @@ pub fn four_turns() -> Vec<Row> {
     ]
 }
 
-pub fn running_turn() -> Vec<Row> {
+const FIVE_TOOLS: [[&str; 3]; 5] = [
+    ["read", "notes/notes.go", "140 lines"],
+    ["read", "web/NoteList.tsx", "112 lines"],
+    ["grep", "Count in notes/ web/", "no matches"],
+    ["bash", "go test ./notes/", "ok · sifted 3 of 48 lines"],
+    ["read", "web/api.ts", "64 lines"],
+];
+
+pub fn running_turn(tools_open: bool) -> Vec<Row> {
     vec![
         Row::You {
             time: "16:40".into(),
@@ -107,6 +116,11 @@ pub fn running_turn() -> Vec<Row> {
         Row::Tools {
             count: "5 tools".into(),
             detail: "· 4s".into(),
+            calls: if tools_open {
+                FIVE_TOOLS.to_vec()
+            } else {
+                Vec::new()
+            },
         },
         Row::Lead {
             time: "16:40".into(),

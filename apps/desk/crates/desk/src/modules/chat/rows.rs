@@ -1,8 +1,8 @@
 use gpui::{AnyElement, Div, FontWeight, Rgba, SharedString, div, prelude::*, px};
 
 use super::paint::{
-    ADD, AGENT_FILL, AGENT_INK, CHECK, DEL, RIGHT, T1, T3, TRACE, TRACE_MARK, glyph, medium, mono,
-    ringed, spacer, spinner, text, tint, white,
+    ADD, AGENT_FILL, AGENT_INK, CHECK, DEL, OPEN, RIGHT, T1, T3, TRACE, TRACE_MARK, black, glyph,
+    medium, mono, ringed, spacer, spinner, text, tint, white,
 };
 
 pub const COLUMN: f32 = 760.0;
@@ -49,6 +49,7 @@ pub enum Row {
     Tools {
         count: SharedString,
         detail: SharedString,
+        calls: Vec<[&'static str; 3]>,
     },
     Agent {
         outcome: Outcome,
@@ -217,11 +218,48 @@ pub fn row(row: &Row, first: bool, scale: f32) -> Div {
                     .enumerate()
                     .map(|(index, block)| lead_block(index, block)),
             ),
-        Row::Tools { count, detail } => tool_line()
-            .mt(px(10.0))
-            .child(glyph(RIGHT, 13.0, white(0.55), scale))
-            .child(count.clone())
-            .child(div().text_color(white(T3)).child(detail.clone())),
+        Row::Tools {
+            count,
+            detail,
+            calls,
+        } => div()
+            .flex()
+            .flex_col()
+            .child(
+                tool_line()
+                    .mt(px(10.0))
+                    .child(glyph(
+                        if calls.is_empty() { RIGHT } else { OPEN },
+                        13.0,
+                        white(0.55),
+                        scale,
+                    ))
+                    .child(count.clone())
+                    .child(div().text_color(white(T3)).child(detail.clone())),
+            )
+            .when(!calls.is_empty(), |line| {
+                line.child(
+                    div()
+                        .mt(px(6.0))
+                        .ml(px(21.0))
+                        .py(px(8.0))
+                        .px(px(12.0))
+                        .rounded(px(9.0))
+                        .bg(black(0.2))
+                        .flex()
+                        .flex_col()
+                        .gap(px(3.0))
+                        .children(calls.iter().map(|[verb, what, tail]| {
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                .child(text(12.5, 19.0, white(T3), *verb).w(px(44.0)))
+                                .child(mono(12.5, 19.0, white(T1), *what).flex_1())
+                                .child(text(12.0, 19.0, white(T3), *tail))
+                        })),
+                )
+            }),
         Row::Agent {
             outcome,
             name,

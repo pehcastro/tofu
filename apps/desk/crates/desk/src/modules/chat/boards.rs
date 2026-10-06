@@ -3,11 +3,12 @@ use gpui::{Div, FontWeight, Rgba, SharedString, TextTransform, div, prelude::*, 
 use super::composer::{Ask, ask_bar, button, compact, kbd, queued_line, tall, working};
 use super::fixture::{four_turns, running_turn};
 use super::paint::{
-    ADD, CHAT, CHECK, DATABASE, GO, LIVE, MONO, POP, REACT, RIGHT, SHELL, T2, T3, TRACE,
-    TRACE_MARK, WARN, black, drop_shadow, file_icon, glyph, hex, medium, mono, progress, ringed,
-    spacer, spinner_on, text, tint, white,
+    ADD, CHAT, CHECK, DATABASE, GO, LIVE, MONO, ON_LIGHT, POP, REACT, RIGHT, SHELL, T1, T2, T3,
+    TRACE, TRACE_MARK, WARN, black, drop_shadow, file_icon, glyph, hex, medium, mono, progress,
+    ringed, spacer, spinner_on, text, tint, white,
 };
 use super::rows::{COLUMN, Row, code_chip, row};
+use super::{Overlay, Wire};
 
 const ENGINEER: Rgba = hex(0x79c0ff);
 const FRONTEND: Rgba = hex(0xb9a6ea);
@@ -68,7 +69,7 @@ fn caps(body: impl Into<SharedString>) -> Div {
         .text_transform(TextTransform::Uppercase)
 }
 
-pub fn transcript(rows: &[Row], bottom: f32, scale: f32) -> Div {
+pub fn transcript(rows: &[Row], bottom: f32, tools: Option<&Wire>, scale: f32) -> Div {
     div()
         .flex_1()
         .min_h_0()
@@ -86,7 +87,12 @@ pub fn transcript(rows: &[Row], bottom: f32, scale: f32) -> Div {
                 .children(
                     rows.iter()
                         .enumerate()
-                        .map(|(index, each)| row(each, index == 0, scale)),
+                        .map(|(index, each)| match (each, tools) {
+                            (Row::Tools { .. }, Some(wire)) => {
+                                wire.on(row(each, index == 0, scale), Overlay::Tools)
+                            }
+                            _ => row(each, index == 0, scale),
+                        }),
                 ),
         )
 }
@@ -109,22 +115,29 @@ pub fn four_turns_board(scale: f32) -> Div {
         .mb(px(8.0))
         .child(chat_head(scale, "amber-cedar-otter · four turns"))
         .child(
-            inner().child(transcript(&four_turns(), 30.0, scale)).child(
-                centred(compact("Ask tofu to build, inspect, or delegate", scale))
-                    .pt(px(6.0))
-                    .pb(px(12.0)),
-            ),
+            inner()
+                .child(transcript(&four_turns(), 30.0, None, scale))
+                .child(
+                    centred(compact("Ask tofu to build, inspect, or delegate", scale))
+                        .pt(px(6.0))
+                        .pb(px(12.0)),
+                ),
         )
 }
 
-pub fn running_board(scale: f32) -> Div {
+pub fn running_board(scale: f32, wire: &Wire) -> Div {
     shell()
         .flex_1()
         .mb(px(8.0))
         .child(chat_head(scale, "clear-sable-eagle · a turn running"))
         .child(
             inner()
-                .child(transcript(&running_turn(), 20.0, scale))
+                .child(transcript(
+                    &running_turn(wire.overlay == Overlay::Tools),
+                    20.0,
+                    Some(wire),
+                    scale,
+                ))
                 .child(centred(working(
                     "waiting on you",
                     "the queue keeps 1 you typed",
@@ -184,7 +197,7 @@ fn dot(fill: Option<Rgba>) -> Div {
     })
 }
 
-pub fn zoomed_board(scale: f32) -> Div {
+pub fn zoomed_board(scale: f32, wire: &Wire) -> Div {
     let plan = div()
         .py(px(10.0))
         .px(px(14.0))
@@ -278,12 +291,19 @@ pub fn zoomed_board(scale: f32) -> Div {
                 .child(
                     centred(
                         div()
+                            .relative()
                             .w(px(740.0))
                             .flex()
                             .flex_col()
                             .gap(px(8.0))
                             .child(queued_line("after that, open the app and read the badge"))
-                            .child(tall("", "/", scale)),
+                            .when(wire.overlay == Overlay::Form, |column| {
+                                column.child(loop_form())
+                            })
+                            .child(tall("", "/", Overlay::Slash, wire, scale))
+                            .when(wire.overlay == Overlay::Slash, |column| {
+                                column.child(slash_menu(wire))
+                            }),
                     )
                     .pt(px(6.0))
                     .pb(px(14.0)),
@@ -315,16 +335,254 @@ fn pop_row(icon: Div, label: Div, tail: Option<Div>) -> Div {
         .children(tail)
 }
 
-fn mention_menu(scale: f32) -> Div {
-    let trace = || div().child(glyph(TRACE_MARK, 13.0, TRACE, scale));
+fn pop(width: f32) -> Div {
     ringed(12.0, white(0.12))
-        .absolute()
-        .left(px(150.0))
-        .bottom(px(96.0))
-        .w(px(392.0))
+        .w(px(width))
         .p(px(6.0))
         .bg(POP)
         .shadow(drop_shadow(50.0, 22.0, 0.6))
+}
+
+fn lit(row: Div, on: bool) -> Div {
+    row.when(on, |row| row.bg(white(0.08)))
+}
+
+fn trace_menu() -> Div {
+    let item = |label: &'static str| text(13.0, 23.0, white(T1), label).py(px(7.0)).px(px(10.0));
+    pop(240.0)
+        .self_end()
+        .mt(px(-6.0))
+        .child(
+            mono(13.0, 23.0, white(T3), "tool#77c1e0 · read 6 files")
+                .py(px(6.0))
+                .px(px(10.0)),
+        )
+        .child(item("Mention in chat"))
+        .child(item("Open in Sub-agents"))
+        .child(item("Copy trace"))
+}
+
+fn model_picker() -> Div {
+    let source = |name: &'static str, quota: &'static str| {
+        div()
+            .flex()
+            .items_center()
+            .child(caps(name).flex_1())
+            .child(medium(10.0, 10.0, white(0.45), quota))
+    };
+    let model = |name: &'static str, note: Option<&'static str>, on: bool| {
+        lit(
+            div()
+                .flex()
+                .items_center()
+                .py(px(7.0))
+                .px(px(10.0))
+                .rounded(px(8.0))
+                .child(text(13.5, 23.0, white(T1), name).flex_1())
+                .children(note.map(|note| text(12.0, 23.0, white(T3), note))),
+            on,
+        )
+    };
+    let effort = |label: &'static str, on: bool| {
+        text(12.5, 20.0, if on { white(1.0) } else { white(0.4) }, label)
+            .py(px(2.0))
+            .px(px(9.0))
+            .rounded(px(6.0))
+            .when(on, |seg| seg.bg(white(0.12)))
+    };
+    pop(340.0)
+        .absolute()
+        .right(px(60.0))
+        .bottom(px(66.0))
+        .child(
+            source("claude-sub", "5h 34% · 7d 12%")
+                .py(px(6.0))
+                .px(px(10.0)),
+        )
+        .child(model("Opus 5", Some("lead default"), true))
+        .child(model("Sonnet 5", Some("@smart"), false))
+        .child(
+            source("codex-sub", "5h 8%")
+                .pt(px(8.0))
+                .px(px(10.0))
+                .pb(px(6.0)),
+        )
+        .child(model("gpt-5.6-sol", None, false))
+        .child(
+            div()
+                .mt(px(6.0))
+                .pt(px(10.0))
+                .px(px(10.0))
+                .pb(px(6.0))
+                .border_t_1()
+                .border_color(white(0.07))
+                .flex()
+                .flex_col()
+                .gap(px(10.0))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(text(12.5, 20.0, white(T3), "effort").w(px(44.0)))
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(2.0))
+                                .p(px(2.0))
+                                .rounded(px(8.0))
+                                .bg(white(0.05))
+                                .child(effort("low", false))
+                                .child(effort("medium", true))
+                                .child(effort("high", false))
+                                .child(effort("max", false)),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .relative()
+                                .w(px(28.0))
+                                .h(px(16.0))
+                                .rounded(px(8.0))
+                                .bg(white(0.2))
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .top(px(2.0))
+                                        .left(px(2.0))
+                                        .size(px(12.0))
+                                        .rounded(px(6.0))
+                                        .bg(white(1.0)),
+                                ),
+                        )
+                        .child(text(12.5, 20.0, white(T2), "for the next turn only")),
+                ),
+        )
+}
+
+fn slash_menu(wire: &Wire) -> Div {
+    let command = |name: &'static str, what: &'static str, on: bool| {
+        lit(
+            pop_row(
+                mono(14.0, 23.0, if on { white(T1) } else { white(T2) }, name).w(px(76.0)),
+                text(13.0, 23.0, if on { white(T2) } else { white(T3) }, what),
+                None,
+            ),
+            on,
+        )
+    };
+    pop(430.0)
+        .absolute()
+        .left_0()
+        .bottom(px(96.0))
+        .child(wire.on(
+            command("/loop", "run a prompt every interval", true),
+            Overlay::Form,
+        ))
+        .child(command("/goal", "repeat until a command exits 0", false))
+        .child(command("/cron", "jobs on a schedule · 1 active", false))
+        .child(div().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(white(0.07)))
+        .child(command(
+            "/undo",
+            "put back the files the last turn changed",
+            false,
+        ))
+        .child(command(
+            "/compact",
+            "shrink old tool results, no model call",
+            false,
+        ))
+        .child(command("/context", "open the Context screen", false))
+}
+
+fn loop_form() -> Div {
+    let pill = |label: &'static str| {
+        medium(12.5, 12.5, white(0.85), label)
+            .h(px(24.0))
+            .flex()
+            .items_center()
+            .px(px(9.0))
+            .rounded(px(7.0))
+            .bg(white(0.07))
+    };
+    div()
+        .py(px(10.0))
+        .px(px(14.0))
+        .rounded(px(12.0))
+        .bg(white(0.05))
+        .flex()
+        .items_center()
+        .gap(px(10.0))
+        .child(mono(13.0, 23.0, white(T1), "/loop"))
+        .child(text(13.0, 23.0, white(T3), "every"))
+        .child(pill("10m"))
+        .child(text(13.0, 23.0, white(T3), "run"))
+        .child(pill("check the badge after each reseed").flex_1())
+        .child(
+            medium(13.0, 13.0, ON_LIGHT, "Start")
+                .h(px(28.0))
+                .px(px(12.0))
+                .flex()
+                .items_center()
+                .rounded(px(8.0))
+                .bg(white(0.9)),
+        )
+}
+
+const MIRROR: &str = r#"<rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/>"#;
+const CHILD: &str = r#"<circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="12" r="1.5"/><path d="M5 5.5v2c0 2 6 1 6 3"/>"#;
+const CLEAN: &str = r#"<circle cx="8" cy="8" r="5.5"/>"#;
+
+fn kind_picker(scale: f32) -> Div {
+    let kind = |icon: &'static str, name: &'static str, what: &'static str| {
+        div()
+            .flex()
+            .items_start()
+            .gap(px(10.0))
+            .py(px(7.0))
+            .px(px(10.0))
+            .child(div().mt(px(3.0)).child(glyph(icon, 16.0, white(T2), scale)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .text_size(px(14.0))
+                    .line_height(px(19.0))
+                    .text_color(white(T1))
+                    .child(name)
+                    .child(div().text_size(px(12.5)).text_color(white(T3)).child(what)),
+            )
+    };
+    ringed(12.0, white(0.12))
+        .absolute()
+        .left(px(16.0))
+        .right(px(12.0))
+        .top(px(95.0))
+        .p(px(8.0))
+        .bg(POP)
+        .shadow(drop_shadow(50.0, 22.0, 0.6))
+        .flex()
+        .flex_col()
+        .gap(px(4.0))
+        .child(medium(11.5, 16.0, white(T3), "Which chat?").pt(px(4.0)).px(px(10.0)).pb(px(6.0)))
+        .child(kind(MIRROR, "The running chat", "Same conversation with the lead, its own scroll. Anything you send here steers the work."))
+        .child(kind(CHILD, "Child chat", "Starts from what the lead knows now. Reads, answers, never edits or spawns; the work is not interrupted."))
+        .child(kind(CLEAN, "Clean chat", "A quick question with no history. Can read the project; a cheaper model by default."))
+}
+
+fn mention_menu(scale: f32) -> Div {
+    let trace = || div().child(glyph(TRACE_MARK, 13.0, TRACE, scale));
+    pop(392.0)
+        .absolute()
+        .left(px(150.0))
+        .bottom(px(96.0))
         .text_size(px(13.0))
         .child(caps("Files").py(px(6.0)).px(px(10.0)))
         .child(pop_row(
@@ -554,7 +812,7 @@ fn agents_panel(scale: f32) -> Div {
         )
 }
 
-pub fn split_board(scale: f32) -> Div {
+pub fn split_board(scale: f32, wire: &Wire) -> Div {
     let chat = shell()
         .w(px(682.8))
         .flex_none()
@@ -589,7 +847,7 @@ pub fn split_board(scale: f32) -> Div {
                                 .text_color(white(0.5))
                                 .child(glyph(RIGHT, 13.0, white(0.5), scale))
                                 .child("Read 6 files · 3s")
-                                .child(trace_button(scale)),
+                                .child(wire.on(trace_button(scale), Overlay::Trace)),
                         )
                         .child(
                             div()
@@ -613,7 +871,10 @@ pub fn split_board(scale: f32) -> Div {
                                         .child("store on SQLite · step 5 of 12"),
                                 )
                                 .child(trace_button(scale)),
-                        ),
+                        )
+                        .when(wire.overlay == Overlay::Trace, |list| {
+                            list.child(trace_menu())
+                        }),
                 )
                 .child(
                     div()
@@ -621,8 +882,17 @@ pub fn split_board(scale: f32) -> Div {
                         .pt(px(10.0))
                         .px(px(12.0))
                         .pb(px(12.0))
-                        .child(tall("why is All sorted by id ", "@", scale))
-                        .child(mention_menu(scale)),
+                        .child(tall(
+                            "why is All sorted by id ",
+                            "@",
+                            Overlay::Closed,
+                            wire,
+                            scale,
+                        ))
+                        .child(match wire.overlay {
+                            Overlay::Picker => model_picker(),
+                            _ => mention_menu(scale),
+                        }),
                 ),
         );
     div()
@@ -694,7 +964,27 @@ const EDITS: [Edit; 4] = [
     },
 ];
 
-fn edits_panel(scale: f32) -> Div {
+fn add_menu(wire: &Wire) -> Div {
+    let item = |label: &'static str| text(13.5, 23.0, white(T2), label).py(px(7.0)).px(px(10.0));
+    pop(200.0)
+        .absolute()
+        .left(px(100.0))
+        .top(px(40.0))
+        .child(
+            wire.on(
+                item("Chat")
+                    .text_color(white(T1))
+                    .rounded(px(8.0))
+                    .bg(white(0.08)),
+                Overlay::Kind,
+            ),
+        )
+        .child(item("Terminal"))
+        .child(item("Editor"))
+        .child(item("Preview"))
+}
+
+fn edits_panel(scale: f32, wire: &Wire) -> Div {
     shell()
         .flex_1()
         .min_w_0()
@@ -710,12 +1000,15 @@ fn edits_panel(scale: f32) -> Div {
                         .bg(white(0.06)),
                 )
                 .child(
-                    medium(12.0, 12.0, white(0.45), "+")
-                        .self_center()
-                        .size(px(24.0))
-                        .flex()
-                        .items_center()
-                        .justify_center(),
+                    wire.on(
+                        medium(12.0, 12.0, white(0.45), "+")
+                            .self_center()
+                            .size(px(24.0))
+                            .flex()
+                            .items_center()
+                            .justify_center(),
+                        Overlay::Add,
+                    ),
                 ),
         )
         .child(
@@ -755,7 +1048,7 @@ fn edits_panel(scale: f32) -> Div {
         )
 }
 
-pub fn edits_board(scale: f32) -> Div {
+pub fn edits_board(scale: f32, wire: &Wire) -> Div {
     let chat = shell()
         .w(px(643.2))
         .flex_none()
@@ -799,5 +1092,13 @@ pub fn edits_board(scale: f32) -> Div {
         .flex()
         .gap(px(6.0))
         .child(chat)
-        .child(edits_panel(scale))
+        .child(
+            edits_panel(scale, wire)
+                .when(wire.overlay == Overlay::Add, |panel| {
+                    panel.child(add_menu(wire))
+                })
+                .when(wire.overlay == Overlay::Kind, |panel| {
+                    panel.child(kind_picker(scale))
+                }),
+        )
 }

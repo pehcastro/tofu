@@ -4,6 +4,7 @@ use super::paint::{
     LINK, MONO, ON_LIGHT, PLUS, SEND, T2, T3, UP, WARN, black, glyph, medium, mono, ringed, spacer,
     spinner, text, tint, white,
 };
+use super::{Overlay, Wire};
 
 fn field() -> Div {
     ringed(16.0, white(0.09)).bg(black(0.22))
@@ -20,17 +21,21 @@ fn add(size: f32, scale: f32) -> Div {
         .child(glyph(PLUS, 16.0, white(0.45), scale))
 }
 
-fn chip(label: &'static str, open: bool, scale: f32) -> Div {
-    div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(px(6.0))
-        .h(px(24.0))
-        .px(px(9.0))
-        .rounded(px(7.0))
-        .child(medium(12.5, 12.5, white(0.85), label))
-        .when(open, |chip| chip.child(glyph(UP, 13.0, white(T3), scale)))
+fn chip(label: &'static str, open: bool, lit: bool, scale: f32) -> Div {
+    if lit {
+        ringed(7.0, white(0.2)).bg(white(0.12))
+    } else {
+        div()
+    }
+    .flex()
+    .flex_none()
+    .items_center()
+    .gap(px(6.0))
+    .h(px(24.0))
+    .px(px(9.0))
+    .rounded(px(7.0))
+    .child(medium(12.5, 12.5, white(0.85), label))
+    .when(open, |chip| chip.child(glyph(UP, 13.0, white(T3), scale)))
 }
 
 fn send(fill: Rgba, ink: Rgba, scale: f32) -> Div {
@@ -61,12 +66,18 @@ pub fn compact(placeholder: &'static str, scale: f32) -> Div {
                 .overflow_hidden()
                 .text_ellipsis(),
         )
-        .child(chip("Opus 5", true, scale))
-        .child(chip("Medium", false, scale))
+        .child(chip("Opus 5", true, false, scale))
+        .child(chip("Medium", false, false, scale))
         .child(send(white(0.18), black(0.6), scale))
 }
 
-pub fn tall(typed: &'static str, trigger: &'static str, scale: f32) -> Div {
+pub fn tall(
+    typed: &'static str,
+    trigger: &'static str,
+    trigger_opens: Overlay,
+    wire: &Wire,
+    scale: f32,
+) -> Div {
     field()
         .pt(px(12.0))
         .pr(px(12.0))
@@ -84,7 +95,7 @@ pub fn tall(typed: &'static str, trigger: &'static str, scale: f32) -> Div {
                 .when(!typed.is_empty(), |line| {
                     line.child(text(14.0, 22.0, white(0.9), typed))
                 })
-                .child(text(14.0, 22.0, LINK, trigger))
+                .child(wire.on(text(14.0, 22.0, LINK, trigger), trigger_opens))
                 .child(div().w(px(1.5)).h(px(16.0)).bg(white(1.0))),
         )
         .child(
@@ -94,8 +105,11 @@ pub fn tall(typed: &'static str, trigger: &'static str, scale: f32) -> Div {
                 .gap(px(6.0))
                 .child(add(26.0, scale))
                 .child(spacer())
-                .child(chip("Opus 5", true, scale))
-                .child(chip("Medium", false, scale))
+                .child(wire.on(
+                    chip("Opus 5", true, wire.overlay == Overlay::Picker, scale),
+                    Overlay::Picker,
+                ))
+                .child(chip("Medium", false, false, scale))
                 .child(send(white(0.9), ON_LIGHT, scale)),
         )
 }

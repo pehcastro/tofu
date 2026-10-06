@@ -29,6 +29,7 @@ pub const TRACE_MARK: &str = r#"<circle cx="8" cy="8" r="2.5"/><path d="M10.5 8v
 pub const CHECK: &str = r#"<path d="M3.5 8.5l3 3 6-7"/>"#;
 pub const RIGHT: &str = r#"<path d="M6 4l4 4-4 4"/>"#;
 pub const UP: &str = r#"<path d="M5 9.5l3-3 3 3"/>"#;
+pub const OPEN: &str = r#"<path d="M4 6l4 4 4-4"/>"#;
 pub const DOWN: &str = r#"<path d="M5 6.5l3 3 3-3"/>"#;
 pub const PLUS: &str = r#"<path d="M8 3v10M3 8h10"/>"#;
 pub const SEND: &str = r#"<path d="M8 12.5v-9M4.5 7L8 3.5 11.5 7"/>"#;
