@@ -1,0 +1,85 @@
+{
+  "name": "Tofu Glass",
+  "mode": "dark",
+  "surface": { "window": "#131218cc" },
+  "cards": {
+    "outer": { "fill": "#ffffff08", "border": "#ffffff14", "radius": 12, "gap": 3 },
+    "inner": { "fill": "#131218b3", "border": "#ffffff12", "radius": 10, "highlight": true, "sheen": "#ffffff1f" }
+  },
+  "toast": { "fill": "#1e1d24f5", "border": "#ffffff1f", "badge": "#ffffff0f" },
+  "text": {
+    "base": "#ffffffeb",
+    "muted": "#ffffff61",
+    "name": "#ffffffbf",
+    "icon": "#ffffff73",
+    "tab": "#ffffff8c",
+    "status": "#ffffff80",
+    "caption": "#ffffff9e",
+    "strong": "#ffffffff"
+  },
+  "status": { "accent": "#8fb4ff", "live": "#6ee0a4", "warn": "#f2c66d", "danger": "#ff7a86" },
+  "git": { "modified": "#deb04e", "added": "#52c68e", "deleted": "#f1737d", "untracked": "#66b0ec" },
+  "agents": {
+    "go-dev": "#79c0ff",
+    "ts-dev": "#b9a6ea",
+    "explore": "#8fd0aa",
+    "research": "#e8c98a",
+    "qa": "#f0a3b5",
+    "browser": "#86d4d4",
+    "py-dev": "#c7d97a"
+  },
+  "syntax": {
+    "keyword": "#c4a7f5",
+    "string": "#9fd8a4",
+    "number": "#f2b880",
+    "comment": "#ffffff59",
+    "function": "#8fc2ff",
+    "type": "#7fd6d0",
+    "variable": "#ffffffd9",
+    "constant": "#f2b880",
+    "operator": "#ffffffa6",
+    "punctuation": "#ffffff80"
+  },
+  "terminal": {
+    "ansi": {
+      "normal": {
+        "black": "#1e1d24",
+        "red": "#f1737d",
+        "green": "#52c68e",
+        "yellow": "#deb04e",
+        "blue": "#66b0ec",
+        "magenta": "#b9a6ea",
+        "cyan": "#86d4d4",
+        "white": "#d8d7de"
+      },
+      "bright": {
+        "black": "#5b5a63",
+        "red": "#ff9aa2",
+        "green": "#7fe0ae",
+        "yellow": "#f2cd7a",
+        "blue": "#8fc8f5",
+        "magenta": "#d2c4f5",
+        "cyan": "#a8e6e6",
+        "white": "#ffffff"
+      }
+    }
+  },
+  "diff": {
+    "added": { "line": "#52c68e1f", "word": "#52c68e4d" },
+    "removed": { "line": "#f1737d1f", "word": "#f1737d4d" }
+  },
+  "focus": { "ring": "#8fb4ffb3" },
+  "selection": "#8fb4ff40",
+  "scrollbar": "#ffffff26",
+  "shadow": "#00000066",
+  "state": {
+    "hover": "#ffffff0f",
+    "active": "#ffffff1a",
+    "disabled": "#ffffff40",
+    "caption_hover": "#ffffff14",
+    "close_hover": "#c42b1cff"
+  },
+  "account": { "from": "#6b7a8fff", "to": "#3a4250ff" },
+  "shape": { "density": "comfortable", "blur": 44, "font": "Geist", "mono": "Geist Mono" },
+  "tabs": { "active": "inner", "border": "none" }
+}

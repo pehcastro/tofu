@@ -1,14 +1,15 @@
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
-use desk_ui::component::{control, toast};
+use desk_ui::component::{control, inner_card, outer_card, toast};
+use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::{
     SIDEBAR_WIDTH, TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
     WINDOW_WIDTH,
 };
-use desk_ui::theme;
+use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     App, ClickEvent, Context, IntoElement, Render, Task, TitlebarOptions, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, rgba, size,
+    WindowOptions, div, prelude::*, px, size,
 };
 
 pub const WINDOW_TITLE: &str = "Tofu Desk";
@@ -85,7 +86,7 @@ impl Desk {
         cx.notify();
     }
 
-    fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn sidebar(theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .w(px(SIDEBAR_WIDTH))
             .flex_none()
@@ -94,12 +95,12 @@ impl Desk {
             .py_2p5()
             .px_2()
             .child(
-                control("open-project", Control::OpenProject.label())
+                control("open-project", Control::OpenProject.label(), theme)
                     .justify_start()
                     .px_2p5()
                     .py_1p5()
                     .rounded_lg()
-                    .text_color(rgba(theme::TEXT_MUTED))
+                    .text_color(theme.color(ColorToken::TextMuted))
                     .child(Control::OpenProject.label())
                     .on_click(Self::teller(Control::OpenProject, cx)),
             )
@@ -108,6 +109,8 @@ impl Desk {
 
 impl Render for Desk {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = ActiveTheme::theme(cx);
+        let problems = ActiveTheme::problems(cx);
         let toast_layer = self.toast.as_ref().map(|shown| {
             div()
                 .absolute()
@@ -119,6 +122,7 @@ impl Render for Desk {
                 .child(toast(
                     shown.control.tell().into(),
                     TELL_BADGE,
+                    &theme,
                     cx.listener(|desk, _: &ClickEvent, _, cx| {
                         desk.toast = None;
                         cx.notify();
@@ -130,18 +134,28 @@ impl Render for Desk {
             .relative()
             .flex()
             .flex_col()
-            .bg(rgba(theme::WINDOW))
+            .bg(theme.color(ColorToken::SurfaceWindow))
             .text_size(px(TEXT))
-            .text_color(rgba(theme::TEXT))
-            .child(crate::title_bar::render(self.sidebar_open, window, cx))
+            .text_color(theme.color(ColorToken::TextBase))
+            .child(crate::title_bar::render(
+                self.sidebar_open,
+                &theme,
+                window,
+                cx,
+            ))
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
                     .flex()
-                    .when(self.sidebar_open, |body| body.child(self.sidebar(cx))),
+                    .pr_2()
+                    .when(self.sidebar_open, |body| {
+                        body.child(Self::sidebar(&theme, cx))
+                    })
+                    .when(!self.sidebar_open, |body| body.pl_2())
+                    .child(outer_card(&theme).flex_1().child(inner_card(&theme))),
             )
-            .child(crate::status_bar::render(cx))
+            .child(crate::status_bar::render(&theme, &problems, cx))
             .children(toast_layer)
     }
 }

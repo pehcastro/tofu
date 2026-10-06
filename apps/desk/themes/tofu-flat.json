@@ -1,0 +1,11 @@
+{
+  "name": "Tofu Flat",
+  "extends": "tofu-glass",
+  "surface": { "window": "#17161cff" },
+  "cards": {
+    "outer": { "fill": "#1d1c22", "border": "none", "gap": 0 },
+    "inner": { "fill": "@cards.outer.fill", "border": "none", "highlight": false }
+  },
+  "toast": { "fill": "#24232a", "border": "none" },
+  "shape": { "blur": 0 }
+}

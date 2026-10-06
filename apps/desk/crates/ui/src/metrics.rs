@@ -1,3 +1,7 @@
+use std::time::Duration;
+
+pub const THEME_POLL: Duration = Duration::from_millis(250);
+pub const HAIRLINE: f32 = 1.0;
 pub const WINDOW_WIDTH: f32 = 1280.0;
 pub const WINDOW_HEIGHT: f32 = 800.0;
 pub const WINDOW_MIN_WIDTH: f32 = 720.0;
