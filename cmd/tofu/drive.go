@@ -27,6 +27,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
+	"tofu/internal/widget"
 )
 
 const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [ARM]
@@ -91,8 +92,13 @@ Steps:
   images       print how many images the last request's user message carried
   requests     print every request sent so far: its bytes, messages and tools as
                json, its tool count, a hash of its tools, and its tool_choice
-               when that is not auto
-  # NOTE       a note, skipped
+               when that is not auto, then one line per message: its role, the
+               bytes of its text, the id of each tool call it makes and of the
+               call it answers
+  requests text [N]  the same, with each message's text and tool calls under
+               it, each line cut at --width and every key masked as the session
+               log masks it; N prints only the Nth request sent
+  # NOTE      a note, skipped
 
 X and Y are zero-based cells: X counts columns and Y counts rows of the printed
 screen, both from 0 at its top left.
@@ -183,7 +189,32 @@ type cassette struct {
 	taken   map[string]int
 	callers map[string]string
 	last    llm.Request
-	sent    []string
+	sent    []sentRequest
+}
+
+type sentRequest struct {
+	summary  string
+	messages []llm.Message
+}
+
+type requestsForm struct {
+	text bool
+	only int
+}
+
+func readRequestsForm(text string) (requestsForm, error) {
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return requestsForm{}, nil
+	}
+	form := requestsForm{text: fields[0] == "text"}
+	if len(fields) == 2 {
+		form.only, _ = strconv.Atoi(fields[1])
+	}
+	if !form.text || len(fields) > 2 || len(fields) == 2 && form.only < 1 {
+		return requestsForm{}, fmt.Errorf("requests takes nothing, text, or text N, and was given %q", text)
+	}
+	return form, nil
 }
 
 func callerName(name string) string {
@@ -285,17 +316,49 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	if choice := request.ToolChoice.OpenAIValue(); choice != "" {
 		line += ", tool_choice " + choice
 	}
-	c.sent = append(c.sent, line)
+	c.sent = append(c.sent, sentRequest{summary: line, messages: slices.Clone(request.Messages)})
 	return c.decks[name][c.taken[name]-1], nil
 }
 
-func (c *cassette) requests() string {
+func (c *cassette) requests(form requestsForm, width int) string {
 	if c == nil {
 		return noRequest
 	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	return cmp.Or(strings.Join(c.sent, "\n"), noRequest)
+	if form.only > len(c.sent) {
+		return fmt.Sprintf("%d requests were sent, so there is no request %d", len(c.sent), form.only)
+	}
+	redactor := sys.LoadKeyRedactor()
+	var lines []string
+	for number, sent := range c.sent {
+		if form.only != 0 && form.only != number+1 {
+			continue
+		}
+		lines = append(lines, sent.summary)
+		for index, message := range sent.messages {
+			line := fmt.Sprintf("  message %d %s: %d bytes", index+1, message.Role, len(message.Content))
+			if message.ToolCallID != "" {
+				line += ", result of " + message.ToolCallID
+			}
+			var said []string
+			if message.Content != "" {
+				said = append(said, message.Content)
+			}
+			for _, call := range message.ToolCalls {
+				line += ", calls " + call.Name + " " + call.ID
+				said = append(said, call.Name+" "+string(call.Arguments))
+			}
+			lines = append(lines, line)
+			if !form.text {
+				continue
+			}
+			for _, one := range strings.Split(redactor.Redact(strings.Join(said, "\n")), "\n") {
+				lines = append(lines, widget.Fit("    "+one, width))
+			}
+		}
+	}
+	return cmp.Or(strings.Join(lines, "\n"), noRequest)
 }
 
 func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -671,7 +734,11 @@ func playStep(driver *filmstrip.Driver, deck *cassette, step filmstrip.Step, pla
 	case "images":
 		said = deck.images
 	case "requests":
-		said = deck.requests
+		form, err := readRequestsForm(step.Text)
+		if err != nil {
+			return err
+		}
+		said = func() string { return deck.requests(form, plan.width) }
 	default:
 		return driver.Play(step, plan.timeout, plan.plain, out)
 	}

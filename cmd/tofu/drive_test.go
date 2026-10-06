@@ -616,6 +616,56 @@ const cappedCassette = `{"text":"reading 1","tools":[{"name":"read","args":{"pat
 {"text":"the notes say note 1 to 4"}
 `
 
+const fakeKey = "sk-or-v1-0000fake0000fake0000"
+
+func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) {
+	dir := drivenProject(t)
+	deck := written(t, dir, "read.cassette", readingCassette)
+	script := written(t, dir, "roles.drive", strings.Join([]string{
+		"wait " + session.Placeholder,
+		"type read note.txt, the key is " + sys.OpenRouterKeyName + "=" + fakeKey,
+		"key enter",
+		"wait cooked for",
+		"requests",
+		"requests text 2",
+	}, "\n"))
+	var out, errOut bytes.Buffer
+	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "60"}, strings.NewReader(""), &out, &errOut); code != exitOK {
+		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
+	}
+	printed := out.String()
+	for _, want := range []string{
+		"  message 1 system: ",
+		", calls read cassette_1_1",
+		" tool: ",
+		", result of cassette_1_1",
+		"    read {\"path\":\"note.txt\"}",
+		sys.OpenRouterKeyName + "=" + sys.KeyRedactedMark,
+	} {
+		if !strings.Contains(printed, want) {
+			t.Errorf("requests never printed %q:\n%s", want, printed)
+		}
+	}
+	if strings.Contains(printed, fakeKey) {
+		t.Errorf("the text form printed the key the prompt held:\n%s", printed)
+	}
+	for _, line := range strings.Split(printed, "\n") {
+		if strings.HasPrefix(line, "    ") && len([]rune(line)) > 60 {
+			t.Errorf("a text line runs past the 60 column screen: %q", line)
+		}
+	}
+	if requests := strings.Count(printed, "the orchestrator request 2:"); requests != 2 {
+		t.Errorf("request 2 was printed %d times, wanted once by requests and once by requests text 2", requests)
+	}
+	if strings.Count(printed, "the orchestrator request 1:") != 1 {
+		t.Errorf("requests text 2 printed request 1 as well:\n%s", printed)
+	}
+	errOut.Reset()
+	if code := driveVerb([]string{written(t, dir, "bad.drive", "requests everything\n")}, strings.NewReader(""), &out, &errOut); code != exitUsage || !strings.Contains(errOut.String(), "line 1:") {
+		t.Errorf("requests everything exited %d: %s", code, errOut.String())
+	}
+}
+
 var requestLine = regexp.MustCompile(`^the orchestrator request (\d+): \d+ bytes, (\d+) tools ([0-9a-f]+)(, tool_choice none)?$`)
 
 func TestDrivenRequestsCarryTheSameToolsEachStepAndNoToolChoiceOnlyAtTheCap(t *testing.T) {

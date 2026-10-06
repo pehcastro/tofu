@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           43 matches
+Docs · "change the colours"                                           44 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -16,6 +16,8 @@ Docs · "change the colours"                                           43 matche
     → tofu docs cron
   The doctor
     → tofu docs doctor
+  Driving the app from a script
+    → tofu docs drive
   The gate
     → tofu docs gate
   Keys

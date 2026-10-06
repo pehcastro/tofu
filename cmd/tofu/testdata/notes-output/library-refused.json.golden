@@ -28,7 +28,7 @@ exit 1
     "subscriptions": 2,
     "roles": 0,
     "questions": 14,
-    "doc_pages": 16,
+    "doc_pages": 17,
     "doc_entries": 80,
     "proxy": "rtk",
     "proxy_from": "library",

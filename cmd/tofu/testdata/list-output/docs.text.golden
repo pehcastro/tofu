@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 80 asks                                                         16 topics
+Docs · 80 asks                                                         17 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -60,6 +60,9 @@ doctor  what tofu doctor checks, what each line it prints means, and what to
     → write use off in .tofu/tools/shell/proxy.yaml
   check the library files and these pages
     → tofu library
+
+drive  what tofu drive does, the steps a script takes, and what the requests
+  step prints
 
 files  every path tofu uses in your home and in a project, and which one wins
   where does tofu keep its files

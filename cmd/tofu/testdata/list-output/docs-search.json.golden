@@ -37,6 +37,10 @@ exit 0
         "do": "tofu docs doctor"
       },
       {
+        "text": "Driving the app from a script",
+        "do": "tofu docs drive"
+      },
+      {
         "text": "The gate",
         "do": "tofu docs gate"
       },

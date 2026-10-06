@@ -33,6 +33,11 @@ exit 0
         "summary": "what tofu doctor checks, what each line it prints means, and what to do about it"
       },
       {
+        "topic": "drive",
+        "title": "Driving the app from a script",
+        "summary": "what tofu drive does, the steps a script takes, and what the requests step prints"
+      },
+      {
         "topic": "files",
         "title": "Files tofu reads and writes",
         "summary": "every path tofu uses in your home and in a project, and which one wins"
