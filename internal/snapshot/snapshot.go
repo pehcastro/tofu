@@ -159,11 +159,19 @@ func (r Repo) Begin(ctx context.Context, turn string) error {
 }
 
 func (r Repo) End(ctx context.Context) error {
+	entries, err := r.entries()
+	if err != nil {
+		return err
+	}
 	tree, err := r.track(ctx)
 	if err != nil {
 		return err
 	}
-	return r.append(entry{End: tree})
+	closing := entry{End: tree}
+	if open := len(entries) - 1; open >= 0 && entries[open].End == "" {
+		closing.Turn = entries[open].Turn
+	}
+	return r.append(closing)
 }
 
 func (r Repo) Undo(ctx context.Context, ask Ask) (Report, error) {

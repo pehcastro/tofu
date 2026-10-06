@@ -19,6 +19,7 @@ type Log struct {
 	store   *Store
 	mu      sync.Mutex
 	file    *os.File
+	lock    *os.File
 	header  Header
 	seq     int
 	last    map[string]string
@@ -26,7 +27,7 @@ type Log struct {
 	redact  sys.KeyRedactor
 }
 
-func (s *Store) Open(header Header) (*Log, error) {
+func (s *Store) Open(header Header) (log *Log, err error) {
 	if header.ID == "" {
 		header.ID = NewEventID()
 	}
@@ -36,7 +37,19 @@ func (s *Store) Open(header Header) (*Log, error) {
 	if s.legacy(header.ID) {
 		header.CarriedFrom, header.ID = &Carried{Session: header.ID}, NewEventID()
 	}
-	log := &Log{store: s, last: map[string]string{}, prompts: map[string]string{}, redact: sys.LoadKeyRedactor()}
+	if err := os.MkdirAll(s.Dir(header.ID), 0o755); err != nil {
+		return nil, err
+	}
+	lock, err := s.lock(header.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil && lock != nil {
+			err = errors.Join(err, unlock(lock))
+		}
+	}()
+	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string]string{}, redact: sys.LoadKeyRedactor()}
 	kept, err := s.read(header.ID)
 	switch {
 	case err == nil:
@@ -47,9 +60,6 @@ func (s *Store) Open(header Header) (*Log, error) {
 	case errors.Is(err, fs.ErrNotExist):
 		log.header = s.fresh(header)
 	default:
-		return nil, err
-	}
-	if err := os.MkdirAll(s.Dir(log.header.ID), 0o755); err != nil {
 		return nil, err
 	}
 	file, err := os.OpenFile(filepath.Join(s.Dir(log.header.ID), eventsName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -179,8 +189,11 @@ func (l *Log) Edit(change func(*Header)) error {
 }
 
 func (l *Log) Close() error {
-	saved := l.save()
-	return errors.Join(saved, l.file.Close())
+	closed := errors.Join(l.save(), l.file.Close())
+	if l.lock == nil {
+		return closed
+	}
+	return errors.Join(closed, unlock(l.lock))
 }
 
 func (l *Log) save() error {

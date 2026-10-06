@@ -84,14 +84,15 @@ type sessionReadsReport struct {
 }
 
 type sessionResume struct {
-	Session     string `json:"session,omitempty"`
-	Name        string `json:"name,omitempty"`
-	Task        string `json:"task,omitempty"`
-	Outcome     string `json:"outcome,omitempty"`
-	Steps       int    `json:"steps"`
-	Carried     int    `json:"carried_messages"`
-	HeadDerived bool   `json:"head_derived,omitempty"`
-	Fresh       string `json:"fresh,omitempty"`
+	Session     string             `json:"session,omitempty"`
+	Name        string             `json:"name,omitempty"`
+	Task        string             `json:"task,omitempty"`
+	Outcome     string             `json:"outcome,omitempty"`
+	Steps       int                `json:"steps"`
+	Carried     int                `json:"carried_messages"`
+	HeadDerived bool               `json:"head_derived,omitempty"`
+	Fresh       string             `json:"fresh,omitempty"`
+	Busy        *session.BusyError `json:"busy,omitempty"`
 
 	messages []llm.Message
 	tasks    []string
@@ -211,7 +212,7 @@ func verbArgs(args []string) ([]string, bool, error) {
 }
 
 func startResumed(o verbOutput, carry sessionResume, in io.Reader) int {
-	if code := o.done(true, carry, func(page cli.Page) []string { return resumeLines(page, carry) }); code != exitOK || o.asJSON {
+	if code := o.done(carry.Busy == nil, carry, func(page cli.Page) []string { return resumeLines(page, carry) }); code != exitOK || o.asJSON {
 		return code
 	}
 	return appVerb(in, o.out, o.errOut, carry)
@@ -235,7 +236,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	if err != nil {
 		return sessionResume{}, err
 	}
-	return sessionResume{
+	carry := sessionResume{
 		Session:  row.ID,
 		Name:     row.Name,
 		Task:     row.Task,
@@ -244,7 +245,15 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 		Carried:  row.Carried,
 		messages: messages,
 		tasks:    row.tasks,
-	}, nil
+	}
+	var busy session.BusyError
+	switch err := store.Busy(row.ID); {
+	case errors.As(err, &busy):
+		carry.Busy = &busy
+	case err != nil:
+		return sessionResume{}, err
+	}
+	return carry, nil
 }
 
 func (carry sessionResume) taskIn(content string) string {
@@ -537,19 +546,24 @@ func resumeLines(page cli.Page, carry sessionResume) []string {
 		lines := append(page.Title("Resume", nil, cli.Verdict{Mark: cli.Idle, Text: "starts fresh"}), "")
 		return append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "reason", Text: carry.Fresh}})...)...)
 	}
-	carried, head := "none, starts over", ""
+	carried, head, writer := "none, starts over", "", ""
+	verdict := cli.Verdict{Mark: cli.Active, Text: cmp.Or(carry.Outcome, "open")}
 	if carry.Carried > 0 {
 		carried = countOf(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
 	}
 	if carry.HeadDerived {
 		head = "none written, took the newest"
 	}
-	lines := append(page.Title("Resume", []string{sessionHandle(carry.Session, carry.Name)}, cli.Verdict{Mark: cli.Active, Text: cmp.Or(carry.Outcome, "open")}), "")
+	if carry.Busy != nil {
+		verdict, writer = cli.Verdict{Mark: cli.Warn, Text: "busy, read only"}, carry.Busy.Error()
+	}
+	lines := append(page.Title("Resume", []string{sessionHandle(carry.Session, carry.Name)}, verdict), "")
 	return append(lines, cli.Indent(page.Facts([]cli.Fact{
 		{Label: "id", Text: carry.Session},
 		{Label: "task", Text: oneLine(carry.Task)},
 		{Label: "carried", Text: carried},
 		{Label: "head", Text: head},
+		{Label: "writer", Text: writer},
 	})...)...)
 }
 

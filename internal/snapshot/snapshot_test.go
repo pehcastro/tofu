@@ -132,6 +132,25 @@ func TestUndoPutsBackEveryKindOfChangeByteForByte(t *testing.T) {
 	}
 }
 
+func TestEveryEndInTheLedgerNamesTheTurnItCloses(t *testing.T) {
+	p := newProject(t)
+	p.turn("t1", func() { p.write("kept.txt", "one\n") })
+	p.turn("t2", func() { p.write("kept.txt", "two\n") })
+	raw, err := os.ReadFile(p.repo.path(ledgerName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ends []string
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if at := strings.Index(line, `"end":`); at >= 0 {
+			ends = append(ends, line[:at])
+		}
+	}
+	if !slices.Equal(ends, []string{`{"turn":"t1",`, `{"turn":"t2",`}) {
+		t.Errorf("the ledger's End entries start %q, want each to name t1 and t2\n%s", ends, raw)
+	}
+}
+
 func TestUndoRefusesAFileChangedAfterTheTurnByName(t *testing.T) {
 	p := newProject(t)
 	p.turn("t1", func() {
