@@ -7,14 +7,13 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, AnyView, App, AppContext, BoxShadow, Context, Div, Image, ImageFormat, IntoElement,
-    Render, SharedString, Stateful, Window, div, linear_color_stop, linear_gradient, point,
-    prelude::*, px,
+    Render, SharedString, Stateful, Window, div, point, prelude::*, px,
 };
 
 use fixture::{SHELLS, SUMMARY, Shell};
 use paint::{
-    ARROW, CLOSE, PROMPT, T2, T3, TRACE, TRACE_MARK, glyph, medium, mono, spacer, square, text,
-    tint, white,
+    ARROW, CLOSE, PROMPT, T2, T3, TRACE, TRACE_MARK, glyph, hex, medium, mono, spacer, square,
+    text, tint, white,
 };
 
 const BACKDROP: &[u8] = include_bytes!("../chat/assets/backdrop.jpg");
@@ -37,14 +36,20 @@ const CLOSE_TAB_SAYS: &str =
 struct Shells {
     backdrop: Arc<Image>,
     selected: usize,
+    menu: bool,
     told: Option<SharedString>,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    match board {
-        None | Some("IWY-9") => {}
-        Some(other) => return Err(format!("the shells module draws IWY-9, not {other}")),
-    }
+    let menu = match board {
+        None | Some("IWY-9") => false,
+        Some("S-WORK-7") => true,
+        Some(other) => {
+            return Err(format!(
+                "the shells module draws IWY-9 and S-WORK-7, not {other}"
+            ));
+        }
+    };
     cx.text_system()
         .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
         .map_err(|error| format!("the shells module cannot load the Geist fonts: {error}"))?;
@@ -53,6 +58,7 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
         .new(|_| Shells {
             backdrop,
             selected: 0,
+            menu,
             told: None,
         })
         .into())
@@ -185,7 +191,7 @@ impl Shells {
             .px(px(3.0))
             .pb(px(3.0))
             .rounded(px(12.0))
-            .bg(tint(0x07060a, 0.72))
+            .bg(hex(0x19181f))
             .shadow(vec![ring(white(0.06))])
             .child(
                 div()
@@ -209,11 +215,7 @@ impl Shells {
                     .flex_col()
                     .overflow_hidden()
                     .rounded(px(11.0))
-                    .bg(linear_gradient(
-                        180.0,
-                        linear_color_stop(white(0.05), 0.0),
-                        linear_color_stop(white(0.03), 1.0),
-                    ))
+                    .relative()
                     .shadow(top_line())
                     .child(
                         div()
@@ -236,7 +238,7 @@ impl Shells {
                             .min_h_0()
                             .flex()
                             .flex_col()
-                            .bg(white(0.05))
+                            .bg(white(0.045))
                             .child(self.details(shell, scale, cx))
                             .child(
                                 div()
@@ -249,8 +251,66 @@ impl Shells {
                                         mono(12.0, 19.0, white(0.68), *line).h(px(19.0))
                                     })),
                             ),
-                    ),
+                    )
+                    .when(self.menu, |inner| inner.child(self.menu(cx))),
             )
+    }
+
+    fn menu(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .absolute()
+            .left(px(8.0))
+            .top(px(38.0))
+            .w(px(440.0))
+            .p(px(6.0))
+            .rounded(px(12.0))
+            .bg(tint(0x1e1d24, 0.94))
+            .shadow(vec![
+                ring(white(0.12)),
+                BoxShadow {
+                    color: tint(0x000000, 0.6).into(),
+                    offset: point(px(0.0), px(22.0)),
+                    blur_radius: px(50.0),
+                    spread_radius: px(0.0),
+                    inset: false,
+                },
+            ])
+            .children(SHELLS.iter().enumerate().map(|(index, shell)| {
+                div()
+                    .id(("shell-menu-row", index))
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.0))
+                    .h(px(37.0))
+                    .px(px(10.0))
+                    .rounded(px(8.0))
+                    .when(index == self.selected, |row| row.bg(white(0.07)))
+                    .on_click(cx.listener(move |shells, _, _, cx| {
+                        shells.selected = index;
+                        shells.menu = false;
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .flex_none()
+                            .size(px(6.0))
+                            .rounded(px(3.0))
+                            .bg(shell.state.dot()),
+                    )
+                    .child(
+                        mono(12.0, 23.0, white(0.9), format!("shell-{}", index + 1))
+                            .flex_none()
+                            .w(px(58.0)),
+                    )
+                    .child(
+                        mono(12.0, 23.0, white(T2), shell.command)
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden(),
+                    )
+                    .child(text(12.0, 23.0, shell.ink, shell.by))
+            }))
     }
 
     fn toast(&self, scale: f32, cx: &mut Context<Self>) -> Option<AnyElement> {
