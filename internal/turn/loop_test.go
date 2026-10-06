@@ -3,6 +3,7 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -44,7 +45,7 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 		subAgentRuns              bool
 		leadRequests              int
 	}{
-		{name: "text in the spawn reply ends on that text", first: announcing, subAgentRuns: true, leadRequests: 1, endsOn: announcing.Content},
+		{name: "text in the spawn reply is said once, on the spawn's own message", first: announcing, subAgentRuns: true, leadRequests: 1, endsOn: announcing.Content},
 		{name: "no text ends on the line tofu writes", first: spawnCall("call-spawn", usersRoute, "src/users.ts"), subAgentRuns: true, leadRequests: 1, endsOn: "sub-1 running: " + usersRoute},
 		{name: "a read beside the spawn asks again", first: besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), subAgentRuns: true, leadRequests: 2, endsOn: "sub-1 is on it"},
 		{name: "a spawn that fails to start asks again", first: spawnCall("call-spawn", usersRoute), leadRequests: 2, endsOn: "sub-1 is on it"},
@@ -64,9 +65,18 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 			if c.subAgentRuns {
 				waitFor(t, "the sub-agent's answer", func() bool { return model.answered(usersRoute) == 1 })
 			}
-			last := row.Conversation[len(row.Conversation)-1]
-			if got := len(model.requests(leadKey)); got != c.leadRequests || last.Role != llm.RoleAssistant || last.Content != c.endsOn {
-				t.Errorf("the lead was asked %d times and ended on %s %q, want %d and %q", got, last.Role, last.Content, c.leadRequests, c.endsOn)
+			var last llm.Message
+			said := 0
+			for _, message := range row.Conversation {
+				if message.Role == llm.RoleAssistant {
+					last = message
+					if message.Content == c.endsOn {
+						said++
+					}
+				}
+			}
+			if got := len(model.requests(leadKey)); got != c.leadRequests || last.Content != c.endsOn || said != 1 {
+				t.Errorf("the lead was asked %d times and its last words were %q, said %d times, want %d and %q said once", got, last.Content, said, c.leadRequests, c.endsOn)
 			}
 		})
 	}
@@ -93,6 +103,33 @@ func TestSpawnsInOneReplyAreNamedInTheOrderOfTheirCalls(t *testing.T) {
 		if want := "sub-" + strings.TrimPrefix(spawned.Call, "call-"); spawned.ID != want {
 			t.Errorf("%s was named %s, want %s, the order of its call in the reply", spawned.Call, spawned.ID, want)
 		}
+	}
+}
+
+func TestTheTextBesideAToolCallIsInTheNextRequestAndMovesNoEarlierMessage(t *testing.T) {
+	thinking := llm.Thinking{Text: "the note may be long", Signature: "signed"}
+	reading := toolCallDecision(llm.ToolCall{ID: "call-1", Name: "noop", Arguments: json.RawMessage(`{"n":1}`)})
+	reading.Content, reading.Thinking = "reading the note first", thinking
+	blank := toolCallDecision(llm.ToolCall{ID: "call-2", Name: "noop", Arguments: json.RawMessage(`{"n":2}`)})
+	blank.Content = " \n"
+	model := &stubModel{decisions: []llm.Decision{reading, blank, messageDecision()}}
+	if _, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("noop")), Task: "read the note",
+		ResultBytesCap: 4096, ArtifactDir: t.TempDir(), NoLastWord: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(model.requests) != 3 {
+		t.Fatalf("the model was asked %d times, want 3", len(model.requests))
+	}
+	second, third := model.requests[1].Messages, model.requests[2].Messages
+	said := second[len(second)-2]
+	if said.Role != llm.RoleAssistant || said.Content != reading.Content || said.Thinking != thinking || len(said.ToolCalls) != 1 {
+		t.Errorf("request 2 carried the reply as %s %q thinking %+v with %d calls, want its text, thinking and call", said.Role, said.Content, said.Thinking, len(said.ToolCalls))
+	}
+	if !reflect.DeepEqual(third[:len(second)], second) {
+		t.Errorf("request 3 does not begin with request 2's messages, so the cached prefix moved")
+	}
+	if got := third[len(third)-2].Content; got != blank.Content {
+		t.Errorf("request 3 carried the blank reply's text as %q, want %q left for the wire to drop", got, blank.Content)
 	}
 }
 

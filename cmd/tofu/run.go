@@ -1232,8 +1232,12 @@ func wordsAfterLastCalls(row turn.Row) (string, bool) {
 	if len(row.Steps) == 0 || len(row.Steps[len(row.Steps)-1].ToolCalls) == 0 || len(row.Conversation) == 0 {
 		return "", false
 	}
-	last := row.Conversation[len(row.Conversation)-1]
-	return last.Content, last.Role == llm.RoleAssistant && strings.TrimSpace(last.Content) != ""
+	if last := row.Conversation[len(row.Conversation)-1]; last.Role == llm.RoleAssistant {
+		return last.Content, strings.TrimSpace(last.Content) != ""
+	}
+	step := row.Steps[len(row.Steps)-1]
+	onlySpawned := !slices.ContainsFunc(step.ToolCalls, func(call turn.ToolCallRow) bool { return call.SubAgentID == "" })
+	return step.AssistantText, onlySpawned && strings.TrimSpace(step.AssistantText) != ""
 }
 
 func printRunRow(out io.Writer, row turn.Row, askedAs, windows string) {

@@ -457,7 +457,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			keep(stepRow)
 
 		case llm.OutcomeToolCalls:
-			messages = append(messages, llm.Message{Role: llm.RoleAssistant, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
+			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 			flush()
 			if concluding != "" {
 				refuse(&stepRow, decision.ToolCalls, theTurnEndsOnACleanReport)
@@ -579,11 +579,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				return endAt(OutcomeLoopGuard, stopped, messages), nil
 			}
 			if started := startedSpawnsOnly(stepTools, stepRow.ToolCalls); config.SpawnedFrom == "" && len(started) > 0 {
-				announced := decision.Content
-				if strings.TrimSpace(announced) == "" {
-					announced = strings.Join(started, "\n")
+				if strings.TrimSpace(decision.Content) == "" {
+					messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: strings.Join(started, "\n")})
 				}
-				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: announced})
 				keep(stepRow)
 				return finish(OutcomeStopped), nil
 			}
