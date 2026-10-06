@@ -34,6 +34,9 @@ const (
 	FactSheetLines     = 64
 	CarryActLines      = 10
 
+	ForkTailTokens      = 20000
+	ForkTailRoomPercent = 50
+
 	CarryVolatileQueryKeys = "ref_fsid source_impression_id federated_search_session_id"
 	CarryVolatileQueryPart = "session"
 )

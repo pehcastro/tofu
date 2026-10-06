@@ -225,6 +225,104 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 	}
 }
 
+func forkStep(said string, results ...string) []llm.Message {
+	step := []llm.Message{{Role: llm.RoleAssistant, Content: said}}
+	for i, result := range results {
+		id := said + "-" + strconv.Itoa(i)
+		step[0].ToolCalls = append(step[0].ToolCalls, llm.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.go"}`)})
+		step = append(step, llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: result})
+	}
+	return step
+}
+
+func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages []llm.Message) (*Fork, []llm.Message) {
+	t.Helper()
+	artifacts, err := NewArtifacts(t.TempDir(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fork, begun, err := forkHistory(artifacts, budget, "fix the parser", slices.Clone(messages), forced, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tail := begun[3:]
+	if fork.TailMessages != len(tail) || !slices.EqualFunc(tail, messages[len(messages)-len(tail):], func(a, b llm.Message) bool {
+		return a.Content == b.Content && a.ToolCallID == b.ToolCallID && len(a.ToolCalls) == len(b.ToolCalls)
+	}) {
+		t.Fatalf("the fork records a tail of %d and keeps %d messages after the carry, want the end of the old history word for word", fork.TailMessages, len(tail))
+	}
+	called := map[string]bool{}
+	for i, message := range begun {
+		for _, call := range message.ToolCalls {
+			called[call.ID] = true
+			if !slices.ContainsFunc(begun[i+1:], func(m llm.Message) bool { return m.ToolCallID == call.ID }) {
+				t.Errorf("call %s is kept and its result is not", call.ID)
+			}
+		}
+		if message.Role == llm.RoleTool && !called[message.ToolCallID] {
+			t.Errorf("the result of %s is kept and its call is not", message.ToolCallID)
+		}
+		if len(message.Images) > 0 && i >= 3 {
+			t.Errorf("message %d in the tail carries an image the estimate never priced", i)
+		}
+	}
+	if budget.Crossed(artifacts.preview, historyOf(begun)) {
+		t.Errorf("the forked history is %d tokens against a %d target", budget.Tokens(artifacts.preview, historyOf(begun)), budget.Bands.Target())
+	}
+	if len(tail) > 0 && strings.Contains(fork.Carry.Text, "the last thing it said or did:\n"+messages[len(messages)-len(tail)].Content) {
+		t.Errorf("the carry repeats the last word the tail already holds:\n%s", fork.Carry.Text)
+	}
+	return fork, begun
+}
+
+func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing.T) {
+	budget := recall.Budget{}.At(20000, "a small budget to fork under")
+	small, large := strings.Repeat("a line of the parser\n", 10), strings.Repeat("a line of the parser\n", 300)
+	head := []llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "fix the parser", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}
+	history := func(steps ...[]llm.Message) []llm.Message {
+		return slices.Concat(append([][]llm.Message{head}, steps...)...)
+	}
+	for _, c := range []struct {
+		name     string
+		forced   ForkKind
+		messages []llm.Message
+		tail     int
+	}{
+		{"a tail that would start on a tool result", ForkContinuation,
+			history(forkStep("old", large), forkStep(large+"read the lexer", small), forkStep("read the grammar", small)), 2},
+		{"parallel tool calls in one step", ForkContinuation,
+			history(forkStep("old", large), forkStep("read three files at once", small, small, small)), 4},
+		{"a tail bigger than the budget on its own", ForkContinuation,
+			history(forkStep("old", small), forkStep("read the whole generated table", large, large)), 0},
+		{"an image in the tail", ForkContinuation,
+			history(forkStep("old", small), []llm.Message{{Role: llm.RoleUser, Content: "this one", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}, forkStep("read it", small)), 2},
+		{"a forced fork with almost no history", ForkAccountSpent,
+			history(forkStep("read the parser", small)), 2},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fork, _ := checkedFork(t, budget, c.forced, c.messages)
+			if fork.TailMessages != c.tail {
+				t.Errorf("kept %d messages after the carry, want %d", fork.TailMessages, c.tail)
+			}
+		})
+	}
+	t.Run("a second fork right after the first", func(t *testing.T) {
+		_, begun := checkedFork(t, budget, ForkContinuation, history(forkStep("old", large), forkStep("read the lexer", small), forkStep("read the grammar", small)))
+		artifacts, err := NewArtifacts(t.TempDir(), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next := append(slices.Clone(begun), forkStep("read the tests", small)...)
+		if budget.Crossed(artifacts.preview, historyOf(next)) {
+			t.Fatalf("one small step after the fork crosses the %d target again, so the turn forks every step", budget.Bands.Target())
+		}
+		fork, again := checkedFork(t, budget, ForkContinuation, next)
+		if slices.ContainsFunc(again[3:], func(m llm.Message) bool { return m.Content == begun[2].Content }) || fork.TailMessages == 0 {
+			t.Errorf("the second fork kept %d messages and the first carry among them is %v", fork.TailMessages, slices.ContainsFunc(again[3:], func(m llm.Message) bool { return m.Content == begun[2].Content }))
+		}
+	})
+}
+
 func TestCompactCarriedShrinksEveryOldResultAndTheNewSessionReadsBackShrunk(t *testing.T) {
 	big := strings.Repeat("a numbered line of a large file\n", 400)
 	read := func(id string) []llm.ToolCall {

@@ -86,6 +86,41 @@ func TestAForkCarriesTheLastInteractiveSnapshotOfEachTabWithItsUrl(t *testing.T)
 	}
 }
 
+func TestACarryBesideAHeldTailRepeatsNothingTheTailHoldsAndKeepsWhatItDropped(t *testing.T) {
+	page := func(step int, tool, args, body string) recall.Entry {
+		return recall.Entry{Step: step, Tool: tool, SupersedeKey: tool + " " + args, Text: web.Untrusted("Chrome tab", body)}
+	}
+	entries := []recall.Entry{
+		page(0, "browser_observe", `{"tab":2}`, "tab 2 https://stays.test/rooms/2 \"Two\"\n- button \"Reserve two\" [ref=e7]"),
+		page(1, "browser_observe", `{"tab":1}`, "tab 1 https://stays.test/s \"Search\"\n- button \"Filters\" [ref=e1]"),
+		{Step: 2, Text: "opening the filters"},
+		{Step: 2, Tool: "browser_act", SupersedeKey: `browser_act {"tab":1,"actions":[{"action":"click","ref":"e1"}]}`, Text: "1. click e1: a dialog opened\nran 1 of 1\n\n" + web.Untrusted("Chrome tab", "a dialog")},
+		page(3, "browser_observe", `{"tab":1}`, "tab 1 https://stays.test/s?filters=1 \"Filters\"\n- button \"Show 27\" [ref=e9]"),
+		{Step: 4, Text: "the filters are open"},
+	}
+	whole, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	beside, err := recall.DistilledCarry(recall.NewStore(t.TempDir()), recall.Config{}, recall.Conversation{Entries: entries, HeldWhole: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, held := range []string{"the last thing it said or did:\nthe filters are open", "the last browser actions it took", "tab 1 https://stays.test/s?filters=1 \"Filters\"\n"} {
+		if !strings.Contains(whole.Text, held) || strings.Contains(beside.Text, held) {
+			t.Errorf("%q is in the carry with no tail %v and beside the tail that holds it %v", held, strings.Contains(whole.Text, held), strings.Contains(beside.Text, held))
+		}
+	}
+	for _, kept := range []string{"\n- button \"Reserve two\" [ref=e7]", "fact: https://stays.test/s?filters=1 :: browser_observe"} {
+		if !strings.Contains(beside.Text, kept) {
+			t.Errorf("the carry beside the tail lost %q, which only the dropped history held or which the fact sheet indexes:\n%s", kept, beside.Text)
+		}
+	}
+	if strings.Contains(beside.Text, "\n- button \"Filters\" [ref=e1]") {
+		t.Errorf("the carry holds tab 1's older snapshot when its newest is in the tail:\n%s", beside.Text)
+	}
+}
+
 func TestAPageReadTwiceUnderAFreshRefFsidAndItsArtifactFetchKeyAsOnePage(t *testing.T) {
 	page := "https://www.airbnb.com/s/Atibaia/homes?adults=4&place_id=ChIJ&ref_fsid="
 	observe := func(step int, fsid string) recall.Entry {

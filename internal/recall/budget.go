@@ -51,6 +51,7 @@ type Conversation struct {
 	ToolSchemas  string
 	Facts        []string
 	Entries      []Entry
+	HeldWhole    int
 }
 
 type Occupancy struct {

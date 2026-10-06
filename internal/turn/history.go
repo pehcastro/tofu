@@ -31,6 +31,7 @@ type Fork struct {
 	TokensBefore  int          `json:"tokens_before"`
 	TokensAfter   int          `json:"tokens_after"`
 	BlockedMicros int64        `json:"blocked_micros"`
+	TailMessages  int          `json:"tail_messages,omitempty"`
 	Carry         recall.Carry `json:"carry"`
 }
 
@@ -375,31 +376,59 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 		kind = ForkContinuation
 	}
 	started := time.Now()
-	carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
-	if err != nil {
-		return nil, nil, err
-	}
 	counted := "this is fork " + strconv.Itoa(number)
 	if most > 0 {
 		counted += " of at most " + strconv.Itoa(most) + ", and the turn stops at the cap"
 	}
-	carry.Text = counted + ".\n" + carry.Text
-	var begun []llm.Message
+	var opening []llm.Message
 	for _, message := range messages {
 		if message.Role == llm.RoleSystem {
-			begun = append(begun, message)
+			opening = append(opening, message)
 		}
 	}
-	begun = append(begun,
-		llm.Message{Role: llm.RoleUser, Content: task},
-		llm.Message{Role: llm.RoleUser, Content: carry.Text})
+	opening = append(opening, llm.Message{Role: llm.RoleUser, Content: task})
+	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, error) {
+		ended.HeldWhole = len(tail)
+		carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
+		carry.Text = counted + ".\n" + carry.Text
+		return slices.Concat(opening, []llm.Message{{Role: llm.RoleUser, Content: carry.Text}}, tail), carry, err
+	}
+	begun, carry, err := carried(nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	room := (budget.Bands.Target() - budget.Tokens(artifacts.preview, historyOf(begun))) * konst.ForkTailRoomPercent / 100
+	if tail := messages[tailStart(artifacts.preview, messages, min(room, konst.ForkTailTokens)):]; len(tail) > 0 {
+		kept, keptCarry, err := carried(tail)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !budget.Crossed(artifacts.preview, historyOf(kept)) {
+			begun, carry = kept, keptCarry
+		}
+	}
 	return &Fork{
 		Kind:          kind,
 		TokensBefore:  recall.Measure(artifacts.preview, budget.Bands, ended).Total(),
 		TokensAfter:   recall.Measure(artifacts.preview, budget.Bands, historyOf(begun)).Total(),
 		BlockedMicros: time.Since(started).Microseconds(),
+		TailMessages:  len(begun) - len(opening) - 1,
 		Carry:         carry,
 	}, begun, nil
+}
+
+func tailStart(preview recall.Config, messages []llm.Message, room int) int {
+	start := len(messages)
+	floor := slices.IndexFunc(messages, func(message llm.Message) bool { return message.Role == llm.RoleAssistant })
+	if floor < 0 {
+		return start
+	}
+	for i := len(messages) - 1; i >= floor && len(messages[i].Images) == 0 && HistoryTokens(preview, messages[i:]) <= room; i-- {
+		if messages[i].Role != llm.RoleTool {
+			start = i
+		}
+	}
+	return start
 }
 
 func compactHistory(artifacts Artifacts, budget recall.Budget, step int, messages []llm.Message) (*Compaction, error) {

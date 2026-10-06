@@ -41,11 +41,17 @@ const (
 
 const carrySnapshots = "the last snapshot of each tab it worked in, as it came back, so the page need not be observed again before acting:\n"
 
+const carryHeldTail = "its last steps follow this message word for word, as they were sent.\n"
+
+func (c Conversation) heldFrom() int {
+	return len(c.Entries) - c.HeldWhole
+}
+
 func lastSnapshots(c Conversation) []string {
 	var tabs []string
-	newest := make(map[string]string)
-	for _, entry := range c.Entries {
-		lead, _, body := unwrapped(entry.Text)
+	newest := make(map[string]int)
+	for i, entry := range c.Entries {
+		_, _, body := unwrapped(entry.Text)
 		first, _, _ := strings.Cut(body, "\n")
 		fields := strings.Fields(first)
 		if !interactiveSnapshot(entry) || len(fields) < 2 || fields[0] != "tab" {
@@ -55,11 +61,14 @@ func lastSnapshots(c Conversation) []string {
 		if _, seen := newest[tab]; !seen {
 			tabs = append(tabs, tab)
 		}
-		newest[tab] = strings.TrimPrefix(entry.Text, lead)
+		newest[tab] = i
 	}
-	snapshots := make([]string, len(tabs))
-	for i, tab := range tabs {
-		snapshots[i] = newest[tab]
+	var snapshots []string
+	for _, tab := range tabs {
+		if at := newest[tab]; at < c.heldFrom() {
+			lead, _, _ := unwrapped(c.Entries[at].Text)
+			snapshots = append(snapshots, strings.TrimPrefix(c.Entries[at].Text, lead))
+		}
 	}
 	return snapshots
 }
@@ -86,7 +95,7 @@ func interactiveSnapshot(entry Entry) bool {
 
 func lastActs(c Conversation) []string {
 	var acts []string
-	for _, entry := range c.Entries {
+	for _, entry := range c.Entries[:c.heldFrom()] {
 		lines := ""
 		switch entry.Tool {
 		case "":
@@ -136,8 +145,11 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 			text.WriteString(strconv.Itoa(i+1) + ". " + act + "\n")
 		}
 	}
-	text.WriteString(carryLastWord)
-	text.WriteString(lastWord(c))
+	if said, at := lastWord(c); at < c.heldFrom() {
+		text.WriteString(carryLastWord + said)
+	} else {
+		text.WriteString(carryHeldTail)
+	}
 	return Carry{Text: text.String(), Facts: facts, Results: kept}, nil
 }
 
@@ -161,11 +173,11 @@ func oneLine(text string, limit int) string {
 	return line.String()
 }
 
-func lastWord(c Conversation) string {
+func lastWord(c Conversation) (string, int) {
 	for i := len(c.Entries) - 1; i >= 0; i-- {
 		if c.Entries[i].Tool == "" && strings.TrimSpace(c.Entries[i].Text) != "" {
-			return c.Entries[i].Text
+			return c.Entries[i].Text, i
 		}
 	}
-	return ""
+	return "", -1
 }
