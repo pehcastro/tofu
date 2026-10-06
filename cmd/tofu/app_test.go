@@ -2270,7 +2270,11 @@ func TestAParkedSubAgentsReportReachesThePanelWhenTheTurnIsStoppedAndNeverAsksAg
 	if len(done) != 1 || len(done[0].SubAgents) == 0 {
 		t.Fatalf("the stopped turn closed with %+v, want one close carrying the sub-agent", done)
 	}
-	last := done[0].SubAgents[0]
+	told := driver.of(tui.EventSubAgent)
+	if len(told) == 0 || len(told[len(told)-1].SubAgents) == 0 {
+		t.Fatal("the panel was never told the sub-agents once the stopped turn settled")
+	}
+	last := told[len(told)-1].SubAgents[0]
 	if last.State != roster.Parked || last.Report == "" {
 		t.Fatalf("the panel was last told %+v, want a parked sub-agent carrying the report the roster holds", last)
 	}

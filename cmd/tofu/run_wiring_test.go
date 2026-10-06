@@ -570,7 +570,7 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 	var decisions []llm.Decision
 	for i := range 10 {
 		name := "part-" + strconv.Itoa(i) + ".txt"
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat("x", 20000)), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat(strings.Repeat("x", 99)+"\n", 200)), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
