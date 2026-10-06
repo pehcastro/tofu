@@ -257,11 +257,15 @@
 - ask: stop a server an agent left running
   do: tofu shells stop <name>
   check: tofu shells list
-  topic: sessions
+  topic: shells
 - ask: read the output of a running shell
   do: tofu shells log <name>
   check: tofu shells list
-  topic: sessions
+  topic: shells
+- ask: why a long build moved to a background shell
+  do: tofu docs shells
+  check: tofu shells list
+  topic: shells
 - ask: see the Claude Code and codex hooks tofu runs here
   do: tofu hooks
   check: tofu hooks --json

@@ -2,7 +2,7 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
@@ -27,9 +27,22 @@ PowerShell. Elsewhere it's `$SHELL`, or `/bin/sh`. The `shell` setting or
 
 ## Limits, guards and background servers
 
-A command is killed after 120 s by default and 600 s at most, so a hung
-command can't hold the turn, and the model still gets what it printed before
-the limit. A command that prints a lot keeps its first and last 32 KiB while
+A command still running after 30 s, such as a long build, moves to a
+background shell instead of holding the call. The call returns its name, such
+as `bash-3`, and what it printed so far, and the command keeps running on the
+**shells** tab. The model reads it back with `shell wait`, which returns when
+the command ends or after another 30 s, with its exit code and last lines.
+Nothing is killed at a deadline, so a 10 minute build is not lost at 10
+minutes. A `timeout_ms` of 30,000 or less is a hard limit instead: the
+command is killed there and returns what it printed.
+
+When a command names its own log file, such as `-Log target/build.log`,
+`> build.log` or `tee build.log`, its row on the **shells** tab and
+`shell logs` also show the end of that file, so a build that prints nothing
+to the console is still visible. Only a path written in the command counts,
+not one a script computes inside itself.
+
+A command that prints a lot keeps its first and last 32 KiB while
 it runs, and says how many bytes it dropped from the middle. tofu probes the project's interpreters once, in
 the background, and refuses a command that names one missing from `PATH`
 rather than letting it fail as `not found`. The probe used to block: building
@@ -70,10 +83,10 @@ stop them there or from the command line.
 | Tool | Parameter | What it does |
 |---|---|---|
 | `bash` | `command` | the command to run |
-| `bash` | `timeout_ms` | the limit, up to 600,000 |
+| `bash` | `timeout_ms` | a hard limit, only when 30,000 or less |
 | `bash` | `background` | keep a server or watcher alive |
 | `bash` | `check_port` | who holds a port, without an HTTP request |
-| `shell` | `op` | `stop`, `restart`, or `logs` for the last 200 lines |
+| `shell` | `op` | `wait` until it ends, `logs` for the last 200 lines, `stop`, or `restart` |
 | `shell` | `name` | the name `bash` returned, such as `bash-1` |
 
 ## Commands

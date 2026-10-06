@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 84 asks                                                         19 topics
+Docs · 85 asks                                                         20 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -159,10 +159,6 @@ sessions  continue where you left off, find an old session, and where sessions
     → tofu session rename <name|id> "<new name>"
   see how full the context window got
     → tofu context
-  stop a server an agent left running
-    → tofu shells stop <name>
-  read the output of a running shell
-    → tofu shells log <name>
 
 settings  every setting, its default, what it takes, and how to change it
   run commands without asking me first
@@ -203,6 +199,15 @@ settings  every setting, its default, what it takes, and how to change it
     → tofu settings set --scope project <key> <value>
   see every setting and where it came from
     → tofu settings
+
+shells  why a long build moves to a background shell, how the model reads it
+  back, and what its row shows
+  stop a server an agent left running
+    → tofu shells stop <name>
+  read the output of a running shell
+    → tofu shells log <name>
+  why a long build moved to a background shell
+    → tofu docs shells
 
 skills  where tofu finds skills, how to add one for every project or for one,
   and how to turn skills off

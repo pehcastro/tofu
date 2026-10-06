@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 type State string
@@ -213,27 +215,39 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		return Yielded{}, err
 	}
 	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: time.Now()}}
-	poll := time.NewTicker(wait.Poll)
-	defer poll.Stop()
+	exited := func(waitErr error) (Yielded, error) {
+		_ = logFile.Close()
+		spawned.release()
+		output, readErr := os.ReadFile(r.logPath(name))
+		_ = os.Remove(r.logPath(name))
+		ended, code := time.Now(), exitCode(waitErr)
+		got.Shell.State, got.Shell.Ended, got.Shell.ExitCode = Exited, &ended, &code
+		got.Output, got.Ready, got.Took = Decode(output), ReadyExited, time.Since(got.Shell.Started)
+		return got, readErr
+	}
+	var polled <-chan time.Time
+	if wait.Poll > 0 {
+		poll := time.NewTicker(wait.Poll)
+		defer poll.Stop()
+		polled = poll.C
+	}
 	gaveUp := time.After(wait.Within)
 	for got.Ready == "" {
 		select {
 		case waitErr := <-waited:
-			_ = logFile.Close()
-			spawned.release()
-			output, readErr := os.ReadFile(r.logPath(name))
-			_ = os.Remove(r.logPath(name))
-			ended, code := time.Now(), exitCode(waitErr)
-			got.Shell.State, got.Shell.Ended, got.Shell.ExitCode = Exited, &ended, &code
-			got.Output, got.Ready, got.Took = Decode(output), ReadyExited, time.Since(got.Shell.Started)
-			return got, readErr
+			return exited(waitErr)
 		case <-gaveUp:
 			got.Ready = ReadyWaited
 		case <-ctx.Done():
 			got.Ready = ReadyStopped
-		case <-poll.C:
+		case <-polled:
 			got.Ready = r.readiness(name, wait)
 		}
+	}
+	select {
+	case waitErr := <-waited:
+		return exited(waitErr)
+	default:
 	}
 	got.Took = time.Since(got.Shell.Started)
 	err = r.keep(got.Shell, spawned, waited, logFile)
@@ -358,25 +372,81 @@ func (r *Registry) List() ([]Shell, error) {
 	return shells, nil
 }
 
+func (r *Registry) AwaitEnd(ctx context.Context, name string, within time.Duration) (Shell, error) {
+	poll := time.NewTicker(konst.ReadyPollMillis * time.Millisecond)
+	defer poll.Stop()
+	gaveUp := time.After(within)
+	for {
+		entry, err := r.Read(name)
+		if err != nil || entry.State != Running {
+			return entry, err
+		}
+		select {
+		case <-poll.C:
+		case <-gaveUp:
+			return entry, nil
+		case <-ctx.Done():
+			return entry, nil
+		}
+	}
+}
+
 func (r *Registry) Tail(name string, lines int) (string, error) {
-	if _, err := r.Read(name); err != nil {
+	entry, err := r.Read(name)
+	if err != nil {
 		return "", err
 	}
 	raw, err := os.ReadFile(r.logPath(name))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
+	parts := []string{lastLines(raw, lines)}
+	for _, path := range namedLogs(entry.Dir, entry.Command) {
+		if named := lastLines(readEnd(path), lines); named != "" {
+			parts = append(parts, path+", which the command writes to, ends:\n"+named)
+		}
+	}
+	return strings.TrimLeft(strings.Join(parts, "\n\n"), "\n"), nil
+}
+
+func lastLines(raw []byte, lines int) string {
 	if strings.TrimSpace(string(raw)) == "" {
-		return "", nil
+		return ""
 	}
-	all := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
-	if len(all) > lines {
-		all = all[len(all)-lines:]
+	all := strings.Split(strings.TrimRight(Decode(raw), "\r\n"), "\n")
+	return strings.Join(all[max(0, len(all)-lines):], "\n")
+}
+
+func readEnd(path string) []byte {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil
 	}
-	return strings.Join(all, "\n"), nil
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil || info.IsDir() {
+		return nil
+	}
+	raw := make([]byte, min(info.Size(), konst.ShellNamedLogBytes))
+	n, _ := file.ReadAt(raw, info.Size()-int64(len(raw)))
+	return raw[:n]
+}
+
+func namedLogs(dir, command string) []string {
+	var paths []string
+	for _, match := range regexp.MustCompile(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`).FindAllStringSubmatch(command, -1) {
+		path := match[1]
+		if slices.Contains([]string{"/dev/null", "$null", "nul"}, strings.ToLower(path)) {
+			continue
+		}
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(dir, path)
+		}
+		if !slices.Contains(paths, path) {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 var ErrNotRunning = errors.New("shell: not running")

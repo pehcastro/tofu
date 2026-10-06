@@ -12,6 +12,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Fixed
 
+- **A long command moves to a background shell instead of being killed.** A bash call still running after 30 s returns with the shell's name and its output so far, and the command keeps running. `shell wait` waits for it to end. Sub-agents get the `shell` tool wherever they get `bash`. A shell's row shows the tail of a log file the command names.
+
 - **A fork happens near the target, and keeps the steps the model was in.** A ceiling set with `TOFU_CONTEXT_CEILING` or `--context-ceiling` used to fork at 25% of it; it now forks at 80%, as a ceiling taken from the model's window does. A fork keeps the newest step whole when it fits, and the trace records the count that decided it.
 
 ### Added

@@ -193,6 +193,10 @@ exit 0
         "do": "tofu docs settings"
       },
       {
+        "text": "Shells and long commands",
+        "do": "tofu docs shells"
+      },
+      {
         "text": "Skills",
         "do": "tofu docs skills"
       }

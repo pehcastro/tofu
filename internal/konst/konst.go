@@ -134,6 +134,8 @@ const (
 	BashWaitDelayMillis   = 1000
 	BashOutputHeldBytes   = 65536
 	BackgroundYieldMillis = 10000
+	BashSoftLimitMillis   = 30000
+	ShellNamedLogBytes    = 65536
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000

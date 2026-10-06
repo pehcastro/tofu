@@ -3,12 +3,16 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"tofu/internal/shell"
@@ -37,6 +41,38 @@ func TestBashTimeoutKeepsTheOutputItHad(t *testing.T) {
 	result := runBash(t, newBash(t), map[string]any{"command": "echo partial; sleep 5", "timeout_ms": 2000})
 	if !strings.Contains(result.Content, "partial") || result.Outcome == ResultSucceeded || !strings.Contains(result.FailureText, "2000 ms") {
 		t.Fatalf("outcome %v, content %q, failure %q", result.Outcome, result.Content, result.FailureText)
+	}
+}
+
+func TestABashCallPastTheSoftLimitReturnsAShellNameAndTheCommandKeepsRunning(t *testing.T) {
+	tool := newBash(t)
+	tool.softLimit = time.Second
+	registry := shell.OpenAt(t.TempDir())
+	ctx := WithShellRegistry(context.Background(), registry)
+	command := "echo building; sleep 4; echo built > marker"
+	raw, _ := json.Marshal(map[string]any{"command": command})
+	started := time.Now()
+	result, err := tool.Run(ctx, raw)
+	took := time.Since(started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := regexp.MustCompile(`bash-\d+`).FindString(result.Content)
+	t.Cleanup(func() { _ = registry.Kill(name) })
+	running, readErr := registry.Read(name)
+	if name == "" || readErr != nil || running.State != shell.Running || took > 3*time.Second || !strings.Contains(result.Content, "building") {
+		t.Fatalf("after %v the call came back %q, shell %q read as %+v (%v), want an early return naming a running shell with the output so far", took, result.Content, name, running, readErr)
+	}
+	marker := filepath.Join(string(tool.root), "marker")
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the marker exists already, so the command ended before the call returned")
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for _, err := os.Stat(marker); err != nil; _, err = os.Stat(marker) {
+		if time.Now().After(deadline) {
+			t.Fatal("the moved command never wrote its marker, so it did not keep running")
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

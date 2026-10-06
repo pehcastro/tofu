@@ -753,6 +753,9 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 
 func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn) Config {
 	offered := func(name string) bool {
+		if name == ShellToolName {
+			name = bashToolName
+		}
 		return len(held.definition.Tools) == 0 || slices.Contains(held.definition.Tools, name)
 	}
 	var owned []Tool

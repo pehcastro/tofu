@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/shell"
 	"tofu/internal/turn"
@@ -18,14 +20,15 @@ func (Shells) Name() string { return turn.ShellToolName }
 func (Shells) Definition() llm.Tool {
 	return llm.Tool{
 		Name: turn.ShellToolName,
-		Description: "controls a process bash started with background: true, by the name that call returned, such as bash-1. " +
-			"stop kills its whole process tree, children included, so the port it held is free when this returns. " +
-			"restart stops it and starts the same command in the same folder under the same name. " +
-			"logs returns the last lines it printed. never stop a server with kill, taskkill or pkill",
+		Description: fmt.Sprintf("controls a process bash kept running, by the name that call returned, such as bash-1: a background: true start, or a command bash moved to a background shell because it was still running. "+
+			"wait returns as soon as it ends, or after %d ms, with whether it is still running, its exit code and its last lines: call it again to keep waiting on a long build, never sleep in bash. "+
+			"logs returns the last lines it printed now, and the end of a log file its command names, such as -Log build.log or > build.log. "+
+			"stop kills its whole process tree, children included, so the port it held is free when this returns. "+
+			"restart stops it and starts the same command in the same folder under the same name. never stop a server with kill, taskkill or pkill", konst.BashSoftLimitMillis),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"op":   map[string]any{"type": "string", "enum": []string{"stop", "restart", "logs"}},
+				"op":   map[string]any{"type": "string", "enum": []string{"wait", "logs", "stop", "restart"}},
 				"name": map[string]any{"type": "string", "description": "the shell's name, as bash returned it"},
 			},
 			"required": []string{"op", "name"},
@@ -64,6 +67,25 @@ func (Shells) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 			return turn.Result{}, fmt.Errorf("shell: %w", err)
 		}
 		return turn.Result{Content: tail, Command: command}, nil
+	case "wait":
+		ended, err := registry.AwaitEnd(ctx, args.Name, konst.BashSoftLimitMillis*time.Millisecond)
+		if err != nil {
+			return turn.Result{}, fmt.Errorf("shell: %w", err)
+		}
+		tail, err := registry.Tail(args.Name, shell.DefaultTail)
+		if err != nil {
+			return turn.Result{}, fmt.Errorf("shell: %w", err)
+		}
+		state := fmt.Sprintf("%s is still running after %s: wait again, or stop it", args.Name, time.Since(ended.Started).Round(time.Second))
+		switch {
+		case ended.State == shell.Killed:
+			state = args.Name + " was stopped"
+		case ended.ExitCode != nil:
+			state = fmt.Sprintf("%s exited %d", args.Name, *ended.ExitCode)
+		case ended.State == shell.Exited:
+			state = args.Name + " ended, with an exit code tofu did not see"
+		}
+		return turn.Result{Content: state + ". its last lines:\n" + tail, Command: command, ExitCode: ended.ExitCode}, nil
 	}
-	return turn.Result{}, fmt.Errorf("shell: op %q is not stop, restart or logs", args.Op)
+	return turn.Result{}, fmt.Errorf("shell: op %q is not wait, logs, stop or restart", args.Op)
 }

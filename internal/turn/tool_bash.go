@@ -25,9 +25,10 @@ import (
 )
 
 type BashTool struct {
-	root   Root
-	choice shell.Choice
-	probe  *toolchainProbe
+	root      Root
+	choice    shell.Choice
+	probe     *toolchainProbe
+	softLimit time.Duration
 }
 
 type shellRegistryKey struct{}
@@ -65,7 +66,7 @@ func NewBashToolCached(root string, cache *ToolchainCache) (*BashTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &BashTool{root: resolved, choice: choice, probe: probe}, nil
+	return &BashTool{root: resolved, choice: choice, probe: probe, softLimit: konst.BashSoftLimitMillis * time.Millisecond}, nil
 }
 
 type toolchainProbe struct {
@@ -147,7 +148,7 @@ func NewBashToolFromShell(root string, shell RunShell) (*BashTool, error) {
 		return nil, err
 	}
 	probe := shell.cache.probeFor(string(resolved), shell.runner(), konst.ToolchainProbeTimeoutMillis*time.Millisecond)
-	return &BashTool{root: resolved, choice: shell.choice, probe: probe}, nil
+	return &BashTool{root: resolved, choice: shell.choice, probe: probe, softLimit: konst.BashSoftLimitMillis * time.Millisecond}, nil
 }
 
 func shellLinesFromShell(dir string, shell RunShell) []string {
@@ -272,7 +273,10 @@ const (
 	ShellToolName = "shell"
 )
 
-const commandExited = "the command exited %d\n"
+const (
+	commandExited         = "the command exited %d\n"
+	cancelledWhileRunning = "bash: %q was cancelled elsewhere in this turn while it was running, not because the command itself failed. its output so far is kept above"
+)
 
 const exitCommandNotFound = 127
 const exitFoundButNotExecutable = 126
@@ -293,7 +297,8 @@ func (t *BashTool) Name() string { return bashToolName }
 func (t *BashTool) Definition() llm.Tool {
 	description := fmt.Sprintf(
 		"runs one command in %s and waits for it to exit. cwd is already the working directory named in the environment block: spell paths that way, no cd. a nonzero exit is reported with its code. "+
-			"a command is killed after %d ms and returns the output it printed until then, so a long one has to be narrowed or given a larger timeout_ms, up to %d. "+
+			"a command still running after %d ms, such as a long build or test run, moves to a background shell and keeps running: the call returns its name, such as bash-1, and the output so far, and the shell tool's wait reads it back until it ends. "+
+			"never wait on a running command with another bash call, such as sleep, Wait-Process or a polling loop: use shell wait. a timeout_ms at or under %d is a hard limit instead: the command is killed there and returns what it printed. "+
 			"do not use it to walk the tree: find, ls -R and wc descend into every ignored directory and take minutes here, "+
 			"while glob, search and project_report skip what .gitignore skips and answer in milliseconds. "+
 			"background: true is for long work that keeps running and nothing else: a dev server, a watcher, a long-running script. "+
@@ -304,7 +309,7 @@ func (t *BashTool) Definition() llm.Tool {
 			"start the server itself as the whole command, with no & and no nohup, so the process kept is the one that serves. "+
 			"stop, restart and read a kept process with the shell tool by its name, never with kill, taskkill or pkill: a kill of a pid tofu started runs as shell stop. "+
 			"check whether a port is taken with check_port, which dials it on 127.0.0.1 and ::1 and names the process holding it, no http request needed.",
-		t.choice.Label, konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis, konst.BackgroundYieldMillis)
+		t.choice.Label, t.softLimit.Milliseconds(), t.softLimit.Milliseconds(), konst.BackgroundYieldMillis)
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
 	}
@@ -315,7 +320,7 @@ func (t *BashTool) Definition() llm.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"command":    map[string]any{"type": "string", "description": "required unless check_port is set"},
-				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("how long the command may run before it is killed, %d by default and %d at most. a larger number runs at the cap and says so rather than being refused", konst.BashDeadlineMillis, konst.BashMaxDeadlineMillis)},
+				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("only for a command that must be killed early: at or under %d it is killed at this limit. a larger value, or none, lets a command still running at %d ms move to a background shell", t.softLimit.Milliseconds(), t.softLimit.Milliseconds())},
 				"background": map[string]any{"type": "boolean", "description": fmt.Sprintf("only for long work that keeps running: a dev server, a watcher, a long-running script. never a test or a one-shot command. waits up to %d ms, returns the output if it ended by then, and otherwise keeps it running on the shells screen, where it outlives the turn", konst.BackgroundYieldMillis)},
 				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port is free or held on 127.0.0.1 and ::1, with the pid and command line of its holder, without any http request"},
 			},
@@ -397,6 +402,37 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	return exitedResult(args.Command, got.Output, *ran.ExitCode, fmt.Sprintf(
 		"bash: this ended inside the %d ms a background start waits, so nothing was kept on the shells screen: a command that ends belongs in bash without background\n",
 		konst.BackgroundYieldMillis)), nil
+}
+
+func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string) (Result, error) {
+	got, err := registry.YieldReady(ctx, t.command(context.Background(), command), command, shellOwnerFrom(ctx), shell.Wait{Within: t.softLimit})
+	if err != nil {
+		return Result{}, fmt.Errorf("bash: %w", err)
+	}
+	ran := got.Shell
+	switch got.Ready {
+	case shell.ReadyExited:
+		output := &heldOutput{}
+		_, _ = output.Write([]byte(got.Output))
+		text, dropped := output.text()
+		return exitedResult(command, text, *ran.ExitCode, dropped+corrected), nil
+	case shell.ReadyStopped:
+		return Result{
+			Content:     got.Output,
+			Command:     command,
+			Outcome:     ResultAborted,
+			FailureText: fmt.Sprintf(cancelledWhileRunning, command),
+		}, registry.Kill(ran.Name)
+	}
+	soFar, _ := registry.Tail(ran.Name, shell.DefaultTail)
+	return Result{
+		Content: fmt.Sprintf("%s is still running after %d ms, so it moved to a background shell as pid %d instead of holding this call. it was not killed and keeps running, listed on the shells screen. "+
+			"read it back with the shell tool: wait %s returns as soon as it ends, or after %d ms, with its exit code and last lines; logs %s returns its last lines now. "+
+			"never wait on it with another bash call. its output so far:\n%s",
+			ran.Name, got.Took.Milliseconds(), ran.PID, ran.Name, t.softLimit.Milliseconds(), ran.Name, soFar),
+		Command: "background " + ran.Name + ": " + command,
+		Outcome: ResultSucceeded,
+	}, nil
 }
 
 func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
@@ -508,6 +544,9 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 
 	deadline, corrected := bashDeadline(args.TimeoutMS)
+	if registry := ShellRegistryFrom(ctx); registry != nil && time.Duration(deadline)*time.Millisecond > t.softLimit {
+		return t.runOrMove(ctx, registry, args.Command, corrected)
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(deadline)*time.Millisecond)
 	defer cancel()
 
@@ -533,11 +572,10 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	}
 	if ctx.Err() != nil {
 		return Result{
-			Content: note + text,
-			Command: args.Command,
-			Outcome: ResultAborted,
-			FailureText: fmt.Sprintf("bash: %q was cancelled elsewhere in this turn while it was running, not because the command itself failed. "+
-				"its output so far is kept above", args.Command),
+			Content:     note + text,
+			Command:     args.Command,
+			Outcome:     ResultAborted,
+			FailureText: fmt.Sprintf(cancelledWhileRunning, args.Command),
 		}, nil
 	}
 	if cmd.ProcessState == nil {
