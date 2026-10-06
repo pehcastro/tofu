@@ -815,6 +815,7 @@ type heldSubAgent struct {
 	inbox       *Inbox
 	trace       spawnTrace
 	history     []llm.Message
+	restored    bool
 	running     bool
 	check       *checkIn
 	cancel      context.CancelFunc
@@ -928,6 +929,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		text = agent.ID + " ran" + runs + "\n\n" + text
 	}
 	t.roster.Reached(agent.ID, state, text)
+	held.agent.State = state
 	if runErr != nil && state != subagent.Parked {
 		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text)
 	}
@@ -1013,7 +1015,11 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	case posted:
 		return Result{Content: args.To + " is running and reads this at its next step. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
 	}
-	opened, err := t.open(held.definition, held.effort)
+	err = t.recompose(held)
+	var opened SubAgentModel
+	if err == nil {
+		opened, err = t.open(held.definition, held.effort)
+	}
 	if err == nil {
 		t.tree.mu.Lock()
 		err = t.rehold(held.agent)

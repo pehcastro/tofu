@@ -37,6 +37,7 @@ const (
 	EventRead       EventKind = "read"
 	EventNotice     EventKind = "notice"
 	EventListChange EventKind = "list_change"
+	EventReport     EventKind = "report"
 )
 
 type NoticeBody struct {
@@ -91,6 +92,11 @@ type SpawnBody struct {
 	Mission    string   `json:"mission,omitempty"`
 	Owns       []string `json:"owns,omitempty"`
 	Depth      int      `json:"depth"`
+}
+
+type ReportBody struct {
+	State string `json:"state"`
+	Text  string `json:"text"`
 }
 
 type AgentEndBody struct {

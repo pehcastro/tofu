@@ -36,7 +36,7 @@ func (s Settings) view(events []Event) ([]Event, error) {
 	for _, event := range events {
 		author := cmp.Or(event.Author, event.Agent, AuthorOrchestrator)
 		switch event.Kind {
-		case EventToolCall, EventCompaction, EventTurnStart, EventSpawn, EventAgentEnd:
+		case EventToolCall, EventCompaction, EventTurnStart, EventSpawn, EventAgentEnd, EventReport:
 		case EventMessage:
 			if made := madeBy[event.ID]; event.Request != "" && len(made) > 0 {
 				message := objectOf(event.Body)

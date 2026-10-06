@@ -248,6 +248,11 @@ func (b *Inbox) ended(held *heldSubAgent, report string, stopping bool, log *ses
 	if report != "" {
 		b.items = append(b.items, inboxItem{text: report, source: sourceReport, posted: time.Now()})
 	}
+	if report != "" && log != nil {
+		if _, err := log.Append(session.Event{Agent: held.agent.ID, Kind: session.EventReport}, session.ReportBody{State: held.agent.State.String(), Text: report}); err != nil {
+			b.unclosed = append(b.unclosed, err)
+		}
+	}
 	if err := b.releasing(log); err != nil {
 		b.unclosed = append(b.unclosed, err)
 	}

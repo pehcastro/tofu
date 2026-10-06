@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
+	"tofu/internal/session"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/library"
@@ -212,6 +214,134 @@ func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T)
 	}
 	if answered := reported(t, spawn); !strings.Contains(answered, "sub-agent sub-1 is ") || model.asked != 4 {
 		t.Errorf("a message to sub-1 did not reach the agent:\n%s", answered)
+	}
+}
+
+const ordersRoute = "add the orders route"
+
+func sessionWithTwoFinishedSubAgents(t *testing.T) (*session.Store, string) {
+	t.Helper()
+	users, err := json.Marshal(spawnArgs{Task: usersRoute, Owns: []string{"src/users.ts"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	orders, err := json.Marshal(spawnArgs{Task: ordersRoute, Owns: []string{"src/orders.ts"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := newCrew(map[string][]llm.Decision{
+		leadKey: {
+			toolCallDecision(llm.ToolCall{ID: "call-users", Name: "spawn", Arguments: users}, llm.ToolCall{ID: "call-orders", Name: "spawn", Arguments: orders}),
+			claimDecision("one reported"), claimDecision("both reported"), claimDecision("done"),
+		},
+		usersRoute:  {claimDecision("the users route is added")},
+		ordersRoute: {claimDecision("the orders route is added")},
+	})
+	store, id := session.NewStore(t.TempDir()), session.NewEventID()
+	lead := crewLead(t, model)
+	lead.Sessions, lead.Session = store, id
+	startLead(context.Background(), lead, nil).wait(t)
+	return store, id
+}
+
+func TestASessionReadBackAsAResumeListsBothItsFinishedSubAgents(t *testing.T) {
+	store, id := sessionWithTwoFinishedSubAgents(t)
+	resumed := &subagent.Roster{}
+	if err := RestoreSubAgents(store, id, resumed, NewInbox()); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := subAgentsTool{orchestrator: NewSpawnTool("turn-lead", Config{}, resumed)}.Run(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("subagents after the resume:\n%s", listed.Content)
+	for _, want := range []string{"sub-1: no definition, finished, ran ", "sub-2: no definition, finished, ran "} {
+		if !strings.Contains(listed.Content, want) {
+			t.Errorf("the list after a resume does not say %q", want)
+		}
+	}
+	for _, agent := range resumed.SubAgents() {
+		if !strings.Contains(agent.Report, "sub-agent "+agent.ID+" is finished") || !slices.Contains([]string{usersRoute, ordersRoute}, agent.Brief) {
+			t.Errorf("%s came back with the brief %q and the report %q, want its own brief and its own report", agent.ID, agent.Brief, agent.Report)
+		}
+	}
+}
+
+func TestEachPostedReportIsRecordedWithTheSubAgentsNameAndState(t *testing.T) {
+	store, id := sessionWithTwoFinishedSubAgents(t)
+	events, err := store.Events(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reported []string
+	for _, event := range events {
+		var report session.ReportBody
+		if event.Kind == session.EventReport && json.Unmarshal(event.Body, &report) == nil &&
+			report.State == "finished" && strings.Contains(report.Text, "sub-agent "+event.Agent+" is finished") {
+			reported = append(reported, event.Agent)
+		}
+	}
+	if slices.Sort(reported); !slices.Equal(reported, []string{"sub-1", "sub-2"}) {
+		t.Fatalf("the session records finished reports for %v, want sub-1 and sub-2", reported)
+	}
+}
+
+func restoredWithout(t *testing.T, store *session.Store, id string, dropped func(session.Event) bool) *subagent.Roster {
+	t.Helper()
+	header, err := store.Header(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.Events(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rewritten := session.NewStore(t.TempDir())
+	if err := rewritten.Write(header, slices.DeleteFunc(events, dropped)); err != nil {
+		t.Fatal(err)
+	}
+	resumed := &subagent.Roster{}
+	if err := RestoreSubAgents(rewritten, id, resumed, NewInbox()); err != nil {
+		t.Fatal(err)
+	}
+	return resumed
+}
+
+func TestAResumeReadsEachReportFromItsOwnEventAndFromTheLeadsMessagesOnlyInAnOlderSession(t *testing.T) {
+	store, id := sessionWithTwoFinishedSubAgents(t)
+	for written, dropped := range map[string]func(session.Event) bool{
+		"with report events and no report in the lead's messages": func(event session.Event) bool {
+			var message session.MessageBody
+			return event.Kind == session.EventMessage && json.Unmarshal(event.Body, &message) == nil && strings.Contains(message.Origin, sourceReport)
+		},
+		"before report events": func(event session.Event) bool { return event.Kind == session.EventReport },
+	} {
+		for _, agent := range restoredWithout(t, store, id, dropped).SubAgents() {
+			if !strings.Contains(agent.Report, "sub-agent "+agent.ID+" is finished") {
+				t.Errorf("a session written %s restores %s with the report %q", written, agent.ID, agent.Report)
+			}
+		}
+	}
+}
+
+func TestAMessageAfterAResumeReachesAFinishedSubAgentWithItsConversation(t *testing.T) {
+	store, id := sessionWithTwoFinishedSubAgents(t)
+	resumed, inbox := &subagent.Roster{}, NewInbox()
+	if err := RestoreSubAgents(store, id, resumed, inbox); err != nil {
+		t.Fatal(err)
+	}
+	model := newCrew(map[string][]llm.Decision{usersRoute: {claimDecision("the health route is added")}})
+	spawn := NewSpawnTool("turn-lead", Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096, ArtifactDir: t.TempDir()}, resumed)
+	spawn.Inbox = inbox
+	if _, err := (messageTool{orchestrator: spawn}).Run(context.Background(), json.RawMessage(`{"to":"sub-1","text":"also add /health"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if report := reported(t, spawn); !strings.Contains(report, "sub-agent sub-1 is finished") {
+		t.Errorf("sub-1 did not report after the message:\n%s", report)
+	}
+	asked := model.requests(usersRoute)
+	if len(asked) != 1 || !slices.ContainsFunc(asked[0].Messages, func(message llm.Message) bool { return message.Content == "the users route is added" }) {
+		t.Fatalf("sub-1 was asked %d times, want once carrying what it said before the resume", len(asked))
 	}
 }
 

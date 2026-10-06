@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -131,19 +132,22 @@ func New(cfg Config) (*Host, []string) {
 	if h.play == nil {
 		h.play = h.run
 	}
-	h.carry(cfg.Resumed.Messages)
+	var troubles []string
+	if err := h.carry(h.id, cfg.Resumed.Messages); err != nil {
+		troubles = append(troubles, err.Error())
+	}
 	if h.id == "" {
-		return h, nil
+		return h, troubles
 	}
 	h.started = SourceResumed
 	if h.readOnly = h.hold(h.id); h.readOnly != nil {
-		return h, []string{h.readOnly.Error()}
+		return h, append(troubles, h.readOnly.Error())
 	}
 	if err := h.loadCron(h.id); err != nil {
-		return h, []string{err.Error()}
+		return h, append(troubles, err.Error())
 	}
 	h.armCron()
-	return h, nil
+	return h, troubles
 }
 
 func (h *Host) Events() <-chan Event { return h.events }
@@ -332,7 +336,7 @@ func cronFile(store *session.Store, id string) string {
 	return filepath.Join(store.Dir(id), "cron.json")
 }
 
-func (h *Host) carry(messages []llm.Message) {
+func (h *Host) carry(id string, messages []llm.Message) error {
 	if h.engine != nil {
 		h.engine.Renew()
 	}
@@ -343,6 +347,17 @@ func (h *Host) carry(messages []llm.Message) {
 			h.shown[message.ToolCallID] = true
 		}
 	}
+	if id == "" {
+		return nil
+	}
+	store, err := session.OpenIn(h.dir)
+	if err == nil {
+		err = turn.RestoreSubAgents(store, id, h.roster, h.inbox)
+	}
+	if err != nil {
+		return fmt.Errorf("the sub-agents of %s were not all read back: %w", id, err)
+	}
+	return nil
 }
 
 func (h *Host) Fresh() error {
@@ -352,7 +367,7 @@ func (h *Host) Fresh() error {
 		return errTurnRunning
 	}
 	h.letGo()
-	h.carry(nil)
+	_ = h.carry("", nil)
 	h.id, h.pending, h.started, h.readOnly = "", nil, SourceCleared, nil
 	return h.cron.Load("")
 }
@@ -369,9 +384,12 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 	}
 	h.readOnly = nil
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
-	h.carry(carry.Messages)
+	restoreErr := h.carry(carry.Session, carry.Messages)
 	h.mu.Unlock()
 	chat := resumedChat(carry, h.dir)
+	if restoreErr != nil {
+		chat = append(chat, Event{Kind: EventNote, Text: restoreErr.Error()})
+	}
 	if err := h.loadCron(carry.Session); err != nil {
 		chat = append(chat, Event{Kind: EventNote, Text: err.Error()})
 	}
