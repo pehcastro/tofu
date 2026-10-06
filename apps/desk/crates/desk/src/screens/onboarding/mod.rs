@@ -1,4 +1,5 @@
 mod fixture;
+mod setup;
 
 use std::sync::Arc;
 
@@ -13,24 +14,53 @@ use fixture::{IMPORT, START, TAGLINE, TELL_IMPORT, TELL_START, TITLE};
 use paint::{BACKDROP, hex, jpeg, load_fonts, shadow, white};
 
 const WELCOME: &[u8] = include_bytes!("../../../../../assets/intro/welcome.jpg");
+const WELCOME_BLURRED: &[u8] = include_bytes!("../../../../../assets/intro/welcome-blur.jpg");
 const WELCOME_BOTTOM: f32 = 150.0;
+
+#[derive(Default)]
+struct Connected {
+    claude: bool,
+    codex: bool,
+    key: bool,
+}
 
 struct Onboarding {
     backdrop: Arc<Image>,
     image: Arc<Image>,
+    blurred: Arc<Image>,
+    step: usize,
+    connected: Connected,
+    key_open: bool,
+    provider: usize,
+    classifier: usize,
+    project: Option<usize>,
     told: Option<SharedString>,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     load_fonts(cx)?;
-    match board {
-        None | Some("IONB-1") => {}
-        Some(other) => return Err(format!("the onboarding draws IONB-1, not {other}")),
-    }
+    let (step, key_open) = match board {
+        None | Some("IONB-1") => (0, false),
+        Some("S-ONB-1") => (1, false),
+        Some("S-ONB-2") => (2, true),
+        Some("S-ONB-3") => (3, false),
+        Some(other) => {
+            return Err(format!(
+                "the onboarding draws IONB-1 and S-ONB-1 to 3, not {other}"
+            ));
+        }
+    };
     Ok(cx
         .new(|_| Onboarding {
             backdrop: jpeg(BACKDROP),
             image: jpeg(WELCOME),
+            blurred: jpeg(WELCOME_BLURRED),
+            step,
+            connected: Connected::default(),
+            key_open,
+            provider: 0,
+            classifier: 0,
+            project: None,
             told: None,
         })
         .into())
@@ -45,12 +75,9 @@ impl Onboarding {
             cx.notify();
         }
     }
-}
 
-impl Render for Onboarding {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let scale = window.scale_factor();
-        let welcome = div()
+    fn welcome(cx: &mut Context<Self>) -> gpui::Div {
+        div()
             .absolute()
             .inset_0()
             .flex()
@@ -102,12 +129,23 @@ impl Render for Onboarding {
                     .cursor_pointer()
                     .on_click(cx.listener(Self::tell(TELL_IMPORT)))
                     .child(IMPORT),
-            );
+            )
+    }
+}
+
+impl Render for Onboarding {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let scale = window.scale_factor();
+        let over = if self.step == 0 {
+            Self::welcome(cx)
+        } else {
+            self.setup(scale, cx)
+        };
         let main = div()
             .relative()
             .flex_1()
             .child(hero(&self.image))
-            .child(welcome);
+            .child(over);
         chrome::window(&self.backdrop, scale, main).children(self.told.clone().map(|message| {
             paint::toast(
                 message,

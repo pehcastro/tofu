@@ -49,13 +49,15 @@ struct Intro {
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     load_fonts(cx)?;
-    let (image, behind_card) = match board {
-        None | Some("IHOME-1") => (STREET, STREET_CARD),
-        Some("IHOME-2") => (ROOM, ROOM_CARD),
-        Some("IHOME-3") => (DUSK, DUSK_CARD),
+    let (image, behind_card, menu) = match board {
+        None | Some("IHOME-1") => (STREET, STREET_CARD, Menu::Closed),
+        Some("IHOME-2") => (ROOM, ROOM_CARD, Menu::Closed),
+        Some("IHOME-3") => (DUSK, DUSK_CARD, Menu::Closed),
+        Some("S-HOME-1") => (STREET, STREET_CARD, Menu::Resume),
+        Some("S-HOME-2") => (STREET, STREET_CARD, Menu::Projects),
         Some(other) => {
             return Err(format!(
-                "the intro draws IHOME-1, IHOME-2 and IHOME-3, not {other}"
+                "the intro draws IHOME-1 to 3, S-HOME-1 and S-HOME-2, not {other}"
             ));
         }
     };
@@ -65,7 +67,7 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             image: jpeg(image),
             behind_card: jpeg(behind_card),
             project: 0,
-            menu: Menu::Closed,
+            menu,
             told: None,
         })
         .into())
@@ -114,7 +116,7 @@ fn pop(width: f32) -> Div {
         .w(px(width))
         .p(px(6.0))
         .bg(POP)
-        .shadow(shadow(50.0, 22.0, 0.6))
+        .shadow(shadow(25.0, 22.0, 0.6))
         .text_size(px(13.0))
         .flex()
         .flex_col()
@@ -223,7 +225,7 @@ impl Intro {
 
     fn resume(&self, cx: &mut Context<Self>) -> Div {
         let project = &PROJECTS[self.project];
-        pop(420.0)
+        pop(432.0)
             .top(relative(1.0))
             .mt(px(6.0))
             .child(caption(format!("Sessions in {}", project.name)))
@@ -300,8 +302,8 @@ impl Intro {
     }
 
     fn projects(&self, scale: f32, cx: &mut Context<Self>) -> Div {
-        pop(320.0)
-            .top(px(28.0))
+        pop(332.0)
+            .top(px(26.0))
             .child(caption("Recent projects"))
             .children(PROJECTS.iter().enumerate().map(|(index, project)| {
                 row(("project", index))
