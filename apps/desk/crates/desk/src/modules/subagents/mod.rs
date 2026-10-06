@@ -16,6 +16,8 @@ use fixture::{Agent, Event, State};
 use paint::{SHELL, T3, glyph, ringed, white};
 
 const BOARD: &str = "IWY-7";
+const FOCUSED: &str = "S-WORK-5";
+const FOCUS: &str = "go-dev 1";
 const BACKDROP: &[u8] = include_bytes!("assets/backdrop.jpg");
 const FONTS: [&[u8]; 6] = [
     include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
@@ -39,22 +41,36 @@ struct Subagents {
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    match board {
-        None | Some(BOARD) => {}
-        Some(other) => return Err(format!("the sub-agents module draws {BOARD}, not {other}")),
-    }
+    let focus = match board {
+        None | Some(BOARD) => None,
+        Some(FOCUSED) => Some(FOCUS),
+        Some(other) => {
+            return Err(format!(
+                "the sub-agents module draws {BOARD} and {FOCUSED}, not {other}"
+            ));
+        }
+    };
     cx.text_system()
         .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
         .map_err(|error| format!("the sub-agents module cannot load the Geist fonts: {error}"))?;
     let agents = fixture::agents();
     let events = fixture::events(&agents);
+    let feed = match focus {
+        None => None,
+        Some(id) => Some(
+            agents
+                .iter()
+                .position(|a| a.id == id)
+                .ok_or(format!("the sub-agents fixture has no agent {id}"))?,
+        ),
+    };
     Ok(cx
         .new(|_| Subagents {
             backdrop: Arc::new(Image::from_bytes(ImageFormat::Jpeg, BACKDROP.to_vec())),
             agents,
             events,
             open: [true, true, true, false],
-            feed: None,
+            feed,
             inactive_open: false,
             tell: None,
         })
