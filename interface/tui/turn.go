@@ -348,10 +348,10 @@ func (a *App) absorb(event Event) {
 	case EventNote:
 		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 	case EventDone:
+		a.leadTurnEnds(event.Text)
 		if event.SubAgents != nil {
 			a.showSubAgents(event.SubAgents)
 		}
-		a.leadTurnEnds(event.Text)
 	case EventFailure:
 		id := cmp.Or(event.ID, a.mintID())
 		a.record(feed.Event{ID: short(id), Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})

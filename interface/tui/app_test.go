@@ -676,6 +676,29 @@ func TestASubAgentsMessageIsNeverSpokenInTheOrchestratorsTranscript(t *testing.T
 	}
 }
 
+func TestAReportRidingTheDoneEventIsDrawnOnce(t *testing.T) {
+	const reportRow = "report [&sub-1]"
+	finished := []subagent.Row{{Name: "sub-1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: roster.Finished, Report: "the note holds one line"}}
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	for _, event := range []Event{
+		{Kind: EventRequesting},
+		{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read note.txt", Promote: true},
+		{Kind: EventToolResult, ID: "s1", Text: "spawn sub-1 finished"},
+		{Kind: EventDone, Text: "cooked for", SubAgents: finished},
+	} {
+		app.Update(event)
+	}
+	if drawn := strings.Count(ansi.Strip(app.View().Content), reportRow); drawn != 1 {
+		t.Fatalf("a report inside the done event drew %d %q rows, want 1\n%s", drawn, reportRow, ansi.Strip(app.View().Content))
+	}
+	app.Update(Event{Kind: EventSubAgent, SubAgents: finished})
+	if drawn := strings.Count(ansi.Strip(app.View().Content), reportRow); drawn != 1 {
+		t.Fatalf("the same report arriving again drew %d %q rows, want 1\n%s", drawn, reportRow, ansi.Strip(app.View().Content))
+	}
+}
+
 func afterAFullEventChannel(afterwards ...Event) (*App, []Event) {
 	filled := make(chan struct{})
 	app := newTestApp(Options{
