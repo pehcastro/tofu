@@ -1,0 +1,10 @@
+name = "table"
+version = "0.1.0"
+api = "0.1"
+permissions = ["notify"]
+
+[[contributes.module]]
+id = "table.rows"
+title = "Rows"
+icon = "table"
+view = "table"

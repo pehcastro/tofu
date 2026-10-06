@@ -1,0 +1,81 @@
+package tofu:desk@0.1.0;
+
+interface types {
+  enum tone { neutral, accent, success, warning, danger }
+
+  record badge {
+    label: string,
+    tone: tone,
+  }
+
+  record choice {
+    options: list<string>,
+    selected: u32,
+  }
+
+  record toggle {
+    label: string,
+    on: bool,
+  }
+
+  record table {
+    columns: list<string>,
+    row-count: u64,
+  }
+
+  variant kind {
+    shell,
+    inner,
+    tabs(choice),
+    row,
+    group(string),
+    avatar(string),
+    chip(string),
+    badge(badge),
+    button(string),
+    segmented(choice),
+    switch(toggle),
+    input(string),
+    table(table),
+    virtual-list(u64),
+    diff(string),
+    term(string),
+    feed-item(string),
+    sheet,
+    popover,
+    text(string),
+    stack,
+    grid(u32),
+  }
+
+  record node {
+    key: string,
+    kind: kind,
+    children: list<u32>,
+  }
+
+  type tree = list<node>;
+
+  variant event {
+    click(string),
+    change(tuple<string, string>),
+    submit(tuple<string, string>),
+  }
+}
+
+interface host {
+  record denied {
+    permission: string,
+  }
+
+  notify: func(title: string, body: string) -> result<_, denied>;
+}
+
+world plugin {
+  use types.{tree, event};
+  import host;
+
+  export view: func() -> tree;
+  export rows: func(start: u64, end: u64) -> tree;
+  export handle: func(event: event);
+}
