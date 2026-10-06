@@ -1,0 +1,109 @@
+use futures::SinkExt;
+use futures::channel::mpsc;
+use futures::executor::block_on;
+use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use std::io::{ErrorKind, Read, Write};
+use std::path::Path;
+use std::sync::mpsc as sync;
+use std::thread;
+
+const READ_CHUNK: usize = 16 * 1024;
+const OUTPUT_BACKLOG: usize = 32;
+
+pub(crate) enum Output {
+    Bytes(Vec<u8>),
+    Exited(Option<u32>),
+}
+
+pub(crate) struct Pty {
+    master: Box<dyn MasterPty + Send>,
+    input: sync::Sender<Vec<u8>>,
+}
+
+impl Pty {
+    pub(crate) fn spawn(
+        cwd: &Path,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(Self, mpsc::Receiver<Output>), String> {
+        let pair = native_pty_system()
+            .openpty(size(cols, rows))
+            .map_err(|error| format!("could not open a pty: {error:#}"))?;
+        let mut command = CommandBuilder::new_default_prog();
+        command.cwd(cwd);
+        command.env("TERM", "xterm-256color");
+        let mut child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|error| format!("could not start the shell: {error:#}"))?;
+        drop(pair.slave);
+        let mut reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|error| format!("could not read the pty: {error:#}"))?;
+        let mut writer = pair
+            .master
+            .take_writer()
+            .map_err(|error| format!("could not write the pty: {error:#}"))?;
+        let (input, pending) = sync::channel::<Vec<u8>>();
+        thread::spawn(move || {
+            for bytes in pending {
+                if writer
+                    .write_all(&bytes)
+                    .and_then(|()| writer.flush())
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        });
+        let (mut output, received) = mpsc::channel(OUTPUT_BACKLOG);
+        let mut exits = output.clone();
+        thread::spawn(move || {
+            let mut chunk = vec![0; READ_CHUNK];
+            loop {
+                match reader.read(&mut chunk) {
+                    Ok(0) => return,
+                    Ok(read) => {
+                        let bytes = chunk.get(..read).unwrap_or_default().to_vec();
+                        if block_on(output.send(Output::Bytes(bytes))).is_err() {
+                            return;
+                        }
+                    }
+                    Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                    Err(_) => return,
+                }
+            }
+        });
+        thread::spawn(move || {
+            let code = child.wait().ok().map(|status| status.exit_code());
+            block_on(exits.send(Output::Exited(code)))
+        });
+        Ok((
+            Pty {
+                master: pair.master,
+                input,
+            },
+            received,
+        ))
+    }
+
+    pub(crate) fn send(&self, bytes: Vec<u8>) -> bool {
+        self.input.send(bytes).is_ok()
+    }
+
+    pub(crate) fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
+        self.master
+            .resize(size(cols, rows))
+            .map_err(|error| format!("could not resize the pty: {error:#}"))
+    }
+}
+
+fn size(cols: u16, rows: u16) -> PtySize {
+    PtySize {
+        rows,
+        cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    }
+}
