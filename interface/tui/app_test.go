@@ -1871,3 +1871,97 @@ func TestARuleQuestionTakesOneForThisProjectTwoForEverywhereAndThreeForNo(t *tes
 		}
 	}
 }
+
+func twoWorking(working int) []subagent.Row {
+	rows := []subagent.Row{
+		{Name: "sub-1", Owns: []string{"a.txt"}, Doing: "read a.txt", State: roster.Working},
+		{Name: "sub-2", Owns: []string{"b.txt"}, Doing: "read b.txt", State: roster.Working},
+	}
+	for index := working; index < len(rows); index++ {
+		rows[index].State, rows[index].Report = roster.Finished, rows[index].Name+" read its file"
+	}
+	return rows
+}
+
+func spawnedTwo(t *testing.T, at *time.Time) *App {
+	t.Helper()
+	app := phaseApp(t, at)
+	app.Update(Event{Kind: EventText, Text: "handing both to sub-agents"})
+	for _, id := range []string{"s1", "s2"} {
+		app.Update(Event{Kind: EventToolCall, ID: id, Tool: "spawn", Text: "read a file", Promote: true})
+	}
+	return app
+}
+
+func leadIdleOnTwo(t *testing.T, at *time.Time) *App {
+	t.Helper()
+	app := spawnedTwo(t, at)
+	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(2)})
+	for _, id := range []string{"s1", "s2"} {
+		app.Update(Event{Kind: EventToolResult, ID: id, Text: "spawned"})
+	}
+	app.Update(Event{Kind: EventDone, Text: "cooked for"})
+	return app
+}
+
+func TestTheTurnLineSaysTheLeadWaitsOnItsWorkingSubAgentsAndNeverCooked(t *testing.T) {
+	at := fixedStart()
+	app := leadIdleOnTwo(t, &at)
+	at = at.Add(3 * time.Second)
+	row := turnRow(t, app)
+	if !strings.Contains(row, "waiting on 2 sub-agents") || strings.Contains(row, "cooked") || strings.Contains(row, "thinking") {
+		t.Fatalf("the lead is idle while two sub-agents work and the turn line reads %q", row)
+	}
+	if !strings.Contains(row, "3s") {
+		t.Errorf("the wait began three seconds ago and the turn line reads %q", row)
+	}
+	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(1)})
+	if row := turnRow(t, app); !strings.Contains(row, "waiting on 1 sub-agent") || strings.Contains(row, "sub-agents") {
+		t.Fatalf("one sub-agent reported and the turn line reads %q", row)
+	}
+	app.Update(Event{Kind: EventRequesting})
+	if row := turnRow(t, app); !strings.Contains(row, "requesting") {
+		t.Fatalf("the lead began reading the report and the turn line reads %q", row)
+	}
+	app.Update(Event{Kind: EventText, Text: "sub-2 read b, sub-1 still works"})
+	app.Update(Event{Kind: EventDone, Text: "cooked for"})
+	if row := turnRow(t, app); !strings.Contains(row, "waiting on 1 sub-agent") {
+		t.Fatalf("the lead answered one report while the other sub-agent works and the turn line reads %q", row)
+	}
+	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(0)})
+	app.Update(Closed{})
+	for _, row := range plainRows(app.View()) {
+		if strings.Contains(row, "waiting on") {
+			t.Fatalf("the turn closed and a row still says %q", row)
+		}
+	}
+}
+
+func TestASubAgentsCallNeverMarksTheLeadsRequestAnswered(t *testing.T) {
+	at := fixedStart()
+	app := leadIdleOnTwo(t, &at)
+	app.Update(Event{Kind: EventSubAgent, SubAgents: twoWorking(1)})
+	app.Update(Event{Kind: EventRequesting})
+	for step := range 10 {
+		at = at.Add(time.Second)
+		app.Update(Event{Kind: EventToolCall, ID: "c" + strconv.Itoa(step), Agent: "sub-1", Tool: "bash", Text: "sleep 1"})
+		app.Update(Event{Kind: EventStats, Agent: "sub-1", Model: "codex-build", TokensIn: step})
+		if row := turnRow(t, app); !strings.Contains(row, "requesting") {
+			t.Fatalf("the lead's request has had no answer for %ds while sub-1 called tools, and the turn line reads %q", step+1, row)
+		}
+	}
+	if app.model == "codex-build" {
+		t.Error("sub-1's stats named its build as the lead's model")
+	}
+}
+
+func TestTheLeadRunningOnlySpawnsNeverReadsAsThinking(t *testing.T) {
+	at := fixedStart()
+	app := spawnedTwo(t, &at)
+	for range 4 {
+		at = at.Add(time.Second)
+		if row := turnRow(t, app); strings.Contains(row, "thinking") {
+			t.Fatalf("the lead runs two spawn calls and the turn line reads %q", row)
+		}
+	}
+}

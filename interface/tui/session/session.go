@@ -119,7 +119,10 @@ type Model struct {
 	Commands           []Command
 	Paths              []string
 	SubAgents          []subagent.Row
+	Spawns             int
 	now                func() time.Time
+	leadIdleSince      time.Time
+	waitingOn          int
 	waiting            time.Time
 	requested          time.Time
 	answered           time.Time
@@ -440,6 +443,7 @@ func (m *Model) Start() {
 	at := m.now()
 	m.entered, m.turns, m.turnID = at, m.turns+1, m.mint()
 	m.Busy, m.Stopping, m.LettingToolsFinish, m.began = true, false, false, at
+	m.leadIdleSince, m.waitingOn = time.Time{}, 0
 	m.waited, m.phase, m.shown = 0, requesting, at
 	m.requested, m.answered, m.respondedOnce = at, time.Time{}, false
 }
@@ -478,6 +482,7 @@ func (m *Model) Stop() {
 	interrupted := m.Stopping || m.LettingToolsFinish
 	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
+	m.leadIdleSince, m.waitingOn = time.Time{}, 0
 	m.seal()
 	m.revision++
 	for index := range m.entries {

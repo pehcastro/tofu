@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Fixed
+
+- **While the lead's sub-agents work, the app says "waiting on N sub-agents"** with a live count, instead of "cooked for". "Thinking" shows only when the lead's own model answers, not while it waits on a request or runs spawns, and a sub-agent's stats no longer rename the lead's model.
+
 ### Changed
 
 - **Auto mode is the default.** Jev decides at every gate and the work does not stop for you: a call it would ask about runs and is recorded, and a call it denies is refused. `tofu settings set gatePrompt ask` makes it wait for you. A hook that asks, a rule override, and the model changing a setting still ask you in both modes.

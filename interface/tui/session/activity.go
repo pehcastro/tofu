@@ -2,6 +2,7 @@ package session
 
 import (
 	"slices"
+	"strconv"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -19,6 +20,7 @@ const (
 	spawningWord = "spawning"
 	runningWord  = "running"
 	reportHead   = "report"
+	readingWords = "reading the reports"
 	doneMark     = "✓ "
 	failedMark   = "✗ "
 	stoppedMark  = "○ "
@@ -31,6 +33,7 @@ const (
 	requesting phase = iota
 	thinking
 	working
+	spawning
 	waitingOnYou
 )
 
@@ -42,6 +45,8 @@ func (p phase) drawn() (string, lipgloss.Style) {
 		return "thinking", look.Style(look.Mint)
 	case working:
 		return "working", look.Style(look.Mint)
+	case spawning:
+		return spawningWord, look.Style(look.Violet)
 	case waitingOnYou:
 		return "waiting", look.Style(look.Amber)
 	}
@@ -58,7 +63,30 @@ func (m *Model) reached() phase {
 	if slices.ContainsFunc(m.entries, Entry.running) {
 		return working
 	}
+	if m.Spawns > 0 {
+		return spawning
+	}
 	return thinking
+}
+
+func (m *Model) WaitOn(working int) {
+	if m.Busy || m.leadIdleSince.IsZero() && working == 0 {
+		return
+	}
+	if m.leadIdleSince.IsZero() {
+		m.leadIdleSince = m.now()
+	}
+	m.waitingOn = working
+}
+
+func (m *Model) leadIdleWords() string {
+	switch m.waitingOn {
+	case 0:
+		return readingWords
+	case 1:
+		return "waiting on 1 sub-agent"
+	}
+	return "waiting on " + strconv.Itoa(m.waitingOn) + " sub-agents"
 }
 
 func (m *Model) settle() {
@@ -90,6 +118,8 @@ func (m *Model) requestLine() string {
 		}
 		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
 		id = m.turnID
+	case !m.leadIdleSince.IsZero():
+		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
 		line += look.Muted(m.cooked + metaGap)
 	default:

@@ -249,7 +249,7 @@ func (a *App) leadTurnBegins() {
 	a.view.Follow()
 	a.status.Fresh = false
 	a.intro.shown = false
-	a.happenedAtTurn, a.keptAnswer, a.subAgentCalls = len(a.happened), "", nil
+	a.happenedAtTurn, a.keptAnswer, a.subAgentCalls, a.view.Spawns = len(a.happened), "", nil, 0
 	a.leading, a.running = true, 0
 	a.view.Start()
 }
@@ -262,6 +262,7 @@ func (a *App) leadTurnEnds(words string) {
 	a.view.Close(words, labelled)
 	a.view.Stop()
 	a.leading, a.running = false, 0
+	a.view.WaitOn(a.status.Agents)
 }
 
 func (a *App) start(task string) tea.Cmd { return a.startAs(task, "") }
@@ -306,7 +307,7 @@ func (a *App) waitForEvent() tea.Cmd {
 }
 
 func (a *App) absorb(event Event) {
-	if event.answered() {
+	if event.answered() && event.Agent == "" {
 		a.view.Returned()
 	}
 	if len(a.subAgentCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
@@ -394,7 +395,7 @@ func (a *App) absorb(event Event) {
 	case EventStats:
 		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
 		a.status.Decisions = event.Decisions
-		if event.Model != "" {
+		if event.Model != "" && event.Agent == "" {
 			a.model = event.Model
 		}
 	}
@@ -422,6 +423,7 @@ func (a *App) called(event Event, at time.Time) {
 	a.running++
 	if event.Promote {
 		a.subAgentCalls = append(a.subAgentCalls, event.ID)
+		a.view.Spawns = len(a.subAgentCalls)
 		return
 	}
 	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail})
@@ -429,6 +431,7 @@ func (a *App) called(event Event, at time.Time) {
 
 func (a *App) answered(event Event, at time.Time) {
 	a.subAgentCalls = slices.DeleteFunc(a.subAgentCalls, func(called string) bool { return called == event.ID })
+	a.view.Spawns = len(a.subAgentCalls)
 	status := event.Text
 	finished := a.finish(short(event.ID), event.Text, event.Failed, at)
 	if finished.Kind == feed.KindSpawn && a.view.Stopping {
@@ -547,6 +550,9 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 		for _, call := range subAgent.Calls {
 			a.rosterCall(subAgent.Name, call)
 		}
+	}
+	if a.busy && !a.leading {
+		a.view.WaitOn(a.status.Agents)
 	}
 }
 

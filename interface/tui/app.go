@@ -105,7 +105,7 @@ func (e Event) snapshot() bool {
 
 func (e Event) answered() bool {
 	switch e.Kind {
-	case EventText, EventTextDelta, EventToolCall, EventStats:
+	case EventText, EventTextDelta, EventToolCall, EventThinking, EventStats:
 		return true
 	}
 	return false

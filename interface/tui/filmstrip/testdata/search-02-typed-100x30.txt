@@ -22,7 +22,7 @@
 
 
 
-  cooked for 0s  |  waited 0s  [request#9d4f10]
+  ⠋ waiting on 1 sub-agent  |  0s  [request#9d4f10]
 
                                                                                                     
   ▯ Ask tofu to build, inspect, or delegate                                                         
