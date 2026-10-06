@@ -153,11 +153,11 @@ func QuotaDir() (string, error) {
 }
 
 func LibraryDir() (string, error) {
-	wd, err := os.Getwd()
+	project, err := ProjectConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(wd, "library"), nil
+	return filepath.Join(project, "library"), nil
 }
 
 func stateChild(name string) (string, error) {

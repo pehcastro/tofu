@@ -35,7 +35,7 @@ func (o Origin) String() string {
 }
 
 func LoadPoint(shipped fs.FS, ref string, set question.Set, dir string) (Rule, Origin, error) {
-	libraryDir := sys.Join(dir, libraryRoot)
+	libraryDir := sys.Join(sys.StateDir(dir), libraryRoot)
 	if dir == "" {
 		var err error
 		if libraryDir, err = sys.LibraryDir(); err != nil {

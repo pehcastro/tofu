@@ -39,7 +39,7 @@ In a project:
 - `.tofu/skills/`, `.agents/skills/`, `.claude/skills/`: skills, from the working directory up to the git root
 - `AGENTS.md` or `CLAUDE.md`: instructions, from the working directory up to the git root, and in a folder with both, `instructionSources` picks one or both
 - `.tofu/models/`, `.tofu/subscriptions/`, `.tofu/roles/`: model changes for this project only
-- `library/`: when the working directory has a folder of this name, its rules replace the ones tofu ships
+- `.tofu/library/`: rules laid out like tofu's own library, which replace the ones tofu ships for this project only. A `library/` folder at the root of a repository is never read
 
 Which one wins: the project wins over your home, and your home wins over
 what tofu ships. A setting, a sub-agent or a model set in the project is the

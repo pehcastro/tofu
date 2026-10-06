@@ -128,7 +128,7 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 		p := newProject(t, "doctor")
 		if step.env != "" {
 			writeFile(t, p.dir, ".env", step.env)
-			writeFile(t, p.dir, "library/general/rules/tool_gate@3.yaml", step.rule)
+			writeFile(t, p.dir, ".tofu/library/general/rules/tool_gate@3.yaml", step.rule)
 		}
 		title, body, _ := strings.Cut(p.run(t, exitVerdict, "doctor"), "\n")
 		if !titleOf.MatchString(title) {

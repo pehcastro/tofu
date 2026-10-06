@@ -104,5 +104,5 @@ thresholds:
 `
 
 func replayProjectRulePath() string {
-	return filepath.Join("library", "general", "rules", replayTestRuleRef+".yaml")
+	return filepath.Join(".tofu", "library", "general", "rules", replayTestRuleRef+".yaml")
 }

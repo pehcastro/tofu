@@ -226,8 +226,8 @@ func TestRulesAddOverALibraryRuleNeedsAReasonAndWritesAnOverride(t *testing.T) {
 func TestRulesOverridesNamesAnOverrideTheLibraryMovedPast(t *testing.T) {
 	project := chdirTemp(t)
 	files := map[string]string{
-		"library/qa/rules/no_unit_test_after_code@2.yaml": "id: no_unit_test_after_code\ndomain: qa\nkind: human\nconcern: code_rules\ntext: never a unit test after the code\n",
-		".tofu/rules/no_unit_test_after_code@1.yaml":      "id: no_unit_test_after_code\noverrides: no_unit_test_after_code@1\nmode: off\nreason: public SDK\nby: person\nat: 2026-10-05\n",
+		".tofu/library/qa/rules/no_unit_test_after_code@2.yaml": "id: no_unit_test_after_code\ndomain: qa\nkind: human\nconcern: code_rules\ntext: never a unit test after the code\n",
+		".tofu/rules/no_unit_test_after_code@1.yaml":            "id: no_unit_test_after_code\noverrides: no_unit_test_after_code@1\nmode: off\nreason: public SDK\nby: person\nat: 2026-10-05\n",
 	}
 	for name, body := range files {
 		if err := sys.WriteFile(filepath.Join(project, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {

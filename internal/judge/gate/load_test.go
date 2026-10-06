@@ -48,7 +48,7 @@ func shippedQuestionSet(t *testing.T) question.Set {
 func projectRuleDir(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, "library", "general", "rules")
+	dir := filepath.Join(root, ".tofu", "library", "general", "rules")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("making %s: %v", dir, err)
 	}

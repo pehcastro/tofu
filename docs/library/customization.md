@@ -19,6 +19,11 @@ and the `AGENTS.md` and `CLAUDE.md` files other coding agents use.
 
 From your home, tofu reads only `~/.tofu`, never `~/.claude` or `~/.agents`.
 
+A rule file laid out like tofu's own library, such as
+`.tofu/library/general/rules/tool_gate@3.yaml`, replaces the shipped one for
+this project. A `library/` folder at the root of your repository is never
+read, so a project with a folder of that name keeps it to itself.
+
 ## Why tofu reads other agents' files
 
 **A project set up for Claude Code works as it is.** A Claude Code agent file
