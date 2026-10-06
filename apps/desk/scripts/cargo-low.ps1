@@ -3,6 +3,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Cargo
 )
 $ErrorActionPreference = "Stop"
+& (Join-Path $PSScriptRoot "prune.ps1") -Quiet
 $watch = [System.Diagnostics.Stopwatch]::StartNew()
 $p = Start-Process cargo -ArgumentList $Cargo -NoNewWindow -PassThru -RedirectStandardError $Log -RedirectStandardOutput "$Log.out"
 $null = $p.Handle
