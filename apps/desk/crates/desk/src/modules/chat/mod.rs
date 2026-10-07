@@ -259,6 +259,12 @@ impl Chat {
         self.transcript.reset(0);
     }
 
+    pub fn focus_composer(&self, window: &mut Window, cx: &mut App) -> bool {
+        let field = self.area.focus_handle(cx);
+        field.focus(window, cx);
+        field.is_focused(window)
+    }
+
     pub fn kill(&mut self, shell: SharedString, cx: &mut Context<Self>) {
         eprintln!("desk: kill {shell}: asking tofu shell.kill");
         let params = ShellParams {

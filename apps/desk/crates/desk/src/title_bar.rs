@@ -7,8 +7,8 @@ use desk_ui::metrics::{
 };
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    Context, FontWeight, IntoElement, Window, WindowControlArea, div, linear_color_stop,
-    linear_gradient, prelude::*, px,
+    AnyElement, Context, FontWeight, IntoElement, Window, WindowControlArea, div,
+    linear_color_stop, linear_gradient, prelude::*, px,
 };
 
 use crate::desk::Desk;
@@ -104,6 +104,7 @@ fn captions(window: &Window, theme: &Theme) -> impl IntoElement {
 
 pub fn render(
     sidebar_open: bool,
+    tabs: Option<AnyElement>,
     theme: &Theme,
     window: &Window,
     cx: &mut Context<Desk>,
@@ -143,14 +144,16 @@ pub fn render(
                     )
                 }),
         )
-        .child(
-            control("new-workspace", Control::NewWorkspace.label(), theme)
+        .child(match tabs {
+            Some(tabs) => div().flex_1().min_w_0().child(tabs).into_any_element(),
+            None => control("new-workspace", Control::NewWorkspace.label(), theme)
                 .h(px(TAB_HEIGHT))
                 .px_2p5()
                 .rounded(px(RADIUS_TAB))
                 .child(icon(Icon::Plus, ICON_SMALL, tab))
-                .on_click(Desk::teller(Control::NewWorkspace, cx)),
-        )
+                .on_click(Desk::teller(Control::NewWorkspace, cx))
+                .into_any_element(),
+        })
         .child(
             div()
                 .id("drag")
@@ -171,7 +174,7 @@ pub fn render(
                         .text_color(theme.color(ColorToken::TextMuted))
                         .child(Control::Palette.label()),
                 )
-                .on_click(Desk::teller(Control::Palette, cx)),
+                .on_click(cx.listener(|desk, _, window, cx| desk.open_palette(window, cx))),
         )
         .child(
             icon_button(

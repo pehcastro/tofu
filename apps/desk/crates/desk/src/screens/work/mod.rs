@@ -9,14 +9,13 @@ use desk_tiling::{
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::empty::{EmptyAction, EmptyHint, empty_state};
 use desk_ui::components::glyph::Glyph;
-use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs, header_tabs};
+use desk_ui::components::tabs::{Tab, TabEvent, TabMark, TabStrip, connected_tabs, header_tabs};
 use desk_ui::live::ActiveTheme;
-use desk_ui::metrics::TITLE_BAR_HEIGHT;
 use desk_ui::theme::Theme;
 use gpui::{
     AnyElement, AnyView, App, AppContext, Context, CursorStyle, Div, Entity, FocusHandle,
-    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, Render, SharedString, Window, WindowControlArea, div, prelude::*, px,
+    Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, Render, SharedString, WeakEntity, Window, div, prelude::*, px,
 };
 
 use crate::modules::chat::cassette::{Replay, Step};
@@ -27,7 +26,12 @@ use crate::modules::shells::{self, Kill, Shells};
 use crate::modules::subagents::{self, Subagents};
 
 const BOARD: &str = "36-agents";
-const INSET: f32 = 8.0;
+const UNFITTED: Rect = Rect {
+    x: 0.0,
+    y: 0.0,
+    w: 0.0,
+    h: 0.0,
+};
 const WORK_NAME: &str = "work";
 const OPENABLE: [Module; 4] = [
     Module::Chat,
@@ -85,10 +89,11 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
         .new(|cx| {
             let focus = cx.focus_handle();
             focus.focus(window, cx);
-            let work = Work {
+            Work {
                 workspace,
                 others,
                 active: 0,
+                area: UNFITTED,
                 layouts,
                 gesture: Gesture::Idle,
                 nudge: None,
@@ -99,9 +104,7 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
                 file_edits,
                 shells,
                 replay,
-            };
-            work.report(window_area(window));
-            work
+            }
         })
         .into())
 }
@@ -124,6 +127,7 @@ pub struct Work {
     workspace: Workspace,
     others: Vec<Workspace>,
     active: usize,
+    area: Rect,
     layouts: Layouts,
     gesture: Gesture,
     nudge: Option<f32>,
@@ -134,16 +138,6 @@ pub struct Work {
     file_edits: Entity<FileEdits>,
     shells: Entity<Shells>,
     replay: Option<Replay>,
-}
-
-fn window_area(window: &Window) -> Rect {
-    let size = window.viewport_size();
-    Rect {
-        x: INSET,
-        y: TITLE_BAR_HEIGHT,
-        w: f32::from(size.width) - 2.0 * INSET,
-        h: f32::from(size.height) - TITLE_BAR_HEIGHT - INSET,
-    }
 }
 
 fn local(position: Point<Pixels>) -> (f32, f32) {
@@ -170,16 +164,28 @@ fn side_of(key: &str) -> Option<Side> {
     }
 }
 
-fn place(element: Div, rect: Rect) -> Div {
+fn place(element: Div, rect: Rect, origin: Rect) -> Div {
     element
         .absolute()
-        .left(px(rect.x))
-        .top(px(rect.y))
+        .left(px(rect.x - origin.x))
+        .top(px(rect.y - origin.y))
         .w(px(rect.w))
         .h(px(rect.h))
 }
 
 impl Work {
+    pub fn fit(&mut self, area: Rect) {
+        if self.area != area {
+            self.area = area;
+            self.report(area);
+        }
+    }
+
+    pub fn focus_composer(&self, window: &mut Window, cx: &mut App) -> bool {
+        self.chat
+            .update(cx, |chat, cx| chat.focus_composer(window, cx))
+    }
+
     fn all(&self) -> Vec<Workspace> {
         let mut all = self.others.clone();
         all.insert(self.active.min(all.len()), self.workspace.clone());
@@ -253,7 +259,7 @@ impl Work {
         self.gesture = Gesture::Idle;
         self.nudge = None;
         self.focus.focus(window, cx);
-        self.save(window_area(window));
+        self.save(self.area);
         cx.notify();
     }
 
@@ -285,7 +291,7 @@ impl Work {
             .workspace
             .focus()
             .ok_or(Refusal::NoSuchTile)
-            .and_then(|tile| self.workspace.send_to_new(tile, window_area(window)));
+            .and_then(|tile| self.workspace.send_to_new(tile, self.area));
         match sent {
             Ok((left, fresh)) => {
                 self.workspace = left;
@@ -310,8 +316,8 @@ impl Work {
         }
     }
 
-    fn run(&mut self, action: Action, key: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let area = window_area(window);
+    pub fn run(&mut self, action: Action, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let area = self.area;
         let next = match action {
             Action::NewWorkspace => return self.add(window, cx),
             Action::GoToWorkspace => {
@@ -397,14 +403,9 @@ impl Work {
         (next.tree() != self.workspace.tree()).then_some(target)
     }
 
-    fn pointer_moved(
-        &mut self,
-        event: &MouseMoveEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn pointer_moved(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let (x, y) = local(event.position);
-        let area = window_area(window);
+        let area = self.area;
         self.gesture = match std::mem::replace(&mut self.gesture, Gesture::Idle) {
             Gesture::Idle => return,
             Gesture::Pressed { grab, from } if (x - from.0).hypot(y - from.1) < DRAG_THRESHOLD => {
@@ -425,8 +426,8 @@ impl Work {
         cx.notify();
     }
 
-    fn released(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let area = window_area(window);
+    fn released(&mut self, cx: &mut Context<Self>) {
+        let area = self.area;
         let next = match std::mem::replace(&mut self.gesture, Gesture::Idle) {
             Gesture::Idle => return,
             Gesture::Pressed { grab, .. } => self.workspace.focus_tile(grab.tile),
@@ -441,7 +442,7 @@ impl Work {
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let held = stroke.modifiers;
-        let area = window_area(window);
+        let area = self.area;
         let key = stroke.key.as_str();
         let mods = Mods {
             ctrl: held.control,
@@ -544,7 +545,7 @@ impl Work {
         Header::Tabs(strip.into_any_element(), None)
     }
 
-    fn strip(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    pub fn tabs(&self, this: WeakEntity<Self>, theme: &Theme) -> TabStrip {
         let tabs: Vec<Tab> = self
             .all()
             .iter()
@@ -559,8 +560,7 @@ impl Work {
                 },
             })
             .collect();
-        let this = cx.weak_entity();
-        let strip = header_tabs(
+        header_tabs(
             "work-workspaces",
             &tabs,
             self.active,
@@ -574,23 +574,7 @@ impl Work {
                 })
                 .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
             },
-        );
-        div()
-            .absolute()
-            .top_0()
-            .left(px(INSET))
-            .right_0()
-            .h(px(TITLE_BAR_HEIGHT))
-            .flex()
-            .items_center()
-            .child(div().flex_1().min_w_0().child(strip))
-            .child(
-                div()
-                    .id("work-drag")
-                    .flex_1()
-                    .h_full()
-                    .window_control_area(WindowControlArea::Drag),
-            )
+        )
     }
 
     fn empty(&self, area: Rect, theme: &Theme, cx: &mut Context<Self>) -> Div {
@@ -610,21 +594,20 @@ impl Work {
             })
             .collect();
         let this = cx.weak_entity();
-        place(div(), area).child(empty_state(
+        place(div(), area, area).child(empty_state(
             "work-empty-workspace",
             "Empty workspace",
             Some("open a module, or use a shortcut".into()),
             &actions,
             &hints,
             theme,
-            move |at, window, cx| {
+            move |at, _, cx| {
                 let Some(module) = OPENABLE.get(at) else {
                     return;
                 };
-                let area = window_area(window);
                 this.update(cx, |work, cx| {
-                    let next = work.workspace.open(module.clone(), area);
-                    work.commit(next, area, cx);
+                    let next = work.workspace.open(module.clone(), work.area);
+                    work.commit(next, work.area, cx);
                 })
                 .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
             },
@@ -670,7 +653,7 @@ impl Work {
             .modules
             .get(stack.active)
             .map(|module| self.body(module, theme));
-        place(div(), rect)
+        place(div(), rect, area)
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |work, event: &MouseDownEvent, _, cx| {
@@ -693,22 +676,30 @@ impl Work {
             tiling::Axis::Row => CursorStyle::ResizeLeftRight,
             tiling::Axis::Column => CursorStyle::ResizeUpDown,
         };
-        place(div(), divider.rect).cursor(cursor).on_mouse_down(
-            MouseButton::Left,
-            cx.listener(move |work, event: &MouseDownEvent, window, cx| {
-                if event.click_count >= 2 {
-                    work.gesture = Gesture::Idle;
-                    let next = work.workspace.even_split(&divider);
-                    work.commit(Ok(next), window_area(window), cx);
-                    return;
-                }
-                work.gesture = Gesture::Resizing {
-                    divider: divider.clone(),
-                    from: work.workspace.clone(),
-                };
-                cx.notify();
-            }),
-        )
+        place(div(), divider.rect, self.area)
+            .cursor(cursor)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |work, event: &MouseDownEvent, _, cx| {
+                    if event.click_count >= 2 {
+                        work.gesture = Gesture::Idle;
+                        let next = work.workspace.even_split(&divider);
+                        work.commit(Ok(next), work.area, cx);
+                        return;
+                    }
+                    work.gesture = Gesture::Resizing {
+                        divider: divider.clone(),
+                        from: work.workspace.clone(),
+                    };
+                    cx.notify();
+                }),
+            )
+    }
+}
+
+impl Focusable for Work {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
     }
 }
 
@@ -716,7 +707,7 @@ impl Render for Work {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
         let theme = ActiveTheme::theme(cx);
-        let area = window_area(window);
+        let area = self.area;
         let stacks: Vec<(Stack, Rect)> = self
             .workspace
             .tiles(area)
@@ -734,7 +725,6 @@ impl Render for Work {
             .map(|divider| self.divider(divider, cx))
             .collect();
         let empty = stacks.is_empty().then(|| self.empty(area, &theme, cx));
-        let strip = self.strip(&theme, cx);
         div()
             .size_full()
             .relative()
@@ -743,9 +733,8 @@ impl Render for Work {
             .on_mouse_move(cx.listener(Self::pointer_moved))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|work, _: &MouseUpEvent, window, cx| work.released(window, cx)),
+                cx.listener(|work, _: &MouseUpEvent, _, cx| work.released(cx)),
             )
-            .child(strip)
             .children(empty)
             .children(tiles)
             .children(dividers)

@@ -1,37 +1,66 @@
-use crate::modules::chat::Chat;
+#[cfg(feature = "screen-work")]
+use crate::screens::work::Work;
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
+#[cfg(feature = "screen-work")]
+use desk_tiling::Rect;
+use desk_tiling::{Key, SHORTCUTS};
 use desk_ui::component::control;
 use desk_ui::components::card::{inner_card, outer_card};
 use desk_ui::components::overlay::toast;
+use desk_ui::components::palette::{Palette, PaletteItem};
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::{
     SIDEBAR_WIDTH, TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
     WINDOW_WIDTH,
 };
+#[cfg(feature = "screen-work")]
+use desk_ui::metrics::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT};
 use desk_ui::theme::{ColorToken, Theme};
+#[cfg(feature = "screen-work")]
+use gpui::Focusable;
 use gpui::{
-    AnyView, App, ClickEvent, Context, Entity, IntoElement, KeyDownEvent, Pixels, Render,
-    SharedString, Size, Task, TitlebarOptions, Window, WindowBounds, WindowOptions, div,
-    prelude::*, px, size,
+    AnyElement, AnyView, App, ClickEvent, Context, Entity, FocusHandle, IntoElement, KeyDownEvent,
+    Pixels, Render, SharedString, Size, Task, TitlebarOptions, Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, size,
 };
 
 pub const WINDOW_TITLE: &str = "Tofu Desk";
 pub const BOARD_VIEWPORT_WIDTH: f32 = 1440.0;
 pub const BOARD_VIEWPORT_HEIGHT: f32 = 900.0;
+const GUTTER: f32 = 8.0;
+const SETTINGS: &str = "settings";
+const SCREEN_ID: &str = "screen.";
+const LAYOUT_ID: &str = "layout.";
+const OPEN_SETTINGS_ID: &str = "settings.open";
 
-pub struct ScreenRoot(pub Option<AnyView>);
+pub type Open = fn(Option<&str>, &mut Window, &mut App) -> Result<AnyView, String>;
 
-impl Render for ScreenRoot {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().children(self.0.clone())
-    }
+#[derive(Clone, Copy)]
+pub struct Screen {
+    pub name: &'static str,
+    pub open: Open,
+}
+
+enum Body {
+    #[cfg(feature = "screen-work")]
+    Work(Entity<Work>),
+    View(AnyView),
+}
+
+struct Shown {
+    name: SharedString,
+    body: Body,
 }
 
 pub struct Desk {
     sidebar_open: bool,
     toast: Option<Toast>,
-    chat: Entity<Chat>,
+    screens: Vec<Screen>,
+    shown: Shown,
+    parked: Vec<Shown>,
+    palette: Entity<Palette>,
+    focus: FocusHandle,
 }
 
 struct Toast {
@@ -71,12 +100,201 @@ pub fn window_options(title: SharedString, client: Size<Pixels>, cx: &App) -> Wi
     options
 }
 
+impl Shown {
+    fn new(name: SharedString, view: AnyView) -> Self {
+        #[cfg(feature = "screen-work")]
+        let view = match view.downcast::<Work>() {
+            Ok(work) => {
+                return Shown {
+                    name,
+                    body: Body::Work(work),
+                };
+            }
+            Err(view) => view,
+        };
+        Shown {
+            name,
+            body: Body::View(view),
+        }
+    }
+}
+
+fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
+    let screens = screens.iter().map(|screen| PaletteItem {
+        id: format!("{SCREEN_ID}{}", screen.name).into(),
+        label: screen.name.into(),
+        group: "Screens".into(),
+        keys: None,
+    });
+    let layout = SHORTCUTS
+        .iter()
+        .filter(|shortcut| shortcut.key != Key::Digit)
+        .map(|shortcut| PaletteItem {
+            id: format!("{LAYOUT_ID}{}", shortcut.label).into(),
+            label: shortcut.label.into(),
+            group: "Layout".into(),
+            keys: Some(shortcut.keys.into()),
+        });
+    let settings = PaletteItem {
+        id: OPEN_SETTINGS_ID.into(),
+        label: "Open settings".into(),
+        group: "Settings".into(),
+        keys: Some("Ctrl ,".into()),
+    };
+    screens
+        .chain(layout)
+        .chain(std::iter::once(settings))
+        .collect()
+}
+
 impl Desk {
-    pub fn new(chat: Entity<Chat>) -> Self {
+    pub fn new(
+        screens: Vec<Screen>,
+        name: SharedString,
+        view: AnyView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let palette = Palette::new(commands(&screens), window, cx);
+        let picked = cx.listener(|desk, id: &SharedString, window, cx| desk.picked(id, window, cx));
+        palette.update(cx, |palette, _| palette.on_pick(picked));
         Desk {
             sidebar_open: true,
             toast: None,
-            chat,
+            screens,
+            shown: Shown::new(name, view),
+            parked: Vec::new(),
+            palette,
+            focus: cx.focus_handle(),
+        }
+    }
+
+    pub fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        eprintln!("desk: palette open");
+        self.palette
+            .update(cx, |palette, cx| palette.open(window, cx));
+    }
+
+    fn show(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.shown.name == name {
+            return eprintln!("desk: screen {name} already shows");
+        }
+        let next = match self.parked.iter().position(|parked| parked.name == name) {
+            Some(at) => self.parked.swap_remove(at),
+            None => {
+                let Some(screen) = self.screens.iter().find(|screen| screen.name == name) else {
+                    return eprintln!("desk: screen {name} is not in this build");
+                };
+                match (screen.open)(None, window, cx) {
+                    Ok(view) => Shown::new(screen.name.into(), view),
+                    Err(error) => return eprintln!("desk: screen {name} did not open: {error}"),
+                }
+            }
+        };
+        let left = std::mem::replace(&mut self.shown, next);
+        self.parked.push(left);
+        let focus = match &self.shown.body {
+            #[cfg(feature = "screen-work")]
+            Body::Work(work) => work.focus_handle(cx),
+            Body::View(_) => self.focus.clone(),
+        };
+        focus.focus(window, cx);
+        eprintln!("desk: screen {name}");
+        cx.notify();
+    }
+
+    fn picked(&mut self, id: &SharedString, window: &mut Window, cx: &mut Context<Self>) {
+        eprintln!("desk: palette picked {id}");
+        if let Some(name) = id.strip_prefix(SCREEN_ID) {
+            return self.show(name, window, cx);
+        }
+        if id == OPEN_SETTINGS_ID {
+            return self.show(SETTINGS, window, cx);
+        }
+        let action = id
+            .strip_prefix(LAYOUT_ID)
+            .and_then(|label| SHORTCUTS.iter().find(|shortcut| shortcut.label == label))
+            .map(|shortcut| shortcut.action);
+        match (action, &self.shown.body) {
+            (None, _) => eprintln!("desk: palette: {id} is not a command the desk knows"),
+            #[cfg(feature = "screen-work")]
+            (Some(action), Body::Work(work)) => {
+                work.update(cx, |work, cx| work.run(action, "", window, cx));
+            }
+            (Some(action), Body::View(_)) => eprintln!(
+                "desk: palette: {action:?} needs the work screen, and {} shows",
+                self.shown.name
+            ),
+        }
+    }
+
+    #[cfg_attr(
+        not(feature = "screen-work"),
+        expect(
+            unused_variables,
+            reason = "only the work screen has a composer to focus"
+        )
+    )]
+    fn escape(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.key != "escape" {
+            return;
+        }
+        match &self.shown.body {
+            #[cfg(feature = "screen-work")]
+            Body::Work(work) => {
+                let focused = work.update(cx, |work, cx| work.focus_composer(window, cx));
+                eprintln!("desk: escape: the composer has focus {focused}");
+            }
+            Body::View(_) => eprintln!("desk: escape: {} has no composer", self.shown.name),
+        }
+    }
+
+    #[cfg_attr(
+        not(feature = "screen-work"),
+        expect(
+            unused_variables,
+            reason = "only the work screen is fitted to the window"
+        )
+    )]
+    fn content(
+        &self,
+        theme: &Theme,
+        window: &Window,
+        cx: &mut App,
+    ) -> (Option<AnyElement>, AnyElement) {
+        match &self.shown.body {
+            #[cfg(feature = "screen-work")]
+            Body::Work(work) => {
+                let viewport = window.viewport_size();
+                let x = if self.sidebar_open {
+                    SIDEBAR_WIDTH
+                } else {
+                    GUTTER
+                };
+                let area = Rect {
+                    x,
+                    y: TITLE_BAR_HEIGHT,
+                    w: f32::from(viewport.width) - x - GUTTER,
+                    h: f32::from(viewport.height) - TITLE_BAR_HEIGHT - STATUS_BAR_HEIGHT,
+                };
+                work.update(cx, |work, _| work.fit(area));
+                let tabs = work.read(cx).tabs(work.downgrade(), theme);
+                (
+                    Some(tabs.into_any_element()),
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(work.clone())
+                        .into_any_element(),
+                )
+            }
+            Body::View(view) => (
+                None,
+                outer_card(theme)
+                    .flex_1()
+                    .child(inner_card(theme).child(view.clone()))
+                    .into_any_element(),
+            ),
         }
     }
 
@@ -94,12 +312,19 @@ impl Desk {
         cx.notify();
     }
 
-    fn global_key(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn global_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
-        if stroke.modifiers.control && stroke.key == "b" {
-            cx.stop_propagation();
-            self.toggle_sidebar(cx);
+        let held = stroke.modifiers;
+        if !held.control || held.alt || held.shift || held.platform {
+            return;
         }
+        match stroke.key.as_str() {
+            "b" => self.toggle_sidebar(cx),
+            "k" => self.open_palette(window, cx),
+            "," => self.show(SETTINGS, window, cx),
+            _ => return,
+        }
+        cx.stop_propagation();
     }
 
     fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
@@ -160,10 +385,13 @@ impl Render for Desk {
                     }),
                 ))
         });
+        let (tabs, content) = self.content(&theme, window, cx);
         div()
             .size_full()
             .relative()
+            .track_focus(&self.focus)
             .capture_key_down(cx.listener(Self::global_key))
+            .on_key_down(cx.listener(Self::escape))
             .flex()
             .flex_col()
             .bg(theme.color(ColorToken::SurfaceWindow))
@@ -171,6 +399,7 @@ impl Render for Desk {
             .text_color(theme.color(ColorToken::TextBase))
             .child(crate::title_bar::render(
                 self.sidebar_open,
+                tabs,
                 &theme,
                 window,
                 cx,
@@ -180,18 +409,15 @@ impl Render for Desk {
                     .flex_1()
                     .min_h_0()
                     .flex()
-                    .pr_2()
+                    .pr(px(GUTTER))
                     .when(self.sidebar_open, |body| {
                         body.child(Self::sidebar(&theme, cx))
                     })
-                    .when(!self.sidebar_open, |body| body.pl_2())
-                    .child(
-                        outer_card(&theme)
-                            .flex_1()
-                            .child(inner_card(&theme).child(self.chat.clone())),
-                    ),
+                    .when(!self.sidebar_open, |body| body.pl(px(GUTTER)))
+                    .child(content),
             )
             .child(crate::status_bar::render(&theme, &problems, cx))
+            .child(self.palette.clone())
             .children(toast_layer)
     }
 }

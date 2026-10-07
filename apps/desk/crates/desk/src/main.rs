@@ -61,14 +61,28 @@ use std::env;
 use std::process::ExitCode;
 use std::rc::Rc;
 
+use desk::{Open, Screen};
 use desk_ui::icon::Icon;
-use gpui::{AnyView, App, AppContext, Window};
+use gpui::{App, AppContext, EmptyView};
 
 const USAGE: &str = "usage: desk [--screen <name> [--board <ID>]]\n\
 screens: work settings accounts theme library classifier usage limits context session intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
-
-type Open = fn(Option<&str>, &mut Window, &mut App) -> Result<AnyView, String>;
+const SCREENS: [&str; 13] = [
+    "work",
+    "settings",
+    "accounts",
+    "theme",
+    "library",
+    "classifier",
+    "usage",
+    "limits",
+    "context",
+    "session",
+    "intro",
+    "onboarding",
+    "platforms",
+];
 
 struct ScreenLaunch {
     name: String,
@@ -141,36 +155,51 @@ fn parse(args: &[String]) -> Result<Launch, String> {
 }
 
 fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
-    let opened = match launch {
-        Launch::Desk => cx
-            .open_window(
-                desk::window_options(desk::WINDOW_TITLE.into(), desk::desk_client(), cx),
-                |window, cx| {
-                    let store = cx.new(|_| desk_core::model::Store::default());
-                    let chat = modules::chat::live(store, window, cx);
-                    cx.new(|_| desk::Desk::new(chat))
-                },
-            )
-            .map(drop),
-        Launch::Screen(launch) => {
-            let title = format!("{} {}", desk::WINDOW_TITLE, launch.name);
-            let mut refused = None;
-            let window = cx.open_window(
-                desk::window_options(title.into(), desk::board_client(), cx),
-                |window, cx| {
-                    let view = (launch.open)(launch.board.as_deref(), window, cx)
-                        .map_err(|error| refused = Some(error))
-                        .ok();
-                    cx.new(|_| desk::ScreenRoot(view))
-                },
-            );
-            if let Some(error) = refused {
-                return Err(error);
-            }
-            window.map(drop)
-        }
+    let screens: Vec<Screen> = SCREENS
+        .into_iter()
+        .filter_map(|name| {
+            Some(Screen {
+                name,
+                open: screen(name).ok()?,
+            })
+        })
+        .collect();
+    let (title, client, name, board, open): (String, _, String, _, Open) = match launch {
+        Launch::Desk => (
+            desk::WINDOW_TITLE.to_owned(),
+            desk::desk_client(),
+            "chat".to_owned(),
+            None,
+            |_, window, cx| {
+                let store = cx.new(|_| desk_core::model::Store::default());
+                Ok(modules::chat::live(store, window, cx).into())
+            },
+        ),
+        Launch::Screen(launch) => (
+            format!("{} {}", desk::WINDOW_TITLE, launch.name),
+            desk::board_client(),
+            launch.name,
+            launch.board,
+            launch.open,
+        ),
     };
-    opened.map_err(|error| format!("tofu desk could not open its window: {error:#}"))
+    let mut refused = None;
+    let window = cx.open_window(
+        desk::window_options(title.into(), client, cx),
+        |window, cx| {
+            let view = open(board.as_deref(), window, cx).unwrap_or_else(|error| {
+                refused = Some(error);
+                cx.new(|_| EmptyView).into()
+            });
+            cx.new(|cx| desk::Desk::new(screens, name.into(), view, window, cx))
+        },
+    );
+    if let Some(error) = refused {
+        return Err(error);
+    }
+    window
+        .map(drop)
+        .map_err(|error| format!("tofu desk could not open its window: {error:#}"))
 }
 
 fn main() -> ExitCode {
