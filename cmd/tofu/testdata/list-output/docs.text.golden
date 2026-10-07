@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 85 asks                                                         20 topics
+Docs · 87 asks                                                         21 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -105,6 +105,13 @@ keys  the keys the app answers to, which ones you can rebind, and finding a
   prompt you sent before with ctrl+p
   find a prompt I sent in another session
     → ctrl+p in the app, type part of it, then enter
+
+memory  what tofu remembers for you across sessions, for every project or for
+  one, and how to add, list and forget it
+  remember something for every later session
+    → tofu memory add --global "<what to keep>"
+  forget something tofu remembers
+    → tofu memory remove <id>
 
 models  sign in to a subscription, name a model as source/model, choose the
   model a task runs, and set the tiers

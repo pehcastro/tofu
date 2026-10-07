@@ -185,6 +185,10 @@ exit 0
         "do": "tofu docs instructions"
       },
       {
+        "text": "Memory",
+        "do": "tofu docs memory"
+      },
+      {
         "text": "Rules",
         "do": "tofu docs rules"
       },

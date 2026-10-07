@@ -360,6 +360,12 @@ const (
 )
 
 const (
+	MemoryScopeBytes        = 4096
+	MemoryOffersAskedFirst  = 50
+	MemoryAcceptedToTrustAt = 45
+)
+
+const (
 	HostEventBuffer   = 256
 	HostSteeringQueue = 64
 )

@@ -36,6 +36,8 @@ func commands(options Options) []session.Command {
 		{Name: "quote", What: "cite a past turn by id, newest first"},
 		{Name: "copy", What: "put the last answer on the clipboard"},
 		{Name: "copy-call", What: "put the last tool call and its result on the clipboard"},
+		{Name: "memory", What: "what tofu remembers for you, global and for this project"},
+		{Name: "remember", What: "keep a line for every later session: /remember <what>"},
 	}
 	if options.Reload != nil {
 		listed = append(listed, session.Command{Name: "reload", What: "re-read settings, rules, skills, sub-agents, models, instructions and keys from disk"})
@@ -117,6 +119,10 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "copy-call":
 		call, found := a.view.LastCall()
 		return a.copy(callUnit, call, found)
+	case "memory":
+		a.view.Append(session.Entry{Kind: session.Note, Body: a.memoryNote()})
+	case "remember":
+		a.view.Append(session.Entry{Kind: session.Note, Body: rememberUsage})
 	case "reload":
 		a.reload()
 	case "resume":

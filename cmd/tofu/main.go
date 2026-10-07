@@ -60,6 +60,8 @@ Verbs:
   library   resolve a library entry and show the origin of each field
   lint      run a house-rule check over the tree
   rules     list the rule library, run it, read back what fired, or index a task
+  memory    list what you asked tofu to remember, global and for this project,
+            or add or remove an entry
   frame     print one recorded interface frame, at a width and a height
   drive     run a script of what a person would do against the real app,
             with no terminal and no model call, and print the screens it asks for
@@ -177,6 +179,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return lintVerb(args[1:], out, errOut)
 	case "rules":
 		return rulesVerb(args[1:], out, errOut)
+	case "memory":
+		return memoryVerb(args[1:], out, errOut)
 	case "settings":
 		return settingsVerb(args[1:], out, errOut)
 	case "reload":

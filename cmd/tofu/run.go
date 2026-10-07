@@ -30,6 +30,7 @@ import (
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/llm/wire/openrouter"
+	"tofu/internal/memory"
 	"tofu/internal/recall"
 	"tofu/internal/recipe"
 	"tofu/internal/rule"
@@ -590,6 +591,7 @@ type composedRun struct {
 	opts         runOpts
 	environment  string
 	files        string
+	memory       string
 	instructions string
 	composed     turn.Composed
 	subAgents    turn.SubAgents
@@ -611,6 +613,14 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	environment, files, instructions, notice := runEnvironment(opts)
 	say(notice)
+	remembered := ""
+	if opts.agent == "" {
+		block, unread := memory.Block(cmp.Or(opts.dir, "."))
+		if unread != nil {
+			say("your memory is not sent this turn: " + unread.Error())
+		}
+		remembered = block
+	}
 	discovered := <-found
 	opts.subAgentList = turn.SubAgentList(discovered.Definitions)
 	for _, broken := range discovered.Broken {
@@ -656,7 +666,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		spec.Role = rule.RoleOrchestrator
 	}
 	composed, err := turn.Compose(spec)
-	return composedRun{opts: opts, environment: environment, files: files, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
+	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
 		checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
 }
 
@@ -698,6 +708,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		System:        composed.Head(),
 		Environment:   composed.WithTaskRules(environment),
 		Instructions:  prompt.files,
+		Memory:        prompt.memory,
 		Caps: turn.Caps{
 			MaxSteps:         opts.maxSteps,
 			LoopGuardRepeats: opts.loopGuardRepeats,
@@ -738,7 +749,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return config, nil, nil
 	}
 	subAgentBase := config
-	subAgentBase.Instructions = ""
+	subAgentBase.Instructions, subAgentBase.Memory = "", ""
 	spawner := turn.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
 	spawner.SubAgents.Open = run.subAgentOpener(opts)

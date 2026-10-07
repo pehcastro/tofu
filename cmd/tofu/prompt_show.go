@@ -19,7 +19,7 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
-	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Environment: composed.WithTaskRules(prompt.environment), Task: opts.task}
+	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment), Task: opts.task}
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 

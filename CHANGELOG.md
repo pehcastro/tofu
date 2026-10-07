@@ -20,6 +20,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Added
 
+- **`tofu memory` and the app's offer card.** Type `remember: ...` or `/remember ...`, pick for every project or this one, and the lead reads it in every later session. `tofu memory` lists what is kept, in your words; `tofu memory remove <id>` forgets it.
+
 - **The lead controls its sub-agents.** `subagents` lists the paths each one holds, and with a name reads one's conversation or shows what it is doing now. `message` with `do` stops, kills (its shells too), releases or backs one up, and `from` resumes one from a backup.
 
 - **Two hook events only tofu has.** `GateVerdict` runs after the gate decides on a call and can turn an ask into allow or deny, or a deny into ask, never a deny into allow. `SubagentSpawn` runs before a sub-agent starts and can refuse it or narrow its owns, never widen them. See `tofu docs hooks`.

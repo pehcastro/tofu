@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           48 matches
+Docs · "change the colours"                                           49 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -90,6 +90,8 @@ Docs · "change the colours"                                           48 matche
     → tofu docs files
   Instruction files
     → tofu docs instructions
+  Memory
+    → tofu docs memory
   Rules
     → tofu docs rules
   Sessions

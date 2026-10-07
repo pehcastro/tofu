@@ -63,6 +63,11 @@ exit 0
         "summary": "the keys the app answers to, which ones you can rebind, and finding a prompt you sent before with ctrl+p"
       },
       {
+        "topic": "memory",
+        "title": "Memory",
+        "summary": "what tofu remembers for you across sessions, for every project or for one, and how to add, list and forget it"
+      },
+      {
         "topic": "models",
         "title": "Models",
         "summary": "sign in to a subscription, name a model as source/model, choose the model a task runs, and set the tiers"
@@ -612,6 +617,18 @@ exit 0
         "do": "ctrl+p in the app, type part of it, then enter",
         "check": "/keys",
         "topic": "keys"
+      },
+      {
+        "ask": "remember something for every later session",
+        "do": "tofu memory add --global \"<what to keep>\"",
+        "check": "tofu memory",
+        "topic": "memory"
+      },
+      {
+        "ask": "forget something tofu remembers",
+        "do": "tofu memory remove <id>",
+        "check": "tofu memory",
+        "topic": "memory"
       },
       {
         "ask": "drive tofu from another program over standard input and output",

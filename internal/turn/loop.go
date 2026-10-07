@@ -117,6 +117,7 @@ type Config struct {
 	References      map[string]string
 	Environment     string
 	Instructions    string
+	Memory          string
 	ImagesOf        func(said string) []llm.Image
 	Caps            Caps
 	Sift            *ShellSift
@@ -163,7 +164,7 @@ func (c Config) FirstUserMessage(notes ...string) string {
 }
 
 func (c Config) SystemMessage() string {
-	return strings.TrimSpace(c.System + "\n\n" + c.Instructions)
+	return strings.TrimSpace(c.System + "\n\n" + c.Instructions + "\n\n" + c.Memory)
 }
 
 func TaskIn(first string) (string, bool) {

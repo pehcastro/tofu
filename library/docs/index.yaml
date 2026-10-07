@@ -334,6 +334,14 @@
   do: ctrl+p in the app, type part of it, then enter
   check: /keys
   topic: keys
+- ask: remember something for every later session
+  do: tofu memory add --global "<what to keep>"
+  check: tofu memory
+  topic: memory
+- ask: forget something tofu remembers
+  do: tofu memory remove <id>
+  check: tofu memory
+  topic: memory
 - ask: drive tofu from another program over standard input and output
   do: tofu serve --stdio
   check: tofu serve --schema
