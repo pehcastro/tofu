@@ -2,7 +2,7 @@
 title: Context
 description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry handles instead of text.
 order: 5
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -17,7 +17,7 @@ judgment:
 | **Middle elision** | What the model reads of a large result is its two ends, with a marker saying how many bytes were left out and where they are |
 | **Memo of repeated calls** | A read, glob, search or fetch repeated in a turn, with nothing written since, is answered from memory |
 | **Browser pages** | Past 4 whole page snapshots in a conversation, older ones shrink to a 600 byte summary and a handle, keeping 2 whole |
-| **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task and a carry of what was read, as handles |
+| **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task, every message you typed, word for word, and a carry of what was read, as handles |
 | **Recall** | `artifact_fetch` reads any range of any handle, so nothing that left the conversation is lost |
 
 **A full window** is recovered in the turn. When the model says a request is
@@ -59,6 +59,13 @@ said. A fork shrank one session from 66,162 tokens to 17,865 and another from
 57,326 to 7,811, and neither fetched again anything it had dropped. The fork's
 first request read 9,457 and 6,105 tokens from the cache and wrote none.
 
+**Your words are carried, not summarised.** Every fork's carry lists what
+you typed in this line of sessions, oldest first, each message word for
+word on its own line, so a correction made three forks ago still holds.
+It keeps the newest 24,000 bytes, and a message over 4,000 bytes keeps its
+start. A conversation continued or resumed over the target forks before
+its first request, so the whole history is never sent first.
+
 ## Watching and changing it
 
 - **See how full a session is**: `tofu context`, or the context meter in the
@@ -75,6 +82,8 @@ first request read 9,457 and 6,105 tokens from the cache and wrote none.
   tool result in the history is shrunk to its handle, with no model call,
   and the chat says how many and the tokens before and after. The shrunk
   history is a new session, so `tofu --continue` carries it after a restart.
+  Typed while the lead waits on its sub-agents, it says so and runs when
+  the turn ends.
 - **Watch a fork**: the chat shows **⟳ forking**, and `tofu session list`
   lists the new session.
 

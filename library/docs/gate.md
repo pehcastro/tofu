@@ -31,9 +31,9 @@ A sub-agent never asks you. Its ask goes to the lead that started it, with
 the call, the verdict and the risk; the lead answers allow or deny within 5
 minutes, or the call is refused. A PreToolUse hook's ask goes to the lead
 too. A call that would wait for you is refused, and the lead is not asked.
-`tofu session trace` shows the ask.
-
-Every verdict is kept as a row in the decision ledger.
+`tofu session trace` shows the ask, `allowed by the orchestrator` when the
+lead let it run, `relaxed by` and the answer that lowered a verdict, and a
+verdict a GateVerdict hook changed. Every verdict is a ledger row.
 
 ## Where it lives
 

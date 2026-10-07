@@ -116,4 +116,6 @@ Shells                                                         ○ none register
 ```
 
 `tofu shells log|stop|restart <name>` act on one process, and every
-subcommand takes `--json`.
+subcommand takes `--json`. A finished shell stays on the list for 72 hours.
+A new shell is numbered past every name still listed, so `bash-3` names one
+command, also across `tofu --continue`.

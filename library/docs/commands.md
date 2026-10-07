@@ -18,7 +18,8 @@ command never reaches the model.
 - `/keys`: every key the app answers to, grouped, with what it does; the
   rebindable ones show the key bound now. Type to filter, esc closes
 - `/links`: every link this conversation carried, newest first
-- `/quote`: cite a past turn by id
+- `/quote`: cite a past turn by id; the `[message#id]` beside any message
+  in the chat works the same when typed
 - `/copy`, `/copy-call`: put the last answer, or the last tool call and
   its result, on the clipboard
 - `/reload`: read settings, rules, skills, sub-agents, models,
@@ -78,9 +79,10 @@ before and after, in tokens:
     went from about 1599 tokens to 695, and the next turn carries it as
     session 6eae6fe1-0bc5-473f-bd01-ad4361d330c5
 
-While a turn runs, `/compact` does nothing and says to stop the turn first
-with ctrl+c. With no history yet, or nothing left to shrink, it says so and
-changes nothing.
+While the lead works, `/compact` does nothing and says to stop the turn
+first with ctrl+c. While the lead is idle but waits on its sub-agents,
+`/compact`, `/new` and `/undo` say so and run when the turn ends. With no
+history yet, or nothing left to shrink, it says so and changes nothing.
 
 Between turns, `/undo 2` undoes the last two turns, and a second `/undo`
 goes one turn further back. From a terminal:

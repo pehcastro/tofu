@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-04
+updated: 2026-10-07
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -22,8 +22,21 @@ commit by mistake.
 last event, and `tofu --continue` picks up from there.
 
 **Never rewritten.** When a session forks to stay under its context budget,
-the old one keeps its whole record and points at the new one. tofu never
-deletes a session either; that is yours to do.
+the old one keeps its whole record and points at the new one, and the new
+one carries every message you typed, word for word. tofu never deletes a
+session either; that is yours to do.
+
+**Every message has an id you can point at.** The chat shows each message,
+yours, the lead's and each sub-agent report, with the id it was recorded
+under, such as `[message#9c2d40]`. Type that reference and the lead quotes
+the message itself rather than its memory of it, across forks and
+`--continue`. `tofu session trace` lists the same ids.
+
+**A continued session opens as it was.** Each session file is read once,
+so `tofu --continue` opens in under a second on a chain of 21 sessions
+with 84 sub-agents. Each message keeps its own time, each sub-agent report
+draws as a report, and a conversation over the context target forks
+before its first request instead of resending the whole history.
 
 ## Continuing, naming and removing
 
@@ -51,7 +64,9 @@ Sessions · 123 sessions                                 ● head clear-sable-ea
 
 `tofu session info <name>` prints one session with its model, cost,
 context budget and the error it ended on, `tofu session trace <name>` every
-request, tool call, message tofu added, fork and failure, `tofu session
+request, message, tool call, hook run, message tofu added, fork and
+failure, and on a continued session the sub-agents that kept working in
+the session before it, `tofu session
 request <name> <request id>` one request exactly as it was sent with its
 response or error body, and `tofu session reads <name>` every file it read.
 Each takes `--json`.

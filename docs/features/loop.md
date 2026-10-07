@@ -2,7 +2,7 @@
 title: The loop
 description: tofu's own code runs the loop of steps, decides when a turn ends, and stops a turn that repeats itself.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-07
 ---
 
 The loop is the part of tofu that drives a turn. Each step, tofu sends the
@@ -19,6 +19,14 @@ adds anything you typed and any sub-agent report from the inbox.
 A turn ends on a final message, on the step cap, on the loop guard, or on an
 error. On a cap or the guard, tofu asks the model once more for what it did,
 what is left and what to do next.
+
+The lead runs a next step it can run rather than offering it. When its
+final message ends by handing you a step, such as "want me to run the
+build?", tofu sends it back once to take the step and report what came of
+it. Its rules tell it to ask you only what you alone can settle, such as
+money, taste, something that cannot be undone, or access it does not
+have, and to say in plain words what it checked and what it did not,
+with no verdict line.
 
 ## Why code decides when to stop
 

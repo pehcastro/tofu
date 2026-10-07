@@ -2,7 +2,7 @@
 title: Hooks
 description: The Claude Code and codex hooks you already wrote run under tofu unchanged, around every tool call, prompt and turn's end, and a project's hooks run only once you trust them.
 order: 13
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 A hook is a command you configured to run at a moment in a turn. tofu reads
@@ -20,11 +20,14 @@ names reaches tofu's own tools. A matcher like `Write|Edit` matches.
 
 **Every turn runs them, sub-agents too.** The hooks fire from the turn
 itself, so the app, `tofu run` and every sub-agent run the same hooks.
-`SubagentStop` fires when one of tofu's sub-agents finishes.
+`SubagentStop` fires when one of tofu's sub-agents finishes. A
+`PreToolUse` hook that asks about a sub-agent's call asks the lead, the way
+the gate does, and the sub-agent waits for its answer.
 
 **A cloned repository cannot run a command on your machine unasked.** A
 project's hooks run only after you trust them. tofu pins each one by a hash
-of its entry and of the script it runs, and asks again when either changes.
+of its entry and of the script it runs, and asks again when either changes,
+whatever you answered before.
 Hooks in your home are yours and run as they are.
 
 **A hook can act on Jev's verdict, and only tofu has one.** `GateVerdict`
@@ -34,7 +37,7 @@ deny into ask, or tighten any verdict. It can never turn a deny into allow,
 and it never touches a call only you may answer.
 
 **A hook can shape a sub-agent before it starts.** `SubagentSpawn` fires
-with the definition, mission and owns. A hook can refuse the spawn or
+with the definition, mission, the task it is given and owns. A hook can refuse the spawn or
 narrow owns, never widen them: a glob tofu cannot prove is inside what was
 asked refuses the spawn.
 

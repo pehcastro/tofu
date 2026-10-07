@@ -99,8 +99,10 @@ next step. When idle, a new message or report starts a turn.
   asks the sub-agent that started it.
 - **Progress**: `subagents` lists each sub-agent's state, its last tool
   call and the paths it holds. With a name, `show read` gives its report,
-  files and conversation without resuming it, and `show diagnose` gives its
-  open calls, shells, last requests and failures.
+  files and conversation without resuming it, so far when it still runs,
+  and `show diagnose` gives its open calls, the last 10 lines of each of its
+  shells, its last request and its failures. `do backup` on a running one
+  keeps its conversation so far.
 
 After a restart, the sub-agents of the session come back holding no paths,
 so the lead can start a new one on the same files at once.
@@ -119,7 +121,9 @@ file to hold. A sub-agent it spawns holds no paths either.
 
 The chat stays on the conversation with the lead. A running
 sub-agent shows as one line, such as `running [&go-dev-1]`, and its report
-comes back folded under the lead's answer.
+comes back folded under the lead's answer. One that has been on a call for
+`subAgentWatchSeconds` says what it is doing, such as `building, 12m`, and
+reads `stalled` only when nothing has moved for that long.
 
 ![The finished answer, with go-dev's report folded under it](./media/tui-task-answer.png)
 
@@ -141,5 +145,6 @@ To run the lead alone: `tofu settings set turnMaySpawn false`.
 | `subAgentsPerTurn` (10) | Sub-agents running at once |
 | `subAgentDepth` (2) | How deep sub-agents may spawn their own |
 | `subAgentCheckSeconds` (1800) | Seconds between checks on a running sub-agent; 0 sends none |
+| `subAgentWatchSeconds` (600) | Seconds a sub-agent's call runs before its row says what it is doing, and with nothing moving, before it reads stalled |
 | `verifySubAgents` (false) | Off: the lead takes a finished sub-agent's report as the result, unless the report says something failed. On: the lead reads what the sub-agent changed and runs the build or tests again. `tofu rules restore verify_sub_agents` also turns it on |
 | `turnMaySpawn` (`true`) | Whether the lead may spawn at all |

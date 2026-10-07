@@ -12,6 +12,14 @@ sub-agent, recorded as it happens. You can continue it later, read it
 back, or give it a name. The session you last worked in is the head, and
 that is the one `tofu --continue` opens.
 
+Every message in the chat shows the id it was recorded under, such as
+`[message#9c2d40]`, yours, the lead's and each sub-agent report alike.
+Type that reference in a message and the lead quotes it, across forks
+and `--continue`. When a session forks, the new one carries every
+message you typed, word for word. A resumed chat draws each message at
+its own time and each report as a report, and a conversation over the
+context target forks before its first request.
+
 A shell an agent started, like a dev server, keeps running after the task
 and stops when tofu exits, with every process it started. That holds when
 tofu is killed too. With the `persistentRegistry` setting on, a shell keeps
@@ -30,12 +38,8 @@ with every character that is not a letter or a digit turned into `-`, so
 - `shells/`: the shells an agent left running, and their logs
 
 None of this is written into the project. tofu never deletes a session
-on its own.
-
-Older versions kept all this in the project's `.tofu` folder. Opening the
-app in a project moves it into your home; `tofu migrate` does the same
-from the command line, and also converts sessions recorded in the older
-layout.
+on its own. Older versions kept all this in the project's `.tofu` folder;
+opening the app there, or `tofu migrate`, moves it into your home.
 
 ## Change it
 
@@ -86,14 +90,16 @@ every file it read.
 
     tofu session trace <name|id>
 
-lists every request and its new messages, every tool call with its
-arguments, gate verdict and hooks, a failed one marked `✗` with its reason,
-each message tofu added (a steer, a sub-agent check or report, a fork's
-carry) with when it was posted and taken, each fork, compaction and resume,
-and each turn that ended in an error. `tofu session request <name|id>
-<request id>` prints one request exactly as sent: its messages, each wire
-attempt with status, provider request id, body and error body, then the
-response. A request id is any ending of the id the trace prints.
+lists every request and its new messages, every message with its
+`[message#id]`, every tool call with its arguments, gate verdict and
+hooks, a failed one marked `✗` with its reason, each message tofu added (a
+steer, a sub-agent check or report, a fork's carry) with when it was
+posted and taken, each fork, compaction and resume, each turn that ended
+in an error, and the sub-agents that kept working across a continue.
+`tofu session request <name|id> <request id>` prints one request exactly
+as sent: its messages, each wire attempt with status, provider request
+id, body and error body, then the response. A request id is any ending
+of the id the trace prints.
 
     tofu context
 
@@ -103,14 +109,12 @@ what filled it. Name a session id to see another one.
     tofu shells list
     tofu shells log <name>
 
-list the shells, each with its state, pid and command, and print one's
-output. In the app, `/shells` shows the same. Every verb here takes
-`--json` and prints one JSON document.
+list the shells, each with its state, pid and command, finished ones for
+72 hours, and print one's output. In the app, `/shells` shows the same.
+Every verb here takes `--json` and prints one JSON document.
 
 ## Undo it
 
-Delete a session's folder under `sessions/` to remove it for good. There
-is no command for that, on purpose.
-
-A rename is undone by renaming again. `tofu migrate` moves and converts,
+Delete a session's folder under `sessions/` to remove it for good. A
+rename is undone by renaming again. `tofu migrate` moves and converts,
 and has no undo, which is why `--dry-run` lists every move first.

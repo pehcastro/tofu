@@ -14,7 +14,8 @@ and, optionally, JSON on standard output. The events fire from the turn
 itself, so the app, `tofu run` and every sub-agent run them alike:
 
 - `PreToolUse`: before a tool call. Exit 2 or `permissionDecision` deny
-  refuses it, ask asks you, and `updatedInput` rewrites it.
+  refuses it, ask asks you, or the lead for a sub-agent's call, and
+  `updatedInput` rewrites it.
 - `PostToolUse`: after a tool call. Exit 2 or `decision: block` puts the
   reason beside the result.
 - `UserPromptSubmit`: when a prompt starts a turn. Exit 2 refuses it; plain
@@ -67,7 +68,7 @@ where `./narrow.sh` prints
 The app asks about a project's hooks once, when a turn starts: allow once,
 always, or deny. `tofu run` cannot ask, so an untrusted hook does not run.
 Trust is a hash of the entry and of every script it names in the project;
-change either and it is asked about again. tofu keeps trust in
+change either and it is asked about again, whatever you answered before. tofu keeps trust in
 `~/.tofu/hooks/trusted.json` and last results in `~/.tofu/hooks/last.json`.
 
 Limits:

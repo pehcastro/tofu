@@ -33,6 +33,9 @@ back as the same text chip it was sent as.
 `up` and `down` in an empty composer walk the prompts of the session you
 are in, without a search.
 
+`shift+enter`, `alt+enter` and `ctrl+j` add a line. The composer grows to
+8 rows and then scrolls, keeping every line you typed.
+
 `ctrl+c` while the lead works stops the lead at once, and its sub-agents
 keep running. With the lead idle and sub-agents working, the first press
 shows "this will stop 2 sub-agents, press Ctrl+C again to confirm" for 3

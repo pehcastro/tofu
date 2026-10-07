@@ -2,7 +2,7 @@
 title: Ownership
 description: Every sub-agent holds the paths it may write, tofu checks every write against them, and sub-agents with different paths run side by side.
 order: 4
-updated: 2026-10-04
+updated: 2026-10-07
 ---
 
 Every sub-agent that can write holds a list of paths, its `owns`: a file, a
@@ -21,7 +21,10 @@ folder, or a glob such as `internal/turn/*.go`. The lead gives it in the
   are the lead's to run once, after the sub-agents finish.
 
 Two running sub-agents never hold overlapping paths. A spawn that would is
-refused and told to `message` the holder instead.
+refused and told to `message` the holder instead. After a restart, the
+session's earlier sub-agents hold no paths, so a spawn on their files
+starts at once, and one of them takes its paths back when a message
+resumes it and nobody else holds them.
 
 ## Why paths are held
 

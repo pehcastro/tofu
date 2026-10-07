@@ -8,10 +8,14 @@ verbs: run, settings
 ## What it is
 
 An instruction file is a plain Markdown file of house rules for a project,
-like how to run the tests or which folders never to touch. tofu sends it
-to the model with every task. It reads `AGENTS.md`, the name most coding
-agents share, and `CLAUDE.md`, the name Claude Code uses, so a project set
-up for either one works here.
+like how to run the tests or which folders never to touch. It reads
+`AGENTS.md`, the name most coding agents share, and `CLAUDE.md`, the name
+Claude Code uses, so a project set up for either one works here.
+
+The lead reads the files at the end of its system prompt, which the
+provider caches, and never again in the message that starts a turn, such
+as a sub-agent's report. A sub-agent reads them in its first message,
+with the environment of its task.
 
 ## Where it lives
 
@@ -73,9 +77,9 @@ Work one task with no instruction file at all:
 
 prints the prompt the next task would send and sends nothing. Its
 `instruction files:` line says how many bytes of instructions went in, or
-that none was found, and the first user message shows each file under
-the name it came from. A file that was cut or skipped is named on a
-`tofu:` line.
+that none was found, and the end of the system message shows each file
+under the name it came from. A file that was cut or skipped is named on
+a `tofu:` line.
 
     tofu settings get instructionSources
     tofu settings get projectInstructionsCap

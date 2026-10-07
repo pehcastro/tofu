@@ -2,7 +2,7 @@
 title: The interface
 description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
-updated: 2026-10-05
+updated: 2026-10-07
 ---
 
 Run `tofu` in a project to open the app. Four tabs hold the work:
@@ -53,15 +53,22 @@ inside the 16.7 ms of a 60 Hz frame.
   `Ctrl+C`, `Ctrl+V`, `Ctrl+J` and `Alt+I` belong to the composer.
 - **Paste an image or a file**: `Ctrl+V` attaches what the clipboard holds.
   On Linux it reads through `wl-paste` on Wayland, or `xclip` or `xsel` on
-  X11, so install `wl-clipboard` or `xclip` first.
+  X11, so install `wl-clipboard` or `xclip` first. The image reaches the
+  model with the message it is in, also when that message waits for the
+  next step while sub-agents run, and after a fork.
 - **Drop a screenshot on the terminal**: a dragged or pasted path to a png,
   jpg, gif or webp file attaches the image. Any other path stays text.
 - **Answer the gate** when `gatePrompt` is `ask`: `1` allows once, `2`
   refuses, `3` always allows that tool on that file this session.
-- **See a sub-agent that stopped moving**: a sub-agent whose tool call has
-  been open for 11 minutes, a minute past the longest bash deadline, is
-  shown as stalled under the turn line, with the call and how long it has
-  been open. The call says so on the Sub-agents tab too.
+- **See what each sub-agent is doing**: under the turn line, a sub-agent
+  waiting on the lead, or with a call open longer than
+  `subAgentWatchSeconds` (600), says what it is doing: `waiting for the
+  orchestrator's answer, 5m 30s`, `running bash, 12m` or `building, 12m`.
+  It reads `stalled` only when no output, step or request has moved for
+  that long, and the call says so on the sub-agents tab too.
+- **Point at a message**: each message shows the id it was recorded under,
+  such as `[message#9c2d40]`. Type it in a prompt and the lead quotes that
+  message.
 - **Open on the last session**: `tofu --continue`.
 - **Go back to any session without leaving**: `/resume` lists this
   project's sessions, newest first, with the one in use marked. Type a word
@@ -80,6 +87,7 @@ the key each rebindable action is bound to now. Type to filter it.
 | `Ctrl+K` | Search |
 | `Ctrl+L` | Pick the model |
 | `Shift+Tab` | Cycle the effort level |
+| `Shift+Enter`, `Alt+Enter`, `Ctrl+J` | New line; the composer grows to 8 rows, then scrolls |
 | `@` | Attach a file |
 | `Ctrl+G` | Edit the prompt in your editor |
 | `Ctrl+P` | Search the prompts you sent, in every session |

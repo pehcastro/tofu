@@ -83,7 +83,8 @@ Ask before stopping a shell from the shells screen:
 ## Check it
 
 List every shell, who started it, whether it still runs, how long it ran
-and when it last printed:
+and when it last printed. A finished one stays listed for 72 hours, and a
+new shell is numbered past every name listed, so a name means one command:
 
     tofu shells list
 

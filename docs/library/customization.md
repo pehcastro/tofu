@@ -2,7 +2,7 @@
 title: Customization
 description: Where tofu reads your own rules, sub-agents, skills and instruction files, including .claude, .agents, CLAUDE.md and AGENTS.md, which one wins, and how to override a rule tofu ships.
 order: 4
-updated: 2026-10-05
+updated: 2026-10-07
 ---
 
 You add to the library with plain files, for every project or for one. tofu
@@ -53,7 +53,9 @@ tofu's behaviour behind your back.
   `tofu settings set skills off` turns them off.
 - **Instructions**: when `AGENTS.md` and `CLAUDE.md` share a folder,
   `instructionSources` picks `agents-first` (default), `claude-first` or
-  `both`. They're cut at `projectInstructionsCap`, 32,768 bytes.
+  `both`. They're cut at `projectInstructionsCap`, 32,768 bytes, and sit
+  at the end of the lead's system prompt, where the provider caches them.
+  A sub-agent gets them in its first message.
 
 ## Overriding a rule
 

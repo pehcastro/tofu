@@ -11,8 +11,8 @@ it, and the lead reads every entry in its system message on every request.
 
 ## Why memory works the way it does
 
-**You decide what is kept.** A sentence that starts with `remember` gets an
-offer card: yes, no, or always, with `tab` to choose every project or this
+**You decide what is kept.** A sentence anywhere in a message that starts
+with `remember`, or `also remember`, gets an offer card: yes, no, or always, with `tab` to choose every project or this
 one. The lead can offer an entry too, quoting your own words, and gets the
 same three answers. Once 7 of your first 10 answers kept the entry, or you
 answer always, tofu keeps entries at once and prints the undo on the same
