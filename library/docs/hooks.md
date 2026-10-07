@@ -7,99 +7,101 @@ verbs: hooks
 
 ## What it is
 
-A hook is a command you configured to run at a moment in a turn: before a
-tool call, after one, when you send a prompt, or when the model is about to
-stop. tofu runs the hooks you already wrote for Claude Code and codex,
-unchanged. A hook reads one JSON document on standard input and answers
-with its exit code and, optionally, JSON on standard output.
+A hook is a command you configured to run at a moment in a turn. tofu runs
+the hooks you already wrote for Claude Code and codex, unchanged. A hook
+reads one JSON document on standard input and answers with its exit code
+and, optionally, JSON on standard output. The events fire from the turn
+itself, so the app, `tofu run` and every sub-agent run them alike:
 
-tofu fires these events, from the turn itself, so the app, `tofu run` and
-every sub-agent run them alike:
+- `PreToolUse`: before a tool call. Exit 2 or `permissionDecision` deny
+  refuses it, ask asks you, and `updatedInput` rewrites it.
+- `PostToolUse`: after a tool call. Exit 2 or `decision: block` puts the
+  reason beside the result.
+- `UserPromptSubmit`: when a prompt starts a turn. Exit 2 refuses it; plain
+  output becomes context.
+- `Stop` and `SubagentStop`: when the model or a sub-agent answers with no
+  tool call. Exit 2 keeps it going, at most 8 times in a row.
+- `SessionStart`: source `startup`, `resume`, `clear`, or `compact` after
+  tofu compacts inside a turn. Its output becomes context.
+- `SessionEnd`: when the app or `tofu drive` exits (`prompt_input_exit`) or
+  `tofu run` finishes (`other`). It has 1.5 seconds.
+- `GateVerdict`, tofu only: after Jev's gate decides on a call, with the
+  verdict, the risk and every answer under `gate`. It matches the tool name.
+  `permissionDecision` can turn an ask into allow or deny, a deny into ask,
+  or tighten any verdict, never a deny into allow. Exit 2 is deny, the
+  strictest of several hooks wins, and a hook-made ask goes to you. It does
+  not fire on calls only you may answer, a failed gate, or a gate in shadow.
+- `SubagentSpawn`, tofu only: before a sub-agent starts, with definition,
+  mission and owns under `spawn`. It matches the definition's name. Exit 2
+  or `decision: block` refuses the spawn; `owns` narrows the paths, `[]`
+  takes them all. A glob not provably inside what was asked, or two hooks
+  giving different owns, refuses the spawn.
 
-- `PreToolUse`: before a tool call. Exit 2 refuses the call, and the model
-  sees the hook's standard error as the reason. `permissionDecision` deny
-  refuses too, ask asks you, and `updatedInput` rewrites the call.
-- `PostToolUse`: after a tool call. Exit 2, or `decision: block`, puts the
-  reason in front of the model beside the result.
-- `UserPromptSubmit`: when a prompt starts a turn. Exit 2 refuses the
-  prompt. Plain output becomes context for the model.
-- `Stop`: when the model answers with no tool call. Exit 2 keeps the turn
-  going with the reason as the next message, at most 8 times in a row.
-- `SubagentStop`: the same, for one of tofu's sub-agents.
-- `SessionStart`: at the first turn of a session, with source `startup`,
-  `resume` after you continue a session, or `clear` after a fresh one.
-  Its output becomes context for the model.
-- `SessionEnd`: when the app exits, with reason `prompt_input_exit`, or when
-  `tofu run` finishes, with reason `other`. It has 1.5 seconds.
+A hook sees Claude's names: `Bash`, `Edit`, `Write`, `Agent`, and
+`file_path` rather than `path`, both ways.
 
-A hook sees Claude's names: `Bash`, `Edit`, `Write`, `Read`, `Agent`, and
-`file_path` rather than tofu's `path`. A matcher of `Edit` matches tofu's
-`edit`, and an `updatedInput` written with `file_path` reaches tofu's tool
-as `path`.
+Each event accepts its own fields. `GateVerdict` takes `permissionDecision`
+and `permissionDecisionReason`; `SubagentSpawn` takes `decision`, `reason`
+and `owns`; every event takes `systemMessage` and `suppressOutput`, and
+`hookSpecificOutput` needs a `hookEventName` naming its event. A misspelt
+or foreign field rejects the whole reply, and the problem shows in the
+trace and in `tofu hooks`.
 
 ## Where it lives
 
-- `~/.claude/settings.json`, `~/.codex/hooks.json` and `~/.tofu/hooks.json`:
-  yours, trusted as they are.
+- `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.codex/config.toml`
+  and `~/.tofu/hooks.json`: yours, trusted as they are.
 - `.claude/settings.json`, `.claude/settings.local.json`,
-  `.codex/hooks.json` and `.tofu/hooks.json` in a project: the project's,
-  which run only once you trust them.
+  `.codex/hooks.json`, `.codex/config.toml` and `.tofu/hooks.json` in a
+  project: run only once you trust them.
 
-Every file has the same shape:
+codex's `config.toml` keeps them under `[hooks]`. Every other file:
 
-    {"hooks": {"PreToolUse": [{"matcher": "Bash",
-      "hooks": [{"type": "command", "command": "./check.sh", "timeout": 10}]}]}}
+    {"hooks": {"SubagentSpawn": [{"matcher": "go-dev",
+      "hooks": [{"type": "command", "command": "./narrow.sh", "timeout": 10}]}]}}
 
-tofu remembers what you trusted in `~/.tofu/hooks/trusted.json`, and each
-hook's last result in `~/.tofu/hooks/last.json`.
+where `./narrow.sh` prints
+`{"hookSpecificOutput":{"hookEventName":"SubagentSpawn","owns":["src/**"]}}`.
 
-## Trust
+The app asks about a project's hooks once, when a turn starts: allow once,
+always, or deny. `tofu run` cannot ask, so an untrusted hook does not run.
+Trust is a hash of the entry and of every script it names in the project;
+change either and it is asked about again. tofu keeps trust in
+`~/.tofu/hooks/trusted.json` and last results in `~/.tofu/hooks/last.json`.
 
-A project's hooks run commands from a repository you may have just cloned,
-so tofu asks before it runs one. The app asks once, when a turn starts:
-allow once runs them in that turn, always trusts them, deny refuses them.
-`tofu run` cannot ask, so an untrusted hook does not run and the notice
-says so.
+Limits:
 
-Trust is a hash of the hook's entry and of every file its command names
-inside the project, such as `.claude/hooks/check.ps1`. Change either and
-the hook reads `changed since trusted` and is asked about again.
-
-## Limits
-
-- A hook has its own `timeout` in seconds, and 60 when it gives none, at
-  most 600. On the timeout every process it started is killed, and the
-  call goes on as if the hook had not answered.
-- At most 4 hook processes run at once on the machine, across every tofu
-  and every sub-agent. A hook waits for a slot inside its own timeout.
-- A hook runs under bash unless it says `"shell": "powershell"`. On a
-  machine with no bash, a bash hook is not run, and `tofu hooks` says
-  why.
-- A handler that appears in two settings files runs once.
-- `rtk hook claude` is skipped: tofu already runs that rewrite.
-- `http`, `prompt`, `agent` and `mcp_tool` hooks, `async` hooks and the
-  `if` field are not run yet, and `tofu hooks` says so on each one.
-- `disableAllHooks: true` in any of the files turns every hook off.
-- tofu's keys are removed from a hook's environment, and
-  `CLAUDE_PROJECT_DIR` is set to the project.
+- `timeout` is in seconds, 60 by default, at most 600. On a timeout every
+  process the hook started is killed and the hook counts as no answer.
+- At most 4 hook processes run at once across the machine.
+- A hook runs under bash unless it says `"shell": "powershell"`.
+- A handler in two files runs once; `rtk hook claude` is skipped.
+- `http`, `prompt`, `agent`, `mcp_tool` and `async` hooks and the `if`
+  field are not run yet, and `tofu hooks` says so.
+- tofu's keys leave the environment; `CLAUDE_PROJECT_DIR` is set.
 
 ## Change it
 
     tofu hooks trust
 
-trusts every hook in this project that is not trusted yet, as they are
-now. Edit the settings file to change or remove a hook.
+trusts every hook in this project that is not trusted yet. Edit the
+settings file to change or remove a hook.
 
 ## Check it
 
     tofu hooks
 
-lists every hook with its event, matcher, trust and command, then the file
-it came from, its level, and its last result or the reason it is skipped.
-`--json` prints one JSON document.
+lists every hook with its event, matcher, trust, command, file, level, and
+its last result or why it is skipped. `--json` prints one document.
+
+    tofu session trace <session>
+
+lists every hook run under `hooks`, in order, beside its call: event, exit
+code, duration, decision, command, source, any problem, and stderr capped
+at 200 bytes with keys masked.
 
 ## Undo it
 
-Remove a hook's line from `~/.tofu/hooks/trusted.json` to be asked about it
-again, or set `disableAllHooks` to `true` in the project's
-`.claude/settings.local.json` to turn every hook off.
+Remove a hook's line from `~/.tofu/hooks/trusted.json` to be asked again,
+or set `"disableAllHooks": true` in `.claude/settings.local.json` to turn
+every hook off.

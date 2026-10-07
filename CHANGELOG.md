@@ -10,6 +10,16 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- **Two hook events only tofu has.** `GateVerdict` runs after the gate decides on a call and can turn an ask into allow or deny, or a deny into ask, never a deny into allow. `SubagentSpawn` runs before a sub-agent starts and can refuse it or narrow its owns, never widen them. See `tofu docs hooks`.
+
+- **`tofu session trace` lists every hook run** with its event, call, exit code, time, decision and stderr, and names the relaxation that let a call over `risk_ask_at` run.
+
+### Fixed
+
+- **`SessionEnd` hooks fire when `tofu drive` exits**, and `SessionStart` fires with source `compact` after a compaction.
+
 ## 0.5.5 - 2026-10-06
 
 Sub-agents you can trust across turns and resumes, and config the model cannot change alone.

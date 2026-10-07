@@ -6,8 +6,9 @@ updated: 2026-10-06
 ---
 
 A hook is a command you configured to run at a moment in a turn. tofu reads
-the hooks you already have in `.claude/settings.json`, `.codex/hooks.json`
-and `.tofu/hooks.json`, in your home and in the project, and runs them with
+the hooks you already have in `.claude/settings.json`, `.codex/hooks.json`,
+the `[hooks]` table of `.codex/config.toml` and `.tofu/hooks.json`, in your
+home and in the project, and runs them with
 Claude Code's rules: the same events, the same JSON on standard input, and
 the same meaning for exit 0, exit 2 and the JSON a hook prints.
 
@@ -25,6 +26,26 @@ itself, so the app, `tofu run` and every sub-agent run the same hooks.
 project's hooks run only after you trust them. tofu pins each one by a hash
 of its entry and of the script it runs, and asks again when either changes.
 Hooks in your home are yours and run as they are.
+
+**A hook can act on Jev's verdict, and only tofu has one.** `GateVerdict`
+fires after the gate decides on a call, with the verdict, the risk that
+decided it and every answer. A hook can turn an ask into deny or allow, a
+deny into ask, or tighten any verdict. It can never turn a deny into allow,
+and it never touches a call only you may answer.
+
+**A hook can shape a sub-agent before it starts.** `SubagentSpawn` fires
+with the definition, mission and owns. A hook can refuse the spawn or
+narrow owns, never widen them: a glob tofu cannot prove is inside what was
+asked refuses the spawn.
+
+**A hook's reply is checked, not trusted.** Each event accepts its own
+fields. A misspelt or foreign field rejects the whole reply, and the
+problem shows in `tofu session trace` and `tofu hooks` instead of the hook
+quietly doing nothing.
+
+**Every run is in the session.** `tofu session trace` lists each hook run
+beside its call: the event, exit code, duration, decision, command, source,
+and standard error with keys masked.
 
 **A hook cannot take the machine with it.** At most 4 hook processes run at
 once across every tofu and every sub-agent. A hook that never exits is
@@ -54,8 +75,40 @@ bash syntax under PowerShell.
 | `UserPromptSubmit` | when a prompt starts a turn | refuses the prompt |
 | `Stop` | when the model answers with no tool call | keeps the turn going |
 | `SubagentStop` | when a sub-agent answers with no tool call | keeps the sub-agent going |
-| `SessionStart` | the first turn after startup, resume or clear | nothing; its output becomes context |
-| `SessionEnd` | the app exits, or `tofu run` finishes | nothing; it has 1.5 seconds |
+| `SessionStart` | the first turn after startup, resume or clear, and after a compaction | nothing; its output becomes context |
+| `SessionEnd` | the app or `tofu drive` exits, or `tofu run` finishes | nothing; it has 1.5 seconds |
+| `GateVerdict` | after Jev's gate decides on a call | the verdict becomes deny |
+| `SubagentSpawn` | before a sub-agent starts | refuses the spawn |
+
+A `GateVerdict` hook that turns Jev's ask on `rm` into deny, in
+`.tofu/hooks.json`:
+
+```json
+{"hooks": {"GateVerdict": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "bash .tofu/no-rm.sh"}]}]}}
+```
+
+```sh
+in=$(cat)
+echo "$in" | grep -q '"verdict":"ask"' || exit 0
+echo "$in" | grep -q '"command":"rm ' || exit 0
+echo '{"hookSpecificOutput":{"hookEventName":"GateVerdict","permissionDecision":"deny","permissionDecisionReason":"no rm in this project"}}'
+```
+
+A `SubagentSpawn` hook that keeps every sub-agent inside `src/`:
+
+```json
+{"hooks": {"SubagentSpawn": [{"hooks": [{"type": "command", "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SubagentSpawn\",\"owns\":[\"src/**\"]}}'"}]}]}}
+```
+
+What `tofu session trace` showed for both, in a real session:
+
+```text
+hooks
+  ✓ orchestrator  toolu_01YLHGkHZHhqS5B2ocwFr2wX spawn  SubagentSpawn  exit 0
+    in 310 ms  owns [src/**]                bash .tofu/narrow.sh · project
+  ✓ orchestrator  toolu_01VX9oUy1dQoPPtto4nD8Dh4 bash   GateVerdict    exit 0
+    in 398 ms  deny: no rm in this project  bash .tofu/no-rm.sh · project
+```
 
 ## Commands
 

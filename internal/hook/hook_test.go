@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
@@ -206,6 +208,120 @@ func TestHooksSkipTheRtkRewriteTofuAlreadyRunsAndRunAHandlerInTwoFilesOnce(t *te
 	engine.Fire(context.Background(), Input{Event: PostToolUse, Tool: "edit", Args: json.RawMessage(`{"path":"a"}`)})
 	if log, _ := os.ReadFile(filepath.Join(project, "twice.log")); strings.Count(string(log), "ran") != 1 {
 		t.Errorf("a handler in two settings files ran %d times, want once", strings.Count(string(log), "ran"))
+	}
+}
+
+func gateFacts(verdict ledger.Verdict) *GateFacts {
+	return &GateFacts{Verdict: verdict, Risk: &ledger.Reason{Question: "destructive", Comparison: ">", Threshold: 0.5, Value: 0.81},
+		Questions: []ledger.Answer{{Question: "destructive", Wording: 1, Kind: ledger.AnswerScore, Score: 0.81}}}
+}
+
+func TestHooksGateVerdictTurnsAnAskIntoDenyAndCannotTurnADenyIntoAllow(t *testing.T) {
+	bash := bashOrSkip(t)
+	project := t.TempDir()
+	settings(t, filepath.Join(project, ".tofu", "hooks.json"), entry{event: "GateVerdict", matcher: "Bash",
+		command: `cat > gate.json; if grep -q '"verdict":"ask"' gate.json; then d=deny; else d=allow; fi; echo '{"hookSpecificOutput":{"hookEventName":"GateVerdict","permissionDecision":"'$d'","permissionDecisionReason":"no rm here"}}'`})
+	engine := trusted(t, project, bash)
+	asked := engine.Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"rm -rf build"}`), Gate: gateFacts(ledger.VerdictAsk)})
+	if asked.Gate != ledger.VerdictDeny || !strings.Contains(asked.GateWhy, "no rm here") || len(asked.Runs) != 1 || !strings.HasPrefix(asked.Runs[0].Decision, "deny") {
+		t.Errorf("on Jev's ask the hook gave gate %q why %q runs %+v, want deny with its reason", asked.Gate, asked.GateWhy, asked.Runs)
+	}
+	seen, _ := os.ReadFile(filepath.Join(project, "gate.json"))
+	if !strings.Contains(string(seen), `"questions"`) || !strings.Contains(string(seen), `"risk"`) || !strings.Contains(string(seen), `"tool_name":"Bash"`) {
+		t.Errorf("the hook read %s, want the verdict, the risk, the questions and the tool", seen)
+	}
+	denied := engine.Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"rm -rf /"}`), Gate: gateFacts(ledger.VerdictDeny)})
+	if denied.Gate == ledger.VerdictAllow || len(denied.Runs) != 1 || !strings.Contains(denied.Runs[0].Problem, "cannot turn a deny into allow") {
+		t.Errorf("on Jev's deny the hook gave gate %q runs %+v, want the deny kept and the run carrying the refusal", denied.Gate, denied.Runs)
+	}
+}
+
+func TestHooksTwoGateVerdictHooksThatDisagreeGiveTheStricterVerdict(t *testing.T) {
+	bash := bashOrSkip(t)
+	project := t.TempDir()
+	answer := func(decision string) string {
+		return `echo '{"hookSpecificOutput":{"hookEventName":"GateVerdict","permissionDecision":"` + decision + `"}}'`
+	}
+	settings(t, filepath.Join(project, ".tofu", "hooks.json"), entry{event: "GateVerdict", command: answer("allow")}, entry{event: "GateVerdict", command: answer("deny")})
+	verdict := trusted(t, project, bash).Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"ls"}`), Gate: gateFacts(ledger.VerdictAsk)})
+	if verdict.Gate != ledger.VerdictDeny || len(verdict.Runs) != 2 {
+		t.Errorf("an allow and a deny on Jev's ask gave %q from %d runs, want deny from 2", verdict.Gate, len(verdict.Runs))
+	}
+}
+
+func TestHooksAGateVerdictHookThatTimesOutLeavesJevsVerdict(t *testing.T) {
+	bash := bashOrSkip(t)
+	project := t.TempDir()
+	settings(t, filepath.Join(project, ".tofu", "hooks.json"), entry{event: "GateVerdict", timeout: 1,
+		command: `sleep 5; echo '{"hookSpecificOutput":{"hookEventName":"GateVerdict","permissionDecision":"allow"}}'`})
+	verdict := trusted(t, project, bash).Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"ls"}`), Gate: gateFacts(ledger.VerdictAsk)})
+	if verdict.Gate != ledger.VerdictUnset || len(verdict.Runs) != 1 || !strings.Contains(verdict.Runs[0].Problem, "timed out") {
+		t.Errorf("a GateVerdict hook that timed out gave %q runs %+v, want no change and a timed out run", verdict.Gate, verdict.Runs)
+	}
+}
+
+func TestHooksSubagentSpawnNarrowsOwnsAndRefusesAWidening(t *testing.T) {
+	bash := bashOrSkip(t)
+	project := t.TempDir()
+	settings(t, filepath.Join(project, ".tofu", "hooks.json"), entry{event: "SubagentSpawn", matcher: "builder",
+		command: `cat > spawn.json; echo '{"hookSpecificOutput":{"hookEventName":"SubagentSpawn","owns":["src/**"]}}'`})
+	engine := trusted(t, project, bash)
+	narrowed := engine.Fire(context.Background(), Input{Event: SubagentSpawn, Spawn: &SpawnFacts{Definition: "builder", Mission: "build it", Owns: []string{"**"}}})
+	if !narrowed.Narrowed || !slices.Equal(narrowed.Owns, []string{"src/**"}) || narrowed.Block != "" {
+		t.Errorf("owns ** with a hook answering src/** gave %+v, want owns narrowed to src/**", narrowed)
+	}
+	if seen, _ := os.ReadFile(filepath.Join(project, "spawn.json")); !strings.Contains(string(seen), `"mission":"build it"`) || !strings.Contains(string(seen), `"definition":"builder"`) {
+		t.Errorf("the hook read %s, want the definition, mission and owns", seen)
+	}
+	widened := engine.Fire(context.Background(), Input{Event: SubagentSpawn, Spawn: &SpawnFacts{Definition: "builder", Owns: []string{"docs/**"}}})
+	if widened.Narrowed || !strings.Contains(widened.Block, "src/**") {
+		t.Errorf("owns docs/** with a hook answering src/** gave %+v, want the spawn refused naming src/**", widened)
+	}
+	other := engine.Fire(context.Background(), Input{Event: SubagentSpawn, Spawn: &SpawnFacts{Definition: "reviewer", Owns: []string{"**"}}})
+	if other.Ran != 0 || other.Narrowed {
+		t.Errorf("a builder matcher ran on a reviewer spawn: %+v", other)
+	}
+}
+
+func TestHooksOwnsAreNarrowerOnlyWhenProvedInsideWhatWasAsked(t *testing.T) {
+	for _, c := range []struct {
+		asked, given []string
+		inside       bool
+	}{
+		{[]string{"**"}, []string{"src/**"}, true},
+		{[]string{"src/**", "docs/**"}, []string{"src/**"}, true},
+		{[]string{"src"}, []string{"src/a.go"}, true},
+		{[]string{"src/**"}, []string{}, true},
+		{[]string{"src/**"}, []string{"**"}, false},
+		{[]string{"src/*.go"}, []string{"src/a*.go"}, false},
+		{[]string{"src/**"}, []string{"src/../etc/**"}, false},
+		{nil, []string{"src/**"}, false},
+	} {
+		if refused := outsideOf(c.given, c.asked); (refused == "") != c.inside {
+			t.Errorf("owns %q narrowed to %q: refused %q, want inside %v", c.asked, c.given, refused, c.inside)
+		}
+	}
+}
+
+func TestHooksAnUnknownFieldOrOneTheEventDoesNotTakeIsAProblemNotANoOp(t *testing.T) {
+	bash := bashOrSkip(t)
+	project := t.TempDir()
+	settings(t, filepath.Join(project, ".tofu", "hooks.json"),
+		entry{event: "PreToolUse", command: `echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecison":"deny"}}'`},
+		entry{event: "GateVerdict", command: `echo '{"hookSpecificOutput":{"hookEventName":"GateVerdict","permissionDecision":"allow","updatedInput":{"command":"ls"}}}'`})
+	engine := trusted(t, project, bash)
+	pre := engine.Fire(context.Background(), Input{Event: PreToolUse, Tool: "bash", Args: json.RawMessage(`{"command":"rm x"}`)})
+	if len(pre.Runs) != 1 || !strings.Contains(pre.Runs[0].Problem, "permissionDecison") || !strings.Contains(strings.Join(pre.Warnings, "\n"), "permissionDecison") {
+		t.Errorf("a misspelt field gave runs %+v warnings %v, want a problem naming it", pre.Runs, pre.Warnings)
+	}
+	gate := engine.Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"rm x"}`), Gate: gateFacts(ledger.VerdictAsk)})
+	if gate.Gate != ledger.VerdictUnset || len(gate.Runs) != 1 || !strings.Contains(gate.Runs[0].Problem, "updatedInput") {
+		t.Errorf("updatedInput on GateVerdict gave %q runs %+v, want the reply rejected whole", gate.Gate, gate.Runs)
+	}
+	for _, listed := range Load(project, bash).Hooks() {
+		if listed.Last == nil || listed.Last.Problem == "" {
+			t.Errorf("tofu hooks would show %s last as %+v, want the problem", listed.Event, listed.Last)
+		}
 	}
 }
 

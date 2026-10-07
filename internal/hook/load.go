@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
+
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
@@ -31,11 +33,13 @@ const (
 	SubagentStop     Event = "SubagentStop"
 	SessionStart     Event = "SessionStart"
 	SessionEnd       Event = "SessionEnd"
+	GateVerdict      Event = "GateVerdict"
+	SubagentSpawn    Event = "SubagentSpawn"
 )
 
 func (e Event) fired() bool {
 	switch e {
-	case PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop, SessionStart, SessionEnd:
+	case PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop, SessionStart, SessionEnd, GateVerdict, SubagentSpawn:
 		return true
 	}
 	return false
@@ -149,9 +153,11 @@ func Load(project string, bash shell.Choice) *Engine {
 	}{
 		{filepath.Join(home, ".claude", "settings.json"), User},
 		{filepath.Join(home, ".codex", "hooks.json"), User},
+		{filepath.Join(home, ".codex", "config.toml"), User},
 		{filepath.Join(tofuHome, "hooks.json"), User},
 		{filepath.Join(full, ".claude", "settings.json"), Project},
 		{filepath.Join(full, ".codex", "hooks.json"), Project},
+		{filepath.Join(full, ".codex", "config.toml"), Project},
 		{filepath.Join(sys.StateDir(full), "hooks.json"), Project},
 		{filepath.Join(full, ".claude", "settings.local.json"), Local},
 	} {
@@ -161,7 +167,7 @@ func Load(project string, bash shell.Choice) *Engine {
 		}
 		var parsed settingsFile
 		if err == nil {
-			err = json.Unmarshal(body, &parsed)
+			parsed, err = readSettings(source.path, body)
 		}
 		if err != nil {
 			engine.problems = append(engine.problems, source.path+" was not read, so none of its hooks run: "+err.Error())
@@ -199,6 +205,25 @@ func Load(project string, bash shell.Choice) *Engine {
 		}
 	}
 	return engine
+}
+
+func readSettings(path string, body []byte) (settingsFile, error) {
+	var parsed settingsFile
+	if filepath.Ext(path) != ".toml" {
+		return parsed, json.Unmarshal(body, &parsed)
+	}
+	var codex struct {
+		Hooks map[string]any `toml:"hooks"`
+	}
+	if _, err := toml.Decode(string(body), &codex); err != nil {
+		return parsed, err
+	}
+	delete(codex.Hooks, "state")
+	asJSON, err := json.Marshal(map[string]any{"hooks": codex.Hooks})
+	if err == nil {
+		err = json.Unmarshal(asJSON, &parsed)
+	}
+	return parsed, err
 }
 
 func skipReason(hook Hook, given handler) string {

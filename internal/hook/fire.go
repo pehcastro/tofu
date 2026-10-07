@@ -9,11 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
@@ -35,6 +37,8 @@ type Input struct {
 	StopActive  bool
 	Source      string
 	Reason      string
+	Gate        *GateFacts
+	Spawn       *SpawnFacts
 }
 
 type Verdict struct {
@@ -44,6 +48,11 @@ type Verdict struct {
 	Context  string
 	Warnings []string
 	Ran      int
+	Gate     ledger.Verdict
+	GateWhy  string
+	Owns     []string
+	Narrowed bool
+	Runs     []Run
 }
 
 type Result struct {
@@ -54,6 +63,7 @@ type Result struct {
 	Said       string    `json:"said,omitempty"`
 	stdout     string
 	stderr     string
+	reply      *hookOutput
 }
 
 type stdinPayload struct {
@@ -74,6 +84,8 @@ type stdinPayload struct {
 	LastMessage  string          `json:"last_assistant_message,omitempty"`
 	Source       string          `json:"source,omitempty"`
 	Reason       string          `json:"reason,omitempty"`
+	Gate         *GateFacts      `json:"gate,omitempty"`
+	Spawn        *SpawnFacts     `json:"spawn,omitempty"`
 }
 
 type toolResponse struct {
@@ -81,25 +93,15 @@ type toolResponse struct {
 	IsError bool   `json:"is_error"`
 }
 
-type hookOutput struct {
-	Decision      string `json:"decision"`
-	Reason        string `json:"reason"`
-	SystemMessage string `json:"systemMessage"`
-	Specific      struct {
-		Permission       string          `json:"permissionDecision"`
-		PermissionReason string          `json:"permissionDecisionReason"`
-		UpdatedInput     json.RawMessage `json:"updatedInput"`
-		Context          string          `json:"additionalContext"`
-	} `json:"hookSpecificOutput"`
-}
-
 func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	var subjects []string
 	switch in.Event {
-	case PreToolUse, PostToolUse:
+	case PreToolUse, PostToolUse, GateVerdict:
 		subjects = toolNames(in.Tool)
 	case SubagentStop:
 		subjects = []string{in.AgentType}
+	case SubagentSpawn:
+		subjects = []string{in.Spawn.Definition}
 	case SessionStart:
 		subjects = []string{in.Source}
 	case SessionEnd:
@@ -115,7 +117,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 		return Verdict{}
 	}
 	payload := stdinPayload{Session: in.Session, Cwd: e.project, Mode: "default", Event: in.Event, Turn: in.Turn, Agent: in.Agent, AgentType: in.AgentType,
-		Prompt: in.Prompt, LastMessage: in.LastMessage, Source: in.Source, Reason: in.Reason}
+		Prompt: in.Prompt, LastMessage: in.LastMessage, Source: in.Source, Reason: in.Reason, Gate: in.Gate, Spawn: in.Spawn}
 	if in.Tool != "" {
 		payload.Tool, payload.ToolInput, payload.ToolUseID = claudeName(in.Tool), e.toClaude(in.Tool, in.Args), in.CallID
 	}
@@ -132,69 +134,127 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 		running.Go(func() { results[i] = e.run(ctx, hook, stdin) })
 	}
 	running.Wait()
-	e.remember(chosen, results)
-	return e.verdictOf(in, chosen, results)
-}
-
-func (e *Engine) verdictOf(in Input, chosen []Hook, results []Result) Verdict {
-	var verdict Verdict
-	joined := func(held, more string) string {
-		if held == "" {
-			return more
-		}
-		return held + "; " + more
+	for i := range results {
+		results[i].read(in.Event)
 	}
+	e.remember(chosen, results)
+	var verdict Verdict
 	for i, result := range results {
-		from := " (a " + string(in.Event) + " hook in " + chosen[i].File + ")"
-		if result.Problem != "" {
-			verdict.Warnings = append(verdict.Warnings, "a hook did not decide: "+result.Problem+from)
-			continue
-		}
-		verdict.Ran++
-		if result.Exit == 2 {
-			verdict.Block = joined(verdict.Block, cmp.Or(strings.TrimSpace(result.stderr), "the hook exited 2 and printed no reason")+from)
-			continue
-		}
-		if result.Exit != 0 {
-			verdict.Warnings = append(verdict.Warnings, "a hook exited "+strconv.Itoa(result.Exit)+": "+strings.TrimSpace(result.stderr)+from)
-		}
-		out := strings.TrimSpace(result.stdout)
-		if !strings.HasPrefix(out, "{") || !strings.HasSuffix(out, "}") {
-			if result.Exit == 0 && out != "" && (in.Event == UserPromptSubmit || in.Event == SessionStart) {
-				verdict.Context = joined(verdict.Context, out)
-			}
-			continue
-		}
-		var reply hookOutput
-		if err := json.Unmarshal([]byte(out), &reply); err != nil {
-			verdict.Warnings = append(verdict.Warnings, "a hook printed JSON tofu could not read: "+err.Error()+from)
-			continue
-		}
-		if reply.Decision == "block" {
-			verdict.Block = joined(verdict.Block, cmp.Or(reply.Reason, "the hook blocked and gave no reason")+from)
-		}
-		switch reply.Specific.Permission {
-		case "deny":
-			verdict.Block = joined(verdict.Block, cmp.Or(reply.Specific.PermissionReason, "the hook denied it and gave no reason")+from)
-		case "ask":
-			verdict.Ask = joined(verdict.Ask, cmp.Or(reply.Specific.PermissionReason, "the hook asks the person")+from)
-		}
-		if len(reply.Specific.UpdatedInput) > 0 {
-			if args, isObject := e.fromClaude(in.Tool, reply.Specific.UpdatedInput); isObject {
-				verdict.Args = args
-			} else {
-				verdict.Warnings = append(verdict.Warnings, "a hook's updatedInput is not a JSON object, so the call runs as it was asked"+from)
-			}
-		}
-		verdict.Context = joined(verdict.Context, reply.Specific.Context)
-		if reply.SystemMessage != "" {
-			verdict.Warnings = append(verdict.Warnings, reply.SystemMessage+from)
-		}
+		said, problem := e.apply(in, result, " (a "+string(in.Event)+" hook in "+chosen[i].File+")", &verdict)
+		stderr := strings.TrimSpace(result.stderr)
+		verdict.Runs = append(verdict.Runs, Run{Event: in.Event, Command: chosen[i].Command, File: chosen[i].File, Level: chosen[i].Level, Exit: result.Exit,
+			DurationMS: result.DurationMS, Decision: strings.Join(said, "; "), Problem: cmp.Or(result.Problem, problem), Stderr: stderr[:min(len(stderr), konst.HookSaidBytes)]})
 	}
 	if len(verdict.Context) > konst.HookContextBytes {
 		verdict.Context = verdict.Context[:konst.HookContextBytes]
 	}
 	return verdict
+}
+
+func (r *Result) read(event Event) {
+	out := strings.TrimSpace(r.stdout)
+	if r.Problem != "" || r.Exit == 2 || !strings.HasPrefix(out, "{") || !strings.HasSuffix(out, "}") {
+		return
+	}
+	reply, err := parseReply(event, out)
+	if err != nil {
+		r.Problem = "it printed output tofu does not accept: " + err.Error()
+		return
+	}
+	r.reply = &reply
+}
+
+func joined(held, more string) string {
+	if held == "" {
+		return more
+	}
+	return held + "; " + more
+}
+
+func (e *Engine) apply(in Input, result Result, from string, verdict *Verdict) ([]string, string) {
+	if result.Problem != "" {
+		verdict.Warnings = append(verdict.Warnings, "a hook did not decide: "+result.Problem+from)
+		return nil, ""
+	}
+	verdict.Ran++
+	if result.Exit == 2 {
+		why := cmp.Or(strings.TrimSpace(result.stderr), "the hook exited 2 and printed no reason")
+		if in.Event == GateVerdict {
+			said, _ := verdict.gate(in.Gate.Verdict, ledger.VerdictDeny, why, from)
+			return []string{said}, ""
+		}
+		verdict.Block = joined(verdict.Block, why+from)
+		return []string{"block: " + why}, ""
+	}
+	if result.Exit != 0 {
+		verdict.Warnings = append(verdict.Warnings, "a hook exited "+strconv.Itoa(result.Exit)+": "+strings.TrimSpace(result.stderr)+from)
+	}
+	reply := result.reply
+	if reply == nil {
+		if out := strings.TrimSpace(result.stdout); result.Exit == 0 && out != "" && (in.Event == UserPromptSubmit || in.Event == SessionStart) {
+			verdict.Context = joined(verdict.Context, out)
+			return []string{"added context"}, ""
+		}
+		return nil, ""
+	}
+	var said []string
+	if reply.Decision == "block" {
+		why := cmp.Or(reply.Reason, "the hook blocked and gave no reason")
+		verdict.Block, said = joined(verdict.Block, why+from), append(said, "block: "+why)
+	}
+	permission, why := ledger.Verdict(reply.Specific.Permission), reply.Specific.PermissionReason
+	var problem string
+	switch {
+	case permission == ledger.VerdictUnset:
+	case in.Event == GateVerdict:
+		var gated string
+		gated, problem = verdict.gate(in.Gate.Verdict, permission, cmp.Or(why, "the hook gave no reason"), from)
+		said = append(said, gated)
+	case permission == ledger.VerdictDeny:
+		verdict.Block, said = joined(verdict.Block, cmp.Or(why, "the hook denied it and gave no reason")+from), append(said, "deny: "+why)
+	case permission == ledger.VerdictAsk:
+		verdict.Ask, said = joined(verdict.Ask, cmp.Or(why, "the hook asks the person")+from), append(said, "ask: "+why)
+	default:
+		said = append(said, "allow")
+	}
+	if len(reply.Specific.UpdatedInput) > 0 {
+		args, isObject := e.fromClaude(in.Tool, reply.Specific.UpdatedInput)
+		if !isObject {
+			problem = "its updatedInput is not a JSON object, so the call runs as it was asked"
+			verdict.Warnings = append(verdict.Warnings, "a hook's "+problem+from)
+		}
+		verdict.Args, said = args, append(said, "rewrote the input")
+	}
+	if reply.Specific.Context != "" {
+		verdict.Context, said = joined(verdict.Context, reply.Specific.Context), append(said, "added context")
+	}
+	if owns := reply.Specific.Owns; owns != nil {
+		said = append(said, "owns ["+strings.Join(*owns, ", ")+"]")
+		switch outside := outsideOf(*owns, in.Spawn.Owns); {
+		case outside != "":
+			verdict.Block = joined(verdict.Block, "it narrowed owns to "+outside+", which is not inside what was asked, ["+strings.Join(in.Spawn.Owns, ", ")+"]"+from)
+		case verdict.Narrowed && !slices.Equal(verdict.Owns, *owns):
+			verdict.Block = joined(verdict.Block, "two hooks gave different owns, ["+strings.Join(verdict.Owns, ", ")+"] and ["+strings.Join(*owns, ", ")+"], and tofu does not intersect globs"+from)
+		default:
+			verdict.Owns, verdict.Narrowed = *owns, true
+		}
+	}
+	if reply.SystemMessage != "" {
+		verdict.Warnings = append(verdict.Warnings, reply.SystemMessage+from)
+	}
+	return said, problem
+}
+
+func (v *Verdict) gate(jev, to ledger.Verdict, why, from string) (string, string) {
+	if jev == ledger.VerdictDeny && to == ledger.VerdictAllow {
+		problem := "a GateVerdict hook cannot turn a deny into allow, so the deny stands"
+		v.Warnings = append(v.Warnings, problem+from)
+		return "allow: " + why, problem
+	}
+	if rank(to) > rank(v.Gate) {
+		v.Gate, v.GateWhy = to, why+from
+	}
+	return string(to) + ": " + why, ""
 }
 
 type cappedOutput struct{ bytes.Buffer }

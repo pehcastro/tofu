@@ -48,6 +48,7 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 		eventOf(t, EventSpawn, SpawnBody{Agent: "go-dev-1"}),
 		eventOf(t, EventAgentEnd, AgentEndBody{Status: "finished"}),
 		eventOf(t, EventReport, ReportBody{State: "finished", Text: "sub-agent go-dev-1 is finished"}),
+		asked(eventOf(t, EventHook, map[string]string{"event": "PreToolUse"}), "c1"),
 		asked(eventOf(t, EventToolResult, ResultBody{Content: "package main", ResultBytes: 12}), "c1"),
 		asked(eventOf(t, EventRequest, StepBody{Index: 1, AssistantText: "looking"}), ""),
 		asked(eventOf(t, EventCompaction, map[string]any{"compaction": map[string]int{"step": 1}}), ""),
@@ -58,7 +59,7 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 	}
 }
 
-var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport}
+var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook}
 
 func readingOf(t *testing.T, reading Reading, kind EventKind) int {
 	t.Helper()

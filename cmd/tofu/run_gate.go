@@ -202,7 +202,7 @@ func harnessFiles() []string {
 		".tofu/hooks.json", ".boji/hooks.json",
 		".tofu/hooks/trusted.json", ".boji/hooks/trusted.json",
 		".claude/settings.json", ".claude/settings.local.json",
-		".codex/hooks.json",
+		".codex/hooks.json", ".codex/config.toml",
 	}
 }
 

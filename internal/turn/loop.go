@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"tofu/internal/hook"
+	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -266,8 +267,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				row.Warnings = append(row.Warnings, warning)
 			}
 		}
+		for _, ran := range verdict.Runs {
+			ran.Decision, ran.Problem, ran.Stderr = redactor.Redact(ran.Decision), redactor.Redact(ran.Problem), redactor.Redact(ran.Stderr)
+			recorded.add(session.Event{Kind: session.EventHook, Call: in.CallID}, ran)
+		}
 		return verdict
 	}
+	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
 	if config.System != "" {
@@ -330,6 +336,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	inserted := func(source, text string, posted time.Time) llm.Message {
 		return llm.Message{Role: llm.RoleUser, Content: text, Origin: llm.Origin{Source: source, PostedAt: posted, TakenAt: now()}}
+	}
+	compacted := func() {
+		if config.SpawnedFrom != "" {
+			return
+		}
+		if said := fire(hook.Input{Event: hook.SessionStart, Source: sessionSourceCompact}).Context; said != "" {
+			messages = append(messages, inserted(sourceSessionStartHook, said, time.Time{}))
+		}
 	}
 	keep := func(step StepRow) {
 		flush()
@@ -596,7 +610,19 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						}
 					}
 					if config.GateMode == GateEnforce {
-						gated.refusal = gateRefusal(ctx, config.Person, request, gated.verdict, gated.gateErr)
+						decided, hooked := gated.verdict, ""
+						if gated.gateErr == "" && decided.Verdict != ledger.VerdictUnset && !decided.PersonOnly {
+							judged := fire(hook.Input{Event: hook.GateVerdict, Tool: call.Name, Args: call.Arguments, CallID: call.ID,
+								Gate: &hook.GateFacts{Verdict: decided.Verdict, Risk: decided.Reason, Questions: append([]ledger.Answer{}, decided.Answers...)}})
+							gated.hooks = append(gated.hooks, hookRunOf(hook.GateVerdict, judged)...)
+							if judged.Gate != ledger.VerdictUnset && judged.Gate != decided.Verdict {
+								decided.Verdict, decided.PersonOnly = judged.Gate, true
+								hooked = "this call did not run: a GateVerdict hook turned the gate's " + string(gated.verdict.Verdict) + " into " + string(judged.Gate) + ": " + judged.GateWhy + ". "
+							}
+						}
+						if gated.refusal = gateRefusal(ctx, config.Person, request, decided, gated.gateErr); gated.refusal != "" {
+							gated.refusal = hooked + gated.refusal
+						}
 					}
 					wave = append(wave, gated)
 				}
@@ -747,6 +773,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					recorded.listChange("fork", string(fork.Kind)+" fork "+strconv.Itoa(forks)+" after step "+strconv.Itoa(step)+" from "+ended.Session+", "+
 						strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
 					messages, sent, answering = begun, 0, ""
+					if fork.Kind == ForkCompact {
+						compacted()
+					}
 					flush()
 					continue
 				}
@@ -761,6 +790,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				stepRow.Compaction = compaction
 				if compaction != nil {
 					recorded.listChange("compaction", "after step "+strconv.Itoa(step), beforeCompaction, messages)
+					compacted()
 				}
 			}
 			keep(stepRow)
@@ -1037,6 +1067,13 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 }
 
 type hookEngineKey struct{}
+
+type hookFireKey struct{}
+
+const (
+	sessionSourceCompact   = "compact"
+	sourceSessionStartHook = "session start hook"
+)
 
 func EndSession(ctx context.Context, project, session, reason string) []string {
 	verdict := hook.Load(project, shell.Choice{}).Fire(ctx, hook.Input{Event: hook.SessionEnd, Session: session, Reason: reason})

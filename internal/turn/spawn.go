@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/hook"
 	"tofu/internal/judge/method"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
@@ -637,6 +638,17 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, err
 	}
+	narrowed := ""
+	if fire, firing := ctx.Value(hookFireKey{}).(func(hook.Input) hook.Verdict); firing {
+		spawning := fire(hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Owns: append([]string{}, args.Owns...)}})
+		if spawning.Block != "" {
+			return Result{}, errors.New("spawn refused by a SubagentSpawn hook: " + spawning.Block)
+		}
+		if spawning.Narrowed {
+			narrowed = "a SubagentSpawn hook narrowed owns from [" + strings.Join(args.Owns, ", ") + "] to [" + strings.Join(spawning.Owns, ", ") + "]. "
+			args.Owns = spawning.Owns
+		}
+	}
 	system, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
@@ -695,7 +707,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	started = true
 	t.Inbox.hold(site.log)
 	go t.background(runCtx, cancel, held, opened, site, task, warm)
-	return Result{Content: held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
+	return Result{Content: narrowed + held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
 func (t *SpawnTool) proseStore() *recall.Store {

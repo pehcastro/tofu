@@ -742,6 +742,11 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, quotas), plan.width, plan.height)
 	defer driver.Close()
 	defer (*launch.release)()
+	defer func() {
+		for _, warning := range (*launch.endSession)() {
+			_, _ = fmt.Fprintln(errOut, "tofu drive: "+warning)
+		}
+	}()
 	for _, step := range steps {
 		err := playStep(driver, deck, step, plan, out)
 		if err == nil {

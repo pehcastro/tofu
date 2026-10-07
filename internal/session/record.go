@@ -38,6 +38,7 @@ const (
 	EventNotice     EventKind = "notice"
 	EventListChange EventKind = "list_change"
 	EventReport     EventKind = "report"
+	EventHook       EventKind = "hook"
 )
 
 type NoticeBody struct {

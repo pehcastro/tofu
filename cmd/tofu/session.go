@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/hook"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
@@ -623,6 +624,14 @@ type traceCall struct {
 	Hooks      []turn.HookRun  `json:"hooks,omitempty"`
 }
 
+type traceHook struct {
+	Agent string `json:"agent,omitempty"`
+	Turn  string `json:"turn"`
+	Call  string `json:"call,omitempty"`
+	Tool  string `json:"tool,omitempty"`
+	hook.Run
+}
+
 type traceFailure struct {
 	Agent string `json:"agent,omitempty"`
 	Turn  string `json:"turn"`
@@ -637,6 +646,7 @@ type sessionTraceReport struct {
 	Agents   []session.AgentRun `json:"agents"`
 	Requests []traceRequest     `json:"requests"`
 	Calls    []traceCall        `json:"calls"`
+	Hooks    []traceHook        `json:"hooks,omitempty"`
 	Failures []traceFailure     `json:"failures,omitempty"`
 
 	Sizes    *session.Sizes         `json:"sizes,omitempty"`
@@ -658,7 +668,11 @@ type traceResult struct {
 func gateWords(result traceResult) string {
 	words := result.Verdict
 	if reason := result.Reason; reason != nil {
-		words += fmt.Sprintf(" (%s %.2f %s %.2f)", reason.Question, reason.Value, reason.Comparison, reason.Threshold)
+		relaxed := ""
+		if reason.RelaxedBy != "" {
+			relaxed = ", relaxed by " + reason.RelaxedBy
+		}
+		words += fmt.Sprintf(" (%s %.2f %s %.2f%s)", reason.Question, reason.Value, reason.Comparison, reason.Threshold, relaxed)
 	}
 	return strings.TrimSpace(strings.TrimSpace(words + " " + result.GateError))
 }
@@ -739,6 +753,13 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 				called.Result, called.Outcome, called.Bytes, called.Reason = event.ID, result.ToolOutcome, result.ResultBytes, callReason(result.ResultBody)
 				called.DurationMS, called.Refused, called.Gate, called.Hooks = result.DurationMS, result.Refused, gateWords(result), result.Hooks
 			}
+		case session.EventHook:
+			ran := traceHook{Agent: event.Agent, Turn: event.Turn, Call: event.Call}
+			_ = json.Unmarshal(event.Body, &ran.Run)
+			if at, known := placed[event.Call]; known {
+				ran.Tool = report.Calls[at].Tool
+			}
+			report.Hooks = append(report.Hooks, ran)
 		case session.EventTurnEnd:
 			var ended struct {
 				Error string `json:"error"`
@@ -803,6 +824,18 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 			calls[i].Detail += " · " + ran.Event + " hook ran " + strconv.Itoa(ran.Ran) + strings.TrimSuffix(" "+cmp.Or(ran.Block, ran.Ask), " ")
 		}
 	}
+	hooks := make([]cli.Row, len(report.Hooks))
+	for i, ran := range report.Hooks {
+		mark, detail := cli.Done, ran.Command+" · "+string(ran.Level)+" "+ran.File
+		if ran.Problem != "" {
+			mark, detail = cli.Warn, detail+" · "+oneLine(ran.Problem)
+		}
+		if ran.Stderr != "" {
+			detail += " · stderr " + oneLine(ran.Stderr)
+		}
+		hooks[i] = cli.Row{Mark: mark, Cells: []string{cmp.Or(ran.Agent, session.AuthorOrchestrator), cmp.Or(strings.TrimSpace(ran.Call+" "+ran.Tool), "no call"), string(ran.Event),
+			"exit " + strconv.Itoa(ran.Exit) + " in " + strconv.FormatInt(ran.DurationMS, 10) + " ms", cmp.Or(oneLine(ran.Decision), "no decision")}, Detail: detail}
+	}
 	inserted := make([]cli.Row, len(report.Inserted))
 	for i, insert := range report.Inserted {
 		when := ""
@@ -840,7 +873,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	for _, section := range []struct {
 		name string
 		rows []cli.Row
-	}{{"sub-agents", agents}, {"requests", requests}, {"messages tofu added", inserted}, {"calls", calls}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
+	}{{"sub-agents", agents}, {"requests", requests}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
 		if len(section.rows) > 0 {
 			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
 		}
