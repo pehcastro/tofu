@@ -13,7 +13,7 @@ use gpui::{
 };
 
 use crate::components::overlay::{ContextMenu, context_menu};
-use crate::components::paint::{ink, pressed, tint};
+use crate::components::paint::{arrowed, focus_ring, ink, pressed, tint};
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
     FONT_SMALL, RADIUS_CHIP, RADIUS_ROW, SEGMENT_PAD_X, SEGMENT_PAD_Y, SEGMENTED_PAD,
@@ -71,7 +71,37 @@ pub fn segmented(
     theme: &Theme,
     on_change: impl Fn(&usize, &mut Window, &mut App) + 'static,
 ) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .child(segment_group(id, options, selected, theme, on_change))
+}
+
+pub fn segmented_with_focus(
+    focus: &FocusHandle,
+    id: &'static str,
+    options: &[&'static str],
+    selected: usize,
+    theme: &Theme,
+    on_change: impl Fn(&usize, &mut Window, &mut App) + 'static,
+) -> Div {
+    let group = segment_group(id, options, selected, theme, on_change);
+    div()
+        .flex()
+        .flex_none()
+        .child(group.track_focus(&focus.clone().tab_stop(true)))
+}
+
+fn segment_group(
+    id: &'static str,
+    options: &[&'static str],
+    selected: usize,
+    theme: &Theme,
+    on_change: impl Fn(&usize, &mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
     let on_change = Rc::new(on_change);
+    let count = options.len();
+    let stepper = on_change.clone();
     let backdrop = theme.color(ColorToken::SegmentedFill);
     let bright = ink(theme, T1);
     let segments = options.iter().enumerate().map(|(ix, option)| {
@@ -98,13 +128,21 @@ pub fn segmented(
             .child(*option);
         pressed(segment, backdrop)
     });
-    div()
+    focus_ring(div().id(id), theme)
         .flex()
         .flex_none()
         .items_center()
         .p(px(SEGMENTED_PAD))
         .rounded(px(RADIUS_ROW))
         .bg(backdrop)
+        .on_key_down(move |event, window, cx| {
+            if let Some(to) = arrowed(event, selected, count) {
+                cx.stop_propagation();
+                if to != selected {
+                    stepper(&to, window, cx);
+                }
+            }
+        })
         .children(segments)
 }
 
@@ -119,12 +157,12 @@ pub fn switch(
     } else {
         0.0
     };
-    div()
-        .id(id)
+    focus_ring(div().id(id), theme)
         .aria_label(label)
         .flex()
         .items_center()
         .gap_2()
+        .rounded(px(RADIUS_ROW))
         .cursor_pointer()
         .text_size(px(FONT_BODY))
         .text_color(ink(theme, T1))

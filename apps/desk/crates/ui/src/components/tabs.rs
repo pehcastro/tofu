@@ -14,7 +14,7 @@ use crate::component::icon;
 use crate::components::chip::badge;
 use crate::components::glyph::Glyph;
 use crate::components::overlay::Popover;
-use crate::components::paint::{glyph, ink, ms, pressed, ring};
+use crate::components::paint::{arrowed, glyph, ink, ms, pressed, ring};
 use crate::components::size::{
     CAPTION_TEXT, CLOSE_BOX, DIM_TEXT, FONT_BODY, FONT_SMALL, FONT_TAB, HOVER, HTAB_ON, NEW_TAB,
     RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON, SCREEN_RING, SHELL_TEXT, T1, TAB,
@@ -212,6 +212,7 @@ struct Motion {
     fixed: Pixels,
     listing: bool,
     list_focus: FocusHandle,
+    strip_focus: FocusHandle,
 }
 
 fn close_box(tab: Bounds<Pixels>) -> Bounds<Pixels> {
@@ -233,10 +234,11 @@ fn settled(bounds: Bounds<Pixels>, now: Instant) -> Glide {
 }
 
 impl Motion {
-    fn new(list_focus: FocusHandle) -> Self {
+    fn new(list_focus: FocusHandle, strip_focus: FocusHandle) -> Self {
         Self {
             listing: false,
             list_focus,
+            strip_focus,
             bounds: Vec::new(),
             pointer: None,
             marker: Glide::new(GlideKind::Eased),
@@ -799,6 +801,7 @@ pub struct TabStrip {
     on: OnTab,
     press: Option<Press>,
     pointed: Option<Pointed>,
+    focus: Option<FocusHandle>,
 }
 
 impl TabStrip {
@@ -856,7 +859,13 @@ impl TabStrip {
             on,
             press: None,
             pointed: None,
+            focus: None,
         }
+    }
+
+    pub fn focus(mut self, focus: &FocusHandle) -> Self {
+        self.focus = Some(focus.clone().tab_stop(true));
+        self
     }
 
     pub fn on_press(
@@ -924,12 +933,22 @@ impl RenderOnce for TabStrip {
             on,
             press,
             pointed,
+            focus,
         } = self;
         let reduced = reduced_motion(cx);
         let state =
             window.use_keyed_state(SharedString::from(format!("{id}-motion")), cx, |_, cx| {
-                Motion::new(cx.focus_handle())
+                Motion::new(cx.focus_handle(), cx.focus_handle().tab_stop(true))
             });
+        let focus = focus.unwrap_or_else(|| state.read(cx).strip_focus.clone());
+        let ringed = focus.is_focused(window) && window.last_input_was_keyboard();
+        let focus_ring = theme.color(ColorToken::FocusRing);
+        let count = tabs.len()
+            + match &shape {
+                Shape::Connected { .. } => 0,
+                Shape::Header { screens } => screens.len(),
+            };
+        let stepper = on.clone();
         let slot = |ix: usize, tab: &Tab| Slot::Tab {
             ix,
             label: tab.label.clone(),
@@ -1038,6 +1057,9 @@ impl RenderOnce for TabStrip {
                         )
                         .h(px(TAB_IN_HEADER))
                         .rounded_t(px(RADIUS_TAB))
+                        .when(ringed && ix == active, |tab| {
+                            tab.shadow(vec![ring(focus_ring)])
+                        })
                     })
                     .map(|item| pressed(item, backdrop).into_any_element())
                     .chain(more)
@@ -1059,6 +1081,9 @@ impl RenderOnce for TabStrip {
                     .rounded(px(header_radius(screen)))
                     .when(screen, |tab| {
                         tab.shadow(vec![ring(ink(&theme, SCREEN_RING))])
+                    })
+                    .when(ringed && ix == active, |tab| {
+                        tab.shadow(vec![ring(focus_ring)])
                     });
                     pressed(item, backdrop).into_any_element()
                 };
@@ -1136,6 +1161,15 @@ impl RenderOnce for TabStrip {
                 }
             })
             .id(id)
+            .track_focus(&focus)
+            .on_key_down(move |event, window, cx| {
+                if let Some(to) = arrowed(event, active, count) {
+                    cx.stop_propagation();
+                    if to != active {
+                        stepper(&TabEvent::Select(to), window, cx);
+                    }
+                }
+            })
             .on_mouse_move(move |event, window, cx| {
                 mover.update(cx, |motion, cx| {
                     if motion.point(Some(event.position), &felt) {

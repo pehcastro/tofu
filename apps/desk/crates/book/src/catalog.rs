@@ -46,6 +46,7 @@ pub enum Page {
     Input,
     Segmented,
     Switch,
+    Focus,
     Popover,
     Menu,
     Dropdown,
@@ -97,7 +98,7 @@ pub const UNBUILT: [(Group, &str); 10] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 38] = [
+    pub const ALL: [Page; 39] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -117,6 +118,7 @@ impl Page {
         Page::Input,
         Page::Segmented,
         Page::Switch,
+        Page::Focus,
         Page::Popover,
         Page::Menu,
         Page::Dropdown,
@@ -293,6 +295,16 @@ impl Page {
                 "components/form.rs",
                 "on, off, track fade",
                 "hover, press, focus, disabled",
+            ),
+            Page::Focus => sheet(
+                "focus",
+                "Focus",
+                Group::Controls,
+                "Tab and Shift Tab move through a button, a segmented, a switch and tabs. Enter and Space press the button and flip the switch, Left and Right move the choice and the tab. The ring shows only when focus came from the keyboard.",
+                "13-keyboard.md",
+                "components/paint.rs focus_ring, arrowed; button.rs, form.rs, tabs.rs",
+                "focused from the keyboard with the ring, focused by a click without it, activation by Enter, Space and arrows",
+                "",
             ),
             Page::Popover => sheet(
                 "popover",

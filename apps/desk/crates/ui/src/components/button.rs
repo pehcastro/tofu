@@ -1,7 +1,7 @@
 use gpui::{Div, ElementId, FontWeight, SharedString, Stateful, div, prelude::*, px};
 
 use crate::components::glyph::Glyph;
-use crate::components::paint::{glyph, pressed};
+use crate::components::paint::{focus_ring, glyph, pressed};
 use crate::components::size::{BUTTON_GAP, FONT_BODY, RADIUS_ROW};
 use crate::metrics::{CONTROL, ICON};
 use crate::theme::{ColorToken, Theme};
@@ -36,8 +36,7 @@ pub fn button(
         ButtonKind::Plain | ButtonKind::Primary | ButtonKind::Opener => (CONTROL, FONT_BODY),
     };
     let hover = theme.color(ColorToken::StateActive);
-    let face = div()
-        .id(id)
+    let face = focus_ring(div().id(id), theme)
         .aria_label(label.clone())
         .flex()
         .flex_none()

@@ -3,8 +3,8 @@ use std::time::Duration;
 use desk_motion::spin;
 use desk_motion::tokens::{PRESS, PRESS_MS};
 use gpui::{
-    AnimationExt, App, BoxShadow, Div, ElementId, Motion, Rgba, Stateful, Svg, Transformation,
-    Window, div, percentage, point, prelude::*, px, rgb_to_hsla, rgba, svg,
+    AnimationExt, App, BoxShadow, Div, ElementId, KeyDownEvent, Motion, Rgba, Stateful, Svg,
+    Transformation, Window, div, percentage, point, prelude::*, px, rgb_to_hsla, rgba, svg,
 };
 
 use crate::components::glyph::{Glyph, MARK_BLEED, spinner_path};
@@ -40,6 +40,22 @@ pub fn ring(color: Rgba) -> BoxShadow {
         blur_radius: px(0.0),
         spread_radius: px(1.0),
         inset: true,
+    }
+}
+
+pub fn focus_ring(element: Stateful<Div>, theme: &Theme) -> Stateful<Div> {
+    let color = theme.color(ColorToken::FocusRing);
+    element
+        .tab_index(0)
+        .focus_visible(move |style| style.shadow(vec![ring(color)]))
+}
+
+pub fn arrowed(event: &KeyDownEvent, at: usize, count: usize) -> Option<usize> {
+    let keys = &event.keystroke;
+    match (keys.modifiers.modified(), keys.key.as_str()) {
+        (false, "left") => Some(at.saturating_sub(1)),
+        (false, "right") => Some(at.saturating_add(1).min(count.saturating_sub(1))),
+        _ => None,
     }
 }
 

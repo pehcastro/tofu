@@ -9,6 +9,7 @@ mod diff;
 mod editor;
 mod empty;
 mod file_edits;
+mod focus;
 mod foundations;
 mod graph;
 mod kit;
@@ -54,6 +55,7 @@ use decide::Crossfade;
 use diff::DiffPage;
 use editor::{HistoryPage, TreePage};
 use file_edits::FileEditsPage;
+use focus::FocusPage;
 use foundations::FoundationsState;
 use graph::GraphPage;
 use kit::{MODELS, label};
@@ -77,6 +79,7 @@ pub struct Book {
     foundations: FoundationsState,
     lists: ListsState,
     controls: ControlsState,
+    focus_page: FocusPage,
     content: ContentState,
     composer: ComposerPage,
     shell: ShellPage,
@@ -116,6 +119,7 @@ impl Book {
             foundations: FoundationsState::new(presence, window, cx),
             lists: ListsState::new(),
             controls: ControlsState::new(presence, window, cx),
+            focus_page: FocusPage::new(cx),
             content: ContentState::new(cx),
             composer: ComposerPage::new(cx),
             shell: ShellPage::new(cx),
@@ -156,6 +160,7 @@ impl Book {
             Page::Delegation => self.graph.key(key),
             Page::Tiling => self.tiling.key(event),
             Page::Palette => self.palette.key(event, window, cx),
+            Page::Focus => self.focus_page.key(event, window, cx),
             _ => self.content.key(page, key) || self.controls.key(page, key),
         };
         if used {
@@ -438,6 +443,7 @@ impl Book {
             | Page::Toast
             | Page::Sheet
             | Page::Drawer => self.content.render(page, theme, window, cx),
+            Page::Focus => self.focus_page.render(theme, window, cx),
             Page::Tooltips => tips::tips(theme, window, cx),
             Page::Empty => empty::empty_page(theme, window, cx),
             Page::Composer => self.composer.render(theme, window, cx),
