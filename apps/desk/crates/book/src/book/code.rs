@@ -1,23 +1,35 @@
-use std::cell::Cell;
-use std::ops::Range;
+use std::cell::{Cell, OnceCell, RefCell};
+use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 
-use desk_core::buffer::Buffer;
+use desk_core::buffer::{Buffer, BufferError};
 use desk_core::syntax::{Kind, Language, Syntax, SyntaxError};
 use desk_ui::components::code::{CodeLine, code_view};
-use desk_ui::theme::{ColorToken, Theme};
-use gpui::{Div, UniformListScrollHandle, Window, div, point, prelude::*, px};
+use desk_ui::components::code_editor::{CodeEditor, code_lines, syntax_token};
+use desk_ui::live::ActiveTheme;
+use desk_ui::theme::Theme;
+use gpui::{
+    App, AppContext, Div, Entity, SharedString, UniformListScrollHandle, Window, div, point,
+    prelude::*, px,
+};
 
 use super::kit::{block, label, spread};
 
 const CODE_WIDTH: f32 = 720.0;
 const CODE_HEIGHT: f32 = 706.0;
+const EDITOR_HEIGHT: f32 = 440.0;
 const NARROW: f32 = 320.0;
 const NARROW_HEIGHT: f32 = 220.0;
 const SWATCH: f32 = 10.0;
 const SIDEWAYS_STEP: f32 = 120.0;
 const CODE_PATH: &str = "ui/src/components/form.rs";
 const CODE_TEXT: &str = include_str!("../../../ui/src/components/form.rs");
+const SCRATCH_SHOWN: &str = ".local/desk-app/shots/desk-163/form.rs";
+const SCRATCH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../../.local/desk-app/shots/desk-163/form.rs"
+);
 const KINDS: [Kind; 10] = [
     Kind::Keyword,
     Kind::String,
@@ -31,62 +43,102 @@ const KINDS: [Kind; 10] = [
     Kind::Punctuation,
 ];
 
-fn syntax_token(kind: Kind) -> ColorToken {
-    match kind {
-        Kind::Keyword => ColorToken::SyntaxKeyword,
-        Kind::String => ColorToken::SyntaxString,
-        Kind::Number => ColorToken::SyntaxNumber,
-        Kind::Comment => ColorToken::SyntaxComment,
-        Kind::Function => ColorToken::SyntaxFunction,
-        Kind::Type => ColorToken::SyntaxType,
-        Kind::Variable => ColorToken::SyntaxVariable,
-        Kind::Constant => ColorToken::SyntaxConstant,
-        Kind::Operator => ColorToken::SyntaxOperator,
-        Kind::Punctuation => ColorToken::SyntaxPunctuation,
-    }
-}
-
-fn byte_range(text: &str, chars: Range<usize>) -> Range<usize> {
-    let byte = |char: usize| {
-        text.char_indices()
-            .nth(char)
-            .map_or(text.len(), |(at, _)| at)
-    };
-    byte(chars.start)..byte(chars.end)
-}
-
 fn coloured(text: &str) -> Result<Vec<CodeLine>, SyntaxError> {
     let buffer = Buffer::from_text(text);
     let syntax = Syntax::new(Language::Rust, &buffer)?;
-    let count = buffer.line_count();
-    let mut lines: Vec<CodeLine> = (0..count)
-        .map(|row| CodeLine {
-            text: buffer.line(row).unwrap_or_default().into(),
-            runs: Vec::new(),
-        })
-        .collect();
-    for span in syntax.spans(0..count) {
-        let mut at = span.chars.start;
-        while at < span.chars.end {
-            let Ok(row) = buffer.char_to_line(at) else {
-                break;
-            };
-            let Ok(start) = buffer.line_to_char(row) else {
-                break;
-            };
-            let end = buffer
-                .line_to_char(row + 1)
-                .map_or(span.chars.end, |next| next.min(span.chars.end));
-            if let Some(line) = lines.get_mut(row) {
-                let bytes = byte_range(&line.text, at - start..end - start);
-                if !bytes.is_empty() {
-                    line.runs.push((bytes, syntax_token(span.kind)));
-                }
+    Ok(code_lines(&buffer, &syntax, 0..buffer.line_count()))
+}
+
+type Opened = Result<Entity<CodeEditor>, SyntaxError>;
+
+fn open(saved: Rc<RefCell<SharedString>>, cx: &mut App) -> Opened {
+    let buffer = Buffer::from_text(CODE_TEXT);
+    let syntax = Syntax::new(Language::Rust, &buffer)?;
+    Ok(cx.new(|cx| {
+        CodeEditor::new(buffer, syntax, cx).on_save(move |buffer, _, _| {
+            let path = Path::new(SCRATCH);
+            let written = path
+                .parent()
+                .map_or(Ok(()), fs::create_dir_all)
+                .map_err(BufferError::from)
+                .and_then(|()| buffer.save(path));
+            *saved.borrow_mut() = match written {
+                Ok(()) => format!("saved {} lines to {SCRATCH_SHOWN}", buffer.line_count()),
+                Err(error) => format!("save failed: {error}"),
             }
-            at = end;
-        }
+            .into();
+        })
+    }))
+}
+
+fn readout(editor: &CodeEditor, saved: &SharedString) -> Vec<String> {
+    let buffer = editor.buffer();
+    let mut lines = vec![format!(
+        "dirty {} | carets {} | last save: {}{}",
+        buffer.is_dirty(),
+        editor.carets().count(),
+        if saved.is_empty() { "none" } else { saved },
+        editor
+            .failure()
+            .map_or(String::new(), |failure| format!(" | failure: {failure}")),
+    )];
+    for (index, (anchor, head)) in editor.carets().enumerate() {
+        let row = buffer.char_to_line(head).unwrap_or_default();
+        let start = buffer.line_to_char(row).unwrap_or_default();
+        lines.push(format!(
+            "caret {}: line {} col {} char {head} selected {} | {}",
+            index + 1,
+            row + 1,
+            head - start + 1,
+            head.abs_diff(anchor),
+            buffer.line(row).unwrap_or_default(),
+        ));
     }
-    Ok(lines)
+    if let Some(row) = editor
+        .carets()
+        .next()
+        .and_then(|(_, head)| buffer.char_to_line(head).ok())
+    {
+        let runs: Vec<String> = editor
+            .syntax()
+            .spans(row..row + 1)
+            .into_iter()
+            .filter_map(|span| {
+                let text = buffer.rope().get_slice(span.chars)?;
+                Some(format!("{} `{text}`", span.kind.name()))
+            })
+            .collect();
+        lines.push(format!("line {} colours: {}", row + 1, runs.join(", ")));
+    }
+    lines
+}
+
+#[derive(IntoElement)]
+struct EditorBlock {
+    editor: Rc<OnceCell<Opened>>,
+    saved: Rc<RefCell<SharedString>>,
+}
+
+impl RenderOnce for EditorBlock {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = ActiveTheme::theme(cx);
+        let saved = self.saved.clone();
+        let editor = match self.editor.get_or_init(|| open(saved, cx)) {
+            Ok(editor) => editor.clone(),
+            Err(error) => return label(error.to_string(), &theme),
+        };
+        let shown = readout(editor.read(cx), &self.saved.borrow());
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(block(
+                "editable: click, type, Alt click adds a caret, Ctrl Z, Ctrl S saves a scratch copy",
+                &theme,
+                div().w(px(CODE_WIDTH)).h(px(EDITOR_HEIGHT)).child(editor),
+            ))
+            .children(shown.into_iter().map(|line| label(line, &theme)))
+    }
 }
 
 struct CodeSample {
@@ -96,6 +148,8 @@ struct CodeSample {
     narrow: UniformListScrollHandle,
     built: Rc<Cell<usize>>,
     shown: usize,
+    editor: Rc<OnceCell<Opened>>,
+    saved: Rc<RefCell<SharedString>>,
 }
 
 impl CodeSample {
@@ -113,6 +167,8 @@ impl CodeSample {
             narrow: UniformListScrollHandle::new(),
             built: Rc::default(),
             shown: 0,
+            editor: Rc::default(),
+            saved: Rc::default(),
         })
     }
 
@@ -132,14 +188,16 @@ impl CodeSample {
             window.request_animation_frame();
         }
         let (lines, counter) = (self.lines.clone(), self.built.clone());
-        let view = code_view("code-sample", lines.len(), &self.wide, move |row| {
-            counter.set(counter.get() + 1);
-            lines.get(row).cloned().unwrap_or_default()
+        let view = code_view("code-sample", lines.len(), &self.wide, move |rows, _| {
+            counter.set(counter.get() + rows.len());
+            rows.map(|row| lines.get(row).cloned().unwrap_or_default())
+                .collect()
         })
         .widest(self.widest);
         let lines = self.lines.clone();
-        let narrow = code_view("code-narrow", lines.len(), &self.narrow, move |row| {
-            lines.get(row).cloned().unwrap_or_default()
+        let narrow = code_view("code-narrow", lines.len(), &self.narrow, move |rows, _| {
+            rows.map(|row| lines.get(row).cloned().unwrap_or_default())
+                .collect()
         })
         .widest(self.widest);
         let legend = spread(theme).children(KINDS.map(|kind| {
@@ -168,6 +226,10 @@ impl CodeSample {
                 theme,
             ))
             .child(legend)
+            .child(EditorBlock {
+                editor: self.editor.clone(),
+                saved: self.saved.clone(),
+            })
             .child(block(
                 "board width",
                 theme,

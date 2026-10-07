@@ -1,16 +1,21 @@
+use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    App, ContentMask, Div, ElementId, Font, HighlightStyle, ListHorizontalSizingBehavior,
-    ScrollHandle, SharedString, StyledText, TextAlign, TextRun, UniformListScrollHandle, Window,
-    canvas, div, font, point, prelude::*, px, rgb_to_hsla, uniform_list,
+    App, Bounds, ContentMask, Div, ElementId, Font, HighlightStyle, ListHorizontalSizingBehavior,
+    Pixels, Point, ScrollHandle, ShapedLine, SharedString, StyledText, TextAlign, TextRun,
+    UniformListScrollHandle, Window, canvas, combine_highlights, div, fill, font, point,
+    prelude::*, px, rgb_to_hsla, size, uniform_list,
 };
 
 use crate::components::chip::{mono, tabular};
 use crate::components::diff::Highlight;
-use crate::components::paint::ink;
+use crate::components::paint::{ink, tint};
 use crate::components::scroll::scrollbar;
-use crate::components::size::{CODE_LINE, FONT_BODY, NUMBER_COLUMN, NUMBER_PAD, NUMBER_TEXT};
+use crate::components::size::{
+    CARET_HEIGHT, CARET_WIDTH, CODE_LINE, FONT_BODY, NUMBER_COLUMN, NUMBER_PAD, NUMBER_TEXT,
+    SELECTION_FILL, T1,
+};
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
 
@@ -20,9 +25,11 @@ const CODE_PAD_TOP: f32 = 2.0;
 pub struct CodeLine {
     pub text: SharedString,
     pub runs: Highlight,
+    pub selected: Vec<Range<usize>>,
+    pub carets: Vec<usize>,
 }
 
-type LineSource = Rc<dyn Fn(usize) -> CodeLine>;
+type LineSource = Rc<dyn Fn(Range<usize>, &mut App) -> Vec<CodeLine>>;
 
 #[derive(IntoElement)]
 pub struct CodeView {
@@ -30,21 +37,21 @@ pub struct CodeView {
     count: usize,
     widest: usize,
     scroll: UniformListScrollHandle,
-    line: LineSource,
+    lines: LineSource,
 }
 
 pub fn code_view(
     id: impl Into<ElementId>,
     count: usize,
     scroll: &UniformListScrollHandle,
-    line: impl Fn(usize) -> CodeLine + 'static,
+    lines: impl Fn(Range<usize>, &mut App) -> Vec<CodeLine> + 'static,
 ) -> CodeView {
     CodeView {
         id: id.into(),
         count,
         widest: 0,
         scroll: scroll.clone(),
-        line: Rc::new(line),
+        lines: Rc::new(lines),
     }
 }
 
@@ -53,6 +60,43 @@ impl CodeView {
         self.widest = line;
         self
     }
+}
+
+pub fn code_origin(
+    bounds: Bounds<Pixels>,
+    scroll: &UniformListScrollHandle,
+    row: usize,
+) -> Point<Pixels> {
+    let offset = scroll.0.borrow().base_handle.offset();
+    point(
+        bounds.left() + px(NUMBER_COLUMN) + offset.x,
+        bounds.top() + px(CODE_PAD_TOP) + offset.y + px(CODE_LINE) * row as f32,
+    )
+}
+
+pub fn code_place(
+    bounds: Bounds<Pixels>,
+    scroll: &UniformListScrollHandle,
+    position: Point<Pixels>,
+) -> (usize, Pixels) {
+    let origin = code_origin(bounds, scroll, 0);
+    let row = ((position.y - origin.y) / px(CODE_LINE)).floor().max(0.0) as usize;
+    (row, position.x - origin.x)
+}
+
+pub fn code_shape(text: SharedString, window: &Window, theme: &Theme) -> ShapedLine {
+    let run = TextRun {
+        len: text.len(),
+        font: font(mono(theme)),
+        color: rgb_to_hsla(ink(theme, T1)),
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+        letter_spacing: None,
+    };
+    window
+        .text_system()
+        .shape_line(text, px(FONT_BODY), &[run], None)
 }
 
 fn code_row(line: &CodeLine, theme: &Theme) -> Div {
@@ -65,6 +109,19 @@ fn code_row(line: &CodeLine, theme: &Theme) -> Div {
             },
         )
     });
+    let selection = HighlightStyle {
+        background_color: Some(rgb_to_hsla(tint(
+            theme.color(ColorToken::FocusRing),
+            SELECTION_FILL,
+        ))),
+        ..HighlightStyle::default()
+    };
+    let selected = line.selected.iter().map(|range| (range.clone(), selection));
+    let text =
+        StyledText::new(line.text.clone()).with_highlights(combine_highlights(runs, selected));
+    let layout = text.layout().clone();
+    let carets = line.carets.clone();
+    let color = ink(theme, T1);
     div()
         .flex()
         .h(px(CODE_LINE))
@@ -75,18 +132,42 @@ fn code_row(line: &CodeLine, theme: &Theme) -> Div {
         .child(
             div()
                 .flex_none()
+                .relative()
                 .text_color(theme.color(ColorToken::SyntaxVariable))
-                .child(StyledText::new(line.text.clone()).with_highlights(runs)),
+                .child(text)
+                .when(!carets.is_empty(), |row| {
+                    row.child(
+                        canvas(
+                            |_, _, _| {},
+                            move |_, _, window, _| {
+                                for at in &carets {
+                                    let Some(origin) = layout.position_for_index(*at) else {
+                                        continue;
+                                    };
+                                    let top = origin.y + px((CODE_LINE - CARET_HEIGHT) / 2.0);
+                                    let caret = Bounds::new(
+                                        point(origin.x, top),
+                                        size(px(CARET_WIDTH), px(CARET_HEIGHT)),
+                                    );
+                                    window.paint_quad(fill(caret, color));
+                                }
+                            },
+                        )
+                        .absolute()
+                        .size_full(),
+                    )
+                }),
         )
 }
 
 impl RenderOnce for CodeView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let line = self.line;
+        let lines = self.lines;
         let list = uniform_list(self.id.clone(), self.count, move |range, _, cx| {
             let theme = ActiveTheme::theme(cx);
-            range
-                .map(|ix| code_row(&line(ix), &theme))
+            lines(range, cx)
+                .iter()
+                .map(|line| code_row(line, &theme))
                 .collect::<Vec<_>>()
         })
         .with_width_from_item(Some(self.widest))

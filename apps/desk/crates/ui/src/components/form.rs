@@ -464,7 +464,11 @@ struct Editor {
     _focus_changes: [Subscription; 2],
 }
 
-fn blinker<T: 'static>(cx: &mut Context<T>) -> Task<()> {
+pub fn caret_shown(since: Instant) -> bool {
+    (since.elapsed().as_millis() / u128::from(CARET_BLINK_MS)).is_multiple_of(2)
+}
+
+pub fn blinker<T: 'static>(cx: &mut Context<T>) -> Task<()> {
     cx.spawn(async move |this, cx| {
         loop {
             cx.background_executor()
@@ -536,7 +540,7 @@ impl Editor {
     }
 
     fn caret_on(&self) -> bool {
-        (self.since.elapsed().as_millis() / u128::from(CARET_BLINK_MS)).is_multiple_of(2)
+        caret_shown(self.since)
     }
 
     fn replace(&mut self, range: Range<usize>, with: &str) {

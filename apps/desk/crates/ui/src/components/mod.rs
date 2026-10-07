@@ -7,6 +7,7 @@ pub mod charts;
 pub mod chat;
 pub mod chip;
 pub mod code;
+pub mod code_editor;
 pub mod composer;
 pub mod diff;
 pub mod empty;

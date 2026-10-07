@@ -1537,6 +1537,7 @@ name = "desk_ui"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "desk_core",
  "desk_motion",
  "gpui-ce",
  "serde_json",
