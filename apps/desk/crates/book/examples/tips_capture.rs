@@ -124,7 +124,7 @@ fn open(args: &Args) -> Result<Session, String> {
         mode: args.mode,
         size: size(px(WINDOW_WIDTH), px(CAPTURE_HEIGHT)),
     };
-    Session::open(&setup, Arc::new(text), Box::new(renderer))
+    Session::open(&setup, Arc::new(text), Box::new(renderer), |_| {})
 }
 
 impl Session {

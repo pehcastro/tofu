@@ -10,21 +10,25 @@ mod themes;
 mod headless;
 
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use desk_ui::components::form::TextArea;
 use desk_ui::metrics::{WINDOW_HEIGHT, WINDOW_WIDTH};
 use desk_ui::theme::Mode;
 use gpui::{
-    AtlasKey, AtlasTextureId, AtlasTile, Bounds, DevicePixels, Font, FontId, FontMetrics, FontRun,
-    GlyphId, Hsla, KeyDownEvent, KeyUpEvent, Keystroke, LineLayout, Modifiers, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas, PlatformHeadlessRenderer,
-    PlatformInput, PlatformTextSystem, Point, RenderGlyphParams, ScaledPixels, Scene, ScrollDelta,
-    ScrollWheelEvent, SharedString, Size, TextRenderingMode, Window, hsla_to_rgba, point, px, size,
+    App, AtlasKey, AtlasTextureId, AtlasTile, Bounds, DevicePixels, EntityInputHandler, Focusable,
+    Font, FontId, FontMetrics, FontRun, GlyphId, Hsla, KeyUpEvent, Keystroke, LineLayout,
+    Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas,
+    PlatformHeadlessRenderer, PlatformInput, PlatformTextSystem, Point, RenderGlyphParams,
+    ScaledPixels, Scene, ScrollDelta, ScrollWheelEvent, SharedString, Size, TextRenderingMode,
+    WeakEntity, Window, hsla_to_rgba, point, px, size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
 use image::RgbaImage;
@@ -45,7 +49,8 @@ const USAGE: &str = "usage: drive <script.json> <out dir>
 script: {\"page\": \"tiling\", \"theme\": \"...\", \"mode\": \"dark|light\", \"size\": [w, h], \"steps\": [...]}
 steps: [\"move\", [x,y]] [\"down\", [x,y], \"left|right\"] [\"up\", [x,y], \"left|right\"]
        [\"drag\", [x,y], [x,y], steps] (moves with the held button) [\"key\", \"ctrl-alt-e\"]
-       [\"scroll\", [x,y], dy] [\"wait\", ms] [\"shot\", \"name\"]";
+       [\"scroll\", [x,y], dy] [\"wait\", ms] [\"shot\", \"name\"]
+       [\"ime\", \"mark|commit\", \"text\"] (to the focused text area's input handler)";
 const GRID: f32 = 20.0;
 const GRID_SAMPLES: u32 = 4;
 const QUANT: u8 = 3;
@@ -64,7 +69,16 @@ enum Step {
     Scroll(Point<Pixels>, f32),
     Wait(Duration),
     Shot(String),
+    Ime(Ime, String),
 }
+
+#[derive(Clone, Copy, Debug)]
+enum Ime {
+    Mark,
+    Commit,
+}
+
+type Areas = Rc<RefCell<Vec<WeakEntity<TextArea>>>>;
 
 struct Script {
     page: Page,
@@ -145,6 +159,17 @@ fn step(value: &Value) -> Result<Step, String> {
         "scroll" => Step::Scroll(at(arg(1))?, number(arg(2), "scroll dy")?),
         "wait" => Step::Wait(Duration::from_millis(whole(arg(1), "wait ms")?)),
         "shot" => Step::Shot(shot_name(arg(1))?),
+        "ime" => {
+            let kind = match arg(1).and_then(Value::as_str) {
+                Some("mark") => Ime::Mark,
+                Some("commit") => Ime::Commit,
+                other => return Err(format!("ime {other:?} is not mark or commit")),
+            };
+            let text = arg(2)
+                .and_then(Value::as_str)
+                .ok_or("an ime step needs a string")?;
+            Step::Ime(kind, text.to_owned())
+        }
         other => return Err(format!("unknown step {other:?}\n{USAGE}")),
     })
 }
@@ -270,11 +295,23 @@ struct Ledger {
     glyphs: HashMap<(FontId, GlyphId), String>,
     tiles: HashMap<TileKey, Ink>,
     quads: Vec<Quad>,
+    underlines: Vec<(Rect, Hsla, f32)>,
     sprites: Vec<(Rect, TileKey)>,
 }
 
 impl Ledger {
     fn record(&mut self, scene: &Scene) {
+        self.underlines = scene
+            .underlines
+            .iter()
+            .filter_map(|line| {
+                Some((
+                    Rect::clipped(line.bounds, line.content_mask.bounds)?,
+                    line.color.into(),
+                    line.thickness.0,
+                ))
+            })
+            .collect();
         self.quads = scene
             .quads
             .iter()
@@ -686,12 +723,42 @@ fn moved(
     )
 }
 
+fn compose(
+    areas: &Areas,
+    kind: Ime,
+    text: &str,
+    window: &mut Window,
+    cx: &mut App,
+) -> Result<String, String> {
+    let area = areas
+        .borrow()
+        .iter()
+        .filter_map(WeakEntity::upgrade)
+        .find(|area| area.read(cx).focus_handle(cx).is_focused(window))
+        .ok_or("no text area has focus")?;
+    Ok(area.update(cx, |area, cx| {
+        match kind {
+            Ime::Mark => {
+                let caret = text.encode_utf16().count();
+                area.replace_and_mark_text_in_range(None, text, Some(caret..caret), window, cx);
+            }
+            Ime::Commit => area.replace_text_in_range(None, text, window, cx),
+        }
+        let marked = area.marked_text_range(window, cx);
+        format!(
+            "ime {kind:?} {text:?}: text {:?} marked utf16 {marked:?}",
+            area.text()
+        )
+    }))
+}
+
 struct Run<'a> {
     script: &'a Script,
     out: &'a Path,
     session: Session,
     ledger: Shared,
     pointer: Pointer,
+    areas: Areas,
 }
 
 impl Run<'_> {
@@ -739,14 +806,13 @@ impl Run<'_> {
                 format!("drag {count} moves holding {:?}", pointer.held)
             }
             Step::Key(keystroke) => {
-                let down = dispatch(
-                    session,
-                    PlatformInput::KeyDown(KeyDownEvent {
-                        keystroke: keystroke.clone(),
-                        is_held: false,
-                        prefer_character_input: false,
-                    }),
-                )?;
+                let typed =
+                    session.with(|window, cx| window.dispatch_keystroke(keystroke.clone(), cx))?;
+                session.frame()?;
+                let down = match typed {
+                    true => "handled",
+                    false => "unhandled",
+                };
                 dispatch(
                     session,
                     PlatformInput::KeyUp(KeyUpEvent {
@@ -773,6 +839,12 @@ impl Run<'_> {
                 format!("wait {} ms", span.as_millis())
             }
             Step::Shot(name) => return self.shot(index, name),
+            Step::Ime(kind, text) => {
+                let areas = &self.areas;
+                let line = session.with(|window, cx| compose(areas, *kind, text, window, cx))??;
+                session.frame()?;
+                line
+            }
         };
         println!(
             "step {index}: {line} at {:.0},{:.0}",
@@ -815,6 +887,21 @@ impl Run<'_> {
             labelled,
         );
         section("painted boxes: fill and border", quads(&ledger, scale));
+        section(
+            "underlines: colour and thickness",
+            ledger
+                .underlines
+                .iter()
+                .map(|(rect, color, thickness)| {
+                    format!(
+                        "underline {} {} {:.1}px",
+                        rect.scaled(scale),
+                        hex(*color),
+                        thickness / scale
+                    )
+                })
+                .collect(),
+        );
         section("fill grid from the png", grid(&image, scale));
         drop(ledger);
         let txt = self.out.join(format!("{name}.txt"));
@@ -848,6 +935,8 @@ fn run(script_path: &Path, out: &Path) -> Result<(), String> {
         mode: script.mode,
         size: script.size,
     };
+    let areas = Areas::default();
+    let seen = areas.clone();
     let mut session = Session::open(
         &setup,
         Arc::new(TextProbe {
@@ -859,6 +948,12 @@ fn run(script_path: &Path, out: &Path) -> Result<(), String> {
             atlas,
             ledger: ledger.clone(),
         }),
+        move |cx| {
+            cx.observe_new(move |_: &mut TextArea, _, cx| {
+                seen.borrow_mut().push(cx.weak_entity());
+            })
+            .detach();
+        },
     )?;
     session.with(|window, _| window.set_a11y_forced(true))?;
     session.frame()?;
@@ -879,6 +974,7 @@ fn run(script_path: &Path, out: &Path) -> Result<(), String> {
             at: point(px(0.0), px(0.0)),
             held: None,
         },
+        areas,
     };
     for (index, step) in script.steps.iter().enumerate() {
         run.perform(index, step)?;

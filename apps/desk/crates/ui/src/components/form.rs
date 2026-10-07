@@ -8,7 +8,8 @@ use gpui::{
     EntityInputHandler, FocusHandle, Focusable, FontWeight, HighlightStyle, KeyDownEvent,
     Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
     ScrollHandle, SharedString, Stateful, StyledText, Subscription, Task, TextLayout,
-    UTF16Selection, Window, canvas, div, fill, point, prelude::*, px, rgb_to_hsla, size,
+    UTF16Selection, UnderlineStyle, Window, canvas, combine_highlights, div, fill, point,
+    prelude::*, px, rgb_to_hsla, size,
 };
 
 use crate::components::overlay::{ContextMenu, context_menu};
@@ -25,6 +26,7 @@ const CARET_SCALE: f32 = 0.85;
 const TEXT_AREA_LINES: usize = 8;
 const TEXT_AREA_LINE: f32 = 20.0;
 const TEXT_AREA_PAD_Y: f32 = 5.0;
+const MARKED_UNDERLINE: f32 = 1.0;
 
 pub fn input(
     id: impl Into<ElementId>,
@@ -273,7 +275,12 @@ impl Span {
         self.select(end, true);
     }
 
-    fn styled(&mut self, shown: SharedString, theme: &Theme) -> StyledText {
+    fn styled(
+        &mut self,
+        shown: SharedString,
+        marked: Option<Range<usize>>,
+        theme: &Theme,
+    ) -> StyledText {
         let highlight = HighlightStyle {
             background_color: Some(rgb_to_hsla(tint(
                 theme.color(ColorToken::FocusRing),
@@ -281,8 +288,17 @@ impl Span {
             ))),
             ..HighlightStyle::default()
         };
+        let underline = HighlightStyle {
+            underline: Some(UnderlineStyle {
+                thickness: px(MARKED_UNDERLINE),
+                color: Some(rgb_to_hsla(ink(theme, T1))),
+                wavy: false,
+            }),
+            ..HighlightStyle::default()
+        };
         let selection = (!self.range.is_empty()).then(|| (self.range.clone(), highlight));
-        let text = StyledText::new(shown).with_highlights(selection);
+        let composing = marked.map(|range| (range, underline));
+        let text = StyledText::new(shown).with_highlights(combine_highlights(selection, composing));
         self.layout = text.layout().clone();
         text
     }
@@ -394,6 +410,7 @@ struct Editor {
     placeholder: SharedString,
     span: Span,
     lines: Lines,
+    marked: Option<Range<usize>>,
     undo: Option<(String, Range<usize>)>,
     since: Instant,
     reveal: bool,
@@ -454,6 +471,7 @@ impl Editor {
             placeholder,
             span: Span::new(String::new()),
             lines,
+            marked: None,
             undo: None,
             since: Instant::now(),
             reveal: false,
@@ -487,10 +505,12 @@ impl Editor {
         self.undo = Some((self.span.text.clone(), self.span.range.clone()));
         self.span.text.replace_range(range.clone(), &typed);
         self.span.select(range.start + typed.len(), false);
+        self.marked = None;
     }
 
     fn undo(&mut self) {
         if let Some((text, range)) = self.undo.take() {
+            self.marked = None;
             let current = std::mem::replace(&mut self.span.text, text);
             self.undo = Some((current, self.span.range.clone()));
             self.span.range = range;
@@ -558,19 +578,51 @@ impl Editor {
         }
     }
 
+    fn target(&self, units: Option<Range<usize>>) -> Range<usize> {
+        let Some(units) = units else {
+            return self.marked.clone().unwrap_or(self.span.range.clone());
+        };
+        let start = from_utf16(&self.span.text, units.start);
+        let end = from_utf16(&self.span.text, units.end);
+        start.min(end)..start.max(end)
+    }
+
     fn type_in<T: 'static>(
         &mut self,
         units: Option<Range<usize>>,
         text: &str,
         cx: &mut Context<T>,
     ) {
-        let range = units.map_or(self.span.range.clone(), |units| {
-            let start = from_utf16(&self.span.text, units.start);
-            let end = from_utf16(&self.span.text, units.end);
-            start.min(end)..start.max(end)
-        });
-        self.replace(range, text);
+        self.replace(self.target(units), text);
         self.touch(cx);
+    }
+
+    fn compose<T: 'static>(
+        &mut self,
+        units: Option<Range<usize>>,
+        text: &str,
+        caret: Option<Range<usize>>,
+        cx: &mut Context<T>,
+    ) {
+        let range = self.target(units);
+        let start = range.start;
+        self.replace(range, text);
+        let marked = start..self.span.head();
+        if let Some(caret) = caret {
+            let within = self.span.text.get(marked.clone()).unwrap_or_default();
+            let anchor = from_utf16(within, caret.start);
+            let head = from_utf16(within, caret.end);
+            self.span.select(start + anchor, false);
+            self.span.select(start + head, true);
+        }
+        self.marked = (!marked.is_empty()).then_some(marked);
+        self.touch(cx);
+    }
+
+    fn marked_units(&self) -> Option<Range<usize>> {
+        let text = &self.span.text;
+        let marked = self.marked.as_ref()?;
+        Some(to_utf16(text, marked.start)..to_utf16(text, marked.end))
     }
 
     fn bounds_for(&self, units: Range<usize>) -> Option<Bounds<Pixels>> {
@@ -638,10 +690,13 @@ macro_rules! editable {
                 _: &mut Window,
                 _: &mut Context<Self>,
             ) -> Option<Range<usize>> {
-                None
+                self.editor.marked_units()
             }
 
-            fn unmark_text(&mut self, _: &mut Window, _: &mut Context<Self>) {}
+            fn unmark_text(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+                self.editor.marked = None;
+                cx.notify();
+            }
 
             fn replace_text_in_range(
                 &mut self,
@@ -657,11 +712,11 @@ macro_rules! editable {
                 &mut self,
                 range: Option<Range<usize>>,
                 text: &str,
-                _: Option<Range<usize>>,
+                caret: Option<Range<usize>>,
                 _: &mut Window,
                 cx: &mut Context<Self>,
             ) {
-                self.editor.type_in(range, text, cx);
+                self.editor.compose(range, text, caret, cx);
             }
 
             fn bounds_for_range(
@@ -715,7 +770,7 @@ fn typed<T: Editable + EntityInputHandler>(
     } else {
         SharedString::from(editor.span.text.clone())
     };
-    let text = editor.span.styled(shown, theme);
+    let text = editor.span.styled(shown, editor.marked.clone(), theme);
     let lit = focused && editor.span.range.is_empty() && editor.caret_on();
     let revealing = std::mem::take(&mut editor.reveal);
     let layout = editor.span.layout.clone();
@@ -952,7 +1007,7 @@ impl Render for SelectableText {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let shown = SharedString::from(self.span.text.clone());
-        let text = self.span.styled(shown, &theme);
+        let text = self.span.styled(shown, None, &theme);
         let body = div()
             .id("selectable-text")
             .track_focus(&self.focus)

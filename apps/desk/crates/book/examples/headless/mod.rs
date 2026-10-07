@@ -9,7 +9,7 @@ use desk_ui::components::glyph::Glyph;
 use desk_ui::icon::Icon;
 use desk_ui::theme::Mode;
 use gpui::{
-    AnyWindowHandle, AppContext, AssetRegistry, AssetSource, HeadlessAppContext, Pixels,
+    AnyWindowHandle, App, AppContext, AssetRegistry, AssetSource, HeadlessAppContext, Pixels,
     PlatformHeadlessRenderer, PlatformTextSystem, SharedString, Size,
 };
 use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
@@ -89,6 +89,7 @@ impl Session {
         setup: &Setup,
         text: Arc<dyn PlatformTextSystem>,
         renderer: Box<dyn PlatformHeadlessRenderer>,
+        prepare: impl FnOnce(&mut App),
     ) -> Result<Session, String> {
         let themes = themes::discover()?;
         let theme = themes
@@ -99,6 +100,7 @@ impl Session {
         let mut cx = HeadlessAppContext::with_platform(text, Arc::new(assets()?), move || {
             renderer.borrow_mut().take()
         });
+        cx.update(prepare);
         let mode = setup.mode;
         cx.update(|cx| {
             themes
