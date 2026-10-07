@@ -8,6 +8,7 @@ mod decide;
 mod diff;
 mod editor;
 mod empty;
+mod file_edits;
 mod foundations;
 mod graph;
 mod kit;
@@ -50,6 +51,7 @@ use controls::ControlsState;
 use decide::Crossfade;
 use diff::DiffPage;
 use editor::{HistoryPage, TreePage};
+use file_edits::FileEditsPage;
 use foundations::FoundationsState;
 use graph::GraphPage;
 use kit::{MODELS, label};
@@ -81,6 +83,7 @@ pub struct Book {
     history: HistoryPage,
     shells: ShellsPage,
     agents: AgentsPage,
+    file_edits: FileEditsPage,
     charts: ChartsPage,
     graph: GraphPage,
     tiling: TilingPage,
@@ -117,6 +120,7 @@ impl Book {
             history: HistoryPage::new(cx),
             shells: ShellsPage::new(cx),
             agents: AgentsPage::new(cx),
+            file_edits: FileEditsPage::new(cx),
             charts: ChartsPage::new(cx),
             graph: GraphPage::new(cx),
             tiling: TilingPage::new(cx),
@@ -436,6 +440,7 @@ impl Book {
             Page::History => self.history.render(theme, window, cx),
             Page::Shells => self.shells.render(theme, window, cx),
             Page::Agents => self.agents.render(theme, window, cx),
+            Page::FileEdits => self.file_edits.render(theme, window, cx),
             Page::Charts => self.charts.render(theme, window, cx),
             Page::Delegation => self.graph.render(theme, window, cx),
             Page::Tiling => self.tiling.render(theme, window, cx),

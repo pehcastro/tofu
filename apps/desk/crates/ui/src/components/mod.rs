@@ -10,6 +10,7 @@ pub mod composer;
 pub mod diff;
 pub mod empty;
 pub mod feed;
+pub mod file_edits;
 pub mod form;
 pub mod glyph;
 pub mod graph;

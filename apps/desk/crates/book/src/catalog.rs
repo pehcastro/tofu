@@ -64,6 +64,7 @@ pub enum Page {
     Shells,
     AskBar,
     Agents,
+    FileEdits,
     Charts,
     Delegation,
     Tiling,
@@ -94,7 +95,7 @@ pub const UNBUILT: [(Group, &str); 10] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 35] = [
+    pub const ALL: [Page; 36] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -107,6 +108,7 @@ impl Page {
         Page::FileTree,
         Page::History,
         Page::Agents,
+        Page::FileEdits,
         Page::Avatar,
         Page::Chip,
         Page::Button,
@@ -467,6 +469,16 @@ impl Page {
                 "components/agents.rs, components/avatar.rs, components/sheet.rs",
                 "working, asking, failed, finished; group folded; row opened in the Sheet; board width and 320 px",
                 "",
+            ),
+            Page::FileEdits => sheet(
+                "file-edits",
+                "File edits",
+                Group::Lists,
+                "Every file the session edited, one row each with who and when, and the history a row opens: every edit to that file, newest first, each a folding DiffCard.",
+                "IWY-4",
+                "components/file_edits.rs, components/diff.rs, components/list.rs",
+                "12 files, one opened; history of 4 edits with a folded context run; added, modified and deleted files; board width",
+                "+ and - per file in the table: FileDiff has no public counts",
             ),
             Page::Charts => sheet(
                 "charts",
