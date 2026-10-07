@@ -1,19 +1,41 @@
 use desk_ui::components::paint::ink;
 use desk_ui::theme::{Theme, WordToken};
 use gpui::{
-    BoxShadow, ClickEvent, Context, Div, ElementId, FontWeight, div, point, prelude::*, px, rgb,
-    rgba,
+    BoxShadow, ClickEvent, Context, Div, ElementId, FontWeight, Stateful, div, point, prelude::*,
+    px, rgb, rgba,
 };
 
 use super::Git;
-use super::changes::{author_dot, file_row};
 use super::fixture::{
     Avatar, BLOCKED, BRANCHES, COMMITS, CREATE_TELL, Day, HISTORY_NOTE, TELL_MENTION, TELL_STASH,
     TOUCHED, TYPED,
 };
-use super::kit::{self, ADD, ANA, BASE, DEL, T2, T3, WARN, YOU, edge};
+use super::kit::{self, ADD, AGENT, ANA, BASE, DEL, T2, T3, WARN, YOU, edge};
 
 const SIDE: f32 = 460.0;
+const ROW: f32 = 28.0;
+
+fn file_row(id: impl Into<ElementId>, left: f32) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(8.0))
+        .h(px(ROW))
+        .pl(px(left))
+        .pr(px(10.0))
+        .rounded(px(7.0))
+        .cursor_pointer()
+}
+
+fn author_dot(agent: bool) -> Div {
+    if agent {
+        kit::dot(rgb(AGENT))
+    } else {
+        kit::person(YOU, 6.0)
+    }
+}
 
 impl Git {
     pub(super) fn history(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {

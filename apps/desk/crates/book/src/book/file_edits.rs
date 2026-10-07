@@ -1,11 +1,16 @@
 use std::rc::Rc;
 
 use desk_ui::components::card::{Header, inner_card, shell};
+use desk_ui::components::chip::GitStatus;
 use desk_ui::components::diff::{FileChange, FileDiff, PatchError};
-use desk_ui::components::file_edits::{EditedFile, FileEdit, file_edits, file_history};
+use desk_ui::components::file_edits::{
+    ChangeAction, ChangedFile, EditedFile, FileEdit, changed_files, commit_box, file_edits,
+    file_history,
+};
+use desk_ui::components::form::TextArea;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::theme::Theme;
-use gpui::{App, Context, Div, SharedString, Window, div, prelude::*, px};
+use gpui::{App, ClickEvent, Context, Div, Entity, SharedString, Window, div, prelude::*, px};
 
 use super::Book;
 use super::kit::label;
@@ -240,9 +245,20 @@ fn files() -> Result<Vec<EditedFile>, PatchError> {
     Ok(files)
 }
 
+const CHANGED: [(&str, GitStatus, bool); 5] = [
+    ("notes/notes.go", GitStatus::Modified, true),
+    ("web/NoteList.tsx", GitStatus::Modified, false),
+    ("README.md", GitStatus::Deleted, false),
+    ("notes/notes_test.go", GitStatus::Untracked, false),
+    ("web/count.ts", GitStatus::Untracked, false),
+];
+
 pub(super) struct FileEditsPage {
     files: Result<Vec<EditedFile>, PatchError>,
     opened: usize,
+    changed: Vec<ChangedFile>,
+    message: Option<Entity<TextArea>>,
+    last: SharedString,
 }
 
 impl FileEditsPage {
@@ -250,10 +266,93 @@ impl FileEditsPage {
         FileEditsPage {
             files: files(),
             opened: OPENED_AT_START,
+            changed: CHANGED
+                .iter()
+                .map(|&(path, status, staged)| ChangedFile {
+                    path: path.into(),
+                    status,
+                    staged,
+                })
+                .collect(),
+            message: None,
+            last: "Click a row to stage or unstage it, or a button on it.".into(),
         }
     }
 
-    pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, cx: &mut Context<Book>) -> Div {
+    fn source_control(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Book>,
+    ) -> Div {
+        let message = self
+            .message
+            .get_or_insert_with(|| cx.new(|cx| TextArea::new("Commit message".into(), window, cx)))
+            .clone();
+        let book = cx.weak_entity();
+        let act = move |ix: usize, action: ChangeAction, _: &mut Window, cx: &mut App| {
+            if let Some(book) = book.upgrade() {
+                book.update(cx, |book, cx| {
+                    let page = &mut book.file_edits;
+                    if let Some(file) = page.changed.get_mut(ix) {
+                        page.last = format!("{} {}", action.verb(), file.path).into();
+                        match action {
+                            ChangeAction::Stage => file.staged = true,
+                            ChangeAction::Unstage => file.staged = false,
+                            ChangeAction::Discard => {
+                                page.changed.remove(ix);
+                            }
+                        }
+                    }
+                    cx.notify();
+                });
+            }
+        };
+        let book = cx.weak_entity();
+        let typed = message.clone();
+        let commit = move |_: &ClickEvent, _: &mut Window, cx: &mut App| {
+            let text = typed.read(cx).text();
+            if let Some(book) = book.upgrade() {
+                book.update(cx, |book, cx| {
+                    let page = &mut book.file_edits;
+                    let staged = page.changed.iter().filter(|file| file.staged).count();
+                    page.last = format!("commit {staged} with {text:?}").into();
+                    page.changed.retain(|file| !file.staged);
+                    cx.notify();
+                });
+            }
+        };
+        let staged = self.changed.iter().filter(|file| file.staged).count();
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(label(
+                "IGIT-1, the Changes pane: the commit box, then the working tree grouped as Staged, Changes and Untracked. A row stages or unstages on click; Discard restores a tracked file.",
+                theme,
+            ))
+            .child(
+                shell(
+                    Header::Title(Some(Glyph::File), "Source control".into(), None),
+                    theme,
+                )
+                .w(px(TILE_WIDTH))
+                .child(
+                    inner_card(theme)
+                        .child(commit_box(message, staged, theme, commit))
+                        .child(changed_files("changed-files", &self.changed, theme, act)),
+                ),
+            )
+            .child(label(self.last.clone(), theme))
+    }
+
+    pub(super) fn render(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Book>,
+    ) -> Div {
+        let source_control = self.source_control(theme, window, cx);
         let files = match &self.files {
             Ok(files) => files,
             Err(problem) => return div().child(label(format!("sample patch: {problem}"), theme)),
@@ -297,5 +396,6 @@ impl FileEditsPage {
                     .child(tile)
                     .children(history),
             )
+            .child(source_control)
     }
 }

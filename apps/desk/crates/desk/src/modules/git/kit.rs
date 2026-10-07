@@ -33,8 +33,6 @@ pub const ADD: u32 = 0x7fd6a6;
 pub const DEL: u32 = 0xee8a8f;
 pub const AGENT: u32 = 0xb9a6ea;
 pub const AGENT_TEXT: u32 = 0xcfc2f2;
-pub const MODIFIED: u32 = 0xdeb04e;
-pub const UNTRACKED: u32 = 0x66b0ec;
 pub const DANGER: u32 = 0xf1737d;
 pub const WARN: u32 = 0xe8c98a;
 pub const YOU: [u32; 2] = [0x6b7a8f, 0x3a4250];
@@ -272,9 +270,6 @@ pub fn count(value: u32, sign: char, color: u32, theme: &Theme) -> Div {
 pub fn icon(kind: Kind, size: f32) -> Div {
     let (label, color) = match kind {
         Kind::Go => ("GO", 0x79c7e3),
-        Kind::Tsx => ("TS", 0x7aa7f0),
-        Kind::Ts => ("TS", 0x3b82c4),
-        Kind::Readme => ("i", 0x7aa7f0),
         Kind::Markdown => ("M", 0x7aa7f0),
     };
     div()

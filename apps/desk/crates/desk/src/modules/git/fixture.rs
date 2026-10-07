@@ -1,96 +1,49 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Go,
-    Tsx,
-    Ts,
-    Readme,
     Markdown,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Author {
-    GoDev,
-    TsDev,
-    You,
-}
-
 pub struct Change {
-    pub name: &'static str,
-    pub dir: Option<&'static str>,
-    pub kind: Kind,
-    pub author: Author,
-    pub added: u32,
-    pub removed: Option<u32>,
+    pub path: &'static str,
     pub tracked: bool,
     pub stageable: bool,
-    pub edit: Option<&'static str>,
     pub tell: &'static str,
 }
 
 pub const CHANGES: [Change; 5] = [
     Change {
-        name: "notes.go",
-        dir: Some("notes"),
-        kind: Kind::Go,
-        author: Author::GoDev,
-        added: 10,
-        removed: Some(1),
+        path: "notes/notes.go",
         tracked: true,
         stageable: true,
-        edit: Some("edit#34a87e"),
         tell: "",
     },
     Change {
-        name: "NoteList.tsx",
-        dir: Some("web"),
-        kind: Kind::Tsx,
-        author: Author::TsDev,
-        added: 7,
-        removed: Some(2),
+        path: "web/NoteList.tsx",
         tracked: true,
         stageable: false,
-        edit: None,
         tell: "Shows the changes to web/NoteList.tsx: 7 lines added, 2 removed, by ts-dev.",
     },
     Change {
-        name: "README.md",
-        dir: None,
-        kind: Kind::Readme,
-        author: Author::You,
-        added: 2,
-        removed: None,
+        path: "README.md",
         tracked: true,
         stageable: false,
-        edit: None,
         tell: "Shows the changes to README.md: 2 lines added, by you.",
     },
     Change {
-        name: "notes_test.go",
-        dir: Some("notes"),
-        kind: Kind::Go,
-        author: Author::GoDev,
-        added: 24,
-        removed: None,
+        path: "notes/notes_test.go",
         tracked: false,
         stageable: true,
-        edit: Some("edit#4f60d8"),
         tell: "",
     },
     Change {
-        name: "count.ts",
-        dir: Some("web"),
-        kind: Kind::Ts,
-        author: Author::TsDev,
-        added: 12,
-        removed: None,
+        path: "web/count.ts",
         tracked: false,
         stageable: false,
-        edit: None,
         tell: "Shows web/count.ts, a new file of 12 lines, by ts-dev.",
     },
 ];
 
-pub const MESSAGE: &str = "feat(notes): count notes and show a badge";
 pub const COMMITTED: &str = "d4e2f10";
 
 #[derive(Clone, Copy)]

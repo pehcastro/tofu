@@ -67,6 +67,8 @@ use desk_ui::icon::Icon;
 use gpui::{App, AppContext, EmptyView};
 #[cfg(feature = "module-editor")]
 use modules::editor::open_file;
+#[cfg(feature = "module-git")]
+use modules::git::open_repo;
 
 #[cfg(not(feature = "module-editor"))]
 fn open_file(
@@ -78,8 +80,19 @@ fn open_file(
     Err("--file needs the editor: rebuild with --features module-editor".to_owned())
 }
 
-const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>]]\n\
+#[cfg(not(feature = "module-git"))]
+fn open_repo(
+    _: &std::path::Path,
+    _: Option<&str>,
+    _: &mut gpui::Window,
+    _: &mut App,
+) -> Result<gpui::AnyView, String> {
+    Err("--repo needs the git module: rebuild with --features module-git".to_owned())
+}
+
+const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>] [--repo <path>]]\n\
 --file opens a file in the editor screen\n\
+--repo opens a git repository in the git screen\n\
 screens: work settings accounts theme library classifier usage limits context session intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
 const SCREENS: [&str; 13] = [
@@ -98,10 +111,15 @@ const SCREENS: [&str; 13] = [
     "platforms",
 ];
 
+enum Target {
+    File(PathBuf),
+    Repo(PathBuf),
+}
+
 struct ScreenLaunch {
     name: String,
     board: Option<String>,
-    file: Option<PathBuf>,
+    target: Option<Target>,
     open: Open,
 }
 
@@ -154,12 +172,15 @@ fn parse(args: &[String]) -> Result<Launch, String> {
     match args {
         [] => Ok(Launch::Desk),
         [flag, name, rest @ ..] if flag == "--screen" => {
-            let (mut board, mut file) = (None, None);
+            let (mut board, mut target) = (None, None);
             for pair in rest.chunks(2) {
                 match pair {
                     [flag, id] if flag == "--board" && board.is_none() => board = Some(id.clone()),
-                    [flag, path] if flag == "--file" && name == "editor" && file.is_none() => {
-                        file = Some(PathBuf::from(path))
+                    [flag, path] if flag == "--file" && name == "editor" && target.is_none() => {
+                        target = Some(Target::File(PathBuf::from(path)))
+                    }
+                    [flag, path] if flag == "--repo" && name == "git" && target.is_none() => {
+                        target = Some(Target::Repo(PathBuf::from(path)))
                     }
                     _ => return Err(USAGE.to_owned()),
                 }
@@ -168,7 +189,7 @@ fn parse(args: &[String]) -> Result<Launch, String> {
                 open: screen(name)?,
                 name: name.clone(),
                 board,
-                file,
+                target,
             }))
         }
         _ => Err(USAGE.to_owned()),
@@ -185,7 +206,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
             })
         })
         .collect();
-    let (title, client, name, board, file, open): (String, _, String, _, _, Open) = match launch {
+    let (title, client, name, board, target, open): (String, _, String, _, _, Open) = match launch {
         Launch::Desk => (
             desk::WINDOW_TITLE.to_owned(),
             desk::desk_client(),
@@ -202,7 +223,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
             desk::board_client(),
             launch.name,
             launch.board,
-            launch.file,
+            launch.target,
             launch.open,
         ),
     };
@@ -210,8 +231,9 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
     let window = cx.open_window(
         desk::window_options(title.into(), client, cx),
         |window, cx| {
-            let opened = match &file {
-                Some(path) => open_file(path, board.as_deref(), window, cx),
+            let opened = match &target {
+                Some(Target::File(path)) => open_file(path, board.as_deref(), window, cx),
+                Some(Target::Repo(path)) => open_repo(path, board.as_deref(), window, cx),
                 None => open(board.as_deref(), window, cx),
             };
             let view = opened.unwrap_or_else(|error| {
