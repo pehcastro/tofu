@@ -32,7 +32,7 @@
   {
     "package": "memory",
     "kind": "measurement with no dated report",
-    "note": "TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. Offering to keep a message, TOFU-1185, 2026-10-07, offline over 54 made-up messages, 24 labelled offer by the agent that wrote them and that knew the rules being scored when it did: regular expression precision 0.67 recall 0.33, the trigger the app uses 1.00 and 0.12, remember anywhere 0.60 and 0.12. Jev memory_offer@1 owes a run on this corpus."
+    "note": "TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: the first arm now keeps the correction with /remember, and the second keeps nothing."
   },
   {
     "package": "learn",

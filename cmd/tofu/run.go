@@ -746,7 +746,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
 	if run.sessions != nil && memoryOn(dir) {
 		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox,
-			Auto: func() bool { return autoMemoryOn(dir) }})
+			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
@@ -1448,4 +1448,9 @@ func nextInt(args []string, i *int, flag string) (int, error) {
 		return 0, fmt.Errorf("%s %q is not a number", flag, raw)
 	}
 	return n, nil
+}
+
+func memoryOn(dir string) bool {
+	on, _ := appSetting(dir, settingspkg.Memory)
+	return on != 0
 }

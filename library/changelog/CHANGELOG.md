@@ -14,7 +14,9 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Fixed
 
-- **The lead's offer to keep a memory is a card** titled `[&orchestrator] wants to add a project memory`, with tab switching to a global one, and a typed `remember` card reads `Add a global memory?`. A memory states the rule itself: the lead's `remember` tool and `tofu learn` refuse one that names or describes you.
+- **Typing a message never offers to keep it as memory**, whatever it says. Memory is added with `tofu memory add`, with `/remember <what>`, which keeps it at once, or by the lead's card titled `[&orchestrator] wants to add a project memory`, with tab switching to a global one.
+
+- **A memory is one short rule**: one line of at most 160 bytes, stating the rule itself. The lead's `remember` tool and `tofu learn` refuse one that names or describes you.
 
 - **`tofu changelog` orders a fix release after its base version**, so a `-fix` entry reads once and is not shown as unread again.
 

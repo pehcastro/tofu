@@ -37,10 +37,6 @@ methods:
   spawn_gate:
     method: unwired
     why: nothing is measured, and it waits on one recorded orchestrator and sub-agent
-  memory_offer:
-    method: cheap
-    why: the app offers a memory when a sentence starts with remember, precision 1.00 and recall 0.12 on a made-up corpus of 54 messages, where jev memory_offer@1 owes a run. jev is asked in shadow on every typed message while memory is on and decides nothing
-    cost: nothing for the rule. the shadow jev call is one ledger row per typed message while memory is on, and no recorded session reports its cost yet
   thrift:
     method: unwired
     why: the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it

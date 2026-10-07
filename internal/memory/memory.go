@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -306,4 +307,27 @@ func readEntry(file string) (Entry, error) {
 		return Entry{}, fmt.Errorf("%s: an entry needs id %s, a kind of %s, %s or %s, and its text", file, want, KindPerson, KindProject, KindReference)
 	}
 	return e, nil
+}
+
+func Rule(statement string) (string, error) {
+	rule := strings.TrimSpace(statement)
+	if words, named := PersonIn(rule); named {
+		return "", fmt.Errorf("the statement names or describes the person (%q); write the rule itself, naming no one, such as: Replies stay short and plain", words)
+	}
+	switch {
+	case rule == "":
+		return "", errors.New("the statement is empty; write the rule itself")
+	case strings.ContainsAny(rule, "\r\n"):
+		return "", errors.New("the statement is more than one line; write one rule on one line, never the whole message")
+	case len(rule) > konst.MemoryRuleBytes:
+		return "", fmt.Errorf("the statement is %d bytes, over the %d a rule may hold; write the rule itself and nothing else, never the whole message", len(rule), konst.MemoryRuleBytes)
+	}
+	return rule, nil
+}
+
+func PersonIn(statement string) (string, bool) {
+	described := regexp.MustCompile(`(?i)\b(?:the\s+(?:person|user|owner|human|developer)|(?:person|user|owner)'s)\b`)
+	named := regexp.MustCompile(`(?:(?i:\b(?:he|she|they))|^\s*\p{Lu}\pL*)\s+(?i:wants?|prefers?|likes?|asks?|asked|said|says|needs?|expects?|hates?|told|keeps)\b`)
+	found := described.FindString(statement) + named.FindString(statement)
+	return found, found != ""
 }

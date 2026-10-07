@@ -51,65 +51,29 @@ func TestAnIDIsNeverGivenTwiceEvenAfterTheHighestIsRemoved(t *testing.T) {
 	}
 }
 
-func TestRememberIsOfferedAtTheStartOfASentenceOnly(t *testing.T) {
+func TestALeadRuleIsOneLineOfAtMost160BytesNamingNoOne(t *testing.T) {
+	at160 := strings.Repeat("a", 159) + "."
 	cases := []struct {
-		typed, text string
-		offered     bool
+		statement, rule, refusal string
 	}{
-		{"remember: never run cargo with more than 2 jobs", "never run cargo with more than 2 jobs", true},
-		{"Remember that gpui and gpui-ce are different crates", "gpui and gpui-ce are different crates", true},
-		{"also remember that the build is cargo build -j 2", "the build is cargo build -j 2", true},
-		{"ok, and remember, you can explore alternatives", "you can explore alternatives", true},
-		{"lets go fast. remember that gpus differ\nand so do drivers", "gpus differ and so do drivers", true},
-		{"remembering the old flag, run it again", "", false},
-		{"do you remember the cargo thing?", "", false},
-		{"i remember you said that", "", false},
-		{"remember", "", false},
-		{"also remember:   ", "", false},
+		{"  Use the shared components; never build a parallel copy.  ", "Use the shared components; never build a parallel copy.", ""},
+		{at160, at160, ""},
+		{"  " + at160 + "\t", at160, ""},
+		{at160 + "b", "", "161 bytes"},
+		{strings.Repeat("€", 54), "", "162 bytes"},
+		{"Use the shared components.\nAlso keep replies short.", "", "one line"},
+		{"Use the shared components.\r\nAlso keep replies short.", "", "one line"},
+		{"   ", "", "empty"},
+		{"The user wants the shared components used.", "", "names or describes the person"},
+		{"She prefers the shared components.", "", "names or describes the person"},
 	}
 	for _, c := range cases {
-		offer, offered := OfferFor(c.typed)
-		if offered != c.offered || offer.Text != c.text {
-			t.Errorf("OfferFor(%q) = %+v, %v, want %q, %v", c.typed, offer, offered, c.text, c.offered)
+		rule, err := Rule(c.statement)
+		switch {
+		case c.refusal == "" && (err != nil || rule != c.rule):
+			t.Errorf("Rule(%q) = %q, %v, want %q kept", c.statement, rule, err, c.rule)
+		case c.refusal != "" && (err == nil || !strings.Contains(err.Error(), c.refusal)):
+			t.Errorf("Rule(%q) = %q, %v, want a refusal saying %q", c.statement, rule, err, c.refusal)
 		}
-		if offered && (offer.Said != c.typed || offer.Scope != Global || offer.Kind != KindPerson) {
-			t.Errorf("OfferFor(%q) = %+v, want his whole words kept and global for a person entry", c.typed, offer)
-		}
-	}
-}
-
-func TestSevenOfTheFirstTenAnswersAcceptedTrustsTheOffers(t *testing.T) {
-	answer := func(home string, times int, a Answer) {
-		for range times {
-			if err := Record(home, a); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	trusts := func(home string) bool {
-		trusted, err := Trusts(home)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return trusted
-	}
-	home := t.TempDir()
-	answer(home, 7, AnswerGlobal)
-	if trusts(home) {
-		t.Fatal("7 answers trusted the offers before 10 were answered")
-	}
-	answer(home, 3, AnswerNo)
-	if !trusts(home) {
-		t.Fatal("7 of 10 accepted did not trust the offers")
-	}
-	home = t.TempDir()
-	answer(home, 6, AnswerProject)
-	answer(home, 4, AnswerNo)
-	if trusts(home) {
-		t.Fatal("6 of 10 accepted trusted the offers")
-	}
-	answer(home, 10, AnswerGlobal)
-	if trusts(home) {
-		t.Fatal("answers after the first 10 changed the decision")
 	}
 }

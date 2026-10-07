@@ -143,10 +143,6 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		Resumed: live.Opening(launch.resumed.hosted()),
 		Keymap:  shortcuts,
 		Agents:  func() roster.Found { found, _ := discoverAgents(); return found },
-		ShadowOffer: func(typed string) error {
-			_, err := askMemoryOffer(context.Background(), typed)
-			return err
-		},
 	}
 }
 

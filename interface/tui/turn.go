@@ -82,8 +82,8 @@ func (a *App) send() tea.Cmd {
 	if command, isBang := strings.CutPrefix(whole, bangPrefix); isBang {
 		return a.runBang(task, chips, whole, strings.TrimSpace(command))
 	}
-	if cmd, typed := a.rememberTyped(whole); typed {
-		return cmd
+	if a.rememberTyped(whole) {
+		return nil
 	}
 	a.rememberPrompt(whole)
 	a.view.Reset()
@@ -95,11 +95,11 @@ func (a *App) send() tea.Cmd {
 			a.handed = append(a.handed, whole)
 		}
 		a.steer(whole)
-		return a.offerTyped(task)
+		return nil
 	}
 	a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
 	a.start(whole)
-	return a.offerTyped(task)
+	return nil
 }
 
 func idPrefix(task string) (string, bool) {

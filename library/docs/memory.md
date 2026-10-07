@@ -53,22 +53,21 @@ with `--global` and `project` without. `--said "<your words>"` keeps the
 words it came from. `--replace <id>` rewrites an entry in place, and
 `--dir <project>` names another project.
 
-In the app, a sentence that starts with `remember`, such as `also
-remember that the build is cargo build -j 2`, gets a card titled
-`Add a global memory?` with the statement under it: `1` yes, `2` no,
-`3` always. `tab` switches the title between a global memory, kept in
-every project, and a project memory. Nothing is written until you pick,
-and `/remember <what>` opens the same card. The lead can offer one too,
-with its `remember` tool, but only with words you typed in this
-conversation. Its card is titled `[&orchestrator] wants to add a project
-memory`, takes the same keys, and `esc` is a no. The lead writes the
-statement as the rule itself and names no one: a statement such as
-`The person wants ...` or `<a name> wants ...` is refused, with the reason.
+In the app, `/remember <what>` keeps it at once as a global entry and
+prints the undo on the same line. A message you type is never offered as
+memory, whatever it says, `remember` included.
 
-Your first 10 answers are counted. Once 7 of them kept the entry, or you
-answer always, the `autoMemory` setting turns on and an entry is kept at
-once, with the undo on the same line. `tofu settings set memory false`
-sends no memory and offers nothing.
+The lead can offer one rule with its `remember` tool, but only with words
+you typed in this conversation. The statement is the rule itself and
+nothing else: one line, at most 160 bytes, naming no one. A longer one, a
+second line, or `The person wants ...` is refused with the reason. Its
+card is titled `[&orchestrator] wants to add a project memory`, with the
+rule under it: `1` yes, `2` no, `3` always, `esc` no, and `tab` switches
+between a project memory and a global one, kept in every project.
+Nothing is written until you pick. Always turns the `autoMemory` setting
+on, and the lead's later rules are then kept at once, with the undo on
+the same line. `tofu settings set memory false` sends no memory and
+gives the lead no `remember` tool.
 
 Every write is a row in the chat, `[memory#m3]`, and the lead is told in
 the same turn that it is saved.

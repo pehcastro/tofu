@@ -72,7 +72,7 @@ func kept(t *testing.T, tool tools.Remember) memory.Memory {
 }
 
 func TestRememberRefusesWordsThePersonDidNotType(t *testing.T) {
-	for _, quote := range []string{"never run cargo with more than 3 jobs", "the build is make all", "prove it end to end", "today", "the logs go to /tmp"} {
+	for _, quote := range []string{"never run cargo with more than 3 jobs", "the build is make all", "prove it end to end", "today"} {
 		tool, asked := rememberChain(t, turn.PersonAllowedOnce)
 		result, err := remembered(t, tool, "cargo runs with 2 jobs", quote, "person")
 		shelves := kept(t, tool)

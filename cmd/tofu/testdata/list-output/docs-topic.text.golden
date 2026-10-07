@@ -150,13 +150,12 @@ Context
     memory                  true
       true or false
       on sends what you asked tofu to remember to the lead on every request and
-      offers to keep a message that says remember; off sends none and offers
-      nothing. tofu memory lists the entries
+      lets the lead offer one short rule; off sends none and offers nothing.
+      tofu memory lists the entries
     autoMemory              false
       true or false
-      on keeps a message that says remember at once and prints the undo, instead
-      of asking first; it turns on by itself once you accepted 7 of the first 10
-      offers, or when you answer always on one
+      on keeps a rule the lead offers at once and prints the undo, instead of
+      asking first; answering always on its card turns it on
     learn                   false
       true or false
       on lets tofu learn send a window around each message you typed to Jev for

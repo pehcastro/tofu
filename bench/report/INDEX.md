@@ -42,7 +42,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 
 ## What decides what today
 
-5 of 12 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
+4 of 11 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
 
 | What decides | Switched on | What it costs | Why | Called by | Measured |
 |---|---|---|---|---|---|
@@ -56,7 +56,6 @@ Read from `bench/harness/report-2026-09-22.md`.
 | `tool_gate` | not wired | nothing, and no call is made | the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six | not stated | not stated |
 | `instruction_trust` | not wired | nothing, and no call is made | jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs | not stated | not stated |
 | `spawn_gate` | not wired | nothing, and no call is made | nothing is measured, and it waits on one recorded orchestrator and sub-agent | not stated | not stated |
-| `memory_offer` | yes, through the cheap method | nothing for the rule. the shadow jev call is one ledger row per typed message while memory is on, and no recorded session reports its cost yet | the app offers a memory when a sentence starts with remember, precision 1.00 and recall 0.12 on a made-up corpus of 54 messages, where jev memory_offer@1 owes a run. jev is asked in shadow on every typed message while memory is on and decides nothing | interface/tui/memory.go | not stated |
 | `thrift` | not wired | nothing, and no call is made | the point reads library/questions/config/thrift_rule@1.yaml directly, which ships mode off, and nothing is cut until a measurement moves it | not stated | not stated |
 
 ## Which decisions Jev wins, which it loses, and by how much
@@ -179,7 +178,7 @@ Why the rest are not compared:
 - `bench/cmd`, runner: the bench command, package main. Runs the other benches, measures 0 things of its own.
 - `bench/corpus`, library: the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here.
 - `bench/learn`, measurement with no dated report: TOFU-1176, 2026-10-07, owing a run. labels.txt holds 50 made-up example labels since TOFU-1185, so a run names its own chain with --chain and its own labels with --labels, and needs Jev and claude. No measured number is committed.
-- `bench/memory`, measurement with no dated report: TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. Offering to keep a message, TOFU-1185, 2026-10-07, offline over 54 made-up messages, 24 labelled offer by the agent that wrote them and that knew the rules being scored when it did: regular expression precision 0.67 recall 0.33, the trigger the app uses 1.00 and 0.12, remember anywhere 0.60 and 0.12. Jev memory_offer@1 owes a run on this corpus.
+- `bench/memory`, measurement with no dated report: TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: the first arm now keeps the correction with /remember, and the second keeps nothing.
 - `bench/orchestrator`, runner: reads 1 session folder and prints where its time went, with 0 dated reports of its own.
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own.
 - `bench/stat`, library: median, p95 and p99 over a slice of floats, called by every bench that reports a spread.

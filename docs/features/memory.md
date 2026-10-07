@@ -11,13 +11,13 @@ it, and the lead reads every entry in its system message on every request.
 
 ## Why memory works the way it does
 
-**You decide what is kept.** A sentence anywhere in a message that starts
-with `remember`, or `also remember`, gets a card titled `Add a global memory?`: yes, no, or always, with `tab` to switch the
-title to a project memory. The lead can offer an entry too, quoting your own words, on a card titled
-`[&orchestrator] wants to add a project memory` with the same three answers. Its statement is the rule
-itself and names no one. Once 7 of your first 10 answers kept the entry, or you
-answer always, tofu keeps entries at once and prints the undo on the same
-line.
+**You decide what is kept.** Nothing you type is offered as memory, even a
+message that says `remember`. You add an entry with `tofu memory add` or
+`/remember <what>`. The lead can offer one short rule, quoting your own
+words, on a card titled `[&orchestrator] wants to add a project memory`:
+yes, no, or always, with `tab` to switch to a global memory. Its rule is
+one line of at most 160 bytes and names no one. Answer always and tofu
+keeps the lead's later rules at once, printing the undo on the same line.
 
 **You can see every write.** Each one is a `[memory#m3]` row in the chat, a
 notice in `tofu session trace`, and a line the lead is told in the same
@@ -40,14 +40,14 @@ one small file.
 
 ## Using memory
 
-- **Keep something**: type `remember: never run cargo with more than 2 jobs`
-  in the app, or `/remember <what>`, and pick a scope.
+- **Keep something**: type `/remember never run cargo with more than 2 jobs`
+  in the app; it is kept for every project at once.
 - **From the command line**: `tofu memory add "<statement>"` for this
   project, `--global` for every project.
 - **See it**: `tofu memory`, or `/memory` in the app, where enter on an
   entry removes it or puts it in the composer to edit.
 - **Turn it off**: `tofu settings set memory false`; `autoMemory false`
-  asks before every write again.
+  asks before every rule the lead offers again.
 - **See what the lead gets**: `tofu run --show-prompt "<task>"`.
 - **Forget one**: `tofu memory remove <id>`, with `--global` for a global
   entry.

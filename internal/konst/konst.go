@@ -363,9 +363,8 @@ const (
 )
 
 const (
-	MemoryScopeBytes        = 4096
-	MemoryOffersAskedFirst  = 10
-	MemoryAcceptedToTrustAt = 7
+	MemoryScopeBytes = 4096
+	MemoryRuleBytes  = 160
 )
 
 const (

@@ -145,7 +145,7 @@ exit 0
         "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "on sends what you asked tofu to remember to the lead on every request and offers to keep a message that says remember; off sends none and offers nothing. tofu memory lists the entries"
+        "description": "on sends what you asked tofu to remember to the lead on every request and lets the lead offer one short rule; off sends none and offers nothing. tofu memory lists the entries"
       },
       {
         "key": "autoMemory",
@@ -153,7 +153,7 @@ exit 0
         "default": "false",
         "takes": "true or false",
         "restart": false,
-        "description": "on keeps a message that says remember at once and prints the undo, instead of asking first; it turns on by itself once you accepted 7 of the first 10 offers, or when you answer always on one"
+        "description": "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on"
       },
       {
         "key": "learn",

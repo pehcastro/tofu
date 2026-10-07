@@ -3,7 +3,6 @@ package tui
 import (
 	"cmp"
 	"errors"
-	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -12,7 +11,6 @@ import (
 
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/session"
-	"tofu/internal/konst"
 	"tofu/internal/memory"
 	isettings "tofu/internal/settings"
 )
@@ -32,24 +30,21 @@ const (
 
 type offerDialog struct {
 	palette.Confirm
-	offer     memory.Offer
+	rule      string
+	scope     memory.Scope
 	leadAskID string
 }
 
-func memoryCard(offer memory.Offer, leadAskID string) *offerDialog {
+func memoryCard(rule string, scope memory.Scope, leadAskID string) *offerDialog {
 	where, other := "in every project", memory.Project
-	if offer.Scope == memory.Project {
+	if scope == memory.Project {
 		where, other = "for this project", memory.Global
 	}
-	title := "Add a " + string(offer.Scope) + " memory?"
-	if leadAskID != "" {
-		title = "[&" + orchestrator + "] wants to add a " + string(offer.Scope) + " memory"
-	}
-	return &offerDialog{palette.NewConfirm(title, "tab: a "+string(other)+" memory instead", offer.Text, []palette.Item{
+	return &offerDialog{palette.NewConfirm("[&"+orchestrator+"] wants to add a "+string(scope)+" memory", "tab: a "+string(other)+" memory instead", rule, []palette.Item{
 		{Title: "Yes", Description: "keep it " + where, Key: "1", ID: offerYes},
 		{Title: "No", Description: "keep nothing", Key: "2", ID: offerNo},
 		{Title: "Always", Description: "keep it, and keep every later one without asking: turns on auto memory", Key: "3", ID: offerAlways},
-	}), offer, leadAskID}
+	}), rule, scope, leadAskID}
 }
 
 func (a *App) showLeadMemoryAsk() {
@@ -58,40 +53,14 @@ func (a *App) showLeadMemoryAsk() {
 	a.dialogs = slices.DeleteFunc(a.dialogs, func(d dialog) bool {
 		card, isCard := d.(*offerDialog)
 		alreadyShown = alreadyShown || isCard && id != "" && card.leadAskID == id
-		return isCard && card.leadAskID != "" && card.leadAskID != id
+		return isCard && card.leadAskID != id
 	})
 	if before > 0 && len(a.dialogs) == 0 {
 		a.view.Focus()
 	}
 	if asks && !alreadyShown {
-		a.push(memoryCard(memory.Offer{Text: decision.Remembers, Scope: decision.MemoryScope}, id))
+		a.push(memoryCard(decision.Remembers, decision.MemoryScope, id))
 	}
-}
-
-func (a *App) offerTyped(typed string) tea.Cmd {
-	if !a.flag(isettings.Memory) {
-		return nil
-	}
-	var shadow tea.Cmd
-	if ask := a.options.ShadowOffer; ask != nil {
-		shadow = func() tea.Msg {
-			_ = ask(typed)
-			return nil
-		}
-	}
-	offer, offered := memory.OfferFor(typed)
-	if !offered {
-		return shadow
-	}
-	return tea.Batch(shadow, a.offerMemory(offer))
-}
-
-func (a *App) offerMemory(offer memory.Offer) tea.Cmd {
-	if a.flag(isettings.AutoMemory) {
-		a.remember(offer)
-		return nil
-	}
-	return a.push(memoryCard(offer, ""))
 }
 
 func (d *offerDialog) over(a *App, base string) string { return d.Over(base, a.width, a.height) }
@@ -99,12 +68,12 @@ func (d *offerDialog) over(a *App, base string) string { return d.Over(base, a.w
 func (d *offerDialog) key(a *App, msg tea.KeyPressMsg) tea.Cmd {
 	keyed := map[string]string{"1": offerYes, "2": offerNo, "3": offerAlways}
 	if msg.String() == "tab" {
-		if d.offer.Scope == memory.Global {
-			d.offer.Scope = memory.Project
+		if d.scope == memory.Global {
+			d.scope = memory.Project
 		} else {
-			d.offer.Scope = memory.Global
+			d.scope = memory.Global
 		}
-		d.Confirm = memoryCard(d.offer, d.leadAskID).Confirm
+		d.Confirm = memoryCard(d.rule, d.scope, d.leadAskID).Confirm
 		return nil
 	}
 	if answer, pressed := keyed[msg.String()]; pressed {
@@ -121,88 +90,25 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 	if !choice.Done && !choice.Cancelled {
 		return nil
 	}
-	if d.leadAskID != "" {
-		return d.answerLead(a, choice)
-	}
-	if choice.ID == "" || choice.ID == offerNo {
-		a.recordAnswer(memory.AnswerNo)
-		a.view.Append(session.Entry{Kind: session.Note, Body: "not remembered"})
-		return a.pop()
-	}
-	if a.remember(d.offer) {
-		a.recordAnswer(memory.Answer(d.offer.Scope))
-	}
-	if choice.ID == offerAlways {
-		a.trustOffers("auto memory is on, as you answered always")
-	}
-	return a.pop()
-}
-
-func (d *offerDialog) answerLead(a *App, choice palette.Choice) tea.Cmd {
 	answer := Denied
 	if choice.ID == offerYes || choice.ID == offerAlways {
 		answer = AllowedOnce
-		if d.offer.Scope == memory.Global {
+		if d.scope == memory.Global {
 			answer = AlwaysHere
 		}
 	}
-	if choice.ID == offerAlways {
-		a.trustOffers("auto memory is on, as you answered always")
+	if choice.ID == offerAlways && a.store != nil {
+		note := "auto memory is on, as you answered always. tofu settings set autoMemory false asks first again"
+		if err := a.store.Set(isettings.Global, isettings.AutoMemory, 1); err != nil {
+			note = "auto memory was not turned on: " + err.Error()
+		}
+		a.refreshSettingsRows()
+		a.view.Append(session.Entry{Kind: session.Note, Body: note})
 	}
 	if a.options.Host != nil && a.options.Host.Answer(d.leadAskID, answer) {
 		a.view.Resume(d.leadAskID)
 	}
 	return a.pop()
-}
-
-func (a *App) recordAnswer(answer memory.Answer) {
-	global, err := memory.GlobalDir()
-	if err == nil {
-		err = memory.Record(global, answer)
-	}
-	trusted := false
-	if err == nil {
-		trusted, err = memory.Trusts(global)
-	}
-	switch {
-	case err != nil:
-		a.view.Append(session.Entry{Kind: session.Note, Body: "your answer was not counted: " + err.Error()})
-	case trusted && !a.flag(isettings.AutoMemory):
-		a.trustOffers(fmt.Sprintf("auto memory is on: you kept %d or more of the first %d offers", konst.MemoryAcceptedToTrustAt, konst.MemoryOffersAskedFirst))
-	}
-}
-
-func (a *App) trustOffers(why string) {
-	if a.store == nil {
-		return
-	}
-	if err := a.store.Set(isettings.Global, isettings.AutoMemory, 1); err != nil {
-		a.view.Append(session.Entry{Kind: session.Note, Body: "auto memory was not turned on: " + err.Error()})
-		return
-	}
-	a.refreshSettingsRows()
-	a.view.Append(session.Entry{Kind: session.Note, Body: why + ". tofu settings set autoMemory false asks first again"})
-}
-
-func (a *App) remember(offer memory.Offer) bool {
-	shelves, err := memory.Open(cmp.Or(a.options.Root, "."))
-	var added memory.Entry
-	if err == nil {
-		added, err = shelves.Add(memory.Entry{Scope: offer.Scope, Kind: offer.Kind, Text: offer.Text, Said: offer.Said, Session: a.sessionID, At: a.options.Now(), By: memory.ByOffer}, "")
-	}
-	if err != nil {
-		hint := ""
-		if errors.As(err, new(memory.FullError)) {
-			hint = ". tofu memory lists what to remove"
-		}
-		a.view.Append(session.Entry{Kind: session.Note, Body: "not remembered: " + err.Error() + hint})
-		return false
-	}
-	a.view.Append(session.Entry{Kind: session.Note, Head: memoryRowHead, ID: added.ID, Body: "remembered for you · " + string(added.Scope) + " · " + added.Text + " · undo: " + added.Undo()})
-	if a.options.Host != nil {
-		a.options.Host.Remembered(added.Saved())
-	}
-	return true
 }
 
 func (a *App) rememberedByTheLead(output string) {
@@ -212,24 +118,40 @@ func (a *App) rememberedByTheLead(output string) {
 	}
 }
 
-func (a *App) rememberTyped(whole string) (tea.Cmd, bool) {
+func (a *App) rememberTyped(whole string) bool {
 	if text, edit := strings.CutPrefix(whole, memoryEditCommand); edit {
 		a.view.Reset()
 		a.editEntry(text)
-		return nil, true
+		return true
 	}
 	text, typed := strings.CutPrefix(whole, rememberCommand)
 	if !typed {
-		return nil, false
+		return false
 	}
 	a.view.Reset()
-	offer, offered := memory.OfferFor("remember: " + text)
-	if !offered {
+	rule := strings.Join(strings.Fields(text), " ")
+	if rule == "" {
 		a.view.Append(session.Entry{Kind: session.Note, Body: rememberUsage})
-		return nil, true
+		return true
 	}
-	offer.Said = whole
-	return a.offerMemory(offer), true
+	shelves, err := memory.Open(cmp.Or(a.options.Root, "."))
+	var added memory.Entry
+	if err == nil {
+		added, err = shelves.Add(memory.Entry{Scope: memory.Global, Kind: memory.KindPerson, Text: rule, Said: whole, Session: a.sessionID, At: a.options.Now(), By: memory.ByPerson}, "")
+	}
+	if err != nil {
+		hint := ""
+		if errors.As(err, new(memory.FullError)) {
+			hint = ". tofu memory lists what to remove"
+		}
+		a.view.Append(session.Entry{Kind: session.Note, Body: "not remembered: " + err.Error() + hint})
+		return true
+	}
+	a.view.Append(session.Entry{Kind: session.Note, Head: memoryRowHead, ID: added.ID, Body: "remembered for you · " + string(added.Scope) + " · " + added.Text + " · undo: " + added.Undo()})
+	if a.options.Host != nil {
+		a.options.Host.Remembered(added.Saved())
+	}
+	return true
 }
 
 func (a *App) editEntry(typed string) {
