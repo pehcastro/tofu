@@ -11,6 +11,7 @@ use gpui::{
 
 use crate::components::chip::{mono, tabular};
 use crate::components::diff::Highlight;
+use crate::components::find::match_highlights;
 use crate::components::paint::{ink, tint};
 use crate::components::scroll::scrollbar;
 use crate::components::size::{
@@ -34,6 +35,8 @@ pub struct CodeLine {
     pub runs: Highlight,
     pub selected: Vec<Range<usize>>,
     pub carets: Vec<usize>,
+    pub matches: Vec<Range<usize>>,
+    pub current_match: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -212,8 +215,9 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, theme: &Theme) -> Div 
         ..HighlightStyle::default()
     };
     let selected = line.selected.iter().map(|range| (range.clone(), selection));
-    let text =
-        StyledText::new(line.text.clone()).with_highlights(combine_highlights(runs, selected));
+    let found = match_highlights(&line.matches, line.current_match, theme);
+    let text = StyledText::new(line.text.clone())
+        .with_highlights(combine_highlights(runs, selected.chain(found)));
     let layout = text.layout().clone();
     let carets = line.carets.clone();
     let color = ink(theme, T1);

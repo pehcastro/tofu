@@ -8,14 +8,15 @@ use std::time::Instant;
 use desk_core::buffer::Buffer;
 use desk_core::syntax::{Kind, Language, Syntax};
 use gpui::{
-    App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
-    Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, ScrollStrategy, SharedString, Task, UTF16Selection, UniformListScrollHandle, Window,
-    canvas, div, point, prelude::*, px, size,
+    App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity, EntityInputHandler,
+    FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, ScrollStrategy, SharedString, Task, UTF16Selection,
+    UniformListScrollHandle, Window, canvas, div, point, prelude::*, px, size,
 };
 
 use crate::components::chat::fail;
 use crate::components::code::{CodeLine, Marks, code_origin, code_place, code_shape, code_view};
+use crate::components::find::{FindBar, find_ranges};
 use crate::components::form::{blinker, caret_shown};
 use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN};
 use crate::live::ActiveTheme;
@@ -164,6 +165,11 @@ pub struct CodeEditor {
     on_save: Option<Save>,
     since: Instant,
     blink: Option<Task<()>>,
+    bar: Option<Entity<FindBar>>,
+    query: String,
+    found: Vec<Range<usize>>,
+    current: usize,
+    edited_since_found: bool,
 }
 
 impl CodeEditor {
@@ -183,6 +189,11 @@ impl CodeEditor {
             on_save: None,
             since: Instant::now(),
             blink: None,
+            bar: None,
+            query: String::new(),
+            found: Vec::new(),
+            current: 0,
+            edited_since_found: false,
         };
         editor.widest = editor.widest_line();
         editor
@@ -227,6 +238,77 @@ impl CodeEditor {
 
     pub fn failure(&self) -> Option<(&'static str, &SharedString)> {
         self.failure.as_ref().map(|(what, error)| (*what, error))
+    }
+
+    pub fn finding(&self) -> Option<(&str, usize, usize)> {
+        let shown = self.current + usize::from(!self.found.is_empty());
+        (!self.query.is_empty()).then_some((self.query.as_str(), shown, self.found.len()))
+    }
+
+    pub fn find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let bar = self
+            .bar
+            .get_or_insert_with(|| {
+                let bar = FindBar::new(window, cx);
+                let changed = cx.listener(|editor, (query, at): &(String, usize), _, cx| {
+                    editor.found(query, *at, cx);
+                });
+                let closed = cx.listener(|editor, _: &(), _, cx| editor.unfound(cx));
+                bar.update(cx, |bar, _| {
+                    bar.on_change(move |query, at, window, cx| {
+                        changed(&(query.to_owned(), at), window, cx);
+                    });
+                    bar.on_close(move |window, cx| closed(&(), window, cx));
+                });
+                bar
+            })
+            .clone();
+        bar.update(cx, |bar, cx| bar.open(window, cx));
+        cx.notify();
+    }
+
+    fn search(&mut self, cx: &mut Context<Self>) {
+        let text = self.buffer.text();
+        let rope = self.buffer.rope();
+        self.found = find_ranges(&text, &self.query)
+            .into_iter()
+            .filter_map(|bytes| {
+                Some(
+                    rope.try_byte_to_char(bytes.start).ok()?
+                        ..rope.try_byte_to_char(bytes.end).ok()?,
+                )
+            })
+            .collect();
+        if self.current >= self.found.len() {
+            self.current = 0;
+        }
+        self.edited_since_found = false;
+        let total = self.found.len();
+        if let Some(bar) = &self.bar {
+            bar.update(cx, |bar, cx| bar.set_total(total, cx));
+        }
+    }
+
+    fn found(&mut self, query: &str, at: usize, cx: &mut Context<Self>) {
+        query.clone_into(&mut self.query);
+        self.current = at;
+        self.search(cx);
+        if let Some(found) = self.found.get(self.current) {
+            self.carets = vec![Caret {
+                anchor: found.start,
+                head: found.end,
+                goal: None,
+            }];
+            self.reveal();
+        }
+        cx.notify();
+    }
+
+    fn unfound(&mut self, cx: &mut Context<Self>) {
+        self.query.clear();
+        self.found.clear();
+        self.current = 0;
+        cx.notify();
     }
 
     fn char_at(&self, at: usize) -> Option<char> {
@@ -382,6 +464,7 @@ impl CodeEditor {
     fn settle(&mut self, lines: usize) {
         let synced = self.syntax.sync(&mut self.buffer);
         self.report("Could not colour", synced);
+        self.edited_since_found = !self.query.is_empty();
         self.carets = self
             .buffer
             .selections()
@@ -522,6 +605,9 @@ impl CodeEditor {
     }
 
     fn touch(&mut self, cx: &mut Context<Self>) {
+        if self.edited_since_found {
+            self.search(cx);
+        }
         self.since = Instant::now();
         self.blink = None;
         cx.notify();
@@ -571,6 +657,7 @@ impl CodeEditor {
                 self.insert("");
             }
             (true, "v") => self.paste(cx),
+            (true, "f") => self.find(window, cx),
             (true, "s") => {
                 if let Some(save) = self.on_save.clone() {
                     let saved = save(&mut self.buffer, window, cx);
@@ -636,19 +723,32 @@ impl CodeEditor {
 
     fn rows(&self, rows: Range<usize>, caret_on: bool) -> Vec<CodeLine> {
         let mut lines = code_lines(&self.buffer, &self.syntax, rows.clone());
+        let current = self.found.get(self.current);
         for (row, line) in rows.zip(lines.iter_mut()) {
             let Ok(start) = self.buffer.line_to_char(row) else {
                 continue;
             };
             let text = line.text.clone();
             let end = start + text.chars().count();
+            let first = self.found.partition_point(|found| found.end <= start);
+            for found in self.found.iter().skip(first) {
+                let (from, to) = (found.start.max(start), found.end.min(end));
+                if from >= to {
+                    break;
+                }
+                if Some(found) == current {
+                    line.current_match = Some(line.matches.len());
+                }
+                line.matches
+                    .push(byte_of(&text, from - start)..byte_of(&text, to - start));
+            }
             for caret in &self.carets {
                 if caret_on && (start..=end).contains(&caret.head) {
                     line.carets.push(byte_of(&text, caret.head - start));
                 }
                 let range = caret.range();
                 let (from, to) = (range.start.max(start), range.end.min(end));
-                if from < to {
+                if from < to && Some(&range) != current {
                     line.selected
                         .push(byte_of(&text, from - start)..byte_of(&text, to - start));
                 }
@@ -821,7 +921,7 @@ impl Render for CodeEditor {
                 .bottom(px(FAILURE_INSET))
                 .child(fail(what, error, "", &ActiveTheme::theme(cx)))
         });
-        div()
+        let editing = div()
             .id("code-editor")
             .relative()
             .size_full()
@@ -846,6 +946,11 @@ impl Render for CodeEditor {
                 .left_0()
                 .size_full(),
             )
-            .children(failure)
+            .children(failure);
+        div()
+            .relative()
+            .size_full()
+            .child(editing)
+            .children(self.bar.clone())
     }
 }

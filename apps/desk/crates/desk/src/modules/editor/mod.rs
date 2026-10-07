@@ -486,6 +486,7 @@ pub struct Editor {
     mode: Mode,
     menu: bool,
     told: Option<SharedString>,
+    find_logged: Option<(String, usize, usize)>,
     source: Source,
     _watch: Option<Subscription>,
     _tree: Option<Subscription>,
@@ -505,6 +506,7 @@ impl Editor {
             mode: Mode::Changes,
             menu: board == Board::Split,
             told: None,
+            find_logged: None,
             source,
             _watch: None,
             _tree: None,
@@ -604,6 +606,17 @@ impl Editor {
     }
 
     fn code_changed(&mut self, code: Entity<CodeEditor>, cx: &mut Context<Self>) {
+        let finding = code
+            .read(cx)
+            .finding()
+            .map(|(query, at, total)| (query.to_owned(), at, total));
+        if finding != self.find_logged {
+            match &finding {
+                Some((query, at, total)) => eprintln!("desk: find editor {query} {at} of {total}"),
+                None => eprintln!("desk: find editor cleared"),
+            }
+            self.find_logged = finding;
+        }
         let dirty = code.read(cx).buffer().is_dirty();
         let Source::Disk {
             file: Some((_, disk)),

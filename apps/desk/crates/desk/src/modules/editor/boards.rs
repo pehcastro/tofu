@@ -12,6 +12,8 @@ use gpui::{
     prelude::*, px,
 };
 
+use crate::modules::chat::Find;
+
 use super::fixture::{COUNT, COUNT_TEST, Git, Icon, Line, MENU, STORE, STORE_DIFF, TOP, WEB};
 use super::kit::{
     ADD, AGENT, AGENT_FILL, AGENT_TEXT, CHAT, COLLAPSE, DANGER, DEL, DOWN, MODIFIED, MONO, PLUS,
@@ -422,7 +424,17 @@ impl Editor {
                 |_, _, _| {},
             )
             .into_any_element(),
-            Some(Ok(editor)) => editor.clone().into_any_element(),
+            Some(Ok(editor)) => {
+                let finder = editor.clone();
+                div()
+                    .size_full()
+                    .on_action(move |_: &Find, window, cx| {
+                        eprintln!("desk: find editor open");
+                        finder.update(cx, |editor, cx| editor.find(window, cx));
+                    })
+                    .child(editor.clone())
+                    .into_any_element()
+            }
             Some(Err(error)) => empty_state(
                 "editor-failure",
                 "Could not open the file",

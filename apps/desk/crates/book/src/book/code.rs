@@ -166,6 +166,11 @@ fn readout(editor: &CodeEditor, saved: &SharedString, theme: &Theme) -> Vec<Stri
                 " | failure: {what}: {error}"
             )),
     )];
+    lines.extend(
+        editor
+            .finding()
+            .map(|(query, at, total)| format!("find `{query}`: {at} of {total}")),
+    );
     lines.extend(mark_lines(editor.marks(), theme));
     for (index, (anchor, head)) in editor.carets().enumerate() {
         let row = buffer.char_to_line(head).unwrap_or_default();
@@ -218,7 +223,7 @@ impl RenderOnce for EditorBlock {
             .flex_col()
             .gap_3()
             .child(block(
-                "editable: click, type, Alt click adds a caret, Ctrl Z, Ctrl S saves a scratch copy",
+                "editable: click, type, Alt click adds a caret, Ctrl Z, Ctrl F finds, Ctrl S saves a scratch copy",
                 &theme,
                 div().w(px(CODE_WIDTH)).h(px(EDITOR_HEIGHT)).child(editor),
             ))
