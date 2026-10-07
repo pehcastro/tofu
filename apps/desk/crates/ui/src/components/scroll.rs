@@ -123,6 +123,7 @@ pub struct ScrollArea {
     id: ElementId,
     max_h: Option<f32>,
     follow_tail: bool,
+    handle: Option<ScrollHandle>,
     children: Vec<AnyElement>,
 }
 
@@ -132,8 +133,14 @@ impl ScrollArea {
             id: id.into(),
             max_h: None,
             follow_tail: false,
+            handle: None,
             children: Vec::new(),
         }
+    }
+
+    pub fn track(mut self, handle: &ScrollHandle) -> Self {
+        self.handle = Some(handle.clone());
+        self
     }
 
     pub fn max_h(mut self, height: f32) -> Self {
@@ -368,12 +375,15 @@ impl RenderOnce for Scrollbar {
 
 impl RenderOnce for ScrollArea {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let handle = window
-            .use_keyed_state(ElementId::from((self.id.clone(), "handle")), cx, |_, _| {
-                ScrollHandle::new()
-            })
-            .read(cx)
-            .clone();
+        let handle = match self.handle {
+            Some(handle) => handle,
+            None => window
+                .use_keyed_state(ElementId::from((self.id.clone(), "handle")), cx, |_, _| {
+                    ScrollHandle::new()
+                })
+                .read(cx)
+                .clone(),
+        };
         let state = viewport(self.id.clone(), Track::Handle(handle.clone()), window, cx);
         let pinned = state.read(cx).pinned;
         if self.follow_tail && pinned {

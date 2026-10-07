@@ -1,10 +1,11 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use desk_motion::GlideKind;
 use gpui::{
-    AnchoredPositionMode, AnyElement, App, ClickEvent, Context, Corners, Div, Entity, FocusHandle,
-    Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, SharedString, Stateful,
-    Window, anchored, deferred, div, point, prelude::*, px,
+    AnchoredPositionMode, AnyElement, App, Bounds, ClickEvent, Context, Corners, Div, Entity,
+    FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels,
+    ScrollHandle, SharedString, Stateful, Window, anchored, deferred, div, point, prelude::*, px,
 };
 
 use crate::components::card::caption;
@@ -47,6 +48,8 @@ pub struct Palette {
     return_focus: Option<FocusHandle>,
     on_pick: Option<OnPick>,
     on_close: Option<OnClose>,
+    scroll: ScrollHandle,
+    row_spans: Rc<RefCell<Vec<Bounds<Pixels>>>>,
 }
 
 impl Palette {
@@ -62,6 +65,7 @@ impl Palette {
                 if query != palette.query {
                     palette.query = query;
                     palette.highlighted = 0;
+                    palette.scroll.set_offset(point(px(0.0), px(0.0)));
                     cx.notify();
                 }
             })
@@ -75,6 +79,8 @@ impl Palette {
                 return_focus: None,
                 on_pick: None,
                 on_close: None,
+                scroll: ScrollHandle::new(),
+                row_spans: Rc::default(),
             }
         })
     }
@@ -91,6 +97,7 @@ impl Palette {
         if !self.open {
             self.open = true;
             self.highlighted = 0;
+            self.scroll.set_offset(point(px(0.0), px(0.0)));
             self.query.clear();
             self.field.update(cx, |field, cx| field.clear(cx));
             self.return_focus = window.focused(cx);
@@ -155,12 +162,50 @@ impl Palette {
             "escape" => self.dismiss(window, cx),
             _ => return,
         }
+        self.reveal_highlighted();
         cx.stop_propagation();
         cx.notify();
     }
 
-    fn row(at: usize, item: &PaletteItem, theme: &Theme, cx: &Context<Self>) -> Stateful<Div> {
+    fn reveal_highlighted(&self) {
+        let Some(span) = self.row_spans.borrow().get(self.highlighted).copied() else {
+            return;
+        };
+        let view = self.scroll.bounds();
+        let offset = self.scroll.offset();
+        let max = self.scroll.max_offset().y;
+        let y = if self.highlighted == 0 {
+            px(0.0)
+        } else if span.bottom() + offset.y > view.bottom() {
+            view.bottom() - span.bottom()
+        } else if span.top() + offset.y < view.top() {
+            view.top() - span.top()
+        } else {
+            return;
+        };
+        self.scroll
+            .set_offset(point(offset.x, y.clamp(-max, px(0.0))));
+    }
+
+    fn row(
+        &self,
+        at: usize,
+        item: &PaletteItem,
+        theme: &Theme,
+        cx: &Context<Self>,
+    ) -> Stateful<Div> {
+        let spans = self.row_spans.clone();
+        let scroll = self.scroll.clone();
         bare_row(("palette-row", at), false, false, theme)
+            .on_prepaint(move |prepaint, _, _| {
+                let mut spans = spans.borrow_mut();
+                if spans.len() <= at {
+                    spans.resize(at + 1, Bounds::default());
+                }
+                if let Some(span) = spans.get_mut(at) {
+                    *span = prepaint.bounds - point(px(0.0), scroll.offset().y);
+                }
+            })
             .on_mouse_move(cx.listener(move |palette, _: &MouseMoveEvent, _, cx| {
                 if palette.highlighted != at {
                     palette.highlighted = at;
@@ -222,7 +267,7 @@ impl Palette {
                     corners,
                 });
             }
-            list = list.item(Self::row(at, item, theme, cx));
+            list = list.item(self.row(at, item, theme, cx));
             entries += 1;
         }
         list.keyed(marker).into_any_element()
@@ -254,12 +299,15 @@ impl Render for Palette {
             )
             .child(separator(&theme).my(px(MENU_PAD)))
             .child(
-                ScrollArea::new("palette-scroll").max_h(PALETTE_LIST).child(
-                    div()
-                        .px(px(MENU_PAD))
-                        .pb(px(MENU_PAD))
-                        .child(self.rows(&theme, cx)),
-                ),
+                ScrollArea::new("palette-scroll")
+                    .max_h(PALETTE_LIST)
+                    .track(&self.scroll)
+                    .child(
+                        div()
+                            .px(px(MENU_PAD))
+                            .pb(px(MENU_PAD))
+                            .child(self.rows(&theme, cx)),
+                    ),
             );
         let viewport = window.viewport_size();
         let layer = div()
