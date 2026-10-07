@@ -1,5 +1,6 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender as StopSender};
 use std::time::SystemTime;
 use std::{fs, thread};
 
@@ -20,6 +21,12 @@ pub struct ActiveTheme {
 }
 
 impl Global for ActiveTheme {}
+
+struct ThemeWatch {
+    _stops_on_drop: StopSender<()>,
+}
+
+impl Global for ThemeWatch {}
 
 impl ActiveTheme {
     pub fn theme(cx: &App) -> Arc<Theme> {
@@ -59,9 +66,13 @@ pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError>
         None => built_in()?,
     };
     let (sender, receiver) = async_channel::unbounded();
+    let (stop, stopped) = mpsc::channel();
+    cx.set_global(ThemeWatch {
+        _stops_on_drop: stop,
+    });
     let watcher = thread::Builder::new()
         .name("theme watch".into())
-        .spawn(move || watch(&dir, &name, files, &sender));
+        .spawn(move || watch(&dir, &name, files, &sender, &stopped));
     if let Err(error) = watcher {
         problems.push(ThemeError::new(
             THEME_VARIABLE,
@@ -126,10 +137,15 @@ fn apply(loaded: Loaded, cx: &mut App) {
     cx.refresh_windows();
 }
 
-fn watch(dir: &Path, name: &str, mut files: Vec<PathBuf>, sender: &Sender<Loaded>) {
+fn watch(
+    dir: &Path,
+    name: &str,
+    mut files: Vec<PathBuf>,
+    sender: &Sender<Loaded>,
+    stopped: &Receiver<()>,
+) {
     let mut seen = stamps(&files);
-    loop {
-        thread::sleep(THEME_POLL);
+    while let Err(RecvTimeoutError::Timeout) = stopped.recv_timeout(THEME_POLL) {
         let current = stamps(&files);
         if current == seen {
             continue;
