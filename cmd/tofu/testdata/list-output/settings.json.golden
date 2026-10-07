@@ -118,6 +118,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "learn",
+        "category": "Context",
+        "value": false,
+        "source": "default"
+      },
+      {
         "key": "diffContext",
         "category": "Files",
         "value": "3",

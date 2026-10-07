@@ -6,7 +6,7 @@
     Appearance    05      decision cap per turn, zero means no cap                                  
     Models & rol… 02                                                                                
     Interaction   05      Sub-agents                                                        ● on    
-    Context       10      a turn may spawn a sub-agent                                              
+    Context       11      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      One turn per project                                              ● on    
   › Turn          13      while one session runs a turn in this project, a turn from any other …    

@@ -6,7 +6,7 @@
     Appearance    05      Lines around changed hunks, at most the 3 each diff carries               
     Models & rol… 02                                                                                
     Interaction   05      Hyperlinks                                                     off  ▾     
-    Context       10      OSC 8 terminal file links; off prints the bare path                       
+    Context       11      OSC 8 terminal file links; off prints the bare path                       
   › Files         03                                                                                
     Shell         05      Group by agent                                                    ● on    
     Turn          13      Author filters in edit feeds                                              

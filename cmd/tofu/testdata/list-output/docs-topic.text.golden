@@ -13,7 +13,8 @@ What it is
   - Appearance: theme, density, animations, statusBar, colorMode
   - Interaction: composer, gatePrompt, readBeforeEdit
   - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images,
-    projectInstructionsCap, instructionSources, skills, memory, autoMemory
+    projectInstructionsCap, instructionSources, skills, memory, autoMemory,
+    learn
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
@@ -156,6 +157,11 @@ Context
       on keeps a message that says remember at once and prints the undo, instead
       of asking first; it turns on by itself once you accepted 7 of the first 10
       offers, or when you answer always on one
+    learn                   false
+      true or false
+      on lets tofu learn send a window around each message you typed to Jev for
+      labels, and write each proposal with your lead model, after printing how
+      many windows and bytes; off runs tofu learn on this machine only
 
 Files
     diffContext             3

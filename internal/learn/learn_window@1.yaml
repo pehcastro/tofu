@@ -1,0 +1,69 @@
+name: learn_window
+domain: general
+questions_version: 1
+
+state:
+  - message
+  - before
+  - after
+  - earlier
+
+questions:
+  corrects:
+    type: noul
+    instructions: >-
+      `message` is one message a person typed to a coding agent, and `before`
+      is the end of what the agent said just before it. Judge whether
+      `message` corrects how the agent behaved, or asks again for something
+      the person had already asked for.
+    criteria:
+      true: >-
+        The person complains that the agent did the wrong thing, did not do
+        what was asked, stopped when it should not have, handed the person
+        work the agent could have done, or repeats an earlier request.
+      false: >-
+        The person asks for new work, answers a question, approves, or
+        comments without correcting the agent.
+
+  bears_on:
+    type: noul
+    instructions: >-
+      `earlier` is something the person told the agent in an earlier session,
+      or empty when there is none. Judge whether `earlier` applies to what the
+      agent did in `before`.
+    criteria:
+      true: >-
+        `earlier` is not empty and says how the agent should have acted in the
+        situation `before` shows.
+      false: >-
+        `earlier` is empty, or it is about something else.
+
+  followed:
+    type: choice
+    instructions: >-
+      Judge whether the agent, in `before`, acted the way `earlier` asked.
+    escape: irrelevant
+    options:
+      - name: followed
+        criteria: >-
+          `before` shows the agent acting the way `earlier` asked.
+      - name: violated
+        criteria: >-
+          `before` shows the agent doing what `earlier` asked it not to do, or
+          not doing what `earlier` asked.
+      - name: irrelevant
+        criteria: >-
+          `earlier` is empty, or `before` has nothing to do with it.
+
+  lacks_info:
+    type: noul
+    instructions: >-
+      Judge whether the agent, in `before`, was missing information it needed
+      and could not have found by itself, so that asking the person was the
+      right thing to do.
+    criteria:
+      true: >-
+        Only the person could answer: a choice of taste, money, something
+        irreversible, or a fact the agent could not look up.
+      false: >-
+        The agent could have found or decided it alone, or it asked nothing.

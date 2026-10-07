@@ -62,6 +62,8 @@ Verbs:
   rules     list the rule library, run it, read back what fired, or index a task
   memory    list what you asked tofu to remember, global and for this project,
             or add or remove an entry
+  learn     read your sessions for the correction you keep repeating,
+            and propose at most five changes with your words behind each
   frame     print one recorded interface frame, at a width and a height
   drive     run a script of what a person would do against the real app,
             with no terminal and no model call, and print the screens it asks for
@@ -181,6 +183,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return rulesVerb(args[1:], out, errOut)
 	case "memory":
 		return memoryVerb(args[1:], out, errOut)
+	case "learn":
+		return learnVerb(args[1:], out, errOut)
 	case "settings":
 		return settingsVerb(args[1:], out, errOut)
 	case "reload":

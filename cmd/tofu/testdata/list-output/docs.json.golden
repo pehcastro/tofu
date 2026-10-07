@@ -63,6 +63,11 @@ exit 0
         "summary": "the keys the app answers to, which ones you can rebind, and finding a prompt you sent before with ctrl+p"
       },
       {
+        "topic": "learn",
+        "title": "Learn",
+        "summary": "read your own sessions for what keeps going wrong, and get at most five proposals with the evidence behind each"
+      },
+      {
         "topic": "memory",
         "title": "Memory",
         "summary": "what tofu remembers for you across sessions, for every project or for one, and how to add, list and forget it"
@@ -629,6 +634,24 @@ exit 0
         "do": "tofu memory remove <id>",
         "check": "tofu memory",
         "topic": "memory"
+      },
+      {
+        "ask": "find what I keep having to tell tofu again",
+        "do": "tofu learn scan --local",
+        "check": "tofu learn show <n>",
+        "topic": "learn"
+      },
+      {
+        "ask": "turn what I keep repeating into a memory entry or a rule",
+        "do": "tofu learn apply <n>",
+        "check": "tofu memory",
+        "topic": "learn"
+      },
+      {
+        "ask": "write up a tofu problem my sessions show, without sending it",
+        "do": "tofu learn upstream <n>",
+        "check": "tofu learn upstream --list",
+        "topic": "learn"
       },
       {
         "ask": "drive tofu from another program over standard input and output",

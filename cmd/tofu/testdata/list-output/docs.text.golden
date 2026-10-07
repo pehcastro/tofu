@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 87 asks                                                         21 topics
+Docs · 90 asks                                                         22 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -105,6 +105,15 @@ keys  the keys the app answers to, which ones you can rebind, and finding a
   prompt you sent before with ctrl+p
   find a prompt I sent in another session
     → ctrl+p in the app, type part of it, then enter
+
+learn  read your own sessions for what keeps going wrong, and get at most five
+  proposals with the evidence behind each
+  find what I keep having to tell tofu again
+    → tofu learn scan --local
+  turn what I keep repeating into a memory entry or a rule
+    → tofu learn apply <n>
+  write up a tofu problem my sessions show, without sending it
+    → tofu learn upstream <n>
 
 memory  what tofu remembers for you across sessions, for every project or for
   one, and how to add, list and forget it

@@ -20,6 +20,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Added
 
+- **`tofu learn`.** It reads your sessions for a correction you made in two or more of them, checks whether your earlier words were in the request when the mistake came back, and proposes at most five memory entries, rules or upstream drafts. `tofu learn apply <n>` writes one; an upstream draft describes what happened without your quotes and is never sent. `--local` keeps everything on your machine; the `learn` setting lets it label with Jev and word each proposal with your lead model.
+
 - **`tofu memory` and the app's offer card.** Type `remember: ...` or `/remember ...`, pick for every project or this one, and the lead reads it in every later session. `tofu memory` lists what is kept, in your words; `tofu memory remove <id>` forgets it. "also remember ..." anywhere in a message gets the card too, with yes, no or always. The lead can offer an entry with its `remember` tool. Every save shows as `[memory#id]` in the chat and in `tofu session trace`. `/memory` removes or edits an entry. The `memory` setting turns it off, and `autoMemory` stops the asking, which also happens once you accept 7 of your first 10 offers.
 
 - **The lead controls its sub-agents.** `subagents` lists the paths each one holds, and with a name reads one's conversation or shows what it is doing now. `message` with `do` stops, kills (its shells too), releases or backs one up, and `from` resumes one from a backup.

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     45 declared
+Settings · 2 set                                                     46 declared
 
 Appearance
   ● theme                   Nord                project
@@ -25,6 +25,7 @@ Context
     skills                  on                  default
     memory                  true                default
     autoMemory              false               default
+    learn                   false               default
 
 Files
     diffContext             3                   default
