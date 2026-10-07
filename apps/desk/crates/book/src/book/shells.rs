@@ -13,12 +13,13 @@ use super::lists::Strip;
 const BOARD_WIDTH: f32 = 640.0;
 const NARROW_WIDTH: f32 = 320.0;
 const HIDDEN_PICK: usize = 4;
+const PORT_PICK: usize = 3;
 
 type Sample = (
     &'static str,
     ShellState,
     &'static str,
-    u32,
+    i64,
     &'static str,
     &'static str,
     Option<u16>,
@@ -55,11 +56,11 @@ const SAMPLES: [Sample; 6] = [
     (
         "shell-4",
         ShellState::Running,
-        "cargo watch -x check",
+        "npx serve dist -l 3000",
         47920,
         "lead",
         "31m",
-        None,
+        Some(3000),
     ),
     (
         "shell-5",
@@ -116,16 +117,16 @@ fn output(state: ShellState) -> (Vec<SharedString>, TermStatus) {
 fn samples() -> Vec<Shell> {
     SAMPLES
         .iter()
-        .map(|(name, state, command, pid, by, age, port)| {
+        .map(|(name, state, command, pid, starter, run_time, port)| {
             let (lines, status) = output(*state);
             Shell {
                 name: (*name).into(),
                 state: *state,
                 command: (*command).into(),
-                pid: *pid,
-                by: (*by).into(),
-                age: (*age).into(),
+                pid: Some(*pid),
+                starter: Some((*starter).into()),
                 port: *port,
+                run_time: Some((*run_time).into()),
                 lines,
                 status,
             }
@@ -181,14 +182,14 @@ impl Tile {
                 None
             }
             ShellEvent::Open(at) => Some(format!("{} opens as a Terminal", name(at))),
-            ShellEvent::Kill(at) => Some(format!("{} killed", name(at))),
             ShellEvent::Trace(at) => Some(format!("{} trace opens in the feed", name(at))),
         }
     }
 }
 
 pub(super) struct ShellsPage {
-    tiles: [Tile; 4],
+    tiles: [Tile; 6],
+    killed: SharedString,
 }
 
 impl ShellsPage {
@@ -196,10 +197,13 @@ impl ShellsPage {
         ShellsPage {
             tiles: [
                 Tile::new(0, false),
+                Tile::new(PORT_PICK, false),
+                Tile::new(HIDDEN_PICK, false),
                 Tile::new(0, false),
                 Tile::new(HIDDEN_PICK, false),
                 Tile::new(1, true),
             ],
+            killed: "on_kill: not called yet".into(),
         }
     }
 
@@ -214,6 +218,8 @@ impl ShellsPage {
                 "shells-tabs-1",
                 "shells-tabs-2",
                 "shells-tabs-3",
+                "shells-tabs-4",
+                "shells-tabs-5",
             ]
             .get(at)
             .copied()
@@ -225,7 +231,7 @@ impl ShellsPage {
                 });
             let shells = Shells::new(
                 id,
-                &tile.shells,
+                tile.shells.clone(),
                 tile.active,
                 tile.listing,
                 cx.listener(move |this, event: &ShellEvent, _, cx| {
@@ -239,7 +245,17 @@ impl ShellsPage {
                     }
                     cx.notify();
                 }),
-            );
+            )
+            .on_kill(cx.listener(move |this, picked: &usize, _, cx| {
+                let name = this
+                    .shells
+                    .tiles
+                    .get(at)
+                    .and_then(|tile| tile.shells.get(*picked))
+                    .map_or_else(SharedString::default, |shell| shell.name.clone());
+                this.shells.killed = format!("on_kill({picked}) from tile {at}: {name}").into();
+                cx.notify();
+            }));
             div()
                 .flex()
                 .flex_col()
@@ -256,26 +272,39 @@ impl ShellsPage {
             .flex_col()
             .gap_4()
             .pb(px(BOARD_WIDTH / 2.0))
+            .child(label(self.killed.clone(), theme))
             .child(tile(
                 0,
                 BOARD_WIDTH,
-                "board width: 6 shells, 3 visible, 3 more; pid, by and age shown",
+                "board width: 6 shells, 3 visible, 3 more; pid, by, run time and port shown",
                 cx,
             ))
             .child(tile(
                 1,
+                BOARD_WIDTH,
+                "board width: shell-4 picked, a server on :3000",
+                cx,
+            ))
+            .child(tile(
+                2,
+                BOARD_WIDTH,
+                "board width: shell-5 picked, a server on :8765",
+                cx,
+            ))
+            .child(tile(
+                3,
                 NARROW_WIDTH,
                 "320 px: module tabs and shell tabs fold into N more; pid, by and age hidden",
                 cx,
             ))
             .child(tile(
-                2,
+                4,
                 NARROW_WIDTH,
                 "320 px: a hidden shell picked from the list takes the last visible slot",
                 cx,
             ))
             .child(tile(
-                3,
+                5,
                 BOARD_WIDTH,
                 "board width: N more open, listing every shell",
                 cx,

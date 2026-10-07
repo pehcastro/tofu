@@ -447,7 +447,7 @@ impl Page {
                 "Shells as tabs under the module tabs: a status dot, a mono name, a close on hover, N more with every shell, and the selected shell's output.",
                 "IWY-4 IWY-9 S-WORK-7",
                 "components/shells.rs, components/width.rs, components/tabs.rs, components/term.rs",
-                "running, failed, waiting; N more closed and open; hidden shell picked; pid, by and age shown wide and hidden under 560 px; board width and 320 px",
+                "running, failed, waiting; N more closed and open; hidden shell picked; pid, starter, port and run time shown wide and hidden under 560 px; Kill calls on_kill; board width and 320 px",
                 "",
             ),
             Page::AskBar => sheet(

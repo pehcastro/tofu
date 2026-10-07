@@ -58,10 +58,10 @@ pub struct Shell {
     pub name: SharedString,
     pub state: ShellState,
     pub command: SharedString,
-    pub pid: u32,
-    pub by: SharedString,
-    pub age: SharedString,
+    pub pid: Option<i64>,
+    pub starter: Option<SharedString>,
     pub port: Option<u16>,
+    pub run_time: Option<SharedString>,
     pub lines: Vec<SharedString>,
     pub status: TermStatus,
 }
@@ -73,11 +73,11 @@ pub enum ShellEvent {
     More,
     Dismiss,
     Open(usize),
-    Kill(usize),
     Trace(usize),
 }
 
 type OnShell = Rc<dyn Fn(&ShellEvent, &mut Window, &mut App)>;
+type OnKill = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct Shells {
@@ -86,23 +86,30 @@ pub struct Shells {
     active: usize,
     listing: bool,
     on: OnShell,
+    kill: Option<OnKill>,
 }
 
 impl Shells {
     pub fn new(
         id: impl Into<SharedString>,
-        shells: &[Shell],
+        shells: Vec<Shell>,
         active: usize,
         listing: bool,
         on: impl Fn(&ShellEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         Shells {
             id: id.into(),
-            shells: shells.to_vec(),
+            shells,
             active,
             listing,
             on: Rc::new(on),
+            kill: None,
         }
+    }
+
+    pub fn on_kill(mut self, kill: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
+        self.kill = Some(Rc::new(kill));
+        self
     }
 }
 
@@ -283,6 +290,7 @@ fn panel(
     fit: Fit,
     theme: &Theme,
     on: &OnShell,
+    kill: Option<&OnKill>,
 ) -> Div {
     let wide = fit == Fit::Wide;
     let header = div()
@@ -305,9 +313,14 @@ fn panel(
         )
         .when(wide, |header| {
             header
-                .child(meta(format!("pid {}", shell.pid), theme))
-                .child(meta(format!("by {}", shell.by), theme))
-                .child(meta(shell.age.clone(), theme))
+                .children(shell.pid.map(|pid| meta(format!("pid {pid}"), theme)))
+                .children(
+                    shell
+                        .starter
+                        .as_ref()
+                        .map(|starter| meta(format!("by {starter}"), theme)),
+                )
+                .children(shell.run_time.clone().map(|run_time| meta(run_time, theme)))
         })
         .children(shell.port.map(|port| meta(format!(":{port}"), theme)))
         .child(action(
@@ -316,12 +329,17 @@ fn panel(
             theme,
             emit(on, ShellEvent::Open(ix)),
         ))
-        .child(action(
-            format!("{id}-kill").into(),
-            "kill",
-            theme,
-            emit(on, ShellEvent::Kill(ix)),
-        ))
+        .children(kill.cloned().map(|kill| {
+            action(
+                format!("{id}-kill").into(),
+                "kill",
+                theme,
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    kill(&ix, window, cx)
+                },
+            )
+        }))
         .child(
             trace(
                 ElementId::Name(format!("{id}-trace").into()),
@@ -354,6 +372,7 @@ impl RenderOnce for Shells {
             active,
             listing,
             on,
+            kill,
         } = self;
         let theme = ActiveTheme::theme(cx);
         let width = Width::of(format!("{id}-width"), window, cx);
@@ -421,7 +440,7 @@ impl RenderOnce for Shells {
         });
         let body = shells
             .get(active)
-            .map(|shell| panel(&id, active, shell, fit, &theme, &on));
+            .map(|shell| panel(&id, active, shell, fit, &theme, &on, kill.as_ref()));
         div()
             .relative()
             .flex()
