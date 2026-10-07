@@ -11,8 +11,9 @@ use desk_ui::metrics::{
 };
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyView, App, ClickEvent, Context, Entity, IntoElement, Pixels, Render, SharedString, Size,
-    Task, TitlebarOptions, Window, WindowBounds, WindowOptions, div, prelude::*, px, size,
+    AnyView, App, ClickEvent, Context, Entity, IntoElement, KeyDownEvent, Pixels, Render,
+    SharedString, Size, Task, TitlebarOptions, Window, WindowBounds, WindowOptions, div,
+    prelude::*, px, size,
 };
 
 pub const WINDOW_TITLE: &str = "Tofu Desk";
@@ -88,7 +89,17 @@ impl Desk {
 
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = !self.sidebar_open;
+        let state = if self.sidebar_open { "open" } else { "closed" };
+        eprintln!("desk: sidebar {state}");
         cx.notify();
+    }
+
+    fn global_key(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let stroke = &event.keystroke;
+        if stroke.modifiers.control && stroke.key == "b" {
+            cx.stop_propagation();
+            self.toggle_sidebar(cx);
+        }
     }
 
     fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
@@ -152,6 +163,7 @@ impl Render for Desk {
         div()
             .size_full()
             .relative()
+            .capture_key_down(cx.listener(Self::global_key))
             .flex()
             .flex_col()
             .bg(theme.color(ColorToken::SurfaceWindow))
