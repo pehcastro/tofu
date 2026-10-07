@@ -7,19 +7,22 @@ use std::path::{Path, PathBuf};
 
 use desk_core::buffer::Buffer;
 use desk_core::syntax::{Language, Syntax};
+use desk_ui::components::code::Marks;
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyView, App, AppContext, ClickEvent, Context, Entity, Render, SharedString, Window, prelude::*,
 };
 
+use boards::{cursor_marks, notes_marks, store_marks};
 use fixture::{COUNT_TEST, Line, NOTES, STORE};
 
-pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
+pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
+    let scale = window.scale_factor();
     let source = Source::Fixture {
-        notes: fixture_editor(NOTES, cx),
-        test: fixture_editor(COUNT_TEST, cx),
-        store: fixture_editor(STORE, cx),
+        notes: fixture_editor(NOTES, notes_marks(scale), cx),
+        test: fixture_editor(COUNT_TEST, cursor_marks(), cx),
+        store: fixture_editor(STORE, store_marks(), cx),
     };
     launch(board, source, cx)
 }
@@ -45,46 +48,49 @@ enum Source {
     File(Opened),
 }
 
-fn fixture_editor(lines: &[Line], cx: &mut App) -> Opened {
+fn fixture_editor(lines: &[Line], marks: Marks, cx: &mut App) -> Opened {
     let text: Vec<String> = lines
         .iter()
         .map(|line| line.runs.iter().map(|(_, body)| *body).collect())
         .collect();
     let buffer = Buffer::from_text(&text.join("\n"));
     let syntax = Syntax::new(Language::Go, &buffer).map_err(|error| error.to_string())?;
-    Ok(cx.new(|cx| CodeEditor::new(buffer, syntax, cx)))
+    let mut editor = CodeEditor::new(buffer, syntax, cx);
+    editor.set_marks(marks);
+    Ok(cx.new(|_| editor))
 }
 
 fn file_editor(path: &Path, cx: &mut App) -> Opened {
     let shown = path.display();
-    let loaded = Language::from_path(path)
-        .ok_or_else(|| format!("desk_core has no syntax for {shown}"))
-        .and_then(|language| {
-            let buffer = Buffer::load(path).map_err(|error| error.to_string())?;
-            let syntax = Syntax::new(language, &buffer).map_err(|error| error.to_string())?;
-            Ok((language, buffer, syntax))
-        });
-    let (language, buffer, syntax) = match loaded {
-        Ok(loaded) => loaded,
+    let editor = match CodeEditor::open(path, cx) {
+        Ok(editor) => editor,
         Err(error) => {
             eprintln!("desk: editor could not open {shown}: {error}");
             return Err(error.into());
         }
     };
+    let language = Language::from_path(path)
+        .map(|language| format!("{language:?}"))
+        .unwrap_or_default();
     eprintln!(
-        "desk: editor opened {shown} {language:?} {} lines",
-        buffer.line_count()
+        "desk: editor opened {shown} {language} {} lines",
+        editor.buffer().line_count()
     );
     let path = PathBuf::from(path);
-    Ok(cx.new(|cx| {
-        CodeEditor::new(buffer, syntax, cx).on_save(move |buffer, _, _| {
-            let shown = path.display();
-            match buffer.save(&path) {
-                Ok(()) => eprintln!("desk: editor saved {shown} {} lines", buffer.line_count()),
-                Err(error) => eprintln!("desk: editor could not save {shown}: {error}"),
+    let editor = editor.on_save(move |buffer, _, _| {
+        let shown = path.display();
+        match buffer.save(&path) {
+            Ok(()) => {
+                eprintln!("desk: editor saved {shown} {} lines", buffer.line_count());
+                Ok(())
             }
-        })
-    }))
+            Err(error) => {
+                eprintln!("desk: editor could not save {shown}: {error}");
+                Err(format!("{shown}: {error}"))
+            }
+        }
+    });
+    Ok(cx.new(|_| editor))
 }
 
 fn launch(board: Option<&str>, source: Source, cx: &mut App) -> Result<AnyView, String> {

@@ -1,11 +1,12 @@
 use std::cell::Cell;
 use std::fmt::Display;
 use std::ops::Range;
+use std::path::Path;
 use std::rc::Rc;
 use std::time::Instant;
 
 use desk_core::buffer::Buffer;
-use desk_core::syntax::{Kind, Syntax};
+use desk_core::syntax::{Kind, Language, Syntax};
 use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
     Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
@@ -13,13 +14,15 @@ use gpui::{
     canvas, div, point, prelude::*, px, size,
 };
 
-use crate::components::code::{CodeLine, code_origin, code_place, code_shape, code_view};
+use crate::components::chat::fail;
+use crate::components::code::{CodeLine, Marks, code_origin, code_place, code_shape, code_view};
 use crate::components::form::{blinker, caret_shown};
-use crate::components::size::{CARET_WIDTH, CODE_LINE};
+use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN};
 use crate::live::ActiveTheme;
 use crate::theme::ColorToken;
 
 const TAB: &str = "    ";
+const FAILURE_INSET: f32 = 12.0;
 
 pub fn syntax_token(kind: Kind) -> ColorToken {
     match kind {
@@ -125,7 +128,26 @@ fn byte_of(text: &str, column: usize) -> usize {
         .map_or(text.len(), |(byte, _)| byte)
 }
 
-type Save = Rc<dyn Fn(&mut Buffer, &mut Window, &mut App)>;
+fn follow(marks: &Marks, line: usize, line_start: bool, removed: &str, inserted: &str) -> Marks {
+    let whole_lines = |text: &str| text.is_empty() || text.ends_with('\n');
+    let whole = line_start && whole_lines(removed) && whole_lines(inserted);
+    let first = line + usize::from(!whole);
+    let gone = removed.matches('\n').count();
+    let added = inserted.matches('\n').count();
+    marks
+        .iter()
+        .filter_map(|(row, mark)| {
+            let row = match *row {
+                row if row < first => row,
+                row if row < first + gone => return None,
+                row => row - gone + added,
+            };
+            Some((row, mark.clone()))
+        })
+        .collect()
+}
+
+type Save = Rc<dyn Fn(&mut Buffer, &mut Window, &mut App) -> Result<(), String>>;
 
 pub struct CodeEditor {
     buffer: Buffer,
@@ -134,7 +156,8 @@ pub struct CodeEditor {
     marked: Option<Range<usize>>,
     widest: usize,
     dragging: bool,
-    failure: Option<SharedString>,
+    failure: Option<(&'static str, SharedString)>,
+    marks: Rc<Marks>,
     scroll: UniformListScrollHandle,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     focus: FocusHandle,
@@ -144,7 +167,7 @@ pub struct CodeEditor {
 }
 
 impl CodeEditor {
-    pub fn new(buffer: Buffer, syntax: Syntax, cx: &mut Context<Self>) -> Self {
+    pub fn new(buffer: Buffer, syntax: Syntax, cx: &mut App) -> Self {
         let mut editor = CodeEditor {
             buffer,
             syntax,
@@ -153,6 +176,7 @@ impl CodeEditor {
             widest: 0,
             dragging: false,
             failure: None,
+            marks: Rc::default(),
             scroll: UniformListScrollHandle::new(),
             bounds: Rc::default(),
             focus: cx.focus_handle(),
@@ -164,9 +188,29 @@ impl CodeEditor {
         editor
     }
 
-    pub fn on_save(mut self, save: impl Fn(&mut Buffer, &mut Window, &mut App) + 'static) -> Self {
+    pub fn open(path: &Path, cx: &mut App) -> Result<Self, String> {
+        let shown = path.display();
+        let language = Language::from_path(path)
+            .ok_or_else(|| format!("desk_core has no syntax for {shown}"))?;
+        let buffer = Buffer::load(path).map_err(|error| format!("{shown}: {error}"))?;
+        let syntax = Syntax::new(language, &buffer).map_err(|error| error.to_string())?;
+        Ok(Self::new(buffer, syntax, cx))
+    }
+
+    pub fn on_save(
+        mut self,
+        save: impl Fn(&mut Buffer, &mut Window, &mut App) -> Result<(), String> + 'static,
+    ) -> Self {
         self.on_save = Some(Rc::new(save));
         self
+    }
+
+    pub fn marks(&self) -> &Marks {
+        &self.marks
+    }
+
+    pub fn set_marks(&mut self, marks: Marks) {
+        self.marks = Rc::new(marks);
     }
 
     pub fn buffer(&self) -> &Buffer {
@@ -181,8 +225,8 @@ impl CodeEditor {
         self.carets.iter().map(|caret| (caret.anchor, caret.head))
     }
 
-    pub fn failure(&self) -> Option<&SharedString> {
-        self.failure.as_ref()
+    pub fn failure(&self) -> Option<(&'static str, &SharedString)> {
+        self.failure.as_ref().map(|(what, error)| (*what, error))
     }
 
     fn char_at(&self, at: usize) -> Option<char> {
@@ -329,15 +373,15 @@ impl CodeEditor {
         self.merge();
     }
 
-    fn report(&mut self, result: Result<(), impl Display>) {
+    fn report(&mut self, what: &'static str, result: Result<(), impl Display>) {
         if let Err(error) = result {
-            self.failure = Some(error.to_string().into());
+            self.failure = Some((what, error.to_string().into()));
         }
     }
 
     fn settle(&mut self, lines: usize) {
         let synced = self.syntax.sync(&mut self.buffer);
-        self.report(synced);
+        self.report("Could not colour", synced);
         self.carets = self
             .buffer
             .selections()
@@ -372,10 +416,35 @@ impl CodeEditor {
             return;
         }
         let lines = self.buffer.line_count();
+        let marks = self.followed(&ranges, text);
         match self.buffer.edit(&ranges, text) {
-            Ok(()) => self.settle(lines),
-            Err(error) => self.report(Err(error)),
+            Ok(()) => {
+                self.marks = marks;
+                self.settle(lines);
+            }
+            Err(error) => self.report("Could not edit", Err(error)),
         }
+    }
+
+    fn followed(&self, ranges: &[Range<usize>], text: &str) -> Rc<Marks> {
+        if self.marks.is_empty() {
+            return self.marks.clone();
+        }
+        let mut ranges = ranges.to_vec();
+        ranges.sort_by_key(|range| std::cmp::Reverse(range.start));
+        let mut marks = (*self.marks).clone();
+        for range in ranges {
+            let rope = self.buffer.rope();
+            let (Ok(line), Some(removed)) = (
+                rope.try_char_to_line(range.start),
+                rope.get_slice(range.clone()),
+            ) else {
+                continue;
+            };
+            let line_start = rope.try_line_to_char(line).ok() == Some(range.start);
+            marks = follow(&marks, line, line_start, &removed.to_string(), text);
+        }
+        Rc::new(marks)
     }
 
     fn selections(&self) -> Vec<Range<usize>> {
@@ -402,14 +471,34 @@ impl CodeEditor {
 
     fn history(&mut self, back: bool) {
         let lines = self.buffer.line_count();
+        let before = self.buffer.rope().clone();
         let moved = if back {
             self.buffer.undo()
         } else {
             self.buffer.redo()
         };
-        if moved {
-            self.settle(lines);
+        if !moved {
+            return;
         }
+        let after = self.buffer.rope();
+        if !self.marks.is_empty() {
+            let same = |pair: &(char, char)| pair.0 == pair.1;
+            let start = before.chars().zip(after.chars()).take_while(same).count();
+            let (old_len, new_len) = (before.len_chars(), after.len_chars());
+            let tail = before
+                .chars_at(old_len)
+                .reversed()
+                .zip(after.chars_at(new_len).reversed())
+                .take_while(same)
+                .count()
+                .min(old_len.min(new_len) - start);
+            let line = before.char_to_line(start);
+            let line_start = before.line_to_char(line) == start;
+            let removed = before.slice(start..old_len - tail).to_string();
+            let inserted = after.slice(start..new_len - tail).to_string();
+            self.marks = Rc::new(follow(&self.marks, line, line_start, &removed, &inserted));
+        }
+        self.settle(lines);
     }
 
     fn copy(&self, cx: &mut App) {
@@ -484,7 +573,8 @@ impl CodeEditor {
             (true, "v") => self.paste(cx),
             (true, "s") => {
                 if let Some(save) = self.on_save.clone() {
-                    save(&mut self.buffer, window, cx);
+                    let saved = save(&mut self.buffer, window, cx);
+                    self.failure = saved.err().map(|error| ("Could not save", error.into()));
                 }
             }
             _ => return,
@@ -721,7 +811,16 @@ impl Render for CodeEditor {
             &self.scroll,
             move |rows, cx| source.update(cx, |editor, _| editor.rows(rows, shown)),
         )
-        .widest(self.widest);
+        .widest(self.widest)
+        .marks(self.marks.clone());
+        let failure = self.failure.clone().map(|(what, error)| {
+            div()
+                .absolute()
+                .left(px(NUMBER_COLUMN))
+                .right(px(FAILURE_INSET))
+                .bottom(px(FAILURE_INSET))
+                .child(fail(what, error, "", &ActiveTheme::theme(cx)))
+        });
         div()
             .id("code-editor")
             .relative()
@@ -747,5 +846,6 @@ impl Render for CodeEditor {
                 .left_0()
                 .size_full(),
             )
+            .children(failure)
     }
 }

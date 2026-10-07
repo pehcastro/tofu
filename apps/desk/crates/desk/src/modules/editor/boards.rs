@@ -1,5 +1,10 @@
+use std::ops::RangeInclusive;
+use std::rc::Rc;
+
+use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::empty::empty_state;
 use desk_ui::live::ActiveTheme;
+use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, Context, Div, FontWeight, SharedString, div, linear_color_stop, linear_gradient,
     prelude::*, px,
@@ -9,10 +14,70 @@ use super::fixture::{COUNT, COUNT_TEST, Git, Icon, Line, MENU, STORE, STORE_DIFF
 use super::kit::{
     ADD, AGENT, AGENT_FILL, AGENT_TEXT, CHAT, COLLAPSE, DANGER, DEL, DOWN, MODIFIED, MONO, PLUS,
     POP, PREFS, ROBOT, SEND, SPLIT, T2, T3, TRACE, black, cap, file_icon, glyph, hex, inner,
-    medium, pop_shadow, ring, shell, square, text, white,
+    medium, pop_shadow, ring, shell, square, text, tint, white,
 };
 use super::parts::{close_mark, code, dot, kbd, quiet, tab, tree_row};
 use super::{Editor, File, Mode};
+
+const CURSOR: ColorToken = ColorToken::StateHover;
+const AGENT_LINES: RangeInclusive<usize> = 10..=18;
+const REMOVED_LINE: usize = 9;
+const MODIFIED_LINE: usize = 21;
+const CURSOR_LINE: usize = 13;
+const STORE_BLAME_LINE: usize = 4;
+
+fn marked(gutter: ColorToken) -> LineMarks {
+    LineMarks {
+        gutter: Some(GutterMark::Changed(gutter)),
+        ..LineMarks::default()
+    }
+}
+
+pub fn cursor_marks() -> Marks {
+    Marks::from([(
+        CURSOR_LINE - 1,
+        LineMarks {
+            background: Some(CURSOR),
+            ..LineMarks::default()
+        },
+    )])
+}
+
+pub fn notes_marks(scale: f32) -> Marks {
+    let mut marks: Marks = AGENT_LINES
+        .map(|line| {
+            let agent = LineMarks {
+                edge: Some(ColorToken::Trace),
+                ..marked(ColorToken::GitAdded)
+            };
+            (line - 1, agent)
+        })
+        .collect();
+    marks.insert(
+        REMOVED_LINE - 1,
+        LineMarks {
+            gutter: Some(GutterMark::Removed(ColorToken::GitDeleted)),
+            ..LineMarks::default()
+        },
+    );
+    marks.insert(MODIFIED_LINE - 1, marked(ColorToken::GitModified));
+    if let Some(line) = marks.get_mut(&(CURSOR_LINE - 1)) {
+        line.background = Some(CURSOR);
+        line.trailing = Some(Rc::new(move |_: &Theme| blame(scale).into_any_element()));
+    }
+    marks
+}
+
+pub fn store_marks() -> Marks {
+    Marks::from([(
+        STORE_BLAME_LINE - 1,
+        LineMarks {
+            background: Some(ColorToken::TabsHover),
+            trailing: Some(Rc::new(|_: &Theme| person_blame().into_any_element())),
+            ..LineMarks::default()
+        },
+    )])
+}
 
 fn head(left: f32) -> Div {
     div()
@@ -73,6 +138,20 @@ fn strip(when: &'static str, scale: f32) -> Div {
         .child(glyph(ROBOT, 13.0, AGENT, scale))
         .child(text(12.5, 23.0, AGENT_TEXT, "Recently edited by go-dev"))
         .child(quiet(12.5, when))
+}
+
+fn blame(scale: f32) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(6.0))
+        .ml(px(28.0))
+        .font_family(super::kit::SANS)
+        .text_size(px(12.5))
+        .text_color(tint(0xb9a6ea, 0.62))
+        .child(glyph(ROBOT, 12.0, tint(0xb9a6ea, 0.62), scale))
+        .child("go-dev · not committed · turn 4")
 }
 
 fn person_blame() -> Div {

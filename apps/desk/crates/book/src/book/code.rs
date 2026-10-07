@@ -5,10 +5,12 @@ use std::rc::Rc;
 
 use desk_core::buffer::{Buffer, BufferError};
 use desk_core::syntax::{Kind, Language, Syntax, SyntaxError};
-use desk_ui::components::code::{CodeLine, code_view};
+use desk_ui::components::avatar::AgentKind;
+use desk_ui::components::chip::agent_pill;
+use desk_ui::components::code::{CodeLine, GutterMark, LineMarks, Marks, Trailing, code_view};
 use desk_ui::components::code_editor::{CodeEditor, code_lines, syntax_token};
 use desk_ui::live::ActiveTheme;
-use desk_ui::theme::Theme;
+use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     App, AppContext, Div, Entity, SharedString, UniformListScrollHandle, Window, div, point,
     prelude::*, px,
@@ -30,6 +32,7 @@ const SCRATCH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../../.local/desk-app/shots/desk-163/form.rs"
 );
+const TRAILING: &str = "go-dev · turn 4";
 const KINDS: [Kind; 10] = [
     Kind::Keyword,
     Kind::String,
@@ -51,27 +54,106 @@ fn coloured(text: &str) -> Result<Vec<CodeLine>, SyntaxError> {
 
 type Opened = Result<Entity<CodeEditor>, SyntaxError>;
 
+fn sample_marks() -> Marks {
+    let changed = LineMarks {
+        gutter: Some(GutterMark::Changed(ColorToken::GitAdded)),
+        edge: Some(ColorToken::Trace),
+        ..LineMarks::default()
+    };
+    let trailing: Trailing =
+        Rc::new(|theme: &Theme| agent_pill(AgentKind::GoDev, TRAILING, theme).into_any_element());
+    Marks::from([
+        (4, changed.clone()),
+        (
+            5,
+            LineMarks {
+                background: Some(ColorToken::StateHover),
+                trailing: Some(trailing),
+                ..changed.clone()
+            },
+        ),
+        (6, changed),
+        (
+            8,
+            LineMarks {
+                gutter: Some(GutterMark::Removed(ColorToken::GitDeleted)),
+                ..LineMarks::default()
+            },
+        ),
+        (
+            10,
+            LineMarks {
+                gutter: Some(GutterMark::Changed(ColorToken::GitModified)),
+                ..LineMarks::default()
+            },
+        ),
+    ])
+}
+
 fn open(saved: Rc<RefCell<SharedString>>, cx: &mut App) -> Opened {
     let buffer = Buffer::from_text(CODE_TEXT);
     let syntax = Syntax::new(Language::Rust, &buffer)?;
-    Ok(cx.new(|cx| {
-        CodeEditor::new(buffer, syntax, cx).on_save(move |buffer, _, _| {
-            let path = Path::new(SCRATCH);
-            let written = path
-                .parent()
-                .map_or(Ok(()), fs::create_dir_all)
-                .map_err(BufferError::from)
-                .and_then(|()| buffer.save(path));
-            *saved.borrow_mut() = match written {
-                Ok(()) => format!("saved {} lines to {SCRATCH_SHOWN}", buffer.line_count()),
-                Err(error) => format!("save failed: {error}"),
-            }
-            .into();
-        })
-    }))
+    let mut editor = CodeEditor::new(buffer, syntax, cx).on_save(move |buffer, _, _| {
+        let path = Path::new(SCRATCH);
+        let written = path
+            .parent()
+            .map_or(Ok(()), fs::create_dir_all)
+            .map_err(BufferError::from)
+            .and_then(|()| buffer.save(path))
+            .map_err(|error| error.to_string());
+        *saved.borrow_mut() = match &written {
+            Ok(()) => format!("saved {} lines to {SCRATCH_SHOWN}", buffer.line_count()),
+            Err(error) => format!("save failed: {error}"),
+        }
+        .into();
+        written
+    });
+    editor.set_marks(sample_marks());
+    Ok(cx.new(|_| editor))
 }
 
-fn readout(editor: &CodeEditor, saved: &SharedString) -> Vec<String> {
+fn fill_hex(theme: &Theme, token: ColorToken) -> String {
+    let color = theme.color(token);
+    let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!(
+        "{} #{:02x}{:02x}{:02x}{:02x}",
+        token.path(),
+        byte(color.red),
+        byte(color.green),
+        byte(color.blue),
+        byte(color.alpha)
+    )
+}
+
+fn mark_lines(marks: &Marks, theme: &Theme) -> Vec<String> {
+    marks
+        .iter()
+        .map(|(row, mark)| {
+            let mut parts = Vec::new();
+            match mark.gutter {
+                Some(GutterMark::Changed(token)) => {
+                    parts.push(format!("gutter changed {}", fill_hex(theme, token)))
+                }
+                Some(GutterMark::Removed(token)) => {
+                    parts.push(format!("gutter removed {}", fill_hex(theme, token)))
+                }
+                None => {}
+            }
+            if let Some(token) = mark.edge {
+                parts.push(format!("edge {}", fill_hex(theme, token)));
+            }
+            if let Some(token) = mark.background {
+                parts.push(format!("background {}", fill_hex(theme, token)));
+            }
+            if mark.trailing.is_some() {
+                parts.push(format!("trailing agent pill `{TRAILING}`"));
+            }
+            format!("mark line {}: {}", row + 1, parts.join(", "))
+        })
+        .collect()
+}
+
+fn readout(editor: &CodeEditor, saved: &SharedString, theme: &Theme) -> Vec<String> {
     let buffer = editor.buffer();
     let mut lines = vec![format!(
         "dirty {} | carets {} | last save: {}{}",
@@ -80,8 +162,11 @@ fn readout(editor: &CodeEditor, saved: &SharedString) -> Vec<String> {
         if saved.is_empty() { "none" } else { saved },
         editor
             .failure()
-            .map_or(String::new(), |failure| format!(" | failure: {failure}")),
+            .map_or(String::new(), |(what, error)| format!(
+                " | failure: {what}: {error}"
+            )),
     )];
+    lines.extend(mark_lines(editor.marks(), theme));
     for (index, (anchor, head)) in editor.carets().enumerate() {
         let row = buffer.char_to_line(head).unwrap_or_default();
         let start = buffer.line_to_char(row).unwrap_or_default();
@@ -127,7 +212,7 @@ impl RenderOnce for EditorBlock {
             Ok(editor) => editor.clone(),
             Err(error) => return label(error.to_string(), &theme),
         };
-        let shown = readout(editor.read(cx), &self.saved.borrow());
+        let shown = readout(editor.read(cx), &self.saved.borrow(), &theme);
         div()
             .flex()
             .flex_col()
