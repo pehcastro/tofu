@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use desk_tiling::SHORTCUTS;
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::chip::{chip, mono};
-use desk_ui::components::form::{input, segmented, switch};
+use desk_ui::components::form::{input, segmented, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::paint::tint;
-use desk_ui::components::settings::{SettingRow, Source, key_binding, page_title, setting_group};
+use desk_ui::components::settings::{
+    SettingRow, Source, key_binding, page_title, setting_group, setting_group_clickable,
+};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{ClickEvent, Context, Div, Render, SharedString, Window, div, prelude::*, px};
@@ -85,17 +87,37 @@ impl Rows {
             .child(list.selected(selected))
     }
 
+    fn flip(&mut self, key: &str, cx: &mut Context<Self>) {
+        let found = self
+            .page
+            .page()
+            .groups
+            .iter()
+            .flat_map(|(_, settings)| settings.iter())
+            .find_map(|setting| match setting.control {
+                Control::Switch(start) if setting.key == key => Some((setting.key, start)),
+                _ => None,
+            });
+        let Some((key, start)) = found else {
+            return;
+        };
+        let now = self.flipped.get(key).copied().unwrap_or(start);
+        self.flipped.insert(key, !now);
+        eprintln!("desk: settings {key} {now} -> {}", !now);
+        cx.notify();
+    }
+
     fn row(&self, setting: &'static Setting, theme: &Theme, cx: &mut Context<Self>) -> SettingRow {
         let flipped = self.flipped.get(setting.key).copied();
         let control = match setting.control {
-            Control::Switch(start) => switch(setting.key, "", flipped.unwrap_or(start), theme)
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    let now = this.flipped.get(setting.key).copied().unwrap_or(start);
-                    this.flipped.insert(setting.key, !now);
-                    eprintln!("desk: settings {} {now} -> {}", setting.key, !now);
-                    cx.notify();
-                }))
-                .into_any_element(),
+            Control::Switch(start) => {
+                switch_bare(setting.key, setting.name, flipped.unwrap_or(start), theme)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.flip(setting.key, cx);
+                    }))
+                    .into_any_element()
+            }
             Control::Value(value) => chip(value, None, theme)
                 .font_family(mono(theme))
                 .text_size(px(VALUE_TEXT))
@@ -163,6 +185,7 @@ impl Render for Rows {
         );
         let page = self.page.page();
         let groups = self.groups(&theme, cx);
+        let clickable = self.page != PageId::Keys;
         if self.shown != Some(self.page) {
             self.shown = Some(self.page);
             let count: usize = groups.iter().map(|(_, rows)| rows.len()).sum();
@@ -184,11 +207,18 @@ impl Render for Rows {
                     .map(Into::into),
                 &theme,
             ))
-            .children(
-                groups
-                    .into_iter()
-                    .map(|(label, rows)| setting_group(label, rows, &theme)),
-            );
+            .children(groups.into_iter().map(|(label, rows)| {
+                if clickable {
+                    setting_group_clickable(
+                        label,
+                        rows,
+                        cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
+                        &theme,
+                    )
+                } else {
+                    setting_group(label, rows, &theme)
+                }
+            }));
         let body = shell(
             Header::Title(None, "Settings".into(), Some(scope.into_any_element())),
             &theme,

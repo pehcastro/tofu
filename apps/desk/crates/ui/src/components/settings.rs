@@ -1,8 +1,12 @@
-use gpui::{AnyElement, Div, FontWeight, Rgba, SharedString, div, prelude::*, px};
+use std::rc::Rc;
+
+use gpui::{
+    AnyElement, App, Div, ElementId, FontWeight, Rgba, SharedString, Window, div, prelude::*, px,
+};
 
 use crate::components::card::caption;
 use crate::components::chip::{Tone, kbd};
-use crate::components::paint::{ink, ring, tint};
+use crate::components::paint::{ink, pressed, ring, tint};
 use crate::components::size::T3;
 use crate::theme::{ColorToken, Theme};
 
@@ -151,6 +155,43 @@ pub fn setting_row(row: SettingRow, theme: &Theme) -> Div {
 }
 
 pub fn setting_group(title: impl Into<SharedString>, rows: Vec<SettingRow>, theme: &Theme) -> Div {
+    group_card(
+        title,
+        rows.into_iter()
+            .map(|row| setting_row(row, theme).into_any_element()),
+        theme,
+    )
+}
+
+pub fn setting_group_clickable(
+    title: impl Into<SharedString>,
+    rows: Vec<SettingRow>,
+    on_row_click: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
+    theme: &Theme,
+) -> Div {
+    let on_row_click = Rc::new(on_row_click);
+    let hover = theme.color(ColorToken::StateHover);
+    let rows = rows.into_iter().map(|row| {
+        let id = row.id.clone();
+        let click = on_row_click.clone();
+        pressed(
+            setting_row(row, theme)
+                .id(ElementId::Name(id.clone()))
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover)),
+            theme.color(ColorToken::CardsInnerFill),
+        )
+        .on_click(move |_, window, cx| click(&id, window, cx))
+        .into_any_element()
+    });
+    group_card(title, rows, theme)
+}
+
+fn group_card(
+    title: impl Into<SharedString>,
+    rows: impl IntoIterator<Item = AnyElement>,
+    theme: &Theme,
+) -> Div {
     div()
         .flex()
         .flex_col()
@@ -164,7 +205,7 @@ pub fn setting_group(title: impl Into<SharedString>, rows: Vec<SettingRow>, them
                 .rounded(px(CARD_RADIUS))
                 .bg(tint(theme.color(ColorToken::Shadow), CARD_FILL))
                 .shadow(vec![ring(ink(theme, CARD_RING))])
-                .children(rows.into_iter().map(|row| setting_row(row, theme))),
+                .children(rows),
         )
 }
 

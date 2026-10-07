@@ -1,5 +1,5 @@
 use desk_ui::components::chip::{chip, mono};
-use desk_ui::components::form::{segmented, switch};
+use desk_ui::components::form::{segmented, switch_bare};
 use desk_ui::components::settings::{SettingRow, Source, key_binding, page_title, setting_group};
 use desk_ui::theme::Theme;
 use gpui::{ClickEvent, Context, Div, SharedString, div, prelude::*, px};
@@ -103,7 +103,7 @@ impl SettingsPage {
             .enumerate()
             .map(|(at, &(id, name, about, source))| {
                 let on = self.on.get(at).copied().unwrap_or_default();
-                let control = switch(id, "", on, theme).on_click(cx.listener(
+                let control = switch_bare(id, name, on, theme).on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
                         if let Some(on) = this.settings.on.get_mut(at) {
                             *on = !*on;

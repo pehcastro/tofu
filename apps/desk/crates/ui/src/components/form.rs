@@ -152,6 +152,15 @@ pub fn switch(
     on: bool,
     theme: &Theme,
 ) -> Stateful<Div> {
+    switch_bare(id, label, on, theme).gap_2().child(label)
+}
+
+pub fn switch_bare(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    on: bool,
+    theme: &Theme,
+) -> Stateful<Div> {
     let travel = if on {
         SWITCH_WIDTH - SWITCH_THUMB - 2.0 * SWITCH_INSET
     } else {
@@ -161,7 +170,6 @@ pub fn switch(
         .aria_label(label)
         .flex()
         .items_center()
-        .gap_2()
         .rounded(px(RADIUS_ROW))
         .cursor_pointer()
         .text_size(px(FONT_BODY))
@@ -194,7 +202,6 @@ pub fn switch(
                     .transitions(|transitions| transitions.ml(TOGGLE)),
             ),
         )
-        .child(label)
 }
 
 struct Span {
