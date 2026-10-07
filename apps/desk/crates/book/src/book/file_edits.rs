@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::diff::{FileChange, FileDiff, PatchError};
 use desk_ui::components::file_edits::{EditedFile, FileEdit, file_edits, file_history};
@@ -198,7 +200,9 @@ fn edit(
     Ok(FileEdit {
         agent: Some(SharedString::from(agent.to_owned())),
         at: SharedString::from(at.to_owned()),
-        diff: FileDiff::parse(path.to_owned(), change, patch, |_| Vec::new())?,
+        diff: Rc::new(FileDiff::parse(path.to_owned(), change, patch, |_| {
+            Vec::new()
+        })?),
     })
 }
 

@@ -1,19 +1,22 @@
 use std::rc::Rc;
 
-use gpui::{AnyElement, App, Div, ElementId, SharedString, Stateful, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, App, Div, ElementId, Rgba, SharedString, Stateful, Window, div, prelude::*, px,
+};
 
 use crate::components::card::caption;
-use crate::components::chip::tabular;
-use crate::components::diff::{DiffCard, FileDiff};
+use crate::components::chip::{Tone, mono, tabular};
+use crate::components::diff::{DiffCard, FileChange, FileDiff};
 use crate::components::list::HoverList;
 use crate::components::paint::ink;
 use crate::components::size::{
     DIM_TEXT, FONT_SMALL, FONT_TAB, FONT_WHO, GRID_PAD_X, GRID_ROW, GRID_WHO, ROW_GAP, T1, T2, T3,
 };
-use crate::theme::Theme;
+use crate::theme::{ColorToken, Theme};
 
 const HEAD_ROW: f32 = 25.0;
 const EDITS_COLUMN: f32 = 52.0;
+const COUNTS_COLUMN: f32 = 56.0;
 const WHEN_COLUMN: f32 = 60.0;
 const HISTORY_GAP: f32 = 10.0;
 const EDIT_GAP: f32 = 6.0;
@@ -30,10 +33,28 @@ pub struct EditedFile {
 pub struct FileEdit {
     pub agent: Option<SharedString>,
     pub at: SharedString,
-    pub diff: FileDiff,
+    pub diff: Rc<FileDiff>,
 }
 
 impl EditedFile {
+    fn added(&self) -> usize {
+        self.edits.iter().map(|edit| edit.diff.added()).sum()
+    }
+
+    fn removed(&self) -> usize {
+        self.edits.iter().map(|edit| edit.diff.removed()).sum()
+    }
+
+    fn name_color(&self, theme: &Theme) -> Rgba {
+        let token = match self.edits.last().map(|edit| edit.diff.change()) {
+            None => return ink(theme, T1),
+            Some(FileChange::Added) => ColorToken::GitAdded,
+            Some(FileChange::Deleted) => ColorToken::GitDeleted,
+            Some(FileChange::Modified | FileChange::Renamed { .. }) => ColorToken::GitModified,
+        };
+        theme.color(token)
+    }
+
     fn name_and_dir(&self) -> (SharedString, SharedString) {
         match self.path.rsplit_once('/') {
             Some((dir, name)) => (name.to_owned().into(), format!("{dir}/").into()),
@@ -92,14 +113,34 @@ fn file_row(ix: usize, file: &EditedFile, theme: &Theme) -> Stateful<Div> {
         .cursor_pointer()
         .text_color(ink(theme, T1))
         .child(
-            file_cell().child(name).child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .text_size(px(FONT_WHO))
-                    .text_color(dim)
-                    .child(dir),
-            ),
+            file_cell()
+                .child(div().text_color(file.name_color(theme)).child(name))
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(FONT_WHO))
+                        .text_color(dim)
+                        .child(dir),
+                ),
+        )
+        .child(
+            fixed(COUNTS_COLUMN)
+                .flex()
+                .gap_1p5()
+                .text_size(px(FONT_WHO))
+                .font_family(mono(theme))
+                .font_features(tabular())
+                .child(
+                    div()
+                        .text_color(Tone::Added.color(theme))
+                        .child(format!("+{}", file.added())),
+                )
+                .child(
+                    div()
+                        .text_color(Tone::Deleted.color(theme))
+                        .child(format!("-{}", file.removed())),
+                ),
         )
         .child(
             fixed(GRID_WHO)
@@ -134,6 +175,7 @@ fn head_row(files: &[EditedFile], theme: &Theme) -> Stateful<Div> {
                     .child(format!("{} {noun}", files.len())),
             ),
         )
+        .child(fixed(COUNTS_COLUMN).child(caption("lines", theme)))
         .child(fixed(GRID_WHO).child(caption("by", theme)))
         .child(fixed(EDITS_COLUMN).child(caption("edits", theme)))
         .child(
@@ -217,7 +259,7 @@ pub fn file_history(id: impl Into<ElementId>, file: &EditedFile, theme: &Theme) 
             .flex_col()
             .gap(px(EDIT_GAP))
             .child(edit_line(edit, theme))
-            .child(DiffCard::new(("file-edit", ix), Rc::new(edit.diff.clone())))
+            .child(DiffCard::new(("file-edit", ix), edit.diff.clone()))
     });
     div()
         .id(id)

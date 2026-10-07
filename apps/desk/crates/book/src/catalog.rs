@@ -478,7 +478,7 @@ impl Page {
                 "IWY-4",
                 "components/file_edits.rs, components/diff.rs, components/list.rs",
                 "12 files, one opened; history of 4 edits with a folded context run; added, modified and deleted files; board width",
-                "+ and - per file in the table: FileDiff has no public counts",
+                "hunk count per edit: Hunk is private to diff.rs",
             ),
             Page::Charts => sheet(
                 "charts",

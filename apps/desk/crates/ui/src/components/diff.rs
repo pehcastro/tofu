@@ -277,6 +277,22 @@ fn close(
 }
 
 impl FileDiff {
+    pub fn path(&self) -> &SharedString {
+        &self.path
+    }
+
+    pub fn change(&self) -> &FileChange {
+        &self.change
+    }
+
+    pub fn added(&self) -> usize {
+        self.added
+    }
+
+    pub fn removed(&self) -> usize {
+        self.removed
+    }
+
     pub fn parse(
         path: impl Into<SharedString>,
         change: FileChange,
