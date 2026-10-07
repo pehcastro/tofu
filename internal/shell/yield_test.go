@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 func shellCommand(t *testing.T, dir, command string) *exec.Cmd {
@@ -77,7 +79,7 @@ func TestAStoppedTurnKeepsTheProcessRatherThanWaitingOutTheYield(t *testing.T) {
 	}
 }
 
-func TestPruneDropsWhatExitedAndKeepsWhatRuns(t *testing.T) {
+func TestPruneDropsWhatEndedPastTheKeepWindowAndKeepsWhatRuns(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "shells")
 	registry := OpenAt(dir)
 	running, _, err := registry.Yield(context.Background(), shellCommand(t, t.TempDir(), "sleep 30"), "sleep 30", "", 500*time.Millisecond)
@@ -90,8 +92,14 @@ func TestPruneDropsWhatExitedAndKeepsWhatRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(10 * time.Second)
-	for entry, _ := registry.Read(ended.Name); entry.State == Running && time.Now().Before(deadline); entry, _ = registry.Read(ended.Name) {
+	entry, _ := registry.Read(ended.Name)
+	for ; entry.State == Running && time.Now().Before(deadline); entry, _ = registry.Read(ended.Name) {
 		time.Sleep(50 * time.Millisecond)
+	}
+	pastTheKeepWindow := time.Now().Add(-(konst.FinishedShellKeptHours + 1) * time.Hour)
+	entry.Ended = &pastTheKeepWindow
+	if err := registry.writeLocked(entry); err != nil {
+		t.Fatal(err)
 	}
 	if err := OpenAt(dir).Prune(); err != nil {
 		t.Fatal(err)
