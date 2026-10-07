@@ -1,3 +1,4 @@
+use crate::modules::chat::Find;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::Work;
 use desk_core::control::{Control, TELL_BADGE};
@@ -321,6 +322,7 @@ impl Desk {
         match stroke.key.as_str() {
             "b" => self.toggle_sidebar(cx),
             "k" => self.open_palette(window, cx),
+            "f" => window.dispatch_action(Box::new(Find), cx),
             "," => self.show(SETTINGS, window, cx),
             _ => return,
         }
@@ -392,6 +394,9 @@ impl Render for Desk {
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(Self::global_key))
             .on_key_down(cx.listener(Self::escape))
+            .on_action(|_: &Find, _, _| {
+                eprintln!("desk: find: Ctrl F is not in the focused module, find is chat only");
+            })
             .flex()
             .flex_col()
             .bg(theme.color(ColorToken::SurfaceWindow))

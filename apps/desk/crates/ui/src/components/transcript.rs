@@ -30,6 +30,11 @@ impl Transcript {
         self.list.splice(old, count);
     }
 
+    pub fn reveal(&self, item: usize) {
+        self.list.scroll_to(self.list.logical_scroll_top());
+        self.list.scroll_to_reveal_item(item);
+    }
+
     pub fn pinned(&self) -> bool {
         self.list.is_following_tail()
     }

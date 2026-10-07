@@ -9,16 +9,21 @@ use desk_ui::components::ask::{
 };
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::chat::{
-    Agent, AgentMark, Block, Call, Span, Verdict, agent_list, agent_row, agents, calls, command,
-    fail, folding, foot, lead, note, queued, tools, you,
+    self, Agent, AgentMark, Block, Call, FIND_RESERVE, Hit, Marks, Span, Verdict, agent_list,
+    agent_row, agents, calls, command, fail, find_hits, folding, foot, hit_marks, lead, note,
+    queued, tools, you,
 };
+use desk_ui::components::chip::kbd;
+use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
+use desk_ui::components::size::MENU_PAD;
 use desk_ui::components::transcript::{Transcript, transcript};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, App, Context, Div, Entity, EntityId, Focusable, FollowMode, ListAlignment,
-    ListState, MouseButton, SharedString, Window, div, list, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Entity, EntityId, Focusable, FollowMode,
+    KeyDownEvent, ListAlignment, ListState, MouseButton, SharedString, Window, div, list,
+    prelude::*, px,
 };
 
 use super::Book;
@@ -81,6 +86,21 @@ enum Row {
 impl Row {
     fn folds(&self) -> bool {
         matches!(self, Row::Tools { .. } | Row::Agents { .. })
+    }
+
+    fn pieces(&self) -> Vec<String> {
+        match self {
+            Row::You { text, .. } => vec![(*text).to_owned()],
+            Row::Lead { body, .. } => chat::pieces(body),
+            Row::Queued(_)
+            | Row::Tools { .. }
+            | Row::Agents { .. }
+            | Row::Agent(_)
+            | Row::Command { .. }
+            | Row::Fail { .. }
+            | Row::Note(_)
+            | Row::Foot(_) => Vec::new(),
+        }
     }
 }
 
@@ -676,14 +696,29 @@ impl Column {
         }
     }
 
-    fn frame(&self, book: EntityId, theme: &Theme, below: Option<Div>) -> Div {
+    fn frame(
+        &self,
+        book: EntityId,
+        theme: &Theme,
+        below: Option<Div>,
+        found: (Rc<Vec<Hit>>, usize, bool),
+        over: Option<AnyElement>,
+    ) -> Div {
         let (shown, conversation) = (self.shown.clone(), self.rows.clone());
         let tag = self.tag;
+        let (hits, current, finding) = found;
+        let reserve = if finding {
+            FIND_RESERVE - COLUMN_TOP
+        } else {
+            0.0
+        };
         let rows = list(self.list.clone(), move |at, _, cx| {
             let theme = ActiveTheme::theme(cx);
-            paint(tag, conversation.get(at), at, &shown, book, &theme)
+            let marks = hit_marks(&hits, current, at, &theme);
+            paint(tag, conversation.get(at), at, &marks, &shown, book, &theme)
         })
-        .h(px(COLUMN_HEIGHT))
+        .mt(px(reserve))
+        .h(px(COLUMN_HEIGHT - reserve))
         .w_full();
         let narrow = self.width < BOARD_WIDTH;
         div()
@@ -698,7 +733,9 @@ impl Column {
                     .pt(px(COLUMN_TOP))
                     .pb(px(COLUMN_BOTTOM))
                     .when(narrow, |column| column.px(px(NARROW_PAD)))
-                    .child(rows),
+                    .relative()
+                    .child(rows)
+                    .children(over),
             )
             .child(phase_line((self.tag, u64::MAX), false, "3m 20s", theme))
             .children(below.map(|ask| div().px(px(ASK_MARGIN)).pb(px(ASK_MARGIN)).child(ask)))
@@ -737,6 +774,7 @@ fn paint(
     tag: &'static str,
     row: Option<&Row>,
     at: usize,
+    marks: &[Marks],
     shown: &Rc<RefCell<Shown>>,
     book: EntityId,
     theme: &Theme,
@@ -756,10 +794,11 @@ fn paint(
             *traced,
             attached.map(Into::into),
             at == 0,
+            marks.first().map_or(&[][..], Vec::as_slice),
             theme,
         ),
         Some(Row::Queued(text)) => queued(*text, theme),
-        Some(Row::Lead { time, body }) => lead(*time, body, theme),
+        Some(Row::Lead { time, body }) => lead(*time, body, marks, theme),
         Some(Row::Tools {
             count,
             summary,
@@ -851,6 +890,7 @@ fn streamed(at: usize, theme: &Theme) -> AnyElement {
             false,
             None,
             at == 0,
+            &[],
             theme,
         ),
         1 => command(
@@ -868,6 +908,7 @@ fn streamed(at: usize, theme: &Theme) -> AnyElement {
                 Span::Code(format!("part_{at}.go").into()),
                 Span::Plain(" and moved on.".into()),
             ])],
+            &[],
             theme,
         ),
         3 => note(format!("· row {at} kept in sub-agents"), theme),
@@ -882,11 +923,31 @@ pub(super) struct ChatPage {
     narrow: Column,
     asking: Rc<RefCell<Asking>>,
     stream: Rc<RefCell<Stream>>,
+    find: Entity<FindBar>,
+    hits: Rc<Vec<Hit>>,
+    current: usize,
+    finding: bool,
 }
 
 impl ChatPage {
-    pub(super) fn new(cx: &mut Context<Book>) -> Self {
+    pub(super) fn new(window: &mut Window, cx: &mut Context<Book>) -> Self {
         let rows: Rc<[Row]> = conversation().into();
+        let find = FindBar::new(window, cx);
+        let changed = cx.listener(|book, (query, current): &(String, usize), _, cx| {
+            book.chat.found(query, *current, cx);
+            cx.notify();
+        });
+        let closed = cx.listener(|book, _: &(), _, cx| {
+            book.chat.finding = false;
+            book.chat.hits = Rc::default();
+            cx.notify();
+        });
+        find.update(cx, |bar, _| {
+            bar.on_change(move |query, current, window, cx| {
+                changed(&(query.to_owned(), current), window, cx);
+            });
+            bar.on_close(move |window, cx| closed(&(), window, cx));
+        });
         ChatPage {
             book: cx.entity_id(),
             wide: Column::new("chat-board", BOARD_WIDTH, false, rows.clone()),
@@ -897,7 +958,44 @@ impl ChatPage {
                 count: STREAM_ROWS,
                 said: String::new(),
             })),
+            find,
+            hits: Rc::default(),
+            current: 0,
+            finding: false,
         }
+    }
+
+    fn open_find(&mut self, window: &mut Window, cx: &mut Context<Book>) {
+        self.finding = true;
+        self.find.update(cx, |bar, cx| bar.open(window, cx));
+    }
+
+    fn found(&mut self, query: &str, current: usize, cx: &mut Context<Book>) {
+        self.hits = Rc::new(find_hits(self.wide.rows.iter().map(Row::pieces), query));
+        self.current = current;
+        let total = self.hits.len();
+        self.find.update(cx, |bar, cx| bar.set_total(total, cx));
+        if let Some(hit) = self.hits.get(current) {
+            self.wide.list.scroll_to_reveal_item(hit.item);
+        }
+    }
+
+    fn find_control(&self, theme: &Theme, cx: &mut Context<Book>) -> AnyElement {
+        if self.finding {
+            return self.find.clone().into_any_element();
+        }
+        div()
+            .absolute()
+            .top(px(MENU_PAD))
+            .right(px(MENU_PAD))
+            .child(
+                button("chat-find", "Find", None, ButtonKind::Text, theme)
+                    .child(kbd("Ctrl F", theme))
+                    .on_click(cx.listener(|book, _: &ClickEvent, window, cx| {
+                        book.chat.open_find(window, cx);
+                    })),
+            )
+            .into_any_element()
     }
 
     fn stream(&self, theme: &Theme, window: &mut Window) -> Div {
@@ -977,6 +1075,8 @@ impl ChatPage {
             theme,
         );
         drop(held);
+        let found = (self.hits.clone(), self.current, self.finding);
+        let control = self.find_control(theme, cx);
         div()
             .flex()
             .flex_wrap()
@@ -985,12 +1085,14 @@ impl ChatPage {
             .child(block(
                 "board width: click 7 tools or 35 sub-agents; r replays the last turn; 1, 2, 3 answer",
                 theme,
-                self.wide.frame(self.book, theme, Some(ask)),
+                self.wide
+                    .frame(self.book, theme, Some(ask), found, Some(control)),
             ))
             .child(block(
                 "320 px, folds held open",
                 theme,
-                self.narrow.frame(self.book, theme, None),
+                self.narrow
+                    .frame(self.book, theme, None, (Rc::default(), 0, false), None),
             ))
             .child(block(
                 "transcript: 2000 generated rows; a appends 500; scroll up to unpin, back to the bottom to pin",
@@ -999,7 +1101,27 @@ impl ChatPage {
             ))
     }
 
-    pub(super) fn key(&mut self, key: &str) -> bool {
+    pub(super) fn key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Book>,
+    ) -> bool {
+        let keys = &event.keystroke;
+        let modifiers = keys.modifiers;
+        let ctrl_f = keys.key == "f"
+            && modifiers.control
+            && !modifiers.alt
+            && !modifiers.shift
+            && !modifiers.platform;
+        if ctrl_f {
+            self.open_find(window, cx);
+            return true;
+        }
+        if self.finding {
+            return false;
+        }
+        let key = keys.key.as_str();
         if key == "a" {
             self.stream.borrow_mut().append();
             return true;

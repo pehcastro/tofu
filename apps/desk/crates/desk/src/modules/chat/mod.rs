@@ -15,14 +15,15 @@ use desk_core::protocol::{
     TurnParams, TurnSendParams, TurnSteerParams, request,
 };
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
-use desk_ui::components::chat::fail;
+use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
 use desk_ui::components::composer::{Composer, picker};
+use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
 use desk_ui::components::transcript::{Transcript, transcript};
 use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyView, App, AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, Render, SharedString, Task, Window, div, prelude::*, px,
+    KeyDownEvent, MouseDownEvent, Render, SharedString, Task, Window, actions, div, prelude::*, px,
 };
 
 use cassette::{Replay, Step};
@@ -43,6 +44,8 @@ const DECISIONS: [ApprovalDecision; 3] = [
 ];
 
 type Opened = Result<(Bridge, InitializeResult), BridgeError>;
+
+actions!(desk, [Find]);
 
 enum Link {
     Starting,
@@ -78,6 +81,12 @@ pub struct Chat {
     problem: Option<SharedString>,
     focus: FocusHandle,
     refocus: bool,
+    find: Entity<FindBar>,
+    query: String,
+    hits: Rc<Vec<Hit>>,
+    current: usize,
+    finding: bool,
+    aimed: bool,
     _drain: Option<Task<()>>,
 }
 
@@ -175,6 +184,17 @@ impl Chat {
                 .on_submit(submit)
         });
         cx.observe(&area, |_, _, cx| cx.notify()).detach();
+        let find = FindBar::new(window, cx);
+        let changed = cx.listener(|chat, (query, current): &(String, usize), _, cx| {
+            chat.found(query, *current, cx);
+        });
+        let closed = cx.listener(|chat, _: &(), _, cx| chat.closed(cx));
+        find.update(cx, |bar, _| {
+            bar.on_change(move |query, current, window, cx| {
+                changed(&(query.to_owned(), current), window, cx);
+            });
+            bar.on_close(move |window, cx| closed(&(), window, cx));
+        });
         Chat {
             link,
             store,
@@ -189,8 +209,60 @@ impl Chat {
             problem: None,
             focus: cx.focus_handle(),
             refocus: true,
+            find,
+            query: String::new(),
+            hits: Rc::default(),
+            current: 0,
+            finding: false,
+            aimed: true,
             _drain: None,
         }
+    }
+
+    fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.aimed {
+            cx.propagate();
+            return;
+        }
+        eprintln!("desk: find chat open");
+        self.finding = true;
+        self.find.update(cx, |bar, cx| bar.open(window, cx));
+    }
+
+    fn found(&mut self, query: &str, current: usize, cx: &mut Context<Self>) {
+        query.clone_into(&mut self.query);
+        self.current = current;
+        self.search(cx);
+        match (query.is_empty(), self.hits.get(self.current)) {
+            (true, _) => eprintln!("desk: find chat cleared"),
+            (false, None) => eprintln!("desk: find chat {query} no matches"),
+            (false, Some(hit)) => {
+                self.transcript.reveal(hit.item);
+                eprintln!(
+                    "desk: find chat {query} {} of {}",
+                    self.current + 1,
+                    self.hits.len()
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    fn search(&mut self, cx: &mut Context<Self>) {
+        self.hits = Rc::new(find_hits(self.items.iter().map(items::pieces), &self.query));
+        let total = self.hits.len();
+        if self.current >= total {
+            self.current = 0;
+        }
+        self.find.update(cx, |bar, cx| bar.set_total(total, cx));
+    }
+
+    fn closed(&mut self, cx: &mut Context<Self>) {
+        eprintln!("desk: find closed");
+        self.finding = false;
+        self.query.clear();
+        self.hits = Rc::default();
+        cx.notify();
     }
 
     fn started(
@@ -400,6 +472,9 @@ impl Chat {
                 .map(|(asked_id, asked)| Approval::new(asked_id.clone(), asked, &self.project));
             self.refocus |= shown || self.approval.is_some();
         }
+        if !self.query.is_empty() {
+            self.search(cx);
+        }
         cx.notify();
     }
 
@@ -555,7 +630,7 @@ impl Chat {
 impl Render for Chat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
-        if std::mem::take(&mut self.refocus) {
+        if !self.finding && std::mem::take(&mut self.refocus) {
             match self
                 .approval
                 .as_ref()
@@ -566,7 +641,7 @@ impl Render for Chat {
             }
         }
         let theme = ActiveTheme::theme(cx);
-        let items = self.items.clone();
+        let (items, hits, current) = (self.items.clone(), self.hits.clone(), self.current);
         let rows = transcript(
             "chat-transcript",
             &self.transcript,
@@ -576,9 +651,10 @@ impl Render for Chat {
                 items.get(at).map_or_else(
                     || div().into_any_element(),
                     |item| {
+                        let marks = hit_marks(&hits, current, at, &theme);
                         div()
                             .px(px(ROW_INSET))
-                            .child(items::render(item, at, &theme))
+                            .child(items::render(item, at, &marks, &theme))
                             .into_any_element()
                     },
                 )
@@ -620,12 +696,23 @@ impl Render for Chat {
         div()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|chat, event: &KeyDownEvent, _, cx| chat.key(event, cx)))
+            .on_action(cx.listener(Self::open_find))
+            .capture_any_mouse_down(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = true))
+            .on_mouse_down_out(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = false))
             .relative()
             .size_full()
             .flex()
             .flex_col()
             .pt(px(COLUMN_TOP))
-            .child(div().flex_1().min_h_0().child(rows))
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .when(self.finding, |area| area.pt(px(FIND_RESERVE)))
+                    .child(rows)
+                    .child(self.find.clone()),
+            )
             .child(
                 div()
                     .flex_none()

@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
@@ -8,13 +9,14 @@ use gpui::{
 
 use crate::components::avatar::spinner;
 use crate::components::chip::{file_chip, mono};
+use crate::components::find::{find_ranges, match_highlights};
 use crate::components::glyph::Glyph;
 use crate::components::paint::{glyph, ink, ring, tint};
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
-    FAIL_TINT, FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_TAB, FONT_WHO, FOOT_GAP, FOOT_TEXT,
-    HOVER_TEXT, LEAD_GAP, NOTE_GAP, RADIUS_BUBBLE, RADIUS_CHIP_SMALL, SHELL_TEXT, T1, T3, TOOL_GAP,
-    YOU_GAP, YOU_MAX, YOU_PAD_BOTTOM, YOU_PAD_TOP, YOU_PAD_X,
+    FAIL_TINT, FIELD, FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_TAB, FONT_WHO, FOOT_GAP, FOOT_TEXT,
+    HOVER_TEXT, LEAD_GAP, MENU_PAD, NOTE_GAP, RADIUS_BUBBLE, RADIUS_CHIP_SMALL, SHELL_TEXT, T1, T3,
+    TOOL_GAP, YOU_GAP, YOU_MAX, YOU_PAD_BOTTOM, YOU_PAD_TOP, YOU_PAD_X,
 };
 use crate::metrics::ICON_SMALL;
 use crate::theme::{ColorToken, Theme, WordToken};
@@ -50,6 +52,48 @@ const BULLETS_GAP: f32 = 4.0;
 const BULLET_INDENT: f32 = 20.0;
 const PARA_GAP: f32 = 6.0;
 const CODE_PAD: char = '\u{202f}';
+
+pub type Marks = Vec<(Range<usize>, HighlightStyle)>;
+
+pub const FIND_RESERVE: f32 = MENU_PAD * 4.0 + FIELD;
+
+pub struct Hit {
+    pub item: usize,
+    pub piece: usize,
+    pub range: Range<usize>,
+}
+
+pub fn find_hits(items: impl IntoIterator<Item = Vec<String>>, query: &str) -> Vec<Hit> {
+    let mut hits = Vec::new();
+    for (item, pieces) in items.into_iter().enumerate() {
+        for (piece, text) in pieces.iter().enumerate() {
+            hits.extend(find_ranges(text, query).into_iter().map(|range| Hit {
+                item,
+                piece,
+                range,
+            }));
+        }
+    }
+    hits
+}
+
+pub fn hit_marks(hits: &[Hit], current: usize, item: usize, theme: &Theme) -> Vec<Marks> {
+    let mine: Vec<(usize, &Hit)> = hits
+        .iter()
+        .enumerate()
+        .filter(|(_, hit)| hit.item == item)
+        .collect();
+    let count = mine.iter().map(|(_, hit)| hit.piece + 1).max().unwrap_or(0);
+    (0..count)
+        .map(|piece| {
+            let here: Vec<&(usize, &Hit)> =
+                mine.iter().filter(|(_, hit)| hit.piece == piece).collect();
+            let ranges: Vec<Range<usize>> = here.iter().map(|(_, hit)| hit.range.clone()).collect();
+            let shown = here.iter().position(|(at, _)| *at == current);
+            match_highlights(&ranges, shown, theme)
+        })
+        .collect()
+}
 
 pub struct Call {
     pub tool: SharedString,
@@ -136,6 +180,15 @@ fn who(name: impl IntoElement, time: impl Into<SharedString>, traced: bool, them
         })
 }
 
+fn marked(text: SharedString, marks: &[(Range<usize>, HighlightStyle)]) -> AnyElement {
+    match marks.is_empty() {
+        true => text.into_any_element(),
+        false => StyledText::new(text)
+            .with_highlights(marks.to_vec())
+            .into_any_element(),
+    }
+}
+
 fn bubble(theme: &Theme) -> Div {
     div()
         .min_w_0()
@@ -155,6 +208,7 @@ pub fn you(
     traced: bool,
     attached: Option<SharedString>,
     first: bool,
+    marks: &[(Range<usize>, HighlightStyle)],
     theme: &Theme,
 ) -> Div {
     div()
@@ -174,7 +228,7 @@ pub fn you(
             bubble(theme)
                 .bg(ink(theme, YOU_FILL))
                 .child(who("You", time, traced, theme))
-                .child(text.into()),
+                .child(marked(text.into(), marks)),
         )
 }
 
@@ -194,7 +248,43 @@ fn span_text(span: &Span) -> String {
     }
 }
 
-pub fn prose(spans: &[Span], theme: &Theme) -> StyledText {
+fn mark_runs(runs: Vec<TextRun>, marks: &[(Range<usize>, HighlightStyle)]) -> Vec<TextRun> {
+    let mut marked = Vec::with_capacity(runs.len());
+    let mut start = 0;
+    for run in runs {
+        let end = start + run.len;
+        let mut cuts: Vec<usize> = marks
+            .iter()
+            .flat_map(|(range, _)| [range.start, range.end])
+            .filter(|cut| *cut > start && *cut < end)
+            .chain([end])
+            .collect();
+        cuts.sort_unstable();
+        cuts.dedup();
+        let mut from = start;
+        for cut in cuts {
+            let mut piece = run.clone();
+            piece.len = cut - from;
+            if let Some((_, style)) = marks
+                .iter()
+                .find(|(range, _)| range.start <= from && cut <= range.end)
+            {
+                piece.color = style.color.unwrap_or(piece.color);
+                piece.background_color = style.background_color.or(piece.background_color);
+            }
+            marked.push(piece);
+            from = cut;
+        }
+        start = end;
+    }
+    marked
+}
+
+pub fn prose(
+    spans: &[Span],
+    marks: &[(Range<usize>, HighlightStyle)],
+    theme: &Theme,
+) -> StyledText {
     let body = font(theme.word(WordToken::ShapeFont));
     let code = font(mono(theme));
     let pieces: Vec<String> = spans.iter().map(span_text).collect();
@@ -216,34 +306,68 @@ pub fn prose(spans: &[Span], theme: &Theme) -> StyledText {
             }
         })
         .collect();
-    StyledText::new(pieces.concat()).with_runs(runs)
+    StyledText::new(pieces.concat()).with_runs(mark_runs(runs, marks))
 }
 
-fn block(block: &Block, first: bool, theme: &Theme) -> Div {
+pub fn pieces(body: &[Block]) -> Vec<String> {
+    body.iter()
+        .flat_map(|block| match block {
+            Block::Para(spans) => vec![spans.iter().map(span_text).collect()],
+            Block::Heading(text) => vec![text.to_string()],
+            Block::Bullets(items) => items.iter().map(ToString::to_string).collect(),
+        })
+        .collect()
+}
+
+fn block(block: &Block, first: bool, marks: &[Marks], theme: &Theme) -> Div {
+    let mark = |at: usize| marks.get(at).map_or(&[][..], Vec::as_slice);
     match block {
         Block::Para(spans) => div()
             .when(!first, |para| para.mt(px(PARA_GAP)))
-            .child(prose(spans, theme)),
+            .child(prose(spans, mark(0), theme)),
         Block::Heading(text) => div()
             .mt(px(HEADING_GAP))
             .font_weight(FontWeight::SEMIBOLD)
-            .child(text.clone()),
+            .child(marked(text.clone(), mark(0))),
         Block::Bullets(items) => {
             div()
                 .mt(px(BULLETS_GAP))
                 .flex()
                 .flex_col()
-                .children(items.iter().map(|item| {
+                .children(items.iter().enumerate().map(|(at, item)| {
                     div()
                         .flex()
                         .child(div().flex_none().w(px(BULLET_INDENT)).child("•"))
-                        .child(div().flex_1().min_w_0().child(item.clone()))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(marked(item.clone(), mark(at))),
+                        )
                 }))
         }
     }
 }
 
-pub fn lead(time: impl Into<SharedString>, body: &[Block], theme: &Theme) -> Div {
+pub fn lead(time: impl Into<SharedString>, body: &[Block], marks: &[Marks], theme: &Theme) -> Div {
+    let mut first_piece = 0;
+    let blocks: Vec<Div> = body
+        .iter()
+        .enumerate()
+        .map(|(at, part)| {
+            let drawn = block(
+                part,
+                at == 0,
+                marks.get(first_piece..).unwrap_or(&[]),
+                theme,
+            );
+            first_piece += match part {
+                Block::Bullets(items) => items.len(),
+                Block::Para(_) | Block::Heading(_) => 1,
+            };
+            drawn
+        })
+        .collect();
     div()
         .mt(px(LEAD_GAP))
         .min_w_0()
@@ -251,11 +375,7 @@ pub fn lead(time: impl Into<SharedString>, body: &[Block], theme: &Theme) -> Div
         .line_height(px(CHAT_LINE))
         .text_color(theme.color(ColorToken::TextBase))
         .child(who(agent("lead", theme), time, false, theme))
-        .children(
-            body.iter()
-                .enumerate()
-                .map(|(at, part)| block(part, at == 0, theme)),
-        )
+        .children(blocks)
 }
 
 fn row(theme: &Theme) -> Div {

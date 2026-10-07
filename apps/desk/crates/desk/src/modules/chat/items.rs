@@ -1,7 +1,8 @@
 use desk_core::model::{Role, Session};
 use desk_core::protocol::AgentState;
 use desk_ui::components::chat::{
-    Agent, AgentMark, Block, Span, Verdict, agent_row, command, fail, foot, lead, note, you,
+    self, Agent, AgentMark, Block, Marks, Span, Verdict, agent_row, command, fail, foot, lead,
+    note, you,
 };
 use desk_ui::theme::Theme;
 use gpui::{AnyElement, IntoElement, SharedString};
@@ -157,12 +158,33 @@ fn spans(text: &str) -> Vec<Span> {
         .collect()
 }
 
-pub fn render(item: &Item, at: usize, theme: &Theme) -> AnyElement {
+pub fn pieces(item: &Item) -> Vec<String> {
     match item {
-        Item::You { time, text } => {
-            you(time.clone(), text.clone(), false, None, at == 0, theme).into_any_element()
+        Item::You { text, .. } => vec![text.to_string()],
+        Item::Lead { text, .. } => chat::pieces(&blocks(text)),
+        Item::Tool { .. }
+        | Item::Agent { .. }
+        | Item::Note(_)
+        | Item::Failure(_)
+        | Item::Foot(_) => Vec::new(),
+    }
+}
+
+pub fn render(item: &Item, at: usize, marks: &[Marks], theme: &Theme) -> AnyElement {
+    match item {
+        Item::You { time, text } => you(
+            time.clone(),
+            text.clone(),
+            false,
+            None,
+            at == 0,
+            marks.first().map_or(&[][..], Vec::as_slice),
+            theme,
+        )
+        .into_any_element(),
+        Item::Lead { time, text } => {
+            lead(time.clone(), &blocks(text), marks, theme).into_any_element()
         }
-        Item::Lead { time, text } => lead(time.clone(), &blocks(text), theme).into_any_element(),
         Item::Tool {
             busy,
             text,
