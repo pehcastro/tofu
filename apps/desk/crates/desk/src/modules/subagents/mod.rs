@@ -104,7 +104,11 @@ impl Subagents {
             },
             board::board,
         ));
-        (self.tile, self.screen) = Self::views(&self.board, cx);
+        let board = self.board.clone();
+        self.tile
+            .update(cx, |tile, cx| tile.set_board(board.clone(), cx));
+        self.screen
+            .update(cx, |screen, cx| screen.set_board(board, cx));
         self.expand(self.expanded, cx);
     }
 
