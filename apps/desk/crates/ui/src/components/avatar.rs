@@ -1,7 +1,7 @@
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
-    App, Context, Div, ElementId, FontWeight, Motion, Rgba, SharedString, Window, div, prelude::*,
-    px,
+    App, Context, Div, ElementId, FontWeight, Motion, Rgba, SharedString, Window, div,
+    linear_color_stop, linear_gradient, prelude::*, px,
 };
 
 use crate::components::glyph::Glyph;
@@ -10,9 +10,10 @@ use crate::components::size::{
     AVATAR_FEED, AVATAR_LARGE, AVATAR_LIST, AVATAR_ROW, AVATAR_TINT_FEED, AVATAR_TINT_LIST,
     CAPTION_TEXT, CHECK, CHIP_FILL, DONE_MARK, DONE_OFFSET, FONT_AVATAR_FEED, FONT_AVATAR_LARGE,
     FONT_AVATAR_LIST, FONT_AVATAR_ROW, FONT_SMALL, MARK_RING, RADIUS_CHIP_SMALL, RING_OUTSET,
-    RING_TRACK, SPINNER, SPINNER_TRACK, WAIT_MARK, WAIT_OFFSET,
+    RING_TRACK, SPINNER, SPINNER_TRACK, T1, WAIT_MARK, WAIT_OFFSET,
 };
 use crate::live::ActiveTheme;
+use crate::metrics::{ACCOUNT_GRADIENT_ANGLE, AVATAR};
 use crate::theme::{ColorToken, Theme};
 
 const STACK_OVERLAP: f32 = 0.35;
@@ -21,6 +22,8 @@ const TIP_PAD_X: f32 = 8.0;
 const TIP_PAD_Y: f32 = 4.0;
 const TIP_SHADOW_Y: f32 = 4.0;
 const TIP_SHADOW_BLUR: f32 = 12.0;
+const PERSON_MENU: f32 = 32.0;
+const FONT_PERSON_MENU: f32 = 14.0;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Person {
@@ -339,6 +342,42 @@ pub fn avatar(id: impl Into<ElementId>, agent: &Agent, size: AvatarSize, theme: 
                 theme.color(ColorToken::StatusDanger),
             )),
         })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PersonSize {
+    Title,
+    Menu,
+}
+
+impl PersonSize {
+    fn metrics(self) -> (f32, f32) {
+        match self {
+            PersonSize::Title => (AVATAR, FONT_AVATAR_LIST),
+            PersonSize::Menu => (PERSON_MENU, FONT_PERSON_MENU),
+        }
+    }
+}
+
+pub fn person_avatar(letter: Option<SharedString>, size: PersonSize, theme: &Theme) -> Div {
+    let (side, font) = size.metrics();
+    div()
+        .flex_none()
+        .size(px(side))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .bg(linear_gradient(
+            ACCOUNT_GRADIENT_ANGLE,
+            linear_color_stop(theme.color(ColorToken::AccountFrom), 0.0),
+            linear_color_stop(theme.color(ColorToken::AccountTo), 1.0),
+        ))
+        .text_size(px(font))
+        .line_height(px(side))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(ink(theme, T1))
+        .children(letter)
 }
 
 pub fn spinner(id: impl Into<ElementId>, theme: &Theme) -> impl IntoElement {

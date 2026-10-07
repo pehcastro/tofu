@@ -1,6 +1,8 @@
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
-use desk_ui::components::title_bar::{Title, TitleBar, TitlePick, WindowKeys};
+use desk_ui::components::title_bar::{
+    Account, Notice, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
+};
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, IntoElement, Window, div, prelude::*, px};
 
@@ -9,14 +11,60 @@ use super::kit::named;
 
 const BOARD_WIDTH: f32 = 1400.0;
 const WORKSPACES: [&str; 3] = ["work", "editor", "data"];
+const POP_ROOM: f32 = 250.0;
 
-fn title(account: Option<&str>, unread: bool) -> Title {
+fn board_title(open: Option<TitlePop>) -> Title {
+    let notice = |text: &str, code: Option<&str>, detail: &str, needs_you| Notice {
+        text: text.to_owned().into(),
+        code: code.map(|code| code.to_owned().into()),
+        detail: detail.to_owned().into(),
+        needs_you,
+    };
     Title {
         sidebar_open: true,
         palette_keys: "Ctrl K".into(),
-        unread,
-        account: account.map(Into::into),
+        notices: vec![
+            notice(
+                "quiet-amber-heron wants to run",
+                Some("rm -rf build/"),
+                "waiting 2m \u{b7} opens the approval",
+                true,
+            ),
+            notice(
+                "ts-dev finished: sort order is now by date",
+                None,
+                "12m \u{b7} opens Sub-agents",
+                false,
+            ),
+            notice(
+                "claude-sub \u{b7} work is back in 40m",
+                None,
+                "1h \u{b7} opens Limits",
+                false,
+            ),
+        ],
+        letter: Some("p".into()),
+        account: Some(Account {
+            name: "pehcastro".into(),
+            found: "found through gh and git config".into(),
+            accounts: Some(5),
+        }),
+        whats_new: Some("0.5.1".into()),
         keys: WindowKeys::Shown,
+        open,
+    }
+}
+
+fn empty_title(open: Option<TitlePop>) -> Title {
+    Title {
+        sidebar_open: true,
+        palette_keys: "Ctrl K".into(),
+        notices: Vec::new(),
+        letter: None,
+        account: None,
+        whats_new: None,
+        keys: WindowKeys::Shown,
+        open,
     }
 }
 
@@ -74,6 +122,28 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         cron: 1,
         problem: None,
     };
+    let opened = [
+        (
+            "Title bar, IWIN-1, bell open",
+            "chrome-title-bell",
+            board_title(Some(TitlePop::Notifications)),
+        ),
+        (
+            "Title bar, IWIN-1, account open",
+            "chrome-title-account",
+            board_title(Some(TitlePop::Account)),
+        ),
+        (
+            "Title bar, empty, bell open",
+            "chrome-title-bell-empty",
+            empty_title(Some(TitlePop::Notifications)),
+        ),
+        (
+            "Title bar, empty, account open",
+            "chrome-title-account-empty",
+            empty_title(Some(TitlePop::Account)),
+        ),
+    ];
     div()
         .flex()
         .flex_col()
@@ -83,7 +153,7 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             theme,
             frame(TitleBar::new(
                 "chrome-title-board",
-                title(Some("p"), true),
+                board_title(None),
                 Some(workspaces(theme, cx).into_any_element()),
                 picked_title(cx),
             )),
@@ -93,7 +163,7 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             theme,
             frame(TitleBar::new(
                 "chrome-title-empty",
-                title(None, false),
+                empty_title(None),
                 None,
                 picked_title(cx),
             )),
@@ -116,4 +186,11 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
                 picked_status(cx),
             )),
         ))
+        .children(opened.map(|(name, id, title)| {
+            named(
+                name,
+                theme,
+                frame(TitleBar::new(id, title, None, picked_title(cx))).pb(px(POP_ROOM)),
+            )
+        }))
 }

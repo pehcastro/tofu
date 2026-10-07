@@ -2,30 +2,61 @@ use std::rc::Rc;
 
 use desk_core::control::Control;
 use gpui::{
-    AnyElement, App, ClickEvent, ElementId, FontWeight, SharedString, Window, WindowControlArea,
-    div, linear_color_stop, linear_gradient, prelude::*, px,
+    AnyElement, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, SharedString,
+    Window, WindowControlArea, div, prelude::*, px,
 };
 
 use crate::component::{control, icon, icon_button};
+use crate::components::avatar::{PersonSize, person_avatar};
+use crate::components::card::caption;
+use crate::components::chip::{kbd, mono};
+use crate::components::list::{bare_row, separator};
+use crate::components::overlay::{Align, Placement, Popover, Side};
 use crate::components::paint::ink;
-use crate::components::size::{FONT_AVATAR_LIST, T1};
+use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T2, T3};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{
-    ACCOUNT_GRADIENT_ANGLE, AVATAR, CAPTION_WIDTH, CONTROL, ICON_SMALL, RADIUS_CAPTION, RADIUS_TAB,
-    SIDEBAR_CLOSED_WIDTH, SIDEBAR_WIDTH, TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
+    CAPTION_WIDTH, CONTROL, ICON_SMALL, RADIUS_CAPTION, RADIUS_TAB, SIDEBAR_CLOSED_WIDTH,
+    SIDEBAR_WIDTH, TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
 };
 use crate::theme::{ColorToken, Theme};
 
 const PRODUCT_NAME: &str = "tofu";
 const BELL_DOT: f32 = 6.0;
 const BELL_DOT_INSET: f32 = 6.0;
+const POP_OFFSET: f32 = 4.0;
+const BELL_POP_WIDTH: f32 = 330.0;
+const ACCOUNT_POP_WIDTH: f32 = 250.0;
+const NOTICE_MARK: f32 = 8.0;
+const NOTICE_LINE: f32 = 18.0;
+const ACCOUNT_LINE: f32 = 17.0;
+const POP_CAPTION_X: f32 = 10.0;
+const POP_CAPTION_TOP: f32 = 8.0;
+const POP_CAPTION_GROUP_TOP: f32 = 10.0;
+const POP_CAPTION_BOTTOM: f32 = 6.0;
+const ACCOUNT_HEAD_BOTTOM: f32 = 10.0;
+const DIVIDER_INSET: f32 = 6.0;
+const DIVIDER_GAP: f32 = 4.0;
+const NOTICE_GLYPH: &str = "\u{25cf}";
+const NO_NOTICES: &str = "Nothing has arrived yet.";
+const NO_ACCOUNT: &str = "no account";
+const SETTINGS_KEYS: &str = "ctrl ,";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TitlePick {
     Sidebar,
     NewWorkspace,
     Palette,
+    Notice(usize),
+    Accounts,
+    Settings,
+    WhatsNew,
+    Docs,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TitlePop {
     Notifications,
     Account,
 }
@@ -37,12 +68,30 @@ pub enum WindowKeys {
 }
 
 #[derive(Clone)]
+pub struct Notice {
+    pub text: SharedString,
+    pub code: Option<SharedString>,
+    pub detail: SharedString,
+    pub needs_you: bool,
+}
+
+#[derive(Clone)]
+pub struct Account {
+    pub name: SharedString,
+    pub found: SharedString,
+    pub accounts: Option<usize>,
+}
+
+#[derive(Clone)]
 pub struct Title {
     pub sidebar_open: bool,
     pub palette_keys: SharedString,
-    pub unread: bool,
-    pub account: Option<SharedString>,
+    pub notices: Vec<Notice>,
+    pub letter: Option<SharedString>,
+    pub account: Option<Account>,
+    pub whats_new: Option<SharedString>,
     pub keys: WindowKeys,
+    pub open: Option<TitlePop>,
 }
 
 type OnPick = Rc<dyn Fn(&TitlePick, &mut Window, &mut App)>;
@@ -77,6 +126,191 @@ impl TitleBar {
         let on_pick = self.on_pick.clone();
         move |_, window, cx| on_pick(&pick, window, cx)
     }
+}
+
+struct Opened {
+    pop: Option<TitlePop>,
+    focus: FocusHandle,
+}
+
+fn shut(state: &Entity<Opened>, cx: &mut App) {
+    state.update(cx, |opened, cx| {
+        opened.pop = None;
+        cx.notify();
+    });
+}
+
+#[derive(Clone)]
+struct PopRow {
+    state: Entity<Opened>,
+    on_pick: OnPick,
+}
+
+impl PopRow {
+    fn picked(&self, pick: TitlePick) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+        let PopRow { state, on_pick } = self.clone();
+        move |_, window, cx| {
+            shut(&state, cx);
+            on_pick(&pick, window, cx);
+        }
+    }
+
+    fn body(&self, focus: &FocusHandle) -> Div {
+        let (escaper, outside) = (self.state.clone(), self.state.clone());
+        div()
+            .flex()
+            .flex_col()
+            .mx(px(MENU_PAD - POPOVER_PAD_X))
+            .my(px(MENU_PAD - POPOVER_PAD_Y))
+            .track_focus(focus)
+            .on_key_down(move |event, _, cx| {
+                if event.keystroke.key == "escape" {
+                    cx.stop_propagation();
+                    shut(&escaper, cx);
+                }
+            })
+            .on_mouse_down_out(move |_, _, cx| shut(&outside, cx))
+    }
+}
+
+fn pop_caption(text: &'static str, top: f32, theme: &Theme) -> Div {
+    div()
+        .pt(px(top))
+        .px(px(POP_CAPTION_X))
+        .pb(px(POP_CAPTION_BOTTOM))
+        .child(caption(text, theme))
+}
+
+fn notice_row(ix: usize, notice: &Notice, rows: &PopRow, theme: &Theme) -> impl IntoElement {
+    let mark = match notice.needs_you {
+        true => theme.color(ColorToken::StatusWarn),
+        false => ink(theme, T3),
+    };
+    bare_row(("title-notice", ix), false, false, theme)
+        .items_start()
+        .line_height(px(NOTICE_LINE))
+        .on_click(rows.picked(TitlePick::Notice(ix)))
+        .child(
+            div()
+                .text_size(px(NOTICE_MARK))
+                .text_color(mark)
+                .child(NOTICE_GLYPH),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap_x_1()
+                        .when(!notice.needs_you, |line| line.text_color(ink(theme, T2)))
+                        .child(notice.text.clone())
+                        .children(
+                            notice
+                                .code
+                                .clone()
+                                .map(|code| div().font_family(mono(theme)).child(code)),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(px(FONT_SMALL))
+                        .text_color(ink(theme, T3))
+                        .child(notice.detail.clone()),
+                ),
+        )
+}
+
+fn notices(title: &Title, rows: &PopRow, theme: &Theme) -> Vec<AnyElement> {
+    if title.notices.is_empty() {
+        return vec![
+            bare_row("title-no-notices", false, false, theme)
+                .cursor_default()
+                .text_color(ink(theme, T3))
+                .child(NO_NOTICES)
+                .into_any_element(),
+        ];
+    }
+    let mut out = Vec::new();
+    for (needs_you, name, top) in [
+        (true, "Needs you", POP_CAPTION_TOP),
+        (false, "Earlier", POP_CAPTION_GROUP_TOP),
+    ] {
+        let group: Vec<AnyElement> = title
+            .notices
+            .iter()
+            .enumerate()
+            .filter(|(_, notice)| notice.needs_you == needs_you)
+            .map(|(ix, notice)| notice_row(ix, notice, rows, theme).into_any_element())
+            .collect();
+        if !group.is_empty() {
+            out.push(pop_caption(name, top, theme).into_any_element());
+            out.extend(group);
+        }
+    }
+    out
+}
+
+fn account_menu(title: &Title, rows: &PopRow, theme: &Theme) -> Div {
+    let t3 = ink(theme, T3);
+    let small = |text: SharedString| div().text_size(px(FONT_SMALL)).text_color(t3).child(text);
+    let row = |id: &'static str, pick: TitlePick| {
+        bare_row(id, false, false, theme).on_click(rows.picked(pick))
+    };
+    let (name, found) = match &title.account {
+        Some(account) => (account.name.clone(), Some(account.found.clone())),
+        None => (NO_ACCOUNT.into(), None),
+    };
+    let count = title
+        .account
+        .as_ref()
+        .and_then(|account| account.accounts)
+        .map(|count| small(format!("{count} accounts").into()));
+    div()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(POP_CAPTION_X))
+                .pt(px(POP_CAPTION_TOP))
+                .px(px(POP_CAPTION_X))
+                .pb(px(ACCOUNT_HEAD_BOTTOM))
+                .line_height(px(ACCOUNT_LINE))
+                .child(person_avatar(None, PersonSize::Menu, theme))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(name)
+                        .children(found.map(small)),
+                ),
+        )
+        .child(
+            row("title-accounts", TitlePick::Accounts)
+                .child(div().flex_1().child("Accounts and models"))
+                .children(count),
+        )
+        .child(
+            row("title-settings", TitlePick::Settings)
+                .child(div().flex_1().child("Settings"))
+                .child(kbd(SETTINGS_KEYS, theme)),
+        )
+        .child(separator(theme).mx(px(DIVIDER_INSET)).my(px(DIVIDER_GAP)))
+        .child(pop_caption("Resources", POP_CAPTION_BOTTOM, theme))
+        .children(title.whats_new.clone().map(|version| {
+            row("title-whats-new", TitlePick::WhatsNew)
+                .text_color(ink(theme, T2))
+                .child(format!("What's new in {version}"))
+        }))
+        .child(
+            row("title-docs", TitlePick::Docs)
+                .text_color(ink(theme, T2))
+                .child("Docs"),
+        )
 }
 
 #[derive(Clone, Copy)]
@@ -168,25 +402,6 @@ fn captions(keys: WindowKeys, maximized: bool, theme: &Theme) -> impl IntoElemen
         .child(Caption::Close.button(keys, theme))
 }
 
-fn account(letter: Option<SharedString>, theme: &Theme) -> impl IntoElement {
-    div()
-        .size(px(AVATAR))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_full()
-        .bg(linear_gradient(
-            ACCOUNT_GRADIENT_ANGLE,
-            linear_color_stop(theme.color(ColorToken::AccountFrom), 0.0),
-            linear_color_stop(theme.color(ColorToken::AccountTo), 1.0),
-        ))
-        .text_size(px(FONT_AVATAR_LIST))
-        .line_height(px(AVATAR))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(ink(theme, T1))
-        .children(letter)
-}
-
 impl RenderOnce for TitleBar {
     fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
@@ -202,12 +417,71 @@ impl RenderOnce for TitleBar {
                 .into_any_element(),
         };
         let title = &self.title;
+        let starts_open = title.open;
+        let state = window.use_keyed_state(self.id.clone(), cx, |_, cx| Opened {
+            pop: starts_open,
+            focus: cx.focus_handle(),
+        });
+        let (shown, focus) = {
+            let opened = state.read(cx);
+            (opened.pop, opened.focus.clone())
+        };
+        let rows = PopRow {
+            state: state.clone(),
+            on_pick: self.on_pick.clone(),
+        };
+        let toggle = |pop: TitlePop| {
+            let (state, focus) = (state.clone(), focus.clone());
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                let next = (shown != Some(pop)).then_some(pop);
+                state.update(cx, |opened, cx| {
+                    opened.pop = next;
+                    cx.notify();
+                });
+                if next.is_some() {
+                    window.focus(&focus, cx);
+                }
+            }
+        };
+        let under = Placement {
+            side: Side::Bottom,
+            align: Align::End,
+            offset: POP_OFFSET,
+        };
         let column = if title.sidebar_open {
             SIDEBAR_WIDTH
         } else {
             SIDEBAR_CLOSED_WIDTH
         };
         let warn = theme.color(ColorToken::StatusWarn);
+        let unread = title.notices.iter().any(|notice| notice.needs_you);
+        let bell = icon_button(
+            "notifications",
+            Icon::Bell,
+            Control::Notifications.label(),
+            &theme,
+        )
+        .when(unread, |bell| {
+            bell.child(
+                div()
+                    .absolute()
+                    .top(px(BELL_DOT_INSET))
+                    .right(px(BELL_DOT_INSET))
+                    .size(px(BELL_DOT))
+                    .rounded_full()
+                    .bg(warn),
+            )
+        })
+        .on_click(toggle(TitlePop::Notifications));
+        let account = control("account", Control::Account.label(), &theme)
+            .size(px(CONTROL))
+            .rounded_full()
+            .child(person_avatar(
+                title.letter.clone(),
+                PersonSize::Title,
+                &theme,
+            ))
+            .on_click(toggle(TitlePop::Account));
         div()
             .id(self.id.clone())
             .w_full()
@@ -265,32 +539,18 @@ impl RenderOnce for TitleBar {
                     .on_click(self.picked(TitlePick::Palette)),
             )
             .child(
-                icon_button(
-                    "notifications",
-                    Icon::Bell,
-                    Control::Notifications.label(),
-                    &theme,
-                )
-                .relative()
-                .when(title.unread, |bell| {
-                    bell.child(
-                        div()
-                            .absolute()
-                            .top(px(BELL_DOT_INSET))
-                            .right(px(BELL_DOT_INSET))
-                            .size(px(BELL_DOT))
-                            .rounded_full()
-                            .bg(warn),
-                    )
-                })
-                .on_click(self.picked(TitlePick::Notifications)),
+                Popover::new("title-bell-pop", bell)
+                    .open(shown == Some(TitlePop::Notifications))
+                    .placement(under)
+                    .width(BELL_POP_WIDTH)
+                    .child(rows.body(&focus).children(notices(title, &rows, &theme))),
             )
             .child(
-                control("account", Control::Account.label(), &theme)
-                    .size(px(CONTROL))
-                    .rounded_full()
-                    .child(account(title.account.clone(), &theme))
-                    .on_click(self.picked(TitlePick::Account)),
+                Popover::new("title-account-pop", account)
+                    .open(shown == Some(TitlePop::Account))
+                    .placement(under)
+                    .width(ACCOUNT_POP_WIDTH)
+                    .child(rows.body(&focus).child(account_menu(title, &rows, &theme))),
             )
             .when(!cfg!(target_os = "macos"), |bar| {
                 bar.child(captions(title.keys, window.is_maximized(), &theme))
