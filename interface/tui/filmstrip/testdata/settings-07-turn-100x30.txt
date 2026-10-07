@@ -9,7 +9,7 @@
     Context       08      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      One turn per project                                              ● on    
-  › Turn          12      while one session runs a turn in this project, a turn from any other …    
+  › Turn          13      while one session runs a turn in this project, a turn from any other …    
     Browser       06                                                                                
                           Sub-agents running at once                                      10  ▾     
   NAVIGATE                how many sub-agents may run at once; a spawn past it is refused until…    
@@ -20,11 +20,11 @@
                           Sub-agent check                                               1800  ▾     
                           every this many seconds the lead is sent a check on each running sub-…    
                                                                                                     
+                          Sub-agent watch                                                600  ▾     
+                          a sub-agent call open this many seconds gets a line in the chat sayin…    
+                                                                                                    
                           Check sub-agents                                                 ○ off    
                           the lead checks each sub-agent's work itself before it reports, readi…    
-                                                                                                    
-                          Agent folders                                   tofu,agents,claude  ▾     
-                          the folders sub-agents are read from, in order, as a comma list of to…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

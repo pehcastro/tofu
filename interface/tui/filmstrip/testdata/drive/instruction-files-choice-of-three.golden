@@ -9,7 +9,7 @@
   › Context       08      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
     Shell         05      Thinking                                                          ● on    
-    Turn          12      thinking shows in each agent's sub-agents feed; t there toggles it        
+    Turn          13      thinking shows in each agent's sub-agents feed; t there toggles it        
     Browser       06                                                                                
                           Thinking summary                                        summarized  ▾     
   NAVIGATE                summarized asks Claude for a summary of its thinking; omitted asks fo…    
@@ -39,7 +39,7 @@
   › Context       08     a folder with both AGENTS.md and CLAUDE.md sends    st 200, off shows …    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
-    Turn          12     tokens. Read from the working directory up to its   here toggles it        
+    Turn          13     tokens. Read from the working directory up to its   here toggles it        
     Browser       06     git root; the home directory gives only                                    
                          ~/.tofu/AGENTS.md                                        summarized  ▾     
   NAVIGATE                                                                   g; omitted asks fo…    
@@ -69,7 +69,7 @@
   › Context       08     a folder with both AGENTS.md and CLAUDE.md sends    st 200, off shows …    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
-    Turn          12     tokens. Read from the working directory up to its   here toggles it        
+    Turn          13     tokens. Read from the working directory up to its   here toggles it        
     Browser       06     git root; the home directory gives only                                    
                          ~/.tofu/AGENTS.md                                        summarized  ▾     
   NAVIGATE                                                                   g; omitted asks fo…    
