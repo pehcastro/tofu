@@ -29,10 +29,9 @@ you in both modes unless jev denies it: through `settings`, `write`,
 
 A sub-agent never asks you. Its ask goes to the lead that started it, with
 the call, the verdict and the risk; the lead answers allow or deny within 5
-minutes, or the call is refused. A PreToolUse hook's ask in a sub-agent
-goes to the lead the same way. A sub-agent's call that would wait for
-you is refused outright, and the lead is not asked. `tofu session trace`
-shows the ask.
+minutes, or the call is refused. A PreToolUse hook's ask goes to the lead
+too. A call that would wait for you is refused, and the lead is not asked.
+`tofu session trace` shows the ask.
 
 Every verdict is kept as a row in the decision ledger.
 
