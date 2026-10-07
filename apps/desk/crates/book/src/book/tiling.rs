@@ -15,9 +15,7 @@ use desk_ui::components::empty::{EmptyAction, EmptyHint, empty_state};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::menu_surface;
 use desk_ui::components::paint::{ink, tint};
-use desk_ui::components::size::{
-    FONT_SMALL, FONT_TITLE, HEADER, HEADER_TABBED, RADIUS_CHIP, RADIUS_ROW, T1,
-};
+use desk_ui::components::size::{FONT_SMALL, FONT_TITLE, HEADER, RADIUS_CHIP, RADIUS_ROW, T1};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::icon::Icon;
 use desk_ui::theme::{ColorToken, NumberToken, Theme};
@@ -1205,7 +1203,7 @@ impl TilingPage {
         let tile_menu = solved.iter().find_map(|(stack, rect)| {
             (self.menu == Menu::Into(stack.id)).then(|| {
                 self.spawn_menu(
-                    (rect.x + rect.w - MENU_WIDTH, rect.y + HEADER_TABBED),
+                    (rect.x + rect.w - MENU_WIDTH, rect.y + HEADER),
                     "click adds a tab here; drag places it",
                     theme,
                     cx,

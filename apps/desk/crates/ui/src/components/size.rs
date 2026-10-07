@@ -21,6 +21,7 @@ pub const IGNORED: f32 = 0.42;
 
 pub const TAB: f32 = 28.0;
 pub const TAB_IN_HEADER: f32 = 31.0;
+pub const TAB_IN_TILE: f32 = 24.0;
 pub const TAB_GAP: f32 = 7.0;
 pub const TAB_PAD_LEFT: f32 = 10.0;
 pub const TAB_PAD_LINK: f32 = 6.0;

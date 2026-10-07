@@ -1041,7 +1041,7 @@ impl RenderOnce for TabStrip {
                 let more = (hidden > 0).then(|| {
                     overflow(
                         more_tab(&id, hidden, &theme)
-                            .h(px(TAB_IN_HEADER))
+                            .h_full()
                             .rounded_t(px(RADIUS_TAB))
                             .text_size(px(FONT_TAB)),
                         cx,
@@ -1058,7 +1058,7 @@ impl RenderOnce for TabStrip {
                             &theme,
                             (&on, &shut, press.as_ref()),
                         )
-                        .h(px(TAB_IN_HEADER))
+                        .h_full()
                         .rounded_t(px(RADIUS_TAB))
                         .when(ringed && ix == active, |tab| {
                             tab.shadow(vec![ring(focus_ring)])
@@ -1067,7 +1067,12 @@ impl RenderOnce for TabStrip {
                     .map(|item| pressed(item, backdrop).into_any_element())
                     .chain(more)
                     .collect::<Vec<_>>();
-                let frame = div().flex().items_end().min_w_0().overflow_hidden();
+                let frame = div()
+                    .flex()
+                    .items_stretch()
+                    .h(px(TAB_IN_HEADER))
+                    .min_w_0()
+                    .overflow_hidden();
                 (frame, children, theme.color(ColorToken::TabsFill), top)
             }
             Shape::Header { screens } => {

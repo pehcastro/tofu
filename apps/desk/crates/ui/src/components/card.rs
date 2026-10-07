@@ -8,8 +8,8 @@ use crate::components::glyph::Glyph;
 use crate::components::paint::{drop, glyph, ink, ring, tint, top_light};
 use crate::components::size::{
     CAP2_TRACKING, CAPTION_TEXT, DOT, DOT_SPACING, DOTS_SHARE, FONT_CAP2, FONT_SMALL, HEADER,
-    HEADER_PAD_LEFT, HEADER_PAD_LEFT_TABBED, HEADER_PAD_RIGHT, HEADER_TABBED, INNER_SHADOW_BLUR,
-    RADIUS_CHIP_SMALL, SHELL_TEXT,
+    HEADER_PAD_LEFT, HEADER_PAD_LEFT_TABBED, HEADER_PAD_RIGHT, INNER_SHADOW_BLUR,
+    RADIUS_CHIP_SMALL, SHELL_TEXT, TAB_IN_TILE,
 };
 use crate::icon::Icon;
 use crate::metrics::ICON_SMALL;
@@ -85,10 +85,18 @@ pub fn shell(header: Header, theme: &Theme) -> Div {
             .child(div().flex_1().min_w_0().truncate().child(title))
             .children(trailing),
         Header::Tabs(tabs, trailing) => top
-            .h(px(HEADER_TABBED))
+            .h(px(HEADER))
             .items_end()
             .pl(px(HEADER_PAD_LEFT_TABBED))
-            .child(div().flex_1().min_w_0().flex().items_end().child(tabs))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(TAB_IN_TILE))
+                    .flex()
+                    .flex_col()
+                    .child(tabs),
+            )
             .children(trailing.map(|trailing| div().self_center().child(trailing))),
     };
     outer_card(theme).flex_col().child(top)
