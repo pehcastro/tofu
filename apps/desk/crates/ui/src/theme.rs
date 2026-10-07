@@ -94,6 +94,27 @@ tokens!(ColorToken {
     StateCloseHover => "state.close_hover",
     AccountFrom => "account.from",
     AccountTo => "account.to",
+    CardsInnerFillEnd => "cards.inner.fill_end",
+    CardsInnerShadow => "cards.inner.shadow",
+    CardsDots => "cards.dots",
+    TabsFill => "tabs.fill",
+    TabsHover => "tabs.hover",
+    ButtonFill => "button.fill",
+    ButtonPrimary => "button.primary",
+    ButtonPrimaryText => "button.primary_text",
+    FieldFill => "field.fill",
+    SegmentedFill => "segmented.fill",
+    SegmentedOn => "segmented.on",
+    SwitchOn => "switch.on",
+    SwitchOff => "switch.off",
+    SwitchThumb => "switch.thumb",
+    AvatarRing => "avatar.ring",
+    Trace => "trace",
+    MentionText => "mention.text",
+    ChatYou => "chat.you",
+    ChatCalls => "chat.calls",
+    Separator => "separator",
+    StateCloseBox => "state.close_box",
 });
 
 tokens!(BorderToken {
@@ -108,6 +129,12 @@ tokens!(NumberToken {
     CardsOuterGap => "cards.outer.gap",
     CardsInnerRadius => "cards.inner.radius",
     ShapeBlur => "shape.blur",
+    MotionFast => "motion.fast",
+    MotionBase => "motion.base",
+    MotionEnter => "motion.enter",
+    MotionExit => "motion.exit",
+    MotionTile => "motion.tile",
+    MotionSpin => "motion.spin",
 });
 
 tokens!(FlagToken {
@@ -135,9 +162,44 @@ impl ChoiceToken {
     }
 }
 
-fn known(path: &str) -> bool {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Light,
+    Dark,
+}
+
+impl Mode {
+    pub const ALL: &'static [Self] = &[Mode::Light, Mode::Dark];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Mode::Light => "light",
+            Mode::Dark => "dark",
+        }
+    }
+
+    fn other(self) -> Self {
+        match self {
+            Mode::Light => Mode::Dark,
+            Mode::Dark => Mode::Light,
+        }
+    }
+
+    fn strip(self, path: &str) -> Option<&str> {
+        path.strip_prefix(self.label())?.strip_prefix('.')
+    }
+}
+
+fn paints(path: &str) -> bool {
     ColorToken::ALL.iter().any(|token| token.path() == path)
         || BorderToken::ALL.iter().any(|token| token.path() == path)
+}
+
+fn known(path: &str) -> bool {
+    if let Some(rest) = Mode::ALL.iter().find_map(|mode| mode.strip(path)) {
+        return paints(rest);
+    }
+    paints(path)
         || NumberToken::ALL.iter().any(|token| token.path() == path)
         || FlagToken::ALL.iter().any(|token| token.path() == path)
         || WordToken::ALL.iter().any(|token| token.path() == path)
@@ -146,6 +208,7 @@ fn known(path: &str) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct Theme {
+    mode: Mode,
     colors: Vec<Rgba>,
     borders: Vec<Option<Rgba>>,
     numbers: Vec<f32>,
@@ -155,6 +218,10 @@ pub struct Theme {
 }
 
 impl Theme {
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
     pub fn color(&self, token: ColorToken) -> Rgba {
         self.colors[token as usize]
     }
@@ -194,6 +261,8 @@ pub enum Problem {
     Expected(&'static str, String),
     Unset,
     Watch(String),
+    MissingMode,
+    OnlyIn(Mode),
 }
 
 impl fmt::Display for Problem {
@@ -211,6 +280,8 @@ impl fmt::Display for Problem {
             Problem::Expected(what, got) => write!(f, "expects {what}, got {got}"),
             Problem::Unset => write!(f, "unset"),
             Problem::Watch(error) => write!(f, "cannot watch, {error}"),
+            Problem::MissingMode => write!(f, "missing, a theme carries both light and dark"),
+            Problem::OnlyIn(mode) => write!(f, "missing, set only in {}", mode.label()),
         }
     }
 }
@@ -269,7 +340,8 @@ pub fn parse_layer(
         Some(Value::String(name)) => Some(name),
         Some(other) => return Err(fail("extends", Problem::NotAName(other.to_string()))),
     };
-    if let Some(name) = root.remove("name").filter(|name| !name.is_string()) {
+    let name = root.remove("name");
+    if let Some(name) = name.as_ref().filter(|name| !name.is_string()) {
         problems.push(fail(
             "name",
             Problem::Expected("a string", name.to_string()),
@@ -291,6 +363,22 @@ pub fn parse_layer(
             }
         }
     }
+    let carries = |mode: Mode| tokens.keys().any(|path| mode.strip(path).is_some());
+    for &mode in Mode::ALL {
+        let other = mode.other();
+        if !carries(mode) {
+            if name.is_some() || carries(other) {
+                problems.push(fail(mode.label(), Problem::MissingMode));
+            }
+            continue;
+        }
+        for path in tokens.keys().filter_map(|path| other.strip(path)) {
+            let mine = format!("{}.{path}", mode.label());
+            if !tokens.contains_key(&mine) {
+                problems.push(fail(&mine, Problem::OnlyIn(other)));
+            }
+        }
+    }
     Ok(ParsedLayer {
         layer: Layer {
             file: file.to_owned(),
@@ -301,8 +389,28 @@ pub fn parse_layer(
 }
 
 pub fn build(layers: &[Layer], problems: &mut Vec<ThemeError>) -> Result<Theme, ThemeError> {
-    let chain = Chain(layers);
+    let chain = Chain {
+        layers,
+        mode: Mode::Dark,
+    };
+    let mode = chain.resolve(ChoiceToken::Mode.path(), mode_of, problems)?;
+    build_mode(layers, mode, problems)
+}
+
+pub fn build_mode(
+    layers: &[Layer],
+    mode: Mode,
+    problems: &mut Vec<ThemeError>,
+) -> Result<Theme, ThemeError> {
+    let chain = Chain { layers, mode };
+    let mut choices: Vec<&'static str> = ChoiceToken::ALL
+        .iter()
+        .map(|token| chain.resolve(token.path(), |value| choice(*token, value), problems))
+        .collect::<Result<_, _>>()?;
+    choices[ChoiceToken::Mode as usize] = mode.label();
     Ok(Theme {
+        mode,
+        choices,
         colors: ColorToken::ALL
             .iter()
             .map(|token| chain.resolve(token.path(), color, problems))
@@ -323,24 +431,28 @@ pub fn build(layers: &[Layer], problems: &mut Vec<ThemeError>) -> Result<Theme, 
             .iter()
             .map(|token| chain.resolve(token.path(), word, problems))
             .collect::<Result<_, _>>()?,
-        choices: ChoiceToken::ALL
-            .iter()
-            .map(|token| chain.resolve(token.path(), |value| choice(*token, value), problems))
-            .collect::<Result<_, _>>()?,
     })
 }
 
-struct Chain<'a>(&'a [Layer]);
+struct Chain<'a> {
+    layers: &'a [Layer],
+    mode: Mode,
+}
 
 impl<'a> Chain<'a> {
+    fn get(&self, layer: &'a Layer, path: &str) -> Option<&'a Value> {
+        let moded = format!("{}.{path}", self.mode.label());
+        layer.tokens.get(&moded).or_else(|| layer.tokens.get(path))
+    }
+
     fn resolve<T>(
         &self,
         path: &str,
         parse: impl Fn(&Value) -> Result<T, Problem>,
         problems: &mut Vec<ThemeError>,
     ) -> Result<T, ThemeError> {
-        for layer in self.0 {
-            let Some(value) = layer.tokens.get(path) else {
+        for layer in self.layers {
+            let Some(value) = self.get(layer, path) else {
                 continue;
             };
             match self.follow(path, value).and_then(&parse) {
@@ -348,7 +460,7 @@ impl<'a> Chain<'a> {
                 Err(problem) => problems.push(ThemeError::new(&layer.file, path, problem)),
             }
         }
-        let last = self.0.last().map_or("", |layer| layer.file.as_str());
+        let last = self.layers.last().map_or("", |layer| layer.file.as_str());
         Err(ThemeError::new(last, path, Problem::Unset))
     }
 
@@ -361,9 +473,9 @@ impl<'a> Chain<'a> {
                 return Err(Problem::ReferenceLoop(trail));
             }
             value = self
-                .0
+                .layers
                 .iter()
-                .find_map(|layer| layer.tokens.get(target))
+                .find_map(|layer| self.get(layer, target))
                 .ok_or_else(|| Problem::UnknownReference(target.to_owned()))?;
         }
         Ok(value)
@@ -398,6 +510,14 @@ fn number(value: &Value) -> Result<f32, Problem> {
         .map(|number| number as f32)
         .filter(|number| number.is_finite() && *number >= 0.0)
         .ok_or_else(|| expected("a number, zero or more", value))
+}
+
+fn mode_of(value: &Value) -> Result<Mode, Problem> {
+    Mode::ALL
+        .iter()
+        .copied()
+        .find(|mode| value.as_str() == Some(mode.label()))
+        .ok_or_else(|| expected("light or dark", value))
 }
 
 fn flag(value: &Value) -> Result<bool, Problem> {

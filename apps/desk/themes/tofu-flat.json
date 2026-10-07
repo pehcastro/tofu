@@ -1,11 +1,28 @@
 {
   "name": "Tofu Flat",
   "extends": "tofu-glass",
-  "surface": { "window": "#17161cff" },
+  "mode": "dark",
   "cards": {
-    "outer": { "fill": "#1d1c22", "border": "none", "gap": 0 },
-    "inner": { "fill": "@cards.outer.fill", "border": "none", "highlight": false }
+    "outer": { "gap": 0 },
+    "inner": { "highlight": false }
   },
-  "toast": { "fill": "#24232a", "border": "none" },
-  "shape": { "blur": 0 }
+  "shape": { "blur": 0 },
+  "dark": {
+    "surface": { "window": "#17161cff" },
+    "cards": {
+      "outer": { "fill": "#18171eeb", "border": "none" },
+      "inner": { "fill": "#00000000", "fill_end": "#00000000", "border": "none" }
+    },
+    "toast": { "fill": "#24232a", "border": "none" },
+    "tabs": { "fill": "#ffffff0f" }
+  },
+  "light": {
+    "surface": { "window": "#f4f3f6ff" },
+    "cards": {
+      "outer": { "fill": "#ecebf0ff", "border": "none" },
+      "inner": { "fill": "#00000000", "fill_end": "#00000000", "border": "none" }
+    },
+    "toast": { "fill": "#ffffff", "border": "none" },
+    "tabs": { "fill": "#17161c0f" }
+  }
 }

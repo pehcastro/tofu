@@ -7,7 +7,7 @@ use async_channel::Sender;
 use gpui::{App, Global};
 
 use crate::metrics::THEME_POLL;
-use crate::theme::{Layer, Problem, Theme, ThemeError, build, parse_layer};
+use crate::theme::{Layer, Mode, Problem, Theme, ThemeError, build, build_mode, parse_layer};
 
 const BUILT_IN: &str = include_str!("../../../themes/tofu-glass.json");
 const BUILT_IN_FILE: &str = "built-in tofu-glass.json";
@@ -16,6 +16,7 @@ pub const THEME_VARIABLE: &str = "TOFU_DESK_THEME";
 pub struct ActiveTheme {
     theme: Arc<Theme>,
     problems: Arc<[ThemeError]>,
+    layers: Arc<[Layer]>,
 }
 
 impl Global for ActiveTheme {}
@@ -28,22 +29,33 @@ impl ActiveTheme {
     pub fn problems(cx: &App) -> Arc<[ThemeError]> {
         cx.global::<Self>().problems.clone()
     }
+
+    pub fn mode(cx: &App) -> Mode {
+        cx.global::<Self>().theme.mode()
+    }
 }
 
 struct Loaded {
-    theme: Option<Theme>,
+    layers: Option<Vec<Layer>>,
     problems: Vec<ThemeError>,
     files: Vec<PathBuf>,
 }
 
 pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError> {
     let Loaded {
-        theme,
+        layers,
         mut problems,
         files,
     } = load(&dir, &name);
-    let theme = match theme {
-        Some(theme) => theme,
+    let built = layers.and_then(|layers| match build(&layers, &mut problems) {
+        Ok(theme) => Some((layers, theme)),
+        Err(error) => {
+            problems.insert(0, error);
+            None
+        }
+    });
+    let (layers, theme) = match built {
+        Some(built) => built,
         None => built_in()?,
     };
     let (sender, receiver) = async_channel::unbounded();
@@ -60,6 +72,7 @@ pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError>
     cx.set_global(ActiveTheme {
         theme: Arc::new(theme),
         problems: problems.into(),
+        layers: layers.into(),
     });
     cx.spawn(async move |cx| {
         while let Ok(loaded) = receiver.recv().await {
@@ -70,14 +83,45 @@ pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError>
     Ok(())
 }
 
+pub fn set_mode(mode: Mode, cx: &mut App) -> Result<(), ThemeError> {
+    let current = cx.global::<ActiveTheme>();
+    let layers = current.layers.clone();
+    let mut problems = current.problems.to_vec();
+    let mut fresh = Vec::new();
+    let theme = build_mode(&layers, mode, &mut fresh)?;
+    fresh.retain(|problem| !problems.contains(problem));
+    problems.append(&mut fresh);
+    cx.set_global(ActiveTheme {
+        theme: Arc::new(theme),
+        problems: problems.into(),
+        layers,
+    });
+    cx.refresh_windows();
+    Ok(())
+}
+
 fn apply(loaded: Loaded, cx: &mut App) {
-    let theme = match loaded.theme {
-        Some(theme) => Arc::new(theme),
-        None => ActiveTheme::theme(cx),
+    let Loaded {
+        layers,
+        mut problems,
+        ..
+    } = loaded;
+    let current = cx.global::<ActiveTheme>();
+    let (theme, layers) = match layers.map(|layers| {
+        let built = build_mode(&layers, current.theme.mode(), &mut problems);
+        (built, layers)
+    }) {
+        Some((Ok(theme), layers)) => (Arc::new(theme), layers.into()),
+        Some((Err(error), _)) => {
+            problems.insert(0, error);
+            (current.theme.clone(), current.layers.clone())
+        }
+        None => (current.theme.clone(), current.layers.clone()),
     };
     cx.set_global(ActiveTheme {
         theme,
-        problems: loaded.problems.into(),
+        problems: problems.into(),
+        layers,
     });
     cx.refresh_windows();
 }
@@ -110,30 +154,28 @@ fn stamps(files: &[PathBuf]) -> Vec<Option<SystemTime>> {
         .collect()
 }
 
-fn built_in() -> Result<Theme, ThemeError> {
+fn built_in() -> Result<(Vec<Layer>, Theme), ThemeError> {
     let mut problems = Vec::new();
-    let parsed = parse_layer(BUILT_IN_FILE, BUILT_IN, &mut problems)?;
-    let theme = build(&[parsed.layer], &mut problems)?;
+    let layers = vec![parse_layer(BUILT_IN_FILE, BUILT_IN, &mut problems)?.layer];
+    let theme = build(&layers, &mut problems)?;
     match problems.into_iter().next() {
         Some(problem) => Err(problem),
-        None => Ok(theme),
+        None => Ok((layers, theme)),
     }
 }
 
 fn load(dir: &Path, name: &str) -> Loaded {
     let mut problems = Vec::new();
     let mut files = Vec::new();
-    let theme = match chain(dir, name, &mut files, &mut problems)
-        .and_then(|layers| build(&layers, &mut problems))
-    {
-        Ok(theme) => Some(theme),
+    let layers = match chain(dir, name, &mut files, &mut problems) {
+        Ok(layers) => Some(layers),
         Err(error) => {
             problems.insert(0, error);
             None
         }
     };
     Loaded {
-        theme,
+        layers,
         problems,
         files,
     }
