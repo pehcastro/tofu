@@ -50,7 +50,7 @@ func rememberChain(t *testing.T, answer turn.PersonAnswer) (tools.Remember, *int
 		asked++
 		return answer, nil
 	}
-	return tools.Remember{Ask: ask, Store: store, Session: newerSession, Project: t.TempDir(), Inbox: turn.NewInbox(), Auto: func() bool { return false }, Trust: func() error { return nil }}, &asked
+	return tools.Remember{Ask: ask, Store: store, Session: newerSession, Project: t.TempDir(), Inbox: turn.NewInbox(), Auto: func() bool { return false }}, &asked
 }
 
 func remembered(t *testing.T, tool tools.Remember, statement, quote, kind string) (turn.Result, error) {
@@ -86,17 +86,17 @@ func TestRememberAsksAndKeepsWordsFromAnyMessageOfTheChain(t *testing.T) {
 	tool, asked := rememberChain(t, turn.PersonAllowedOnce)
 	result, err := remembered(t, tool, "cargo runs with at most 2 jobs", "never run cargo with more than 2 jobs", "person")
 	shelves := kept(t, tool)
-	if err != nil || *asked != 1 || len(shelves.Global.Entries) != 1 || !strings.Contains(result.Content, "[memory#m1]") || result.Command != "[memory#m1]" {
-		t.Fatalf("result %+v, err %v, asked %d, global %d: want one ask and m1 kept globally for a person entry", result, err, *asked, len(shelves.Global.Entries))
+	if err != nil || *asked != 1 || len(shelves.Project.Entries) != 1 || !strings.Contains(result.Content, "[memory#m1]") || result.Command != "[memory#m1]" {
+		t.Fatalf("result %+v, err %v, asked %d, project %d: want one ask and m1 kept in the project the answer chose", result, err, *asked, len(shelves.Project.Entries))
 	}
-	if entry := shelves.Global.Entries[0]; entry.Said != "never run cargo with more than 2 jobs" || entry.By != memory.ByLead {
+	if entry := shelves.Project.Entries[0]; entry.Said != "never run cargo with more than 2 jobs" || entry.By != memory.ByLead {
 		t.Errorf("kept %+v, want the quote as said and by lead", entry)
 	}
 	if _, err := remembered(t, tool, "replies stay short", "and keep replies short", "project"); err != nil {
 		t.Fatalf("words typed in a later session, with other spacing, were refused: %v", err)
 	}
-	if shelves := kept(t, tool); len(shelves.Project.Entries) != 1 {
-		t.Errorf("a project entry went to %d project entries", len(shelves.Project.Entries))
+	if shelves := kept(t, tool); len(shelves.Project.Entries) != 2 {
+		t.Errorf("a second project answer went to %d project entries", len(shelves.Project.Entries))
 	}
 }
 

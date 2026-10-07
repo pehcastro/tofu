@@ -100,9 +100,17 @@ func (m *Model) AsksWhereToOverride() bool {
 	return open && entry.Decision.OverridesRule != ""
 }
 
+func (m *Model) AsksToRemember() (string, Decision, bool) {
+	entry, open := m.openAsk()
+	if !open || entry.Decision.Remembers == "" {
+		return "", Decision{}, false
+	}
+	return entry.askID, *entry.Decision, true
+}
+
 func (m *Model) askLines() []string {
 	entry, open := m.openAsk()
-	if !open {
+	if !open || entry.Decision.Remembers != "" {
 		return nil
 	}
 	head := askMarker + entry.Decision.Tool + wantsWord + entry.Body
@@ -113,10 +121,6 @@ func (m *Model) askLines() []string {
 	if overriding := entry.Decision.OverridesRule; overriding != "" {
 		head = askMarker + "override " + overriding + "?"
 		labels = [...]string{"[1] this project", "[2] everywhere", "[3] no"}
-	}
-	if remembers := entry.Decision.Remembers; remembers != "" {
-		head = askMarker + remembers
-		labels = [...]string{"[1] yes", "[2] no", "[3] always"}
 	}
 	id := ""
 	if short := trace.Short(entry.ID); short != "" {

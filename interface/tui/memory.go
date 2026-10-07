@@ -22,7 +22,6 @@ const (
 	memoryEditCommand = "/memory edit "
 	memoryRowHead     = "memory"
 	rememberUsage     = "type /remember and what tofu should keep, like /remember never run cargo with more than 2 jobs"
-	offerTitle        = "Remember this?"
 	offerYes          = "yes"
 	offerNo           = "no"
 	offerAlways       = "always"
@@ -33,19 +32,40 @@ const (
 
 type offerDialog struct {
 	palette.Confirm
-	offer memory.Offer
+	offer     memory.Offer
+	leadAskID string
 }
 
-func newOfferDialog(offer memory.Offer) *offerDialog {
-	where, other := "for you, in every project", "for this project"
+func memoryCard(offer memory.Offer, leadAskID string) *offerDialog {
+	where, other := "in every project", memory.Project
 	if offer.Scope == memory.Project {
-		where, other = other, where
+		where, other = "for this project", memory.Global
 	}
-	return &offerDialog{palette.NewConfirm(offerTitle, offer.Text, where+" · tab: "+other, []palette.Item{
+	title := "Add a " + string(offer.Scope) + " memory?"
+	if leadAskID != "" {
+		title = "[&" + orchestrator + "] wants to add a " + string(offer.Scope) + " memory"
+	}
+	return &offerDialog{palette.NewConfirm(title, "tab: a "+string(other)+" memory instead", offer.Text, []palette.Item{
 		{Title: "Yes", Description: "keep it " + where, Key: "1", ID: offerYes},
 		{Title: "No", Description: "keep nothing", Key: "2", ID: offerNo},
 		{Title: "Always", Description: "keep it, and keep every later one without asking: turns on auto memory", Key: "3", ID: offerAlways},
-	}), offer}
+	}), offer, leadAskID}
+}
+
+func (a *App) showLeadMemoryAsk() {
+	id, decision, asks := a.view.AsksToRemember()
+	alreadyShown, before := false, len(a.dialogs)
+	a.dialogs = slices.DeleteFunc(a.dialogs, func(d dialog) bool {
+		card, isCard := d.(*offerDialog)
+		alreadyShown = alreadyShown || isCard && id != "" && card.leadAskID == id
+		return isCard && card.leadAskID != "" && card.leadAskID != id
+	})
+	if before > 0 && len(a.dialogs) == 0 {
+		a.view.Focus()
+	}
+	if asks && !alreadyShown {
+		a.push(memoryCard(memory.Offer{Text: decision.Remembers, Scope: decision.MemoryScope}, id))
+	}
 }
 
 func (a *App) offerTyped(typed string) tea.Cmd {
@@ -71,7 +91,7 @@ func (a *App) offerMemory(offer memory.Offer) tea.Cmd {
 		a.remember(offer)
 		return nil
 	}
-	return a.push(newOfferDialog(offer))
+	return a.push(memoryCard(offer, ""))
 }
 
 func (d *offerDialog) over(a *App, base string) string { return d.Over(base, a.width, a.height) }
@@ -84,7 +104,7 @@ func (d *offerDialog) key(a *App, msg tea.KeyPressMsg) tea.Cmd {
 		} else {
 			d.offer.Scope = memory.Global
 		}
-		d.Confirm = newOfferDialog(d.offer).Confirm
+		d.Confirm = memoryCard(d.offer, d.leadAskID).Confirm
 		return nil
 	}
 	if answer, pressed := keyed[msg.String()]; pressed {
@@ -101,6 +121,9 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 	if !choice.Done && !choice.Cancelled {
 		return nil
 	}
+	if d.leadAskID != "" {
+		return d.answerLead(a, choice)
+	}
 	if choice.ID == "" || choice.ID == offerNo {
 		a.recordAnswer(memory.AnswerNo)
 		a.view.Append(session.Entry{Kind: session.Note, Body: "not remembered"})
@@ -111,6 +134,23 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 	}
 	if choice.ID == offerAlways {
 		a.trustOffers("auto memory is on, as you answered always")
+	}
+	return a.pop()
+}
+
+func (d *offerDialog) answerLead(a *App, choice palette.Choice) tea.Cmd {
+	answer := Denied
+	if choice.ID == offerYes || choice.ID == offerAlways {
+		answer = AllowedOnce
+		if d.offer.Scope == memory.Global {
+			answer = AlwaysHere
+		}
+	}
+	if choice.ID == offerAlways {
+		a.trustOffers("auto memory is on, as you answered always")
+	}
+	if a.options.Host != nil && a.options.Host.Answer(d.leadAskID, answer) {
+		a.view.Resume(d.leadAskID)
 	}
 	return a.pop()
 }

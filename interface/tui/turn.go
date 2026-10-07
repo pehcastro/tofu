@@ -412,8 +412,10 @@ func (a *App) absorb(event Event) {
 		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
 		a.view.Await(event.ID, event.Tool, event.Text, event.Decision)
+		a.showLeadMemoryAsk()
 	case EventResumed:
 		a.view.Resume(event.ID)
+		a.showLeadMemoryAsk()
 	case EventPersisted:
 		a.recorded(event)
 	case EventSteered:

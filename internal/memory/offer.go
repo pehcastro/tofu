@@ -37,6 +37,13 @@ func OfferFor(typed string) (Offer, bool) {
 	return Offer{Text: text, Said: typed, Kind: KindPerson, Scope: Global}, true
 }
 
+func PersonIn(statement string) (string, bool) {
+	described := regexp.MustCompile(`(?i)\b(?:the\s+(?:person|user|owner|human|developer)|(?:person|user|owner)'s)\b`)
+	named := regexp.MustCompile(`(?:(?i:\b(?:he|she|they))|^\s*\p{Lu}\pL*)\s+(?i:wants?|prefers?|likes?|asks?|asked|said|says|needs?|expects?|hates?|told|keeps)\b`)
+	found := described.FindString(statement) + named.FindString(statement)
+	return found, found != ""
+}
+
 type Answer string
 
 const (

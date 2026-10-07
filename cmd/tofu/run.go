@@ -746,7 +746,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
 	if run.sessions != nil && memoryOn(dir) {
 		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox,
-			Auto: func() bool { return autoMemoryOn(dir) }, Trust: trustMemory})
+			Auto: func() bool { return autoMemoryOn(dir) }})
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))

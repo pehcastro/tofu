@@ -31,7 +31,7 @@ the in-request check, the counting and the cap are code, with no model.
 `--local` sends nothing. With `tofu settings set learn true`, each window is also
 labelled by Jev after the count and bytes are printed, and those labels
 are shown, not acted on, until a calibration backs them, and your own lead
-model writes each memory statement as one instruction, with your words kept
+model writes each memory statement as one rule that names no one, with your words kept
 under it as evidence.
 
 **Drafts describe, they do not quote.** An upstream draft says what

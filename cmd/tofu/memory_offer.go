@@ -22,14 +22,6 @@ func autoMemoryOn(dir string) bool {
 	return on != 0
 }
 
-func trustMemory() error {
-	store, err := openSettings(".")
-	if err != nil {
-		return err
-	}
-	return store.Set(settingspkg.Global, settingspkg.AutoMemory, 1)
-}
-
 func askMemoryOffer(ctx context.Context, typed string) (ledger.Row, error) {
 	built, builder, err := state.BuildMemoryOffer(state.MemoryOfferState{Message: typed})
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/memory"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 )
@@ -155,6 +156,7 @@ type Decision struct {
 	Enforced      bool
 	OverridesRule string
 	Remembers     string
+	MemoryScope   memory.Scope
 }
 
 type PlanState int

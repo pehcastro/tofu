@@ -15,6 +15,7 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
+	"tofu/internal/memory"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -273,7 +274,10 @@ func gateOffEvent(gateErr error) Event {
 func awaitPerson(emit func(Event), book *asks) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
-		var overriding struct{ Rule, Question, Statement, Scope string }
+		var overriding struct {
+			Rule, Question, Statement string
+			Scope                     memory.Scope
+		}
 		if request.Tool == (tools.RuleOverride{}).Name() || request.Tool == turn.RememberToolName {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
@@ -283,7 +287,7 @@ func awaitPerson(emit func(Event), book *asks) turn.Person {
 		id := cmp.Or(decision.ID, session.NewEventID())
 		switch {
 		case overriding.Statement != "":
-			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, Remembers: "remember this, " + overriding.Scope + "? " + overriding.Statement}})
+			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, Remembers: overriding.Statement, MemoryScope: overriding.Scope}})
 		case overriding.Question != "":
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})

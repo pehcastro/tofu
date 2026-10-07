@@ -54,11 +54,16 @@ words it came from. `--replace <id>` rewrites an entry in place, and
 `--dir <project>` names another project.
 
 In the app, a sentence that starts with `remember`, such as `also
-remember that the build is cargo build -j 2`, gets an offer card: `1`
-yes, `2` no, `3` always. `tab` switches between every project and this
-project. Nothing is written until you pick, and `/remember <what>` opens
-the same card. The lead can offer one too, with its `remember` tool, but
-only with words you typed in this conversation; it asks the same three.
+remember that the build is cargo build -j 2`, gets a card titled
+`Add a global memory?` with the statement under it: `1` yes, `2` no,
+`3` always. `tab` switches the title between a global memory, kept in
+every project, and a project memory. Nothing is written until you pick,
+and `/remember <what>` opens the same card. The lead can offer one too,
+with its `remember` tool, but only with words you typed in this
+conversation. Its card is titled `[&orchestrator] wants to add a project
+memory`, takes the same keys, and `esc` is a no. The lead writes the
+statement as the rule itself and names no one: a statement such as
+`The person wants ...` or `<a name> wants ...` is refused, with the reason.
 
 Your first 10 answers are counted. Once 7 of them kept the entry, or you
 answer always, the `autoMemory` setting turns on and an entry is kept at

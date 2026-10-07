@@ -32,9 +32,8 @@ const (
 )
 
 const (
-	forkCarry        = "fork carry"
-	leadTurnEnd      = "lead turn end"
-	statementOpening = "The person wants"
+	forkCarry   = "fork carry"
+	leadTurnEnd = "lead turn end"
 )
 
 var (
@@ -319,7 +318,7 @@ func propose(themes []Theme, known Known) []Proposal {
 		proposal := Proposal{Bucket: BucketApply, Target: TargetMemory, Scope: memory.Global, Said: latest.Text, Session: latest.Session, Places: theme.Places, Themes: []Theme{theme},
 			Text: statement("Said in "+places+" sessions, to hold without being told again: ", directive(theme)+".")}
 		if theme.Mechanism == leadTurnEnd {
-			proposal.Text = "The person wants the lead to decide the next step and keep working, and to ask only what only the person can decide; they corrected a turn that ended asking them in " + places + " sessions."
+			proposal.Text = "Decide the next step and keep working, and ask only what cannot be decided without asking; a turn that ended asking was corrected in " + places + " sessions."
 		}
 		if entry, again := needed(theme, known.Memory, retired); again {
 			proposal.Target, proposal.Scope, proposal.Retire, proposal.Text, proposal.Said = TargetRule, entry.Scope, entry.ID, entry.Text, entry.Said
@@ -378,7 +377,8 @@ func directive(theme Theme) string {
 
 func Statement(reply string) (string, bool) {
 	text := strings.Trim(strings.TrimSpace(reply), `"`)
-	return text, strings.HasPrefix(text, statementOpening) && !strings.ContainsAny(text, "\r\n") && len(text) <= StatementBytes
+	_, named := memory.PersonIn(text)
+	return text, text != "" && !named && !strings.ContainsAny(text, "\r\n") && len(text) <= StatementBytes
 }
 
 func (p Proposal) Prompt() string {
@@ -388,8 +388,9 @@ func (p Proposal) Prompt() string {
 			quotes.WriteString("- " + flat(q.Text) + "\n")
 		}
 	}
-	return "Summarise in one sentence what this user wants from their coding assistant, judging from these chat messages they sent it in different sessions:\n\n" + quotes.String() +
-		"\nStart the sentence with \"" + statementOpening + "\", keep it under " + strconv.Itoa(StatementAskedBytes) + " characters, and reply with that sentence only."
+	return "Write the one rule a coding assistant should follow from now on, judging from these chat messages sent to it in different sessions:\n\n" + quotes.String() +
+		"\nState the rule itself in plain words, imperative or declarative, and name no one: no name, no \"the person\", \"the user\", he or she. Keep it under " +
+		strconv.Itoa(StatementAskedBytes) + " characters, and reply with that sentence only."
 }
 
 func statement(lead, words string) string {
