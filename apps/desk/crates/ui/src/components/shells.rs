@@ -41,15 +41,17 @@ pub enum ShellState {
     Running,
     Failed,
     Waiting,
+    Exited,
 }
 
 impl ShellState {
     fn color(self, theme: &Theme) -> Rgba {
-        theme.color(match self {
-            ShellState::Running => ColorToken::GitAdded,
-            ShellState::Failed => ColorToken::StatusDanger,
-            ShellState::Waiting => ColorToken::StatusWarn,
-        })
+        match self {
+            ShellState::Running => theme.color(ColorToken::GitAdded),
+            ShellState::Failed => theme.color(ColorToken::StatusDanger),
+            ShellState::Waiting => theme.color(ColorToken::StatusWarn),
+            ShellState::Exited => ink(theme, CAPTION_TEXT),
+        }
     }
 }
 

@@ -64,7 +64,7 @@ fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell, since:
         (true, code) => {
             let code = code.and_then(|code| i32::try_from(code).ok()).unwrap_or(-1);
             let state = if code == 0 && !stored.killed {
-                ShellState::Running
+                ShellState::Exited
             } else {
                 ShellState::Failed
             };

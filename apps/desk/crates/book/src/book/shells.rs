@@ -14,6 +14,7 @@ const BOARD_WIDTH: f32 = 640.0;
 const NARROW_WIDTH: f32 = 320.0;
 const HIDDEN_PICK: usize = 4;
 const PORT_PICK: usize = 3;
+const EXITED_PICK: usize = 6;
 
 type Sample = (
     &'static str,
@@ -25,7 +26,7 @@ type Sample = (
     Option<u16>,
 );
 
-const SAMPLES: [Sample; 6] = [
+const SAMPLES: [Sample; 7] = [
     (
         "shell-1",
         ShellState::Running,
@@ -80,6 +81,15 @@ const SAMPLES: [Sample; 6] = [
         "20s",
         None,
     ),
+    (
+        "shell-7",
+        ShellState::Exited,
+        "go build ./...",
+        48511,
+        "lead",
+        "6s",
+        None,
+    ),
 ];
 
 fn output(state: ShellState) -> (Vec<SharedString>, TermStatus) {
@@ -109,6 +119,13 @@ fn output(state: ShellState) -> (Vec<SharedString>, TermStatus) {
             vec!["\x1b[33mwaiting on you\x1b[0m: approve npm run build".into()],
             TermStatus::Running {
                 since: Instant::now(),
+            },
+        ),
+        ShellState::Exited => (
+            vec!["\x1b[2mok\x1b[0m  notes  built in 5.8s".into()],
+            TermStatus::Exited {
+                code: 0,
+                took: Duration::from_millis(5800),
             },
         ),
     }
@@ -188,7 +205,7 @@ impl Tile {
 }
 
 pub(super) struct ShellsPage {
-    tiles: [Tile; 6],
+    tiles: [Tile; 7],
     killed: SharedString,
 }
 
@@ -201,6 +218,7 @@ impl ShellsPage {
                 Tile::new(HIDDEN_PICK, false),
                 Tile::new(0, false),
                 Tile::new(HIDDEN_PICK, false),
+                Tile::new(EXITED_PICK, false),
                 Tile::new(1, true),
             ],
             killed: "on_kill: not called yet".into(),
@@ -220,6 +238,7 @@ impl ShellsPage {
                 "shells-tabs-3",
                 "shells-tabs-4",
                 "shells-tabs-5",
+                "shells-tabs-6",
             ]
             .get(at)
             .copied()
@@ -305,6 +324,12 @@ impl ShellsPage {
             ))
             .child(tile(
                 5,
+                BOARD_WIDTH,
+                "board width: shell-7 picked, exited 0, its dot muted",
+                cx,
+            ))
+            .child(tile(
+                6,
                 BOARD_WIDTH,
                 "board width: N more open, listing every shell",
                 cx,
