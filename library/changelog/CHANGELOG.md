@@ -10,6 +10,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.6-fix1 - 2026-10-07
+
+### Fixed
+
+- **The sub-agents, file edits and shells screens stay responsive on a long session.** On a session of 117 sub-agents and 9,400 events, scrolling the activity feed to its oldest card took 2.7 s a frame and now takes 7 ms; with sub-agents working, every screen took about 80 ms a frame and now takes 6 to 13 ms.
+
 ## 0.5.6 - 2026-10-07
 
 tofu remembers what you tell it, learns from your sessions, and lets the lead run its sub-agents properly.
