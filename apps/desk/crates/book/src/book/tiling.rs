@@ -604,7 +604,6 @@ impl TilingPage {
                     TabEvent::Select(index) => page.switch(index),
                     TabEvent::Close(index) => page.close_workspace(index),
                     TabEvent::New => page.add(),
-                    TabEvent::More => {}
                 }
                 cx.notify();
             }),
@@ -772,7 +771,6 @@ impl TilingPage {
                         workspace.close_module(tile, index, area)
                     }),
                     TabEvent::New => page.menu = Menu::Into(tile),
-                    TabEvent::More => {}
                 }
                 cx.notify();
             }),

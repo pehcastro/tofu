@@ -122,7 +122,7 @@ impl Strip {
             theme,
             cx.listener(move |this, event: &TabEvent, _, cx| {
                 if let Some(strip) = strip(this) {
-                    strip.apply(*event, room);
+                    strip.apply(*event);
                     cx.notify();
                 }
             }),
@@ -145,14 +145,14 @@ impl Strip {
             theme,
             cx.listener(move |this, event: &TabEvent, _, cx| {
                 if let Some(strip) = strip(this) {
-                    strip.apply(*event, usize::MAX);
+                    strip.apply(*event);
                     cx.notify();
                 }
             }),
         )
     }
 
-    fn apply(&mut self, event: TabEvent, room: usize) {
+    fn apply(&mut self, event: TabEvent) {
         let workspaces = self.tabs.len().saturating_sub(self.screens);
         match event {
             TabEvent::Select(at) => self.picked = at,
@@ -167,12 +167,6 @@ impl Strip {
                 self.picked = self.picked.min(self.tabs.len().saturating_sub(1));
             }
             TabEvent::Close(_) => {}
-            TabEvent::More if room < self.tabs.len() => {
-                let tab = self.tabs.remove(room);
-                self.tabs.insert(0, tab);
-                self.picked = 0;
-            }
-            TabEvent::More => {}
             TabEvent::New => {
                 self.made += 1;
                 self.tabs.insert(
@@ -447,7 +441,7 @@ impl ListsState {
                 .child(tile(
                     module,
                     &page.module,
-                    "Room for 4: N more brings the next hidden tab in.",
+                    "Room for 4: N more lists the hidden tabs.",
                 ))
                 .child(tile(roomy, &page.roomy, "Room for all six.")),
             )

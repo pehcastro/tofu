@@ -6,18 +6,19 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use desk_motion::tokens::{EASE_OUT, PANEL_OUT_MS};
 use desk_motion::{Glide, GlideKind, reduced_motion};
 use gpui::{
-    AnyElement, App, Bounds, Corners, Div, ElementId, Entity, MouseButton, Pixels, Point, Rgba,
-    SharedString, Stateful, Window, canvas, div, point, prelude::*, px, size,
+    AnyElement, App, Bounds, Corners, Div, ElementId, Entity, FocusHandle, MouseButton, Pixels,
+    Point, Rgba, SharedString, Stateful, Window, canvas, div, point, prelude::*, px, size,
 };
 
 use crate::component::icon;
 use crate::components::chip::badge;
 use crate::components::glyph::Glyph;
+use crate::components::overlay::Popover;
 use crate::components::paint::{glyph, ink, ms, pressed, ring};
 use crate::components::size::{
-    CAPTION_TEXT, CLOSE_BOX, DIM_TEXT, FONT_BODY, FONT_TAB, HOVER, HTAB_ON, NEW_TAB, RADIUS_ROW,
-    RADIUS_TAB, SCREEN_ON, SCREEN_RING, SHELL_TEXT, TAB, TAB_GAP, TAB_IN_HEADER, TAB_MAX_WIDTH,
-    TAB_PAD_LEFT, TAB_PAD_LINK, TAB_PAD_TAIL, TAB_SEPARATOR,
+    CAPTION_TEXT, CLOSE_BOX, DIM_TEXT, FONT_BODY, FONT_SMALL, FONT_TAB, HOVER, HTAB_ON, NEW_TAB,
+    RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON, SCREEN_RING, SHELL_TEXT, T1, TAB,
+    TAB_GAP, TAB_IN_HEADER, TAB_MAX_WIDTH, TAB_PAD_LEFT, TAB_PAD_LINK, TAB_PAD_TAIL, TAB_SEPARATOR,
 };
 use crate::components::width::Width;
 use crate::icon::Icon;
@@ -26,6 +27,7 @@ use crate::theme::{ColorToken, NumberToken, Theme};
 
 const TRACE_VAR: &str = "DESK_MOTION_TRACE";
 const HEADER_GAP: f32 = 4.0;
+const MORE_LIST_MIN: f32 = 180.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TabMark {
@@ -46,7 +48,6 @@ pub struct Tab {
 pub enum TabEvent {
     Select(usize),
     Close(usize),
-    More,
     New,
 }
 
@@ -209,6 +210,8 @@ struct Motion {
     widths: Vec<(SharedString, Pixels)>,
     more: Pixels,
     fixed: Pixels,
+    listing: bool,
+    list_focus: FocusHandle,
 }
 
 fn close_box(tab: Bounds<Pixels>) -> Bounds<Pixels> {
@@ -230,8 +233,10 @@ fn settled(bounds: Bounds<Pixels>, now: Instant) -> Glide {
 }
 
 impl Motion {
-    fn new() -> Self {
+    fn new(list_focus: FocusHandle) -> Self {
         Self {
+            listing: false,
+            list_focus,
             bounds: Vec::new(),
             pointer: None,
             marker: Glide::new(GlideKind::Eased),
@@ -607,14 +612,7 @@ fn tab_frame(
         .child(content)
 }
 
-fn more_tab(
-    id: &SharedString,
-    hidden: usize,
-    event: TabEvent,
-    theme: &Theme,
-    on: &OnTab,
-) -> Stateful<Div> {
-    let more = on.clone();
+fn more_tab(id: &SharedString, hidden: usize, theme: &Theme) -> Stateful<Div> {
     div()
         .id((id.clone(), usize::MAX - 1))
         .aria_label("More tabs")
@@ -625,8 +623,101 @@ fn more_tab(
         .cursor_pointer()
         .font_weight(gpui::FontWeight::MEDIUM)
         .text_color(ink(theme, DIM_TEXT))
-        .on_click(move |_, window, cx| more(&event, window, cx))
         .child(format!("{hidden} more"))
+}
+
+fn shut_list(state: &Entity<Motion>, cx: &mut App) {
+    state.update(cx, |motion, cx| {
+        if motion.listing {
+            motion.listing = false;
+            cx.notify();
+        }
+    });
+}
+
+fn hidden_row(
+    id: &SharedString,
+    ix: usize,
+    tab: &Tab,
+    theme: &Theme,
+    (state, on): (&Entity<Motion>, &OnTab),
+) -> Stateful<Div> {
+    let hover = ink(theme, HOVER);
+    let (state, on) = (state.clone(), on.clone());
+    div()
+        .id(ElementId::Name(format!("{id}-hidden-{ix}").into()))
+        .flex()
+        .items_center()
+        .gap(px(TAB_GAP))
+        .px(px(ROW_PAD_X))
+        .py(px(ROW_PAD_Y))
+        .rounded(px(RADIUS_ROW))
+        .cursor_pointer()
+        .hover(move |row| row.bg(hover))
+        .text_size(px(FONT_SMALL))
+        .text_color(ink(theme, T1))
+        .on_click(move |_, window, cx| {
+            cx.stop_propagation();
+            shut_list(&state, cx);
+            on(&TabEvent::Select(ix), window, cx)
+        })
+        .children(
+            tab.icon
+                .map(|lead| glyph(lead, ICON_SMALL, ink(theme, DIM_TEXT))),
+        )
+        .child(div().min_w_0().truncate().child(tab.label.clone()))
+}
+
+fn more_list(
+    id: &SharedString,
+    trigger: Stateful<Div>,
+    hidden: &[(usize, &Tab)],
+    (theme, backdrop): (&Theme, Rgba),
+    (state, on): (&Entity<Motion>, &OnTab),
+    cx: &App,
+) -> AnyElement {
+    let Motion {
+        listing,
+        list_focus,
+        ..
+    } = state.read(cx);
+    let (listing, list_focus) = (*listing, list_focus.clone());
+    let (toggler, focus) = (state.clone(), list_focus.clone());
+    let trigger = pressed(
+        trigger.on_click(move |_, window, cx| {
+            toggler.update(cx, |motion, cx| {
+                motion.listing = !listing;
+                cx.notify();
+            });
+            if !listing {
+                window.focus(&focus, cx);
+            }
+        }),
+        backdrop,
+    );
+    let (outside, escaper) = (state.clone(), state.clone());
+    Popover::new(ElementId::Name(format!("{id}-more-list").into()), trigger)
+        .open(listing)
+        .fit(MORE_LIST_MIN)
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .track_focus(&list_focus)
+                .on_key_down(move |event, _, cx| {
+                    if event.keystroke.key == "escape" {
+                        cx.stop_propagation();
+                        shut_list(&escaper, cx);
+                    }
+                })
+                .on_mouse_down_out(move |_, _, cx| shut_list(&outside, cx))
+                .children(
+                    hidden
+                        .iter()
+                        .map(|(ix, tab)| hidden_row(id, *ix, tab, theme, (state, on))),
+                ),
+        )
+        .into_any_element()
 }
 
 fn shown(count: usize, fit: usize, active: usize) -> Vec<usize> {
@@ -836,8 +927,8 @@ impl RenderOnce for TabStrip {
         } = self;
         let reduced = reduced_motion(cx);
         let state =
-            window.use_keyed_state(SharedString::from(format!("{id}-motion")), cx, |_, _| {
-                Motion::new()
+            window.use_keyed_state(SharedString::from(format!("{id}-motion")), cx, |_, cx| {
+                Motion::new(cx.focus_handle())
             });
         let slot = |ix: usize, tab: &Tab| Slot::Tab {
             ix,
@@ -907,6 +998,17 @@ impl RenderOnce for TabStrip {
                 }),
         };
         let backdrop = theme.color(ColorToken::CardsOuterFill);
+        let unseen: Vec<(usize, &Tab)> = tabs
+            .iter()
+            .enumerate()
+            .filter(|(ix, _)| !visible.contains(ix))
+            .collect();
+        if unseen.is_empty() {
+            shut_list(&state, cx);
+        }
+        let overflow = |trigger: Stateful<Div>, cx: &App| {
+            more_list(&id, trigger, &unseen, (&theme, backdrop), (&state, &on), cx)
+        };
         let (frame, children, marker_fill, corners) = match shape {
             Shape::Connected { .. } => {
                 let top = Corners {
@@ -914,10 +1016,15 @@ impl RenderOnce for TabStrip {
                     top_right: px(RADIUS_TAB),
                     ..Corners::default()
                 };
-                let more = more_tab(&id, hidden, TabEvent::More, &theme, &on)
-                    .h(px(TAB_IN_HEADER))
-                    .rounded_t(px(RADIUS_TAB))
-                    .text_size(px(FONT_TAB));
+                let more = (hidden > 0).then(|| {
+                    overflow(
+                        more_tab(&id, hidden, &theme)
+                            .h(px(TAB_IN_HEADER))
+                            .rounded_t(px(RADIUS_TAB))
+                            .text_size(px(FONT_TAB)),
+                        cx,
+                    )
+                });
                 let children = visible
                     .iter()
                     .filter_map(|ix| Some((*ix, tabs.get(*ix)?)))
@@ -932,8 +1039,8 @@ impl RenderOnce for TabStrip {
                         .h(px(TAB_IN_HEADER))
                         .rounded_t(px(RADIUS_TAB))
                     })
-                    .chain((hidden > 0).then_some(more))
                     .map(|item| pressed(item, backdrop).into_any_element())
+                    .chain(more)
                     .collect::<Vec<_>>();
                 let frame = div().flex().items_end().min_w_0().overflow_hidden();
                 (frame, children, theme.color(ColorToken::TabsFill), top)
@@ -955,12 +1062,14 @@ impl RenderOnce for TabStrip {
                     });
                     pressed(item, backdrop).into_any_element()
                 };
-                let more = (0..tabs.len()).find(|ix| !visible.contains(ix)).map(|ix| {
-                    let more = more_tab(&id, hidden, TabEvent::Select(ix), &theme, &on)
-                        .h(px(TAB))
-                        .rounded(px(RADIUS_ROW))
-                        .text_size(px(FONT_BODY));
-                    pressed(more, backdrop).into_any_element()
+                let more = (hidden > 0).then(|| {
+                    overflow(
+                        more_tab(&id, hidden, &theme)
+                            .h(px(TAB))
+                            .rounded(px(RADIUS_ROW))
+                            .text_size(px(FONT_BODY)),
+                        cx,
+                    )
                 });
                 let children = visible
                     .iter()
