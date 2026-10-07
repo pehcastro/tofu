@@ -34,6 +34,9 @@ const (
 	FactSheetLines     = 64
 	CarryActLines      = 10
 
+	CarrySaidBytes        = 24000
+	CarrySaidMessageBytes = 4000
+
 	ForkTailTokens      = 20000
 	ForkTailRoomPercent = 50
 
@@ -349,6 +352,11 @@ const (
 	HookSaidBytes             = 200
 	HookStopContinuations     = 8
 	HookSessionEndMillis      = 1500
+)
+
+const (
+	LeadHandbackContinuations = 1
+	LeadHandbackQuoteBytes    = 400
 )
 
 const (

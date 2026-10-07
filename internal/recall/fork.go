@@ -2,9 +2,11 @@ package recall
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 )
@@ -20,8 +22,11 @@ type CarriedResult struct {
 type Carry struct {
 	Text    string          `json:"text"`
 	Facts   []string        `json:"facts,omitempty"`
+	Said    []string        `json:"said,omitempty"`
 	Results []CarriedResult `json:"results"`
 }
+
+const SaidCarryHeading = "what the person said in this line of sessions, oldest first, each message word for word as one quoted line. it stands until the person says otherwise:\n"
 
 func Crossed(cfg Config, bands Bands, c Conversation) bool {
 	return Measure(cfg, bands, c).Total() > bands.Target()
@@ -133,6 +138,13 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 		text.WriteString(line)
 		text.WriteString("\n")
 	}
+	said := saidSoFar(c)
+	if len(said) > 0 {
+		text.WriteString(SaidCarryHeading)
+		for _, words := range said {
+			text.WriteString(saidMark + strconv.Quote(words) + "\n")
+		}
+	}
 	if snapshots := lastSnapshots(c); len(snapshots) > 0 {
 		text.WriteString(carrySnapshots)
 		for _, snapshot := range snapshots {
@@ -150,8 +162,52 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 	} else {
 		text.WriteString(carryHeldTail)
 	}
-	return Carry{Text: text.String(), Facts: facts, Results: kept}, nil
+	return Carry{Text: text.String(), Facts: facts, Said: said, Results: kept}, nil
 }
+
+const saidMark = "said: "
+
+func saidSoFar(c Conversation) []string {
+	var said []string
+	for _, entry := range c.Entries {
+		_, section, carried := strings.Cut(entry.Text, SaidCarryHeading)
+		switch {
+		case entry.Tool != "":
+		case entry.Said != "":
+			said = append(said, entry.Said)
+		case carried:
+			for _, line := range strings.Split(section, "\n") {
+				quoted, marked := strings.CutPrefix(line, saidMark)
+				if words, err := strconv.Unquote(quoted); marked && err == nil {
+					said = append(said, words)
+				}
+			}
+		}
+	}
+	var kept []string
+	room := konst.CarrySaidBytes
+	for _, words := range slices.Backward(said) {
+		cut := words
+		if len(cut) > konst.CarrySaidMessageBytes {
+			end := konst.CarrySaidMessageBytes - len(saidCutMark)
+			for !utf8.RuneStart(cut[end]) {
+				end--
+			}
+			cut = cut[:end] + saidCutMark
+		}
+		if slices.Contains(kept, cut) {
+			continue
+		}
+		if room -= len(cut); room < 0 {
+			break
+		}
+		kept = append(kept, cut)
+	}
+	slices.Reverse(kept)
+	return kept
+}
+
+const saidCutMark = " ..."
 
 func oneLine(text string, limit int) string {
 	var line strings.Builder

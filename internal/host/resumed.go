@@ -201,8 +201,8 @@ func (l *resumedLead) parkTheRunning() {
 }
 
 func (carry Carry) taskIn(content string) string {
-	if !strings.HasPrefix(content, envOpen) {
-		return content
+	if task, found := turn.TaskIn(content); found {
+		return task
 	}
 	for _, task := range carry.Tasks {
 		if task != "" && strings.HasSuffix(content, task) {

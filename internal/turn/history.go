@@ -55,6 +55,9 @@ func historyOf(messages []llm.Message) recall.Conversation {
 			step++
 		}
 		entry := recall.Entry{Step: step, Text: message.Content}
+		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && slices.Contains([]string{sourceTask, sourceTyped, sourceSteer}, message.Origin.Source) {
+			entry.Said = task
+		}
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 			entry.Text += "\n" + call.Name + " " + string(call.Arguments)

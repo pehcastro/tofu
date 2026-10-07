@@ -14,6 +14,7 @@ switch one of tofu's off, or replace one with your own text.
 
 A rule has an id, a short name in lower case letters, digits and
 underscores, like `no_yaml`. The id is how you switch it off or remove it.
+Each message you type is carried word for word when a session forks.
 
 ## Where it lives
 

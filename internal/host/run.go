@@ -139,6 +139,13 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	h.mu.Unlock()
 	config.Steering = func() []string { return steered(live.Steering, emit) }
+	config.ImagesOf = func(said string) []llm.Image {
+		attached, err := h.takePendingImages(said)
+		if err != nil {
+			say("an image in your message did not read, so the model does not see it: " + err.Error())
+		}
+		return attached
+	}
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	config.Appended = func(logged session.Event) {
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})

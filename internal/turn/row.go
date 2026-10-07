@@ -214,7 +214,7 @@ func messageOf(m MessageRow) (llm.Message, error) {
 		signature = codex.EncodeReasoning(m.Reasoning.ID, m.Reasoning.EncryptedContent)
 	}
 	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
-		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}}
+		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: llm.Origin{Source: m.Origin}}
 	switch m.Role {
 	case session.RoleSystem:
 		message.Role = llm.RoleSystem

@@ -44,6 +44,7 @@ type Entry struct {
 	SupersedeKey string
 	Text         string
 	Handle       string
+	Said         string
 }
 
 type Conversation struct {

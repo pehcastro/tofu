@@ -550,14 +550,14 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	return exitOK
 }
 
-func runEnvironment(opts runOpts) (environment, instructions, notice string) {
+func runEnvironment(opts runOpts) (environment, written, instructions, notice string) {
 	if opts.shell.Resolved() {
 		environment = turn.EnvironmentFromShell(opts.dir, time.Now(), opts.shell)
 	} else {
 		environment = turn.Environment(opts.dir, time.Now())
 	}
 	if opts.noInstructions {
-		return environment, "off by request, and " + turn.InstructionsOff, ""
+		return environment, "", "off by request, and " + turn.InstructionsOff, ""
 	}
 	home, _ := os.UserHomeDir()
 	setting, unreadable := appSetting(opts.dir, settingspkg.ProjectInstructionsCap)
@@ -566,7 +566,6 @@ func runEnvironment(opts runOpts) (environment, instructions, notice string) {
 	instructions = "on, and neither an AGENTS.md nor a CLAUDE.md was found to send"
 	if written != "" {
 		instructions = fmt.Sprintf("on, %d bytes", len(written))
-		environment += "\n\n" + written
 	}
 	var notices []string
 	if unreadable != "" {
@@ -580,7 +579,7 @@ func runEnvironment(opts runOpts) (environment, instructions, notice string) {
 		notices = append(notices, fmt.Sprintf("skipped %s: choose with tofu settings set %s %s, %s or %s", strings.Join(skipped, "; "), settingspkg.InstructionSources,
 			settingspkg.InstructionsAgentsFirst, settingspkg.InstructionsClaudeFirst, settingspkg.InstructionsBoth))
 	}
-	return environment, instructions, strings.Join(notices, "; ")
+	return environment, written, instructions, strings.Join(notices, "; ")
 }
 
 func writeNotice(w io.Writer) func(string) {
@@ -590,6 +589,7 @@ func writeNotice(w io.Writer) func(string) {
 type composedRun struct {
 	opts         runOpts
 	environment  string
+	files        string
 	instructions string
 	composed     turn.Composed
 	subAgents    turn.SubAgents
@@ -609,7 +609,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 			run.notify(notice)
 		}
 	}
-	environment, instructions, notice := runEnvironment(opts)
+	environment, files, instructions, notice := runEnvironment(opts)
 	say(notice)
 	discovered := <-found
 	opts.subAgentList = turn.SubAgentList(discovered.Definitions)
@@ -643,7 +643,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	if err != nil {
 		say("no framework rule fires this run: " + err.Error())
 	}
-	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: environment,
+	subAgents := turn.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.dir, "."), Prompt: turn.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
 		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, WindowTokens: run.budget.WindowTokens, Frameworks: frameworks}}
 	spec := subAgents.Prompt
 	spec.Task, spec.ToolGuidance = opts.task, runSystem(opts)
@@ -656,7 +656,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		spec.Role = rule.RoleOrchestrator
 	}
 	composed, err := turn.Compose(spec)
-	return composedRun{opts: opts, environment: environment, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
+	return composedRun{opts: opts, environment: environment, files: files, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
 		checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
 }
 
@@ -697,6 +697,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		Wire:          opts.wire,
 		System:        composed.Head(),
 		Environment:   composed.WithTaskRules(environment),
+		Instructions:  prompt.files,
 		Caps: turn.Caps{
 			MaxSteps:         opts.maxSteps,
 			LoopGuardRepeats: opts.loopGuardRepeats,
@@ -736,7 +737,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		config.Tools = run.leadTools(append(slices.Clone(built), override))
 		return config, nil, nil
 	}
-	spawner := turn.NewSpawnTool(orchestratorID, config, cmp.Or(run.roster, &subagent.Roster{}))
+	subAgentBase := config
+	subAgentBase.Instructions = ""
+	spawner := turn.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
 	learn := learnBrowserRecipe(run.notify)
@@ -830,13 +833,13 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 	messages := []llm.Message{{Role: llm.RoleUser, Content: config.FirstUserMessage()}}
 	switch opts.wire {
 	case wireKey:
-		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.System}}, messages...)
+		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)
 		return llm.Request{Messages: system, Tools: tools}.Encode(model)
 	case wireCodex, wireMeta:
-		return codex.Request{Model: model, Instructions: config.System, Messages: messages, Tools: tools, Effort: opts.effort}.Encode(nil)
+		return codex.Request{Model: model, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.effort}.Encode(nil)
 	}
 	versions, _ := subFingerprint(opts.dir)
-	return anthropic.Request{Model: model, System: []string{config.System}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode}.Encode(true)
+	return anthropic.Request{Model: model, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode}.Encode(true)
 }
 
 func turnTransportConfig() transport.Config {

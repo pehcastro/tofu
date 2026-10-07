@@ -18,9 +18,9 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	opts, environment, instructions, composed := prompt.opts, prompt.environment, prompt.instructions, prompt.composed
-	system := composed.Head()
-	firstUser := composed.WithTaskRules(environment) + "\n\n" + opts.task
+	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
+	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Environment: composed.WithTaskRules(prompt.environment), Task: opts.task}
+	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
 	fired, widest := 0, 0
@@ -46,6 +46,6 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	_, _ = fmt.Fprintf(out, "\nsystem message, %d bytes\n%s\n", len(system), system)
 	_, _ = fmt.Fprintf(out, "\nfirst user message, %d bytes\n%s\n", len(firstUser), firstUser)
 	_, _ = fmt.Fprintf(out, "\ncomposed system prompt %d bytes against %d uncomposed, %+d bytes\n",
-		len(system), uncomposed, len(system)-uncomposed)
+		len(sent.System), uncomposed, len(sent.System)-uncomposed)
 	return exitOK
 }

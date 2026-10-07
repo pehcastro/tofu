@@ -943,7 +943,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 		t.Fatal(err)
 	}
 	alone, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
-	if !strings.Contains(alone.System+alone.Environment, "[code_rules, from the rule fe_control_states]") {
+	if !strings.Contains(alone.SystemMessage()+alone.FirstUserMessage(), "[code_rules, from the rule fe_control_states]") {
 		t.Error("a run with no sub-agents writes the code itself and lost the code rules")
 	}
 	var aloneTools []string

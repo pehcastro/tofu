@@ -67,11 +67,7 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 	if q.store == nil || q.session == "" {
 		return turn.Result{}, errors.New("quote: this turn is recording no session, so there is no turn to quote")
 	}
-	talk, err := q.store.Conversation(q.session)
-	if err != nil {
-		return turn.Result{}, fmt.Errorf("quote: %w", err)
-	}
-	said, at, err := quotedTurn(talk, hash)
+	talk, said, at, err := q.quotedInChain(hash)
 	if err != nil {
 		return turn.Result{}, err
 	}
@@ -82,6 +78,32 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 		Content: withNote(header+"\n"+body+"\n", note),
 		Command: hash,
 	}, nil
+}
+
+func (q Quote) quotedInChain(hash string) (session.Conversation, session.Utterance, int, error) {
+	newest, err := q.store.Header(q.session)
+	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
+		newest, err = q.store.Header(newest.ForkedInto)
+	}
+	if err != nil {
+		return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w", err)
+	}
+	ancestors, err := q.store.Ancestors(newest.ID)
+	if err != nil {
+		return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w", err)
+	}
+	chain := append([]session.Header{newest}, ancestors...)
+	for _, header := range chain {
+		talk, err := q.store.Conversation(header.ID)
+		if err != nil {
+			return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w", err)
+		}
+		said, at, err := quotedTurn(talk, hash)
+		if !errors.Is(err, session.ErrEventHashNotFound) {
+			return talk, said, at, err
+		}
+	}
+	return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: no turn in the %d sessions of this chain ends with %q: ask for the reference again rather than quoting the nearest turn", len(chain), hash)
 }
 
 func quotedTurn(talk session.Conversation, hash string) (session.Utterance, int, error) {

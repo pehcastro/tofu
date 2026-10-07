@@ -10,6 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Changed
+
+- **Your messages survive every fork word for word.** The carry into a new session lists what you said in this line of sessions, so a correction made before a fork still holds after it.
+
+- **CLAUDE.md is sent once, in the system prompt**, not with every turn and sub-agent report: the first message of a turn started by a report went from 28 KB to 1 KB.
+
+- **The lead runs a next step it can run instead of offering it**, and it no longer ends a reply to you with a verdict line.
+
 ### Added
 
 - **The lead controls its sub-agents.** `subagents` lists the paths each one holds, and with a name reads one's conversation or shows what it is doing now. `message` with `do` stops, kills (its shells too), releases or backs one up, and `from` resumes one from a backup.

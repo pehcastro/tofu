@@ -16,6 +16,8 @@ import (
 
 const (
 	sourceTask          = "task"
+	sourceBrief         = "sub-agent brief"
+	sourceHandback      = "turn end check"
 	sourceTyped         = "typed by the person"
 	sourceSteer         = "steer"
 	sourceStepCapNotice = "step cap notice"
@@ -357,6 +359,9 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		}
 		config.TaskOrigin = originOf(next)
 		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(textsOf(next), "\n\n"), nil, nil, ""
+		if said != "" && config.ImagesOf != nil {
+			config.Images = config.ImagesOf(said)
+		}
 		config.Session = cmp.Or(row.Session, config.Session)
 	}
 }

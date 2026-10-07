@@ -116,6 +116,8 @@ type Config struct {
 	System          string
 	References      map[string]string
 	Environment     string
+	Instructions    string
+	ImagesOf        func(said string) []llm.Image
 	Caps            Caps
 	Sift            *ShellSift
 	Thrift          *ThriftSift
@@ -142,11 +144,36 @@ type Config struct {
 	NewID           func() string
 }
 
-func (c Config) FirstUserMessage() string {
-	if c.Environment == "" {
-		return c.Task
+const (
+	environmentBeforeTheTask = "<env>"
+	TheTaskFollows           = "\n\n[the task]\n"
+	NotesAfterTheTask        = "\n\n[tofu's notes on this task, not the person's words]\n"
+)
+
+func (c Config) FirstUserMessage(notes ...string) string {
+	first := c.Task
+	if c.Environment != "" {
+		first = c.Environment + TheTaskFollows + c.Task
 	}
-	return c.Environment + "\n\n" + c.Task
+	notes = slices.DeleteFunc(notes, func(note string) bool { return strings.TrimSpace(note) == "" })
+	if len(notes) == 0 {
+		return first
+	}
+	return first + NotesAfterTheTask + strings.Join(notes, "\n\n")
+}
+
+func (c Config) SystemMessage() string {
+	return strings.TrimSpace(c.System + "\n\n" + c.Instructions)
+}
+
+func TaskIn(first string) (string, bool) {
+	if _, task, follows := strings.Cut(first, TheTaskFollows); follows {
+		first = task
+	} else if strings.HasPrefix(first, environmentBeforeTheTask) {
+		return "", false
+	}
+	task, _, _ := strings.Cut(first, NotesAfterTheTask)
+	return task, true
 }
 
 func Run(ctx context.Context, config Config) (Row, error) {
@@ -276,12 +303,12 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
-	if config.System != "" {
-		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: config.System})
+	if system := config.SystemMessage(); system != "" {
+		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
 	}
 	afterSystem := len(messages)
 	messages = append(messages, config.History...)
-	first, concluding, taken := config.FirstUserMessage(), "", ""
+	concluding, taken := "", ""
 	for _, tool := range config.Tools.tools {
 		if spawner, spawning := tool.(*SpawnTool); spawning {
 			concluding = spawner.cleanReport(config.Task)
@@ -298,11 +325,12 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		prompted := fire(hook.Input{Event: hook.UserPromptSubmit, Prompt: config.Task})
 		promptRefused, hookContext = prompted.Block, strings.TrimSpace(hookContext+"\n\n"+prompted.Context)
 	}
-	if note := strings.TrimSpace(concluding + taken + "\n\n" + hookContext); note != "" {
-		first += "\n\n" + note
+	first := config.FirstUserMessage(concluding+taken, hookContext)
+	taskOrigin, taskSource := config.TaskOrigin, sourceTask
+	if config.SpawnedFrom != "" {
+		taskSource = sourceBrief
 	}
-	taskOrigin := config.TaskOrigin
-	taskOrigin.Source, taskOrigin.TakenAt = cmp.Or(taskOrigin.Source, sourceTask), start
+	taskOrigin.Source, taskOrigin.TakenAt = cmp.Or(taskOrigin.Source, taskSource), start
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images, Origin: taskOrigin})
 
 	var written, shadowed sync.WaitGroup
@@ -426,7 +454,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return fail(errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused))
 	}
 	guard := newLoopGuard(config.Caps)
-	forks, recordedGrants, stopContinuations := 0, 0, 0
+	forks, recordedGrants, stopContinuations, handbacks := 0, 0, 0, 0
 	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
 		ended := row
 		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
@@ -486,7 +514,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
-				messages = append(messages, inserted(sourceSteer, steered, time.Time{}))
+				said := inserted(sourceSteer, steered, time.Time{})
+				if config.ImagesOf != nil {
+					said.Images = config.ImagesOf(steered)
+				}
+				messages = append(messages, said)
 			}
 		}
 		if config.Inbox != nil {
@@ -595,6 +627,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 			if blocked != "" {
 				row.Warnings = append(row.Warnings, "the turn ended with a "+string(stop)+" hook still blocking after "+strconv.Itoa(stopContinuations)+" continuations: "+blocked)
+			}
+			if offered := handedBack(decision.Content); offered != "" && config.SpawnedFrom == "" && concluding == "" && handbacks < konst.LeadHandbackContinuations {
+				handbacks++
+				stepRow.Warnings = append(stepRow.Warnings, "the lead ended by handing the person a step, so it was asked to take it: "+offered)
+				messages = append(messages, inserted(sourceHandback, handbackNote(offered), time.Time{}))
+				keep(stepRow)
+				continue
 			}
 			keep(stepRow)
 			return finish(OutcomeStopped), nil
