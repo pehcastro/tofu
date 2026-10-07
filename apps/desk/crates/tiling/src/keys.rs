@@ -10,6 +10,11 @@ pub enum Action {
     Lock,
     Undo,
     Cancel,
+    CloseTab,
+    ReopenTab,
+    NextTab,
+    PrevTab,
+    Split,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -49,7 +54,7 @@ const CTRL_SHIFT: Mods = Mods {
     ..CTRL
 };
 
-pub const SHORTCUTS: [Shortcut; 10] = [
+pub const SHORTCUTS: [Shortcut; 15] = [
     Shortcut {
         action: Action::NewWorkspace,
         mods: CTRL,
@@ -119,6 +124,41 @@ pub const SHORTCUTS: [Shortcut; 10] = [
         key: Key::Named("escape"),
         keys: "Escape",
         label: "cancel a drag or unzoom",
+    },
+    Shortcut {
+        action: Action::CloseTab,
+        mods: CTRL,
+        key: Key::Named("w"),
+        keys: "Ctrl W",
+        label: "close tab",
+    },
+    Shortcut {
+        action: Action::ReopenTab,
+        mods: CTRL_SHIFT,
+        key: Key::Named("t"),
+        keys: "Ctrl Shift T",
+        label: "reopen closed tab",
+    },
+    Shortcut {
+        action: Action::NextTab,
+        mods: CTRL,
+        key: Key::Named("tab"),
+        keys: "Ctrl Tab",
+        label: "next tab",
+    },
+    Shortcut {
+        action: Action::PrevTab,
+        mods: CTRL_SHIFT,
+        key: Key::Named("tab"),
+        keys: "Ctrl Shift Tab",
+        label: "previous tab",
+    },
+    Shortcut {
+        action: Action::Split,
+        mods: CTRL,
+        key: Key::Named("\\"),
+        keys: "Ctrl \\",
+        label: "split tile",
     },
 ];
 

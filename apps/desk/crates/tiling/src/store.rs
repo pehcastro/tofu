@@ -350,7 +350,7 @@ impl<'a> Parser<'a> {
                 None => return Err("the layout ends inside a tile".to_owned()),
             }
         }
-        if active >= modules.len() {
+        if active >= modules.len().max(1) {
             return Err(format!(
                 "a tile with {} modules has active index {active}",
                 modules.len()

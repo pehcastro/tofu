@@ -438,6 +438,25 @@ impl TilingPage {
             Action::Lock => self.toggle_lock(),
             Action::Undo => self.apply(true, |workspace, _| workspace.undo()),
             Action::Cancel => return self.cancel(),
+            Action::CloseTab => {
+                let Some(tile) = self.aimed_tile() else {
+                    return false;
+                };
+                self.apply(true, |workspace, area| {
+                    workspace.focus_tile(tile)?.close_tab(area)
+                });
+            }
+            Action::Split => {
+                let Some(tile) = self.aimed_tile() else {
+                    return false;
+                };
+                self.apply(true, |workspace, area| {
+                    workspace.focus_tile(tile)?.split(area)
+                });
+            }
+            Action::ReopenTab => self.apply(true, |workspace, area| workspace.reopen(area)),
+            Action::NextTab => self.apply(false, |workspace, _| workspace.step_tab(true)),
+            Action::PrevTab => self.apply(false, |workspace, _| workspace.step_tab(false)),
         }
         true
     }

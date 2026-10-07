@@ -1,7 +1,8 @@
 use crate::solve::{corners, dividers, least, spans};
 use crate::{
-    Axis, Corner, Divider, EDGE_BAR, HISTORY_DEPTH, MAX_TILES, Module, Node, Part, Preset, Rect,
-    Refusal, SLACK, STRIP_HEIGHT, STRIP_WIDTH, Side, Size, Stack, Target, TileId, Zone, solve,
+    Axis, CLOSED_DEPTH, Corner, Divider, EDGE_BAR, HISTORY_DEPTH, MAX_TILES, Module, Node, Part,
+    Preset, Rect, Refusal, SLACK, STRIP_HEIGHT, STRIP_WIDTH, Side, Size, Stack, Target, TileId,
+    Zone, solve,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +40,7 @@ pub struct Workspace {
     focus: Option<TileId>,
     zoom: Option<TileId>,
     history: Vec<Option<Node>>,
+    closed: Vec<(Module, usize)>,
     next: u32,
 }
 
@@ -138,14 +140,16 @@ fn reach(tree: Option<&Node>, divider: &Divider) -> Result<Reach, Refusal> {
     })
 }
 
-fn pruned(node: Node) -> Option<Node> {
+fn pruned(node: Node, tile: TileId) -> Option<Node> {
     match node {
-        Node::Tile(stack) => (!stack.modules.is_empty()).then_some(Node::Tile(stack)),
+        Node::Tile(stack) => {
+            (stack.id != tile || !stack.modules.is_empty()).then_some(Node::Tile(stack))
+        }
         Node::Split { axis, parts } => {
             let mut parts: Vec<Part> = parts
                 .into_iter()
                 .filter_map(|part| {
-                    pruned(part.node).map(|node| Part {
+                    pruned(part.node, tile).map(|node| Part {
                         size: part.size,
                         node,
                     })
@@ -287,6 +291,14 @@ fn centre(rect: Rect) -> (f32, f32) {
     (rect.x + rect.w / 2.0, rect.y + rect.h / 2.0)
 }
 
+fn longer_side(rect: Rect) -> Side {
+    if rect.w > rect.h {
+        Side::Right
+    } else {
+        Side::Bottom
+    }
+}
+
 impl Workspace {
     pub fn new(name: impl Into<String>, preset: Preset) -> Self {
         let mut next = 0;
@@ -310,6 +322,7 @@ impl Workspace {
             focus,
             zoom: None,
             history: Vec::new(),
+            closed: Vec::new(),
             next,
         };
         workspace.settle();
@@ -446,14 +459,9 @@ impl Workspace {
         candidates.sort_by(|a, b| (b.1.w * b.1.h).total_cmp(&(a.1.w * a.1.h)));
         let mut refusal = Refusal::NoSuchTile;
         for (stack, rect) in candidates {
-            let side = if rect.w > rect.h {
-                Side::Right
-            } else {
-                Side::Bottom
-            };
             let placed = place(
                 Some(tree.clone()),
-                Target::Tile(stack.id, Zone::Side(side)),
+                Target::Tile(stack.id, Zone::Side(longer_side(rect))),
                 fresh.clone(),
             )
             .and_then(|tree| self.with_new(tree, area, fresh.id));
@@ -568,7 +576,11 @@ impl Workspace {
         };
         let fresh =
             Workspace::restore(name, Preset::Empty, false, Some(Node::Tile(moved)), None, 1);
-        Ok((self.close_tile(tile, area)?, fresh))
+        let left = Workspace {
+            closed: self.closed.clone(),
+            ..self.close_tile(tile, area)?
+        };
+        Ok((left, fresh))
     }
 
     pub fn move_to(
@@ -605,7 +617,7 @@ impl Workspace {
             modules: vec![module],
             active: 0,
         };
-        let tree = place(pruned(tree), target, fresh)?;
+        let tree = place(pruned(tree, tile), target, fresh)?;
         let focus = match target {
             Target::Tile(on, Zone::Stack { .. }) => on,
             Target::Tile(_, Zone::Side(_)) | Target::Edge(_) => id,
@@ -673,23 +685,22 @@ impl Workspace {
             .find(|(stack, _)| stack.id == tile)
             .ok_or(Refusal::NoSuchTile)?;
         let mut tree = tree.clone();
+        let mut removed = Vec::new();
         let found = walk_mut(&mut tree, &mut |stack| {
             if stack.id != tile || module.is_some_and(|module| module >= stack.modules.len()) {
                 return false;
             }
-            match module {
-                Some(module) => {
-                    stack.modules.remove(module);
-                }
-                None => stack.modules.clear(),
-            }
+            removed = match module {
+                Some(module) => vec![(stack.modules.remove(module), module)],
+                None => stack.modules.drain(..).zip(0..).collect(),
+            };
             stack.active = stack.active.min(stack.modules.len().saturating_sub(1));
             true
         });
         if !found {
             return Err(Refusal::NoSuchTile);
         }
-        let tree = pruned(tree);
+        let tree = pruned(tree, tile);
         let (cx, cy) = centre(gone);
         let focus = tree.as_ref().and_then(|tree| {
             solve(tree, area)
@@ -708,7 +719,95 @@ impl Workspace {
         } else {
             self.focus
         };
-        Ok(self.changed(tree, focus))
+        let mut next = self.changed(tree, focus);
+        next.closed.extend(removed);
+        let excess = next.closed.len().saturating_sub(CLOSED_DEPTH);
+        next.closed.drain(..excess);
+        Ok(next)
+    }
+
+    pub fn close_tab(&self, area: Rect) -> Result<Self, Refusal> {
+        if self.locked {
+            return Err(Refusal::Locked);
+        }
+        let focus = self.focus.ok_or(Refusal::NoSuchTile)?;
+        let stack = self.stack(focus).ok_or(Refusal::NoSuchTile)?;
+        if stack.modules.is_empty() {
+            self.close_tile(focus, area)
+        } else {
+            self.close_module(focus, stack.active, area)
+        }
+    }
+
+    pub fn reopen(&self, area: Rect) -> Result<Self, Refusal> {
+        let mut closed = self.closed.clone();
+        let (module, at) = closed.pop().ok_or(Refusal::NothingClosed)?;
+        let mut next = match self.focus {
+            Some(tile) => self.open_at(module, Target::Tile(tile, Zone::Stack { at }), area),
+            None => self.open(module, area),
+        }?;
+        next.closed = closed;
+        Ok(next)
+    }
+
+    pub fn step_tab(&self, forward: bool) -> Result<Self, Refusal> {
+        let mut tabs = Vec::new();
+        let mut pending: Vec<&Node> = self.tree.iter().collect();
+        while let Some(node) = pending.pop() {
+            match node {
+                Node::Tile(stack) if stack.modules.is_empty() => tabs.push((stack.id, None)),
+                Node::Tile(stack) => {
+                    tabs.extend((0..stack.modules.len()).map(|index| (stack.id, Some(index))))
+                }
+                Node::Split { parts, .. } => {
+                    pending.extend(parts.iter().rev().map(|part| &part.node))
+                }
+            }
+        }
+        if !forward {
+            tabs.reverse();
+        }
+        let current = self.focus.and_then(|focus| self.stack(focus)).map(|stack| {
+            (
+                stack.id,
+                (!stack.modules.is_empty()).then_some(stack.active),
+            )
+        });
+        let here = tabs.iter().position(|tab| Some(*tab) == current);
+        let (tile, module) = tabs
+            .iter()
+            .cycle()
+            .nth(here.map_or(0, |here| here + 1))
+            .copied()
+            .ok_or(Refusal::NoSuchTile)?;
+        let mut next = match module {
+            Some(module) => self.activate(tile, module)?,
+            None => self.focus_tile(tile)?,
+        };
+        if next.zoom.is_some() {
+            next.zoom = next.focus;
+        }
+        Ok(next)
+    }
+
+    pub fn split(&self, area: Rect) -> Result<Self, Refusal> {
+        if self.locked {
+            return Err(Refusal::Locked);
+        }
+        if count(self.tree.as_ref()) >= MAX_TILES {
+            return Err(Refusal::TooMany);
+        }
+        let focus = self.focus.ok_or(Refusal::NoSuchTile)?;
+        let rect = self.focused_rect(area).ok_or(Refusal::NoSuchTile)?;
+        let fresh = Stack {
+            id: TileId(self.next),
+            modules: Vec::new(),
+            active: 0,
+        };
+        let id = fresh.id;
+        let target = Target::Tile(focus, Zone::Side(longer_side(rect)));
+        let tree = place(self.tree.clone(), target, fresh)?;
+        self.with_new(tree, area, id)
     }
 
     pub fn corners(&self, area: Rect) -> Vec<Corner> {

@@ -20,6 +20,7 @@ pub const STRIP_HEIGHT: f32 = 240.0;
 pub const STRIP_WIDTH: f32 = 360.0;
 pub const NUDGE: f32 = 32.0;
 pub const HISTORY_DEPTH: usize = 50;
+pub const CLOSED_DEPTH: usize = 10;
 pub const HEADER_ZONE: f32 = 40.0;
 pub const CORNER_ZONE: f32 = 16.0;
 pub const HOLD: f32 = 12.0;
@@ -279,6 +280,7 @@ pub enum Refusal {
     Locked,
     NoSuchTile,
     NoHistory,
+    NothingClosed,
 }
 
 impl fmt::Display for Refusal {
@@ -292,6 +294,7 @@ impl fmt::Display for Refusal {
             Refusal::Locked => write!(f, "this workspace is locked, so it takes no new tiles"),
             Refusal::NoSuchTile => write!(f, "there is no tile there"),
             Refusal::NoHistory => write!(f, "there is nothing to undo"),
+            Refusal::NothingClosed => write!(f, "there is no closed tab to reopen"),
         }
     }
 }

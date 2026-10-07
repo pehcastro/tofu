@@ -4,7 +4,7 @@ use std::rc::Rc;
 use desk_core::model::Store;
 use desk_tiling::{
     self as tiling, Action, DRAG_THRESHOLD, Divider, HEADER_ZONE, Mods, Module, NUDGE, Preset,
-    Rect, Refusal, SHORTCUTS, Side, Stack, Store as Layouts, Target, TileId, Workspace,
+    Rect, Refusal, SHORTCUTS, Side, Stack, Store as Layouts, Target, TileId, Workspace, Zone,
 };
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::empty::{EmptyAction, EmptyHint, empty_state};
@@ -15,7 +15,8 @@ use desk_ui::theme::Theme;
 use gpui::{
     AnyElement, AnyView, App, AppContext, Context, CursorStyle, Div, Entity, FocusHandle,
     Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, Point, Render, SharedString, WeakEntity, Window, div, prelude::*, px,
+    MouseUpEvent, Pixels, Point, Render, SharedString, Stateful, WeakEntity, Window, div,
+    prelude::*, px,
 };
 
 use crate::modules::chat::cassette::{Replay, Step};
@@ -222,6 +223,20 @@ impl Work {
                 tiles.join("; ")
             );
         }
+        if let Some(stack) = self
+            .workspace
+            .focus()
+            .and_then(|id| self.workspace.stack(id))
+        {
+            eprintln!(
+                "desk: work: focus tile {} {}",
+                stack.id.0,
+                stack
+                    .modules
+                    .get(stack.active)
+                    .map_or("empty", Module::name)
+            );
+        }
     }
 
     fn save(&self, area: Rect) {
@@ -350,6 +365,14 @@ impl Work {
                 Ok(next)
             }
             Action::Undo => self.workspace.undo(),
+            Action::CloseTab => {
+                self.focus.focus(window, cx);
+                self.workspace.close_tab(area)
+            }
+            Action::ReopenTab => self.workspace.reopen(area),
+            Action::NextTab => self.workspace.step_tab(true),
+            Action::PrevTab => self.workspace.step_tab(false),
+            Action::Split => self.workspace.split(area),
         };
         self.commit(next, area, cx);
     }
@@ -504,6 +527,9 @@ impl Work {
 
     fn header(&self, stack: &Stack, area: Rect, theme: &Theme, cx: &mut Context<Self>) -> Header {
         let tile = stack.id;
+        if stack.modules.is_empty() {
+            return Header::Title(None, "Empty tile".into(), None);
+        }
         if let [module] = stack.modules.as_slice() {
             let session = (*module == Module::Chat)
                 .then(|| self.session(cx))
@@ -577,7 +603,7 @@ impl Work {
         )
     }
 
-    fn empty(&self, area: Rect, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    fn empty(&self, tile: Option<TileId>, theme: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
         let actions: Vec<EmptyAction> = OPENABLE
             .iter()
             .map(|module| EmptyAction {
@@ -588,15 +614,23 @@ impl Work {
             .collect();
         let hints: Vec<EmptyHint> = SHORTCUTS
             .iter()
+            .filter(|_| tile.is_none())
             .map(|shortcut| EmptyHint {
                 keys: shortcut.keys.into(),
                 label: shortcut.label.into(),
             })
             .collect();
+        let (id, title) = match tile {
+            None => ("work-empty-workspace".into(), "Empty workspace"),
+            Some(tile) => (
+                SharedString::from(format!("work-empty-tile-{}", tile.0)),
+                "Empty tile",
+            ),
+        };
         let this = cx.weak_entity();
-        place(div(), area, area).child(empty_state(
-            "work-empty-workspace",
-            "Empty workspace",
+        empty_state(
+            id,
+            title,
             Some("open a module, or use a shortcut".into()),
             &actions,
             &hints,
@@ -606,12 +640,19 @@ impl Work {
                     return;
                 };
                 this.update(cx, |work, cx| {
-                    let next = work.workspace.open(module.clone(), work.area);
+                    let next = match tile {
+                        None => work.workspace.open(module.clone(), work.area),
+                        Some(tile) => work.workspace.open_at(
+                            module.clone(),
+                            Target::Tile(tile, Zone::Stack { at: 0 }),
+                            work.area,
+                        ),
+                    };
                     work.commit(next, work.area, cx);
                 })
                 .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
             },
-        ))
+        )
     }
 
     fn body(&self, module: &Module, theme: &Theme) -> AnyElement {
@@ -649,10 +690,10 @@ impl Work {
             tile: stack.id,
             module: stack.active,
         };
-        let body = stack
-            .modules
-            .get(stack.active)
-            .map(|module| self.body(module, theme));
+        let body = match stack.modules.get(stack.active) {
+            Some(module) => self.body(module, theme),
+            None => self.empty(Some(stack.id), theme, cx).into_any_element(),
+        };
         place(div(), rect, area)
             .on_mouse_down(
                 MouseButton::Left,
@@ -667,7 +708,7 @@ impl Work {
             .child(
                 shell(self.header(stack, area, theme, cx), theme)
                     .size_full()
-                    .child(inner_card(theme).children(body)),
+                    .child(inner_card(theme).child(body)),
             )
     }
 
@@ -724,7 +765,9 @@ impl Render for Work {
             .into_iter()
             .map(|divider| self.divider(divider, cx))
             .collect();
-        let empty = stacks.is_empty().then(|| self.empty(area, &theme, cx));
+        let empty = stacks
+            .is_empty()
+            .then(|| place(div(), area, area).child(self.empty(None, &theme, cx)));
         div()
             .size_full()
             .relative()
