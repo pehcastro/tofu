@@ -1,0 +1,30 @@
+ tofu  ./tofu/                 chat   agents (2)   edits   shells (3)                30s [settings] 
+                                                                                                    
+                                                                                                    
+    You                                                                                    14:32    
+    subagents-12-thirteen-waiting-and-two-in-bash-are-one-line                                      
+                                                                                                    
+                                                                                                    
+    [&orchestrator]                                                      14:32  [message#9d4f12]    
+    fifteen sub-agents are out.                                                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ⠞ waiting on 2 sub-agents  |  30s  [request#6726b3]                                               
+  (13) agents waiting for an answer · (2) agents running bash                                       
+                                                                                                    
+                                                                                                    
+  █ Ask tofu to build, inspect, or delegate                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

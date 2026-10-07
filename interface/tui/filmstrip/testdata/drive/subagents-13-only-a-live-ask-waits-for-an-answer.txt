@@ -1,0 +1,7 @@
+# moment 13: a sub-agent left in waiting_answer with no ask open and a parked one count in no state; only the sub-agent whose ask is open right now waits for an answer.
+type subagents-13-only-a-live-ask-waits-for-an-answer
+key enter
+wait three sub-agents, one asks.
+wait (1) agent waiting for an answer
+absent (2) agents
+screen

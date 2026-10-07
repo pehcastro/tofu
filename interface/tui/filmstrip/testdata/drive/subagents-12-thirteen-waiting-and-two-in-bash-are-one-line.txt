@@ -1,0 +1,9 @@
+# moment 12: thirteen sub-agents waiting for an answer and two running bash draw one line above the composer, the most urgent state first, and no row per sub-agent.
+type subagents-12-thirteen-waiting-and-two-in-bash-are-one-line
+key enter
+wait waiting on 2 sub-agents
+clock 30s
+wait (13) agents waiting for an answer · (2) agents running bash
+absent [&rd-
+absent [&qa-
+screen

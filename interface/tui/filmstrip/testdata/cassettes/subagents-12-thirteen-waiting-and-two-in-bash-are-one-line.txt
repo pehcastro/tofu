@@ -1,0 +1,37 @@
+# moment 12: thirteen sub-agents ask the lead and two run the board tests
+requesting
+row rd-01 waiting_answer draw board 01
+pending rd-01 0s 7d0001 ask may I keep palette 01?
+row rd-02 waiting_answer draw board 02
+pending rd-02 0s 7d0002 ask may I keep palette 02?
+row rd-03 waiting_answer draw board 03
+pending rd-03 0s 7d0003 ask may I keep palette 03?
+row rd-04 waiting_answer draw board 04
+pending rd-04 0s 7d0004 ask may I keep palette 04?
+row rd-05 waiting_answer draw board 05
+pending rd-05 0s 7d0005 ask may I keep palette 05?
+row rd-06 waiting_answer draw board 06
+pending rd-06 0s 7d0006 ask may I keep palette 06?
+row rd-07 waiting_answer draw board 07
+pending rd-07 0s 7d0007 ask may I keep palette 07?
+row rd-08 waiting_answer draw board 08
+pending rd-08 0s 7d0008 ask may I keep palette 08?
+row rd-09 waiting_answer draw board 09
+pending rd-09 0s 7d0009 ask may I keep palette 09?
+row rd-10 waiting_answer draw board 10
+pending rd-10 0s 7d0010 ask may I keep palette 10?
+row rd-11 waiting_answer draw board 11
+pending rd-11 0s 7d0011 ask may I keep palette 11?
+row rd-12 waiting_answer draw board 12
+pending rd-12 0s 7d0012 ask may I keep palette 12?
+row rd-13 waiting_answer draw board 13
+pending rd-13 0s 7d0013 ask may I keep palette 13?
+row qa-1 working check the board
+pending qa-1 0s 7e0001 bash go test -p 4 ./board/1/...
+shell qa-1 test-1 0s go test -p 4 ./board/1/...
+row qa-2 working check the board
+pending qa-2 0s 7e0002 bash go test -p 4 ./board/2/...
+shell qa-2 test-2 0s go test -p 4 ./board/2/...
+text 9d4f12 fifteen sub-agents are out.
+done cooked for
+hold

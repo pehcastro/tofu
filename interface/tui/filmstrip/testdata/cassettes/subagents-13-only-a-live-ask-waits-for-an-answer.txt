@@ -1,0 +1,9 @@
+# moment 13: rd-01 ended its run still marked waiting_answer with no ask open, rd-02 is parked, and rd-03 asks the lead right now
+requesting
+row rd-01 waiting_answer draw board 01
+row rd-02 parked draw board 02
+row rd-03 waiting_answer draw board 03
+pending rd-03 0s 7d0303 ask may I keep palette 03?
+text 9d4f13 three sub-agents, one asks.
+done cooked for
+hold
