@@ -62,6 +62,7 @@ Turn
     subAgentsPerTurn        10                               default
     subAgentDepth           2                                default
     subAgentCheckSeconds    1800                             default
+    subAgentWatchSeconds    600                              default
     agentSources            tofu,agents,claude               default
 ```
 

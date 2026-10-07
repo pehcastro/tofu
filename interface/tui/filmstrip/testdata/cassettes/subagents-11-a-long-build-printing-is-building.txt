@@ -1,0 +1,15 @@
+# moment 11: c3 runs a cargo build that prints a line now and then, and then goes quiet
+requesting
+spawn 5e01aa build the desk book
+row c3 working build the desk book
+result 5e01aa spawned [&c3]
+pending c3 0s 7c3e02 bash cargo build -p desk_book -j 4
+shell c3 build-1 0s cargo build -p desk_book -j 4
+print build-1 Compiling desk_ui v0.1.0
+text 9d4f11 one sub-agent builds the book: [&c3].
+done cooked for
+pause
+print build-1 Compiling desk_motion v0.1.0
+pause
+print build-1 Compiling desk_book v0.1.0
+hold

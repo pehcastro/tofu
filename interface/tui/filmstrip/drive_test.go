@@ -20,6 +20,7 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/fixture"
 	"tofu/interface/tui/paste"
+	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/golden"
 	"tofu/internal/host"
@@ -98,6 +99,34 @@ type cassette struct {
 	ended    context.Context
 	emit     func(tui.Event)
 	rows     []subagent.Row
+	shells   *shellBook
+}
+
+type shellBook struct {
+	mutex   sync.Mutex
+	entries []shells.Entry
+}
+
+func (b *shellBook) held() []shells.Entry {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return slices.Clone(b.entries)
+}
+
+func (b *shellBook) start(entry shells.Entry) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.entries = append(b.entries, entry)
+}
+
+func (b *shellBook) print(name, line string) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	for index := range b.entries {
+		if b.entries[index].Name == name {
+			b.entries[index].Log = strings.TrimPrefix(b.entries[index].Log+"\n"+line, "\n")
+		}
+	}
 }
 
 func (c *cassette) row(name string) *subagent.Row {
@@ -186,6 +215,15 @@ func (c *cassette) play(ctx context.Context, body string) {
 				row.Calls = append(row.Calls, subagent.Call{ID: callID, At: c.at.Add(-ago), Tool: tool, Text: what})
 			}
 			c.emit(tui.Event{Kind: tui.EventSubAgent, SubAgents: c.snapshot()})
+		case "shell":
+			ago, command, _ := strings.Cut(tail, " ")
+			since, err := time.ParseDuration(ago)
+			if err != nil {
+				panic("cassette line " + strconv.Itoa(step.Line) + ": " + err.Error())
+			}
+			c.shells.start(shells.Entry{Name: word, Command: command, State: shells.Running, Started: c.at.Add(-since), Owner: id})
+		case "print":
+			c.shells.print(id, rest)
 		case "pause":
 			if !c.released(ctx, c.release) {
 				return
@@ -247,6 +285,7 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	t.Cleanup(metaModels.Close)
 	t.Setenv(library.MetaBaseURLVariable, metaModels.URL)
 	out := &transcript{release: make(chan struct{}, 1)}
+	book := &shellBook{}
 	r := newReel(fixture.Width, fixture.Height, home, func(options *tui.Options) {
 		signed := options.Wires
 		options.Wires = func() []tui.Wire {
@@ -256,7 +295,7 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 			return signed()
 		}
 		options.Fresh = strings.HasPrefix(name, freshPrefix)
-		options.Host, _ = host.New(host.Config{Now: options.Now, Play: seededTurn(options.Now(), cassette{release: out.release, ended: t.Context()})})
+		options.Host, _ = host.New(host.Config{Now: options.Now, Play: seededTurn(options.Now(), cassette{release: out.release, ended: t.Context(), shells: book})})
 		t.Cleanup(options.Host.Close)
 		options.Copy = func(text string) error {
 			_, err := out.Write([]byte("clipboard: " + text + "\n"))
@@ -266,6 +305,8 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 			return sys.Clipboard{Kind: sys.ClipboardText, Text: strings.Repeat("the clipboard holds a long passage. ", clipboardRepeats)}, nil
 		}}
 		withShells(options)
+		fixed := options.Shells
+		options.Shells = func() []shells.Entry { return append(fixed(), book.held()...) }
 	})
 	t.Cleanup(r.driver.Close)
 	return r, out

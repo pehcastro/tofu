@@ -1,0 +1,9 @@
+# moment 10: a sub-agent whose ask to the orchestrator is open past the watch time, lowered to 60 s here, says it is waiting for the orchestrator's answer and for how long, and is never stalled.
+type subagents-10-an-open-ask-waits-for-the-orchestrator
+key enter
+wait waiting on 1 sub-agent
+clock 30s
+absent waiting for the orchestrator's answer
+clock 5m
+wait [&c3] waiting for the orchestrator's answer, 5m 30s  |  may I delete apps/desk/target
+absent stalled

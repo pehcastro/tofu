@@ -1,8 +1,14 @@
-# moment 6: a sub-agent whose tool call does not return within its deadline is shown as stalled, not working.
+# moment 6: a sub-agent with no new output, step or request for the watch time, ten minutes by default, is stalled and says for how long; a call first seen open is not stalled for the minutes before tofu saw it, and a sub-agent that took a step is not stalled at all.
 type subagents-6-a-call-past-its-deadline-is-flagged
 key enter
 wait waiting on 2 sub-agents
-clock 1s
-wait stalled
+absent stalled
+clock 9m
+absent stalled
+release
+wait moved on to the ledger
+clock 2m
+wait [&c1] stalled no progress for 11m  |  bash go test ./internal/shell/...
+once stalled
 key alt+2
 wait stalled

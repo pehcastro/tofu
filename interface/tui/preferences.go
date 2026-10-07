@@ -55,6 +55,17 @@ func (a *App) declared(key string) isettings.Spec {
 	return a.defaults[at]
 }
 
+func (a *App) number(key string) int {
+	if a.preview.key == key {
+		value, _ := strconv.Atoi(a.preview.value)
+		return value
+	}
+	if a.store == nil {
+		return a.declared(key).Default
+	}
+	return a.store.Int(key)
+}
+
 func (a *App) flag(key string) bool {
 	if a.preview.key == key {
 		return a.preview.value == switchOn

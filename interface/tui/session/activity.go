@@ -11,7 +11,6 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/interface/tui/trace"
-	"tofu/internal/konst"
 	roster "tofu/internal/subagent"
 	"tofu/internal/widget"
 )
@@ -102,8 +101,44 @@ func (m *Model) AskToStop(subAgents int, until time.Time) {
 
 func (m *Model) AskedToStop() bool { return m.now().Before(m.stopAskedUntil) }
 
-func Stalled(call subagent.Call, now time.Time) bool {
-	return call.Result == "" && !call.At.IsZero() && now.Sub(call.At) >= konst.SubAgentStallMillis*time.Millisecond
+type Doing int
+
+const (
+	WaitingOnLead Doing = iota
+	NoProgress
+	Building
+	RunningBash
+	RunningTool
+)
+
+type Activity struct {
+	Name  string
+	Doing Doing
+	Since time.Time
+	Tool  string
+	What  string
+}
+
+func (a Activity) drawn(now time.Time) string {
+	took := widget.Until(max(now.Sub(a.Since), 0))
+	what := ""
+	if a.What != "" {
+		what = look.Muted(requestSeparator + oneLine(a.What))
+	}
+	working := look.Style(look.Violet)
+	switch a.Doing {
+	case WaitingOnLead:
+		return working.Render("waiting for the orchestrator's answer, "+took) + what
+	case NoProgress:
+		return look.Style(look.Amber).Render(stalledWord) + " " + look.Muted("no progress for "+took) + what
+	case Building:
+		return working.Render("building, "+took) + what
+	case RunningBash:
+		return working.Render("running bash, "+took) + what
+	case RunningTool:
+		return working.Render("running "+a.Tool+", "+took) + what
+	}
+	panic("session: unknown sub-agent activity")
 }
 
 func (m *Model) turnLines() []string {
@@ -114,14 +149,8 @@ func (m *Model) turnLines() []string {
 	if m.AskedToStop() {
 		lines = append(lines, margin+look.Style(look.Amber).Render("this will stop "+subAgentCount(m.stopAsked)+stopAskTail))
 	}
-	for _, row := range m.SubAgents {
-		at := slices.IndexFunc(row.Calls, func(call subagent.Call) bool { return row.State == roster.Working && Stalled(call, m.now()) })
-		if at < 0 {
-			continue
-		}
-		call := row.Calls[at]
-		open := requestSeparator + "open " + widget.Until(m.now().Sub(call.At))
-		lines = append(lines, widget.Fit(margin+look.AgentRef(row.Name)+" "+look.Style(look.Amber).Render(stalledWord)+" "+look.Muted(oneLine(call.Tool+" "+call.Text)+open), m.width))
+	for _, row := range m.Activity {
+		lines = append(lines, widget.Fit(margin+look.AgentRef(row.Name)+" "+row.drawn(m.now()), m.width))
 	}
 	return lines
 }

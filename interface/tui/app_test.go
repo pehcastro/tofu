@@ -1986,20 +1986,30 @@ func TestCtrlCWhileTheLeadIsIdleAsksBeforeItStopsTheSubAgents(t *testing.T) {
 	}
 }
 
-func TestACallOpenPastTheStallThresholdIsFlaggedInChatAndInSubAgents(t *testing.T) {
+func TestOnlyTheSubAgentWithNoStepForTheWatchTimeIsStalledAndAnOldCallSeenFreshIsNot(t *testing.T) {
 	at := fixedStart()
 	app := leadIdleOnTwo(t, &at)
 	rows := twoWorking(2)
 	rows[0].Calls = []subagent.Call{{ID: "k1", At: at.Add(-15 * time.Minute), Tool: "bash", Text: "go test ./internal/shell/..."}}
-	rows[1].Calls = []subagent.Call{{Tool: "read"}, {ID: "k2", At: at, Tool: "read", Text: "floor.go"}}
+	rows[1].Calls = []subagent.Call{{ID: "k2", At: at, Tool: "read", Result: "1 KB", Text: "floor.go"}}
+	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
+	if chat := ansi.Strip(app.View().Content); strings.Contains(chat, "stalled") {
+		t.Fatalf("a call first seen now is stalled for the minutes before tofu saw it\n%s", chat)
+	}
+	at = at.Add(11 * time.Minute)
+	rows[1].Calls = append(slices.Clone(rows[1].Calls), subagent.Call{ID: "k3", At: at, Tool: "read", Text: "ledger.go"})
 	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
 	chat := ansi.Strip(app.View().Content)
-	if !regexp.MustCompile(`sub-1.*stalled.*bash go test ./internal/shell/\.\.\..*15m`).MatchString(chat) || strings.Count(chat, "stalled") != 1 {
-		t.Fatalf("chat does not flag sub-1 alone, with its call and how long it has been open\n%s", chat)
+	if !regexp.MustCompile(`sub-1.*stalled.*no progress for 11m.*go test ./internal/shell/\.\.\.`).MatchString(chat) || strings.Count(chat, "stalled") != 1 {
+		t.Fatalf("chat does not flag sub-1 alone, with its call and how long nothing moved\n%s", chat)
 	}
-	app.Update(tea.KeyPressMsg{Code: '2', Mod: tea.ModAlt})
-	if agents := ansi.Strip(app.View().Content); !strings.Contains(agents, "stalled") {
-		t.Fatalf("the sub-agents screen does not flag the stalled call\n%s", agents)
+	if at := app.happenedAt("k1"); at < 0 || !slices.Contains(app.happened[at].Detail, stalledDetail) {
+		t.Fatalf("the sub-agents screen does not flag sub-1's open call: %+v", app.happened)
+	}
+	rows[0].Calls = append(slices.Clone(rows[0].Calls), subagent.Call{ID: "k4", At: at, Tool: "read", Text: "registry.go"})
+	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
+	if at := app.happenedAt("k1"); strings.Contains(ansi.Strip(app.View().Content), "stalled") || slices.Contains(app.happened[at].Detail, stalledDetail) {
+		t.Fatalf("sub-1 took a step and still reads stalled: %+v", app.happened[at])
 	}
 }
 

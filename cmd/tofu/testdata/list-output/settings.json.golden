@@ -190,6 +190,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "subAgentWatchSeconds",
+        "category": "Turn",
+        "value": 600,
+        "source": "default"
+      },
+      {
         "key": "verifySubAgents",
         "category": "Turn",
         "value": false,

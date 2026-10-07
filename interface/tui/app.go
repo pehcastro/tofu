@@ -249,6 +249,8 @@ type App struct {
 	stopCommand    context.CancelFunc
 	subAgentCalls  []string
 	subAgents      []subagent.Row
+	moves          map[string]movement
+	liveShells     []shells.Entry
 	happened       []feed.Event
 	feedStale      bool
 	reached        []string
@@ -327,6 +329,7 @@ func New(options Options) *App {
 		height:       defaultHeight,
 		started:      options.Now(),
 		reports:      map[string]string{},
+		moves:        map[string]movement{},
 		board:        paste.Default(options.Paste),
 	}
 	if options.PromptHistory != "" {
@@ -473,8 +476,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.options.Host != nil {
 		a.options.Host.Choose(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort})
 	}
+	a.view.Activity = nil
 	if a.busy {
-		a.flagStalls()
+		a.watchSubAgents()
 	}
 	a.flushFeed()
 	a.syncFeed()

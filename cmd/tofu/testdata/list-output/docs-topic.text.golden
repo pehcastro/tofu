@@ -17,8 +17,9 @@ What it is
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
-    subAgentDepth, subAgentCheckSeconds, verifySubAgents, agentSources,
-    modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+    subAgentDepth, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents,
+    agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
+    modelTier.dumb
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor
 
@@ -203,6 +204,13 @@ Turn
       sub-agent, built from what tofu records with no model call: its steps, the
       files it changed, its gate and its last tool. 0 sends none; the next spawn
       reads the new value
+    subAgentWatchSeconds    600
+      at least 1 seconds before a long call is named, and before a sub-agent
+      with no progress is stalled
+      a sub-agent call open this many seconds gets a line in the chat saying
+      what it is doing: waiting for the orchestrator's answer, running bash or
+      building; a sub-agent with no new output, step or request for this long is
+      shown as stalled
     verifySubAgents         false
       true or false
       the lead checks each sub-agent's work itself before it reports, reading

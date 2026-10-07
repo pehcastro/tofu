@@ -286,6 +286,17 @@ func (a *watcher) result(message llm.Message, asker string) {
 	}
 	delete(a.wrote, message.ToolCallID)
 	a.marks.Unlock()
+	ended := byteSize(message.ToolResultBytes)
+	if result.Failed {
+		ended = cmp.Or(result.Text, ended)
+	}
+	a.shows.Lock()
+	for index, call := range a.asked[asker] {
+		if call.ID == result.ID {
+			a.asked[asker][index].Result = ended
+		}
+	}
+	a.shows.Unlock()
 	a.emit(result)
 }
 
@@ -316,7 +327,8 @@ func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.Tool
 	}
 	a.spent[subAgent] += tokens
 	for _, call := range calls {
-		a.asked[subAgent] = append(a.asked[subAgent], Call{ID: a.eventID(subAgent, call.ID), At: a.now(), Tool: call.Name})
+		intent, _ := callIntent(call)
+		a.asked[subAgent] = append(a.asked[subAgent], Call{ID: a.eventID(subAgent, call.ID), At: a.now(), Tool: call.Name, Text: intent})
 	}
 	a.shows.Unlock()
 	a.sendSubAgents()

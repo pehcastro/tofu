@@ -1,0 +1,9 @@
+# moment 10: c3 asks the lead a question and nothing else moves while it waits
+requesting
+spawn 5e01aa build the desk book
+row c3 working build the desk book
+result 5e01aa spawned [&c3]
+pending c3 0s 7c3e01 ask may I delete apps/desk/target before the cold build?
+text 9d4f11 one sub-agent builds the book: [&c3].
+done cooked for
+hold

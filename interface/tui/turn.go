@@ -41,7 +41,6 @@ const (
 	orchestrator       = "orchestrator"
 	verdictLine        = "verdict "
 	noEngine           = "no engine is wired to this app"
-	stalledDetail      = "stalled: open longer than the longest bash deadline"
 )
 
 func gateOffNote(why jev.Why) string {
@@ -566,6 +565,7 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 			a.status.Agents++
 		}
 		a.linkSpawn(subAgent)
+		a.stepped(subAgent)
 		a.drawReport(subAgent)
 		for _, call := range subAgent.Calls {
 			a.rosterCall(subAgent.Name, call)
@@ -587,24 +587,6 @@ func (a *App) drawReport(subAgent subagent.Row) {
 		return
 	}
 	a.view.Reported(a.mintID(), subAgent)
-}
-
-func (a *App) flagStalls() {
-	now := a.options.Now()
-	for _, subAgent := range a.subAgents {
-		if subAgent.State != roster.Working {
-			continue
-		}
-		for _, call := range subAgent.Calls {
-			at := a.happenedAt(short(call.ID))
-			if !session.Stalled(call, now) || at < 0 || a.happened[at].State != feed.StateRunning || slices.Contains(a.happened[at].Detail, stalledDetail) {
-				continue
-			}
-			held := a.happened[at]
-			held.Detail = append(slices.Clone(held.Detail), stalledDetail)
-			a.record(held)
-		}
-	}
 }
 
 func (a *App) rosterCall(actor string, call subagent.Call) {
@@ -653,6 +635,7 @@ func (a *App) parkSubAgentsTheTurnLeftBehind() {
 }
 
 func (a *App) showShells(entries []shells.Entry) {
+	a.printed(entries)
 	a.shells.SetKillConfirm(a.flag(isettings.KillConfirm))
 	a.shells.Set(entries)
 }

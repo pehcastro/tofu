@@ -1,0 +1,27 @@
+# moment 11: a sub-agent whose bash runs a known build past the watch time, lowered to 60 s here, reads building with the time while its output moves, and stalled only once the output stops for the watch time. The shells screen shows each new line before the clock moves on, so the app has read it.
+type subagents-11-a-long-build-printing-is-building
+key enter
+wait waiting on 1 sub-agent
+key alt+4
+wait build-1
+key down
+key down
+wait Compiling desk_ui
+clock 50s
+release
+wait Compiling desk_motion
+clock 40s
+key alt+1
+wait [&c3] building, 1m 30s  |  cargo build -p desk_book -j 4
+absent stalled
+key alt+4
+clock 50s
+release
+wait Compiling desk_book
+clock 40s
+key alt+1
+wait [&c3] building, 3m  |  cargo build -p desk_book -j 4
+absent stalled
+clock 2m
+wait [&c3] stalled no progress for 2m
+absent building,

@@ -73,7 +73,6 @@ const (
 	SubAgentRedrawMillis = 250
 	QuitAgainMillis      = 3000
 	StopSubAgentsMillis  = 3000
-	SubAgentStallMillis  = BashMaxDeadlineMillis + 60000
 	FeedRecentEvents     = 200
 
 	DriveTimeoutMillis = 60000
@@ -162,6 +161,7 @@ const (
 	SubAgentDepthDefault        = 2
 	SubAgentsPerTurnDefault     = 10
 	SubAgentCheckSecondsDefault = 1800
+	SubAgentWatchSecondsDefault = 600
 
 	SubAgentRetainedRows    = 4
 	SubAgentMissionChars    = 60

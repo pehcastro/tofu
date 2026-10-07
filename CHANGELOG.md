@@ -16,7 +16,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **`tofu session trace` lists every hook run** with its event, call, exit code, time, decision and stderr, and names the relaxation that let a call over `risk_ask_at` run.
 
+### Changed
+
+- **A sub-agent's row says what it is doing:** "waiting for the orchestrator's answer", "running bash, 12m" or "building, 12m". It says "stalled" only when no output, step or request has moved for the new `subAgentWatchSeconds` setting (default 600).
+
 ### Fixed
+
+- **A finished sub-agent call no longer reads as open**, so a 1 ms write no longer shows as "stalled write, open 22m".
 
 - **`SessionEnd` hooks fire when `tofu drive` exits**, and `SessionStart` fires with source `compact` after a compaction.
 

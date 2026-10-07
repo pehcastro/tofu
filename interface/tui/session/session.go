@@ -121,6 +121,7 @@ type Model struct {
 	Commands           []Command
 	Paths              []string
 	SubAgents          []subagent.Row
+	Activity           []Activity
 	Spawns             int
 	now                func() time.Time
 	leadIdleSince      time.Time
