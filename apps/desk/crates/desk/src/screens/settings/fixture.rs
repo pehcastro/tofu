@@ -1,3 +1,5 @@
+use desk_ui::components::settings::Source;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageId {
     Appearance,
@@ -34,8 +36,8 @@ impl PageId {
         match self {
             PageId::Git => &GIT,
             PageId::Appearance => &APPEARANCE,
+            PageId::Keys => &KEYS,
             PageId::Turn
-            | PageId::Keys
             | PageId::Notify
             | PageId::Workspaces
             | PageId::Editor
@@ -64,23 +66,6 @@ pub const NAV: [(&str, &[PageId]); 4] = [
     ),
     ("Models", &[PageId::Accounts]),
 ];
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Source {
-    Default,
-    Global,
-    Project,
-}
-
-impl Source {
-    pub fn label(self) -> &'static str {
-        match self {
-            Source::Default => "default",
-            Source::Global => "global",
-            Source::Project => "project",
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
@@ -288,6 +273,14 @@ const APPEARANCE: Page = Page {
         ],
     )],
 };
+
+const KEYS: Page = Page {
+    title: "Keyboard",
+    desc: "The keys the desk answers to. Rebinding comes later.",
+    groups: &[],
+};
+
+pub const KEYS_GROUP: &str = "Tiles and tabs";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Effect {

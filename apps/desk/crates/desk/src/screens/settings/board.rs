@@ -24,9 +24,6 @@ const TOP_SHADE_DEPTH: f32 = 0.2;
 const BODY_TRACKING: f32 = -0.12;
 const INNER_TINT: u32 = 0xe6e0ff;
 const INNER_FILL: (f32, f32) = (0.07, 0.05);
-const SEGMENT_TEXT: f32 = 12.0;
-const SEGMENT_ON: f32 = 0.12;
-const SEGMENT_OFF: f32 = 0.5;
 const BODY_TEXT: f32 = 14.0;
 const BODY_LINE: f32 = 23.0;
 const BODY_INK: f32 = 0.9;
@@ -124,21 +121,6 @@ pub fn root(
                 .justify_center()
                 .child(toast(message, TELL_BADGE, theme, on_dismiss))
         }))
-}
-
-pub fn segment(label: &'static str, on: bool, theme: &Theme) -> gpui::Stateful<Div> {
-    div()
-        .id(label)
-        .py(px(3.0))
-        .px(px(9.0))
-        .rounded(px(6.0))
-        .text_size(px(SEGMENT_TEXT))
-        .cursor_pointer()
-        .child(label)
-        .when(on, |seg| {
-            seg.bg(ink(theme, SEGMENT_ON)).text_color(ink(theme, 1.0))
-        })
-        .when(!on, |seg| seg.text_color(ink(theme, SEGMENT_OFF)))
 }
 
 pub fn inner(theme: &Theme) -> Div {

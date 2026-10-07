@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use desk_ui::components::button::{ButtonKind, button};
-use desk_ui::components::card::{caption, outer_card};
+use desk_ui::components::card::{Header, caption, inner_card, shell};
+use desk_ui::components::form::switch;
+use desk_ui::components::list::separator;
 use desk_ui::components::paint::{halo, ink, ring, tint};
 use desk_ui::components::size::{T2, T3};
 use desk_ui::live::ActiveTheme;
@@ -12,14 +14,12 @@ use gpui::{
     prelude::*, px, relative, rgba, size,
 };
 
-use super::board::{inner, root};
+use super::board::root;
 use super::fixture::{
     ADD_IMAGE_TELL, EFFORT, Effect, IMAGE_DIR, IMAGES, LATEST_SESSION, MODEL, OPEN_INTRO_TELL,
     PROJECT,
 };
-use super::{EFFECT_TRACK, track};
 
-const SHELL_HEADER: f32 = 28.0;
 const TITLE: f32 = 19.0;
 const DESC: f32 = 13.0;
 const SMALL: f32 = 12.0;
@@ -32,7 +32,6 @@ const ADD_RING: f32 = 0.14;
 const PICKED_GAP: f32 = 2.0;
 const PICKED_RING: f32 = 3.5;
 const ROW_LINE: f32 = 18.0;
-const RULE: f32 = 0.06;
 const PREVIEW_RADIUS: f32 = 12.0;
 const COMPOSER_LEFT: f32 = 0.19;
 const COMPOSER_TOP: f32 = 0.46;
@@ -141,7 +140,7 @@ impl Intro {
             }))
         });
         let effects: Vec<_> = effects.collect();
-        inner(theme)
+        inner_card(theme)
             .p(px(14.0))
             .gap_4()
             .text_size(px(DESC))
@@ -177,7 +176,7 @@ impl Intro {
                     .child(caption("Effects, applied in order", theme).pb_1p5())
                     .children(effects),
             )
-            .child(div().h(px(1.0)).flex_none().bg(ink(theme, RULE)))
+            .child(separator(theme).flex_none())
             .child(
                 switch_row(
                     "motion",
@@ -347,25 +346,14 @@ fn switch_row(
                         .child(sub),
                 ),
         )
-        .child(track(on, EFFECT_TRACK, theme))
+        .child(switch("switch", "", on, theme))
 }
 
-fn shell_header(title: &'static str, note: SharedString, theme: &Theme) -> Div {
-    div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap_1p5()
-        .h(px(SHELL_HEADER))
-        .pl(px(9.0))
-        .pr_1p5()
-        .child(caption(title, theme).flex_1())
-        .child(
-            div()
-                .text_size(px(SMALL))
-                .text_color(ink(theme, T3))
-                .child(note),
-        )
+fn titled(title: &'static str, note: SharedString, theme: &Theme) -> Div {
+    shell(
+        Header::Title(None, title.into(), Some(note.into_any_element())),
+        theme,
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -513,23 +501,15 @@ impl Render for Intro {
                     .flex()
                     .gap_2()
                     .child(
-                        outer_card(&theme)
-                            .flex_col()
+                        titled("Background", "this device".into(), &theme)
                             .w(px(LEFT_WIDTH))
                             .flex_none()
-                            .child(shell_header("Background", "this device".into(), &theme))
                             .child(self.background(&theme, cx)),
                     )
                     .child(
-                        outer_card(&theme)
-                            .flex_col()
+                        titled("Preview", format!("{name} \u{b7} live").into(), &theme)
                             .flex_1()
-                            .child(shell_header(
-                                "Preview",
-                                format!("{name} \u{b7} live").into(),
-                                &theme,
-                            ))
-                            .child(inner(&theme).p_3().child(self.preview(&theme))),
+                            .child(inner_card(&theme).p_3().child(self.preview(&theme))),
                     ),
             );
         root(
