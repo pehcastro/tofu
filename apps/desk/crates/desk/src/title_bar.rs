@@ -6,6 +6,7 @@ use crate::desk::Desk;
 
 pub fn title_bar(
     sidebar_open: bool,
+    tabs_x: f32,
     letter: Option<SharedString>,
     tabs: Option<AnyElement>,
     cx: &mut Context<Desk>,
@@ -19,6 +20,7 @@ pub fn title_bar(
         whats_new: None,
         keys: WindowKeys::Live,
         open: None,
+        tabs_x,
     };
     TitleBar::new(
         "title-bar",

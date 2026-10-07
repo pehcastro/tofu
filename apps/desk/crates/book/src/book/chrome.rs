@@ -1,3 +1,4 @@
+use desk_ui::components::sidebar::SIDEBAR_COLUMN;
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
@@ -52,6 +53,7 @@ fn board_title(open: Option<TitlePop>) -> Title {
         whats_new: Some("0.5.1".into()),
         keys: WindowKeys::Shown,
         open,
+        tabs_x: SIDEBAR_COLUMN,
     }
 }
 
@@ -65,6 +67,7 @@ fn empty_title(open: Option<TitlePop>) -> Title {
         whats_new: None,
         keys: WindowKeys::Shown,
         open,
+        tabs_x: SIDEBAR_COLUMN,
     }
 }
 

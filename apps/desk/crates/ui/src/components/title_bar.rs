@@ -18,10 +18,11 @@ use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{
     CAPTION_WIDTH, CONTROL, ICON_SMALL, RADIUS_CAPTION, RADIUS_TAB, SIDEBAR_CLOSED_WIDTH,
-    SIDEBAR_WIDTH, TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
+    TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
 };
 use crate::theme::{ColorToken, Theme};
 
+const TITLE_GAP: f32 = 4.0;
 const PRODUCT_NAME: &str = "tofu";
 const BELL_DOT: f32 = 6.0;
 const BELL_DOT_INSET: f32 = 6.0;
@@ -92,6 +93,7 @@ pub struct Title {
     pub whats_new: Option<SharedString>,
     pub keys: WindowKeys,
     pub open: Option<TitlePop>,
+    pub tabs_x: f32,
 }
 
 type OnPick = Rc<dyn Fn(&TitlePick, &mut Window, &mut App)>;
@@ -448,11 +450,7 @@ impl RenderOnce for TitleBar {
             align: Align::End,
             offset: POP_OFFSET,
         };
-        let column = if title.sidebar_open {
-            SIDEBAR_WIDTH
-        } else {
-            SIDEBAR_CLOSED_WIDTH
-        };
+        let column = title.tabs_x.max(SIDEBAR_CLOSED_WIDTH + TITLE_GAP) - TITLE_GAP;
         let warn = theme.color(ColorToken::StatusWarn);
         let unread = title.notices.iter().any(|notice| notice.needs_you);
         let bell = icon_button(
@@ -489,7 +487,7 @@ impl RenderOnce for TitleBar {
             .flex_none()
             .flex()
             .items_center()
-            .gap_1()
+            .gap(px(TITLE_GAP))
             .child(
                 div()
                     .w(px(column))
