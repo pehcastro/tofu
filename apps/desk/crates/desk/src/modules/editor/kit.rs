@@ -18,7 +18,6 @@ pub const TY: Rgba = hex(0x9fdcc3);
 pub const ST: Rgba = hex(0xe6d38f);
 pub const ADD: Rgba = hex(0x7fd6a6);
 pub const DEL: Rgba = hex(0xee8a8f);
-pub const MARK: Rgba = hex(0x52c68e);
 pub const MODIFIED: Rgba = hex(0xdeb04e);
 pub const UNTRACKED: Rgba = hex(0x66b0ec);
 pub const DANGER: Rgba = hex(0xf1737d);

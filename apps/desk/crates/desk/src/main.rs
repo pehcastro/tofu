@@ -58,14 +58,28 @@ mod modules {
 
 use std::cell::Cell;
 use std::env;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
 
 use desk::{Open, Screen};
 use desk_ui::icon::Icon;
 use gpui::{App, AppContext, EmptyView};
+#[cfg(feature = "module-editor")]
+use modules::editor::open_file;
 
-const USAGE: &str = "usage: desk [--screen <name> [--board <ID>]]\n\
+#[cfg(not(feature = "module-editor"))]
+fn open_file(
+    _: &std::path::Path,
+    _: Option<&str>,
+    _: &mut gpui::Window,
+    _: &mut App,
+) -> Result<gpui::AnyView, String> {
+    Err("--file needs the editor: rebuild with --features module-editor".to_owned())
+}
+
+const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>]]\n\
+--file opens a file in the editor screen\n\
 screens: work settings accounts theme library classifier usage limits context session intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
 const SCREENS: [&str; 13] = [
@@ -87,6 +101,7 @@ const SCREENS: [&str; 13] = [
 struct ScreenLaunch {
     name: String,
     board: Option<String>,
+    file: Option<PathBuf>,
     open: Open,
 }
 
@@ -139,15 +154,21 @@ fn parse(args: &[String]) -> Result<Launch, String> {
     match args {
         [] => Ok(Launch::Desk),
         [flag, name, rest @ ..] if flag == "--screen" => {
-            let board = match rest {
-                [] => None,
-                [flag, id] if flag == "--board" => Some(id.clone()),
-                _ => return Err(USAGE.to_owned()),
-            };
+            let (mut board, mut file) = (None, None);
+            for pair in rest.chunks(2) {
+                match pair {
+                    [flag, id] if flag == "--board" && board.is_none() => board = Some(id.clone()),
+                    [flag, path] if flag == "--file" && name == "editor" && file.is_none() => {
+                        file = Some(PathBuf::from(path))
+                    }
+                    _ => return Err(USAGE.to_owned()),
+                }
+            }
             Ok(Launch::Screen(ScreenLaunch {
                 open: screen(name)?,
                 name: name.clone(),
                 board,
+                file,
             }))
         }
         _ => Err(USAGE.to_owned()),
@@ -164,11 +185,12 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
             })
         })
         .collect();
-    let (title, client, name, board, open): (String, _, String, _, Open) = match launch {
+    let (title, client, name, board, file, open): (String, _, String, _, _, Open) = match launch {
         Launch::Desk => (
             desk::WINDOW_TITLE.to_owned(),
             desk::desk_client(),
             "chat".to_owned(),
+            None,
             None,
             |_, window, cx| {
                 let store = cx.new(|_| desk_core::model::Store::default());
@@ -180,6 +202,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
             desk::board_client(),
             launch.name,
             launch.board,
+            launch.file,
             launch.open,
         ),
     };
@@ -187,7 +210,11 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
     let window = cx.open_window(
         desk::window_options(title.into(), client, cx),
         |window, cx| {
-            let view = open(board.as_deref(), window, cx).unwrap_or_else(|error| {
+            let opened = match &file {
+                Some(path) => open_file(path, board.as_deref(), window, cx),
+                None => open(board.as_deref(), window, cx),
+            };
+            let view = opened.unwrap_or_else(|error| {
                 refused = Some(error);
                 cx.new(|_| EmptyView).into()
             });

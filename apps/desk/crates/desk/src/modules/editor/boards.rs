@@ -1,20 +1,18 @@
+use desk_ui::components::empty::empty_state;
+use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyElement, Context, Div, FontWeight, SharedString, div, linear_color_stop, linear_gradient,
     prelude::*, px,
 };
 
-use super::fixture::{
-    COUNT, COUNT_TEST, Git, Icon, Line, MENU, NOTES, STORE, STORE_DIFF, TOP, WEB,
-};
+use super::fixture::{COUNT, COUNT_TEST, Git, Icon, Line, MENU, STORE, STORE_DIFF, TOP, WEB};
 use super::kit::{
-    ADD, AGENT, AGENT_FILL, AGENT_TEXT, CHAT, COLLAPSE, DANGER, DEL, DOWN, MARK, MODIFIED, MONO,
-    PLUS, POP, PREFS, ROBOT, SEND, SPLIT, T2, T3, TRACE, black, cap, file_icon, glyph, hex, inner,
-    medium, pop_shadow, ring, shell, square, text, tint, white,
+    ADD, AGENT, AGENT_FILL, AGENT_TEXT, CHAT, COLLAPSE, DANGER, DEL, DOWN, MODIFIED, MONO, PLUS,
+    POP, PREFS, ROBOT, SEND, SPLIT, T2, T3, TRACE, black, cap, file_icon, glyph, hex, inner,
+    medium, pop_shadow, ring, shell, square, text, white,
 };
-use super::parts::{close_mark, code, dot, kbd, number, quiet, row, runs, tab, tree_row};
+use super::parts::{close_mark, code, dot, kbd, quiet, tab, tree_row};
 use super::{Editor, File, Mode};
-
-const AGENT_LINES: std::ops::RangeInclusive<usize> = 10..=18;
 
 fn head(left: f32) -> Div {
     div()
@@ -77,20 +75,6 @@ fn strip(when: &'static str, scale: f32) -> Div {
         .child(quiet(12.5, when))
 }
 
-fn blame(scale: f32) -> Div {
-    div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(px(6.0))
-        .ml(px(28.0))
-        .font_family(super::kit::SANS)
-        .text_size(px(12.5))
-        .text_color(tint(0xb9a6ea, 0.62))
-        .child(glyph(ROBOT, 12.0, tint(0xb9a6ea, 0.62), scale))
-        .child("go-dev · not committed · turn 4")
-}
-
 fn person_blame() -> Div {
     div()
         .flex()
@@ -134,14 +118,6 @@ fn pop_row(label: &'static str, color: gpui::Rgba, key: Option<&'static str>) ->
 }
 
 impl Editor {
-    fn file_lines(&self) -> &'static [Line] {
-        match self.file {
-            File::Notes => NOTES,
-            File::Test => COUNT_TEST,
-            File::Store => STORE,
-        }
-    }
-
     pub fn edit_board(&mut self, scale: f32, cx: &mut Context<Self>) -> Div {
         let notes = self.file == File::Notes;
         let header = head(290.0)
@@ -340,64 +316,19 @@ impl Editor {
                     .on_click(cx.listener(Self::update(|this| this.trace = !this.trace))),
             );
 
-        let lines = self.file_lines();
-        let mut code_rows: Vec<AnyElement> = Vec::new();
-        for line in lines {
-            let index: usize = line.number.parse().unwrap_or(0);
-            let agent_line = notes && AGENT_LINES.contains(&index);
-            let mark = match index {
-                _ if !notes => None,
-                10..=18 => Some(MARK),
-                21 => Some(MODIFIED),
-                _ => None,
-            };
-            let gutter = number(line.number, 52.0)
-                .id(("line", index))
-                .cursor_pointer()
-                .on_click(cx.listener(Self::update(move |this| this.cursor = index)))
-                .children(mark.map(|color| {
-                    div()
-                        .absolute()
-                        .right(px(6.0))
-                        .top(px(3.0))
-                        .w(px(3.0))
-                        .h(px(16.0))
-                        .rounded(px(2.0))
-                        .bg(color)
-                }))
-                .when(notes && index == 9, |gutter| {
-                    gutter.child(
-                        div()
-                            .absolute()
-                            .right(px(3.0))
-                            .bottom(px(-3.0))
-                            .size(px(6.0))
-                            .bg(DANGER),
-                    )
-                });
-            code_rows.push(
-                row(line)
-                    .when(index == self.cursor, |row| row.bg(white(0.04)))
-                    .when(agent_line, |row| {
-                        row.child(
-                            div()
-                                .absolute()
-                                .left_0()
-                                .top_0()
-                                .bottom_0()
-                                .w(px(2.0))
-                                .bg(AGENT),
-                        )
-                    })
-                    .child(gutter)
-                    .children(runs(line))
-                    .when(notes && index == 13, |row| row.child(blame(scale)))
-                    .when(self.file == File::Store && index == 4, |row| {
-                        row.bg(white(0.035)).child(person_blame())
-                    })
-                    .into_any_element(),
-            );
-        }
+        let code_area = match self.opened() {
+            Ok(editor) => editor.clone().into_any_element(),
+            Err(error) => empty_state(
+                "editor-failure",
+                "Could not open the file",
+                Some(error.clone()),
+                &[],
+                &[],
+                &ActiveTheme::theme(cx),
+                |_, _, _| {},
+            )
+            .into_any_element(),
+        };
         let editor = div()
             .relative()
             .flex()
@@ -411,9 +342,10 @@ impl Editor {
                     .flex()
                     .flex_col()
                     .flex_1()
+                    .min_h_0()
                     .overflow_hidden()
                     .pt(px(2.0))
-                    .children(code_rows),
+                    .child(code_area),
             )
             .when(self.trace, |editor| editor.child(self.trace_pop(cx)));
 
