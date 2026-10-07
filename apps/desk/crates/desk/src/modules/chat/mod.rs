@@ -329,6 +329,9 @@ impl Chat {
             .zip(&next)
             .take_while(|(was, now)| was == now)
             .count();
+        if let Some(Item::Lead { text, .. }) = next.get(same) {
+            eprintln!("desk: lead row streams {} chars", text.len());
+        }
         if same < self.items.len() || next.len() > same {
             self.transcript
                 .splice(same..self.items.len(), next.len() - same);
