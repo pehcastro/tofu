@@ -28,12 +28,14 @@ use crate::theme::{ColorToken, NumberToken, Theme};
 const TRACE_VAR: &str = "DESK_MOTION_TRACE";
 const HEADER_GAP: f32 = 4.0;
 const MORE_LIST_MIN: f32 = 180.0;
+const DIRTY_DOT: f32 = 7.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TabMark {
     Close,
     Pinned,
     Locked,
+    Dirty,
 }
 
 #[derive(Clone)]
@@ -542,6 +544,7 @@ fn mark(tab: &Tab, ix: usize, look: Look, theme: &Theme, shut: &Shut) -> Div {
         TabMark::Close => slot.child(close(ix, look, theme, shut.clone())),
         TabMark::Pinned => slot.child(glyph(Glyph::Pin, ICON_TINY, ink(theme, CAPTION_TEXT))),
         TabMark::Locked => slot.child(glyph(Glyph::Lock, ICON_TINY, ink(theme, CAPTION_TEXT))),
+        TabMark::Dirty => slot.child(div().size(px(DIRTY_DOT)).rounded_full().bg(ink(theme, T1))),
     }
 }
 

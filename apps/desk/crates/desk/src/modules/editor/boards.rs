@@ -3,6 +3,8 @@ use std::rc::Rc;
 
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::empty::empty_state;
+use desk_ui::components::glyph::Glyph;
+use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
@@ -17,7 +19,7 @@ use super::kit::{
     medium, pop_shadow, ring, shell, square, text, tint, white,
 };
 use super::parts::{close_mark, code, dot, kbd, quiet, tab, tree_row};
-use super::{Editor, File, Mode};
+use super::{Editor, File, Mode, OnDisk, Source};
 
 const CURSOR: ColorToken = ColorToken::StateHover;
 const AGENT_LINES: RangeInclusive<usize> = 10..=18;
@@ -199,72 +201,41 @@ fn pop_row(label: &'static str, color: gpui::Rgba, key: Option<&'static str>) ->
 impl Editor {
     pub fn edit_board(&mut self, scale: f32, cx: &mut Context<Self>) -> Div {
         let notes = self.file == File::Notes;
-        let header = head(290.0)
-            .child(
-                div()
-                    .flex()
-                    .gap(px(8.0))
-                    .mb(px(6.0))
-                    .absolute()
-                    .left(px(246.0))
-                    .top(px(6.0))
-                    .child(
-                        icon_button("new-file", PLUS, 24.0, scale).on_click(cx.listener(
-                            Self::tell(
-                                "Creates a file in the selected folder and opens it in a new tab.",
-                            ),
-                        )),
-                    )
-                    .child(
-                        icon_button("collapse", COLLAPSE, 24.0, scale)
-                            .on_click(cx.listener(Self::update(|this| this.notes_open = false))),
-                    ),
-            )
-            .child(
-                tab(Icon::Go, "notes.go", notes, scale)
-                    .id("tab-notes")
-                    .cursor_pointer()
-                    .on_click(cx.listener(Self::update(|this| this.file = File::Notes)))
-                    .child(
-                        div()
-                            .flex_none()
-                            .size(px(7.0))
-                            .mx(px(4.0))
-                            .rounded(px(4.0))
-                            .bg(white(0.85)),
-                    ),
-            )
-            .when(self.test_open, |head| {
-                head.child(
-                    tab(Icon::Go, "notes_test.go", self.file == File::Test, scale)
-                        .id("tab-test")
-                        .cursor_pointer()
-                        .on_click(cx.listener(Self::update(|this| this.file = File::Test)))
-                        .child(close_mark().id("close-test").on_click(cx.listener(
-                            |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.test_open = false;
-                                if this.file == File::Test {
-                                    this.file = File::Notes;
-                                }
-                                cx.notify();
-                            },
-                        ))),
+        let header = head(290.0).child(
+            div()
+                .flex()
+                .gap(px(8.0))
+                .mb(px(6.0))
+                .absolute()
+                .left(px(246.0))
+                .top(px(6.0))
+                .child(
+                    icon_button("new-file", PLUS, 24.0, scale).on_click(cx.listener(Self::tell(
+                        "Creates a file in the selected folder and opens it in a new tab.",
+                    ))),
                 )
-            })
-            .child(div().flex_1())
-            .child(
-                icon_button("split", SPLIT, 26.0, scale)
-                    .mb(px(5.0))
-                    .on_click(cx.listener(Self::tell(
+                .child(
+                    icon_button("collapse", COLLAPSE, 24.0, scale)
+                        .on_click(cx.listener(Self::update(|this| this.notes_open = false))),
+                ),
+        );
+        let header = match &self.source {
+            Source::File(_, disk) => header.child(self.file_tab(disk, cx)),
+            Source::Fixture { .. } => self.fixture_tabs(header, notes, scale, cx),
+        }
+        .child(
+            icon_button("split", SPLIT, 26.0, scale)
+                .mb(px(5.0))
+                .on_click(cx.listener(Self::tell(
                     "Splits the editor in two side by side; the current tab opens on the right.",
                 ))),
-            )
-            .child(
-                icon_button("prefs", PREFS, 26.0, scale)
-                    .mb(px(5.0))
-                    .on_click(cx.listener(Self::update(|this| this.prefs = !this.prefs))),
-            );
+        )
+        .child(
+            icon_button("prefs", PREFS, 26.0, scale)
+                .mb(px(5.0))
+                .on_click(cx.listener(Self::update(|this| this.prefs = !this.prefs))),
+        );
+        let fixture = matches!(self.source, Source::Fixture { .. });
 
         let selected = |file: File| self.file == file;
         let mut rows: Vec<AnyElement> = Vec::new();
@@ -377,14 +348,34 @@ impl Editor {
             .gap(px(6.0))
             .pt(px(9.0))
             .px(px(16.0))
-            .pb(px(6.0))
-            .child(quiet(12.5, "notes"))
-            .child(quiet(12.5, "›"))
-            .child(file_icon(Icon::Go.bytes(), 13.0, scale))
-            .child(text(12.5, 23.0, white(T2), crumb))
-            .child(quiet(12.5, symbol))
-            .child(div().flex_1())
-            .child(quiet(11.5, state));
+            .pb(px(6.0));
+        let crumbs = match &self.source {
+            Source::File(_, disk) => crumbs
+                .children(disk.folders.iter().flat_map(|folder| {
+                    [
+                        text(12.5, 23.0, white(T3), folder.clone()),
+                        quiet(12.5, "›"),
+                    ]
+                }))
+                .child(text(12.5, 23.0, white(T2), disk.name.clone()))
+                .child(div().flex_1())
+                .child(quiet(
+                    11.5,
+                    if disk.dirty {
+                        "modified · unsaved"
+                    } else {
+                        "saved"
+                    },
+                )),
+            Source::Fixture { .. } => crumbs
+                .child(quiet(12.5, "notes"))
+                .child(quiet(12.5, "›"))
+                .child(file_icon(Icon::Go.bytes(), 13.0, scale))
+                .child(text(12.5, 23.0, white(T2), crumb))
+                .child(quiet(12.5, symbol))
+                .child(div().flex_1())
+                .child(quiet(11.5, state)),
+        };
         let agent = strip("this session · turn 4 · 2 min ago", scale)
             .child(div().flex_1())
             .child(
@@ -395,7 +386,18 @@ impl Editor {
                     .on_click(cx.listener(Self::update(|this| this.trace = !this.trace))),
             );
 
+        let shut = matches!(&self.source, Source::File(_, disk) if disk.shut);
         let code_area = match self.opened() {
+            Ok(_) if shut => empty_state(
+                "editor-shut",
+                "No file open",
+                Some("Run desk with --file to open one.".into()),
+                &[],
+                &[],
+                &ActiveTheme::theme(cx),
+                |_, _, _| {},
+            )
+            .into_any_element(),
             Ok(editor) => editor.clone().into_any_element(),
             Err(error) => empty_state(
                 "editor-failure",
@@ -415,7 +417,7 @@ impl Editor {
             .flex_1()
             .min_w_0()
             .child(crumbs)
-            .when(notes, |editor| editor.child(agent))
+            .when(notes && fixture, |editor| editor.child(agent))
             .child(
                 div()
                     .flex()
@@ -435,6 +437,74 @@ impl Editor {
                 .child(inner().flex_row().child(side).child(editor))
                 .when(self.prefs, |shell| shell.child(self.prefs_pop(cx))),
         )
+    }
+
+    fn file_tab(&self, disk: &OnDisk, cx: &mut Context<Self>) -> Div {
+        let tabs: Vec<Tab> = (!disk.shut)
+            .then(|| Tab {
+                label: disk.name.clone(),
+                icon: Some(Glyph::File),
+                count: None,
+                mark: if disk.dirty {
+                    TabMark::Dirty
+                } else {
+                    TabMark::Close
+                },
+            })
+            .into_iter()
+            .collect();
+        let editor = cx.weak_entity();
+        div().flex_1().min_w_0().child(connected_tabs(
+            "editor-file-tabs",
+            &tabs,
+            0,
+            1,
+            &ActiveTheme::theme(cx),
+            move |event, _, cx| {
+                if let TabEvent::Close(_) = event
+                    && let Err(error) = editor.update(cx, |editor, cx| editor.shut_file(cx))
+                {
+                    eprintln!("desk: editor is gone before its tab closed: {error}");
+                }
+            },
+        ))
+    }
+
+    fn fixture_tabs(&self, header: Div, notes: bool, scale: f32, cx: &mut Context<Self>) -> Div {
+        header
+            .child(
+                tab(Icon::Go, "notes.go", notes, scale)
+                    .id("tab-notes")
+                    .cursor_pointer()
+                    .on_click(cx.listener(Self::update(|this| this.file = File::Notes)))
+                    .child(
+                        div()
+                            .flex_none()
+                            .size(px(7.0))
+                            .mx(px(4.0))
+                            .rounded(px(4.0))
+                            .bg(white(0.85)),
+                    ),
+            )
+            .when(self.test_open, |head| {
+                head.child(
+                    tab(Icon::Go, "notes_test.go", self.file == File::Test, scale)
+                        .id("tab-test")
+                        .cursor_pointer()
+                        .on_click(cx.listener(Self::update(|this| this.file = File::Test)))
+                        .child(close_mark().id("close-test").on_click(cx.listener(
+                            |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.test_open = false;
+                                if this.file == File::Test {
+                                    this.file = File::Notes;
+                                }
+                                cx.notify();
+                            },
+                        ))),
+                )
+            })
+            .child(div().flex_1())
     }
 
     fn prefs_pop(&self, cx: &mut Context<Self>) -> Div {

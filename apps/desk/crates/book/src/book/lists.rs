@@ -65,6 +65,22 @@ impl Strip {
         }
     }
 
+    fn files() -> Self {
+        let tabs =
+            [("form.rs", TabMark::Dirty), ("tabs.rs", TabMark::Close)].map(|(name, mark)| Tab {
+                label: name.into(),
+                icon: Some(Glyph::File),
+                count: None,
+                mark,
+            });
+        Strip {
+            tabs: tabs.to_vec(),
+            screens: 0,
+            picked: 0,
+            made: 0,
+        }
+    }
+
     pub(super) fn pair() -> Self {
         let mut strip = Strip::modules();
         strip.tabs.truncate(2);
@@ -226,6 +242,8 @@ impl Strip {
                 "Approve, or send back to rust-dev".into(),
             ],
             "Settings" => vec!["Screen tab: theme, mode, keys, accounts".into()],
+            "form.rs" => vec!["Edited and not saved: the dot stands where the \u{d7} was".into()],
+            "tabs.rs" => vec!["Saved: its \u{d7} closes it".into()],
             other => vec![format!("{other}: an empty workspace, nothing open yet").into()],
         };
         div()
@@ -246,6 +264,7 @@ pub struct TabPage {
     roomy: Strip,
     header: Strip,
     bare: Strip,
+    files: Strip,
 }
 
 impl TabPage {
@@ -255,6 +274,7 @@ impl TabPage {
             roomy: Strip::modules(),
             header: Strip::workspaces(true),
             bare: Strip::workspaces(false),
+            files: Strip::files(),
         }
     }
 }
@@ -395,6 +415,11 @@ impl ListsState {
         let bare = page.bare.header("header-bare", theme, cx, |book| {
             Some(&mut book.lists.tabs.bare)
         });
+        let files = page
+            .files
+            .connected("file-tabs", usize::MAX, theme, cx, |book| {
+                Some(&mut book.lists.tabs.files)
+            });
         let tile = |strip: TabStrip, shown: &Strip, about: &'static str| {
             shell(Header::Tabs(strip.into_any_element(), None), theme)
                 .min_h(px(TILE_HEIGHT / 2.0))
@@ -461,6 +486,14 @@ impl ListsState {
                     theme,
                     workspace(bare, &page.bare),
                 )),
+            )
+            .child(
+                section(
+                    "File tabs",
+                    "An editor's open files. A dot marks one with unsaved changes.",
+                    theme,
+                )
+                .child(tile(files, &page.files, "form.rs is dirty, tabs.rs is saved.")),
             )
     }
 

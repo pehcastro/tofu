@@ -4,14 +4,18 @@ mod kit;
 mod parts;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use desk_core::buffer::Buffer;
+use desk_core::git::{Against, Git, GitBinary, Hunk};
 use desk_core::syntax::{Language, Syntax};
-use desk_ui::components::code::Marks;
+use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::live::ActiveTheme;
+use desk_ui::theme::ColorToken;
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Entity, Render, SharedString, Window, prelude::*,
+    AnyView, App, AppContext, ClickEvent, Context, Entity, Render, SharedString, Subscription,
+    Task, Window, prelude::*,
 };
 
 use boards::{cursor_marks, notes_marks, store_marks};
@@ -33,7 +37,7 @@ pub fn open_file(
     _: &mut Window,
     cx: &mut App,
 ) -> Result<AnyView, String> {
-    let source = Source::File(file_editor(path, cx));
+    let source = Source::File(file_editor(path, cx), on_disk(path));
     launch(board, source, cx)
 }
 
@@ -45,7 +49,121 @@ enum Source {
         test: Opened,
         store: Opened,
     },
-    File(Opened),
+    File(Opened, OnDisk),
+}
+
+struct OnDisk {
+    name: SharedString,
+    folders: Vec<SharedString>,
+    repo: Option<Repo>,
+    dirty: bool,
+    shut: bool,
+}
+
+struct Repo {
+    git: Arc<GitBinary>,
+    path: String,
+}
+
+fn named(part: &std::ffi::OsStr) -> SharedString {
+    part.to_string_lossy().into_owned().into()
+}
+
+fn on_disk(path: &Path) -> OnDisk {
+    let full = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let name = full.file_name().map(named).unwrap_or_default();
+    let parent = full.parent().unwrap_or(&full);
+    let inside = match GitBinary::open(parent) {
+        Ok(git) => match full.strip_prefix(git.root()) {
+            Ok(inside) => Some((inside.to_path_buf(), git)),
+            Err(_) => {
+                eprintln!(
+                    "desk: editor found {} outside its repository {}",
+                    full.display(),
+                    git.root().display()
+                );
+                None
+            }
+        },
+        Err(error) => {
+            eprintln!("desk: editor shows no git marks: {error}");
+            None
+        }
+    };
+    let Some((inside, git)) = inside else {
+        eprintln!(
+            "desk: editor path {}, not in a git repository",
+            full.display()
+        );
+        return OnDisk {
+            name,
+            folders: parent.file_name().map(named).into_iter().collect(),
+            repo: None,
+            dirty: false,
+            shut: false,
+        };
+    };
+    let parts: Vec<SharedString> = inside.iter().map(named).collect();
+    let path = parts.join("/");
+    eprintln!(
+        "desk: editor path {path} in repository {}",
+        git.root().display()
+    );
+    OnDisk {
+        name,
+        folders: parts
+            .split_last()
+            .map(|(_, folders)| folders.to_vec())
+            .unwrap_or_default(),
+        repo: Some(Repo {
+            git: Arc::new(git),
+            path,
+        }),
+        dirty: false,
+        shut: false,
+    }
+}
+
+fn git_marks(hunks: &[Hunk]) -> Marks {
+    hunks
+        .iter()
+        .flat_map(|hunk| {
+            let (start, count) = (hunk.new.start as usize, hunk.new.count as usize);
+            let (lines, gutter) = match (hunk.old.count, count) {
+                (_, 0) => (
+                    start.max(1)..start.max(1) + 1,
+                    GutterMark::Removed(ColorToken::GitDeleted),
+                ),
+                (0, _) => (
+                    start..start + count,
+                    GutterMark::Changed(ColorToken::GitAdded),
+                ),
+                _ => (
+                    start..start + count,
+                    GutterMark::Changed(ColorToken::GitModified),
+                ),
+            };
+            lines.map(move |line| {
+                let mark = LineMarks {
+                    gutter: Some(gutter),
+                    ..LineMarks::default()
+                };
+                (line.saturating_sub(1), mark)
+            })
+        })
+        .collect()
+}
+
+fn described(marks: &Marks) -> String {
+    let lines: Vec<String> = marks
+        .iter()
+        .map(|(row, mark)| match mark.gutter {
+            Some(GutterMark::Changed(ColorToken::GitAdded)) => format!("{} added", row + 1),
+            Some(GutterMark::Removed(_)) => format!("{} removed below", row + 1),
+            _ => format!("{} modified", row + 1),
+        })
+        .collect();
+    lines.join(", ")
 }
 
 fn fixture_editor(lines: &[Line], marks: Marks, cx: &mut App) -> Opened {
@@ -115,7 +233,7 @@ fn launch(board: Option<&str>, source: Source, cx: &mut App) -> Result<AnyView, 
             ));
         }
     };
-    Ok(cx.new(|_| editor).into())
+    Ok(cx.new(|cx| editor.watched(cx)).into())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -151,6 +269,8 @@ pub struct Editor {
     menu: bool,
     told: Option<SharedString>,
     source: Source,
+    _watch: Option<Subscription>,
+    _marking: Option<Task<()>>,
 }
 
 impl Editor {
@@ -167,12 +287,87 @@ impl Editor {
             menu: board == Board::Split,
             told: None,
             source,
+            _watch: None,
+            _marking: None,
+        }
+    }
+
+    fn watched(mut self, cx: &mut Context<Self>) -> Self {
+        if let Source::File(Ok(code), _) = &self.source {
+            self._watch = Some(cx.observe(code, Self::code_changed));
+            self.remark(cx);
+        }
+        self
+    }
+
+    fn code_changed(&mut self, code: Entity<CodeEditor>, cx: &mut Context<Self>) {
+        let dirty = code.read(cx).buffer().is_dirty();
+        let Source::File(_, disk) = &mut self.source else {
+            return;
+        };
+        if disk.dirty == dirty {
+            return;
+        }
+        disk.dirty = dirty;
+        if !dirty {
+            self.remark(cx);
+        }
+        cx.notify();
+    }
+
+    fn remark(&mut self, cx: &mut Context<Self>) {
+        let Source::File(
+            Ok(code),
+            OnDisk {
+                repo: Some(repo), ..
+            },
+        ) = &self.source
+        else {
+            return;
+        };
+        let (code, git, path) = (code.downgrade(), repo.git.clone(), repo.path.clone());
+        let diff = cx
+            .background_executor()
+            .spawn(async move { git.diff(&path, Against::Index).map(|hunks| (path, hunks)) });
+        self._marking = Some(cx.spawn(async move |_, cx| {
+            let (path, hunks) = match diff.await {
+                Ok(found) => found,
+                Err(error) => {
+                    eprintln!("desk: editor could not read git marks: {error}");
+                    return;
+                }
+            };
+            let marks = git_marks(&hunks);
+            let shown = described(&marks);
+            let applied = code.update(cx, |code, cx| {
+                let clean = !code.buffer().is_dirty();
+                if clean {
+                    code.set_marks(marks);
+                    cx.notify();
+                }
+                clean
+            });
+            match applied {
+                Ok(true) => eprintln!(
+                    "desk: editor git marks for {path}, {} hunks: {shown}",
+                    hunks.len()
+                ),
+                Ok(false) => eprintln!("desk: editor dropped git marks for {path}, edited since"),
+                Err(error) => eprintln!("desk: editor is gone before its git marks: {error}"),
+            }
+        }));
+    }
+
+    fn shut_file(&mut self, cx: &mut Context<Self>) {
+        if let Source::File(_, disk) = &mut self.source {
+            disk.shut = true;
+            cx.notify();
         }
     }
 
     fn opened(&self) -> &Opened {
         match (&self.source, self.file) {
-            (Source::File(opened), _) => opened,
+            (Source::File(opened, _), _) => opened,
             (Source::Fixture { notes, .. }, File::Notes) => notes,
             (Source::Fixture { test, .. }, File::Test) => test,
             (Source::Fixture { store, .. }, File::Store) => store,
