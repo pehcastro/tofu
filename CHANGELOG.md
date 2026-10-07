@@ -10,6 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.6-fix2 - 2026-10-07
+
+### Fixed
+
+- **The lead's offer to keep a memory is a card** titled `[&orchestrator] wants to add a project memory`, with tab switching to a global one, and a typed `remember` card reads `Add a global memory?`. A memory states the rule itself: the lead's `remember` tool and `tofu learn` refuse one that names or describes you.
+
+- **`tofu changelog` orders a fix release after its base version**, so a `-fix` entry reads once and is not shown as unread again.
+
 ## 0.5.6-fix1 - 2026-10-07
 
 ### Fixed
