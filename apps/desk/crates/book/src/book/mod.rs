@@ -1,6 +1,7 @@
 mod agents;
 mod charts;
 mod chat;
+mod code;
 mod composer;
 mod content;
 mod controls;
@@ -50,6 +51,7 @@ use crate::themes::{self, Choice};
 use agents::AgentsPage;
 use charts::ChartsPage;
 use chat::{AskPage, ChatPage};
+use code::CodePage;
 use composer::ComposerPage;
 use content::ContentState;
 use controls::ControlsState;
@@ -88,6 +90,7 @@ pub struct Book {
     composer: ComposerPage,
     shell: ShellPage,
     diff: DiffPage,
+    code: CodePage,
     chat: ChatPage,
     ask: AskPage,
     tree: TreePage,
@@ -130,6 +133,7 @@ impl Book {
             composer: ComposerPage::new(cx),
             shell: ShellPage::new(cx),
             diff: DiffPage::new(cx),
+            code: CodePage::new(),
             chat: ChatPage::new(window, cx),
             ask: AskPage::new(cx),
             tree: TreePage::new(cx),
@@ -158,6 +162,7 @@ impl Book {
             Page::Composer => self.composer.key(key),
             Page::Shell => self.shell.key(key),
             Page::Diff => self.diff.key(key),
+            Page::Code => self.code.key(key),
             Page::ChatRows => self.chat.key(event, window, cx),
             Page::AskBar => self.ask.key(key),
             Page::FileTree => self.tree.key(key),
@@ -458,6 +463,7 @@ impl Book {
             Page::Composer => self.composer.render(theme, window, cx),
             Page::Shell => self.shell.render(theme, window, cx),
             Page::Diff => self.diff.render(theme, window, cx),
+            Page::Code => self.code.render(theme, window),
             Page::ChatRows => self.chat.render(theme, window, cx),
             Page::AskBar => self.ask.render(theme, window, cx),
             Page::FileTree => self.tree.render(theme, window, cx),

@@ -61,6 +61,7 @@ pub enum Page {
     Composer,
     Shell,
     Diff,
+    Code,
     ChatRows,
     FileTree,
     History,
@@ -86,7 +87,7 @@ pub struct Sheet {
     pub missing: &'static str,
 }
 
-pub const UNBUILT: [(Group, &str); 10] = [
+pub const UNBUILT: [(Group, &str); 9] = [
     (Group::Foundations, "Theme classes"),
     (Group::Foundations, "Theme preview"),
     (Group::Foundations, "Intro background"),
@@ -95,12 +96,11 @@ pub const UNBUILT: [(Group, &str); 10] = [
     (Group::Controls, "Scrollbar"),
     (Group::Controls, "Progress bar"),
     (Group::Content, "Status bar"),
-    (Group::Content, "Code and editor"),
     (Group::Content, "Sections"),
 ];
 
 impl Page {
-    pub const ALL: [Page; 41] = [
+    pub const ALL: [Page; 42] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -135,6 +135,7 @@ impl Page {
         Page::Composer,
         Page::Shell,
         Page::Diff,
+        Page::Code,
         Page::Shells,
         Page::Terminal,
         Page::AskBar,
@@ -439,6 +440,16 @@ impl Page {
                 "components/term.rs",
                 "exit 0, exit 1",
                 "running",
+            ),
+            Page::Code => sheet(
+                "code",
+                "Code",
+                Group::Content,
+                "Read-only code with a line number gutter and syntax colours. The gutter stays put on a sideways scroll; left and right scroll sideways.",
+                "IEDITOR-1",
+                "components/code.rs",
+                "Rust file coloured by desk_core::syntax, rows built per frame, vertical and sideways scroll; board width",
+                "",
             ),
             Page::Diff => sheet(
                 "diff",
