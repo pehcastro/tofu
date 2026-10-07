@@ -1,4 +1,6 @@
 mod desk;
+#[path = "screens/theme/pick.rs"]
+mod pick;
 mod status_bar;
 mod title_bar;
 mod screens {
@@ -56,15 +58,12 @@ mod modules {
 
 use std::cell::Cell;
 use std::env;
-use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
 
 use desk_ui::icon::Icon;
-use desk_ui::live::{self, THEME_VARIABLE};
 use gpui::{AnyView, App, AppContext, Window};
 
-const DEFAULT_THEME: &str = "tofu-glass";
 const USAGE: &str = "usage: desk [--screen <name> [--board <ID>]]\n\
 screens: work settings accounts theme library classifier usage limits context session intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
@@ -194,13 +193,11 @@ fn main() -> ExitCode {
                 }
             })
             .detach();
-            let themes = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../themes");
-            let chosen = env::var_os(THEME_VARIABLE).map_or_else(
-                || DEFAULT_THEME.to_owned(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            let opened = live::start(themes, chosen, cx)
-                .map_err(|error| format!("tofu desk has no theme to draw with: {error}"))
+            let opened = pick::chosen()
+                .and_then(|chosen| {
+                    pick::start(&chosen.theme, cx)?;
+                    pick::set_mode(&chosen.theme, chosen.mode, cx)
+                })
                 .and_then(|()| open_launch(launch, cx));
             if let Err(error) = opened {
                 eprintln!("{error}");
