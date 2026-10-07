@@ -40,6 +40,8 @@ pub struct Tool {
     pub args: serde_json::Value,
     pub output: Option<String>,
     pub failed: bool,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +55,9 @@ pub struct Agent {
     pub report: Option<String>,
     pub steps: i64,
     pub tokens: i64,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub thinking: String,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +68,9 @@ pub struct Shell {
     pub exit_code: Option<i64>,
     pub killed: bool,
     pub exited: bool,
+    pub pid: Option<i64>,
+    pub started_at: Option<String>,
+    pub port: Option<u16>,
 }
 
 #[derive(Debug, Default)]
@@ -171,10 +179,14 @@ impl Session {
                 .open_message(&e.turn, &e.agent, Role::Assistant)
                 .text
                 .push_str(&e.text),
-            N::ThinkingDelta(e) => self
-                .open_message(&e.turn, &e.agent, Role::Thinking)
-                .text
-                .push_str(&e.text),
+            N::ThinkingDelta(e) => {
+                if let Some(agent) = e.agent.as_ref().and_then(|a| self.agents.get_mut(a)) {
+                    agent.thinking.push_str(&e.text);
+                }
+                self.open_message(&e.turn, &e.agent, Role::Thinking)
+                    .text
+                    .push_str(&e.text);
+            }
             N::MessageReset(e) => self
                 .open_message(&e.turn, &e.agent, Role::Assistant)
                 .text
@@ -193,6 +205,8 @@ impl Session {
                         args: e.args.clone(),
                         output: None,
                         failed: false,
+                        started_at: Some(e.started_at.clone()),
+                        ended_at: None,
                     },
                 );
             }
@@ -217,6 +231,9 @@ impl Session {
                         report: None,
                         steps: 0,
                         tokens: 0,
+                        started_at: Some(e.started_at.clone()),
+                        ended_at: None,
+                        thinking: String::new(),
                     },
                 );
             }
@@ -270,6 +287,9 @@ impl Session {
                         exit_code: None,
                         killed: false,
                         exited: false,
+                        pid: Some(e.pid),
+                        started_at: Some(e.started_at.clone()),
+                        port: None,
                     },
                 );
             }
