@@ -1539,6 +1539,7 @@ dependencies = [
  "async-channel",
  "desk_core",
  "desk_motion",
+ "desk_tiling",
  "gpui-ce",
  "serde_json",
 ]

@@ -10,7 +10,7 @@ use crate::title_bar::title_bar;
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
-use desk_tiling::Rect;
+use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Key, SHORTCUTS};
 use desk_ui::components::card::{inner_card, outer_card};
 use desk_ui::components::overlay::toast;
@@ -21,7 +21,7 @@ use desk_ui::components::sheet::Sheet;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
 use desk_ui::live::ActiveTheme;
 #[cfg(feature = "screen-work")]
-use desk_ui::metrics::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT};
+use desk_ui::metrics::STATUS_BAR_HEIGHT;
 use desk_ui::metrics::{
     TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
 };
@@ -302,6 +302,9 @@ impl Desk {
         match &self.shown.body {
             #[cfg(feature = "screen-work")]
             Body::Work(work) => {
+                if work.update(cx, |work, cx| work.cancel_drag(cx)) {
+                    return eprintln!("desk: escape: the drag is cancelled");
+                }
                 let focused = work.update(cx, |work, cx| work.focus_composer(window, cx));
                 eprintln!("desk: escape: the composer has focus {focused}");
             }
@@ -324,28 +327,13 @@ impl Desk {
             reason = "only the work screen is fitted to the window"
         )
     )]
-    fn content(
-        &self,
-        theme: &Theme,
-        window: &Window,
-        cx: &mut App,
-    ) -> (Option<AnyElement>, AnyElement) {
+    fn content(&self, theme: &Theme, cx: &mut App) -> (Option<AnyElement>, AnyElement) {
         match &self.shown.body {
             #[cfg(feature = "screen-work")]
             Body::Work(work) => {
-                let viewport = window.viewport_size();
-                let x = self.tiles_x();
-                let area = Rect {
-                    x,
-                    y: TITLE_BAR_HEIGHT + TILE_TOP,
-                    w: f32::from(viewport.width) - x - GUTTER,
-                    h: f32::from(viewport.height)
-                        - TITLE_BAR_HEIGHT
-                        - TILE_TOP
-                        - TILE_BOTTOM
-                        - STATUS_BAR_HEIGHT,
-                };
-                work.update(cx, |work, _| work.fit(area));
+                work.update(cx, |work, _| {
+                    work.fit(TILE_BOTTOM + STATUS_BAR_HEIGHT - WORKSPACE_EDGE)
+                });
                 let tabs = work.read(cx).tabs(work.downgrade(), theme);
                 (
                     Some(tabs.into_any_element()),
@@ -647,7 +635,7 @@ impl Desk {
 }
 
 impl Render for Desk {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let problems = ActiveTheme::problems(cx);
         let toast_layer = self.toast.as_ref().map(|shown| {
@@ -668,7 +656,7 @@ impl Render for Desk {
                     }),
                 ))
         });
-        let (tabs, content) = self.content(&theme, window, cx);
+        let (tabs, content) = self.content(&theme, cx);
         let sheet = self.switch_sheet(cx);
         #[cfg(feature = "screen-work")]
         let menu = self.projects.menu.clone();

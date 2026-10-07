@@ -32,6 +32,7 @@ pub mod status_bar;
 pub mod tabs;
 pub mod term;
 pub mod terminal;
+pub mod tiling_board;
 pub mod title_bar;
 pub mod tooltip;
 pub mod transcript;
