@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -107,7 +108,7 @@ type Host struct {
 
 type pendingImage struct {
 	index int
-	name  string
+	path  string
 }
 
 func New(cfg Config) (*Host, []string) {
@@ -262,8 +263,8 @@ func (h *Host) StopLead() {
 	}
 }
 
-func (h *Host) Answer(answer Answer) bool {
-	if h.asks.answer(oldestAsk, answer) {
+func (h *Host) Answer(id string, answer Answer) bool {
+	if h.asks.answer(id, answer) {
 		return true
 	}
 	select {
@@ -467,33 +468,28 @@ func (h *Host) Attached(index int, name string, bytes int, format string) {
 	id := h.pendingID()
 	_ = store.AppendEvent(id, session.EventAttachment, session.Attachment{File: session.AttachmentPath(id, name), Bytes: bytes, Format: format})
 	h.mu.Lock()
-	h.pending = append(h.pending, pendingImage{index: index, name: name})
+	h.pending = append(h.pending, pendingImage{index: index, path: filepath.Join(store.AttachmentDir(id), name)})
 	h.mu.Unlock()
 }
 
 func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
 	h.mu.Lock()
 	var wanted []pendingImage
-	for _, image := range h.pending {
-		if strings.Contains(task, ImageToken(image.index)) {
+	h.pending = slices.DeleteFunc(h.pending, func(image pendingImage) bool {
+		taken := strings.Contains(task, ImageToken(image.index))
+		if taken {
 			wanted = append(wanted, image)
 		}
-	}
+		return taken
+	})
 	h.mu.Unlock()
-	if len(wanted) == 0 {
-		return nil, nil
-	}
-	dir, err := h.AttachmentDir()
-	if err != nil {
-		return nil, err
-	}
 	images := make([]llm.Image, 0, len(wanted))
 	for _, image := range wanted {
-		data, err := os.ReadFile(filepath.Join(dir, image.name))
+		data, err := os.ReadFile(image.path)
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, llm.Image{MediaType: imageMediaType(image.name), Data: data})
+		images = append(images, llm.Image{MediaType: imageMediaType(image.path), Data: data})
 	}
 	return images, nil
 }

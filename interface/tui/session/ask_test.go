@@ -15,7 +15,7 @@ func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {
 	model.SetSize(80, 24)
 	model.Start()
 	model.Append(Entry{Kind: Tool, ID: "c1", Head: "bash", Body: "git push --force origin main"})
-	model.Decide(Decision{
+	model.Decide("ask-push", Decision{
 		Tool:    "bash",
 		Verdict: Ask,
 		Answers: []Answer{
@@ -30,7 +30,7 @@ func TestTheAskBlockCarriesTheNumbersTheParagraphCannotFit(t *testing.T) {
 			Value:     2,
 		},
 	})
-	model.Await()
+	model.Await("ask-push", "bash", "", nil)
 
 	frame := model.View()
 	plain := ansi.Strip(frame)
@@ -70,7 +70,7 @@ func TestTheSessionFormatsTheNumbersItWasHanded(t *testing.T) {
 	view := New(fixed(), counted(new(int)))
 	view.SetSize(100, 20)
 	view.Append(Entry{Kind: Tool, ID: "w1", Head: "write", Body: "README.md"})
-	view.Decide(Decision{
+	view.Decide("ask-write", Decision{
 		Tool:    "write",
 		Verdict: Ask,
 		Answers: []Answer{

@@ -49,7 +49,7 @@ func TestSessionAwaitingGolden(t *testing.T) {
 	model.Returned()
 	at = at.Add(2 * time.Second)
 	model.Append(Entry{Kind: Tool, ID: "toolu_d00d11", Head: "bash", Body: "git push --force origin develop"})
-	model.Decide(Decision{
+	model.Decide("ask-push", Decision{
 		Tool:    "bash",
 		Verdict: Ask,
 		Answers: []Answer{
@@ -58,7 +58,7 @@ func TestSessionAwaitingGolden(t *testing.T) {
 		},
 		Reason: Reason{Question: "risk", Limit: "risk_ask_at", Levels: fixture.RiskLevels(), Threshold: 1.5, Value: 2},
 	})
-	model.Await()
+	model.Await("ask-push", "bash", "", nil)
 	at = at.Add(21 * time.Second)
 	golden.Assert(t, "session-awaiting-120x36.golden", model.View())
 }

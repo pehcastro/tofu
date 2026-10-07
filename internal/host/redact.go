@@ -127,6 +127,11 @@ func redacted(event Event, mask func(string) string) Event {
 	if event.Args != nil {
 		event.Args = json.RawMessage(mask(string(event.Args)))
 	}
+	if event.Logged != nil && event.Logged.Body != nil {
+		logged := *event.Logged
+		logged.Body = json.RawMessage(mask(string(logged.Body)))
+		event.Logged = &logged
+	}
 	if event.Decision != nil {
 		decided := *event.Decision
 		decided.Failure, decided.OverridesRule = mask(decided.Failure), mask(decided.OverridesRule)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/interface/tui/trace"
 	"tofu/internal/hook"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
@@ -637,6 +638,14 @@ type traceHook struct {
 	hook.Run
 }
 
+type traceMessage struct {
+	ID   string    `json:"id"`
+	Turn string    `json:"turn"`
+	Role string    `json:"role"`
+	At   time.Time `json:"at"`
+	Text string    `json:"text"`
+}
+
 type traceFailure struct {
 	Agent string `json:"agent,omitempty"`
 	Turn  string `json:"turn"`
@@ -653,6 +662,7 @@ type sessionTraceReport struct {
 	Calls    []traceCall        `json:"calls"`
 	Hooks    []traceHook        `json:"hooks,omitempty"`
 	Failures []traceFailure     `json:"failures,omitempty"`
+	Messages []traceMessage     `json:"messages,omitempty"`
 
 	Sizes    *session.Sizes         `json:"sizes,omitempty"`
 	Inserted []session.TracedInsert `json:"inserted,omitempty"`
@@ -746,6 +756,7 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 		return sessionTraceReport{}, err
 	}
 	report.Session, report.Name, report.Error, report.Events = header.ID, header.Named(), header.Error, len(events)
+	report.Messages = slices.DeleteFunc(report.Messages, func(said traceMessage) bool { return header.CarriedFrom != nil && said.Turn == header.ID })
 	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
 	return withAncestors(store, header, report)
 }
@@ -781,6 +792,16 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 				ran.Tool = report.Calls[at].Tool
 			}
 			report.Hooks = append(report.Hooks, ran)
+		case session.EventMessage:
+			var said session.MessageBody
+			if event.Agent != "" || json.Unmarshal(event.Body, &said) != nil || strings.TrimSpace(said.Content) == "" || said.Role != session.RoleUser && said.Role != session.RoleAssistant {
+				break
+			}
+			text, typed := turn.TaskIn(said.Content)
+			if !typed {
+				text = said.Content
+			}
+			report.Messages = append(report.Messages, traceMessage{ID: event.ID, Turn: event.Turn, Role: said.Role, At: event.At, Text: text})
 		case session.EventTurnEnd:
 			var ended struct {
 				Error string `json:"error"`
@@ -881,6 +902,14 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	for i, notice := range report.Notices {
 		notices[i] = cli.Row{Mark: cli.Warn, Cells: []string{cmp.Or(notice.Agent, session.AuthorOrchestrator), notice.At.Format(time.TimeOnly)}, Detail: oneLine(notice.Text)}
 	}
+	messages := make([]cli.Row, len(report.Messages))
+	for i, said := range report.Messages {
+		who := session.AuthorOrchestrator
+		if said.Role == session.RoleUser {
+			who = "to the orchestrator"
+		}
+		messages[i] = cli.Row{Mark: cli.Idle, Cells: []string{who, "[message" + trace.Short(said.ID) + "]", said.At.Format(time.TimeOnly)}, Detail: widget.Fit(oneLine(said.Text), page.Width)}
+	}
 	failures := make([]cli.Row, len(report.Failures))
 	for i, failure := range report.Failures {
 		failures[i] = cli.Row{Mark: cli.Fail, Cells: []string{cmp.Or(failure.Agent, session.AuthorOrchestrator), failure.Turn}, Detail: oneLine(failure.Error)}
@@ -897,7 +926,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	for _, section := range []struct {
 		name string
 		rows []cli.Row
-	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
+	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"messages", messages}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
 		if len(section.rows) > 0 {
 			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
 		}

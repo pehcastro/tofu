@@ -386,7 +386,7 @@ func (t *SpawnTool) diagnose(ctx context.Context, name string) (Result, error) {
 			if !ownedBy(running.Owner, []string{name}) {
 				continue
 			}
-			tail, err := registry.Tail(running.Name, konst.ShellLogTailLinesShort)
+			tail, err := registry.Tail(running.Name, konst.SubAgentDiagnoseTailLines)
 			if err != nil {
 				tail = "its output did not read back: " + err.Error()
 			}

@@ -18,6 +18,7 @@ import (
 	"tofu/interface/tui/progress"
 	"tofu/interface/tui/subagent"
 	"tofu/internal/konst"
+	isession "tofu/internal/session"
 	"tofu/internal/turn/tools"
 	"tofu/internal/widget"
 )
@@ -61,6 +62,8 @@ type Entry struct {
 	Ended     time.Time
 	Decision  *Decision
 	SubAgents []string
+	recorded  string
+	askID     string
 	turn      int
 	intoTurn  time.Duration
 	streaming bool
@@ -129,6 +132,7 @@ type Model struct {
 	stopAsked          int
 	stopAskedUntil     time.Time
 	waiting            time.Time
+	asks               []string
 	requested          time.Time
 	answered           time.Time
 	respondedOnce      bool
@@ -370,16 +374,52 @@ func (m *Model) LastCall() (string, bool) {
 	return "", false
 }
 
-func (m *Model) Decide(decision Decision) {
+func (m *Model) Decide(id string, decision Decision) {
 	for index := range m.entries {
 		entry := &m.entries[index]
 		if entry.Kind == Tool && entry.Decision == nil && entry.Head == decision.Tool && !entry.returned() {
-			entry.Decision = &decision
+			entry.Decision, entry.askID = &decision, id
 			m.revision++
 			return
 		}
 	}
-	m.Append(Entry{Kind: Tool, Head: decision.Tool, Decision: &decision})
+	m.Append(Entry{Kind: Tool, Head: decision.Tool, Decision: &decision, askID: id})
+}
+
+func (m *Model) Recorded(role, content, id string, at time.Time) {
+	if strings.TrimSpace(content) == "" {
+		return
+	}
+	switch role {
+	case isession.RoleAssistant:
+		m.link(func(entry Entry) bool {
+			return entry.Kind == Assistant && strings.TrimSpace(entry.Body) == strings.TrimSpace(content)
+		}, id, at)
+	case isession.RoleUser:
+		m.link(func(entry Entry) bool {
+			return entry.Kind == User && !entry.waiting && strings.Contains(content, Expand(entry.Body, entry.Chips))
+		}, id, at)
+		for m.link(func(entry Entry) bool {
+			return entry.Head == reportHead && entry.Detail != "" && strings.Contains(content, entry.Detail)
+		}, id, time.Time{}) {
+		}
+	}
+}
+
+func (m *Model) link(matches func(Entry) bool, id string, at time.Time) bool {
+	for index := range m.entries {
+		entry := &m.entries[index]
+		if entry.recorded != "" || !matches(*entry) {
+			continue
+		}
+		entry.recorded, entry.drawn = id, drawn{}
+		if !at.IsZero() {
+			entry.Started = at
+		}
+		m.revision++
+		return true
+	}
+	return false
 }
 
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
@@ -490,6 +530,8 @@ func (m *Model) Stop() {
 	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
 	m.leadIdleSince, m.waitingOn, m.stopAskedUntil = time.Time{}, 0, time.Time{}
+	m.asks, m.waiting = nil, time.Time{}
+	m.markAsked()
 	m.seal()
 	m.revision++
 	for index := range m.entries {

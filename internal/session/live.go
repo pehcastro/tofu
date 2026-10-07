@@ -174,9 +174,11 @@ func (l *Log) Append(event Event, body any) (Event, error) {
 		l.prompts[event.Agent] = string(event.Body)
 	}
 	if l.watch != nil {
-		bodiless := event
-		bodiless.Body = nil
-		l.watch(bodiless)
+		watched := event
+		if event.Kind != EventMessage {
+			watched.Body = nil
+		}
+		l.watch(watched)
 	}
 	return event, nil
 }

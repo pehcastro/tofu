@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	placeWords  = 2
-	cancelledAt = "cancelled at"
+	placeWords    = 2
+	cancelledAt   = "cancelled at"
+	hookTrustTool = "hooks"
 )
 
 type Engine interface {
@@ -78,11 +79,14 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	defer func() { _ = releaseTurn() }()
 	task += h.takeRan()
-	images, err := h.takePendingImages(task)
-	if err != nil {
-		fail(err)
-		return
+	imagesOf := func(said string) []llm.Image {
+		attached, err := h.takePendingImages(said)
+		if err != nil {
+			say("an image in your message did not read, so the model does not see it: " + err.Error())
+		}
+		return attached
 	}
+	images := imagesOf(task)
 	watch := &watcher{held: h.roster, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	person := awaitPerson(emit, h.asks)
 	var prepared Prepared
@@ -139,13 +143,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	h.mu.Unlock()
 	config.Steering = func() []string { return steered(live.Steering, emit) }
-	config.ImagesOf = func(said string) []llm.Image {
-		attached, err := h.takePendingImages(said)
-		if err != nil {
-			say("an image in your message did not read, so the model does not see it: " + err.Error())
-		}
-		return attached
-	}
+	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	config.Appended = func(logged session.Event) {
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
@@ -279,20 +277,22 @@ func awaitPerson(emit func(Event), book *asks) turn.Person {
 		if request.Tool == (tools.RuleOverride{}).Name() || request.Tool == turn.RememberToolName {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
+		standing := overriding.Question == "" && overriding.Statement == "" && request.Tool != hookTrustTool
 		stood, stands := book.stood(place)
+		stands = stands && standing
+		id := cmp.Or(decision.ID, session.NewEventID())
 		switch {
 		case overriding.Statement != "":
-			overriding.Question = "remember this, " + overriding.Scope + "? " + overriding.Statement
-			emit(Event{Kind: EventDecision, Decision: &Decision{Tool: request.Tool, Verdict: Ask, Remembers: overriding.Question}})
+			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, Remembers: "remember this, " + overriding.Scope + "? " + overriding.Statement}})
 		case overriding.Question != "":
 			emit(Event{Kind: EventNote, Text: overriding.Question})
-			emit(Event{Kind: EventDecision, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})
+			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})
 		case stands && stood == AlwaysHere:
 			return turn.PersonAlwaysHere, nil
 		case stands:
 			return turn.PersonDenied, nil
 		}
-		asked := Event{Kind: EventAwaitPerson, ID: cmp.Or(decision.ID, session.NewEventID()), Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx)}
+		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx)}
 		if decision.Verdict != ledger.VerdictUnset {
 			judged := gateDecision(request.Tool, decision)
 			asked.Decision = &judged
@@ -303,7 +303,7 @@ func awaitPerson(emit func(Event), book *asks) turn.Person {
 		defer emit(Event{Kind: EventResumed, ID: asked.ID, Agent: asked.Agent})
 		select {
 		case answered := <-reply:
-			if (answered == AlwaysHere || answered == NeverHere) && overriding.Question == "" {
+			if (answered == AlwaysHere || answered == NeverHere) && standing {
 				book.stand(place, answered)
 			}
 			var out turn.PersonAnswer

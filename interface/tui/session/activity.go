@@ -1,8 +1,10 @@
 package session
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -325,28 +327,57 @@ func (m *Model) Awaiting() bool { return !m.waiting.IsZero() }
 
 func (m *Model) TakesAnswerDigits() bool { return m.Awaiting() && m.composer.Value() == "" }
 
-func (m *Model) markAsked(awaiting bool) {
-	for index := len(m.entries) - 1; index >= 0; index-- {
-		if entry := &m.entries[index]; entry.Decision != nil && entry.Decision.Verdict == Ask {
-			entry.asking, entry.asked = awaiting, entry.asked || awaiting
-			return
+func (m *Model) AskedID() string {
+	if len(m.asks) == 0 {
+		return ""
+	}
+	return m.asks[0]
+}
+
+func (m *Model) markAsked() {
+	m.revision++
+	for index := range m.entries {
+		entry := &m.entries[index]
+		entry.asking = entry.askID != "" && entry.askID == m.AskedID()
+		entry.asked = entry.asked || entry.asking
+	}
+}
+
+func (m *Model) Await(id, tool, place string, decision *Decision) {
+	if !m.Busy || slices.Contains(m.asks, id) {
+		return
+	}
+	if id == "" {
+		id = m.mint()
+		if at := slices.IndexFunc(m.entries, func(entry Entry) bool {
+			return entry.askID == "" && entry.Decision != nil && entry.Decision.Verdict == Ask && !entry.returned()
+		}); at >= 0 {
+			m.entries[at].askID = id
 		}
 	}
+	if !slices.ContainsFunc(m.entries, func(entry Entry) bool { return entry.askID == id }) {
+		asked := Decision{Tool: tool, Verdict: Ask}
+		if decision != nil {
+			asked = *decision
+		}
+		m.Append(Entry{Kind: Tool, Head: tool, Body: strings.TrimPrefix(place, tool+" "), Decision: &asked, askID: id})
+	}
+	if m.asks = append(m.asks, id); len(m.asks) == 1 {
+		m.waiting = m.now()
+	}
+	m.markAsked()
 }
 
-func (m *Model) Await() {
-	if !m.Busy || m.Awaiting() {
+func (m *Model) Resume(id string) {
+	at := slices.Index(m.asks, cmp.Or(id, m.AskedID()))
+	if at < 0 {
 		return
 	}
-	m.waiting = m.now()
-	m.markAsked(true)
-}
-
-func (m *Model) Resume() {
-	if !m.Awaiting() {
+	m.asks = slices.Delete(m.asks, at, at+1)
+	m.markAsked()
+	if len(m.asks) > 0 {
 		return
 	}
-	m.markAsked(false)
 	waited := max(m.now().Sub(m.waiting), 0)
 	m.waiting = time.Time{}
 	m.hold(waited)
@@ -366,6 +397,7 @@ func (m *Model) hold(waited time.Duration) {
 }
 
 func (m *Model) Requesting() {
+	m.seal()
 	if !m.Busy {
 		return
 	}

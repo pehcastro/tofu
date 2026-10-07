@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	turnRunningNote = "a turn is running. stop it with ctrl+c first"
-	noRecordYet     = "nothing is recorded under this repository yet"
-	undoWithCount   = "/undo "
+	turnRunningNote       = "a turn is running. stop it with ctrl+c first"
+	waitsForSubAgentsNote = "the orchestrator is idle and its turn stays open until its sub-agents report, so this runs when the turn ends. ctrl+c twice stops them now"
+	noRecordYet           = "nothing is recorded under this repository yet"
+	undoWithCount         = "/undo "
 )
 
 func commands(options Options) []session.Command {
@@ -274,9 +275,20 @@ func (a *App) repick(slug string) string {
 }
 
 func (a *App) carry(change func() string) {
-	if !a.refusedMidTurn() {
+	switch {
+	case a.busy && !a.leading:
+		a.afterTurn = append(a.afterTurn, change)
+		a.view.Append(session.Entry{Kind: session.Note, Body: waitsForSubAgentsNote})
+	case !a.refusedMidTurn():
 		a.view.Append(session.Entry{Kind: session.Note, Body: change()})
 	}
+}
+
+func (a *App) carryHeld() {
+	for _, change := range a.afterTurn {
+		a.view.Append(session.Entry{Kind: session.Note, Body: change()})
+	}
+	a.afterTurn = nil
 }
 
 func (a *App) undoCommand() bool {

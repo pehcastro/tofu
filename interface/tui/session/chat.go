@@ -1,6 +1,7 @@
 package session
 
 import (
+	"cmp"
 	"strconv"
 	"strings"
 	"time"
@@ -294,7 +295,7 @@ func (m *Model) render(index int) []string {
 func (m *Model) message(entry Entry, label string, body []string, tinted bool) []string {
 	width, clock := m.textWidth(), entry.Started.Format(clockLayout)
 	meta := look.Faint(clock)
-	if short := trace.Short(entry.ID); short != "" {
+	if short := trace.Short(entry.shownID()); short != "" {
 		meta = look.Faint(clock+metaGap) + look.TypedID(messageKind, short)
 	}
 	if entry.waiting {
@@ -316,6 +317,13 @@ func (m *Model) message(entry Entry, label string, body []string, tinted bool) [
 		surface[index] = margin + line
 	}
 	return surface
+}
+
+func (e Entry) shownID() string {
+	if e.Kind == Assistant {
+		return cmp.Or(e.recorded, e.ID)
+	}
+	return e.recorded
 }
 
 func indented(lines []string) []string {
@@ -345,6 +353,9 @@ func (m *Model) toolLine(entry Entry) string {
 		marker = progress.Work(m.frame) + " "
 	}
 	right := expandMark(entry.ID)
+	if short := trace.Short(entry.recorded); short != "" {
+		right = gap + look.TypedID(messageKind, short) + right
+	}
 	if status = widget.Fit(oneLine(status), max(m.textWidth()/statusShare-widget.Cells(right), 0)); status != "" {
 		right = gap + statusStyle.Render(status) + right
 	}

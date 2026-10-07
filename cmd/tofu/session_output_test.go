@@ -114,6 +114,7 @@ func sessionOutputProject(t *testing.T) string {
 func TestSessionContextAndShellsMatchTheirTextAndJSONGoldens(t *testing.T) {
 	stamp := regexp.MustCompile(`"(at|started_at|ended_at|started|ended|last_output)": "[^"]*"`)
 	homeValue := regexp.MustCompile(`HOME[^"]*`)
+	clock := regexp.MustCompile(`\b\d{2}:\d{2}:\d{2}\b`)
 	printed := map[string]string{}
 	for _, mode := range []string{"text", "json"} {
 		t.Run(mode, func(t *testing.T) {
@@ -140,6 +141,7 @@ func TestSessionContextAndShellsMatchTheirTextAndJSONGoldens(t *testing.T) {
 					out = homeValue.ReplaceAllStringFunc(out, func(path string) string { return strings.ReplaceAll(path, `\\`, "/") })
 					out = strings.ReplaceAll(stamp.ReplaceAllString(out, `"$1": "AT"`), konst.Version, "VERSION")
 				}
+				out = clock.ReplaceAllString(out, "HH:MM:SS")
 				printed["session-output/"+c.name+"."+mode+".golden"] = "exit " + strconv.Itoa(got) + "\n--- stdout\n" + out + "--- stderr\n" + errOut
 			}
 		})

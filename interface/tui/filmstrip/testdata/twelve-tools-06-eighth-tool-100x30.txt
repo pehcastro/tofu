@@ -1,7 +1,7 @@
  tofu  ./tofu/                     chat   agents   edits   shells                    16s [settings] 
                                                                                                     
                                                                                                     
-    You                                                                  14:32  [message#91ce62]    
+    You                                                                                    14:32    
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     

@@ -2,7 +2,7 @@
                                                             
                                                            │
                                                            │
-    You                          14:32  [message#672500]   │
+    You                                            14:32   │
     edits                                                  │
                                                            │
                                                            │
@@ -86,7 +86,7 @@ Select an edit reference to read every changed line.
   › Appearance    05    › Theme                 tofu  ▾     
     Models & rol… 02      tofu uses Zed Nu Disco; choos…    
     Interaction   05                                        
-    Context       10      Density        comfortable  ▾     
+    Context       11      Density        comfortable  ▾     
     Files         03      Spacing across lists and pane…    
     Shell         05                                        
     Turn          13      Animations          subtle  ▾     
@@ -106,7 +106,7 @@ Select an edit reference to read every changed line.
                                                                                │
                                                                                │
                                                                                │
-    You                                              14:32  [message#672500]   ┃
+    You                                                                14:32   ┃
     edits                                                                      ┃
                                                                                ┃
                                                                                ┃
@@ -202,7 +202,7 @@ Select an edit reference to read every changed line.
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette              
     Models & rol… 02                                                            
     Interaction   05      Density                            comfortable  ▾     
-    Context       10      Spacing across lists and panels                       
+    Context       11      Spacing across lists and panels                       
     Files         03                                                            
     Shell         05      Animations                              subtle  ▾     
     Turn          13      Motion for conversational states                      
@@ -220,7 +220,7 @@ Select an edit reference to read every changed line.
                                                                                 
  tofu  ./tofu/                     chat   agents   edits   shells (1)                     0s [settings] 
                                                                                                         
-    You                                                                      14:32  [message#672866]    
+    You                                                                                        14:32    
     agents                                                                                              
                                                                                                         
     ✓ [&c2]  ✗ [&c3]  ○ [&c1]                                                                           
@@ -235,7 +235,7 @@ Select an edit reference to read every changed line.
                                                                                                         
                                                                                                         
                                                                                                         
-    You                                                                      14:32  [message#672500]    
+    You                                                                                        14:32    
     edits                                                                                               
                                                                                                         
                                                                                                         
@@ -354,7 +354,7 @@ Select an edit reference to read every changed line.
   › Appearance    05      tofu uses Zed Nu Disco; choose a palette                                      
     Models & rol… 02                                                                                    
     Interaction   05      Density                                                    comfortable  ▾     
-    Context       10      Spacing across lists and panels                                               
+    Context       11      Spacing across lists and panels                                               
     Files         03                                                                                    
     Shell         05      Animations                                                      subtle  ▾     
     Turn          13      Motion for conversational states                                              
@@ -380,7 +380,7 @@ Select an edit reference to read every changed line.
                                                                                                         
  tofu   |  ./tofu/ (git:develop)           chat   sub-agents   file edits   shells (1)   amber-cedar-otter [session#3c5f71] | 0s [settings] 
                                                                                                                                             
-    You                                                                                                          14:32  [message#672866]    
+    You                                                                                                                            14:32    
     agents                                                                                                                                  
                                                                                                                                             
     ✓ [&c2]  ✗ [&c3]  ○ [&c1]                                                                                                               
@@ -394,7 +394,7 @@ Select an edit reference to read every changed line.
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-    You                                                                                                          14:32  [message#672500]    
+    You                                                                                                                            14:32    
     edits                                                                                                                                   
                                                                                                                                             
                                                                                                                                             
@@ -546,7 +546,7 @@ Select an edit reference to read every changed line.
   › Appearance          05      tofu uses Zed Nu Disco; choose a palette                                     choose a palette               
     Models & roles      02                                                                                                                  
     Interaction         05      Density                                                   comfortable  ▾     CURRENT VALUE                  
-    Context             10      Spacing across lists and panels                                               tofu                          
+    Context             11      Spacing across lists and panels                                               tofu                          
     Files               03                                                                                                                  
     Shell               05      Animations                                                     subtle  ▾     HOW IT WORKS                   
     Turn                13      Motion for conversational states                                             Enter opens a focused          

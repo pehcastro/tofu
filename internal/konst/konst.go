@@ -235,6 +235,9 @@ const (
 	ShellLogTailLinesShort   = 100
 	ShellLogTailLinesDefault = 500
 	ShellLogTailLinesLong    = 1000
+
+	SubAgentDiagnoseTailLines = 10
+	FinishedShellKeptHours    = 72
 )
 
 const (

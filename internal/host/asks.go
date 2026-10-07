@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-const oldestAsk = ""
-
 type waitingAsk struct {
 	id    string
 	reply chan Answer
@@ -50,7 +48,7 @@ func (a *asks) answer(id string, given Answer) bool {
 func (a *asks) take(id string) (chan Answer, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	at := slices.IndexFunc(a.waiting, func(one waitingAsk) bool { return id == oldestAsk || one.id == id })
+	at := slices.IndexFunc(a.waiting, func(one waitingAsk) bool { return one.id == id })
 	if at < 0 {
 		return nil, false
 	}

@@ -97,7 +97,7 @@ func Expand(task string, chips []Chip) string {
 			task = strings.Replace(task, chip.Token, chip.Text, 1)
 		}
 	}
-	return task
+	return strings.ReplaceAll(task, messageToken, quoteToken)
 }
 
 func (m *Model) replaceToken(token, replacement string) {

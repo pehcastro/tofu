@@ -375,6 +375,7 @@ type record struct {
 	turn      string
 	agent     string
 	spawnedBy string
+	appended  func(session.Event)
 	said      map[string]string
 	failed    []string
 	undo      *snapshot.Repo
@@ -394,7 +395,7 @@ type compactionRow struct {
 }
 
 func openRecord(config Config, row Row) (*record, error) {
-	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, said: map[string]string{}}
+	opened := &record{store: config.Sessions, inbox: config.Inbox, log: config.Log, scope: row.ID, turn: row.ID, appended: config.Appended, said: map[string]string{}}
 	switch {
 	case config.Log != nil:
 		opened.turn, opened.agent, opened.spawnedBy = config.Turn, row.ID, config.SpawnedBy
@@ -407,7 +408,14 @@ func openRecord(config Config, row Row) (*record, error) {
 	default:
 		return nil, nil
 	}
+	opened.observe()
 	return opened, nil
+}
+
+func (r *record) observe() {
+	if r.appended != nil {
+		r.log.Observe(r.appended)
+	}
 }
 
 func (r *record) session() string {
@@ -623,5 +631,6 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 		return
 	}
 	r.log, r.turn = log, next.ID
+	r.observe()
 	r.begin(next)
 }

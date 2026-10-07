@@ -91,7 +91,9 @@ type Fork struct {
 
 func (e Event) snapshot() bool {
 	switch e.Kind {
-	case EventContext, EventSubAgent, EventPersisted:
+	case EventPersisted:
+		return e.Logged == nil || e.Logged.Kind != session.EventMessage || e.Agent != ""
+	case EventContext, EventSubAgent:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,

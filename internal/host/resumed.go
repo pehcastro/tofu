@@ -33,6 +33,13 @@ type resumedLead struct {
 	reports []recordedReport
 	origins map[string]string
 	rows    []SubAgentRow
+	said    []recordedMessage
+}
+
+type recordedMessage struct {
+	logged session.Event
+	body   session.MessageBody
+	taken  bool
 }
 
 const (
@@ -80,6 +87,9 @@ func resumedChat(carry Carry, dir string) []Event {
 			lead.watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
 		}
+		if said := lead.recorded(message); said != nil {
+			lead.watch.emit(Event{Kind: EventPersisted, ID: said.ID, Logged: said})
+		}
 	}
 	lead.parkTheRunning()
 	return chat
@@ -115,9 +125,13 @@ func (l *resumedLead) note(event session.Event) {
 	}
 	if event.Kind == session.EventMessage {
 		var message session.MessageBody
-		if json.Unmarshal(event.Body, &message) == nil && message.Role == session.RoleUser {
+		if json.Unmarshal(event.Body, &message) != nil {
+			return
+		}
+		if message.Role == session.RoleUser {
 			l.origins[message.Content] = message.Origin
 		}
+		l.said = append(l.said, recordedMessage{logged: event, body: message})
 		return
 	}
 	if event.Call == "" {
@@ -157,6 +171,20 @@ func (l *resumedLead) reportsIn(task string) (string, bool) {
 		task, drew = strings.Replace(task, report.text, "", 1), true
 	}
 	return strings.TrimSpace(task), drew
+}
+
+func (l *resumedLead) recorded(message llm.Message) *session.Event {
+	if message.Role != llm.RoleUser && message.Role != llm.RoleAssistant {
+		return nil
+	}
+	at := slices.IndexFunc(l.said, func(said recordedMessage) bool {
+		return !said.taken && said.body.Role == message.Role.String() && said.body.Content == message.Content
+	})
+	if at < 0 {
+		return nil
+	}
+	l.said[at].taken = true
+	return &l.said[at].logged
 }
 
 func (l *resumedLead) typed(content string) bool {

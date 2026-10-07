@@ -39,9 +39,9 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			emit(event)
 			select {
 			case answer := <-s.answers:
-				s.Answer(answer)
+				s.Answer(event.ID, answer)
 			default:
-				s.Answer(tui.Denied)
+				s.Answer(event.ID, tui.Denied)
 			}
 		default:
 			emit(event)

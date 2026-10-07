@@ -48,6 +48,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **After a restart, earlier sub-agents hold no paths**, so a spawn on their files starts instead of being refused, and a refused spawn now reads as failed. A resumed sub-agent carries only its conversation since its latest fork.
 
+- **Every message shows the id it was recorded under**, the lead's messages and sub-agent reports included. Type `[message#id]` and the lead quotes that message, across forks and `--continue`; `tofu session trace` lists the same ids.
+
+- **A resumed chat keeps each message's own time.** A hook-trust prompt asks again when the hooks change, and never shares its keys with an older ask. An image pasted before a fork, or while sub-agents run, reaches the model. Shell names stay unique across `--continue`, and `tofu shells` lists finished shells for 72 hours.
+
+- **`/compact`, `/new` and `/undo` while the lead waits on sub-agents** say so and run when the turn ends. A sub-agent waiting on the lead reads "waiting for the orchestrator's answer", and `subagents diagnose` shows a shell's last 10 lines.
+
 - **Shift+Enter adds a line past the eighth.** The input stops growing at 8 rows and scrolls; before, every line after the eighth was joined onto it.
 
 - **`tofu session trace` names what let an ask run**: `allowed by gatePrompt auto`, the person, the orchestrator, or a GateVerdict hook that changed the verdict. A forked session's carried calls show their verdict, result and the session they came from.

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"cmp"
+	"encoding/json"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
+	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
 )
@@ -137,9 +139,17 @@ func (a *App) dropSteering() {
 }
 
 func (a *App) answer(answer Answer) {
-	if a.options.Host != nil && a.options.Host.Answer(answer) {
-		a.view.Resume()
+	if asked := a.view.AskedID(); a.options.Host != nil && a.options.Host.Answer(asked, answer) {
+		a.view.Resume(asked)
 	}
+}
+
+func (a *App) recorded(event Event) {
+	var said isession.MessageBody
+	if event.Agent != "" || event.Logged == nil || event.Logged.Kind != isession.EventMessage || json.Unmarshal(event.Logged.Body, &said) != nil {
+		return
+	}
+	a.view.Recorded(said.Role, said.Content, event.Logged.ID, event.Logged.At)
 }
 
 func (a *App) mintID() string {
@@ -379,7 +389,7 @@ func (a *App) absorb(event Event) {
 			break
 		}
 		if event.Agent == "" && !event.Promote {
-			a.view.Decide(*event.Decision)
+			a.view.Decide(event.ID, *event.Decision)
 		}
 		a.judged(*event.Decision, cmp.Or(event.Agent, orchestrator))
 	case EventSession:
@@ -402,9 +412,11 @@ func (a *App) absorb(event Event) {
 	case EventPlan:
 		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
-		a.view.Await()
+		a.view.Await(event.ID, event.Tool, event.Text, event.Decision)
 	case EventResumed:
-		a.view.Resume()
+		a.view.Resume(event.ID)
+	case EventPersisted:
+		a.recorded(event)
 	case EventSteered:
 		a.view.Delivered(event.Text)
 		if taken := slices.Index(a.handed, event.Text); taken >= 0 {
@@ -417,9 +429,6 @@ func (a *App) absorb(event Event) {
 	case EventStats:
 		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
 		a.status.Decisions = event.Decisions
-		if event.Model != "" && event.Agent == "" {
-			a.model = event.Model
-		}
 	}
 }
 
@@ -582,7 +591,8 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 
 func (a *App) drawReport(subAgent subagent.Row) {
 	seen, spawnedByTheLead := a.reports[subAgent.Name]
-	if !spawnedByTheLead || subAgent.State == roster.Working || subAgent.Report == "" || subAgent.Report == seen {
+	stillRunning := subAgent.State == roster.Working || subAgent.State == roster.Reopened || subAgent.State == roster.WaitingAnswer
+	if !spawnedByTheLead || stillRunning || subAgent.Report == "" || subAgent.Report == seen {
 		return
 	}
 	a.reports[subAgent.Name] = subAgent.Report

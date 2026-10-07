@@ -273,9 +273,6 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if err != nil {
 		return Row{}, err
 	}
-	if recorded != nil && config.Appended != nil {
-		recorded.log.Observe(config.Appended)
-	}
 	row.Session = recorded.session()
 	recorded.begin(row)
 	if len(config.History) > 0 {

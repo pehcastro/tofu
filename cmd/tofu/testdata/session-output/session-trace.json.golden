@@ -62,6 +62,22 @@ exit 0
         "tool": "search",
         "result_bytes": 0
       }
+    ],
+    "messages": [
+      {
+        "id": "ev-task",
+        "turn": "turn-one",
+        "role": "user",
+        "at": "AT",
+        "text": "explain the session store"
+      },
+      {
+        "id": "ev-answer",
+        "turn": "turn-one",
+        "role": "assistant",
+        "at": "AT",
+        "text": "it keeps one log per session"
+      }
     ]
   },
   "problems": []

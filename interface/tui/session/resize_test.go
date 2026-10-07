@@ -48,7 +48,7 @@ func resizeSteps() []step {
 		{"a turn started", func(m *Model) { m.Append(Entry{Kind: User, Body: "one more"}); m.Start() }},
 		{"a message queued", func(m *Model) { m.Queue("after this", "after this", nil) }},
 		{"a call to be gated", func(m *Model) { m.Append(Entry{Kind: Tool, ID: "toolu_gate", Head: "bash", Body: "git push --force"}) }},
-		{"the gate asks", func(m *Model) { m.Decide(Decision{Tool: "bash", Verdict: Ask}) }},
+		{"the gate asks", func(m *Model) { m.Decide("ask-bash", Decision{Tool: "bash", Verdict: Ask}) }},
 		{"a call to fail", func(m *Model) { m.Append(Entry{Kind: Tool, ID: "toolu_fail", Head: "read", Body: "missing.go"}) }},
 		{"the call fails", func(m *Model) { m.Finish("toolu_fail", Result{Status: "no such file", Failed: true}) }},
 		{"streamed text", func(m *Model) { m.Stream("streamed "); m.Stream("answer\n\nwith a second paragraph") }},

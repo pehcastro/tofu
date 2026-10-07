@@ -21,6 +21,7 @@ const (
 	focusedCue        = "█"
 	blurredCue        = "▯"
 	quoteToken        = "[quote#"
+	messageToken      = "[" + messageKind + "#"
 	fileToken         = "[File @"
 	agentToken        = "[&"
 	textTokenHead     = "[Text "

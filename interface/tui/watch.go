@@ -59,6 +59,13 @@ func (a *App) watchSubAgents() {
 	now, after := a.options.Now(), time.Duration(a.number(isettings.SubAgentWatchSeconds))*time.Second
 	var named []session.Activity
 	for _, row := range a.subAgents {
+		if row.State == roster.WaitingAnswer {
+			waiting := session.Activity{Name: row.Name, Doing: session.WaitingOnLead, Since: now}
+			if at := slices.IndexFunc(row.Calls, func(call subagent.Call) bool { return call.Result == "" && !call.At.IsZero() }); at >= 0 {
+				waiting.Since, waiting.What = row.Calls[at].At, strings.TrimSpace(row.Calls[at].Tool+" "+row.Calls[at].Text)
+			}
+			named = append(named, waiting)
+		}
 		if row.State != roster.Working {
 			continue
 		}

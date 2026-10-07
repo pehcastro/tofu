@@ -65,6 +65,7 @@ const (
 	EventStreamReset = host.EventStreamReset
 	EventThinking    = host.EventThinking
 	EventTurnStarted = host.EventTurnStarted
+	EventPersisted   = host.EventPersisted
 )
 
 type Event = host.Event
@@ -241,6 +242,7 @@ type App struct {
 	busy           bool
 	leading        bool
 	handed         []string
+	afterTurn      []func() string
 	reports        map[string]string
 	heldReports    []subagent.Row
 	forking        bool
@@ -659,6 +661,7 @@ func (a *App) closed() tea.Cmd {
 	a.view.Stop()
 	a.dropSteering()
 	a.countCrons()
+	a.carryHeld()
 	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
 	task, queued := a.view.Release()
 	if !queued && len(a.handed) > 0 {

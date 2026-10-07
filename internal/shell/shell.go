@@ -117,11 +117,20 @@ func (r *Registry) claim() (string, *os.File, error) {
 	if err := os.MkdirAll(r.dir, dirMode); err != nil {
 		return "", nil, err
 	}
-	for number := 1; ; number++ {
-		name := claimedPrefix + strconv.Itoa(number)
-		if exists(r.statePath(name)) {
-			continue
+	files, err := os.ReadDir(r.dir)
+	if err != nil {
+		return "", nil, err
+	}
+	highest := 0
+	for _, file := range files {
+		rest, claimed := strings.CutPrefix(file.Name(), claimedPrefix)
+		digits, _, _ := strings.Cut(rest, ".")
+		if number, err := strconv.Atoi(digits); claimed && err == nil {
+			highest = max(highest, number)
 		}
+	}
+	for number := highest + 1; ; number++ {
+		name := claimedPrefix + strconv.Itoa(number)
 		logFile, err := os.OpenFile(r.logPath(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fileMode)
 		if errors.Is(err, os.ErrExist) {
 			continue
@@ -319,8 +328,9 @@ func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, p
 
 func (r *Registry) Prune() error {
 	found, err := r.List()
+	kept := time.Now().Add(-konst.FinishedShellKeptHours * time.Hour)
 	for _, one := range found {
-		if one.State != Running {
+		if one.State != Running && (one.Ended == nil || one.Ended.Before(kept)) {
 			_ = os.Remove(r.statePath(one.Name))
 			_ = os.Remove(r.logPath(one.Name))
 		}

@@ -384,12 +384,16 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 		counted += " of at most " + strconv.Itoa(most) + ", and the turn stops at the cap"
 	}
 	var opening []llm.Message
+	var shown []llm.Image
 	for _, message := range messages {
-		if message.Role == llm.RoleSystem {
+		switch {
+		case message.Role == llm.RoleSystem:
 			opening = append(opening, message)
+		case message.Role == llm.RoleUser && task != "" && strings.Contains(message.Content, task):
+			shown = message.Images
 		}
 	}
-	opening = append(opening, llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: sourceForkTask, TakenAt: started}})
+	opening = append(opening, llm.Message{Role: llm.RoleUser, Content: task, Images: shown, Origin: llm.Origin{Source: sourceForkTask, TakenAt: started}})
 	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, error) {
 		ended.HeldWhole = len(tail)
 		carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
