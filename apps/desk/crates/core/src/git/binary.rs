@@ -106,7 +106,10 @@ impl GitBinary {
 
 impl Git for GitBinary {
     fn status(&self) -> Result<Vec<Entry>, GitError> {
-        parse::status(&self.run(&["status", "--porcelain=v2", "-z"], None)?)
+        parse::status(&self.run(
+            &["status", "--porcelain=v2", "-z", "--ignored=matching"],
+            None,
+        )?)
     }
 
     fn diff(&self, path: &str, against: Against) -> Result<Vec<Hunk>, GitError> {

@@ -66,7 +66,7 @@ use desk::{Open, Screen};
 use desk_ui::icon::Icon;
 use gpui::{App, AppContext, EmptyView};
 #[cfg(feature = "module-editor")]
-use modules::editor::open_file;
+use modules::editor::{open_dir, open_file};
 #[cfg(feature = "module-git")]
 use modules::git::open_repo;
 
@@ -80,6 +80,17 @@ fn open_file(
     Err("--file needs the editor: rebuild with --features module-editor".to_owned())
 }
 
+#[cfg(not(feature = "module-editor"))]
+fn open_dir(
+    _: &std::path::Path,
+    _: Option<&std::path::Path>,
+    _: Option<&str>,
+    _: &mut gpui::Window,
+    _: &mut App,
+) -> Result<gpui::AnyView, String> {
+    Err("--dir needs the editor: rebuild with --features module-editor".to_owned())
+}
+
 #[cfg(not(feature = "module-git"))]
 fn open_repo(
     _: &std::path::Path,
@@ -90,8 +101,9 @@ fn open_repo(
     Err("--repo needs the git module: rebuild with --features module-git".to_owned())
 }
 
-const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>] [--repo <path>]]\n\
+const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>] [--dir <path>] [--repo <path>]]\n\
 --file opens a file in the editor screen\n\
+--dir lists a folder in the editor screen's file tree\n\
 --repo opens a git repository in the git screen\n\
 screens: work settings accounts theme library classifier usage limits context session intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
@@ -113,6 +125,7 @@ const SCREENS: [&str; 13] = [
 
 enum Target {
     File(PathBuf),
+    Dir(PathBuf, Option<PathBuf>),
     Repo(PathBuf),
 }
 
@@ -172,19 +185,27 @@ fn parse(args: &[String]) -> Result<Launch, String> {
     match args {
         [] => Ok(Launch::Desk),
         [flag, name, rest @ ..] if flag == "--screen" => {
-            let (mut board, mut target) = (None, None);
+            let (mut board, mut file, mut dir, mut repo) = (None, None, None, None);
             for pair in rest.chunks(2) {
                 match pair {
                     [flag, id] if flag == "--board" && board.is_none() => board = Some(id.clone()),
-                    [flag, path] if flag == "--file" && name == "editor" && target.is_none() => {
-                        target = Some(Target::File(PathBuf::from(path)))
+                    [flag, path] if flag == "--file" && name == "editor" && file.is_none() => {
+                        file = Some(PathBuf::from(path))
                     }
-                    [flag, path] if flag == "--repo" && name == "git" && target.is_none() => {
-                        target = Some(Target::Repo(PathBuf::from(path)))
+                    [flag, path] if flag == "--dir" && name == "editor" && dir.is_none() => {
+                        dir = Some(PathBuf::from(path))
+                    }
+                    [flag, path] if flag == "--repo" && name == "git" && repo.is_none() => {
+                        repo = Some(PathBuf::from(path))
                     }
                     _ => return Err(USAGE.to_owned()),
                 }
             }
+            let target = match (dir, file, repo) {
+                (Some(dir), file, _) => Some(Target::Dir(dir, file)),
+                (None, Some(file), _) => Some(Target::File(file)),
+                (None, None, repo) => repo.map(Target::Repo),
+            };
             Ok(Launch::Screen(ScreenLaunch {
                 open: screen(name)?,
                 name: name.clone(),
@@ -233,6 +254,9 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
         |window, cx| {
             let opened = match &target {
                 Some(Target::File(path)) => open_file(path, board.as_deref(), window, cx),
+                Some(Target::Dir(dir, file)) => {
+                    open_dir(dir, file.as_deref(), board.as_deref(), window, cx)
+                }
                 Some(Target::Repo(path)) => open_repo(path, board.as_deref(), window, cx),
                 None => open(board.as_deref(), window, cx),
             };

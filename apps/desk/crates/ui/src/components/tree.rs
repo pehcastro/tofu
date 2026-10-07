@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 use desk_motion::reduced_motion;
 use desk_motion::tokens::{EASE_OUT, HOVER as SLIDE, HOVER_MS, PANEL_OUT_MS, TOGGLE_MS};
 use gpui::{
-    AnyElement, ClickEvent, Context, ElementId, Image, ImageFormat, SharedString, SpringState,
-    Window, div, img, prelude::*, px,
+    AnyElement, ClickEvent, Context, ElementId, EventEmitter, Image, ImageFormat, SharedString,
+    SpringState, Window, div, img, prelude::*, px,
 };
 use serde_json::Value;
 
@@ -26,7 +26,7 @@ const GUIDE: f32 = 0.06;
 const IGNORED_FADE: f32 = 0.42;
 const ICON_SIZE: f32 = 16.0;
 const DOT: f32 = 6.0;
-const CONFLICT_FONT: f32 = 11.0;
+const LABEL_FONT: f32 = 11.0;
 const SETTLED_PX: f32 = 0.05;
 const UNHOVER_MS: Duration = Duration::from_millis(100);
 
@@ -202,6 +202,7 @@ impl IconTheme {
 pub enum NodeKind {
     File,
     Folder(Vec<TreeNode>),
+    Unread(Vec<GitStatus>),
 }
 
 pub struct TreeNode {
@@ -210,8 +211,13 @@ pub struct TreeNode {
     pub kind: NodeKind,
 }
 
+pub enum TreeEvent {
+    Opened(SharedString),
+    Unfolded(SharedString),
+}
+
 impl TreeNode {
-    pub fn file(name: &'static str, git: Option<GitStatus>) -> Self {
+    pub fn file(name: impl Into<SharedString>, git: Option<GitStatus>) -> Self {
         TreeNode {
             name: name.into(),
             git,
@@ -219,7 +225,11 @@ impl TreeNode {
         }
     }
 
-    pub fn folder(name: &'static str, git: Option<GitStatus>, children: Vec<TreeNode>) -> Self {
+    pub fn folder(
+        name: impl Into<SharedString>,
+        git: Option<GitStatus>,
+        children: Vec<TreeNode>,
+    ) -> Self {
         TreeNode {
             name: name.into(),
             git,
@@ -227,20 +237,44 @@ impl TreeNode {
         }
     }
 
+    pub fn unread(
+        name: impl Into<SharedString>,
+        git: Option<GitStatus>,
+        inside: Vec<GitStatus>,
+    ) -> Self {
+        TreeNode {
+            name: name.into(),
+            git,
+            kind: NodeKind::Unread(inside),
+        }
+    }
+
     fn rolled_up(&self) -> Option<GitStatus> {
-        let mut strongest = None;
+        let mut found = Vec::new();
         let mut pending = vec![self];
         while let Some(node) = pending.pop() {
-            if let Some(git) = node.git.filter(|git| *git != GitStatus::Ignored)
-                && strongest.is_none_or(|known| strength(git) > strength(known))
-            {
-                strongest = Some(git);
-            }
-            if let NodeKind::Folder(children) = &node.kind {
-                pending.extend(children);
+            found.extend(node.git);
+            match &node.kind {
+                NodeKind::File => {}
+                NodeKind::Folder(children) => pending.extend(children),
+                NodeKind::Unread(inside) => found.extend(inside),
             }
         }
-        strongest
+        found
+            .into_iter()
+            .filter(|git| *git != GitStatus::Ignored)
+            .max_by_key(|git| strength(*git))
+    }
+}
+
+fn badge(git: GitStatus) -> Option<&'static str> {
+    match git {
+        GitStatus::Modified => Some("M"),
+        GitStatus::Added => Some("A"),
+        GitStatus::Untracked => Some("U"),
+        GitStatus::Deleted => Some("D"),
+        GitStatus::Conflict => Some("!"),
+        GitStatus::Ignored => None,
     }
 }
 
@@ -261,38 +295,42 @@ struct Row {
     name: SharedString,
     git: Option<GitStatus>,
     folder: bool,
+    unread: bool,
     rolled: Option<GitStatus>,
     shut_icon: Arc<Image>,
     open_icon: Arc<Image>,
 }
 
-fn flatten(roots: &[TreeNode], icons: &IconTheme) -> Vec<Row> {
+fn flatten(roots: &[TreeNode], icons: &IconTheme, depth: usize, parent: &str) -> Vec<Row> {
     let mut rows = Vec::new();
     let mut pending: Vec<(usize, SharedString, &TreeNode)> = roots
         .iter()
         .rev()
-        .map(|node| (0, node.name.clone(), node))
+        .map(|node| match parent {
+            "" => (depth, node.name.clone(), node),
+            parent => (depth, format!("{parent}/{}", node.name).into(), node),
+        })
         .collect();
     while let Some((depth, path, node)) = pending.pop() {
+        if let NodeKind::Folder(children) = &node.kind {
+            pending.extend(children.iter().rev().map(|child| {
+                (
+                    depth.saturating_add(1),
+                    SharedString::from(format!("{path}/{}", child.name)),
+                    child,
+                )
+            }));
+        }
         let (folder, shut_icon, open_icon) = match &node.kind {
             NodeKind::File => {
                 let icon = icons.file(&node.name);
                 (false, icon.clone(), icon)
             }
-            NodeKind::Folder(children) => {
-                pending.extend(children.iter().rev().map(|child| {
-                    (
-                        depth.saturating_add(1),
-                        SharedString::from(format!("{path}/{}", child.name)),
-                        child,
-                    )
-                }));
-                (
-                    true,
-                    icons.folder(&node.name, false),
-                    icons.folder(&node.name, true),
-                )
-            }
+            NodeKind::Folder(_) | NodeKind::Unread(_) => (
+                true,
+                icons.folder(&node.name, false),
+                icons.folder(&node.name, true),
+            ),
         };
         rows.push(Row {
             depth,
@@ -300,12 +338,19 @@ fn flatten(roots: &[TreeNode], icons: &IconTheme) -> Vec<Row> {
             name: node.name.clone(),
             git: node.git,
             folder,
+            unread: matches!(node.kind, NodeKind::Unread(_)),
             rolled: if folder { node.rolled_up() } else { None },
             shut_icon,
             open_icon,
         });
     }
     rows
+}
+
+fn unread_paths(rows: &[Row]) -> impl Iterator<Item = SharedString> + '_ {
+    rows.iter()
+        .filter(|row| row.unread)
+        .map(|row| row.path.clone())
 }
 
 fn fraction(elapsed: Duration, span: Duration) -> f32 {
@@ -421,20 +466,25 @@ pub struct FileTree {
     selected_y: Option<f32>,
     slide: Option<Slide>,
     slide_from: Option<SpringState>,
+    badges: bool,
 }
+
+impl EventEmitter<TreeEvent> for FileTree {}
 
 impl FileTree {
     pub fn new(id: impl Into<SharedString>, roots: Vec<TreeNode>, icons: &IconTheme) -> Self {
+        let rows = flatten(&roots, icons, 0, "");
         FileTree {
             id: id.into(),
-            rows: flatten(&roots, icons),
-            closed: BTreeSet::new(),
+            closed: unread_paths(&rows).collect(),
+            rows,
             folds: HashMap::new(),
             hovers: Vec::new(),
             selected: None,
             selected_y: None,
             slide: None,
             slide_from: None,
+            badges: false,
         }
     }
 
@@ -446,6 +496,54 @@ impl FileTree {
     pub fn selected(mut self, path: &'static str) -> Self {
         self.selected = Some(path.into());
         self
+    }
+
+    pub fn badges(mut self) -> Self {
+        self.badges = true;
+        self
+    }
+
+    pub fn load(&mut self, folder: &str, children: Vec<TreeNode>, icons: &IconTheme) -> bool {
+        let Some((at, row)) = self
+            .rows
+            .iter_mut()
+            .enumerate()
+            .find(|(_, row)| row.folder && row.path == folder)
+        else {
+            return false;
+        };
+        row.unread = false;
+        let depth = row.depth;
+        let start = at.saturating_add(1);
+        let below = self
+            .rows
+            .iter()
+            .skip(start)
+            .take_while(|row| row.depth > depth)
+            .count();
+        let rows = flatten(&children, icons, depth.saturating_add(1), folder);
+        self.closed.extend(unread_paths(&rows));
+        self.rows.splice(start..start.saturating_add(below), rows);
+        true
+    }
+
+    pub fn select(&mut self, path: SharedString, cx: &mut Context<Self>) {
+        if self.selected.as_ref() == Some(&path) {
+            return;
+        }
+        let now = Instant::now();
+        let at = Slide::offset(self.slide, now);
+        self.slide_from = self
+            .selected_y
+            .filter(|_| !reduced_motion(cx))
+            .map(|y| SpringState {
+                position: y + at.position,
+                velocity: at.velocity,
+            });
+        self.slide = None;
+        self.hover(path.clone(), false, now);
+        self.selected = Some(path);
+        cx.notify();
     }
 
     fn openness(&self, path: &SharedString, now: Instant) -> f32 {
@@ -488,20 +586,15 @@ impl FileTree {
         }
     }
 
-    fn click(&mut self, path: SharedString, folder: bool, cx: &mut Context<Self>) {
-        let now = Instant::now();
-        let reduced = reduced_motion(cx);
-        if folder {
-            self.toggle(path, reduced, now);
-        } else if self.selected.as_ref() != Some(&path) {
-            let at = Slide::offset(self.slide, now);
-            self.slide_from = self.selected_y.filter(|_| !reduced).map(|y| SpringState {
-                position: y + at.position,
-                velocity: at.velocity,
-            });
-            self.slide = None;
-            self.hover(path.clone(), false, now);
-            self.selected = Some(path);
+    fn click(&mut self, path: SharedString, folder: bool, unread: bool, cx: &mut Context<Self>) {
+        if !folder {
+            self.select(path.clone(), cx);
+            cx.emit(TreeEvent::Opened(path));
+            return;
+        }
+        self.toggle(path.clone(), reduced_motion(cx), Instant::now());
+        if unread {
+            cx.emit(TreeEvent::Unfolded(path));
         }
         cx.notify();
     }
@@ -564,7 +657,12 @@ impl FileTree {
             .filter(|fade| !picked || !fade.on)
             .map_or(0.0, |fade| fade.level(now));
         let fill = if own_fill { ROW_ON } else { HOVER * lit };
-        let folder = row.folder;
+        let (folder, unread) = (row.folder, row.unread);
+        let label = match (self.badges, row.git) {
+            (true, Some(git)) if !folder => badge(git).map(|letter| (letter, git)),
+            (false, Some(GitStatus::Conflict)) => Some(("conflict", GitStatus::Conflict)),
+            _ => None,
+        };
         let clicked = row.path.clone();
         let hovered = row.path.clone();
         div()
@@ -593,19 +691,19 @@ impl FileTree {
                     .rounded(px(DOT / 2.0))
                     .bg(git.color(theme))
             }))
-            .children((row.git == Some(GitStatus::Conflict)).then(|| {
+            .children(label.map(|(text, git)| {
                 div()
                     .flex_none()
-                    .text_size(px(CONFLICT_FONT))
-                    .text_color(GitStatus::Conflict.color(theme))
-                    .child("conflict")
+                    .text_size(px(LABEL_FONT))
+                    .text_color(git.color(theme))
+                    .child(text)
             }))
             .on_hover(cx.listener(move |this, on: &bool, _, cx| {
                 this.hover(hovered.clone(), *on, Instant::now());
                 cx.notify();
             }))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                this.click(clicked.clone(), folder, cx);
+                this.click(clicked.clone(), folder, unread, cx);
             }))
             .into_any_element()
     }

@@ -82,15 +82,13 @@ fn tree() -> Vec<TreeNode> {
     ]
 }
 
-fn file_tree(id: &'static str, icons: &IconTheme, cx: &mut Context<Book>) -> Entity<FileTree> {
-    cx.new(|_| {
-        FileTree::new(id, tree(), icons)
-            .closed(".github")
-            .closed("cmd")
-            .closed("migrations")
-            .closed("node_modules")
-            .selected("notes/notes.go")
-    })
+fn file_tree(id: &'static str, icons: &IconTheme) -> FileTree {
+    FileTree::new(id, tree(), icons)
+        .closed(".github")
+        .closed("cmd")
+        .closed("migrations")
+        .closed("node_modules")
+        .selected("notes/notes.go")
 }
 
 fn panel(tree: Entity<FileTree>) -> Div {
@@ -230,31 +228,46 @@ fn page() -> Div {
     div().flex().flex_col().gap_3()
 }
 
+struct Trees {
+    wide: Entity<FileTree>,
+    narrow: Entity<FileTree>,
+    badged_wide: Entity<FileTree>,
+    badged_narrow: Entity<FileTree>,
+}
+
 pub(super) struct TreePage {
-    trees: Result<(Entity<FileTree>, Entity<FileTree>), IconThemeError>,
+    trees: Result<Trees, IconThemeError>,
 }
 
 impl TreePage {
     pub(super) fn new(cx: &mut Context<Book>) -> Self {
         TreePage {
-            trees: IconTheme::material().map(|icons| {
-                (
-                    file_tree("tree-wide", &icons, cx),
-                    file_tree("tree-narrow", &icons, cx),
-                )
+            trees: IconTheme::material().map(|icons| Trees {
+                wide: cx.new(|_| file_tree("tree-wide", &icons)),
+                narrow: cx.new(|_| file_tree("tree-narrow", &icons)),
+                badged_wide: cx.new(|_| file_tree("tree-badged-wide", &icons).badges()),
+                badged_narrow: cx.new(|_| file_tree("tree-badged-narrow", &icons).badges()),
             }),
         }
     }
 
     pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, _: &mut Context<Book>) -> Div {
         match &self.trees {
-            Ok((wide, narrow)) => page().child(twice(
-                "File tree: click a folder to fold it, click a file to select it, right click for the menu",
-                theme,
-                TREE_WIDTH,
-                panel(wide.clone()),
-                panel(narrow.clone()),
-            )),
+            Ok(trees) => page()
+                .child(twice(
+                    "File tree: click a folder to fold it, click a file to select it, right click for the menu",
+                    theme,
+                    TREE_WIDTH,
+                    panel(trees.wide.clone()),
+                    panel(trees.narrow.clone()),
+                ))
+                .child(twice(
+                    "File tree with badges: a git letter beside each changed file, M A U D and ! for a conflict",
+                    theme,
+                    TREE_WIDTH,
+                    panel(trees.badged_wide.clone()),
+                    panel(trees.badged_narrow.clone()),
+                )),
             Err(error) => page().child(label(error.to_string(), theme)),
         }
     }

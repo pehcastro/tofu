@@ -220,7 +220,9 @@ impl Editor {
                 ),
         );
         let header = match &self.source {
-            Source::File(_, disk) => header.child(self.file_tab(disk, cx)),
+            Source::Disk { file, .. } => {
+                header.child(self.file_tab(file.as_ref().map(|(_, disk)| disk), cx))
+            }
             Source::Fixture { .. } => self.fixture_tabs(header, notes, scale, cx),
         }
         .child(
@@ -235,8 +237,17 @@ impl Editor {
                 .mb(px(5.0))
                 .on_click(cx.listener(Self::update(|this| this.prefs = !this.prefs))),
         );
-        let fixture = matches!(self.source, Source::Fixture { .. });
+        let side = match &self.source {
+            Source::Disk {
+                folder: Some(folder),
+                ..
+            } => tree(291.0).child(folder.tree.clone()),
+            _ => self.fixture_tree(scale, cx),
+        };
+        self.shell_around(header, side, scale, cx)
+    }
 
+    fn fixture_tree(&self, scale: f32, cx: &mut Context<Self>) -> Div {
         let selected = |file: File| self.file == file;
         let mut rows: Vec<AnyElement> = Vec::new();
         if self.filtering {
@@ -326,7 +337,7 @@ impl Editor {
                 .into_any_element(),
             );
         }
-        let side = tree(291.0).children(rows).child(div().flex_1()).child(
+        tree(291.0).children(rows).child(div().flex_1()).child(
             div()
                 .id("filter")
                 .cursor_pointer()
@@ -334,8 +345,12 @@ impl Editor {
                 .py(px(6.0))
                 .child(quiet(11.5, "type to filter"))
                 .on_click(cx.listener(Self::update(|this| this.filtering = !this.filtering))),
-        );
+        )
+    }
 
+    fn shell_around(&self, header: Div, side: Div, scale: f32, cx: &mut Context<Self>) -> Div {
+        let notes = self.file == File::Notes;
+        let fixture = matches!(self.source, Source::Fixture { .. });
         let (crumb, symbol, state) = match self.file {
             File::Notes => ("notes.go", " › Count", "modified · unsaved"),
             File::Test => ("notes_test.go", " › TestCount", "untracked"),
@@ -350,7 +365,11 @@ impl Editor {
             .px(px(16.0))
             .pb(px(6.0));
         let crumbs = match &self.source {
-            Source::File(_, disk) => crumbs
+            Source::Disk { file: None, .. } => crumbs,
+            Source::Disk {
+                file: Some((_, disk)),
+                ..
+            } => crumbs
                 .children(disk.folders.iter().flat_map(|folder| {
                     [
                         text(12.5, 23.0, white(T3), folder.clone()),
@@ -386,20 +405,25 @@ impl Editor {
                     .on_click(cx.listener(Self::update(|this| this.trace = !this.trace))),
             );
 
-        let shut = matches!(&self.source, Source::File(_, disk) if disk.shut);
+        let hint = match &self.source {
+            Source::Disk {
+                folder: Some(_), ..
+            } => "Click a file in the tree to open it.",
+            _ => "Run desk with --file to open one.",
+        };
         let code_area = match self.opened() {
-            Ok(_) if shut => empty_state(
+            None => empty_state(
                 "editor-shut",
                 "No file open",
-                Some("Run desk with --file to open one.".into()),
+                Some(hint.into()),
                 &[],
                 &[],
                 &ActiveTheme::theme(cx),
                 |_, _, _| {},
             )
             .into_any_element(),
-            Ok(editor) => editor.clone().into_any_element(),
-            Err(error) => empty_state(
+            Some(Ok(editor)) => editor.clone().into_any_element(),
+            Some(Err(error)) => empty_state(
                 "editor-failure",
                 "Could not open the file",
                 Some(error.clone()),
@@ -439,9 +463,9 @@ impl Editor {
         )
     }
 
-    fn file_tab(&self, disk: &OnDisk, cx: &mut Context<Self>) -> Div {
-        let tabs: Vec<Tab> = (!disk.shut)
-            .then(|| Tab {
+    fn file_tab(&self, disk: Option<&OnDisk>, cx: &mut Context<Self>) -> Div {
+        let tabs: Vec<Tab> = disk
+            .map(|disk| Tab {
                 label: disk.name.clone(),
                 icon: Some(Glyph::File),
                 count: None,
