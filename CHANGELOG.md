@@ -30,6 +30,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **A continued or resumed conversation over the context target forks before its first request**, instead of sending the whole history first.
 
+- **Shift+Enter adds a line past the eighth.** The input stops growing at 8 rows and scrolls; before, every line after the eighth was joined onto it.
+
 - **A PreToolUse hook that asks before a sub-agent's call asks the lead**, as the gate's ask does, instead of refusing the call.
 
 - **A finished sub-agent call no longer reads as open**, so a 1 ms write no longer shows as "stalled write, open 22m".

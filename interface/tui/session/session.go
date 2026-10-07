@@ -179,6 +179,7 @@ func New(now func() time.Time, prose Prose) Model {
 	composer.DynamicHeight = true
 	composer.MinHeight = composerMinRows
 	composer.MaxHeight = composerMaxRows
+	composer.MaxContentHeight = konst.ComposerContentRows
 	composer.CharLimit = 0
 	composer.SetVirtualCursor(false)
 	composer.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("shift+enter", "alt+enter", "ctrl+j"))

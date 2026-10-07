@@ -74,6 +74,7 @@ const (
 	QuitAgainMillis      = 3000
 	StopSubAgentsMillis  = 3000
 	FeedRecentEvents     = 200
+	ComposerContentRows  = 10000
 
 	DriveTimeoutMillis = 60000
 	DriveSettleMillis  = ProgressTickMillis / 2
