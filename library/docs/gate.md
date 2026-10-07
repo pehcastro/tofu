@@ -18,10 +18,10 @@ A call on a shell tofu itself started is allowed without asking jev.
 The `gatePrompt` setting says what a verdict does:
 
 - `auto`, the default: an allow or an ask runs and is recorded, a deny is
-  refused.
+  refused. `tofu session trace` marks such an ask `allowed by gatePrompt auto`.
 - `ask`: an ask waits for you. Press 1 to allow it once, 2 to refuse it,
   or 3 to allow it here for the rest of the session. When jev cannot
-  answer, the call is refused.
+  answer, the call is refused. The trace marks it `allowed by the person`.
 
 A call that changes tofu's settings, hooks or hook trust files waits for
 you in both modes unless jev denies it: through `settings`, `write`,

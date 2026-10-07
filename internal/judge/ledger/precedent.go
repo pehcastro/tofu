@@ -2,7 +2,9 @@ package ledger
 
 import (
 	"math"
-	"sort"
+	"slices"
+	"sync"
+	"time"
 
 	"tofu/internal/konst"
 )
@@ -21,19 +23,19 @@ type Precedent struct {
 }
 
 func AnswerDistance(left, right []Answer) (float64, bool) {
-	byQuestion := make(map[string]Answer, len(left))
-	for _, answer := range left {
-		byQuestion[answer.Question] = answer
-	}
 	total := 0.0
 	shared := 0
-	for _, answer := range right {
-		mine, ok := byQuestion[answer.Question]
-		if !ok || mine.Kind != answer.Kind {
-			continue
+	for i := range right {
+		answer := &right[i]
+		for j := range left {
+			if mine := &left[j]; mine.Question == answer.Question {
+				if mine.Kind == answer.Kind {
+					total += answerGap(mine, answer)
+					shared++
+				}
+				break
+			}
 		}
-		total += answerGap(mine, answer)
-		shared++
 	}
 	if shared == 0 {
 		return answersUnrelated, false
@@ -41,7 +43,7 @@ func AnswerDistance(left, right []Answer) (float64, bool) {
 	return total / float64(shared), true
 }
 
-func answerGap(left, right Answer) float64 {
+func answerGap(left, right *Answer) float64 {
 	switch left.Kind {
 	case AnswerNoul:
 		return math.Abs(left.Noul - right.Noul)
@@ -56,7 +58,7 @@ func answerGap(left, right Answer) float64 {
 	panic("ledger: unknown answer kind " + string(left.Kind))
 }
 
-func levelSpan(left, right Answer) float64 {
+func levelSpan(left, right *Answer) float64 {
 	levels := len(left.Dist)
 	if len(right.Dist) > levels {
 		levels = len(right.Dist)
@@ -69,8 +71,9 @@ func levelSpan(left, right Answer) float64 {
 
 func Shortlist(target Row, candidates []Row) []Precedent {
 	var found []Precedent
-	for _, candidate := range candidates {
-		if candidate.ID == target.ID || candidate.ReplayOf != "" || !candidate.At.Before(target.At) {
+	for i := range candidates {
+		candidate := &candidates[i]
+		if !candidate.At.Before(target.At) || candidate.ReplayOf != "" {
 			continue
 		}
 		distance, comparable := AnswerDistance(target.Answers, candidate.Answers)
@@ -78,16 +81,23 @@ func Shortlist(target Row, candidates []Row) []Precedent {
 		if !same && (!comparable || distance > precedentNearCeiling) {
 			continue
 		}
-		found = append(found, Precedent{Row: candidate, Distance: distance, SameFingerprint: same, Comparable: comparable})
-	}
-	sort.SliceStable(found, func(i, j int) bool { return ranksAhead(found[i], found[j]) })
-	if len(found) > precedentShortlistMax {
-		found = found[:precedentShortlistMax]
+		near := Precedent{Row: *candidate, Distance: distance, SameFingerprint: same, Comparable: comparable}
+		at := len(found)
+		for j := range found {
+			if ranksAhead(&near, &found[j]) {
+				at = j
+				break
+			}
+		}
+		if at < precedentShortlistMax {
+			found = slices.Insert(found, at, near)
+			found = found[:min(len(found), precedentShortlistMax)]
+		}
 	}
 	return found
 }
 
-func ranksAhead(a, b Precedent) bool {
+func ranksAhead(a, b *Precedent) bool {
 	if a.SameFingerprint != b.SameFingerprint {
 		return a.SameFingerprint
 	}
@@ -100,14 +110,29 @@ func ranksAhead(a, b Precedent) bool {
 	return a.Row.At.After(b.Row.At)
 }
 
-func (r *Reader) Precedents(target Row) ([]Precedent, error) {
-	var candidates []Row
-	_, err := r.Each(Filter{Point: target.Point, Until: target.At}, func(row Row) error {
-		candidates = append(candidates, row)
+func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
+	points, until := map[string][]Row{}, time.Time{}
+	for _, target := range targets {
+		points[target.Point] = nil
+		if target.At.After(until) {
+			until = target.At
+		}
+	}
+	_, err := r.Each(Filter{Until: until}, func(row Row) error {
+		if candidates, wanted := points[row.Point]; wanted {
+			row.State = nil
+			points[row.Point] = append(candidates, row)
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return Shortlist(target, candidates), nil
+	found := make([][]Precedent, len(targets))
+	var shortlisting sync.WaitGroup
+	for i, target := range targets {
+		shortlisting.Go(func() { found[i] = Shortlist(target, points[target.Point]) })
+	}
+	shortlisting.Wait()
+	return found, nil
 }

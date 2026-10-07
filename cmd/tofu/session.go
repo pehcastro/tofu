@@ -671,7 +671,7 @@ type traceResult struct {
 	Hooks      []turn.HookRun `json:"hooks"`
 }
 
-func gateWords(result traceResult) string {
+func gateWords(result traceResult, hooks []traceHook, call string) string {
 	words := result.Verdict
 	if reason := result.Reason; reason != nil {
 		relaxed := ""
@@ -679,6 +679,14 @@ func gateWords(result traceResult) string {
 			relaxed = ", relaxed by " + reason.RelaxedBy
 		}
 		words += fmt.Sprintf(" (%s %.2f %s %.2f%s)", reason.Question, reason.Value, reason.Comparison, reason.Threshold, relaxed)
+	}
+	for _, ran := range hooks {
+		if ran.Call == call && ran.Gate != ledger.VerdictUnset && string(ran.Gate) != result.Verdict {
+			words += ", turned into " + string(ran.Gate) + " by a GateVerdict hook"
+		}
+	}
+	if result.Reason != nil && result.Reason.AllowedBy != "" {
+		words += ", allowed by " + result.Reason.AllowedBy
 	}
 	return strings.TrimSpace(strings.TrimSpace(words + " " + result.GateError))
 }
@@ -739,7 +747,7 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	}
 	report.Session, report.Name, report.Error, report.Events = header.ID, header.Named(), header.Error, len(events)
 	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
-	return withAncestorsSubAgents(store, header, report)
+	return withAncestors(store, header, report)
 }
 
 func traceBody(store *session.Store, id string, events []session.Event, keep func(agent string, at time.Time) bool) (sessionTraceReport, error) {
@@ -764,7 +772,7 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 			if at, known := placed[event.Call]; known {
 				called := &report.Calls[at]
 				called.Result, called.Outcome, called.Bytes, called.Reason = event.ID, result.ToolOutcome, result.ResultBytes, callReason(result.ResultBody)
-				called.DurationMS, called.Refused, called.Gate, called.Hooks = result.DurationMS, result.Refused, gateWords(result), result.Hooks
+				called.DurationMS, called.Refused, called.Gate, called.Hooks = result.DurationMS, result.Refused, gateWords(result, report.Hooks, event.Call), result.Hooks
 			}
 		case session.EventHook:
 			ran := traceHook{Agent: event.Agent, Turn: event.Turn, Call: event.Call}

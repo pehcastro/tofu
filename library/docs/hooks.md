@@ -32,7 +32,8 @@ itself, so the app, `tofu run` and every sub-agent run them alike:
   strictest of several hooks wins, and a hook-made ask goes to you. It does
   not fire on calls only you may answer, a failed gate, or a gate in shadow.
 - `SubagentSpawn`, tofu only: before a sub-agent starts, with definition,
-  mission and owns under `spawn`. It matches the definition's name. Exit 2
+  mission, the task it is given and owns under `spawn`. It matches the
+  definition's name. Exit 2
   or `decision: block` refuses the spawn; `owns` narrows the paths, `[]`
   takes them all. A glob not provably inside what was asked, or two hooks
   giving different owns, refuses the spawn.
@@ -98,7 +99,8 @@ its last result or why it is skipped. `--json` prints one document.
 
 lists every hook run under `hooks`, in order, beside its call: event, exit
 code, duration, decision, command, source, any problem, and stderr capped
-at 200 bytes with keys masked.
+at 200 bytes with keys masked. A call a `GateVerdict` hook changed says so
+on its row under `calls`, with the verdict the hook gave.
 
 ## Undo it
 

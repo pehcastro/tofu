@@ -20,19 +20,21 @@ type GateFacts struct {
 type SpawnFacts struct {
 	Definition string   `json:"definition"`
 	Mission    string   `json:"mission"`
+	Task       string   `json:"task"`
 	Owns       []string `json:"owns"`
 }
 
 type Run struct {
-	Event      Event  `json:"event"`
-	Command    string `json:"command"`
-	File       string `json:"file"`
-	Level      Level  `json:"level"`
-	Exit       int    `json:"exit"`
-	DurationMS int64  `json:"duration_ms"`
-	Decision   string `json:"decision,omitempty"`
-	Problem    string `json:"problem,omitempty"`
-	Stderr     string `json:"stderr,omitempty"`
+	Event      Event          `json:"event"`
+	Command    string         `json:"command"`
+	File       string         `json:"file"`
+	Level      Level          `json:"level"`
+	Exit       int            `json:"exit"`
+	DurationMS int64          `json:"duration_ms"`
+	Decision   string         `json:"decision,omitempty"`
+	Gate       ledger.Verdict `json:"gate,omitempty"`
+	Problem    string         `json:"problem,omitempty"`
+	Stderr     string         `json:"stderr,omitempty"`
 }
 
 type hookOutput struct {

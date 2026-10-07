@@ -136,12 +136,46 @@ func filesWritten(history []llm.Message) []string {
 	return wrote
 }
 
+func (t *SpawnTool) conversationSoFar(held *heldSubAgent, running bool) ([]llm.Message, error) {
+	began, err := held.conversation()
+	t.Inbox.mu.Lock()
+	log := held.log
+	t.Inbox.mu.Unlock()
+	if err != nil || !running || log == nil || t.base.Sessions == nil {
+		return began, err
+	}
+	unread := *t.base.Sessions
+	unread.ForgetRead()
+	events, err := unread.Events(log.ID())
+	if err != nil {
+		return nil, err
+	}
+	ours := func(event session.Event, kind session.EventKind) bool {
+		return event.Agent == held.agent.ID && event.Kind == kind
+	}
+	started := -1
+	for i, event := range events {
+		if ours(event, session.EventTurnStart) {
+			started = i
+		}
+	}
+	if started < 0 {
+		return began, nil
+	}
+	thisRun := events[started+1:]
+	since, err := subAgentHistory(&unread, []recordedSession{{id: log.ID(), events: thisRun}}, held.agent.ID)
+	if err != nil || slices.ContainsFunc(thisRun, func(event session.Event) bool { return ours(event, session.EventListChange) }) {
+		return since, err
+	}
+	return append(slices.Clone(began), since...), nil
+}
+
 func (t *SpawnTool) backup(to string) (Result, error) {
 	held, running := t.Inbox.find(to)
 	if held == nil {
 		return Result{}, t.unknown(to)
 	}
-	history, err := held.conversation()
+	history, err := t.conversationSoFar(held, running)
 	if err != nil {
 		return Result{}, fmt.Errorf("message: %s's conversation did not read back: %w", to, err)
 	}
@@ -178,7 +212,7 @@ func (t *SpawnTool) backup(to string) (Result, error) {
 	said := fmt.Sprintf("%s is backed up as %s: %d messages, and %d files it wrote as they are now. message with text and from %s resumes it from this conversation.",
 		to, name, len(history), len(kept.Files), name)
 	if running {
-		said += " it is running, so the conversation is the one it had when its last run began or ended."
+		said += " it is running, so the conversation is the one it has so far, up to its last finished call."
 	}
 	if len(gone) > 0 {
 		said += " these files it wrote are gone, so the backup has no copy: " + strings.Join(gone, ", ")
@@ -253,14 +287,14 @@ func (t *SpawnTool) read(name string) (Result, error) {
 	if held == nil {
 		return Result{Content: said + "\n\nits conversation is kept by the sub-agent that spawned it, not by you.", Command: "read " + name, SubAgent: name}, nil
 	}
-	history, err := held.conversation()
+	history, err := t.conversationSoFar(held, running)
 	if err != nil {
 		return Result{}, fmt.Errorf("subagents: %s's conversation did not read back: %w", name, err)
 	}
 	said += "\n\nfiles it changed: " + cmp.Or(strings.Join(filesWritten(history), ", "), "none")
 	said += fmt.Sprintf("\n\nits conversation, %d messages", len(history))
 	if running {
-		said += ", as it was when its last run began or ended, since it is running"
+		said += ", so far, since it is running"
 	}
 	return Result{Content: said + ":" + conversationText(history), Command: "read " + name, SubAgent: name}, nil
 }

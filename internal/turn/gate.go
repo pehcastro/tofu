@@ -56,13 +56,14 @@ const (
 	PersonDenied PersonAnswer = iota
 	PersonAllowedOnce
 	PersonAlwaysHere
+	PersonNotAsked
 )
 
 func (a PersonAnswer) allows() bool {
 	switch a {
 	case PersonDenied:
 		return false
-	case PersonAllowedOnce, PersonAlwaysHere:
+	case PersonAllowedOnce, PersonAlwaysHere, PersonNotAsked:
 		return true
 	}
 	panic("turn: unknown person answer")
@@ -76,6 +77,8 @@ func (a PersonAnswer) Outcome() ledger.Outcome {
 		return ledger.Outcome{Kind: OutcomeKindGateAnswer, Detail: "deny"}
 	case PersonAllowedOnce, PersonAlwaysHere:
 		return ledger.Outcome{Kind: OutcomeKindGateAnswer, Detail: "allow"}
+	case PersonNotAsked:
+		panic("turn: a call gatePrompt auto ran unasked has no answer of the person's to record")
 	}
 	panic("turn: unknown person answer")
 }
@@ -88,11 +91,16 @@ func (p Person) RunsWhatJevAsks() Person {
 	}
 	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
 		if decision.ID != "" && !decision.PersonOnly {
-			return PersonAllowedOnce, nil
+			return PersonNotAsked, nil
 		}
 		return p(ctx, request, decision)
 	}
 }
+
+const (
+	allowedInAutoMode  = "gatePrompt auto"
+	allowedByThePerson = "the person"
+)
 
 const (
 	refusedHead = "the tool gate refused this call under an enforced policy: "
@@ -126,6 +134,12 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 		case err != nil:
 			return "the verdict is ask and " + who + " could not be asked: " + err.Error()
 		case answer.allows():
+			if decision.Reason != nil {
+				decision.Reason.AllowedBy = who
+				if answer == PersonNotAsked {
+					decision.Reason.AllowedBy = allowedInAutoMode
+				}
+			}
 			return ""
 		}
 		return "the verdict is ask" + standing(decision.Reason) + ", and " + who + " did not allow it"
@@ -137,7 +151,7 @@ func answerer(ctx context.Context) string {
 	if SubAgentAsking(ctx) != "" {
 		return "the orchestrator"
 	}
-	return "the person"
+	return allowedByThePerson
 }
 
 const orchestratorAnswerWait = 5 * time.Minute

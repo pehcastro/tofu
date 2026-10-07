@@ -32,7 +32,7 @@ func callsAfterTheLeadLeft(store *session.Store, header session.Header, events [
 	return outlived
 }
 
-func withAncestorsSubAgents(store *session.Store, header session.Header, report sessionTraceReport) (sessionTraceReport, error) {
+func withAncestors(store *session.Store, header session.Header, report sessionTraceReport) (sessionTraceReport, error) {
 	here := sessionHandle(header.ID, header.Named())
 	ancestors, err := store.Ancestors(header.ID)
 	if err != nil {
@@ -40,6 +40,12 @@ func withAncestorsSubAgents(store *session.Store, header session.Header, report 
 	}
 	whileHere := func(agent string, at time.Time) bool {
 		return agent != "" && !at.Before(header.At) && (header.EndedAt == nil || at.Before(*header.EndedAt))
+	}
+	carried := map[string]int{}
+	for i, call := range report.Calls {
+		if header.CarriedFrom != nil && call.Turn == header.ID {
+			carried[call.Call] = i
+		}
 	}
 	for _, from := range ancestors {
 		events, err := store.Events(from.ID)
@@ -51,6 +57,21 @@ func withAncestorsSubAgents(store *session.Store, header session.Header, report 
 			return sessionTraceReport{}, err
 		}
 		there := sessionHandle(from.ID, from.Named())
+		recorded := slices.DeleteFunc(slices.Clone(events), func(event session.Event) bool {
+			_, wanted := carried[event.Call]
+			return !wanted || event.Turn == from.ID
+		})
+		if len(recorded) > 0 {
+			original, err := traceBody(store, from.ID, recorded, func(string, time.Time) bool { return true })
+			if err != nil {
+				return sessionTraceReport{}, err
+			}
+			for _, call := range original.Calls {
+				call.RecordedIn = there
+				report.Calls[carried[call.Call]] = call
+				delete(carried, call.Call)
+			}
+		}
 		for i := range borrowed.Requests {
 			borrowed.Requests[i].RecordedIn = there
 		}

@@ -639,7 +639,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	narrowed := ""
 	if fire, firing := ctx.Value(hookFireKey{}).(func(hook.Input) hook.Verdict); firing {
-		spawning := fire(hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Owns: append([]string{}, args.Owns...)}})
+		spawning := fire(hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...)}})
 		if spawning.Block != "" {
 			return Result{}, errors.New("spawn refused by a SubagentSpawn hook: " + spawning.Block)
 		}

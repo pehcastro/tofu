@@ -89,10 +89,11 @@ func TestTheRealLedgerGroupsIntoFingerprints(t *testing.T) {
 func TestAPrecedentQueryOverTheRealLedgerReadsLikeSomethingAPersonWrote(t *testing.T) {
 	dir, rows, _ := fingerprintedCopyOfTheRealLedger(t)
 	target := rows[len(rows)-1]
-	found, err := ledger.NewReader(dir).Precedents(target)
+	shortlists, err := ledger.NewReader(dir).Precedents([]ledger.Row{target})
 	if err != nil {
 		t.Fatalf("precedents: %v", err)
 	}
+	found := shortlists[0]
 	if len(found) == 0 {
 		t.Fatalf("the last row of the real ledger found no precedent among %d earlier rows", len(rows)-1)
 	}

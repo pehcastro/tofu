@@ -223,15 +223,15 @@ func TestHooksGateVerdictTurnsAnAskIntoDenyAndCannotTurnADenyIntoAllow(t *testin
 		command: `cat > gate.json; if grep -q '"verdict":"ask"' gate.json; then d=deny; else d=allow; fi; echo '{"hookSpecificOutput":{"hookEventName":"GateVerdict","permissionDecision":"'$d'","permissionDecisionReason":"no rm here"}}'`})
 	engine := trusted(t, project, bash)
 	asked := engine.Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"rm -rf build"}`), Gate: gateFacts(ledger.VerdictAsk)})
-	if asked.Gate != ledger.VerdictDeny || !strings.Contains(asked.GateWhy, "no rm here") || len(asked.Runs) != 1 || !strings.HasPrefix(asked.Runs[0].Decision, "deny") {
-		t.Errorf("on Jev's ask the hook gave gate %q why %q runs %+v, want deny with its reason", asked.Gate, asked.GateWhy, asked.Runs)
+	if asked.Gate != ledger.VerdictDeny || !strings.Contains(asked.GateWhy, "no rm here") || len(asked.Runs) != 1 || !strings.HasPrefix(asked.Runs[0].Decision, "deny") || asked.Runs[0].Gate != ledger.VerdictDeny {
+		t.Errorf("on Jev's ask the hook gave gate %q why %q runs %+v, want deny with its reason, recorded on the run", asked.Gate, asked.GateWhy, asked.Runs)
 	}
 	seen, _ := os.ReadFile(filepath.Join(project, "gate.json"))
 	if !strings.Contains(string(seen), `"questions"`) || !strings.Contains(string(seen), `"risk"`) || !strings.Contains(string(seen), `"tool_name":"Bash"`) {
 		t.Errorf("the hook read %s, want the verdict, the risk, the questions and the tool", seen)
 	}
 	denied := engine.Fire(context.Background(), Input{Event: GateVerdict, Tool: "bash", Args: json.RawMessage(`{"command":"rm -rf /"}`), Gate: gateFacts(ledger.VerdictDeny)})
-	if denied.Gate == ledger.VerdictAllow || len(denied.Runs) != 1 || !strings.Contains(denied.Runs[0].Problem, "cannot turn a deny into allow") {
+	if denied.Gate == ledger.VerdictAllow || len(denied.Runs) != 1 || !strings.Contains(denied.Runs[0].Problem, "cannot turn a deny into allow") || denied.Runs[0].Gate != ledger.VerdictUnset {
 		t.Errorf("on Jev's deny the hook gave gate %q runs %+v, want the deny kept and the run carrying the refusal", denied.Gate, denied.Runs)
 	}
 }

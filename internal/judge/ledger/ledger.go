@@ -213,6 +213,7 @@ type Reason struct {
 	Value      float64 `json:"value"`
 	DeadBand   bool    `json:"dead_band,omitempty"`
 	RelaxedBy  string  `json:"relaxed_by,omitempty"`
+	AllowedBy  string  `json:"allowed_by,omitempty"`
 	Blocked    bool    `json:"blocked,omitempty"`
 	Ambiguous  string  `json:"ambiguous,omitempty"`
 	Mode       Mode    `json:"mode,omitempty"`

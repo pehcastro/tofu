@@ -97,12 +97,23 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 		}
 		return exitOK
 	}
-	for _, row := range rows {
+	decisions := make([]ledger.Row, len(rows))
+	for i, row := range rows {
 		listing, err := whyListingOf(reader, dir, row)
 		if err != nil {
 			return o.fail(err)
 		}
-		report.Rows = append(report.Rows, listing)
+		report.Rows, decisions[i] = append(report.Rows, listing), listing.decision()
+	}
+	shortlists, err := reader.Precedents(decisions)
+	if err != nil {
+		return o.fail(err)
+	}
+	for i, found := range shortlists {
+		for _, precedent := range found {
+			report.Rows[i].Precedents = append(report.Rows[i].Precedents, whyPrecedent{ID: precedent.Row.ID, Verdict: precedent.Row.Verdict, At: precedent.Row.At,
+				Distance: precedent.Distance, SameFingerprint: precedent.SameFingerprint, Comparable: precedent.Comparable, Why: precedentWhy(precedent), Outcome: precedent.Row.Outcome})
+		}
 	}
 	return o.done(true, report, func(page cli.Page) []string { return whyPage(page, report, now()) })
 }
@@ -125,14 +136,6 @@ func whyListingOf(reader *ledger.Reader, dir string, row ledger.Row) (whyListing
 		listing.statePath = filepath.Join(dir, e.File)
 	}
 	listing.state, listing.stateErr = reader.State(decision)
-	found, err := reader.Precedents(decision)
-	if err != nil {
-		return whyListing{}, err
-	}
-	for _, precedent := range found {
-		listing.Precedents = append(listing.Precedents, whyPrecedent{ID: precedent.Row.ID, Verdict: precedent.Row.Verdict, At: precedent.Row.At,
-			Distance: precedent.Distance, SameFingerprint: precedent.SameFingerprint, Comparable: precedent.Comparable, Why: precedentWhy(precedent), Outcome: precedent.Row.Outcome})
-	}
 	return listing, nil
 }
 

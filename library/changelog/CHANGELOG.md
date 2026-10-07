@@ -46,6 +46,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **Shift+Enter adds a line past the eighth.** The input stops growing at 8 rows and scrolls; before, every line after the eighth was joined onto it.
 
+- **`tofu session trace` names what let an ask run**: `allowed by gatePrompt auto`, the person, the orchestrator, or a GateVerdict hook that changed the verdict. A forked session's carried calls show their verdict, result and the session they came from.
+
+- **`subagents read` and `do backup` on a running sub-agent give its conversation so far**, and the SubagentSpawn hook gets the sub-agent's task.
+
+- **`tofu why --last 5000` finishes in about 4 s** instead of not finishing in 2 minutes.
+
 - **A PreToolUse hook that asks before a sub-agent's call asks the lead**, as the gate's ask does, instead of refusing the call.
 
 - **A finished sub-agent call no longer reads as open**, so a 1 ms write no longer shows as "stalled write, open 22m".

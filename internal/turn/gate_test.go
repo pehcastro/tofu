@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
+	"tofu/internal/session"
 	"tofu/internal/subagent"
 )
 
@@ -91,6 +93,103 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 	}
 	if written, err := os.ReadFile(filepath.Join(root, "mine", "note.txt")); err != nil || string(written) != "a note" {
 		t.Errorf("the lead allowed the write and the file holds %q: %v", written, err)
+	}
+}
+
+type asksWithReason struct{ reason bool }
+
+func (g asksWithReason) Decide(_ context.Context, request GateRequest) (GateDecision, error) {
+	decided := GateDecision{ID: "row-" + request.Tool, Verdict: ledger.VerdictAsk}
+	if g.reason {
+		decided.Reason = &ledger.Reason{Question: "risk", Comparison: "risk_ask_at", Value: 1.77, Threshold: 1.5}
+	}
+	return decided, nil
+}
+
+func TestAnAskThatRunsNamesWhatAllowedIt(t *testing.T) {
+	answering := func(answer PersonAnswer) Person {
+		return func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) { return answer, nil }
+	}
+	for _, case_ := range []struct {
+		name    string
+		person  Person
+		reason  bool
+		refused bool
+		want    string
+	}{
+		{"gatePrompt auto runs it unasked", answering(PersonDenied).RunsWhatJevAsks(), true, false, allowedInAutoMode},
+		{"the person allows it", answering(PersonAllowedOnce), true, false, allowedByThePerson},
+		{"the person allows it here for good", answering(PersonAlwaysHere), true, false, allowedByThePerson},
+		{"the person refuses it", answering(PersonDenied), true, true, ""},
+		{"auto mode with no reason to carry it", answering(PersonDenied).RunsWhatJevAsks(), false, false, ""},
+	} {
+		t.Run(case_.name, func(t *testing.T) {
+			root := t.TempDir()
+			write, err := NewWriteTool(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			model := &leadAndSubAgent{lead: []llm.Decision{called("write", map[string]any{"path": "note.txt", "content": "a note"}), claimDecision("wrote note.txt")}}
+			row, err := Run(t.Context(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096,
+				ArtifactDir: filepath.Join(root, "artifacts"), Gate: asksWithReason{reason: case_.reason}, GateMode: GateEnforce, Person: case_.person, Task: "write a note"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			call := row.Steps[0].ToolCalls[0]
+			if call.Refused != case_.refused {
+				t.Fatalf("refused is %v, want %v: %+v", call.Refused, case_.refused, call)
+			}
+			allowedBy := ""
+			if call.GateReason != nil {
+				allowedBy = call.GateReason.AllowedBy
+			}
+			if allowedBy != case_.want {
+				t.Errorf("the recorded reason says allowed by %q, want %q", allowedBy, case_.want)
+			}
+		})
+	}
+}
+
+func TestReadAndBackupOfARunningSubAgentCarryItsConversationSoFar(t *testing.T) {
+	const task = "read the note and say what it holds"
+	model := newCrew(map[string][]llm.Decision{
+		leadKey: {spawnCall("call-spawn", task, "notes/**"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		task:    {called("read", map[string]any{"path": "note.txt"}), claimDecision("the note says hello")},
+	})
+	release := model.hold(task, 2)
+	defer release()
+	lead := crewLead(t, model)
+	lead.Sessions, lead.Session = session.NewStore(t.TempDir()), session.NewEventID()
+	spawn := lead.Tools.byName["spawn"].(*SpawnTool)
+	spawn.base.Sessions, spawn.base.Session = lead.Sessions, lead.Session
+	led := startLead(t.Context(), lead, nil)
+	asked := func() int {
+		model.mu.Lock()
+		defer model.mu.Unlock()
+		return len(model.asked[task])
+	}
+	for deadline := time.Now().Add(5 * time.Second); asked() < 2; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the sub-agent never reached its second request")
+		}
+	}
+	read, err := spawn.read("sub-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backup, err := spawn.backup("sub-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	led.wait(t)
+	for _, want := range []string{"its conversation, 3 messages", task, "note.txt"} {
+		if !strings.Contains(read.Content, want) {
+			t.Errorf("read on the running sub-agent lacks %q:\n%s", want, read.Content)
+		}
+	}
+	if !strings.Contains(backup.Content, ": 3 messages") {
+		t.Errorf("backup of the running sub-agent says %q, want its 3 messages so far", backup.Content)
 	}
 }
 

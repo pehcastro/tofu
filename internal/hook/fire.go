@@ -140,10 +140,15 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	e.remember(chosen, results)
 	var verdict Verdict
 	for i, result := range results {
+		before := verdict.Gate
 		said, problem := e.apply(in, result, " (a "+string(in.Event)+" hook in "+chosen[i].File+")", &verdict)
 		stderr := strings.TrimSpace(result.stderr)
-		verdict.Runs = append(verdict.Runs, Run{Event: in.Event, Command: chosen[i].Command, File: chosen[i].File, Level: chosen[i].Level, Exit: result.Exit,
-			DurationMS: result.DurationMS, Decision: strings.Join(said, "; "), Problem: cmp.Or(result.Problem, problem), Stderr: stderr[:min(len(stderr), konst.HookSaidBytes)]})
+		run := Run{Event: in.Event, Command: chosen[i].Command, File: chosen[i].File, Level: chosen[i].Level, Exit: result.Exit,
+			DurationMS: result.DurationMS, Decision: strings.Join(said, "; "), Problem: cmp.Or(result.Problem, problem), Stderr: stderr[:min(len(stderr), konst.HookSaidBytes)]}
+		if verdict.Gate != before {
+			run.Gate = verdict.Gate
+		}
+		verdict.Runs = append(verdict.Runs, run)
 	}
 	if len(verdict.Context) > konst.HookContextBytes {
 		verdict.Context = verdict.Context[:konst.HookContextBytes]
