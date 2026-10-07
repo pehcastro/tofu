@@ -260,7 +260,7 @@ impl Chat {
     }
 
     pub fn kill(&mut self, shell: SharedString, cx: &mut Context<Self>) {
-        eprintln!("desk: shell.kill {shell} sent");
+        eprintln!("desk: kill {shell}: asking tofu shell.kill");
         let params = ShellParams {
             shell: shell.to_string(),
             offset: None,
