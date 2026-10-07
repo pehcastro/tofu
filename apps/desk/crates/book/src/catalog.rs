@@ -62,6 +62,7 @@ pub enum Page {
     FileTree,
     History,
     Shells,
+    Terminal,
     AskBar,
     Agents,
     FileEdits,
@@ -95,7 +96,7 @@ pub const UNBUILT: [(Group, &str); 10] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 36] = [
+    pub const ALL: [Page; 37] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -128,6 +129,7 @@ impl Page {
         Page::Shell,
         Page::Diff,
         Page::Shells,
+        Page::Terminal,
         Page::AskBar,
         Page::Charts,
         Page::Delegation,
@@ -449,6 +451,16 @@ impl Page {
                 "components/shells.rs, components/width.rs, components/tabs.rs, components/term.rs",
                 "running, failed, waiting; N more closed and open; hidden shell picked; pid, starter, port and run time shown wide and hidden under 560 px; Kill calls on_kill; board width and 320 px",
                 "",
+            ),
+            Page::Terminal => sheet(
+                "terminal",
+                "Terminal",
+                Group::Content,
+                "The person's own shell: a PTY drawn by desk_terminal inside a tile; an exited process shows its code and Restart.",
+                "06-modules.md Terminal",
+                "components/terminal.rs, components/card.rs, components/button.rs, components/chip.rs; desk_terminal",
+                "running in a scratch folder, typing; exited with code 1 over the dimmed last screen; Restart calls on_restart",
+                "split, find, copy and paste, rename; grid colours from the theme",
             ),
             Page::AskBar => sheet(
                 "ask-bar",

@@ -24,6 +24,7 @@ pub mod shells;
 pub mod size;
 pub mod tabs;
 pub mod term;
+pub mod terminal;
 pub mod tooltip;
 pub mod transcript;
 pub mod tree;

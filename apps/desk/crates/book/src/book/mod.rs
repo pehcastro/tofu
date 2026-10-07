@@ -15,6 +15,7 @@ mod kit;
 mod lists;
 mod shell;
 mod shells;
+mod terminal;
 mod tiling;
 mod tips;
 
@@ -58,6 +59,7 @@ use kit::{MODELS, label};
 use lists::ListsState;
 use shell::ShellPage;
 use shells::ShellsPage;
+use terminal::TerminalPage;
 use tiling::TilingPage;
 
 const META_WIDTH: f32 = 150.0;
@@ -82,6 +84,7 @@ pub struct Book {
     tree: TreePage,
     history: HistoryPage,
     shells: ShellsPage,
+    terminal: TerminalPage,
     agents: AgentsPage,
     file_edits: FileEditsPage,
     charts: ChartsPage,
@@ -119,6 +122,7 @@ impl Book {
             tree: TreePage::new(cx),
             history: HistoryPage::new(cx),
             shells: ShellsPage::new(cx),
+            terminal: TerminalPage::new(cx),
             agents: AgentsPage::new(cx),
             file_edits: FileEditsPage::new(cx),
             charts: ChartsPage::new(cx),
@@ -439,6 +443,7 @@ impl Book {
             Page::FileTree => self.tree.render(theme, window, cx),
             Page::History => self.history.render(theme, window, cx),
             Page::Shells => self.shells.render(theme, window, cx),
+            Page::Terminal => self.terminal.render(theme, window, cx),
             Page::Agents => self.agents.render(theme, window, cx),
             Page::FileEdits => self.file_edits.render(theme, window, cx),
             Page::Charts => self.charts.render(theme, window, cx),

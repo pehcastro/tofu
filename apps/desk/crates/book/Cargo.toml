@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 desk_motion.workspace = true
 desk_perf.workspace = true
+desk_terminal.workspace = true
 desk_tiling.workspace = true
 desk_ui.workspace = true
 gpui.workspace = true
