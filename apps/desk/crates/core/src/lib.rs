@@ -4,3 +4,4 @@ pub mod control;
 pub mod limits;
 pub mod model;
 pub mod protocol;
+pub mod syntax;
