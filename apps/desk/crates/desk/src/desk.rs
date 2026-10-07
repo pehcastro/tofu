@@ -1,6 +1,9 @@
+use crate::modules::chat::Chat;
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
-use desk_ui::component::{control, inner_card, outer_card, toast};
+use desk_ui::component::control;
+use desk_ui::components::card::{inner_card, outer_card};
+use desk_ui::components::overlay::toast;
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::{
     SIDEBAR_WIDTH, TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
@@ -8,15 +11,26 @@ use desk_ui::metrics::{
 };
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    App, ClickEvent, Context, IntoElement, Render, Task, TitlebarOptions, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, size,
+    AnyView, App, ClickEvent, Context, Entity, IntoElement, Pixels, Render, SharedString, Size,
+    Task, TitlebarOptions, Window, WindowBounds, WindowOptions, div, prelude::*, px, size,
 };
 
 pub const WINDOW_TITLE: &str = "Tofu Desk";
+pub const BOARD_VIEWPORT_WIDTH: f32 = 1440.0;
+pub const BOARD_VIEWPORT_HEIGHT: f32 = 900.0;
+
+pub struct ScreenRoot(pub Option<AnyView>);
+
+impl Render for ScreenRoot {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().children(self.0.clone())
+    }
+}
 
 pub struct Desk {
     sidebar_open: bool,
     toast: Option<Toast>,
+    chat: Entity<Chat>,
 }
 
 struct Toast {
@@ -24,15 +38,20 @@ struct Toast {
     _expiry: Task<gpui::Result<()>>,
 }
 
-pub fn window_options(cx: &App) -> WindowOptions {
+pub fn desk_client() -> Size<Pixels> {
+    size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT))
+}
+
+pub fn board_client() -> Size<Pixels> {
+    size(px(BOARD_VIEWPORT_WIDTH), px(BOARD_VIEWPORT_HEIGHT))
+}
+
+pub fn window_options(title: SharedString, client: Size<Pixels>, cx: &App) -> WindowOptions {
     let mut options = WindowOptions::new()
-        .window_bounds(Some(WindowBounds::centered(
-            size(px(WINDOW_WIDTH), px(WINDOW_HEIGHT)),
-            cx,
-        )))
+        .window_bounds(Some(WindowBounds::centered(client, cx)))
         .window_min_size(Some(size(px(WINDOW_MIN_WIDTH), px(WINDOW_MIN_HEIGHT))))
         .titlebar(Some(TitlebarOptions {
-            title: Some(WINDOW_TITLE.into()),
+            title: Some(title),
             appears_transparent: true,
             traffic_light_position: None,
         }));
@@ -52,10 +71,11 @@ pub fn window_options(cx: &App) -> WindowOptions {
 }
 
 impl Desk {
-    pub fn new() -> Self {
+    pub fn new(chat: Entity<Chat>) -> Self {
         Desk {
             sidebar_open: true,
             toast: None,
+            chat,
         }
     }
 
@@ -153,7 +173,11 @@ impl Render for Desk {
                         body.child(Self::sidebar(&theme, cx))
                     })
                     .when(!self.sidebar_open, |body| body.pl_2())
-                    .child(outer_card(&theme).flex_1().child(inner_card(&theme))),
+                    .child(
+                        outer_card(&theme)
+                            .flex_1()
+                            .child(inner_card(&theme).child(self.chat.clone())),
+                    ),
             )
             .child(crate::status_bar::render(&theme, &problems, cx))
             .children(toast_layer)

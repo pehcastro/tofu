@@ -1,0 +1,20 @@
+use std::time::Duration;
+
+pub const FRAME_BUDGET: Duration = Duration::from_millis(8);
+pub const HANG_THRESHOLD: Duration = Duration::from_millis(100);
+pub const HANG_CONTRIBUTORS: usize = 8;
+pub const POLL_INTERVAL: Duration = Duration::from_millis(250);
+pub const MEMORY_INTERVAL: Duration = Duration::from_secs(1);
+pub const RECENT_FRAMES: usize = 240;
+pub const RECENT_SPANS: Duration = Duration::from_secs(1);
+pub const PENDING_SPANS: usize = 65_536;
+pub const RECORDED_EVENTS: usize = 500_000;
+pub const BENCH_WARMUP_FRAMES: u32 = 30;
+pub const OVERLAY_TOP_SPANS: usize = 8;
+pub const RECORD_MAX: Duration = Duration::from_secs(20);
+pub const RECORD_MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;
+pub const RECORD_DIR: &str = "recordings";
+pub const SLOW_FRAME_FACTOR: f64 = 1.5;
+pub const FLASH_CELL: usize = 16;
+pub const FLASH_LUMINANCE: f32 = 12.0;
+pub const FLASH_RETURN_FRAMES: usize = 3;

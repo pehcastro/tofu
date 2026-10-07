@@ -1,0 +1,23 @@
+[package]
+name = "desk_perf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+gpui = { workspace = true, features = ["profiler"] }
+memory-stats = "1.2.0"
+png = "0.18.1"
+raw-window-handle = "0.6.2"
+serde = { version = "1.0.221", features = ["derive"] }
+serde_json = "1.0.144"
+stats_alloc = "0.1.10"
+
+[target.'cfg(windows)'.dependencies]
+windows-capture = "1.5.0"
+
+[lints]
+workspace = true

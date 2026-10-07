@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $stale = (Get-Date).AddDays(-3)
 $target = Join-Path (Split-Path $PSScriptRoot -Parent) "target"
 if (-not (Test-Path $target)) { "target absent"; exit 0 }
-$keepDirs = @("debug", "release", "motion", "profiling", "walls")
+$keepDirs = @("debug", "release", "motion", "profiling", "walls", "recordings")
 $keepFiles = @(".rustc_info.json", "CACHEDIR.TAG")
 $loose = @("*.log", "*.out", "*.png", "*.err")
 

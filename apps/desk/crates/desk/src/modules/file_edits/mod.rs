@@ -10,6 +10,9 @@ use gpui::{
     Rgba, SharedString, Stateful, Window, div, prelude::*, px,
 };
 
+use desk_ui::components::list::{HoverVariant, RowGlide, bare_row};
+use desk_ui::live::ActiveTheme;
+use desk_ui::theme::Theme;
 use fixture::{
     AGENTS, Agent, CHANGES, Change, FILES, File, Kin, Lang, Mark, Op, STORIES, State, Story,
 };
@@ -74,7 +77,7 @@ impl Render for FileEdits {
             .flex_1()
             .min_h_0()
             .flex()
-            .child(self.side(scale, cx))
+            .child(self.side(scale, window, cx))
             .child(div().w(px(1.0)).h_full().bg(black(0.35)))
             .child(self.feed(scale, cx));
         let shell = ringed(12.0, white(0.06))
@@ -206,32 +209,46 @@ fn numbers(add: &'static str, del: &'static str) -> [Div; 2] {
     })
 }
 
-fn row(id: impl Into<SharedString>, on: bool, height: f32) -> Stateful<Div> {
-    div()
-        .id(gpui::ElementId::Name(id.into()))
-        .flex()
-        .items_center()
-        .gap(px(8.0))
-        .h(px(height))
-        .px(px(10.0))
-        .rounded(px(9.0))
-        .cursor_pointer()
-        .when(on, |row| row.bg(white(0.07)))
-        .hover(|row| row.bg(white(0.05)))
+fn row(
+    glide: &RowGlide,
+    ix: usize,
+    id: impl Into<SharedString>,
+    on: bool,
+    height: f32,
+    theme: &Theme,
+) -> Stateful<Div> {
+    glide.row(
+        ix,
+        bare_row(gpui::ElementId::Name(id.into()), false, false, theme)
+            .gap(px(8.0))
+            .h(px(height))
+            .px(px(10.0))
+            .py_0()
+            .rounded(px(9.0))
+            .when(on, |row| row.bg(white(0.07))),
+    )
 }
 
 impl FileEdits {
-    fn side(&self, scale: f32, cx: &mut Context<Self>) -> Div {
+    fn side(&self, scale: f32, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
+        let theme = ActiveTheme::theme(cx);
+        let glide = RowGlide::new(
+            "file-edits-side",
+            HoverVariant::default(),
+            &theme,
+            window,
+            cx,
+        );
         let pick = |to: Pick| {
             cx.listener(move |this: &mut Self, _: &gpui::ClickEvent, _, cx| {
                 this.pick = to;
                 cx.notify();
             })
         };
-        let agent_row = |agent: &Agent| {
+        let agent_row = |(ix, agent): (usize, &Agent)| {
             let on = self.pick == Pick::Agent(agent.id);
             let [add, del] = numbers(agent.add, agent.del);
-            row(agent.id, on, 32.0)
+            row(&glide, 1 + ix, agent.id, on, 32.0, &theme)
                 .on_click(pick(Pick::Agent(agent.id)))
                 .child(
                     div()
@@ -244,14 +261,14 @@ impl FileEdits {
                 .child(add)
                 .child(del)
         };
-        let file_row = |file: &File| {
+        let file_row = |(ix, file): (usize, &File)| {
             let on = self.pick == Pick::File(file.base);
             let [add, del] = numbers(file.add, file.del);
             let icon = match file.lang {
                 Lang::Go => GO,
                 Lang::React => REACT,
             };
-            row(file.base, on, 30.0)
+            row(&glide, 1 + AGENTS.len() + ix, file.base, on, 30.0, &theme)
                 .on_click(pick(Pick::File(file.base)))
                 .child(file_icon(icon, 14.0, scale))
                 .child(text(13.0, 23.0, op_ink(file.op), file.base))
@@ -260,13 +277,7 @@ impl FileEdits {
                 .child(add)
                 .child(del)
         };
-        div()
-            .w(px(340.0))
-            .flex_none()
-            .h_full()
-            .overflow_hidden()
-            .px(px(6.0))
-            .py(px(8.0))
+        let list = div()
             .child(
                 div()
                     .flex()
@@ -276,7 +287,7 @@ impl FileEdits {
                     .child(cap(fixture::RUNNING)),
             )
             .child(
-                row("all", self.pick == Pick::All, 32.0)
+                row(&glide, 0, "all", self.pick == Pick::All, 32.0, &theme)
                     .on_click(pick(Pick::All))
                     .child(
                         text(13.0, 23.0, white(0.9), "All changes")
@@ -285,7 +296,7 @@ impl FileEdits {
                     .child(spacer())
                     .child(text(12.0, 23.0, white(T3), fixture::FILE_SUM)),
             )
-            .children(AGENTS.iter().map(agent_row))
+            .children(AGENTS.iter().enumerate().map(agent_row))
             .child(
                 div()
                     .px(px(10.0))
@@ -293,7 +304,15 @@ impl FileEdits {
                     .pb(px(6.0))
                     .child(cap("Files in this session")),
             )
-            .children(FILES.iter().map(file_row))
+            .children(FILES.iter().enumerate().map(file_row));
+        glide
+            .frame("file-edits-side-frame", list)
+            .w(px(340.0))
+            .flex_none()
+            .h_full()
+            .overflow_hidden()
+            .px(px(6.0))
+            .py(px(8.0))
     }
 
     fn feed(&self, scale: f32, cx: &mut Context<Self>) -> Div {

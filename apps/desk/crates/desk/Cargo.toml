@@ -10,8 +10,35 @@ publish.workspace = true
 desk_core.workspace = true
 desk_ui.workspace = true
 desk_terminal.workspace = true
+desk_tiling.workspace = true
+flume = { version = "0.11.1", default-features = false, features = ["async"] }
 gpui.workspace = true
 gpui_platform.workspace = true
+serde_json = "1.0.149"
+
+[features]
+default = []
+screen-work = []
+screen-settings = []
+screen-accounts = []
+screen-theme = []
+screen-library = []
+screen-classifier = []
+screen-usage = []
+screen-limits = []
+screen-context = []
+screen-session = []
+module-subagents = []
+module-file-edits = []
+module-shells = []
+module-git = []
+module-editor = []
+module-browser = []
+module-data-studio = []
+screen-platforms = []
+screen-intro = []
+screen-onboarding = ["screen-intro"]
+all-screens = ["screen-work", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "module-subagents", "module-file-edits", "module-shells", "module-git", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
 
 [lints]
 workspace = true

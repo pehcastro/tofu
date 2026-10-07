@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/ui", "crates/terminal", "crates/perf", "crates/desk", "crates/motion", "crates/plugin"]
+members = ["crates/core", "crates/ui", "crates/terminal", "crates/perf", "crates/desk", "crates/motion", "crates/plugin", "crates/book", "crates/tiling"]
 exclude = ["vendor"]
 
 [workspace.package]
@@ -17,6 +17,7 @@ desk_terminal = { path = "crates/terminal" }
 desk_perf = { path = "crates/perf" }
 desk_motion = { path = "crates/motion" }
 desk_plugin = { path = "crates/plugin" }
+desk_tiling = { path = "crates/tiling" }
 gpui = { package = "gpui-ce", path = "vendor/gpui-ce/crates/gpui" }
 gpui_platform = { package = "gpui_ce_platform", path = "vendor/gpui-ce/crates/gpui_platform" }
 
@@ -29,9 +30,12 @@ expect_used = "deny"
 
 [profile.dev]
 opt-level = 1
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
+debug-assertions = false
 
 [profile.release]
 lto = "thin"
@@ -40,3 +44,10 @@ codegen-units = 1
 [profile.profiling]
 inherits = "release"
 debug = true
+
+[profile.motion]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+debug = false

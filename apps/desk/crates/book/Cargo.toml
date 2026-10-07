@@ -1,0 +1,28 @@
+[package]
+name = "desk_book"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "book"
+path = "src/main.rs"
+
+[dependencies]
+desk_motion.workspace = true
+desk_perf.workspace = true
+desk_tiling.workspace = true
+desk_ui.workspace = true
+gpui.workspace = true
+gpui_platform.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+gpui_wgpu = { package = "gpui_ce_wgpu", path = "../../vendor/gpui-ce/crates/gpui_wgpu", features = ["test-support"] }
+image = "0.25"
+serde_json = "1"
+
+[lints]
+workspace = true
