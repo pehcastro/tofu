@@ -413,8 +413,9 @@ impl Editor {
             } => "Click a file in the tree to open it.",
             _ => "Run desk with --file to open one.",
         };
-        let code_area = match self.opened() {
-            None => empty_state(
+        let code_area = match (self.who_view(&ActiveTheme::theme(cx)), self.opened()) {
+            (Some(who), _) => who,
+            (None, None) => empty_state(
                 "editor-shut",
                 "No file open",
                 Some(hint.into()),
@@ -424,7 +425,7 @@ impl Editor {
                 |_, _, _| {},
             )
             .into_any_element(),
-            Some(Ok(editor)) => {
+            (None, Some(Ok(editor))) => {
                 let finder = editor.clone();
                 div()
                     .size_full()
@@ -435,7 +436,7 @@ impl Editor {
                     .child(editor.clone())
                     .into_any_element()
             }
-            Some(Err(error)) => empty_state(
+            (None, Some(Err(error))) => empty_state(
                 "editor-failure",
                 "Could not open the file",
                 Some(error.clone()),

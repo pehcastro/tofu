@@ -1,3 +1,4 @@
+mod blame;
 mod boards;
 mod fixture;
 mod kit;
@@ -5,7 +6,9 @@ mod parts;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use desk_core::buffer::Buffer;
 use desk_core::git::{Against, Git, GitBinary, Hunk, Mark, State};
@@ -13,16 +16,20 @@ use desk_core::syntax::{Language, Syntax};
 use desk_ui::components::chip::GitStatus;
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::code_editor::CodeEditor;
+use desk_ui::components::history::{blame_gutter, inline_blame};
 use desk_ui::components::tree::{FileTree, IconTheme, TreeEvent, TreeNode};
 use desk_ui::live::ActiveTheme;
-use desk_ui::theme::ColorToken;
+use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Entity, Focusable, Render, SharedString,
-    Subscription, Task, Window, prelude::*,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Entity, Focusable, Render,
+    SharedString, Subscription, Task, Window, div, prelude::*,
 };
 
+use blame::{Blamed, Inline};
 use boards::{cursor_marks, notes_marks, store_marks};
 use fixture::{COUNT_TEST, Line, NOTES, STORE};
+
+const BLAME_IDLE: Duration = Duration::from_millis(500);
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let scale = window.scale_factor();
@@ -121,6 +128,9 @@ struct OnDisk {
 struct Repo {
     git: Arc<GitBinary>,
     path: String,
+    wanted: Option<String>,
+    blamed: Option<Blamed>,
+    inline: Option<Inline>,
 }
 
 struct Folder {
@@ -332,7 +342,13 @@ fn on_disk(full: PathBuf, git: Option<Arc<GitBinary>>) -> OnDisk {
             .split_last()
             .map(|(_, folders)| folders.to_vec())
             .unwrap_or_default(),
-        repo: Some(Repo { git, path }),
+        repo: Some(Repo {
+            git,
+            path,
+            wanted: None,
+            blamed: None,
+            inline: None,
+        }),
         dirty: false,
     }
 }
@@ -491,6 +507,7 @@ pub struct Editor {
     _watch: Option<Subscription>,
     _tree: Option<Subscription>,
     _marking: Option<Task<()>>,
+    _blaming: Option<Task<()>>,
 }
 
 impl Editor {
@@ -511,6 +528,7 @@ impl Editor {
             _watch: None,
             _tree: None,
             _marking: None,
+            _blaming: None,
         }
     }
 
@@ -534,8 +552,10 @@ impl Editor {
             ..
         } = &self.source
         {
-            self._watch = Some(cx.observe(code, Self::code_changed));
+            let code = code.clone();
+            self._watch = Some(cx.observe(&code, Self::code_changed));
             self.remark(cx);
+            self.follow_blame(&code, cx);
         }
     }
 
@@ -617,6 +637,7 @@ impl Editor {
             }
             self.find_logged = finding;
         }
+        self.follow_blame(&code, cx);
         let dirty = code.read(cx).buffer().is_dirty();
         let Source::Disk {
             file: Some((_, disk)),
@@ -682,6 +703,158 @@ impl Editor {
         }));
     }
 
+    fn follow_blame(&mut self, code: &Entity<CodeEditor>, cx: &mut Context<Self>) {
+        let Source::Disk {
+            file:
+                Some((
+                    _,
+                    OnDisk {
+                        repo: Some(repo), ..
+                    },
+                )),
+            ..
+        } = &mut self.source
+        else {
+            return;
+        };
+        let editor = code.read(cx);
+        let rope = editor.buffer().rope().clone();
+        let row = editor
+            .carets()
+            .last()
+            .and_then(|(_, head)| editor.buffer().char_to_line(head).ok());
+        let shown = editor
+            .marks()
+            .iter()
+            .find_map(|(row, mark)| mark.trailing.as_ref().map(|_| *row));
+        if repo.wanted.as_deref().is_none_or(|wanted| rope != wanted) {
+            let text = rope.to_string();
+            let wait = if repo.wanted.is_some() {
+                BLAME_IDLE
+            } else {
+                Duration::ZERO
+            };
+            repo.wanted = Some(text.clone());
+            let (git, path) = (repo.git.clone(), repo.path.clone());
+            self._blaming = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(wait).await;
+                let started = Instant::now();
+                let blamed = cx
+                    .background_executor()
+                    .spawn(async move {
+                        git.blame(&path, Some(&text))
+                            .map(|lines| Blamed { text, lines })
+                    })
+                    .await;
+                let applied = this.update(cx, |editor, cx| editor.blamed(blamed, started, cx));
+                if let Err(error) = applied {
+                    eprintln!("desk: editor is gone before its blame: {error}");
+                }
+            }));
+        }
+        let wanted = row
+            .zip(
+                repo.blamed
+                    .as_ref()
+                    .filter(|blamed| rope == blamed.text.as_str()),
+            )
+            .and_then(|(row, blamed)| blame::inline(blamed, row));
+        if wanted == repo.inline && shown == wanted.as_ref().map(|(row, _, _)| *row) {
+            return;
+        }
+        repo.inline.clone_from(&wanted);
+        match &wanted {
+            Some((row, name, when)) => {
+                eprintln!("desk: editor inline blame line {}: {name}, {when}", row + 1)
+            }
+            None => eprintln!("desk: editor inline blame hidden"),
+        }
+        code.update(cx, |code, cx| {
+            let mut marks = code.marks().clone();
+            marks.retain(|_, mark| {
+                mark.trailing = None;
+                mark.gutter.is_some() || mark.edge.is_some() || mark.background.is_some()
+            });
+            if let Some((row, name, when)) = wanted {
+                marks.entry(row).or_default().trailing = Some(Rc::new(move |theme: &Theme| {
+                    inline_blame(("inline-blame", row), &name, &when, theme)
+                }));
+            }
+            code.set_marks(marks);
+            cx.notify();
+        });
+    }
+
+    fn blamed(
+        &mut self,
+        blamed: Result<Blamed, desk_core::git::GitError>,
+        started: Instant,
+        cx: &mut Context<Self>,
+    ) {
+        let Source::Disk {
+            file:
+                Some((
+                    Ok(code),
+                    OnDisk {
+                        repo: Some(repo), ..
+                    },
+                )),
+            ..
+        } = &mut self.source
+        else {
+            return;
+        };
+        match blamed {
+            Ok(blamed) => {
+                eprintln!(
+                    "desk: editor blamed {}: {} lines, {} not committed, {} ms",
+                    repo.path,
+                    blamed.lines.len(),
+                    blamed
+                        .lines
+                        .iter()
+                        .filter(|line| line.commit.is_none())
+                        .count(),
+                    started.elapsed().as_millis()
+                );
+                repo.blamed = Some(blamed);
+            }
+            Err(error) => eprintln!("desk: editor shows no blame for {}: {error}", repo.path),
+        }
+        let code = code.clone();
+        self.follow_blame(&code, cx);
+        cx.notify();
+    }
+
+    fn who_view(&self, theme: &Theme) -> Option<AnyElement> {
+        let Source::Disk {
+            file:
+                Some((
+                    _,
+                    OnDisk {
+                        repo:
+                            Some(Repo {
+                                blamed: Some(blamed),
+                                ..
+                            }),
+                        ..
+                    },
+                )),
+            ..
+        } = &self.source
+        else {
+            return None;
+        };
+        (self.mode == Mode::Who).then(|| {
+            div()
+                .id("editor-who")
+                .size_full()
+                .overflow_y_scroll()
+                .child(blame_gutter(&blame::gutter(blamed), theme))
+                .into_any_element()
+        })
+    }
+
     fn shut_file(&mut self, cx: &mut Context<Self>) {
         if let Source::Disk { file, .. } = &mut self.source {
             *file = None;
@@ -722,8 +895,10 @@ impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let scale = window.scale_factor();
         let theme = ActiveTheme::theme(cx);
+        let who_on_disk = self.mode == Mode::Who && matches!(self.source, Source::Disk { .. });
         let body = match self.board {
             Board::Edit => self.edit_board(scale, cx),
+            Board::Changes if who_on_disk => self.edit_board(scale, cx),
             Board::Changes => self.changes_board(scale, cx),
             Board::Split => self.split_board(scale, cx),
         };

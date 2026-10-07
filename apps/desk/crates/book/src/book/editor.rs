@@ -1,6 +1,6 @@
 use desk_ui::components::chip::GitStatus;
 use desk_ui::components::history::{
-    Blame, BlameLine, ChangedFile, Changes, Commit, Day, History, blame_gutter,
+    Blame, BlameLine, ChangedFile, Changes, Commit, Day, History, blame_gutter, inline_blame,
 };
 use desk_ui::components::tree::{FileTree, IconTheme, IconThemeError, TreeNode};
 use desk_ui::theme::Theme;
@@ -193,6 +193,15 @@ fn blame() -> Vec<BlameLine> {
     .collect()
 }
 
+fn inline_blames(id: &'static str, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(inline_blame((id, 0usize), "pehcastro", "7 days ago", theme))
+        .child(inline_blame((id, 1usize), "you", "not committed", theme))
+}
+
 fn changes(cx: &mut Context<Book>) -> Entity<Changes> {
     let file = |path: &'static str, git, staged, agent| ChangedFile {
         path: path.into(),
@@ -328,6 +337,13 @@ impl HistoryPage {
                 HISTORY_WIDTH,
                 self.changes_wide.clone(),
                 self.changes_narrow.clone(),
+            ))
+            .child(twice(
+                "Inline blame: faint after the caret line's code, fades in over 150 ms",
+                theme,
+                BLAME_WIDTH,
+                inline_blames("wide", theme),
+                inline_blames("narrow", theme),
             ))
     }
 

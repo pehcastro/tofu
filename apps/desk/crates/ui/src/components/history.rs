@@ -1,6 +1,7 @@
+use desk_motion::tokens::{EASE_OUT, HOVER_MS};
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, Entity, FontWeight, Rgba, SharedString, Window, div,
-    prelude::*, px, rgb,
+    Animation, AnimationExt, AnyElement, ClickEvent, Context, Div, ElementId, Entity, FontWeight,
+    Rgba, SharedString, Window, div, prelude::*, px, rgb,
 };
 
 use crate::component::icon;
@@ -17,7 +18,7 @@ use crate::components::size::{
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{AVATAR, ICON, ICON_SMALL};
-use crate::theme::{ColorToken, Theme};
+use crate::theme::{ColorToken, Theme, WordToken};
 
 const PERSON_FILL: u32 = 0x56_63_75;
 const PERSON_TEXT: u32 = 0xe6_ea_f0;
@@ -26,6 +27,7 @@ const NUMBER_WIDTH: f32 = 52.0;
 const NUMBER_PAD: f32 = 18.0;
 const BLAME_WIDTH: f32 = 168.0;
 const BLAME_FACE: f32 = 14.0;
+const INLINE_GAP: f32 = 28.0;
 const AGENT_BAR: f32 = 3.0;
 const DOT: f32 = 6.0;
 const CHECKBOX: f32 = 14.0;
@@ -402,6 +404,26 @@ pub fn blame_gutter(lines: &[BlameLine], theme: &Theme) -> Div {
         );
     }
     gutter
+}
+
+pub fn inline_blame(id: impl Into<ElementId>, name: &str, when: &str, theme: &Theme) -> AnyElement {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap_1p5()
+        .ml(px(INLINE_GAP))
+        .font_family(theme.word(WordToken::ShapeFont))
+        .text_size(px(FONT_SMALL))
+        .text_color(ink(theme, CAPTION_TEXT))
+        .child(face(name, BLAME_FACE))
+        .child(format!("{name}, {when}"))
+        .with_animation(
+            id,
+            Animation::new(HOVER_MS).with_easing(EASE_OUT),
+            |label, shown| label.opacity(shown),
+        )
+        .into_any_element()
 }
 
 fn same_blame(a: &Blame, b: &Blame) -> bool {
