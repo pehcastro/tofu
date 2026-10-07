@@ -525,8 +525,11 @@ fn events(seed: &Seed) -> Vec<AgentEvent> {
         .collect()
 }
 
-fn board() -> AgentBoard {
-    let seeds = seeds();
+fn board(swapped: bool) -> AgentBoard {
+    let mut seeds = seeds();
+    if let Some(first) = seeds.first_mut().filter(|_| swapped) {
+        first.agent.status = AgentStatus::Failed;
+    }
     let mut events: Vec<AgentEvent> = seeds.iter().flat_map(events).collect();
     events.sort_by(|a, b| a.minutes.total_cmp(&b.minutes));
     AgentBoard {
@@ -549,11 +552,13 @@ pub(super) struct AgentsPage {
     board: Rc<AgentBoard>,
     tile: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
+    swapped: bool,
+    pending: bool,
 }
 
 impl AgentsPage {
     pub(super) fn new(cx: &mut Context<Book>) -> Self {
-        let board = Rc::new(board());
+        let board = Rc::new(board(false));
         let book = cx.weak_entity();
         let screen = cx.new(|_| AgentScreen::new(board.clone(), mention(book.clone())));
         let shown = screen.clone();
@@ -574,7 +579,19 @@ impl AgentsPage {
             board,
             tile,
             screen,
+            swapped: false,
+            pending: false,
         }
+    }
+
+    fn swap(&mut self, cx: &mut Context<Book>) {
+        self.pending = false;
+        self.swapped = !self.swapped;
+        self.board = Rc::new(board(self.swapped));
+        self.tile
+            .update(cx, |tile, cx| tile.set_board(self.board.clone(), cx));
+        self.screen
+            .update(cx, |screen, cx| screen.set_board(self.board.clone(), cx));
     }
 
     fn tabs(&self, theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
@@ -614,6 +631,9 @@ impl AgentsPage {
     }
 
     pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, cx: &mut Context<Book>) -> Div {
+        if self.pending {
+            self.swap(cx);
+        }
         let column = |caption: &'static str, body: Div| {
             div()
                 .flex()
@@ -655,7 +675,8 @@ impl AgentsPage {
             ))
     }
 
-    pub(super) fn key(&mut self, _: &str) -> bool {
-        false
+    pub(super) fn key(&mut self, key: &str) -> bool {
+        self.pending = key == "b";
+        self.pending
     }
 }

@@ -257,6 +257,12 @@ impl AgentBoard {
             .count()
     }
 
+    fn find(&self, agent: Agent) -> Option<usize> {
+        self.lines
+            .iter()
+            .position(|line| line.agent.kind == agent.kind && line.agent.instance == agent.instance)
+    }
+
     pub fn live(&self) -> usize {
         self.lines.len() - self.count(AgentStatus::Finished)
     }
@@ -967,6 +973,17 @@ impl AgentTile {
         }
     }
 
+    pub fn set_board(&mut self, board: impl Into<Rc<AgentBoard>>, cx: &mut Context<Self>) {
+        let board = board.into();
+        let shown = self.board.lines.get(self.shown).map(|line| line.agent);
+        match shown.and_then(|agent| board.find(agent)) {
+            Some(at) => self.shown = at,
+            None => self.open = false,
+        }
+        self.board = board;
+        cx.notify();
+    }
+
     fn show(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.shown = ix;
         self.open = true;
@@ -1192,6 +1209,16 @@ impl AgentScreen {
             open_groups: OPEN_AT_START,
             mention: Rc::new(mention),
         }
+    }
+
+    pub fn set_board(&mut self, board: impl Into<Rc<AgentBoard>>, cx: &mut Context<Self>) {
+        let board = board.into();
+        self.picked = self
+            .picked
+            .and_then(|ix| self.board.lines.get(ix))
+            .and_then(|line| board.find(line.agent));
+        self.board = board;
+        cx.notify();
     }
 
     pub fn show(&mut self, agent: Agent, cx: &mut Context<Self>) {
