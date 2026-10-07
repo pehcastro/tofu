@@ -13,7 +13,7 @@ default, and you only write the ones you want different.
 The settings come in groups:
 
 - Appearance: theme, density, animations, statusBar, colorMode
-- Interaction: composer, gatePrompt, readBeforeEdit
+- Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills, memory, autoMemory, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell

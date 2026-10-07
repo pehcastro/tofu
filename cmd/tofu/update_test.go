@@ -15,7 +15,10 @@ import (
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"tofu/internal/konst"
 )
 
 type fakeRelease struct {
@@ -51,8 +54,11 @@ func fakeArchive(t *testing.T, binary []byte) ([]byte, string) {
 	return packed.Bytes(), ".tar.gz"
 }
 
-func serveRelease(t *testing.T, release fakeRelease, binary []byte) {
+type releaseHits struct{ latest, asset atomic.Int32 }
+
+func serveRelease(t *testing.T, release fakeRelease, binary []byte) *releaseHits {
 	t.Helper()
+	hits := &releaseHits{}
 	archive, suffix := fakeArchive(t, binary)
 	version := strings.TrimPrefix(release.tag, "v")
 	name := "tofu_" + version + "_" + goruntime.GOOS + "_" + goruntime.GOARCH + suffix
@@ -68,15 +74,20 @@ func serveRelease(t *testing.T, release fakeRelease, binary []byte) {
 		assets = append(assets, map[string]string{"name": "checksums.txt", "browser_download_url": server.URL + "/download/sums"})
 	}
 	mux.HandleFunc("/repos/pehcastro/tofu/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		hits.latest.Add(1)
 		if release.missing {
 			http.Error(w, `{"message":"Not Found","status":"404"}`, http.StatusNotFound)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": release.tag, "assets": assets})
 	})
-	mux.HandleFunc("/download/asset", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(archive) })
+	mux.HandleFunc("/download/asset", func(w http.ResponseWriter, r *http.Request) {
+		hits.asset.Add(1)
+		_, _ = w.Write(archive)
+	})
 	mux.HandleFunc("/download/sums", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(checksums)) })
 	t.Setenv(updateAPIVariable, server.URL)
+	return hits
 }
 
 func TestUpdateAgainstAFakeRelease(t *testing.T) {
@@ -135,13 +146,98 @@ func TestUpdateAgainstAFakeRelease(t *testing.T) {
 			for _, entry := range entries {
 				names = append(names, entry.Name())
 			}
-			want := []string{"tofu.exe"}
-			if c.installed == newBinary && goruntime.GOOS == "windows" {
-				want = append(want, "tofu.exe.old")
+			setAside := c.installed == newBinary && goruntime.GOOS == "windows"
+			want := 1
+			if setAside {
+				want = 2
 			}
-			if strings.Join(names, " ") != strings.Join(want, " ") {
-				t.Errorf("the directory holds %v, want %v", names, want)
+			if len(names) != want || names[0] != "tofu.exe" || setAside && !strings.HasPrefix(names[1], "tofu.exe.old-") {
+				t.Errorf("the directory holds %v, want tofu.exe and, after a Windows install, one tofu.exe.old-*", names)
 			}
 		})
+	}
+}
+
+func TestUpdateInTheBackground(t *testing.T) {
+	const oldBinary, newBinary = "old tofu", "new tofu"
+	cases := []struct {
+		name      string
+		release   fakeRelease
+		auto      bool
+		says      string
+		installed string
+		downloads int32
+	}{
+		{"on, a newer release is installed once and the restart line stays", fakeRelease{tag: "v99.0.0", sums: true}, true, "tofu 99.0.0 is installed · restart to use it", newBinary, 1},
+		{"off, a newer release is only named", fakeRelease{tag: "v99.0.0", sums: true}, false, "tofu 99.0.0 is out · tofu update installs it", oldBinary, 0},
+		{"a bad checksum installs nothing, says so, and is not retried every tick", fakeRelease{tag: "v99.0.0", sums: true, checksums: strings.Repeat("0", 64) + "  {name}\n"}, true, "installing it failed", oldBinary, 1},
+		{"no release says nothing and asks once", fakeRelease{missing: true}, true, "", oldBinary, 0},
+		{"a tag that is not a version installs nothing", fakeRelease{tag: "nightly", sums: true}, true, "", oldBinary, 0},
+		{"the running release is current", fakeRelease{tag: "v" + konst.Version, sums: true}, true, "", oldBinary, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			hits := serveRelease(t, c.release, []byte(newBinary))
+			dir := t.TempDir()
+			target := filepath.Join(dir, "tofu.exe")
+			if err := os.WriteFile(target, []byte(oldBinary), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			watch, err := newUpdateWatch(target, filepath.Join(dir, "update.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for tick := range 3 {
+				said := watch.check(t.Context(), c.auto)
+				t.Logf("tick %d: %q", tick, said)
+				if c.says == "" && said != "" || !strings.Contains(said, c.says) {
+					t.Errorf("tick %d said %q, want %q", tick, said, c.says)
+				}
+			}
+			if got, _ := os.ReadFile(target); string(got) != c.installed {
+				t.Errorf("the target holds %q, want %q", got, c.installed)
+			}
+			if hits.latest.Load() != 1 || hits.asset.Load() != c.downloads {
+				t.Errorf("three ticks asked for the release %d times and downloaded it %d times, want 1 and %d", hits.latest.Load(), hits.asset.Load(), c.downloads)
+			}
+		})
+	}
+	t.Run("a test binary is a dev build and gets no updater", func(t *testing.T) {
+		if appUpdates(t.TempDir()) != nil {
+			t.Error("a dev build got an update check")
+		}
+	})
+}
+
+func TestReplaceBinaryPassesACopyStillRunning(t *testing.T) {
+	if goruntime.GOOS != "windows" {
+		t.Skip("only Windows sets the running binary aside")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "tofu.exe")
+	free, held := target+".old", target+".old-held"
+	for _, path := range []string{target, free, held} {
+		if err := os.WriteFile(path, []byte(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	running, err := os.Open(held)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = running.Close() }()
+	aside, err := replaceBinary(target, []byte("new tofu"))
+	if err != nil {
+		t.Fatalf("a held set-aside copy blocked the install: %v", err)
+	}
+	t.Logf("set aside at %s", aside)
+	if _, err := os.Stat(free); err == nil {
+		t.Error("the free tofu.exe.old was kept")
+	}
+	if _, err := os.Stat(held); err != nil {
+		t.Error("the held copy was deleted")
+	}
+	if got, _ := os.ReadFile(target); string(got) != "new tofu" {
+		t.Errorf("the target holds %q", got)
 	}
 }

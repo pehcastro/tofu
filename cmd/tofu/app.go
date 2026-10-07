@@ -133,6 +133,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		NewSession:   func() string { return freshSession(live) },
 		Compact:      func() string { return compactSession(live) },
 		Undo:         func(count string) string { return undoTurns(live.ID(), count) },
+		Updates:      appUpdates(dir),
 		Shells:       appShells(dir, launch.registry, launch.registryErr),
 		KillShell:    appKillShell(launch.registry, launch.registryErr),
 		RunCommand: func(ctx context.Context, command string) (string, bool) {

@@ -11,7 +11,7 @@ What it is
   The settings come in groups:
 
   - Appearance: theme, density, animations, statusBar, colorMode
-  - Interaction: composer, gatePrompt, readBeforeEdit
+  - Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate
   - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images,
     projectInstructionsCap, instructionSources, skills, memory, autoMemory,
     learn
@@ -113,6 +113,11 @@ Interaction
       true or false
       an edit or a write to a file this session has not read, or that changed
       since it was read, is refused
+    autoUpdate              true
+      true or false
+      on installs a newer tofu release in the background, looked up at most once
+      an hour, and the next start runs it; off only says in the chat that one is
+      out, and tofu update installs it. A build from source never updates
 
 Context
     chatShowsTools          false

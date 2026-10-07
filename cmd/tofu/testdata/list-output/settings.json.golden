@@ -58,6 +58,12 @@ exit 0
         "source": "global"
       },
       {
+        "key": "autoUpdate",
+        "category": "Interaction",
+        "value": true,
+        "source": "default"
+      },
+      {
         "key": "chatShowsTools",
         "category": "Context",
         "value": false,

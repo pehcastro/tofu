@@ -665,11 +665,12 @@ func (a *App) parkSubAgentsTheTurnLeftBehind() {
 func (a *App) shellActivity() []session.Activity {
 	var rows []session.Activity
 	for _, entry := range a.liveShells {
-		if slices.ContainsFunc(a.view.Activity, func(row session.Activity) bool { return row.Name == entry.Owner }) {
+		counted := func(row session.Activity) bool { return row.Name == entry.Owner }
+		working := func(row subagent.Row) bool { return row.Name == entry.Owner && row.State == roster.Working }
+		if slices.ContainsFunc(a.view.Activity, counted) || slices.ContainsFunc(rows, counted) || !slices.ContainsFunc(a.subAgents, working) {
 			continue
 		}
-		lines := strings.Split(strings.TrimRight(entry.Log, "\r\n"), "\n")
-		rows = append(rows, session.Activity{Name: cmp.Or(entry.Owner, "tofu"), Doing: session.RunningBash, Since: entry.Started, What: cmp.Or(lines[len(lines)-1], "nothing printed yet")})
+		rows = append(rows, session.Activity{Name: entry.Owner, Doing: session.RunningBash})
 	}
 	return rows
 }

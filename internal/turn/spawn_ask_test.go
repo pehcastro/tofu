@@ -104,6 +104,24 @@ func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 	}
 }
 
+func TestARunThatAskedEndsFinishedAndItsOpenGrantStillNeedsContext(t *testing.T) {
+	outside := toolCallDecision(llm.ToolCall{ID: "call-write", Name: "write", Arguments: json.RawMessage(`{"path":"src/orders.ts","content":"x"}`)})
+	model := askTurn(t, false, []llm.Decision{claimDecision("yes, on 3000")}, outside, claimDecision("the route is added"))
+	listed, err := subAgentsTool{orchestrator: model.spawn}.Run(t.Context(), nil)
+	if err != nil || !strings.Contains(listed.Content, "sub-1: no definition, finished") {
+		t.Errorf("subagents after the run ended listed %q, %v, want sub-1 finished", listed.Content, err)
+	}
+	reported := false
+	for _, request := range model.script.requests(leadKey) {
+		for _, message := range request.Messages {
+			reported = reported || strings.Contains(message.Content, "sub-agent sub-1 is finished, needs_context")
+		}
+	}
+	if !reported {
+		t.Errorf("the lead never read sub-1 as finished and needing context for its refused write")
+	}
+}
+
 func TestAFailedSideCallAnswersWithTheDefaultMarkedAssumed(t *testing.T) {
 	model := askTurn(t, true, nil, claimDecision("started on 3000"))
 	saw := subAgentSaw(t, model)

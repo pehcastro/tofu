@@ -116,31 +116,41 @@ const (
 type Activity struct {
 	Name  string
 	Doing Doing
-	Since time.Time
-	Tool  string
-	What  string
 }
 
-func (a Activity) drawn(now time.Time) string {
-	took := widget.Until(max(now.Sub(a.Since), 0))
-	what := ""
-	if a.What != "" {
-		what = look.Muted(requestSeparator + oneLine(a.What))
+func (d Doing) drawn(count int) string {
+	agents := "(" + strconv.Itoa(count) + ") agents "
+	if count == 1 {
+		agents = "(1) agent "
 	}
 	working := look.Style(look.Violet)
-	switch a.Doing {
+	switch d {
 	case WaitingOnLead:
-		return working.Render("waiting for the orchestrator's answer, "+took) + what
+		return working.Render(agents + "waiting for an answer")
 	case NoProgress:
-		return look.Style(look.Amber).Render(stalledWord) + " " + look.Muted("no progress for "+took) + what
+		return look.Style(look.Amber).Render(agents + stalledWord)
 	case Building:
-		return working.Render("building, "+took) + what
+		return working.Render(agents + "building")
 	case RunningBash:
-		return working.Render("running bash, "+took) + what
+		return working.Render(agents + "running bash")
 	case RunningTool:
-		return working.Render("running "+a.Tool+", "+took) + what
+		return working.Render(agents + "working")
 	}
 	panic("session: unknown sub-agent activity")
+}
+
+func (m *Model) activityLine() string {
+	var counts [RunningTool + 1]int
+	for _, row := range m.Activity {
+		counts[row.Doing]++
+	}
+	var parts []string
+	for doing, count := range counts {
+		if count > 0 {
+			parts = append(parts, Doing(doing).drawn(count))
+		}
+	}
+	return widget.Fit(margin+strings.Join(parts, look.Muted(foldSeparator)), m.width)
 }
 
 func (m *Model) turnLines() []string {
@@ -151,8 +161,8 @@ func (m *Model) turnLines() []string {
 	if m.AskedToStop() {
 		lines = append(lines, margin+look.Style(look.Amber).Render("this will stop "+subAgentCount(m.stopAsked)+stopAskTail))
 	}
-	for _, row := range m.Activity {
-		lines = append(lines, widget.Fit(margin+look.AgentRef(row.Name)+" "+row.drawn(m.now()), m.width))
+	if len(m.Activity) > 0 {
+		lines = append(lines, m.activityLine())
 	}
 	return lines
 }

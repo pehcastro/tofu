@@ -115,7 +115,7 @@ exit 0
       {
         "topic": "update",
         "title": "Updating tofu",
-        "summary": "how tofu update finds the latest release, checks it and replaces the tofu you run"
+        "summary": "how tofu finds the latest release, installs it in the background or with tofu update, and says when to restart"
       }
     ],
     "entries": [

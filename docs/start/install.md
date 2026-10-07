@@ -1,13 +1,12 @@
 ---
 title: Install
-description: Install tofu with one command on Linux, macOS or Windows, keep it updated with tofu update, and remove it.
+description: Install tofu with one command on Linux, macOS or Windows, let it update itself, and remove it.
 order: 2
-updated: 2026-10-05
+updated: 2026-10-07
 ---
 
 tofu is one binary, `tofu`, with no runtime and no daemon. An install script
-puts the latest release in `~/.local/bin`, and `tofu update` keeps it
-current. Everything tofu keeps goes under `~/.tofu`.
+puts the latest release in `~/.local/bin`, and tofu keeps it current. Everything tofu keeps goes under `~/.tofu`.
 
 ## Install with the script
 
@@ -60,9 +59,17 @@ irm https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.ps1
 
 ## Update
 
-`tofu update` checks the latest release and replaces the running binary when
-a newer version exists. `tofu changelog` then prints what changed since the
-version you last read.
+tofu updates itself. The app looks up the latest release at most once an
+hour, installs a newer one in the background, and says in the chat
+`tofu 0.5.7 is installed · restart to use it`. Sessions already open keep
+running their copy until you restart them. To only be told, turn it off:
+
+```
+tofu settings set autoUpdate false
+```
+
+`tofu update` installs the latest release now, whatever the setting.
+`tofu changelog` then prints what changed since the version you last read.
 
 ```
 tofu update

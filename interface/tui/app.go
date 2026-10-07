@@ -156,6 +156,7 @@ type Options struct {
 	NewSession    func() string
 	Compact       func() string
 	Undo          func(count string) string
+	Updates       func() string
 	Now           func() time.Time
 	Shells        func() []shells.Entry
 	KillShell     func(name string) error
@@ -262,6 +263,7 @@ type App struct {
 	minted         int
 	happenedAtTurn int
 	keptAnswer     string
+	updateSaid     string
 	selection      pointer.Selection
 	frozen         string
 	drag           pointer.Drag
@@ -294,6 +296,8 @@ type shellsMsg []shells.Entry
 type shellsDueMsg struct{}
 
 type modelsReloadedMsg string
+
+type updateMsg string
 
 func New(options Options) *App {
 	if options.Now == nil {
@@ -421,7 +425,15 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen())
+	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0))
+}
+
+func (a *App) watchUpdates(after time.Duration) tea.Cmd {
+	updates := a.options.Updates
+	if updates == nil {
+		return nil
+	}
+	return tea.Tick(after, func(time.Time) tea.Msg { return updateMsg(updates()) })
 }
 
 func (a *App) reloadStaleModels() tea.Cmd {
@@ -592,6 +604,12 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 			a.notify(string(msg))
 		}
 		return nil
+	case updateMsg:
+		if msg != "" && string(msg) != a.updateSaid {
+			a.updateSaid = string(msg)
+			a.view.Append(session.Entry{Kind: session.Note, Body: a.updateSaid})
+		}
+		return a.watchUpdates(konst.UpdateWatchSeconds * time.Second)
 	}
 	if cmd, open := a.toFiles(msg); open {
 		return cmd

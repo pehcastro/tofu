@@ -17,8 +17,8 @@
   section           Quote selection  ctrl+r                                                 ● on
   ctrl+k search     Edit in editor  ctrl+g                                           that chang…
   esc chat          Prompt history  ctrl+p                                          
-                                                                                    
-                  Host editors may still intercept a chosen key.                    
+                                                                                            ● on
+                  Host editors may still intercept a chosen key.                     up at most…
                                                                                     
                   ↑↓ choose · enter edit · bksp clear · esc                         
                                                                                     

@@ -5,7 +5,7 @@
   CATEGORIES            › Tool detail                                                      ○ off    
     Appearance    05      chat shows every tool call                                                
     Models & rol… 02                                                                                
-    Interaction   05      Agent feeds                                                   full  ▾     
+    Interaction   06      Agent feeds                                                   full  ▾     
   › Context       11      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
     Shell         05      Thinking                                                          ● on    

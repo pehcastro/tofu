@@ -66,12 +66,8 @@ func (a *App) watchSubAgents() {
 	now, after := a.options.Now(), time.Duration(a.number(isettings.SubAgentWatchSeconds))*time.Second
 	var named []session.Activity
 	for _, row := range a.subAgents {
-		if row.State == roster.WaitingAnswer {
-			waiting := session.Activity{Name: row.Name, Doing: session.WaitingOnLead, Since: now}
-			if at := slices.IndexFunc(row.Calls, func(call subagent.Call) bool { return call.Result == "" && !call.At.IsZero() }); at >= 0 {
-				waiting.Since, waiting.What = row.Calls[at].At, strings.TrimSpace(row.Calls[at].Tool+" "+row.Calls[at].Text)
-			}
-			named = append(named, waiting)
+		if row.State == roster.WaitingAnswer && slices.ContainsFunc(row.Calls, openCall) {
+			named = append(named, session.Activity{Name: row.Name, Doing: session.WaitingOnLead})
 		}
 		if row.State != roster.Working {
 			continue
@@ -89,7 +85,7 @@ func (a *App) watchSubAgents() {
 
 func (a *App) activityOf(row subagent.Row, now time.Time, after time.Duration) (session.Activity, bool) {
 	var open subagent.Call
-	if at := slices.IndexFunc(row.Calls, func(call subagent.Call) bool { return call.Result == "" && !call.At.IsZero() }); at >= 0 {
+	if at := slices.IndexFunc(row.Calls, openCall); at >= 0 {
 		open = row.Calls[at]
 	}
 	opened := now.Sub(open.At) >= after
@@ -106,20 +102,20 @@ func (a *App) activityOf(row subagent.Row, now time.Time, after time.Duration) (
 	}
 	switch {
 	case open.Tool == askTool && opened:
-		return session.Activity{Name: row.Name, Doing: session.WaitingOnLead, Since: open.At, What: open.Text}, true
+		return session.Activity{Name: row.Name, Doing: session.WaitingOnLead}, true
 	case !moved.IsZero() && now.Sub(moved) >= after:
-		return session.Activity{Name: row.Name, Doing: session.NoProgress, Since: moved, What: strings.TrimSpace(open.Tool + " " + open.Text)}, true
+		return session.Activity{Name: row.Name, Doing: session.NoProgress}, true
+	case commanding && now.Sub(ran) >= after && building(command):
+		return session.Activity{Name: row.Name, Doing: session.Building}, true
 	case commanding && now.Sub(ran) >= after:
-		doing := session.RunningBash
-		if building(command) {
-			doing = session.Building
-		}
-		return session.Activity{Name: row.Name, Doing: doing, Since: ran, What: command}, true
+		return session.Activity{Name: row.Name, Doing: session.RunningBash}, true
 	case open.Tool != "" && opened:
-		return session.Activity{Name: row.Name, Doing: session.RunningTool, Since: open.At, Tool: open.Tool, What: open.Text}, true
+		return session.Activity{Name: row.Name, Doing: session.RunningTool}, true
 	}
 	return session.Activity{}, false
 }
+
+func openCall(call subagent.Call) bool { return call.Result == "" && !call.At.IsZero() }
 
 func (a *App) markStalled(call subagent.Call, stalled bool) {
 	at := a.happenedAt(short(call.ID))

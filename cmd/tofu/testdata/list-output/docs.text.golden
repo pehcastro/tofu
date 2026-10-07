@@ -238,8 +238,8 @@ start  what tofu is, the first commands to type, and where to read more
   see what changed in this version
     → tofu changelog
 
-update  how tofu update finds the latest release, checks it and replaces the
-  tofu you run
+update  how tofu finds the latest release, installs it in the background or
+  with tofu update, and says when to restart
   update tofu to the latest release
     → tofu update
   is there a newer tofu

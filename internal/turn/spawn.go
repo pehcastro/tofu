@@ -988,15 +988,15 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	claims, sentBack, state, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent)
 	forked := held.forkedSoFar()
 	asked := subAgent.Boundary.Asked()
-	if len(asked) > 0 && state != subagent.Errored && state != subagent.Parked {
-		state = subagent.WaitingAnswer
-	}
 	last := &claims[len(claims)-1]
 	if err := errors.Join(began, trace.end(id, state)); err != nil {
 		last.Warnings = append(last.Warnings, "this sub-agent run was not wholly recorded: "+err.Error())
 	}
 	report := reportOf(agent, forked, []Row{wholeRun(claims)}, state)
 	report.Asked = asked
+	if len(asked) > 0 && state == subagent.Finished {
+		report.Completion = subagent.NeedsContext
+	}
 	if len(sentBack) > 0 {
 		times := "once"
 		if len(sentBack) > 1 {

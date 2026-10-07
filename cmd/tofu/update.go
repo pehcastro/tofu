@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	goruntime "runtime"
@@ -27,6 +28,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
 	"tofu/internal/konst"
+	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
@@ -40,6 +42,7 @@ const (
 	updateLatestPath     = "/repos/" + updateRepository + "/releases/latest"
 	updateChecksums      = "checksums.txt"
 	updateAsideSuffix    = ".old"
+	updateCacheFile      = "update.json"
 	updateExecutableMode = 0o755
 	updateAttemptTimeout = 5 * time.Minute
 	exitUpdateAvailable  = 10
@@ -81,23 +84,19 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
 	}
-	client, err := transport.New(transport.Config{AttemptTimeout: updateAttemptTimeout, Concurrency: 1})
+	client, err := updateClient()
 	if err != nil {
 		return o.fail(err)
 	}
 	ctx := context.Background()
-	report := updateReport{Current: current, Release: release, Source: cmp.Or(strings.TrimSpace(os.Getenv(updateAPIVariable)), updateAPI)}
-	body, err := fetch(ctx, client, report.Source+updateLatestPath, "application/vnd.github+json")
+	report := updateReport{Current: current, Release: release, Source: updateSource()}
+	latest, err := readLatest(ctx, client)
 	var failed *transport.Error
 	if errors.As(err, &failed) && failed.Status == http.StatusNotFound {
 		return o.refuse(exitVerdict, cli.Problem{What: "no release published yet at github.com/" + updateRepository})
 	}
 	if err != nil {
-		return o.fail(fmt.Errorf("reading the latest release from %s: %w", report.Source, err))
-	}
-	var latest latestRelease
-	if err := json.Unmarshal(body, &latest); err != nil {
-		return o.fail(fmt.Errorf("the latest release from %s is not JSON: %w", report.Source, err))
+		return o.fail(err)
 	}
 	report.Latest = strings.TrimPrefix(latest.Tag, "v")
 	latestNumber, ok := parseSemver(report.Latest)
@@ -119,14 +118,9 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 	if !report.Available && !force {
 		return o.done(true, report, lines)
 	}
-	target := os.Getenv(updateTargetVariable)
-	if target == "" {
-		if target, err = os.Executable(); err != nil {
-			return o.fail(err)
-		}
-	}
-	if resolved, err := filepath.EvalSymlinks(target); err == nil {
-		target = resolved
+	target, err := updateTarget()
+	if err != nil {
+		return o.fail(err)
 	}
 	binary, err := downloadVerified(ctx, client, latest, report.Latest)
 	if err != nil {
@@ -137,6 +131,149 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 	}
 	report.Installed = target
 	return o.done(true, report, lines)
+}
+
+func updateClient() (*transport.Client, error) {
+	return transport.New(transport.Config{AttemptTimeout: updateAttemptTimeout, Concurrency: 1})
+}
+
+func updateSource() string {
+	return cmp.Or(strings.TrimSpace(os.Getenv(updateAPIVariable)), updateAPI)
+}
+
+func readLatest(ctx context.Context, client *transport.Client) (latestRelease, error) {
+	var latest latestRelease
+	source := updateSource()
+	body, err := fetch(ctx, client, source+updateLatestPath, "application/vnd.github+json")
+	if err != nil {
+		return latest, fmt.Errorf("reading the latest release from %s: %w", source, err)
+	}
+	if err := json.Unmarshal(body, &latest); err != nil {
+		return latest, fmt.Errorf("the latest release from %s is not JSON: %w", source, err)
+	}
+	return latest, nil
+}
+
+func updateTarget() (string, error) {
+	target := os.Getenv(updateTargetVariable)
+	if target == "" {
+		var err error
+		if target, err = os.Executable(); err != nil {
+			return "", err
+		}
+	}
+	if resolved, err := filepath.EvalSymlinks(target); err == nil {
+		target = resolved
+	}
+	return target, nil
+}
+
+type updateWatch struct {
+	client        *transport.Client
+	target, cache string
+	onDiskStat    os.FileInfo
+	onDisk        string
+	tried         string
+	installErr    error
+}
+
+func appUpdates(dir string) func() string {
+	if frame.Release(sys.Version(), sys.BuildRevision()) != konst.Version {
+		return nil
+	}
+	target, err := updateTarget()
+	home, homeErr := sys.HomeConfigDir()
+	if errors.Join(err, homeErr) != nil {
+		return nil
+	}
+	watch, err := newUpdateWatch(target, filepath.Join(home, updateCacheFile))
+	if err != nil {
+		return nil
+	}
+	return func() string {
+		return watch.check(context.Background(), settingInt(dir, settingspkg.AutoUpdate, nil) != 0)
+	}
+}
+
+func newUpdateWatch(target, cache string) (*updateWatch, error) {
+	client, err := updateClient()
+	started, statErr := os.Stat(target)
+	return &updateWatch{client: client, target: target, cache: cache, onDiskStat: started, onDisk: konst.Version}, errors.Join(err, statErr)
+}
+
+func (w *updateWatch) check(ctx context.Context, auto bool) string {
+	release := w.latest(ctx)
+	latest := strings.TrimPrefix(release.Tag, "v")
+	w.readDisk(ctx)
+	if newer(latest, w.onDisk) && !strings.Contains(w.onDisk, "+") {
+		if !auto {
+			return "tofu " + latest + " is out · tofu update installs it"
+		}
+		if w.tried != latest {
+			w.tried, w.installErr = latest, w.install(ctx, release, latest)
+		}
+		if w.installErr != nil {
+			return "tofu " + latest + " is out and installing it failed: " + w.installErr.Error() + " · tofu update installs it"
+		}
+	}
+	if newer(w.onDisk, konst.Version) {
+		return "tofu " + w.onDisk + " is installed · restart to use it"
+	}
+	return ""
+}
+
+func (w *updateWatch) latest(ctx context.Context) latestRelease {
+	cached, readErr := os.ReadFile(w.cache)
+	info, statErr := os.Stat(w.cache)
+	if readErr != nil || statErr != nil || time.Since(info.ModTime()) >= konst.UpdateCheckHours*time.Hour {
+		if fetched, err := readLatest(ctx, w.client); err == nil {
+			cached, _ = json.Marshal(fetched)
+		}
+		_ = os.MkdirAll(filepath.Dir(w.cache), 0o755)
+		_ = os.WriteFile(w.cache, cached, 0o644)
+	}
+	var release latestRelease
+	_ = json.Unmarshal(cached, &release)
+	return release
+}
+
+func (w *updateWatch) readDisk(ctx context.Context) {
+	now, err := os.Stat(w.target)
+	if err != nil || now.Size() == w.onDiskStat.Size() && now.ModTime().Equal(w.onDiskStat.ModTime()) {
+		return
+	}
+	probe, cancel := context.WithTimeout(ctx, konst.UpdateProbeSeconds*time.Second)
+	defer cancel()
+	var printed struct {
+		Data versionReport `json:"data"`
+	}
+	output, err := exec.CommandContext(probe, w.target, "version", "--json").Output()
+	if err != nil || json.Unmarshal(output, &printed) != nil {
+		printed.Data.Version = konst.Version
+	}
+	w.onDiskStat, w.onDisk = now, printed.Data.Version
+}
+
+func (w *updateWatch) install(ctx context.Context, release latestRelease, version string) error {
+	binary, err := downloadVerified(ctx, w.client, release, version)
+	if err != nil {
+		return err
+	}
+	if _, err := replaceBinary(w.target, binary); err != nil {
+		return err
+	}
+	installed, err := os.Stat(w.target)
+	if err != nil {
+		return err
+	}
+	w.onDiskStat, w.onDisk = installed, version
+	return nil
+}
+
+func newer(version, than string) bool {
+	this, ok := parseSemver(version)
+	that, thatOK := parseSemver(than)
+	return ok && thatOK && this.after(that)
 }
 
 func updateLines(page cli.Page, report updateReport) []string {
@@ -262,10 +399,11 @@ func replaceBinary(target string, binary []byte) (string, error) {
 	if goruntime.GOOS != "windows" {
 		return "", os.Rename(staged.Name(), target)
 	}
-	aside := target + updateAsideSuffix
-	if err := os.Remove(aside); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return "", problemError{What: aside + " is still running from an earlier update, so " + target + " was left as it was", Hint: "close every tofu, then run tofu update again"}
+	setAside, _ := filepath.Glob(target + updateAsideSuffix + "*")
+	for _, old := range setAside {
+		_ = os.Remove(old)
 	}
+	aside := target + updateAsideSuffix + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	if err := os.Rename(target, aside); errors.Is(err, fs.ErrNotExist) {
 		aside = ""
 	} else if err != nil {

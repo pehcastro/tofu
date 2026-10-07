@@ -5,7 +5,7 @@
   CATEGORIES            › Composer                                                  standard  ▾     
     Appearance    05      Enter sends; Shift+Enter inserts a line break                             
     Models & rol… 02                                                                                
-  › Interaction   05      Keybindings                                                   edit  ▾     
+  › Interaction   06      Keybindings                                                   edit  ▾     
     Context       11      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         05      Host integration                                       inspect Zed  ▾     
@@ -17,10 +17,10 @@
   section                 Read before edit                                                  ● on    
   ctrl+k search ·         an edit or a write to a file this session has not read, or that chang…    
   esc chat                                                                                          
+                          Auto update                                                       ● on    
+                          on installs a newer tofu release in the background, looked up at most…    
+                                                                                                    
                         enter change  ·  shift+tab scope  ·  esc chat                               
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

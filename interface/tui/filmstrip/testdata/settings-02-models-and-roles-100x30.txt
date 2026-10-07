@@ -5,7 +5,7 @@
   CATEGORIES            › Orchestrator model                                                  ▾     
     Appearance    05      the model that plans and hands work to sub-agents                         
   › Models & rol… 02                                                                                
-    Interaction   05      Classifier model                             openrouter/jev-latest  ▾     
+    Interaction   06      Classifier model                             openrouter/jev-latest  ▾     
     Context       11      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
     Shell         05    enter change  ·  shift+tab scope  ·  esc chat                               
