@@ -18,7 +18,6 @@ const TILE_WIDTH: f32 = 513.0;
 
 pub struct Subagents {
     store: Entity<Store>,
-    stale: bool,
     board: Rc<AgentBoard>,
     tile: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
@@ -67,11 +66,10 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
         let screen = cx.new(|_| AgentScreen::new(board.clone(), mention));
         Subagents {
             _watch: cx.observe(&store, |module, _, cx| {
-                module.stale = true;
+                module.rebuild(cx);
                 cx.notify();
             }),
             store,
-            stale: true,
             board,
             tile,
             screen,
@@ -104,7 +102,6 @@ impl Subagents {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        self.stale = false;
         self.board = Rc::new(session(self.store.read(cx)).map_or_else(empty, board::board));
         let board = self.board.clone();
         self.tile
@@ -154,9 +151,6 @@ impl Subagents {
 
 impl Render for Subagents {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.stale {
-            self.rebuild(cx);
-        }
         let shown: AnyView = match self.expanded {
             None => self.tile.clone().into(),
             Some(_) => self.screen.clone().into(),

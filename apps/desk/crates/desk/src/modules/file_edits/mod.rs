@@ -19,7 +19,6 @@ const TILE_WIDTH: f32 = 513.0;
 
 pub struct FileEdits {
     store: Entity<Store>,
-    stale: bool,
     files: Vec<EditedFile>,
     opened: usize,
     drawer: bool,
@@ -54,11 +53,10 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
 pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<FileEdits> {
     cx.new(|cx: &mut Context<FileEdits>| FileEdits {
         _watch: cx.observe(&store, |module, _, cx| {
-            module.stale = true;
+            module.rebuild(cx);
             cx.notify();
         }),
         store,
-        stale: true,
         files: Vec::new(),
         opened: 0,
         drawer: false,
@@ -151,8 +149,7 @@ impl FileEdits {
         self.files.len()
     }
 
-    fn rebuild(&mut self, cx: &App) {
-        self.stale = false;
+    fn rebuild(&mut self, cx: &mut Context<Self>) {
         self.files = self
             .store
             .read(cx)
@@ -185,9 +182,6 @@ fn cassette_edits() -> usize {
 
 impl Render for FileEdits {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.stale {
-            self.rebuild(cx);
-        }
         let theme = ActiveTheme::theme(cx);
         let (opener, closer) = (cx.weak_entity(), cx.weak_entity());
         let open = move |at: usize, _: &mut Window, cx: &mut App| {

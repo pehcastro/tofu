@@ -19,7 +19,6 @@ pub type Kill = Rc<dyn Fn(SharedString, &mut App)>;
 
 pub struct Shells {
     store: Entity<Store>,
-    stale: bool,
     kill: Kill,
     opened_at: Instant,
     shells: Vec<Shell>,
@@ -57,11 +56,10 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
 pub fn mount(store: Entity<Store>, kill: Kill, cx: &mut App) -> Entity<Shells> {
     cx.new(|cx: &mut Context<Shells>| Shells {
         _watch: cx.observe(&store, |module, _, cx| {
-            module.stale = true;
+            module.rebuild(cx);
             cx.notify();
         }),
         store,
-        stale: true,
         kill,
         opened_at: Instant::now(),
         shells: Vec::new(),
@@ -121,8 +119,7 @@ impl Shells {
         self.shells.len()
     }
 
-    fn rebuild(&mut self, cx: &App) {
-        self.stale = false;
+    fn rebuild(&mut self, cx: &mut Context<Self>) {
         let since = self.opened_at;
         let session = self.store.read(cx).sessions.values().next();
         self.shells = session.map_or_else(Vec::new, |session| {
@@ -174,9 +171,6 @@ fn cassette_started() -> usize {
 
 impl Render for Shells {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.stale {
-            self.rebuild(cx);
-        }
         let names: Vec<SharedString> = self.shells.iter().map(|shell| shell.name.clone()).collect();
         let kill = self.kill.clone();
         ShellsTile::new(
