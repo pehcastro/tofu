@@ -327,8 +327,12 @@ type SessionForked struct {
 
 type SessionUpdated struct {
 	Identity
-	Name string `json:"name"`
-	Root string `json:"root"`
+	Name       string    `json:"name"`
+	Root       string    `json:"root"`
+	Tag        string    `json:"tag,omitempty"`
+	Generation int       `json:"generation,omitempty"`
+	Handle     string    `json:"handle,omitempty"`
+	Started    time.Time `json:"started,omitzero"`
 }
 
 type ApprovalRequest struct {

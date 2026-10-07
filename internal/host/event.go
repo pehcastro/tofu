@@ -65,6 +65,7 @@ type Event struct {
 	Created   string
 	Agent     string
 	Root      string
+	Identity  *session.Identity
 	Promote   bool
 	GateWhy   jev.Why
 	Args      json.RawMessage

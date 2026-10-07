@@ -394,6 +394,9 @@ func (a *App) absorb(event Event) {
 	case EventSession:
 		if root := cmp.Or(event.Root, event.ID); root != a.sessionRoot {
 			a.started, a.sessionRoot = at, root
+			if event.Identity != nil {
+				a.started = event.Identity.Started
+			}
 		}
 		a.sessionName, a.sessionID = event.Text, event.ID
 	case EventGateOff:

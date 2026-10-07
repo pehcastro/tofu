@@ -13,6 +13,10 @@ exit 0
       {
         "id": "turn-one",
         "name": "store-walk",
+        "handle": "store-walk#4b7gl.1",
+        "family": "turn-one",
+        "generation": 1,
+        "generations": 1,
         "at": "AT",
         "task": "explain the session store",
         "turns": 0,
@@ -30,6 +34,10 @@ exit 0
       {
         "id": "turn-two",
         "name": "older-task",
+        "handle": "older-task#7upyn.1",
+        "family": "turn-two",
+        "generation": 1,
+        "generations": 1,
         "at": "AT",
         "task": "the older task",
         "turns": 0,

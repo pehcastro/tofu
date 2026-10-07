@@ -1,7 +1,6 @@
 package host
 
 import (
-	"cmp"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -28,7 +27,6 @@ type recordedReport struct {
 
 type resumedLead struct {
 	watch   *watcher
-	root    string
 	calls   map[string]*recordedCall
 	reports []recordedReport
 	origins map[string]string
@@ -55,15 +53,16 @@ func resumedChat(carry Carry, dir string) []Event {
 	mask := sys.LoadKeyRedactor().Redact
 	lead := &resumedLead{
 		watch:   &watcher{emit: func(event Event) { chat = append(chat, redacted(event, mask)) }, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}},
-		root:    carry.Session,
 		calls:   map[string]*recordedCall{},
 		origins: map[string]string{},
 	}
+	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
 	if store, err := carry.reading(dir); err == nil {
 		lead.read(store, carry.Session)
 		store.ForgetRead()
+		labelled = labelledAs(store, labelled)
 	}
-	lead.watch.emit(Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: lead.root})
+	lead.watch.emit(labelled)
 	for _, message := range carry.Messages {
 		switch message.Role {
 		case llm.RoleUser:
@@ -100,7 +99,6 @@ func (l *resumedLead) read(store *session.Store, id string) {
 	if err != nil {
 		return
 	}
-	l.root = cmp.Or(header.Root, id)
 	lineage, _ := store.Ancestors(id)
 	slices.Reverse(lineage)
 	for _, from := range append(lineage, header) {

@@ -210,7 +210,7 @@ func (a *App) recordReach(id string) {
 }
 
 func (a *App) appendPromotion(row isession.Promotion) {
-	row.At, row.Session = a.options.Now(), a.sessionID
+	row.At, row.Session = a.options.Now(), a.sessionRoot
 	if err := a.options.Promotions.Append(row); err != nil {
 		a.notify(err.Error())
 	}

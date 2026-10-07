@@ -222,10 +222,16 @@ func busy(err error) error {
 }
 
 func (s *server) sameSession(id string) error {
-	if open := s.Host.ID(); id != open {
-		return &Refusal{Code: CodeRefused, Message: "session " + strconv.Quote(id) + " is not the one open here, " + strconv.Quote(open) + ": open it first"}
+	open := s.Host.ID()
+	if id == open {
+		return nil
 	}
-	return nil
+	if store, err := session.OpenIn(s.Host.dir); err == nil {
+		if family, err := store.Identity(open); err == nil && family.Family == id {
+			return nil
+		}
+	}
+	return &Refusal{Code: CodeRefused, Message: "session " + strconv.Quote(id) + " is not the one open here, " + strconv.Quote(open) + ": open it first"}
 }
 
 func (s *server) send(p TurnSendParams) (any, error) {

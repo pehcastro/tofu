@@ -1,0 +1,14 @@
+exit 0
+--- stdout
+store-walk#4b7gl.1 · 1 generation · started 10m ago · active 3m        ● stopped
+
+generations
+  ● .1  10m ago  1 step  3m  1.6 KB  began
+
+  cost      $0.005400
+
+sub-agents
+  ○ agent-1  planner  1 run  done
+
+  → tofu session find store-walk#4b7gl.1 --tool bash
+--- stderr

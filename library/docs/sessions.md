@@ -12,18 +12,22 @@ sub-agent, recorded as it happens. You can continue it later, read it
 back, or give it a name. The session you last worked in is the head, and
 that is the one `tofu --continue` opens.
 
+A conversation keeps one name for its whole life, such as
+`tidy-moss-vole#12cp3.2`: the name, the family tag after `#`, and the
+generation after `.`. A fork to stay under the context budget, `/compact`
+and a move to another account start the next generation, so the name
+stays and the number rises. `/new` starts a new family, and so does a
+branch, which records where it branched. Hooks see the family id.
+
 Every message in the chat shows the id it was recorded under, such as
-`[message#9c2d40]`, yours, the lead's and each sub-agent report alike.
-Type that reference in a message and the lead quotes it, across forks
-and `--continue`. When a session forks, the new one carries every
-message you typed, word for word. A resumed chat draws each message at
-its own time and each report as a report, and a conversation over the
-context target forks before its first request.
+`[message#9c2d40]`. Type that reference in a message and the lead quotes
+it, across forks and `--continue`. A fork carries every message you
+typed, word for word.
 
 A shell an agent started, like a dev server, keeps running after the task
-and stops when tofu exits, with every process it started. That holds when
-tofu is killed too. With the `persistentRegistry` setting on, a shell keeps
-running after tofu exits, until you stop it, and the next launch lists it.
+and stops when tofu exits, with every process it started, even when tofu
+is killed. With the `persistentRegistry` setting on, a shell keeps running
+after tofu exits, until you stop it, and the next launch lists it.
 
 ## Where it lives
 
@@ -32,8 +36,8 @@ Each project has its own folder in your home,
 with every character that is not a letter or a digit turned into `-`, so
 `C:\code\shop` becomes `C--code-shop`. In it:
 
-- `sessions/<id>/`: one folder per session, holding `session.json` and
-  `events.jsonl`
+- `sessions/<id>/`: one folder per generation, holding `session.json`
+  and `events.jsonl`
 - `log/`: the decision ledger
 - `shells/`: the shells an agent left running, and their logs
 
@@ -43,28 +47,28 @@ opening the app there, or `tofu migrate`, moves it into your home.
 
 ## Change it
 
-Continue the session you last worked in:
+Continue the head, or any other session:
 
     tofu --continue
-
-Continue any other, by its name or its id:
-
     tofu session resume <name|id>
 
-Give a session a name you will find again:
+A session is named by its name (the newest generation), its id, or a
+handle: `tidy-moss-vole#12cp3.1` is the first generation, `12cp3` the
+family. A name from before this naming still finds its own generation,
+and `[session#9ff700]` from the header finds its generation too.
+
+Give a conversation a name you will find again, on every generation:
 
     tofu session rename <name|id> "checkout redesign"
 
 In the app, `/resume` carries the last session into your next message,
 and `/new` starts fresh.
 
-Move what an older version left in the project:
+Move what an older version left in the project, or stop and restart a
+shell an agent left running:
 
     tofu migrate --dry-run
     tofu migrate
-
-Stop or restart a shell an agent left running:
-
     tofu shells stop <name>
     tofu shells restart <name>
 
@@ -72,46 +76,42 @@ Stop or restart a shell an agent left running:
 
     tofu session list
 
-lists this project's sessions, newest first, `●` on the head and `○` on
-the rest, each with its age, steps, state and task:
+lists this project's conversations, one row per family, newest first, `●`
+on the head, each with its handle, age, steps, state and task. A session
+that cannot be read goes under `unreadable` with a `✗`.
 
-    Sessions · 2 sessions                    ● head store-walk
-      ● store-walk  10m ago  1 step   stopped  explain the session store
-      ○ older-task  3h ago   0 steps  done     the older task
+    tofu session <name|id>
 
-A session that cannot be read goes under `unreadable` with a `✗`.
+prints the family: when it started, how long it was worked on (each turn
+from its first event to its last), and each generation with how it
+began, its steps, active time and size, its branches and sub-agents.
+
+    tofu session find <name|id> --tool bash
+
+finds calls across every generation. `--command`, `--file`, `--text`,
+`--agent`, `--since` and `--until` (`2h`, or a time) narrow it together.
 
     tofu session info <name|id>
 
 prints one session: its id, task, counts, whether it ended, its model and
-cost, why it ended in an error when it did, and the command that continues
-it, `→ tofu --continue` for the head. `tofu session reads <name|id>` lists
-every file it read.
+cost, why it ended in an error, and the command that continues it.
+`tofu session reads <name|id>` lists every file it read.
 
     tofu session trace <name|id>
 
-lists every request and its new messages, every message with its
-`[message#id]`, every tool call with its arguments, gate verdict and
-hooks, a failed one marked `✗` with its reason, each message tofu added (a
-steer, a sub-agent check or report, a fork's carry) with when it was
-posted and taken, each fork, compaction and resume, each turn that ended
-in an error, and the sub-agents that kept working across a continue.
+lists every request, message with its `[message#id]`, tool call with its
+arguments, gate verdict and hooks, each message tofu added, each fork,
+compaction and resume, and each turn that ended in an error.
 `tofu session request <name|id> <request id>` prints one request exactly
-as sent: its messages, each wire attempt with status, provider request
-id, body and error body, then the response. A request id is any ending
-of the id the trace prints.
+as sent, each wire attempt, and the response.
 
     tofu context
-
-prints a bar per context band of the newest session, how full it was and
-what filled it. Name a session id to see another one.
-
     tofu shells list
     tofu shells log <name>
 
-list the shells, each with its state, pid and command, finished ones for
-72 hours, and print one's output. In the app, `/shells` shows the same.
-Every verb here takes `--json` and prints one JSON document.
+print a bar per context band of the newest session, then the shells with
+their state, pid and command, and one shell's output. Every verb here
+takes `--json` and prints one JSON document.
 
 ## Undo it
 

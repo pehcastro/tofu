@@ -19,21 +19,18 @@ func callsAfterTheLeadLeft(store *session.Store, header session.Header, events [
 	if header.ForkedInto == "" || header.EndedAt == nil {
 		return nil
 	}
-	into := sessionHandle(header.ForkedInto, "")
-	if next, err := store.Header(header.ForkedInto); err == nil {
-		into = sessionHandle(next.ID, next.Named())
-	}
+	into, here := handleOf(store, header.ForkedInto), handleOf(store, header.ID)
 	var outlived []traceOutlived
 	for _, event := range events {
 		if event.Kind == session.EventToolCall && event.Agent != "" && event.At.After(*header.EndedAt) {
-			outlived = counted(outlived, traceOutlived{Agent: event.Agent, RecordedIn: sessionHandle(header.ID, header.Named()), LeadIn: into})
+			outlived = counted(outlived, traceOutlived{Agent: event.Agent, RecordedIn: here, LeadIn: into})
 		}
 	}
 	return outlived
 }
 
 func withAncestors(store *session.Store, header session.Header, report sessionTraceReport) (sessionTraceReport, error) {
-	here := sessionHandle(header.ID, header.Named())
+	here := handleOf(store, header.ID)
 	ancestors, err := store.Ancestors(header.ID)
 	if err != nil {
 		return sessionTraceReport{}, err
@@ -56,7 +53,7 @@ func withAncestors(store *session.Store, header session.Header, report sessionTr
 		if err != nil {
 			return sessionTraceReport{}, err
 		}
-		there := sessionHandle(from.ID, from.Named())
+		there := handleOf(store, from.ID)
 		recorded := slices.DeleteFunc(slices.Clone(events), func(event session.Event) bool {
 			_, wanted := carried[event.Call]
 			return !wanted || event.Turn == from.ID

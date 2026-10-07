@@ -128,7 +128,11 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, merged("plan.updated", "", &PlanUpdated{Identity: id, Items: steps}))
 	case EventSession:
 		s.session = event.ID
-		return append(out, kept("session.updated", &SessionUpdated{Identity: s.identity("", event.ID), Name: event.Text, Root: event.Root}))
+		updated := &SessionUpdated{Identity: s.identity("", event.ID), Name: event.Text, Root: event.Root}
+		if family := event.Identity; family != nil {
+			updated.Name, updated.Tag, updated.Generation, updated.Handle, updated.Started = family.Name, family.Tag, family.Generation, family.Handle(), family.Started
+		}
+		return append(out, kept("session.updated", updated))
 	case EventForkEnd:
 		if event.Fork == nil {
 			return out

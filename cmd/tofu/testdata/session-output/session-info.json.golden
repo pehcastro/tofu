@@ -8,6 +8,9 @@ exit 0
   "data": {
     "id": "turn-one",
     "name": "store-walk",
+    "handle": "store-walk#4b7gl.1",
+    "family": "turn-one",
+    "generation": 1,
     "at": "AT",
     "task": "explain the session store",
     "turns": 0,

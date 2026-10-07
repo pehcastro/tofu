@@ -80,8 +80,11 @@ func Recent(store *session.Store, count int) ([]session.Header, error) {
 	if err != nil {
 		return nil, err
 	}
-	recent := listing.Sessions[:min(count, len(listing.Sessions))]
-	slices.Reverse(recent)
+	families := listing.Families()
+	var recent []session.Header
+	for _, family := range slices.Backward(families[:min(count, len(families))]) {
+		recent = append(recent, family.Generations...)
+	}
 	return recent, nil
 }
 

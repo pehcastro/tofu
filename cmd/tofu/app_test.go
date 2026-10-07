@@ -774,7 +774,7 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	driver := driveApp(t)
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write a note", driver.emit)
 
-	screen := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 120, Height: 24}))
+	screen := ansi.Strip(driver.view(tea.WindowSizeMsg{Width: 150, Height: 24}))
 	if !strings.Contains(screen, "[session#") {
 		t.Fatalf("the header does not carry the session id:\n%s", screen)
 	}
@@ -792,8 +792,15 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	if len(listing.Sessions) != 1 || listing.Sessions[0].Name == nil {
 		t.Fatalf("listing %+v, want the one session with a name", listing.Sessions)
 	}
-	if !strings.Contains(screen, " "+*listing.Sessions[0].Name+" [session#") {
+	if !strings.Contains(screen, " "+*listing.Sessions[0].Name+"#"+sessionstore.FamilyTag(listing.Sessions[0].ID)+".1 [session#") {
 		t.Fatalf("the header does not carry the session name %q:\n%s", *listing.Sessions[0].Name, screen)
+	}
+	family := "#" + sessionstore.FamilyTag(listing.Sessions[0].ID) + ".1"
+	for _, width := range []int{120, 80} {
+		header, _, _ := strings.Cut(ansi.Strip(driver.view(tea.WindowSizeMsg{Width: width, Height: 24})), "\n")
+		if !strings.Contains(header, family) {
+			t.Errorf("at %d columns the header drops the family %s:\n%s", width, family, header)
+		}
 	}
 }
 

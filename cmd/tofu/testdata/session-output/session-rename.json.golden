@@ -8,6 +8,9 @@ exit 0
   "data": {
     "id": "turn-two",
     "name": "older-work",
+    "handle": "older-work#7upyn.1",
+    "family": "turn-two",
+    "generation": 1,
     "at": "AT",
     "task": "the older task",
     "turns": 0,

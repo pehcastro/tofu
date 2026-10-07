@@ -324,14 +324,14 @@ func TestContinueTakesTheHeadWithNoListAndNoQuestion(t *testing.T) {
 	}
 }
 
-func TestAnUnknownSessionSubcommandIsRefusedByName(t *testing.T) {
+func TestAWordThatIsNoSubcommandIsReadAsOneSessionHandle(t *testing.T) {
 	sessionProject(t)
 	out, errOut, code := sessionRun(t, "session", "tree", "turn-one")
 	if code != exitUsage {
-		t.Errorf("an unknown subcommand exited %d, want %d", code, exitUsage)
+		t.Errorf("two operands with no subcommand exited %d, want %d", code, exitUsage)
 	}
-	if !strings.Contains(errOut, `there is no subcommand "tree"`) {
-		t.Errorf("the refusal does not name the subcommand:\n%s", errOut)
+	if !strings.Contains(errOut, "2 operands, want <name|id>") {
+		t.Errorf("the refusal does not say it wanted one handle:\n%s", errOut)
 	}
 	if out != "" {
 		t.Errorf("an unknown subcommand printed to stdout:\n%s", out)

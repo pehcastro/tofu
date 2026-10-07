@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
@@ -68,6 +69,7 @@ type Result struct {
 
 type stdinPayload struct {
 	Session      string          `json:"session_id"`
+	Generation   int             `json:"generation,omitempty"`
 	Transcript   string          `json:"transcript_path"`
 	Cwd          string          `json:"cwd"`
 	Mode         string          `json:"permission_mode"`
@@ -118,6 +120,11 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	}
 	payload := stdinPayload{Session: in.Session, Cwd: e.project, Mode: "default", Event: in.Event, Turn: in.Turn, Agent: in.Agent, AgentType: in.AgentType,
 		Prompt: in.Prompt, LastMessage: in.LastMessage, Source: in.Source, Reason: in.Reason, Gate: in.Gate, Spawn: in.Spawn}
+	if store, err := session.OpenIn(e.project); err == nil && in.Session != "" {
+		if family, err := store.Identity(in.Session); err == nil {
+			payload.Session, payload.Generation, payload.Transcript = family.Family, family.Generation, store.EventsPath(in.Session)
+		}
+	}
 	if in.Tool != "" {
 		payload.Tool, payload.ToolInput, payload.ToolUseID = claudeName(in.Tool), e.toClaude(in.Tool, in.Args), in.CallID
 	}

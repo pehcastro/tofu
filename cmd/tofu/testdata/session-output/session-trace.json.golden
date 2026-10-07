@@ -8,6 +8,7 @@ exit 0
   "data": {
     "session": "turn-one",
     "name": "store-walk",
+    "handle": "store-walk#4b7gl.1",
     "events": 7,
     "agents": [
       {

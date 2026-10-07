@@ -93,10 +93,7 @@ func topLeft(head Head, width int, drop crowding) []span {
 }
 
 func topRight(head Head, width int, drop crowding) []span {
-	var right []span
-	if drop < dropSession {
-		right = session(head, width, drop)
-	}
+	right := session(head, width, drop)
 	if drop < dropClock && !head.Started.IsZero() {
 		clock := widget.Until(head.At.Sub(head.Started))
 		switch {
@@ -115,21 +112,29 @@ func topRight(head Head, width int, drop crowding) []span {
 }
 
 func session(head Head, width int, drop crowding) []span {
-	if head.Notice != "" {
+	if head.Notice != "" && drop < dropSession {
 		return []span{{text: head.Notice, fg: look.Amber, bg: look.Background}}
 	}
-	if width < workspaceColumns || head.SessionID == "" {
+	if head.Notice != "" || head.SessionID == "" {
 		return nil
 	}
 	name := head.SessionName
-	if drop == cutName {
-		name, _, _ = strings.Cut(name, "-")
+	words, family, tagged := strings.Cut(name, "#")
+	if tagged {
+		family = "#" + family
+	}
+	switch {
+	case width < workspaceColumns || drop >= dropName:
+		name = family
+	case drop == cutName:
+		first, _, _ := strings.Cut(words, "-")
+		name = first + family
 	}
 	var parts []span
-	if name != "" && drop < dropName {
+	if name != "" {
 		parts = append(parts, span{text: name, fg: look.Text, bg: look.Background})
 	}
-	if width < sessionRefColumns {
+	if width < sessionRefColumns || drop >= dropSession {
 		return parts
 	}
 	if len(parts) > 0 {

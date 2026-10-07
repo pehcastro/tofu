@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 const AuthorOrchestrator = "orchestrator"
 
@@ -226,12 +226,14 @@ type Header struct {
 	EndReason        EndReason  `json:"end_reason,omitempty"`
 	Head             string     `json:"head,omitempty"`
 	CarriedFrom      *Carried   `json:"carried_from,omitempty"`
+	BranchedFrom     *Carried   `json:"branched_from,omitempty"`
 	Parent           string     `json:"-"`
 	ForkedInto       string     `json:"forked_into,omitempty"`
 	ForkKind         string     `json:"fork_kind,omitempty"`
 	ForkTokensBefore int        `json:"fork_tokens_before,omitempty"`
 	ForkTokensAfter  int        `json:"fork_tokens_after,omitempty"`
 	Root             string     `json:"root,omitempty"`
+	Generation       int        `json:"generation,omitempty"`
 	Task             string     `json:"task,omitempty"`
 	Wire             string     `json:"wire,omitempty"`
 	Model            string     `json:"model,omitempty"`

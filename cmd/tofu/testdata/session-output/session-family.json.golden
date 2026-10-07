@@ -1,0 +1,42 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "session": "turn-one",
+    "family": "turn-one",
+    "tag": "4b7gl",
+    "name": "store-walk",
+    "generation": 1,
+    "started": "AT",
+    "handle": "store-walk#4b7gl.1",
+    "active_ms": 180000,
+    "cost_usd": 0.0054,
+    "generations": [
+      {
+        "generation": 1,
+        "session": "turn-one",
+        "at": "AT",
+        "outcome": "stopped",
+        "steps": 1,
+        "active_ms": 180000,
+        "bytes": 1612,
+        "cost_usd": 0.0054
+      }
+    ],
+    "sub_agents": [
+      {
+        "agent": "agent-1",
+        "definition": "planner",
+        "runs": 1,
+        "status": "done",
+        "cost_usd": 0.0012
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

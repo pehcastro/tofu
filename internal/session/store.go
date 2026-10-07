@@ -18,7 +18,7 @@ import (
 
 const (
 	IDPrefix        = "turn-"
-	TurnMark        = "#"
+	TurnMark        = "@"
 	headerName      = "session.json"
 	eventsName      = "events.jsonl"
 	headName        = "HEAD"
@@ -187,7 +187,25 @@ func (s *Store) SetName(id, given string) (Header, error) {
 	if err != nil {
 		return Header{}, err
 	}
-	return s.edit(id, func(header *Header) { header.Name = &name })
+	listing, err := s.Listing()
+	if err != nil {
+		return Header{}, err
+	}
+	family, _, err := listing.FamilyOf(id)
+	if err != nil {
+		return Header{}, err
+	}
+	var named Header
+	for _, generation := range slices.Backward(family.Generations) {
+		edited, err := s.edit(generation.ID, func(header *Header) { header.Name = &name })
+		if err != nil {
+			return Header{}, err
+		}
+		if edited.ID == id {
+			named = edited
+		}
+	}
+	return named, nil
 }
 
 func (s *Store) End(id string, reason EndReason, at time.Time) (Header, error) {
@@ -234,17 +252,14 @@ func (s *Store) Resolve(handle string) ([]Header, error) {
 	if err != nil {
 		return nil, err
 	}
-	var named []Header
-	for _, header := range listing.Sessions {
-		if header.Name != nil && *header.Name == handle {
-			named = append(named, header)
-		}
-	}
+	named := resolveIn(listing.Families(), handle)
 	if len(named) == 0 {
 		return nil, fmt.Errorf("session: nothing here is called %s: %w", handle, fs.ErrNotExist)
 	}
 	return named, nil
 }
+
+func (s *Store) EventsPath(id string) string { return filepath.Join(s.Dir(id), eventsName) }
 
 func (s *Store) Header(handle string) (Header, error) {
 	id, _ := s.holding(handle)

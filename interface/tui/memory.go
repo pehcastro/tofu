@@ -137,7 +137,7 @@ func (a *App) rememberTyped(whole string) bool {
 	shelves, err := memory.Open(cmp.Or(a.options.Root, "."))
 	var added memory.Entry
 	if err == nil {
-		added, err = shelves.Add(memory.Entry{Scope: memory.Global, Kind: memory.KindPerson, Text: rule, Said: whole, Session: a.sessionID, At: a.options.Now(), By: memory.ByPerson}, "")
+		added, err = shelves.Add(memory.Entry{Scope: memory.Global, Kind: memory.KindPerson, Text: rule, Said: whole, Session: a.sessionRoot, At: a.options.Now(), By: memory.ByPerson}, "")
 	}
 	if err != nil {
 		hint := ""

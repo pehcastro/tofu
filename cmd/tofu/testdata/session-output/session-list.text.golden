@@ -1,9 +1,9 @@
 exit 0
 --- stdout
-Sessions · 2 sessions                                          ● head store-walk
+Sessions · 2 sessions                                  ● head store-walk#4b7gl.1
 
-  ● store-walk  10m ago  1 step   stopped  explain the session store
-  ○ older-task  3h ago   0 steps  done     the older task
+  ● store-walk#4b7gl.1  10m ago  1 step   stopped  explain the session store
+  ○ older-task#7upyn.1  3h ago   0 steps  done     the older task
 
 unreadable      ✗ 1
   ✗ turn-broken  session: the header of turn-broken does not parse: invalid

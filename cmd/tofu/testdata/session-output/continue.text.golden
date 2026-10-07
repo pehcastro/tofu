@@ -1,6 +1,6 @@
 exit 2
 --- stdout
-Resume · store-walk                                                    ● stopped
+Resume · store-walk#4b7gl.1                                            ● stopped
 
   id        turn-one
   task      explain the session store

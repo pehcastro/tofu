@@ -46,6 +46,11 @@ fields. A misspelt or foreign field rejects the whole reply, and the
 problem shows in `tofu session trace` and `tofu hooks` instead of the hook
 quietly doing nothing.
 
+**One `session_id` for the whole conversation.** A hook reads the family
+id as `session_id`, the same across every fork and `/compact`, with
+`generation` beside it and `transcript_path` naming the open generation's
+`events.jsonl`, so a script keyed on `session_id` keeps its state.
+
 **Every run is in the session.** `tofu session trace` lists each hook run
 beside its call: the event, exit code, duration, decision, command, source,
 and standard error with keys masked.

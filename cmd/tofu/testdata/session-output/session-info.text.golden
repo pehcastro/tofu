@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-store-walk                                                             ● stopped
+store-walk#4b7gl.1                                                     ● stopped
 
   id        turn-one
   when      10m ago

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/cron"
@@ -126,7 +127,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	if err := h.cron.Keep(cronFile(sessions, id)); err != nil {
 		say("cron jobs were not written: " + err.Error())
 	}
-	if labelled, named := h.label(sessions); named {
+	if labelled, named := h.label(sessions, h.ID()); named {
 		emit(labelled)
 	}
 	if prepared.GateOff != nil {
@@ -149,6 +150,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	config.Appended = func(logged session.Event) {
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
 	}
+	var endedSession atomic.Pointer[string]
 	config.Step = func(step turn.StepRow) {
 		if prepared.Plan != nil {
 			emit(Event{Kind: EventPlan, Plan: statedPlan(prepared.Plan.Items())})
@@ -156,8 +158,16 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		if step.Occupancy != nil {
 			emit(Event{Kind: EventContext, Context: Context{Used: step.Occupancy.Total(), Budget: prepared.Ceiling}})
 		}
+		if ended := endedSession.Swap(nil); ended != nil {
+			if header, err := sessions.Header(*ended); err == nil && header.ForkedInto != "" {
+				emit(labelledAs(sessions, Event{Kind: EventSession, ID: header.ForkedInto, Root: header.ForkedInto}))
+			}
+		}
 	}
 	config.EndedSession = func(ended turn.Row) error {
+		if ended.SpawnedFrom == "" && ended.Session != "" {
+			endedSession.Store(&ended.Session)
+		}
 		forked := forkOf(ended)
 		emit(Event{Kind: EventForkStart})
 		emit(Event{Kind: EventNote, Text: forkWords(forked)})
@@ -197,7 +207,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 			if keepErr := h.cron.Keep(cronFile(sessions, row.Session)); keepErr != nil && forked {
 				say("cron jobs were not written: " + keepErr.Error())
 			}
-			if labelled, named := h.label(sessions); named && forked {
+			if labelled, named := h.label(sessions, h.ID()); named && forked {
 				emit(labelled)
 			}
 		}
@@ -242,27 +252,23 @@ func (h *Host) holdTurn(id string) (func() error, error) {
 	return store.HoldTurn()
 }
 
-func (h *Host) label(store *session.Store) (Event, bool) {
-	id := h.ID()
+func (h *Host) label(store *session.Store, id string) (Event, bool) {
 	if id == "" {
 		return Event{}, false
 	}
-	labelled := Event{Kind: EventSession, ID: id, Root: id}
-	header, err := store.Header(id)
+	if _, err := store.Header(id); err != nil {
+		_ = store.Write(session.Header{ID: id, Root: id, At: h.now()}, nil)
+	}
+	return labelledAs(store, Event{Kind: EventSession, ID: id, Root: id}), true
+}
+
+func labelledAs(store *session.Store, labelled Event) Event {
+	identity, err := store.Identity(labelled.ID)
 	if err != nil {
-		if writeErr := store.Write(session.Header{ID: id, Root: id, At: h.now()}, nil); writeErr != nil {
-			return labelled, true
-		}
-		header, err = store.Header(id)
-		if err != nil {
-			return labelled, true
-		}
+		return labelled
 	}
-	labelled.Root = cmp.Or(header.Root, id)
-	if header.Name != nil {
-		labelled.Text = *header.Name
-	}
-	return labelled, true
+	labelled.Root, labelled.Text, labelled.Identity = identity.Family, identity.Handle(), &identity
+	return labelled
 }
 
 func gateOffEvent(gateErr error) Event {

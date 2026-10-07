@@ -86,6 +86,14 @@ func (s *Store) Open(header Header) (log *Log, err error) {
 func (s *Store) fresh(header Header) Header {
 	header.Schema = SchemaVersion
 	header.Project = cmp.Or(header.Project, s.project)
+	if header.CarriedFrom == nil {
+		header.Generation = 1
+	} else if from, err := s.Identity(header.CarriedFrom.Session); err == nil {
+		header.Root, header.Generation = from.Family, from.Generation+1
+		if header.Name == nil && from.Name != "" {
+			header.Name = &from.Name
+		}
+	}
 	if header.Name == nil {
 		name := newName()
 		header.Name = &name

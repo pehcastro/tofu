@@ -1,0 +1,6 @@
+exit 0
+--- stdout
+Found · store-walk#4b7gl.1 · 1 hit
+
+  ○ .1  8m ago  lead  read  {"path":"internal/session/store.go"}
+--- stderr

@@ -70,6 +70,9 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		return turn.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation; copy their words exactly, or do not offer it", args.Said)
 	}
 	entry := memory.Entry{Scope: memory.Project, Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
+	if family, err := r.Store.Identity(r.Session); err == nil {
+		entry.Session = family.Family
+	}
 	if args.Kind == memory.KindPerson {
 		entry.Scope = memory.Global
 	}

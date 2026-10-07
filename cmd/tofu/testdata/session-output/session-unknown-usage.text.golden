@@ -1,5 +1,0 @@
-exit 2
---- stdout
---- stderr
-✗ tofu session: there is no subcommand "tree"
-  → tofu session list|info|trace|reads|resume|rename|request <name|id> [--json]

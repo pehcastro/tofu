@@ -1,0 +1,34 @@
+exit 0
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session find",
+  "ok": true,
+  "at": "AT",
+  "data": {
+    "handle": "store-walk#4b7gl.1",
+    "query": {
+      "tool": "read"
+    },
+    "hits": [
+      {
+        "generation": 1,
+        "session": "turn-one",
+        "event": "ev-call-1",
+        "at": "AT",
+        "turn": "turn-one",
+        "call": "call-1",
+        "tool": "read",
+        "args": {
+          "path": "internal/session/store.go"
+        },
+        "ran": {
+          "outcome": "ran",
+          "bytes": 2048
+        }
+      }
+    ]
+  },
+  "problems": []
+}
+--- stderr

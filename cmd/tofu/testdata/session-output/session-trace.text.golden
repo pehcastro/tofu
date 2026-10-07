@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Trace · store-walk · 7 events
+Trace · store-walk#4b7gl.1 · 7 events
 
 sub-agents
   ○ agent-1  planner  claude-sub/claude-opus-5  done  1 call  $0.001200

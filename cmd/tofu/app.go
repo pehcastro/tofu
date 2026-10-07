@@ -607,9 +607,11 @@ func appSessions(inUse string) ([]tui.SessionRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	open, _ := store.Identity(inUse)
 	rows := make([]tui.SessionRow, len(report.Sessions))
 	for i, row := range report.Sessions {
-		rows[i] = tui.SessionRow{ID: row.ID, Name: row.Name, Task: oneLine(row.Task), Facts: sessionWhen(row.At, now) + " · " + countOf(row.Turns, "turn"), InUse: row.ID == inUse}
+		rows[i] = tui.SessionRow{ID: row.ID, Name: row.Handle, Task: oneLine(row.Task), InUse: row.ID == inUse || (open.Family != "" && row.Family == open.Family),
+			Facts: sessionWhen(row.At, now) + " · " + countOf(row.Turns, "turn") + " · " + countOf(row.Generations, "generation")}
 	}
 	return rows, nil
 }

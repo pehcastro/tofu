@@ -30,7 +30,10 @@ func sessionOutputCases() []outputCase {
 		{"session-rename", []string{"session", "rename", "turn-two", "older work"}, exitOK},
 		{"session-missing", []string{"session", "info", "nope"}, exitVerdict},
 		{"session-usage", []string{"session", "info"}, exitUsage},
-		{"session-unknown-usage", []string{"session", "tree"}, exitUsage},
+		{"session-family", []string{"session", "store-walk"}, exitOK},
+		{"session-family-missing", []string{"session", "tree"}, exitVerdict},
+		{"session-find", []string{"session", "find", "store-walk", "--tool", "read"}, exitOK},
+		{"session-find-usage", []string{"session", "find", "store-walk", "--colour", "red"}, exitUsage},
 		{"continue", []string{"--continue"}, exitUsage},
 		{"context", []string{"context"}, exitOK},
 		{"context-missing", []string{"context", "nope"}, exitVerdict},
@@ -64,21 +67,22 @@ func sessionOutputProject(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	step := turn.StepRow{Index: 1, AssistantText: "looking at the store", Model: "claude-opus-5", PromptTokens: 1200, CompletionTokens: 300, CostUSD: 0.0042,
 		Occupancy: &recall.Occupancy{Identity: 3300, Facts: 1200, WorkingSet: 9000, Recent: 4000, Target: 50000}}
 	storeWalk, olderTask := "store-walk", "older-task"
 	one := session.Header{ID: "turn-one", Name: &storeWalk, At: now.Add(-10 * time.Minute), Task: "explain the session store", Root: "turn-one",
 		Wire: wireSubscription, Model: "claude-opus-5", Outcome: "stopped", CostUSD: 0.0054,
 		Agents: []session.AgentRun{{Agent: "agent-1", Definition: "planner", Model: "claude-sub/claude-opus-5", SpawnCall: "call-2", SpawnTurn: "turn-one", Status: "done", CostUSD: 0.0012}}}
+	at := func(minutes int) time.Time { return now.Add(time.Duration(minutes-10) * time.Minute) }
 	events := []session.Event{
-		{ID: "ev-task", Kind: session.EventMessage, Body: rawJSON(t, turn.MessageRow{Role: "user", Content: "explain the session store"})},
-		{ID: "req-1", Turn: "turn-one", Kind: session.EventStep, Body: rawJSON(t, step)},
-		{ID: "ev-call-1", Turn: "turn-one", Call: "call-1", Request: "req-1", Kind: session.EventToolCall,
+		{ID: "ev-task", At: at(0), Kind: session.EventMessage, Body: rawJSON(t, turn.MessageRow{Role: "user", Content: "explain the session store"})},
+		{ID: "req-1", At: at(1), Turn: "turn-one", Kind: session.EventStep, Body: rawJSON(t, step)},
+		{ID: "ev-call-1", At: at(2), Turn: "turn-one", Call: "call-1", Request: "req-1", Kind: session.EventToolCall,
 			Body: rawJSON(t, session.CallBody{Tool: "read", Args: json.RawMessage(`{"path":"internal/session/store.go"}`)})},
-		{ID: "res-1", Turn: "turn-one", Call: "call-1", Kind: session.EventToolResult, Body: rawJSON(t, session.ResultBody{ToolOutcome: "ran", ResultBytes: 2048})},
-		{ID: "ev-call-3", Turn: "turn-one", Agent: "agent-1", Call: "call-3", Kind: session.EventToolCall, Body: rawJSON(t, session.CallBody{Tool: "search"})},
-		{ID: "ev-answer", Kind: session.EventMessage, Body: rawJSON(t, turn.MessageRow{Role: "assistant", Content: "it keeps one log per session"})},
+		{ID: "res-1", At: at(3), Turn: "turn-one", Call: "call-1", Kind: session.EventToolResult, Body: rawJSON(t, session.ResultBody{ToolOutcome: "ran", ResultBytes: 2048})},
+		{ID: "ev-call-3", At: at(4), Turn: "turn-one", Agent: "agent-1", Call: "call-3", Kind: session.EventToolCall, Body: rawJSON(t, session.CallBody{Tool: "search"})},
+		{ID: "ev-answer", At: at(5), Kind: session.EventMessage, Body: rawJSON(t, turn.MessageRow{Role: "assistant", Content: "it keeps one log per session"})},
 	}
 	two := session.Header{ID: "turn-two", Name: &olderTask, At: now.Add(-3 * time.Hour), Task: "the older task", Root: "turn-two", Outcome: "done"}
 	for _, err := range []error{store.Write(one, events), store.Write(two, nil), store.SetHead("turn-one")} {

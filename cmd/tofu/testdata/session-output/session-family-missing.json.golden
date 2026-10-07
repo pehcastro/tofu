@@ -1,0 +1,16 @@
+exit 1
+--- stdout
+{
+  "tofu": "VERSION",
+  "verb": "session",
+  "ok": false,
+  "at": "AT",
+  "data": null,
+  "problems": [
+    {
+      "what": "no session tree here",
+      "hint": "tofu session list"
+    }
+  ]
+}
+--- stderr

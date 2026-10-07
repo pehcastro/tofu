@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session list|info|trace|reads|resume|rename|request <name|id> [--json]"
+	sessionSubcommands = "tofu session <name|id>, or tofu session list|info|trace|reads|resume|rename|request|find <name|id> [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -40,6 +40,10 @@ type sessionSkip struct {
 type sessionRow struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name,omitempty"`
+	Handle           string    `json:"handle"`
+	Family           string    `json:"family,omitempty"`
+	Generation       int       `json:"generation,omitempty"`
+	Generations      int       `json:"generations,omitempty"`
 	At               time.Time `json:"at"`
 	Task             string    `json:"task,omitempty"`
 	Turns            int       `json:"turns"`
@@ -92,6 +96,7 @@ type sessionReadsReport struct {
 type sessionResume struct {
 	Session     string             `json:"session,omitempty"`
 	Name        string             `json:"name,omitempty"`
+	Handle      string             `json:"handle,omitempty"`
 	Task        string             `json:"task,omitempty"`
 	Outcome     string             `json:"outcome,omitempty"`
 	Steps       int                `json:"steps"`
@@ -125,9 +130,27 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(withoutJSON(args)) == 0 {
 		return o.usage(errors.New("no subcommand"))
 	}
+	now := time.Now()
+	if args[0] == "find" {
+		o.verb, o.usageLine = "session find", sessionFindUsage
+		handle, query, err := sessionFindArgs(args[1:], now)
+		if err != nil {
+			return o.usage(err)
+		}
+		return sessionReport(o, func(store *session.Store) (sessionFindReport, error) { return sessionFind(store, handle, query) },
+			func(page cli.Page, report sessionFindReport) []string { return sessionFindLines(page, report, now) })
+	}
 	operands, wanted, known := sessionOperands(args[0])
 	if !known {
-		return o.usage(fmt.Errorf("there is no subcommand %q", args[0]))
+		o.usageLine = "tofu session <name|id> [--json]"
+		if handles, _, err = verbArgs(args); err == nil && len(handles) != 1 {
+			err = fmt.Errorf("%d operands, want <name|id>", len(handles))
+		}
+		if err != nil {
+			return o.usage(err)
+		}
+		return sessionReport(o, func(store *session.Store) (sessionFamilyReport, error) { return sessionFamilyOf(store, handles[0]) },
+			func(page cli.Page, report sessionFamilyReport) []string { return sessionFamilyLines(page, report, now) })
 	}
 	o.verb, o.usageLine = "session "+args[0], strings.TrimSpace("tofu session "+args[0]+" "+operands)+" [--json]"
 	if err == nil && len(handles) != wanted {
@@ -140,7 +163,6 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	now := time.Now()
 	lifetime := session.DefaultSettings().Lifetime
 	switch args[0] {
 	case "list":
@@ -255,6 +277,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	carry := sessionResume{
 		Session:  row.ID,
 		Name:     row.Name,
+		Handle:   row.Handle,
 		Task:     row.Task,
 		Outcome:  row.Outcome,
 		Steps:    row.Steps,
@@ -286,7 +309,7 @@ func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error)
 	if err != nil {
 		return sessionRow{}, err
 	}
-	row.Name = *header.Name
+	row.Name, row.Handle = *header.Name, handleOf(store, row.ID)
 	return row, nil
 }
 
@@ -381,6 +404,10 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if header.Name != nil {
 		row.Name = *header.Name
 	}
+	row.Handle = sessionShortID(header.ID)
+	if identity, err := store.Identity(header.ID); err == nil {
+		row.Handle, row.Family, row.Generation = identity.Handle(), identity.Family, identity.Generation
+	}
 	if header.ForkedInto != "" {
 		if into, err := store.Header(header.ForkedInto); err == nil {
 			row.ForkIntoKind = into.ForkKind
@@ -410,13 +437,13 @@ func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Ti
 	for _, skip := range listing.Skipped {
 		report.Skipped = append(report.Skipped, sessionSkip{Session: skip.ID, Reason: skip.Reason.Error()})
 	}
-	for _, header := range listing.Sessions {
-		row, _, err := sessionDetail(store, header.ID)
+	for _, family := range listing.Families() {
+		row, _, err := sessionDetail(store, family.Session)
 		if err != nil {
-			report.Skipped = append(report.Skipped, sessionSkip{Session: header.ID, Reason: err.Error()})
+			report.Skipped = append(report.Skipped, sessionSkip{Session: family.Session, Reason: err.Error()})
 			continue
 		}
-		row.Head = row.ID == report.Head
+		row.Head, row.Generations = slices.ContainsFunc(family.Generations, func(header session.Header) bool { return header.ID == report.Head }), len(family.Generations)
 		row.Expired = lifetime.Expired(row.lastAt, now)
 		if row.Expired {
 			report.Expired++
@@ -437,7 +464,7 @@ func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []
 	var verdict cli.Verdict
 	rows := make([]cli.Row, len(report.Sessions))
 	for i, row := range report.Sessions {
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{sessionHandle(row.ID, row.Name), sessionWhen(row.At, now), sessionSteps(row.Steps), row.Outcome}, Detail: oneLine(row.Task)}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{row.Handle, sessionWhen(row.At, now), sessionSteps(row.Steps), row.Outcome}, Detail: oneLine(row.Task)}
 		switch {
 		case row.Head && report.HeadDerived:
 			verdict = cli.Verdict{Mark: cli.Idle, Text: "newest " + rows[i].Cells[0]}
@@ -490,7 +517,7 @@ func sessionReadsLines(page cli.Page, report sessionReadsReport) []string {
 
 func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 	verdict := cli.Verdict{Mark: cli.Idle, Text: cmp.Or(row.Outcome, "open")}
-	hint := "tofu session resume " + sessionHandle(row.ID, row.Name)
+	hint := "tofu session resume " + row.Handle
 	switch {
 	case row.Head:
 		verdict.Mark, hint = cli.Active, "tofu --continue"
@@ -546,7 +573,7 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 		facts = append(facts, cli.Fact{Label: "context", Text: strconv.Itoa(row.ContextCeiling) + " ceiling · " +
 			strconv.Itoa(row.ContextTarget) + " target · compaction " + row.AutoCompaction})
 	}
-	lines := append(page.Title(sessionHandle(row.ID, row.Name), nil, verdict), "")
+	lines := append(page.Title(row.Handle, nil, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(append(lines, ""), cli.Indent(page.Hint(hint))...)
 }
@@ -567,7 +594,7 @@ func resumeLines(page cli.Page, carry sessionResume) []string {
 	if carry.Busy != nil {
 		verdict, writer = cli.Verdict{Mark: cli.Warn, Text: "busy, read only"}, carry.Busy.Error()
 	}
-	lines := append(page.Title("Resume", []string{sessionHandle(carry.Session, carry.Name)}, verdict), "")
+	lines := append(page.Title("Resume", []string{carry.Handle}, verdict), "")
 	return append(lines, cli.Indent(page.Facts([]cli.Fact{
 		{Label: "id", Text: carry.Session},
 		{Label: "task", Text: oneLine(carry.Task)},
@@ -655,6 +682,7 @@ type traceFailure struct {
 type sessionTraceReport struct {
 	Session  string             `json:"session"`
 	Name     string             `json:"name,omitempty"`
+	Handle   string             `json:"handle"`
 	Error    string             `json:"error,omitempty"`
 	Events   int                `json:"events"`
 	Agents   []session.AgentRun `json:"agents"`
@@ -755,7 +783,7 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	report.Session, report.Name, report.Error, report.Events = header.ID, header.Named(), header.Error, len(events)
+	report.Session, report.Name, report.Handle, report.Error, report.Events = header.ID, header.Named(), handleOf(store, header.ID), header.Error, len(events)
 	report.Messages = slices.DeleteFunc(report.Messages, func(said traceMessage) bool { return header.CarriedFrom != nil && said.Turn == header.ID })
 	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
 	return withAncestors(store, header, report)
@@ -918,7 +946,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	if report.Error != "" {
 		verdict = cli.Verdict{Mark: cli.Fail, Text: "ended in error"}
 	}
-	facts := []string{sessionHandle(report.Session, report.Name), countOf(report.Events, "event")}
+	facts := []string{report.Handle, countOf(report.Events, "event")}
 	if sizes := report.Sizes; sizes != nil {
 		facts = append(facts, "events "+widget.Size(int(sizes.Events))+", requests "+widget.Size(int(sizes.Requests))+", bodies "+widget.Size(int(sizes.Blobs)))
 	}

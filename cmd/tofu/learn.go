@@ -154,7 +154,7 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 			return []learn.Source{{Store: store, Headers: headers}}, "the chain ending in " + opts.chain, err
 		}
 		headers, err := learn.Recent(store, opts.last)
-		return []learn.Source{{Store: store, Headers: headers}}, "the last " + strconv.Itoa(len(headers)) + " sessions of this project", err
+		return []learn.Source{{Store: store, Headers: headers}}, countOf(len(headers), "session") + " of the last " + strconv.Itoa(opts.last) + " conversations of this project", err
 	}
 	home, err := sys.HomeConfigDir()
 	if err != nil {
@@ -170,7 +170,7 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 		}
 		sources = append(sources, learn.Source{Store: store, Headers: headers, Project: filepath.Base(state)})
 	}
-	return sources, "every project, the last " + strconv.Itoa(opts.last) + " sessions of each", err
+	return sources, "every project, the last " + strconv.Itoa(opts.last) + " conversations of each", err
 }
 
 func learnScan(o verbOutput, opts learnOpts, home learn.Home) int {
