@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"regexp"
@@ -48,8 +47,6 @@ const (
 
 	summarizedThinkingMajor = 4
 	summarizedThinkingMinor = 7
-
-	ImageBytesCap = 5 << 20
 )
 
 type cacheControl struct {
@@ -77,7 +74,7 @@ type contentBlock struct {
 	Name      string          `json:"name,omitempty"`
 	Input     json.RawMessage `json:"input,omitempty"`
 	ToolUseID string          `json:"tool_use_id,omitempty"`
-	Content   string          `json:"content,omitempty"`
+	Content   any             `json:"content,omitempty"`
 	Thinking  string          `json:"thinking,omitempty"`
 	Signature string          `json:"signature,omitempty"`
 
@@ -305,7 +302,8 @@ func historyChars(messages []wireMessage) int {
 	total := 0
 	for _, message := range messages {
 		for _, block := range message.Content {
-			total += len(block.Text) + len(block.Content) + len(block.Input)
+			result, _ := block.Content.(string)
+			total += len(block.Text) + len(result) + len(block.Input)
 		}
 	}
 	return total
@@ -368,20 +366,15 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
-			blocks := make([]contentBlock, 0, len(message.Images)+1)
+			var blocks []contentBlock
 			if !llm.BlankText(message.Content) {
 				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
 			}
-			for imageIndex, image := range message.Images {
-				if len(image.Data) > ImageBytesCap {
-					return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
-						"message %d image %d is %d bytes, past the %d byte cap", index, imageIndex, len(image.Data), ImageBytesCap)
-				}
-				blocks = append(blocks, contentBlock{Type: "image", Source: &imageSource{
-					Type: "base64", MediaType: image.MediaType, Data: base64.StdEncoding.EncodeToString(image.Data),
-				}})
+			pictures, err := pictureBlocks(index, message.Images)
+			if err != nil {
+				return nil, err
 			}
-			encoded = append(encoded, wireMessage{Role: "user", Content: blocks})
+			encoded = append(encoded, wireMessage{Role: "user", Content: append(blocks, pictures...)})
 
 		case llm.RoleTool:
 			if message.ToolCallID == "" {
@@ -389,6 +382,13 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 					"message %d is a tool result with no tool call id", index)
 			}
 			result := contentBlock{Type: "tool_result", ToolUseID: message.ToolCallID, Content: message.Content}
+			if len(message.Images) > 0 {
+				pictures, err := pictureBlocks(index, message.Images)
+				if err != nil {
+					return nil, err
+				}
+				result.Content = append([]contentBlock{{Type: "text", Text: message.Content}}, pictures...)
+			}
 			last := len(encoded) - 1
 			if last >= 0 && encoded[last].Role == "user" && encoded[last].Content[0].Type == "tool_result" {
 				encoded[last].Content = append(encoded[last].Content, result)
@@ -428,6 +428,19 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 		}
 	}
 	return encoded, nil
+}
+
+func pictureBlocks(index int, images []llm.Image) ([]contentBlock, error) {
+	blocks := make([]contentBlock, len(images))
+	for i, image := range images {
+		data := image.Base64()
+		if len(data) > llm.ImageEncodedBytes {
+			return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
+				"message %d image %d is %d bytes of base64, past the %d byte cap", index, i, len(data), llm.ImageEncodedBytes)
+		}
+		blocks[i] = contentBlock{Type: "image", Source: &imageSource{Type: "base64", MediaType: image.MediaType, Data: data}}
+	}
+	return blocks, nil
 }
 
 func encodeTools(tools []llm.Tool, oauth bool) ([]wireTool, error) {

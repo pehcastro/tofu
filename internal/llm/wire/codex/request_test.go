@@ -8,6 +8,36 @@ import (
 	"tofu/internal/llm"
 )
 
+func TestAPictureAToolReturnedTravelsInItsFunctionCallOutput(t *testing.T) {
+	items, err := encodeInput([]llm.Message{
+		{Role: llm.RoleUser, Content: "look at a.png"},
+		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}}},
+		{Role: llm.RoleTool, ToolCallID: "call-1", Content: "a.png is a png", Images: []llm.Image{{MediaType: "image/png", Data: []byte("made-up png")}}},
+	})
+	if err != nil {
+		t.Fatalf("a tool result with a picture was refused: %v", err)
+	}
+	body, err := json.Marshal(items[len(items)-1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output struct {
+		Type   string `json:"type"`
+		Output []struct {
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			ImageURL string `json:"image_url"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &output); err != nil {
+		t.Fatalf("the result was sent as %s, want an output array: %v", body, err)
+	}
+	if output.Type != "function_call_output" || len(output.Output) != 2 || output.Output[0].Text != "a.png is a png" ||
+		output.Output[1].Type != "input_image" || output.Output[1].ImageURL != "data:image/png;base64,bWFkZS11cCBwbmc=" {
+		t.Fatalf("the result was sent as %s, want the text then the picture as an input_image", body)
+	}
+}
+
 func TestAReplyWithReasoningTextAndACallIsSentBackInTheOrderItArrived(t *testing.T) {
 	call := llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}
 	reasoning := llm.Thinking{Signature: EncodeReasoning("rs_1", "sealed")}

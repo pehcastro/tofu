@@ -27,6 +27,7 @@ const (
 
 type Result struct {
 	Content     string
+	Images      []llm.Image
 	Command     string
 	ExitCode    *int
 	FailureText string

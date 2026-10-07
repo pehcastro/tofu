@@ -3,7 +3,6 @@ package codex
 import (
 	"bytes"
 	"cmp"
-	"encoding/base64"
 	"encoding/json"
 	"slices"
 
@@ -57,7 +56,7 @@ type inputItem struct {
 	CallID           string      `json:"call_id,omitempty"`
 	Name             string      `json:"name,omitempty"`
 	Arguments        string      `json:"arguments,omitempty"`
-	Output           string      `json:"output,omitempty"`
+	Output           any         `json:"output,omitempty"`
 	EncryptedContent string      `json:"encrypted_content,omitempty"`
 	Summary          []inputPart `json:"summary,omitzero"`
 }
@@ -200,10 +199,6 @@ func (r Request) RefusedControls() []string {
 func encodeInput(messages []llm.Message) ([]inputItem, error) {
 	items := make([]inputItem, 0, len(messages))
 	for index, message := range messages {
-		if len(message.Images) > 0 && message.Role != llm.RoleUser {
-			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
-				"message %d carries an image outside a user message; codex sends images only from the user", index)
-		}
 		switch message.Role {
 		case llm.RoleSystem:
 			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
@@ -214,23 +209,22 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
-			parts := make([]inputPart, 0, len(message.Images)+1)
+			var parts []inputPart
 			if !llm.BlankText(message.Content) {
 				parts = append(parts, inputPart{Type: "input_text", Text: message.Content})
 			}
-			for _, image := range message.Images {
-				parts = append(parts, inputPart{Type: "input_image", Detail: imageDetail,
-					ImageURL: "data:" + image.MediaType + ";base64," + base64.StdEncoding.EncodeToString(image.Data)})
-			}
-			items = append(items, inputItem{Role: "user", Content: parts})
+			items = append(items, inputItem{Role: "user", Content: append(parts, pictureParts(message.Images)...)})
 
 		case llm.RoleTool:
 			if message.ToolCallID == "" {
 				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 					"message %d is a tool result with no tool call id", index)
 			}
-			items = append(items, inputItem{Type: "function_call_output",
-				CallID: message.ToolCallID, Output: message.Content})
+			output := any(message.Content)
+			if len(message.Images) > 0 {
+				output = append([]inputPart{{Type: "input_text", Text: message.Content}}, pictureParts(message.Images)...)
+			}
+			items = append(items, inputItem{Type: "function_call_output", CallID: message.ToolCallID, Output: output})
 
 		case llm.RoleAssistant:
 			if id, encrypted, ok := DecodeReasoning(message.Thinking.Signature); ok && len(message.ToolCalls) > 0 {
@@ -259,6 +253,14 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 		}
 	}
 	return items, nil
+}
+
+func pictureParts(images []llm.Image) []inputPart {
+	parts := make([]inputPart, len(images))
+	for i, image := range images {
+		parts[i] = inputPart{Type: "input_image", Detail: imageDetail, ImageURL: image.DataURL()}
+	}
+	return parts
 }
 
 func encodeTools(tools []llm.Tool) ([]wireTool, error) {

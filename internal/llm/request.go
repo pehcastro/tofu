@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"time"
@@ -59,9 +60,23 @@ func (o ToolOutcome) Failed() bool {
 	panic("llm: unknown tool outcome")
 }
 
+const (
+	ImageLongEdgePixels = 1568
+	ImagePixels         = 1_150_000
+	ImageEncodedBytes   = 5 << 20
+)
+
 type Image struct {
 	MediaType string
 	Data      []byte
+}
+
+func (i Image) Base64() string {
+	return base64.StdEncoding.EncodeToString(i.Data)
+}
+
+func (i Image) DataURL() string {
+	return "data:" + i.MediaType + ";base64," + i.Base64()
 }
 
 type Thinking struct {
@@ -139,7 +154,11 @@ func (r Request) Encode(model string) ([]byte, error) {
 	}
 
 	messages := make([]wireMessage, 0, len(r.Messages))
+	var toolPictures []wirePart
 	for index, message := range r.Messages {
+		if message.Role != RoleTool && len(toolPictures) > 0 {
+			messages, toolPictures = append(messages, wireMessage{Role: "user", Content: toolPictures}), nil
+		}
 		if message.Role == RoleAssistant && BlankText(message.Content) && len(message.ToolCalls) == 0 {
 			continue
 		}
@@ -148,6 +167,13 @@ func (r Request) Encode(model string) ([]byte, error) {
 			return nil, err
 		}
 		messages = append(messages, wire)
+		if message.Role == RoleTool && len(message.Images) > 0 {
+			toolPictures = append(toolPictures, wirePart{Type: "text", Text: "the picture tool call " + message.ToolCallID + " returned"})
+			toolPictures = append(toolPictures, pictureParts(message.Images)...)
+		}
+	}
+	if len(toolPictures) > 0 {
+		messages = append(messages, wireMessage{Role: "user", Content: toolPictures})
 	}
 
 	tools, err := encodeTools(r.Tools)
@@ -169,10 +195,6 @@ func (r Request) Encode(model string) ([]byte, error) {
 }
 
 func encodeMessage(index int, message Message) (wireMessage, error) {
-	if len(message.Images) > 0 {
-		return wireMessage{}, transport.Fail("llm.Encode", transport.KindBadRequest, nil,
-			"message %d carries an image; the openrouter wire does not send one", index)
-	}
 	switch message.Role {
 	case RoleSystem, RoleUser:
 		if BlankText(message.Content) {
@@ -204,12 +226,22 @@ func encodeMessage(index int, message Message) (wireMessage, error) {
 		calls[callIndex].Function.Arguments = string(call.Arguments)
 	}
 
-	return wireMessage{
-		Role:       message.Role.String(),
-		Content:    message.Content,
-		ToolCallID: message.ToolCallID,
-		ToolCalls:  calls,
-	}, nil
+	wire := wireMessage{Role: message.Role.String(), ToolCallID: message.ToolCallID, ToolCalls: calls}
+	if message.Content != "" {
+		wire.Content = message.Content
+	}
+	if message.Role == RoleUser && len(message.Images) > 0 {
+		wire.Content = append([]wirePart{{Type: "text", Text: message.Content}}, pictureParts(message.Images)...)
+	}
+	return wire, nil
+}
+
+func pictureParts(images []Image) []wirePart {
+	parts := make([]wirePart, len(images))
+	for i, image := range images {
+		parts[i] = wirePart{Type: "image_url", ImageURL: &wireImageURL{URL: image.DataURL()}}
+	}
+	return parts
 }
 
 func encodeTools(tools []Tool) ([]wireTool, error) {
@@ -245,9 +277,19 @@ type wireToolCall struct {
 	Function wireFunctionCall `json:"function"`
 }
 
+type wireImageURL struct {
+	URL string `json:"url"`
+}
+
+type wirePart struct {
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *wireImageURL `json:"image_url,omitempty"`
+}
+
 type wireMessage struct {
 	Role       string         `json:"role"`
-	Content    string         `json:"content,omitempty"`
+	Content    any            `json:"content,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
 	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 }

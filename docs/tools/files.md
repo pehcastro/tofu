@@ -2,7 +2,7 @@
 title: Files
 description: read, write, edit, glob, search, symbols and project_report, tofu's own Go tools for finding, reading and changing files.
 order: 2
-updated: 2026-10-05
+updated: 2026-10-07
 ---
 
 Seven tools, all tofu's own Go code, none of them a wrapper around `cat`,
@@ -28,6 +28,17 @@ paths cut 88.4% of all tool output bytes over 1,401 calls.
 A range gets one header, `path lines a-b of N`, and no line carries
 a number, so no bytes go to numbering. A path that doesn't exist is repaired
 when exactly one file has that name, and the repair is named first.
+
+A png, jpeg, gif or webp comes back as a picture the model can see, with one
+line of text naming it, such as `shapes.png: png, 400x300, 2753 bytes, attached
+as a picture`. The file's bytes decide, not its name, so a text file called
+`notes.png` still reads as text. A picture past 1568 pixels on its long edge or
+1.15 megapixels is shrunk to fit first, because Anthropic shrinks it to that
+size anyway and charges about width x height / 750 tokens, so a fitted picture
+costs at most about 1,600. The text line names both sizes. A webp past 5 MB is
+refused, since tofu cannot shrink one. The session keeps that text line and not
+the picture, so a resumed session knows which file was looked at and reads it
+again to see it.
 
 | Parameter | Type | What it does |
 |---|---|---|
