@@ -3,13 +3,13 @@ use std::rc::Rc;
 
 use desk_core::model::Store;
 use desk_tiling::{
-    self as tiling, DRAG_THRESHOLD, Divider, HEADER_ZONE, Module, NUDGE, Preset, Rect, Refusal,
-    Side, Stack, Store as Layouts, Target, TileId, Workspace,
+    self as tiling, Action, DRAG_THRESHOLD, Divider, HEADER_ZONE, Mods, Module, NUDGE, Preset,
+    Rect, Refusal, SHORTCUTS, Side, Stack, Store as Layouts, Target, TileId, Workspace,
 };
 use desk_ui::components::card::{Header, inner_card, shell};
-use desk_ui::components::empty::empty_state;
+use desk_ui::components::empty::{EmptyAction, EmptyHint, empty_state};
 use desk_ui::components::glyph::Glyph;
-use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
+use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs, header_tabs};
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::TITLE_BAR_HEIGHT;
 use desk_ui::theme::Theme;
@@ -29,6 +29,12 @@ use crate::modules::subagents::{self, Subagents};
 const BOARD: &str = "36-agents";
 const INSET: f32 = 8.0;
 const WORK_NAME: &str = "work";
+const OPENABLE: [Module; 4] = [
+    Module::Chat,
+    Module::SubAgents,
+    Module::FileEdits,
+    Module::Shells,
+];
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let replay = match board {
@@ -79,9 +85,10 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
         .new(|cx| {
             let focus = cx.focus_handle();
             focus.focus(window, cx);
-            Work {
+            let work = Work {
                 workspace,
                 others,
+                active: 0,
                 layouts,
                 gesture: Gesture::Idle,
                 nudge: None,
@@ -92,7 +99,9 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
                 file_edits,
                 shells,
                 replay,
-            }
+            };
+            work.report(window_area(window));
+            work
         })
         .into())
 }
@@ -114,6 +123,7 @@ enum Gesture {
 pub struct Work {
     workspace: Workspace,
     others: Vec<Workspace>,
+    active: usize,
     layouts: Layouts,
     gesture: Gesture,
     nudge: Option<f32>,
@@ -170,20 +180,172 @@ fn place(element: Div, rect: Rect) -> Div {
 }
 
 impl Work {
-    fn commit(&mut self, next: Result<Workspace, Refusal>, cx: &mut Context<Self>) {
+    fn all(&self) -> Vec<Workspace> {
+        let mut all = self.others.clone();
+        all.insert(self.active.min(all.len()), self.workspace.clone());
+        all
+    }
+
+    fn report(&self, area: Rect) {
+        let all = self.all();
+        for (at, workspace) in all.iter().enumerate() {
+            let tiles: Vec<String> = workspace
+                .tiles(area)
+                .into_iter()
+                .map(|(stack, rect)| {
+                    let names: Vec<&str> = stack.modules.iter().map(Module::name).collect();
+                    format!(
+                        "tile {} [{}] {:.1},{:.1} {:.1}x{:.1}",
+                        stack.id.0,
+                        names.join(", "),
+                        rect.x,
+                        rect.y,
+                        rect.w,
+                        rect.h
+                    )
+                })
+                .collect();
+            eprintln!(
+                "desk: work: workspace {}/{}{} {:?} preset {} locked {}: {}",
+                at + 1,
+                all.len(),
+                if at == self.active { " active" } else { "" },
+                workspace.name,
+                workspace.preset.name(),
+                workspace.locked,
+                tiles.join("; ")
+            );
+        }
+    }
+
+    fn save(&self, area: Rect) {
+        if let Err(error) = self.layouts.save(&self.all()) {
+            eprintln!("the layout was not saved: {error}");
+        }
+        self.report(area);
+    }
+
+    fn commit(&mut self, next: Result<Workspace, Refusal>, area: Rect, cx: &mut Context<Self>) {
         match next {
             Ok(workspace) => {
                 self.workspace = workspace;
-                let all: Vec<Workspace> = std::iter::once(self.workspace.clone())
-                    .chain(self.others.iter().cloned())
-                    .collect();
-                if let Err(error) = self.layouts.save(&all) {
-                    eprintln!("the layout was not saved: {error}");
-                }
+                self.save(area);
             }
             Err(refusal) => eprintln!("the layout refused that: {refusal}"),
         }
         cx.notify();
+    }
+
+    fn arrange(
+        &mut self,
+        mut all: Vec<Workspace>,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let index = index.min(all.len().saturating_sub(1));
+        if index >= all.len() {
+            return;
+        }
+        self.workspace = all.remove(index);
+        self.others = all;
+        self.active = index;
+        self.gesture = Gesture::Idle;
+        self.nudge = None;
+        self.focus.focus(window, cx);
+        self.save(window_area(window));
+        cx.notify();
+    }
+
+    fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let mut all = self.all();
+        all.push(Workspace::new(
+            format!("workspace {}", all.len() + 1),
+            Preset::Empty,
+        ));
+        let last = all.len() - 1;
+        self.arrange(all, last, window, cx);
+    }
+
+    fn close_workspace(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let mut all = self.all();
+        if index >= all.len() {
+            return;
+        }
+        all.remove(index);
+        if all.is_empty() {
+            all.push(Workspace::new("workspace 1", Preset::Empty));
+        }
+        let active = self.active.saturating_sub(usize::from(index < self.active));
+        self.arrange(all, active, window, cx);
+    }
+
+    fn send_to_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let sent = self
+            .workspace
+            .focus()
+            .ok_or(Refusal::NoSuchTile)
+            .and_then(|tile| self.workspace.send_to_new(tile, window_area(window)));
+        match sent {
+            Ok((left, fresh)) => {
+                self.workspace = left;
+                let mut all = self.all();
+                all.push(fresh);
+                let last = all.len() - 1;
+                self.arrange(all, last, window, cx);
+            }
+            Err(refusal) => eprintln!("the layout refused that: {refusal}"),
+        }
+    }
+
+    fn cancel(&mut self, area: Rect, cx: &mut Context<Self>) {
+        if matches!(
+            self.gesture,
+            Gesture::Pressed { .. } | Gesture::Dragging { .. }
+        ) {
+            self.gesture = Gesture::Idle;
+            cx.notify();
+        } else if self.nudge.take().is_none() && self.workspace.zoomed().is_some() {
+            self.commit(self.workspace.zoom(), area, cx);
+        }
+    }
+
+    fn run(&mut self, action: Action, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let area = window_area(window);
+        let next = match action {
+            Action::NewWorkspace => return self.add(window, cx),
+            Action::GoToWorkspace => {
+                let count = self.others.len() + 1;
+                if let Some(index) = key
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|digit| digit.checked_sub(1))
+                    .filter(|index| *index < count)
+                {
+                    self.arrange(self.all(), index, window, cx);
+                }
+                return;
+            }
+            Action::SendToNewWorkspace => return self.send_to_new(window, cx),
+            Action::Cancel => return self.cancel(area, cx),
+            Action::Zoom => self.workspace.zoom(),
+            Action::Close => {
+                self.focus.focus(window, cx);
+                self.workspace
+                    .focus()
+                    .ok_or(Refusal::NoSuchTile)
+                    .and_then(|focus| self.workspace.close_tile(focus, area))
+            }
+            Action::Even => Ok(self.workspace.even()),
+            Action::Reset => Ok(self.workspace.reset()),
+            Action::Lock => {
+                let mut next = self.workspace.clone();
+                next.locked = !next.locked;
+                Ok(next)
+            }
+            Action::Undo => self.workspace.undo(),
+        };
+        self.commit(next, area, cx);
     }
 
     fn frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -273,55 +435,45 @@ impl Work {
                 .and_then(|target| self.workspace.move_to(grab.tile, grab.module, target, area)),
             Gesture::Resizing { .. } => Ok(self.workspace.clone()),
         };
-        self.commit(next, cx);
+        self.commit(next, area, cx);
     }
 
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let held = stroke.modifiers;
-        let chord = held.control && held.alt;
         let area = window_area(window);
         let key = stroke.key.as_str();
-        let next = match key {
-            "escape"
-                if matches!(
-                    self.gesture,
-                    Gesture::Pressed { .. } | Gesture::Dragging { .. }
-                ) =>
-            {
-                self.gesture = Gesture::Idle;
-                cx.notify();
-                return;
-            }
-            "escape" if self.nudge.take().is_some() => return,
-            "escape" if self.workspace.zoomed().is_some() => self.workspace.zoom(),
-            "z" if held.control && !held.alt => self.workspace.undo(),
-            "+" | "=" if chord => {
+        let mods = Mods {
+            ctrl: held.control,
+            alt: held.alt,
+            shift: held.shift,
+        };
+        if let Some(action) = tiling::action(mods, key) {
+            return self.run(action, key, window, cx);
+        }
+        if !(held.control && held.alt) {
+            return;
+        }
+        let side = match key {
+            "+" | "=" => {
                 self.nudge = Some(NUDGE);
                 return;
             }
-            "-" if chord => {
+            "-" => {
                 self.nudge = Some(-NUDGE);
                 return;
             }
-            "enter" if chord => self.workspace.zoom(),
-            "w" if chord => self
-                .workspace
-                .focus()
-                .ok_or(Refusal::NoSuchTile)
-                .and_then(|focus| self.workspace.close_tile(focus, area)),
-            _ => {
-                let Some(side) = side_of(key).filter(|_| chord) else {
-                    return;
-                };
-                match self.nudge.take() {
-                    Some(step) => self.workspace.nudge(side, step, area),
-                    None if held.shift => self.workspace.move_focused(side, area),
-                    None => self.workspace.focus_toward(side, area),
-                }
-            }
+            _ => match side_of(key) {
+                Some(side) => side,
+                None => return,
+            },
         };
-        self.commit(next, cx);
+        let next = match self.nudge.take() {
+            Some(step) => self.workspace.nudge(side, step, area),
+            None if held.shift => self.workspace.move_focused(side, area),
+            None => self.workspace.focus_toward(side, area),
+        };
+        self.commit(next, area, cx);
     }
 
     fn count(&self, module: &Module, cx: &App) -> Option<u32> {
@@ -380,16 +532,103 @@ impl Work {
                     let next = match *event {
                         TabEvent::Select(at) => work.workspace.activate(tile, at),
                         TabEvent::Close(at) => work.workspace.close_module(tile, at, area),
-                        TabEvent::More | TabEvent::New => {
+                        TabEvent::New => {
                             return eprintln!("desk: work: {event:?} on a tile is not wired");
                         }
                     };
-                    work.commit(next, cx);
+                    work.commit(next, area, cx);
                 })
                 .ok();
             },
         );
         Header::Tabs(strip.into_any_element(), None)
+    }
+
+    fn strip(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let tabs: Vec<Tab> = self
+            .all()
+            .iter()
+            .map(|workspace| Tab {
+                label: workspace.name.clone().into(),
+                icon: None,
+                count: None,
+                mark: if workspace.locked {
+                    TabMark::Locked
+                } else {
+                    TabMark::Close
+                },
+            })
+            .collect();
+        let this = cx.weak_entity();
+        let strip = header_tabs(
+            "work-workspaces",
+            &tabs,
+            self.active,
+            &[],
+            theme,
+            move |event, window, cx| {
+                this.update(cx, |work, cx| match *event {
+                    TabEvent::Select(index) => work.arrange(work.all(), index, window, cx),
+                    TabEvent::Close(index) => work.close_workspace(index, window, cx),
+                    TabEvent::New => work.add(window, cx),
+                })
+                .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+            },
+        );
+        div()
+            .absolute()
+            .top_0()
+            .left(px(INSET))
+            .right_0()
+            .h(px(TITLE_BAR_HEIGHT))
+            .flex()
+            .items_center()
+            .child(div().flex_1().min_w_0().child(strip))
+            .child(
+                div()
+                    .id("work-drag")
+                    .flex_1()
+                    .h_full()
+                    .window_control_area(WindowControlArea::Drag),
+            )
+    }
+
+    fn empty(&self, area: Rect, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let actions: Vec<EmptyAction> = OPENABLE
+            .iter()
+            .map(|module| EmptyAction {
+                label: module.name().to_owned().into(),
+                glyph: glyph(module),
+                keys: None,
+            })
+            .collect();
+        let hints: Vec<EmptyHint> = SHORTCUTS
+            .iter()
+            .map(|shortcut| EmptyHint {
+                keys: shortcut.keys.into(),
+                label: shortcut.label.into(),
+            })
+            .collect();
+        let this = cx.weak_entity();
+        place(div(), area).child(empty_state(
+            "work-empty-workspace",
+            "Empty workspace",
+            Some("open a module, or use a shortcut".into()),
+            &actions,
+            &hints,
+            theme,
+            move |at, window, cx| {
+                let Some(module) = OPENABLE.get(at) else {
+                    return;
+                };
+                let area = window_area(window);
+                this.update(cx, |work, cx| {
+                    let next = work.workspace.open(module.clone(), area);
+                    work.commit(next, area, cx);
+                })
+                .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+            },
+        ))
     }
 
     fn body(&self, module: &Module, theme: &Theme) -> AnyElement {
@@ -456,11 +695,11 @@ impl Work {
         };
         place(div(), divider.rect).cursor(cursor).on_mouse_down(
             MouseButton::Left,
-            cx.listener(move |work, event: &MouseDownEvent, _, cx| {
+            cx.listener(move |work, event: &MouseDownEvent, window, cx| {
                 if event.click_count >= 2 {
                     work.gesture = Gesture::Idle;
                     let next = work.workspace.even_split(&divider);
-                    work.commit(Ok(next), cx);
+                    work.commit(Ok(next), window_area(window), cx);
                     return;
                 }
                 work.gesture = Gesture::Resizing {
@@ -494,6 +733,8 @@ impl Render for Work {
             .into_iter()
             .map(|divider| self.divider(divider, cx))
             .collect();
+        let empty = stacks.is_empty().then(|| self.empty(area, &theme, cx));
+        let strip = self.strip(&theme, cx);
         div()
             .size_full()
             .relative()
@@ -504,16 +745,8 @@ impl Render for Work {
                 MouseButton::Left,
                 cx.listener(|work, _: &MouseUpEvent, window, cx| work.released(window, cx)),
             )
-            .child(
-                div()
-                    .id("work-drag")
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .w_full()
-                    .h(px(TITLE_BAR_HEIGHT))
-                    .window_control_area(WindowControlArea::Drag),
-            )
+            .child(strip)
+            .children(empty)
             .children(tiles)
             .children(dividers)
             .children(self.replay.as_ref().map(Replay::meter))
