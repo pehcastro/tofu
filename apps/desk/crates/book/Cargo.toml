@@ -11,6 +11,7 @@ name = "book"
 path = "src/main.rs"
 
 [dependencies]
+desk_core.workspace = true
 desk_motion.workspace = true
 desk_perf.workspace = true
 desk_terminal.workspace = true

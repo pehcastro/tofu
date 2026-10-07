@@ -1447,6 +1447,7 @@ dependencies = [
 name = "desk_book"
 version = "0.1.0"
 dependencies = [
+ "desk_core",
  "desk_motion",
  "desk_perf",
  "desk_terminal",

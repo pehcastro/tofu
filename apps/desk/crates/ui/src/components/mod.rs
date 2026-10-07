@@ -6,6 +6,7 @@ pub mod card;
 pub mod charts;
 pub mod chat;
 pub mod chip;
+pub mod code;
 pub mod composer;
 pub mod diff;
 pub mod empty;
