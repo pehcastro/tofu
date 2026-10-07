@@ -20,6 +20,7 @@ mod palette;
 mod settings;
 mod shell;
 mod shells;
+mod sidebar;
 mod terminal;
 mod tiling;
 mod tips;
@@ -460,6 +461,7 @@ impl Book {
             Page::Focus => self.focus_page.render(theme, window, cx),
             Page::Tooltips => tips::tips(theme, window, cx),
             Page::Empty => empty::empty_page(theme, window, cx),
+            Page::Sidebar => sidebar::sidebar_page(theme, cx),
             Page::Composer => self.composer.render(theme, window, cx),
             Page::Shell => self.shell.render(theme, window, cx),
             Page::Diff => self.diff.render(theme, window, cx),

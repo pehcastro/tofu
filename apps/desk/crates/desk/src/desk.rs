@@ -6,17 +6,18 @@ use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
 use desk_tiling::Rect;
 use desk_tiling::{Key, SHORTCUTS};
-use desk_ui::component::control;
 use desk_ui::components::card::{inner_card, outer_card};
 use desk_ui::components::overlay::toast;
 use desk_ui::components::palette::{Palette, PaletteItem};
+#[cfg(feature = "screen-work")]
+use desk_ui::components::sidebar::SIDEBAR_COLUMN;
+use desk_ui::components::sidebar::{Sidebar, SidebarPick};
 use desk_ui::live::ActiveTheme;
-use desk_ui::metrics::{
-    SIDEBAR_WIDTH, TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH,
-    WINDOW_WIDTH,
-};
 #[cfg(feature = "screen-work")]
 use desk_ui::metrics::{STATUS_BAR_HEIGHT, TITLE_BAR_HEIGHT};
+use desk_ui::metrics::{
+    TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
+};
 use desk_ui::theme::{ColorToken, Theme};
 #[cfg(feature = "screen-work")]
 use gpui::Focusable;
@@ -30,6 +31,8 @@ pub const WINDOW_TITLE: &str = "Tofu Desk";
 pub const BOARD_VIEWPORT_WIDTH: f32 = 1440.0;
 pub const BOARD_VIEWPORT_HEIGHT: f32 = 900.0;
 const GUTTER: f32 = 8.0;
+const TILE_TOP: f32 = 2.0;
+const TILE_BOTTOM: f32 = 8.0;
 const SETTINGS: &str = "settings";
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
@@ -268,15 +271,19 @@ impl Desk {
             Body::Work(work) => {
                 let viewport = window.viewport_size();
                 let x = if self.sidebar_open {
-                    SIDEBAR_WIDTH
+                    SIDEBAR_COLUMN
                 } else {
                     GUTTER
                 };
                 let area = Rect {
                     x,
-                    y: TITLE_BAR_HEIGHT,
+                    y: TITLE_BAR_HEIGHT + TILE_TOP,
                     w: f32::from(viewport.width) - x - GUTTER,
-                    h: f32::from(viewport.height) - TITLE_BAR_HEIGHT - STATUS_BAR_HEIGHT,
+                    h: f32::from(viewport.height)
+                        - TITLE_BAR_HEIGHT
+                        - TILE_TOP
+                        - TILE_BOTTOM
+                        - STATUS_BAR_HEIGHT,
                 };
                 work.update(cx, |work, _| work.fit(area));
                 let tabs = work.read(cx).tabs(work.downgrade(), theme);
@@ -344,24 +351,14 @@ impl Desk {
         cx.notify();
     }
 
-    fn sidebar(theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .w(px(SIDEBAR_WIDTH))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .py_2p5()
-            .px_2()
-            .child(
-                control("open-project", Control::OpenProject.label(), theme)
-                    .justify_start()
-                    .px_2p5()
-                    .py_1p5()
-                    .rounded_lg()
-                    .text_color(theme.color(ColorToken::TextMuted))
-                    .child(Control::OpenProject.label())
-                    .on_click(Self::teller(Control::OpenProject, cx)),
-            )
+    fn pick_from_sidebar(&mut self, pick: &SidebarPick, cx: &mut Context<Self>) {
+        match pick {
+            SidebarPick::Project => self.tell(Control::OpenProject, cx),
+            SidebarPick::NewSession
+            | SidebarPick::Running(_)
+            | SidebarPick::Inactive(_)
+            | SidebarPick::Docs => eprintln!("desk: sidebar: {pick:?} is not wired"),
+        }
     }
 }
 
@@ -416,10 +413,24 @@ impl Render for Desk {
                     .flex()
                     .pr(px(GUTTER))
                     .when(self.sidebar_open, |body| {
-                        body.child(Self::sidebar(&theme, cx))
+                        body.child(Sidebar::new(
+                            "sidebar",
+                            None,
+                            cx.listener(|desk, pick: &SidebarPick, _, cx| {
+                                desk.pick_from_sidebar(pick, cx)
+                            }),
+                        ))
                     })
                     .when(!self.sidebar_open, |body| body.pl(px(GUTTER)))
-                    .child(content),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .pt(px(TILE_TOP))
+                            .pb(px(TILE_BOTTOM))
+                            .child(content),
+                    ),
             )
             .child(crate::status_bar::render(&theme, &problems, cx))
             .child(self.palette.clone())

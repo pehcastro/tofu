@@ -40,6 +40,7 @@ pub enum Page {
     Row,
     Table,
     Feed,
+    Sidebar,
     Avatar,
     Chip,
     Button,
@@ -87,11 +88,10 @@ pub struct Sheet {
     pub missing: &'static str,
 }
 
-pub const UNBUILT: [(Group, &str); 9] = [
+pub const UNBUILT: [(Group, &str); 8] = [
     (Group::Foundations, "Theme classes"),
     (Group::Foundations, "Theme preview"),
     (Group::Foundations, "Intro background"),
-    (Group::Lists, "Sidebar rows"),
     (Group::Controls, "Window controls"),
     (Group::Controls, "Scrollbar"),
     (Group::Controls, "Progress bar"),
@@ -100,7 +100,7 @@ pub const UNBUILT: [(Group, &str); 9] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 42] = [
+    pub const ALL: [Page; 43] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -109,6 +109,7 @@ impl Page {
         Page::Row,
         Page::Table,
         Page::Feed,
+        Page::Sidebar,
         Page::ChatRows,
         Page::FileTree,
         Page::History,
@@ -240,6 +241,16 @@ impl Page {
                 "components/feed.rs, components/list.rs",
                 "every event kind, failure",
                 "empty, loading",
+            ),
+            Page::Sidebar => sheet(
+                "sidebar",
+                "Sidebar",
+                Group::Lists,
+                "The window's left column: the project picker, running sessions with their state, the inactive ones folded under a count, and Docs at the foot.",
+                "IWIN-1 IWY-4",
+                "components/sidebar.rs; component.rs control icon, list.rs HoverList bare_row, paint.rs glyph",
+                "project with two running sessions, the one on screen selected, inactive folded and open, hover glide; no project",
+                "",
             ),
             Page::Avatar => sheet(
                 "avatar",
