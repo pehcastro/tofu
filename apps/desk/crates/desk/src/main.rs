@@ -230,18 +230,19 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
     let (title, client, name, board, target, open): (String, _, String, _, _, Open) = match launch {
         Launch::Desk => (
             desk::WINDOW_TITLE.to_owned(),
-            desk::desk_client(),
-            "chat".to_owned(),
+            desk::board_client(),
+            "work".to_owned(),
             None,
             None,
-            |_, window, cx| {
-                let store = cx.new(|_| desk_core::model::Store::default());
-                Ok(modules::chat::live(store, window, cx).into())
-            },
+            screen("work")?,
         ),
         Launch::Screen(launch) => (
             format!("{} {}", desk::WINDOW_TITLE, launch.name),
-            desk::board_client(),
+            if launch.name == "chat" {
+                desk::desk_client()
+            } else {
+                desk::board_client()
+            },
             launch.name,
             launch.board,
             launch.target,
