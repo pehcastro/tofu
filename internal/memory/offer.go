@@ -6,17 +6,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
 	"tofu/internal/konst"
 )
 
 const (
-	rememberWord = "remember"
-	thatWord     = "that "
-	answersFile  = "answers.jsonl"
+	answersFile = "answers.jsonl"
 )
 
 type Offer struct {
@@ -27,19 +25,12 @@ type Offer struct {
 }
 
 func OfferFor(typed string) (Offer, bool) {
-	trimmed := strings.TrimSpace(typed)
-	if len(trimmed) < len(rememberWord) || !strings.EqualFold(trimmed[:len(rememberWord)], rememberWord) {
+	sentenceStart := regexp.MustCompile(`(?i)(?:^|[.!?\n])\s*(?:(?:also|and|but|so|ok|okay|btw|pls|please)[\s,]+)*remember\b[\s:,;-]*(?:that\s+)?`)
+	at := sentenceStart.FindStringIndex(typed)
+	if at == nil {
 		return Offer{}, false
 	}
-	rest := trimmed[len(rememberWord):]
-	if rest != "" && unicode.IsLetter([]rune(rest)[0]) {
-		return Offer{}, false
-	}
-	rest = strings.TrimLeft(rest, " \t\r\n:,;-")
-	if len(rest) >= len(thatWord) && strings.EqualFold(rest[:len(thatWord)], thatWord) {
-		rest = rest[len(thatWord):]
-	}
-	text := strings.Join(strings.Fields(rest), " ")
+	text := strings.Join(strings.Fields(typed[at[1]:]), " ")
 	if text == "" {
 		return Offer{}, false
 	}
@@ -75,24 +66,24 @@ func Record(globalDir string, answer Answer) error {
 	return errors.Join(err, file.Close())
 }
 
-func AsksFirst(globalDir string) (bool, error) {
+func Trusts(globalDir string) (bool, error) {
 	file, err := os.Open(filepath.Join(globalDir, answersFile))
 	if errors.Is(err, os.ErrNotExist) {
-		return true, nil
+		return false, nil
 	}
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	defer func() { _ = file.Close() }()
 	answered, accepted := 0, 0
 	for lines := bufio.NewScanner(file); answered < konst.MemoryOffersAskedFirst && lines.Scan(); answered++ {
 		var one answerLine
 		if err := json.Unmarshal(lines.Bytes(), &one); err != nil {
-			return true, err
+			return false, err
 		}
 		if one.Answer != AnswerNo {
 			accepted++
 		}
 	}
-	return answered < konst.MemoryOffersAskedFirst || accepted <= konst.MemoryAcceptedToTrustAt, nil
+	return answered == konst.MemoryOffersAskedFirst && accepted >= konst.MemoryAcceptedToTrustAt, nil
 }

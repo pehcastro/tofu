@@ -11,10 +11,16 @@ it, and the lead reads every entry in its system message on every request.
 
 ## Why memory works the way it does
 
-**You decide what is kept.** A message that begins with `remember` gets an
-offer card: for you in every project, for this project, or no. Nothing is
-written until you pick. After 50 answers, if more than 45 said yes, tofu
-writes at once and prints the undo on the same line.
+**You decide what is kept.** A sentence that starts with `remember` gets an
+offer card: yes, no, or always, with `tab` to choose every project or this
+one. The lead can offer an entry too, quoting your own words, and gets the
+same three answers. Once 7 of your first 10 answers kept the entry, or you
+answer always, tofu keeps entries at once and prints the undo on the same
+line.
+
+**You can see every write.** Each one is a `[memory#m3]` row in the chat, a
+notice in `tofu session trace`, and a line the lead is told in the same
+turn, so it never asks you to save it again.
 
 **Two scopes, and the closer one wins.** Global entries live in
 `~/.tofu/memory/`; project entries live beside that project's sessions in
@@ -37,7 +43,10 @@ one small file.
   in the app, or `/remember <what>`, and pick a scope.
 - **From the command line**: `tofu memory add "<statement>"` for this
   project, `--global` for every project.
-- **See it**: `tofu memory`, or `/memory` in the app.
+- **See it**: `tofu memory`, or `/memory` in the app, where enter on an
+  entry removes it or puts it in the composer to edit.
+- **Turn it off**: `tofu settings set memory false`; `autoMemory false`
+  asks before every write again.
 - **See what the lead gets**: `tofu run --show-prompt "<task>"`.
 - **Forget one**: `tofu memory remove <id>`, with `--global` for a global
   entry.

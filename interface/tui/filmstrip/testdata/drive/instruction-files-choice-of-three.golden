@@ -2,29 +2,29 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES              Tool detail                                                      ○ off    
-    Appearance    05      chat shows every tool call                                                
+  CATEGORIES              Thinking                                                          ● on    
+    Appearance    05      thinking shows in each agent's sub-agents feed; t there toggles it        
     Models & rol… 02                                                                                
-    Interaction   05      Agent feeds                                                   full  ▾     
-  › Context       08      full keeps every sub-agents event, summary the latest 200, off shows …    
+    Interaction   05      Thinking summary                                        summarized  ▾     
+  › Context       10      summarized asks Claude for a summary of its thinking; omitted asks fo…    
     Files         03                                                                                
-    Shell         05      Thinking                                                          ● on    
-    Turn          13      thinking shows in each agent's sub-agents feed; t there toggles it        
+    Shell         05      Images                                                        auto  ▾     
+    Turn          13      auto sends a pasted image only to a model that can see, inline always…    
     Browser       06                                                                                
-                          Thinking summary                                        summarized  ▾     
-  NAVIGATE                summarized asks Claude for a summary of its thinking; omitted asks fo…    
-  ↑↓ setting · ←→                                                                                   
-  section                 Images                                                        auto  ▾     
-  ctrl+k search ·         auto sends a pasted image only to a model that can see, inline always…    
-  esc chat                                                                                          
                           Project instructions                                         32768  ▾     
-                          bytes of your instruction files sent each turn                            
-                                                                                                    
-                        › Instruction files                                     claude-first  ▾     
-                          a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
-                                                                                                    
+  NAVIGATE                bytes of your instruction files sent each turn                            
+  ↑↓ setting · ←→                                                                                   
+  section               › Instruction files                                     claude-first  ▾     
+  ctrl+k search ·         a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
+  esc chat                                                                                          
                           Skills                                                            ● on    
                           on lists the skills in .tofu, .agents and .claude skill folders to th…    
+                                                                                                    
+                          Memory                                                            ● on    
+                          on sends what you asked tofu to remember to the lead on every request…    
+                                                                                                    
+                          Auto memory                                                      ○ off    
+                          on keeps a message that says remember at once and prints the undo, in…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
@@ -32,29 +32,29 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES              Tool detail                                                      ○ off    
-    Appearance    05      chat shows every tool call                                                
+  CATEGORIES              Thinking                                                          ● on    
+    Appearance    05      thinking shows in each agent's sub-agents feed; t there toggles it        
     Models & rol… 02                                                                                
-    Interaction   05     Instruction files                              esc             full  ▾     
-  › Context       08     a folder with both AGENTS.md and CLAUDE.md sends    st 200, off shows …    
+    Interaction   05     Instruction files                              esc       summarized  ▾     
+  › Context       10     a folder with both AGENTS.md and CLAUDE.md sends    g; omitted asks fo…    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
-    Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
-    Turn          13     tokens. Read from the working directory up to its   here toggles it        
+    Shell         05     sends CLAUDE.md, both sends both and costs more                auto  ▾     
+    Turn          13     tokens. Read from the working directory up to its   see, inline always…    
     Browser       06     git root; the home directory gives only                                    
-                         ~/.tofu/AGENTS.md                                        summarized  ▾     
-  NAVIGATE                                                                   g; omitted asks fo…    
+                         ~/.tofu/AGENTS.md                                             32768  ▾     
+  NAVIGATE                                                                                          
   ↑↓ setting · ←→          agents-first                                                             
-  section                                                                               auto  ▾     
-  ctrl+k search ·        >  claude-first                                     see, inline always…    
+  section                                                                       claude-first  ▾     
+  ctrl+k search ·        >  claude-first                                     e: agents-first se…    
   esc chat                                                                                          
-                           both                                                        32768  ▾     
-                                                                                                    
+                           both                                                             ● on    
+                                                                             kill folders to th…    
                          1-3/3 · ↑↓ preview · enter apply · esc cancel                              
-                                                                                claude-first  ▾     
-                          a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
+                                                                                            ● on    
+                          on sends what you asked tofu to remember to the lead on every request…    
                                                                                                     
-                          Skills                                                            ● on    
-                          on lists the skills in .tofu, .agents and .claude skill folders to th…    
+                          Auto memory                                                      ○ off    
+                          on keeps a message that says remember at once and prints the undo, in…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     
@@ -62,29 +62,29 @@
   tofu settings         Context                                         global scope (shift+tab)    
   Global preferences    Choose a row to inspect and change its value.                               
                                                                                                     
-  CATEGORIES              Tool detail                                                      ○ off    
-    Appearance    05      chat shows every tool call                                                
+  CATEGORIES              Thinking                                                          ● on    
+    Appearance    05      thinking shows in each agent's sub-agents feed; t there toggles it        
     Models & rol… 02                                                                                
-    Interaction   05     Instruction files                              esc             full  ▾     
-  › Context       08     a folder with both AGENTS.md and CLAUDE.md sends    st 200, off shows …    
+    Interaction   05     Instruction files                              esc       summarized  ▾     
+  › Context       10     a folder with both AGENTS.md and CLAUDE.md sends    g; omitted asks fo…    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
-    Shell         05     sends CLAUDE.md, both sends both and costs more                    ● on    
-    Turn          13     tokens. Read from the working directory up to its   here toggles it        
+    Shell         05     sends CLAUDE.md, both sends both and costs more                auto  ▾     
+    Turn          13     tokens. Read from the working directory up to its   see, inline always…    
     Browser       06     git root; the home directory gives only                                    
-                         ~/.tofu/AGENTS.md                                        summarized  ▾     
-  NAVIGATE                                                                   g; omitted asks fo…    
+                         ~/.tofu/AGENTS.md                                             32768  ▾     
+  NAVIGATE                                                                                          
   ↑↓ setting · ←→          agents-first                                                             
-  section                                                                               auto  ▾     
-  ctrl+k search ·          claude-first                                      see, inline always…    
+  section                                                                               both  ▾     
+  ctrl+k search ·          claude-first                                      e: agents-first se…    
   esc chat                                                                                          
-                         >  both                                                       32768  ▾     
-                                                                                                    
+                         >  both                                                            ● on    
+                                                                             kill folders to th…    
                          1-3/3 · ↑↓ preview · enter apply · esc cancel                              
-                                                                                        both  ▾     
-                          a folder with both AGENTS.md and CLAUDE.md sends one: agents-first se…    
+                                                                                            ● on    
+                          on sends what you asked tofu to remember to the lead on every request…    
                                                                                                     
-                          Skills                                                            ● on    
-                          on lists the skills in .tofu, .agents and .claude skill folders to th…    
+                          Auto memory                                                      ○ off    
+                          on keeps a message that says remember at once and prints the undo, in…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

@@ -45,10 +45,14 @@ func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 	return model.Ask(ctx, request)
 }
 
-const RuleOverrideToolName = "rule_override"
+const (
+	RuleOverrideToolName = "rule_override"
+	RememberToolName     = "remember"
+)
 
 func gateExempt(tool string) bool {
-	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName || tool == RuleOverrideToolName
+	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName ||
+		tool == RuleOverrideToolName || tool == RememberToolName
 }
 
 type Caps struct {
@@ -525,6 +529,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if config.Inbox != nil {
 			for _, item := range config.Inbox.takeItems() {
 				messages = append(messages, inserted(item.source, item.text, item.posted))
+				if item.source == sourceMemory {
+					recorded.notice(item.text)
+				}
 			}
 		}
 		capped := config.Caps.MaxSteps > 0

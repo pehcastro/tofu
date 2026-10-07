@@ -53,19 +53,20 @@ with `--global` and `project` without. `--said "<your words>"` keeps the
 words it came from. `--replace <id>` rewrites an entry in place, and
 `--dir <project>` names another project.
 
-In the app, a message that begins with `remember` gets an offer card:
+In the app, a sentence that starts with `remember`, such as `also
+remember that the build is cargo build -j 2`, gets an offer card: `1`
+yes, `2` no, `3` always. `tab` switches between every project and this
+project. Nothing is written until you pick, and `/remember <what>` opens
+the same card. The lead can offer one too, with its `remember` tool, but
+only with words you typed in this conversation; it asks the same three.
 
-    Remember this?
-      1  For you, in every project
-      2  For this project
-      3  No
+Your first 10 answers are counted. Once 7 of them kept the entry, or you
+answer always, the `autoMemory` setting turns on and an entry is kept at
+once, with the undo on the same line. `tofu settings set memory false`
+sends no memory and offers nothing.
 
-Nothing is written until you pick. `/remember <what>` opens the same card
-without sending a message to the lead. Your first 50 answers are counted;
-once more than 45 of them said yes, tofu writes the entry at once and
-tells you, with the undo on the same line:
-
-    remembered for you · m3 · global · undo: tofu memory remove --global m3
+Every write is a row in the chat, `[memory#m3]`, and the lead is told in
+the same turn that it is saved.
 
 ## Check it
 
@@ -73,13 +74,11 @@ tells you, with the undo on the same line:
 
 prints each scope with its size against the limit and its folder, then
 every entry with its id, kind, date and text, and your words under it.
-`tofu memory list --json` prints one JSON document. In the app, `/memory`
-prints the same list in the chat.
-
-    tofu run --show-prompt "<task>"
-
-prints the system message the lead gets, with the memory block at its
-end.
+`/memory` in the app lists them; enter on one removes it or puts it in
+the composer to edit. `tofu session trace <session>` lists each write
+under notices with its id, scope and words, and
+`tofu run --show-prompt --dir . "<task>"` prints the block at the end of
+the system message, each line with its `[memory#id]`.
 
 ## Undo it
 

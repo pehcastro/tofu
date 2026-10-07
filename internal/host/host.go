@@ -227,6 +227,12 @@ func (h *Host) Steer(text string) {
 	}
 }
 
+func (h *Host) Remembered(note string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.inbox.Remembered(note)
+}
+
 func (h *Host) DropSteering() {
 	for {
 		select {

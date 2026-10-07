@@ -164,6 +164,7 @@ type Options struct {
 	Pose          string
 	Keymap        string
 	PromptHistory string
+	ShadowOffer   func(typed string) error
 }
 
 type screen int

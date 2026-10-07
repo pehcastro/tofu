@@ -275,12 +275,15 @@ func gateOffEvent(gateErr error) Event {
 func awaitPerson(emit func(Event), book *asks) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
-		var overriding struct{ Rule, Question string }
-		if request.Tool == (tools.RuleOverride{}).Name() {
+		var overriding struct{ Rule, Question, Statement, Scope string }
+		if request.Tool == (tools.RuleOverride{}).Name() || request.Tool == turn.RememberToolName {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
 		stood, stands := book.stood(place)
 		switch {
+		case overriding.Statement != "":
+			overriding.Question = "remember this, " + overriding.Scope + "? " + overriding.Statement
+			emit(Event{Kind: EventDecision, Decision: &Decision{Tool: request.Tool, Verdict: Ask, Remembers: overriding.Question}})
 		case overriding.Question != "":
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})

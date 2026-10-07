@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     43 declared
+Settings · 2 set                                                     45 declared
 
 Appearance
   ● theme                   Nord                project
@@ -23,6 +23,8 @@ Context
     projectInstructionsCap  32768               default
     instructionSources      agents-first        default
     skills                  on                  default
+    memory                  true                default
+    autoMemory              false               default
 
 Files
     diffContext             3                   default

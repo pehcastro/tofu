@@ -120,7 +120,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 		call, found := a.view.LastCall()
 		return a.copy(callUnit, call, found)
 	case "memory":
-		a.view.Append(session.Entry{Kind: session.Note, Body: a.memoryNote()})
+		return a.push(a.memoryDialog())
 	case "remember":
 		a.view.Append(session.Entry{Kind: session.Note, Body: rememberUsage})
 	case "reload":

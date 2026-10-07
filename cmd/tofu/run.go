@@ -614,7 +614,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	environment, files, instructions, notice := runEnvironment(opts)
 	say(notice)
 	remembered := ""
-	if opts.agent == "" {
+	if opts.agent == "" && memoryOn(cmp.Or(opts.dir, ".")) {
 		block, unread := memory.Block(cmp.Or(opts.dir, "."))
 		if unread != nil {
 			say("your memory is not sent this turn: " + unread.Error())
@@ -743,9 +743,13 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		rules, _, err := loadRules("", dir)
 		return rules, err
 	}
-	override := tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}
+	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
+	if run.sessions != nil && memoryOn(dir) {
+		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox,
+			Auto: func() bool { return autoMemoryOn(dir) }, Trust: trustMemory})
+	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
-		config.Tools = run.leadTools(append(slices.Clone(built), override))
+		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
 		return config, nil, nil
 	}
 	subAgentBase := config
@@ -770,7 +774,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if !nodeProject(dir) {
 		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
 	}
-	orchestrating := append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner, override)
+	orchestrating := append(append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner), asking...)
 	if run.gate != nil {
 		spawner.SettingsTool = true
 		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))

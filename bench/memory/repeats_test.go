@@ -35,7 +35,7 @@ func TestRepeatsOfOneCorrectionAcrossTenDrivenChains(t *testing.T) {
 	if tofu == "" {
 		t.Skip("TOFU_BIN names the tofu binary this bench drives, and it is not set")
 	}
-	for _, arm := range []struct{ name, answer string }{{"memory on: the offer accepted", "1"}, {"memory off: the offer declined", "3"}} {
+	for _, arm := range []struct{ name, answer string }{{"memory on: the offer accepted", "1"}, {"memory off: the offer declined", "2"}} {
 		home, project := t.TempDir(), t.TempDir()
 		drive(t, tofu, home, project, "type remember: "+correction+"\nkey enter\nwait Remember this?\nkey "+arm.answer+"\nwait cooked for\n")
 		repeats := 0

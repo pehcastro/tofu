@@ -361,8 +361,8 @@ const (
 
 const (
 	MemoryScopeBytes        = 4096
-	MemoryOffersAskedFirst  = 50
-	MemoryAcceptedToTrustAt = 45
+	MemoryOffersAskedFirst  = 10
+	MemoryAcceptedToTrustAt = 7
 )
 
 const (

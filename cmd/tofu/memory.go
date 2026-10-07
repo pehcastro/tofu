@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -145,14 +144,7 @@ func memoryAdd(o verbOutput, opts memoryOpts, shelves memory.Memory) int {
 			kind = memory.KindPerson
 		}
 	}
-	before := shelves.Project.Entries
-	if opts.scope == memory.Global {
-		before = shelves.Global.Entries
-	}
-	replaced := ""
-	if at := slices.IndexFunc(before, func(e memory.Entry) bool { return e.ID == opts.replace }); at >= 0 {
-		replaced = before[at].Text
-	}
+	old, _ := shelves.Find(opts.scope, opts.replace)
 	added, err := shelves.Add(memory.Entry{Scope: opts.scope, Kind: kind, Text: opts.rest[0], Said: opts.said, At: time.Now(), By: memory.ByPerson}, opts.replace)
 	var full memory.FullError
 	if errors.As(err, &full) {
@@ -171,7 +163,7 @@ func memoryAdd(o verbOutput, opts memoryOpts, shelves memory.Memory) int {
 	}
 	change, undo := changeAdded, "tofu memory remove"+opts.flags()+" "+added.ID
 	if opts.replace != "" {
-		change, undo = changeChanged, "tofu memory add"+opts.flags()+" --replace "+added.ID+" "+strconv.Quote(replaced)
+		change, undo = changeChanged, "tofu memory add"+opts.flags()+" --replace "+added.ID+" "+strconv.Quote(old.Text)
 	}
 	return o.receipt(writeReceipt{Changes: []fileChange{{Change: change, What: "memory " + added.ID + " · " + string(added.Scope), File: added.File}}, Undo: undo})
 }

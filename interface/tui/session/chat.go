@@ -269,13 +269,20 @@ func (m *Model) render(index int) []string {
 		if len(entry.SubAgents) > 0 {
 			return indented(m.batchLines(m.batchOf(entry.SubAgents)))
 		}
-		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker), 1))
+		reference := ""
+		if entry.Head != "" && entry.ID != "" {
+			reference = gap + look.TypedID(entry.Head, entry.ID)
+		}
+		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker)-widget.Cells(reference), 1))
 		for index, line := range lines {
 			marker := noteMarker
 			if index > 0 {
 				marker = strings.Repeat(" ", widget.Cells(noteMarker))
 			}
 			lines[index] = look.Faint(marker + line)
+		}
+		if reference != "" && len(lines) > 0 {
+			lines[0] += reference
 		}
 		return indented(lines)
 	case Failure:

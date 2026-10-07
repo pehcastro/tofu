@@ -471,6 +471,7 @@ func (a *App) answered(event Event, at time.Time) {
 	if finished.Kind != feed.KindSpawn {
 		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed})
 	}
+	a.rememberedByTheLead(event.Detail)
 	a.running = max(a.running-1, 0)
 	if a.view.LettingToolsFinish && a.running == 0 {
 		a.stopTurn()

@@ -19,6 +19,7 @@ const (
 	dirName     = "memory"
 	entryPrefix = "m"
 	fileSuffix  = ".yaml"
+	lastIDFile  = "last-id"
 	blockHead   = "remembered for you, global first, then this project, which outranks global where they disagree:"
 )
 
@@ -44,6 +45,7 @@ type By string
 const (
 	ByPerson By = "person"
 	ByOffer  By = "offer"
+	ByLead   By = "lead"
 )
 
 type Entry struct {
@@ -58,9 +60,25 @@ type Entry struct {
 	File    string    `json:"file"`
 }
 
-func (e Entry) line() string { return "- " + e.At.Format(time.DateOnly) + ": " + e.Text + "\n" }
+func (e Entry) Ref() string { return "[memory#" + e.ID + "]" }
+
+func (e Entry) line() string {
+	return "- " + e.Ref() + " " + e.At.Format(time.DateOnly) + ": " + e.Text + "\n"
+}
 
 func (e Entry) Cost() int { return len(e.line()) }
+
+func (e Entry) Undo() string {
+	if e.Scope == Global {
+		return "tofu memory remove --global " + e.ID
+	}
+	return "tofu memory remove " + e.ID
+}
+
+func (e Entry) Saved() string {
+	return fmt.Sprintf("%s saved to memory, %s, by %s: %s. The words it came from: %q. It is in the system message from the next turn, so the person does not need to save it again. Undo: %s",
+		e.Ref(), e.Scope, e.By, strings.TrimSuffix(e.Text, "."), e.Said, e.Undo())
+}
 
 type Shelf struct {
 	Scope   Scope   `json:"scope"`
@@ -154,11 +172,10 @@ func (m *Memory) Add(e Entry, replace string) (Entry, error) {
 	kept := shelf.Entries
 	e.ID = m.nextID()
 	if replace != "" {
-		at := slices.IndexFunc(kept, func(old Entry) bool { return old.ID == replace })
-		if at < 0 {
-			return Entry{}, fmt.Errorf("the %s memory holds no %s", shelf.Scope, replace)
+		if _, err := m.Find(e.Scope, replace); err != nil {
+			return Entry{}, err
 		}
-		e.ID, kept = replace, slices.Delete(slices.Clone(kept), at, at+1)
+		e.ID, kept = replace, slices.DeleteFunc(slices.Clone(kept), func(old Entry) bool { return old.ID == replace })
 	}
 	if (Shelf{Entries: kept}).Bytes()+e.Cost() > konst.MemoryScopeBytes {
 		return Entry{}, FullError{Shelf: *shelf, Need: e.Cost()}
@@ -167,26 +184,40 @@ func (m *Memory) Add(e Entry, replace string) (Entry, error) {
 	if err := sys.WriteFile(e.File, e.encode(), 0o644); err != nil {
 		return Entry{}, err
 	}
+	if replace == "" {
+		if err := sys.WriteFile(filepath.Join(m.Global.Dir, lastIDFile), []byte(strconv.Itoa(e.number())), 0o644); err != nil {
+			return Entry{}, err
+		}
+	}
 	shelf.Entries = slices.Concat(kept, []Entry{e})
 	return e, nil
 }
 
-func (m *Memory) Remove(scope Scope, id string) (Entry, error) {
+func (m Memory) Find(scope Scope, id string) (Entry, error) {
 	shelf := m.shelf(scope)
 	at := slices.IndexFunc(shelf.Entries, func(e Entry) bool { return e.ID == id })
 	if at < 0 {
 		return Entry{}, fmt.Errorf("the %s memory holds no %s", scope, id)
 	}
-	gone := shelf.Entries[at]
+	return shelf.Entries[at], nil
+}
+
+func (m *Memory) Remove(scope Scope, id string) (Entry, error) {
+	gone, err := m.Find(scope, id)
+	if err != nil {
+		return Entry{}, err
+	}
 	if err := os.Remove(gone.File); err != nil {
 		return Entry{}, err
 	}
-	shelf.Entries = slices.Delete(shelf.Entries, at, at+1)
+	shelf := m.shelf(scope)
+	shelf.Entries = slices.DeleteFunc(shelf.Entries, func(e Entry) bool { return e.ID == id })
 	return gone, nil
 }
 
 func (m Memory) nextID() string {
-	highest := 0
+	given, _ := os.ReadFile(filepath.Join(m.Global.Dir, lastIDFile))
+	highest, _ := strconv.Atoi(strings.TrimSpace(string(given)))
 	for _, e := range append(slices.Clone(m.Global.Entries), m.Project.Entries...) {
 		highest = max(highest, e.number())
 	}

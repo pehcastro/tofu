@@ -106,6 +106,18 @@ exit 0
         "source": "default"
       },
       {
+        "key": "memory",
+        "category": "Context",
+        "value": true,
+        "source": "default"
+      },
+      {
+        "key": "autoMemory",
+        "category": "Context",
+        "value": false,
+        "source": "default"
+      },
+      {
         "key": "diffContext",
         "category": "Files",
         "value": "3",

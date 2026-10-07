@@ -30,6 +30,7 @@ const (
 	sourceReport        = "sub-agent report"
 	sourceMessage       = "message to this sub-agent"
 	sourceGateAsk       = "sub-agent gate ask"
+	sourceMemory        = "memory saved"
 )
 
 type inboxItem struct {
@@ -64,6 +65,16 @@ func (b *Inbox) post(item string) {
 	b.items = append(b.items, inboxItem{text: item, source: sourceMessage, posted: time.Now()})
 	b.mu.Unlock()
 	b.signal()
+}
+
+func SaidByThePerson(source string) bool {
+	return source == sourceTask || source == sourceTyped || source == sourceSteer
+}
+
+func (b *Inbox) Remembered(note string) {
+	b.mu.Lock()
+	b.items = append(b.items, inboxItem{text: note, source: sourceMemory, posted: time.Now()})
+	b.mu.Unlock()
 }
 
 func (b *Inbox) attach(held *heldSubAgent, check *checkIn) {

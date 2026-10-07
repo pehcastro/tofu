@@ -55,6 +55,8 @@ const (
 	Images                 = "images"
 	ProjectInstructionsCap = "projectInstructionsCap"
 	InstructionSources     = "instructionSources"
+	Memory                 = "memory"
+	AutoMemory             = "autoMemory"
 	DiffContext            = "diffContext"
 	Hyperlinks             = "hyperlinks"
 	GroupByAgent           = "groupByAgent"
@@ -230,6 +232,8 @@ func Default() []Spec {
 			Aliases: map[string]string{"AGENTS.md,CLAUDE.md": InstructionsAgentsFirst, "AGENTS.md": InstructionsAgentsFirst, "CLAUDE.md,AGENTS.md": InstructionsClaudeFirst, "CLAUDE.md": InstructionsClaudeFirst}},
 		{Key: Skills, Label: "Skills", Description: "on lists the skills in .tofu, .agents and .claude skill folders to the model and offers the skill tool; off sends neither. The project gives all three, the home directory only ~/.tofu/skills", Category: "Context", Kind: Text, DefaultText: SkillsOn,
 			Choices: []string{SkillsOn, SkillsOff}},
+		{Key: Memory, Label: "Memory", Description: "on sends what you asked tofu to remember to the lead on every request and offers to keep a message that says remember; off sends none and offers nothing. tofu memory lists the entries", Category: "Context", Kind: Bool, Default: 1},
+		{Key: AutoMemory, Label: "Auto memory", Description: "on keeps a message that says remember at once and prints the undo, instead of asking first; it turns on by itself once you accepted 7 of the first 10 offers, or when you answer always on one", Category: "Context", Kind: Bool},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
 			Choices: lineCounts(konst.DiffContextLinesTight, konst.DiffContextLinesDefault, konst.DiffContextLinesWide, konst.DiffContextLinesWidest)},
 		{Key: Hyperlinks, Label: "Hyperlinks", Description: "OSC 8 terminal file links; off prints the bare path", Category: "Files", Kind: Text, DefaultText: LinksAuto,

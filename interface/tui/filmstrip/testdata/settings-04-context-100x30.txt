@@ -6,7 +6,7 @@
     Appearance    05      chat shows every tool call                                                
     Models & rol… 02                                                                                
     Interaction   05      Agent feeds                                                   full  ▾     
-  › Context       08      full keeps every sub-agents event, summary the latest 200, off shows …    
+  › Context       10      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
     Shell         05      Thinking                                                          ● on    
     Turn          13      thinking shows in each agent's sub-agents feed; t there toggles it        

@@ -152,6 +152,7 @@ type Decision struct {
 	Failure       string
 	Enforced      bool
 	OverridesRule string
+	Remembers     string
 }
 
 type PlanState int

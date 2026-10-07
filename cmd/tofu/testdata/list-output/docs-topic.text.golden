@@ -13,7 +13,7 @@ What it is
   - Appearance: theme, density, animations, statusBar, colorMode
   - Interaction: composer, gatePrompt, readBeforeEdit
   - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images,
-    projectInstructionsCap, instructionSources, skills
+    projectInstructionsCap, instructionSources, skills, memory, autoMemory
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
@@ -146,6 +146,16 @@ Context
       on lists the skills in .tofu, .agents and .claude skill folders to the
       model and offers the skill tool; off sends neither. The project gives all
       three, the home directory only ~/.tofu/skills
+    memory                  true
+      true or false
+      on sends what you asked tofu to remember to the lead on every request and
+      offers to keep a message that says remember; off sends none and offers
+      nothing. tofu memory lists the entries
+    autoMemory              false
+      true or false
+      on keeps a message that says remember at once and prints the undo, instead
+      of asking first; it turns on by itself once you accepted 7 of the first 10
+      offers, or when you answer always on one
 
 Files
     diffContext             3

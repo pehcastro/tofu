@@ -114,6 +114,10 @@ func (m *Model) askLines() []string {
 		head = askMarker + "override " + overriding + "?"
 		labels = [...]string{"[1] this project", "[2] everywhere", "[3] no"}
 	}
+	if remembers := entry.Decision.Remembers; remembers != "" {
+		head = askMarker + remembers
+		labels = [...]string{"[1] yes", "[2] no", "[3] always"}
+	}
 	id := ""
 	if short := trace.Short(entry.ID); short != "" {
 		id = askGap + look.TypedID(toolKind, short)
