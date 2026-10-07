@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"strconv"
 	"strings"
+	"time"
 
 	"tofu/interface/cli"
 	settingspkg "tofu/internal/settings"
@@ -64,17 +65,38 @@ func launchShellRegistry(dir string) (*shell.Registry, error) {
 	return registry, nil
 }
 
+type shellReading struct {
+	shell.Shell
+	ElapsedMS  int64      `json:"elapsed_ms"`
+	LastOutput *time.Time `json:"last_output,omitempty"`
+	timing     shell.Timing
+}
+
+func readShell(registry *shell.Registry, one shell.Shell, now time.Time) shellReading {
+	timing := registry.Timing(one, now)
+	reading := shellReading{Shell: one, ElapsedMS: timing.Ran.Milliseconds(), timing: timing}
+	if !timing.Last.IsZero() {
+		reading.LastOutput = &timing.Last
+	}
+	return reading
+}
+
 func shellsList(o verbOutput, registry *shell.Registry) int {
 	shells, err := registry.List()
 	if err != nil {
 		return o.fail(err)
 	}
+	now := time.Now()
+	readings := make([]shellReading, len(shells))
+	for i, one := range shells {
+		readings[i] = readShell(registry, one, now)
+	}
 	return o.done(true, struct {
-		Shells []shell.Shell `json:"shells"`
-	}{append([]shell.Shell{}, shells...)}, func(page cli.Page) []string { return shellsLines(page, shells) })
+		Shells []shellReading `json:"shells"`
+	}{readings}, func(page cli.Page) []string { return shellsLines(page, readings, now) })
 }
 
-func shellsLines(page cli.Page, shells []shell.Shell) []string {
+func shellsLines(page cli.Page, shells []shellReading, now time.Time) []string {
 	if len(shells) == 0 {
 		return page.Title("Shells", nil, cli.Verdict{Mark: cli.Idle, Text: "none registered"})
 	}
@@ -93,7 +115,7 @@ func shellsLines(page cli.Page, shells []shell.Shell) []string {
 		if one.State == shell.Running {
 			running++
 		}
-		rows[i] = cli.Row{Mark: mark, Cells: []string{one.Name, state, "pid " + strconv.Itoa(one.PID), ownerName(one.Owner)}, Detail: one.Command + " · " + page.Path(one.Dir)}
+		rows[i] = cli.Row{Mark: mark, Cells: []string{one.Name, state, "pid " + strconv.Itoa(one.PID), ownerName(one.Owner)}, Detail: one.Command + " · " + page.Path(one.Dir) + " · " + one.timing.Words(now)}
 	}
 	facts := []string{countOf(len(shells), "shell")}
 	if running > 0 {
@@ -103,6 +125,10 @@ func shellsLines(page cli.Page, shells []shell.Shell) []string {
 }
 
 func shellsLog(o verbOutput, registry *shell.Registry, name string) int {
+	entry, err := registry.Read(name)
+	if err != nil {
+		return shellsFailed(o, name, err)
+	}
 	log, err := registry.Tail(name, shell.DefaultTail)
 	if err != nil {
 		return shellsFailed(o, name, err)
@@ -111,11 +137,13 @@ func shellsLog(o verbOutput, registry *shell.Registry, name string) int {
 	if log != "" {
 		lines = strings.Split(log, "\n")
 	}
+	now := time.Now()
+	reading := readShell(registry, entry, now)
 	return o.done(true, struct {
-		Name  string   `json:"name"`
+		shellReading
 		Lines []string `json:"lines"`
-	}{name, lines}, func(page cli.Page) []string {
-		printed := append(page.Title("Log", []string{name, countOf(len(lines), "line")}, cli.Verdict{}), "")
+	}{reading, lines}, func(page cli.Page) []string {
+		printed := append(page.Title("Log", []string{name, string(entry.State), reading.timing.Words(now), countOf(len(lines), "line")}, cli.Verdict{}), "")
 		if len(lines) == 0 {
 			return append(printed, cli.Indent(page.Label("empty"))...)
 		}

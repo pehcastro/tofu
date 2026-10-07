@@ -251,6 +251,7 @@ type App struct {
 	subAgents      []subagent.Row
 	moves          map[string]movement
 	liveShells     []shells.Entry
+	shellsTicking  bool
 	happened       []feed.Event
 	feedStale      bool
 	reached        []string
@@ -286,6 +287,8 @@ type pulseMsg struct{}
 type fillMsg struct{}
 
 type shellsMsg []shells.Entry
+
+type shellsDueMsg struct{}
 
 type modelsReloadedMsg string
 
@@ -479,6 +482,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.view.Activity = nil
 	if a.busy {
 		a.watchSubAgents()
+		a.view.Activity = append(a.view.Activity, a.shellActivity()...)
 	}
 	a.flushFeed()
 	a.syncFeed()
@@ -511,7 +515,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.pasted(msg)
 	case pulseMsg:
 		a.beat()
-		if a.busy && a.pulse%shellPulses == 0 {
+		if a.busy && !a.shellsTicking && a.pulse%shellPulses == 0 {
 			return a.pollShells()
 		}
 		return nil
@@ -569,7 +573,14 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.watchSetup()
 	case shellsMsg:
 		a.showShells(msg)
-		return nil
+		if a.shellsTicking || !slices.ContainsFunc(msg, func(entry shells.Entry) bool { return entry.State == shells.Running }) {
+			return nil
+		}
+		a.shellsTicking = true
+		return tea.Tick(shellPoll, func(time.Time) tea.Msg { return shellsDueMsg{} })
+	case shellsDueMsg:
+		a.shellsTicking = false
+		return a.pollShells()
 	case pickerReloadedMsg:
 		return a.pickerReloaded(string(msg))
 	case modelsReloadedMsg:

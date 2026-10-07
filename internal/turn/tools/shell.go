@@ -62,11 +62,16 @@ func (Shells) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		}
 		return turn.Result{Content: fmt.Sprintf("%s restarted as pid %d in %s: %s. check it with bash check_port once it should be up", started.Name, started.PID, started.Dir, started.Command), Command: command}, nil
 	case "logs":
+		entry, err := registry.Read(args.Name)
+		if err != nil {
+			return turn.Result{}, fmt.Errorf("shell: %w", err)
+		}
 		tail, err := registry.Tail(args.Name, shell.DefaultTail)
 		if err != nil {
 			return turn.Result{}, fmt.Errorf("shell: %w", err)
 		}
-		return turn.Result{Content: tail, Command: command}, nil
+		now := time.Now()
+		return turn.Result{Content: fmt.Sprintf("%s is %s, %s. its last lines:\n%s", args.Name, entry.State, registry.Timing(entry, now).Words(now), tail), Command: command}, nil
 	case "wait":
 		ended, err := registry.AwaitEnd(ctx, args.Name, konst.BashSoftLimitMillis*time.Millisecond)
 		if err != nil {
@@ -76,7 +81,7 @@ func (Shells) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		if err != nil {
 			return turn.Result{}, fmt.Errorf("shell: %w", err)
 		}
-		state := fmt.Sprintf("%s is still running after %s: wait again, or stop it", args.Name, time.Since(ended.Started).Round(time.Second))
+		state := args.Name + " is still running: wait again, or stop it"
 		switch {
 		case ended.State == shell.Killed:
 			state = args.Name + " was stopped"
@@ -85,7 +90,8 @@ func (Shells) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		case ended.State == shell.Exited:
 			state = args.Name + " ended, with an exit code tofu did not see"
 		}
-		return turn.Result{Content: state + ". its last lines:\n" + tail, Command: command, ExitCode: ended.ExitCode}, nil
+		now := time.Now()
+		return turn.Result{Content: state + ", " + registry.Timing(ended, now).Words(now) + ". its last lines:\n" + tail, Command: command, ExitCode: ended.ExitCode}, nil
 	}
 	return turn.Result{}, fmt.Errorf("shell: op %q is not wait, logs, stop or restart", args.Op)
 }

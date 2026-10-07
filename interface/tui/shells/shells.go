@@ -33,6 +33,8 @@ const (
 	emptyBody      = "No background processes in this session yet."
 	emptyRule      = "Only long work lands here: a dev server, a watcher, a long script.\n  Never a test, a build or a one-shot command: those end and never show."
 	outputHint     = "  ·  wheel / PgUp / PgDn"
+	silentRunning  = "nothing printed yet"
+	silentEnded    = "printed nothing"
 	killAskHint    = " request kill · confirmation required"
 	killNowHint    = " kill"
 	noOwner        = "tofu"
@@ -260,7 +262,14 @@ func (m Model) detail(c *cache, width int) string {
 		owner = look.AgentRef(entry.Owner)
 	}
 	facts := m.facts(entry, width)
-	output, _, _ := look.Window(c.styledLog(entry.Log), width, m.outputHeight(), m.scroll)
+	log := c.styledLog(entry.Log)
+	if strings.TrimSpace(entry.Log) == "" {
+		log = look.Faint(silentEnded)
+		if entry.State.Endable() {
+			log = look.Faint(silentRunning)
+		}
+	}
+	output, _, _ := look.Window(log, width, m.outputHeight(), m.scroll)
 	view := look.Sides(look.Title(entry.Name), badge(entry), width) + "\n" + look.Muted("Owned by ") + owner + "\n\n" +
 		c.process.Surface(processWidth(width), processHeight+len(facts)-processRows, look.PanelLight, processPadding, strings.Join(facts, "\n")) + "\n\n" +
 		look.SectionLabel("Output") + look.Faint(outputHint) + "\n" + output + "\n"

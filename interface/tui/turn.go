@@ -634,6 +634,18 @@ func (a *App) parkSubAgentsTheTurnLeftBehind() {
 	a.showSubAgents(parked)
 }
 
+func (a *App) shellActivity() []session.Activity {
+	var rows []session.Activity
+	for _, entry := range a.liveShells {
+		if slices.ContainsFunc(a.view.Activity, func(row session.Activity) bool { return row.Name == entry.Owner }) {
+			continue
+		}
+		lines := strings.Split(strings.TrimRight(entry.Log, "\r\n"), "\n")
+		rows = append(rows, session.Activity{Name: cmp.Or(entry.Owner, "tofu"), Doing: session.RunningBash, Since: entry.Started, What: cmp.Or(lines[len(lines)-1], "nothing printed yet")})
+	}
+	return rows
+}
+
 func (a *App) showShells(entries []shells.Entry) {
 	a.printed(entries)
 	a.shells.SetKillConfirm(a.flag(isettings.KillConfirm))

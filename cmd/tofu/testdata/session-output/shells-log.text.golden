@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Log · build · 2 lines
+Log · build · exited · ran 1m, last output 30s before it ended · 2 lines
 
   compiling
   done

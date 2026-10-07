@@ -7,6 +7,16 @@ exit 0
   "at": "AT",
   "data": {
     "name": "build",
+    "command": "go build ./...",
+    "dir": "HOME/project",
+    "owner": "",
+    "pid": 4242,
+    "state": "exited",
+    "started": "AT",
+    "ended": "AT",
+    "exit_code": 0,
+    "elapsed_ms": 60000,
+    "last_output": "AT",
     "lines": [
       "compiling",
       "done"

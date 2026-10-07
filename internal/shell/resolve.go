@@ -37,7 +37,7 @@ func (c Choice) Command(ctx context.Context, dir, command string, extraEnv ...st
 		name, _, _ := strings.Cut(entry, "=")
 		return slices.ContainsFunc(sys.KeyNames(), func(key string) bool { return strings.EqualFold(name, key) })
 	})
-	for _, entry := range []string{"AI_AGENT=tofu", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "EDITOR=false"} {
+	for _, entry := range []string{"AI_AGENT=tofu", "PYTHONUNBUFFERED=1", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "EDITOR=false"} {
 		if name, _, _ := strings.Cut(entry, "="); os.Getenv(name) == "" {
 			cmd.Env = append(cmd.Env, entry)
 		}

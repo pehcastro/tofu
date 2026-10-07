@@ -103,6 +103,17 @@ func TestShellWheelScrollsOutputWithoutChangingSidebarSelection(t *testing.T) {
 	}
 }
 
+func TestOutputPaneSaysWhenNothingWasPrinted(t *testing.T) {
+	m := testModel()
+	m.Entries[0].Log, m.Entries[1].Log = "", ""
+	for pick, want := range map[int]string{0: "nothing printed yet", 1: "printed nothing"} {
+		m.pick = pick
+		if view := ansi.Strip(m.View()); !strings.Contains(view, want) {
+			t.Errorf("a %s shell with no output does not say %q:\n%s", m.Entries[pick].State, want, view)
+		}
+	}
+}
+
 func BenchmarkProgressedScreenRender(b *testing.B) {
 	b.Run("shells", func(b *testing.B) {
 		m := testModel()

@@ -424,12 +424,11 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 			FailureText: fmt.Sprintf(cancelledWhileRunning, command),
 		}, registry.Kill(ran.Name)
 	}
-	soFar, _ := registry.Tail(ran.Name, shell.DefaultTail)
 	return Result{
 		Content: fmt.Sprintf("%s is still running after %d ms, so it moved to a background shell as pid %d instead of holding this call. it was not killed and keeps running, listed on the shells screen. "+
 			"read it back with the shell tool: wait %s returns as soon as it ends, or after %d ms, with its exit code and last lines; logs %s returns its last lines now. "+
 			"never wait on it with another bash call. its output so far:\n%s",
-			ran.Name, got.Took.Milliseconds(), ran.PID, ran.Name, t.softLimit.Milliseconds(), ran.Name, soFar),
+			ran.Name, got.Took.Milliseconds(), ran.PID, ran.Name, t.softLimit.Milliseconds(), ran.Name, got.Output),
 		Command: "background " + ran.Name + ": " + command,
 		Outcome: ResultSucceeded,
 	}, nil

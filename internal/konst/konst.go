@@ -136,6 +136,10 @@ const (
 	BackgroundYieldMillis = 10000
 	BashSoftLimitMillis   = 30000
 	ShellNamedLogBytes    = 65536
+	ShellTailBytes        = 262144
+
+	ShellLogClockSlackMillis = 1000
+	ShellRewriteHeadBytes    = 64
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000

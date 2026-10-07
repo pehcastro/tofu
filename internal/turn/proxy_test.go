@@ -21,6 +21,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/shell"
 	shipped "tofu/library"
 )
 
@@ -420,6 +421,36 @@ func TestARewriteWhoseFilterLosesOutputRunsTheCommandAsAsked(t *testing.T) {
 			t.Errorf("%q: the row says ran %q, note %q, want no run and a note naming %q", row.command, proxied.Ran, proxied.Note, row.note)
 		}
 		t.Logf("%q ran as %s, note %q", row.command, ran, proxied.Note)
+	}
+}
+
+func TestOutputOfACommandThatCanMoveToABackgroundShellIsNotHeldByRtk(t *testing.T) {
+	fakeProxyOnPath(t)
+	proxy := proxyFrom(t, t.TempDir(), proxyOn)
+	movable := WithShellRegistry(context.Background(), shell.OpenAt(t.TempDir()))
+	for _, row := range []struct {
+		ctx       context.Context
+		arguments string
+		kept      bool
+	}{
+		{movable, `{"command":"go test ./pkg/"}`, true},
+		{movable, `{"command":"cargo build -j 2"}`, true},
+		{movable, `{"command":"npm run build","timeout_ms":600000}`, true},
+		{movable, `{"command":"go test ./pkg/","timeout_ms":5000}`, false},
+		{movable, `{"command":"git status"}`, false},
+		{movable, `{"command":"go vet ./pkg/"}`, true},
+		{movable, `{"command":"go version"}`, false},
+		{context.Background(), `{"command":"go test ./pkg/"}`, false},
+	} {
+		ran, proxied := proxy.rewrite(row.ctx, llm.ToolCall{Name: bashToolName, Arguments: json.RawMessage(row.arguments)})
+		if kept := string(ran) == row.arguments; kept != row.kept {
+			t.Errorf("%s ran as %s, kept as asked %v, want %v", row.arguments, ran, kept, row.kept)
+			continue
+		}
+		if row.kept && !strings.Contains(proxied.Note, "background shell") {
+			t.Errorf("%s ran as asked with the note %q, which does not say why", row.arguments, proxied.Note)
+		}
+		t.Logf("%s ran as %s, note %q", row.arguments, ran, proxied.Note)
 	}
 }
 

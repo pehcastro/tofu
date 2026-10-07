@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -102,14 +103,16 @@ func sessionOutputProject(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	if err := sys.WriteFile(filepath.Join(state, "shells", "build.log"), []byte("compiling\ndone\n"), 0o644); err != nil {
+	built := filepath.Join(state, "shells", "build.log")
+	printedAt := now.Add(-90 * time.Second)
+	if err := cmp.Or(sys.WriteFile(built, []byte("compiling\ndone\n"), 0o644), os.Chtimes(built, printedAt, printedAt)); err != nil {
 		t.Fatal(err)
 	}
 	return home
 }
 
 func TestSessionContextAndShellsMatchTheirTextAndJSONGoldens(t *testing.T) {
-	stamp := regexp.MustCompile(`"(at|started_at|ended_at|started|ended)": "[^"]*"`)
+	stamp := regexp.MustCompile(`"(at|started_at|ended_at|started|ended|last_output)": "[^"]*"`)
 	homeValue := regexp.MustCompile(`HOME[^"]*`)
 	printed := map[string]string{}
 	for _, mode := range []string{"text", "json"} {

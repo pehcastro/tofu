@@ -2,7 +2,7 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
@@ -36,11 +36,25 @@ Nothing is killed at a deadline, so a 10 minute build is not lost at 10
 minutes. A `timeout_ms` of 30,000 or less is a hard limit instead: the
 command is killed there and returns what it printed.
 
+Every command is on the **shells** tab from its first second, with its
+output as it prints, and the chat shows its last line under the working
+line while the turn runs. The tab reads four times a second while any
+shell runs, turn or no turn. `shell wait` and `shell logs` say how long it
+ran and when it last printed, such as `ran 1m 1s, last output 2s ago`.
+
 When a command names its own log file, such as `-Log target/build.log`,
 `> build.log` or `tee build.log`, its row on the **shells** tab and
 `shell logs` also show the end of that file, so a build that prints nothing
-to the console is still visible. Only a path written in the command counts,
-not one a script computes inside itself.
+to the console is still visible. The path is read from where the command
+is, so `cd apps/desk && ... -Log target/build.log` reads
+`apps/desk/target/build.log`, and a file older than the shell is skipped.
+Only a path written in the command counts, not one a script computes
+inside itself.
+
+A command that holds its own output says so in its first line instead of
+showing an empty row: `tofu: piped into tail -2, which prints when the
+command ends`, and the same for `head`, `sort`, `wc`, `grep`, `sed` and
+`awk`. Python is told not to buffer its output.
 
 A command that prints a lot keeps its first and last 32 KiB while
 it runs, and says how many bytes it dropped from the middle. tofu probes the project's interpreters once, in
@@ -63,7 +77,9 @@ reads it.
 By default, each `bash` command is first passed to `rtk rewrite`, with a 5 s
 limit, and the rewritten command runs instead, such as `rtk git diff` for
 `git diff`, so the model reads a compact form of the same output. A
-background command, a piped one and a redirected one run as written. rtk
+background command, a piped one and a redirected one run as written, and
+so does a build, test or install that could move to a background shell,
+because rtk prints nothing until the command exits. rtk
 also stands aside when it isn't on `PATH`, when the project ships
 `.rtk/filters.toml`, and when the rewrite is `rtk tsc` or `rtk npx`, which
 can download a compiler.

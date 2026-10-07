@@ -16,7 +16,9 @@ exit 0
         "state": "exited",
         "started": "AT",
         "ended": "AT",
-        "exit_code": 0
+        "exit_code": 0,
+        "elapsed_ms": 60000,
+        "last_output": "AT"
       },
       {
         "name": "web",
@@ -26,7 +28,8 @@ exit 0
         "pid": 4343,
         "state": "killed",
         "started": "AT",
-        "ended": "AT"
+        "ended": "AT",
+        "elapsed_ms": 0
       }
     ]
   },

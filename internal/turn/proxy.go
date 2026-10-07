@@ -10,10 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 )
 
@@ -105,6 +107,13 @@ func (p *CommandProxy) rewrite(ctx context.Context, call llm.ToolCall) (json.Raw
 		row.Note = "the command ran as it was asked for, without " + proxyUseRTK + ": " + proxyUseRTK + " " + verb + " would " + reason + ". its output is whole and was not filtered"
 		return call.Arguments, row
 	}
+	if deadline, _ := bashDeadline(args.TimeoutMS); deadline > konst.BashSoftLimitMillis && ShellRegistryFrom(ctx) != nil {
+		if verb := heldUntilExit(rewritten); verb != "" {
+			row.Note = fmt.Sprintf("the command ran as it was asked for, without %[1]s: %[1]s %[2]s prints nothing until the command exits, and a command still running at %[3]d ms moves to a background shell, whose output would sit empty until then. a timeout_ms at or under %[3]d keeps %[1]s",
+				proxyUseRTK, verb, konst.BashSoftLimitMillis)
+			return call.Arguments, row
+		}
+	}
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(call.Arguments, &fields)
 	fields["command"], _ = json.Marshal(rewritten)
@@ -159,6 +168,23 @@ func refusedVerb(rewritten string) (string, string) {
 		}
 	}
 	return "", ""
+}
+
+func heldUntilExit(rewritten string) string {
+	fields := strings.Fields(rewritten)
+	for index, field := range fields[:max(len(fields)-1, 0)] {
+		if field != proxyUseRTK {
+			continue
+		}
+		verb := fields[index+1]
+		if verb == "go" && index+2 < len(fields) && slices.Contains([]string{"test", "build", "run", "install", "generate", "vet"}, fields[index+2]) {
+			return verb + " " + fields[index+2]
+		}
+		if slices.Contains([]string{"cargo", "npm", "pnpm", "dotnet", "mvn", "gradlew", "pytest", "jest", "vitest", "playwright", "next", "rake", "rspec", "test", "pip", "docker", "golangci-lint", "lint", "mypy", "rubocop"}, verb) {
+			return verb
+		}
+	}
+	return ""
 }
 
 func proxyPanicked(content string) bool {

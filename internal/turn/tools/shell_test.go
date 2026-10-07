@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,30 @@ func runShell(t *testing.T, ctx context.Context, op, name string) turn.Result {
 		t.Fatalf("shell %s %s: %v", op, name, err)
 	}
 	return result
+}
+
+func TestOutputWaitAndLogsSayHowLongItRanAndWhenItLastPrinted(t *testing.T) {
+	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	ctx := turn.WithShellRegistry(context.Background(), registry)
+	for name, command := range map[string]string{"bash-1": "echo hi; sleep 30", "bash-2": "sleep 30"} {
+		if _, err := registry.Start(t.TempDir(), name, command, ""); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = registry.Kill(name) })
+	}
+	time.Sleep(1500 * time.Millisecond)
+	for _, op := range []string{"logs", "wait"} {
+		if op == "wait" {
+			_, _ = registry.Kill("bash-1"), registry.Kill("bash-2")
+		}
+		printed, silent := runShell(t, ctx, op, "bash-1").Content, runShell(t, ctx, op, "bash-2").Content
+		if !strings.Contains(printed, "ran ") || !strings.Contains(printed, "last output") {
+			t.Errorf("shell %s on a shell that printed says nothing of how long it ran or when it printed:\n%s", op, printed)
+		}
+		if !strings.Contains(silent, "ran ") || !strings.Contains(silent, "no output") || strings.Contains(silent, "last output") {
+			t.Errorf("shell %s on a shell that printed nothing reads:\n%s", op, silent)
+		}
+	}
 }
 
 func TestStopKillsTheServerTheWrapperStartedAndRestartBringsItBack(t *testing.T) {

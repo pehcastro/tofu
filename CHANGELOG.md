@@ -32,6 +32,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **A continued or resumed conversation over the context target forks before its first request**, instead of sending the whole history first.
 
+- **A running command shows its output as it prints.** Every bash is on the shells screen from its first second, the chat shows its last line, and the screen keeps updating while no turn runs. A log a script writes after a `cd` is found, a log left from an earlier run is not shown, python is unbuffered, and a command piped into `tail`, `head`, `sort` or `grep` says why its output is empty. `shell logs`, `shell wait` and `tofu shells` say how long a shell ran and when it last printed. `tofu serve` shell events no longer skip or repeat output.
+
 - **After a restart, earlier sub-agents hold no paths**, so a spawn on their files starts instead of being refused, and a refused spawn now reads as failed. A resumed sub-agent carries only its conversation since its latest fork.
 
 - **Shift+Enter adds a line past the eighth.** The input stops growing at 8 rows and scrolls; before, every line after the eighth was joined onto it.

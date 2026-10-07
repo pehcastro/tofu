@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"math"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -41,10 +40,11 @@ type server struct {
 	client  string
 	ready   bool
 	pending map[string]Identity
+	shells  map[string]*watchedShell
 }
 
 func Serve(cfg ServeConfig) error {
-	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]Identity{},
+	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]Identity{}, shells: map[string]*watchedShell{},
 		items: items{session: cfg.Host.ID(), tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
@@ -286,13 +286,14 @@ func (s *server) shellRead(p ShellParams) (any, error) {
 	if s.Shells == nil {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu has no shell registry"}
 	}
-	text, err := s.Shells.Tail(p.Shell, math.MaxInt32)
-	if err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	watched := s.watched(p.Shell)
+	if err := s.follow(p.Shell, watched, sys.LoadKeyRedactor().Redact); err != nil {
 		return nil, err
 	}
-	text = sys.LoadKeyRedactor().Redact(text)
-	offset := min(max(p.Offset, 0), len(text))
-	return ShellReadResult{Shell: p.Shell, Offset: offset, Text: text[offset:], Next: len(text)}, nil
+	offset := min(max(p.Offset, 0), len(watched.stream))
+	return ShellReadResult{Shell: p.Shell, Offset: offset, Text: watched.stream[offset:], Next: len(watched.stream)}, nil
 }
 
 func (s *server) shellKill(p ShellParams) (any, error) {
@@ -380,29 +381,44 @@ func (s *server) quota(id Identity) {
 }
 
 type watchedShell struct {
-	state shell.State
-	sent  int
+	state     shell.State
+	announced bool
+	sent      int
+	cursor    shell.Cursor
+	stream    string
+}
+
+func (s *server) watched(name string) *watchedShell {
+	if s.shells[name] == nil {
+		s.shells[name] = &watchedShell{}
+	}
+	return s.shells[name]
+}
+
+func (s *server) follow(name string, watched *watchedShell, mask func(string) string) error {
+	text, err := s.Shells.Follow(name, &watched.cursor)
+	watched.stream += mask(text)
+	return err
 }
 
 func (s *server) watchShells(quit <-chan struct{}) {
 	if s.Shells == nil {
 		return
 	}
-	known := map[string]watchedShell{}
 	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
 	defer every.Stop()
 	for first := true; ; first = false {
-		s.scanShells(known, first)
+		s.scanShells(first)
 		select {
 		case <-quit:
-			s.scanShells(known, false)
+			s.scanShells(false)
 			return
 		case <-every.C:
 		}
 	}
 }
 
-func (s *server) scanShells(known map[string]watchedShell, first bool) {
+func (s *server) scanShells(first bool) {
 	found, err := s.Shells.List()
 	if err != nil || len(found) == 0 {
 		return
@@ -411,27 +427,27 @@ func (s *server) scanShells(known map[string]watchedShell, first bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, one := range found {
-		was, seen := known[one.Name]
-		if seen && was.state != shell.Running || !seen && first && one.State != shell.Running {
-			known[one.Name] = watchedShell{state: one.State}
+		watched := s.watched(one.Name)
+		if watched.announced && watched.state != shell.Running || !watched.announced && first && one.State != shell.Running {
+			watched.announced, watched.state = true, one.State
 			continue
 		}
 		id := s.items.identity(one.Owner, one.Name)
-		text, _ := s.Shells.Tail(one.Name, math.MaxInt32)
-		text = mask(text)
-		if !seen {
+		_ = s.follow(one.Name, watched, mask)
+		if !watched.announced {
 			s.box.push(kept("shell.started", &ShellStarted{Identity: id, Shell: one.Name, Command: mask(one.Command), PID: one.PID, StartedAt: one.Started}))
+			if first {
+				watched.sent = len(watched.stream)
+			}
 		}
-		if first && !seen {
-			was.sent = len(text)
-		}
-		if len(text) > was.sent {
-			s.box.push(merged("shell.output", one.Name, &ShellOutput{Identity: id, Shell: one.Name, Offset: was.sent, Text: text[was.sent:]}))
+		if len(watched.stream) > watched.sent {
+			s.box.push(merged("shell.output", one.Name, &ShellOutput{Identity: id, Shell: one.Name, Offset: watched.sent, Text: watched.stream[watched.sent:]}))
+			watched.sent = len(watched.stream)
 		}
 		if one.State != shell.Running {
 			s.box.push(kept("shell.exited", &ShellExited{Identity: id, Shell: one.Name, ExitCode: one.ExitCode, Killed: one.State == shell.Killed, EndedAt: one.Ended}))
 		}
-		known[one.Name] = watchedShell{state: one.State, sent: max(len(text), was.sent)}
+		watched.announced, watched.state = true, one.State
 	}
 }
 
