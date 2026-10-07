@@ -10,6 +10,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.6 - 2026-10-07
+
+tofu remembers what you tell it, learns from your sessions, and lets the lead run its sub-agents properly.
+
 ### Changed
 
 - **Your messages survive every fork word for word.** The carry into a new session lists what you said in this line of sessions, so a correction made before a fork still holds after it.
