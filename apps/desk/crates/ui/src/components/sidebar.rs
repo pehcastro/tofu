@@ -39,6 +39,7 @@ const INACTIVE_INDENT: f32 = 8.0;
 pub struct Session {
     pub name: SharedString,
     pub state: SharedString,
+    pub age: SharedString,
 }
 
 #[derive(Clone)]
@@ -171,7 +172,13 @@ fn session_row(row: Stateful<Div>, lead: Div, session: &Session, theme: &Theme) 
                 .truncate()
                 .child(session.name.clone()),
         )
-        .child(word(session.state.clone(), theme))
+        .child(word(
+            match session.age.is_empty() {
+                true => session.state.clone(),
+                false => format!("{} · {}", session.state, session.age).into(),
+            },
+            theme,
+        ))
 }
 
 fn word(text: SharedString, theme: &Theme) -> Div {

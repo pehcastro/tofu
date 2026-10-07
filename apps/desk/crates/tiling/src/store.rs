@@ -18,6 +18,8 @@ const LAYOUTS: &str = "layouts";
 const EXTENSION: &str = "layout";
 const MAX_DEPTH: usize = MAX_TILES;
 const V1_NAME: &str = "work";
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0100_0000_01b3;
 
 #[derive(Debug)]
 pub enum StoreError {
@@ -71,19 +73,27 @@ fn config_home() -> Result<PathBuf, StoreError> {
 }
 
 impl Store {
-    pub fn for_project(project: &str) -> Result<Store, StoreError> {
-        let name = Path::new(project);
-        if !name
-            .components()
-            .all(|part| matches!(part, Component::Normal(_)))
-        {
-            return Err(StoreError::BadProject(project.to_owned()));
-        }
-        let path = config_home()?
-            .join(FOLDER)
-            .join(LAYOUTS)
-            .join(name)
-            .with_extension(EXTENSION);
+    pub fn home() -> Result<PathBuf, StoreError> {
+        Ok(config_home()?.join(FOLDER))
+    }
+
+    pub fn for_project(project: &Path) -> Result<Store, StoreError> {
+        let name = project
+            .file_name()
+            .filter(|name| {
+                Path::new(name)
+                    .components()
+                    .all(|part| matches!(part, Component::Normal(_)))
+            })
+            .ok_or_else(|| StoreError::BadProject(project.display().to_string()))?;
+        let key = project
+            .to_string_lossy()
+            .bytes()
+            .fold(FNV_OFFSET, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+            });
+        let file = format!("{}-{key:016x}.{EXTENSION}", name.to_string_lossy());
+        let path = Store::home()?.join(LAYOUTS).join(file);
         Ok(Store { path })
     }
 

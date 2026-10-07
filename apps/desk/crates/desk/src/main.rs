@@ -1,6 +1,7 @@
 mod desk;
 #[path = "screens/theme/pick.rs"]
 mod pick;
+mod project;
 mod status_bar;
 mod title_bar;
 mod screens {

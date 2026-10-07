@@ -1,4 +1,4 @@
-use std::env;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use desk_core::model::Store;
@@ -25,6 +25,7 @@ use crate::modules::file_edits::{self, FileEdits};
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
 use crate::modules::subagents::{self, Subagents};
+use crate::project;
 
 const BOARD: &str = "36-agents";
 const UNFITTED: Rect = Rect {
@@ -53,12 +54,27 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
     };
     replayed::fonts(cx)?;
     let project = match replay {
-        Some(_) => BOARD.to_owned(),
-        None => env::current_dir()
-            .ok()
-            .and_then(|dir| Some(dir.file_name()?.to_string_lossy().into_owned()))
-            .ok_or("the work screen cannot name the project it runs in")?,
+        Some(_) => PathBuf::from(BOARD),
+        None => project::launch()?,
     };
+    Ok(build(replay, project, window, cx)?.into())
+}
+
+pub fn open_in(
+    project: PathBuf,
+    window: &mut Window,
+    cx: &mut App,
+) -> Result<Entity<Work>, String> {
+    replayed::fonts(cx)?;
+    build(None, project, window, cx)
+}
+
+fn build(
+    replay: Option<Replay>,
+    project: PathBuf,
+    window: &mut Window,
+    cx: &mut App,
+) -> Result<Entity<Work>, String> {
     let layouts = Layouts::for_project(&project).map_err(|error| error.to_string())?;
     let mut saved = layouts
         .load()
@@ -75,7 +91,7 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
     let store = cx.new(|_| Store::default());
     let chat = match replay {
         Some(_) => chat::fed(store.clone(), window, cx),
-        None => chat::live(store.clone(), window, cx),
+        None => chat::live(project, store.clone(), window, cx),
     };
     let killer = chat.downgrade();
     let kill: Kill = Rc::new(move |shell, cx| {
@@ -86,28 +102,26 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
     let subagents = subagents::mount(store.clone(), cx);
     let file_edits = file_edits::mount(store.clone(), cx);
     let shells = shells::mount(store.clone(), kill, cx);
-    Ok(cx
-        .new(|cx| {
-            let focus = cx.focus_handle();
-            focus.focus(window, cx);
-            Work {
-                workspace,
-                others,
-                active: 0,
-                area: UNFITTED,
-                layouts,
-                gesture: Gesture::Idle,
-                nudge: None,
-                focus,
-                store,
-                chat,
-                subagents,
-                file_edits,
-                shells,
-                replay,
-            }
-        })
-        .into())
+    Ok(cx.new(|cx| {
+        let focus = cx.focus_handle();
+        focus.focus(window, cx);
+        Work {
+            workspace,
+            others,
+            active: 0,
+            area: UNFITTED,
+            layouts,
+            gesture: Gesture::Idle,
+            nudge: None,
+            focus,
+            store,
+            chat,
+            subagents,
+            file_edits,
+            shells,
+            replay,
+        }
+    }))
 }
 
 #[derive(Clone, Copy)]
@@ -175,6 +189,10 @@ fn place(element: Div, rect: Rect, origin: Rect) -> Div {
 }
 
 impl Work {
+    pub fn chat(&self) -> &Entity<Chat> {
+        &self.chat
+    }
+
     pub fn fit(&mut self, area: Rect) {
         if self.area != area {
             self.area = area;

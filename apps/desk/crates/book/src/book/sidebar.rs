@@ -6,21 +6,19 @@ use super::Book;
 use super::kit::{named, spread};
 
 const SIDEBAR_HEIGHT: f32 = 794.0;
-const RUNNING: [(&str, &str); 2] = [
-    ("clear-sable-eagle", "working"),
-    ("quiet-amber-heron", "loop 10m"),
-];
-const INACTIVE: [(&str, &str); 3] = [
-    ("fond-sandy-mink", "2h"),
-    ("tidy-ochre-wren", "1d"),
-    ("crisp-azure-swift", "3d"),
+const RUNNING: [(&str, &str, &str); 1] = [("clear-sable-eagle", "Running", "12m ago")];
+const INACTIVE: [(&str, &str, &str); 3] = [
+    ("fond-sandy-mink", "done", "2h ago"),
+    ("tidy-ochre-wren", "failed", "1d ago"),
+    ("crisp-azure-swift", "ended", "3d ago"),
 ];
 
-fn sessions(rows: &[(&'static str, &'static str)]) -> Vec<Session> {
+fn sessions(rows: &[(&'static str, &'static str, &'static str)]) -> Vec<Session> {
     rows.iter()
-        .map(|&(name, state)| Session {
+        .map(|&(name, state, age)| Session {
             name: name.into(),
             state: state.into(),
+            age: age.into(),
         })
         .collect()
 }
@@ -43,6 +41,14 @@ pub(super) fn sidebar_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         shown: Some(0),
         inactive: sessions(&INACTIVE),
     };
+    let fresh = Project {
+        name: "hono-starter".into(),
+        branch: "".into(),
+        changed: 0,
+        running: Vec::new(),
+        shown: None,
+        inactive: Vec::new(),
+    };
     let frame = |sidebar: Sidebar| {
         div()
             .w(px(SIDEBAR_COLUMN))
@@ -52,12 +58,21 @@ pub(super) fn sidebar_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
     spread(theme)
         .items_start()
         .child(named(
-            "IWIN-1 fixture",
+            "Sessions",
             theme,
             frame(Sidebar::new(
                 "sidebar-notes",
                 Some(notes),
                 told("notes-app", cx),
+            )),
+        ))
+        .child(named(
+            "Empty project",
+            theme,
+            frame(Sidebar::new(
+                "sidebar-fresh",
+                Some(fresh),
+                told("hono-starter", cx),
             )),
         ))
         .child(named(

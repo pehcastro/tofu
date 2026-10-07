@@ -10,10 +10,11 @@ use std::{env, iter, slice, thread};
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
-    ApprovalAnswer, ApprovalDecision, ApprovalRequest, InitializeResult, Notification, PROTOCOL,
-    Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, ShellParams, TurnCompleted,
-    TurnParams, TurnSendParams, TurnSteerParams, request,
+    ApprovalAnswer, ApprovalDecision, ApprovalRequest, InitializeResult, NoParams, Notification,
+    PROTOCOL, Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, ShellParams,
+    TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request,
 };
+use desk_core::sessions::{SessionRow, session_rows};
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
 use desk_ui::components::composer::{Composer, picker};
@@ -22,8 +23,9 @@ use desk_ui::components::form::TextArea;
 use desk_ui::components::transcript::{Transcript, transcript};
 use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, MouseDownEvent, Render, SharedString, Task, Window, actions, div, prelude::*, px,
+    AnyView, App, AppContext, ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, MouseDownEvent, Render, SharedString, Task, Window, actions, div,
+    prelude::*, px,
 };
 
 use cassette::{Replay, Step};
@@ -87,13 +89,18 @@ pub struct Chat {
     current: usize,
     finding: bool,
     aimed: bool,
+    rows: Vec<SessionRow>,
     _drain: Option<Task<()>>,
 }
+
+pub struct Listed;
+
+impl EventEmitter<Listed> for Chat {}
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let store = cx.new(|_| Store::default());
     match board {
-        None => Ok(live(store, window, cx).into()),
+        None => Ok(live(crate::project::launch()?, store, window, cx).into()),
         Some("36-agents") => {
             let replay = Replay::read()?;
             Ok(cx
@@ -110,15 +117,18 @@ pub fn fed(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Ch
     cx.new(|cx| Chat::new(Link::Fed, store, window, cx))
 }
 
-pub fn live(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Chat> {
+pub fn live(
+    project: PathBuf,
+    store: Entity<Store>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<Chat> {
     cx.new(|cx| {
         let (sender, opened) = flume::bounded::<Opened>(1);
         thread::spawn(move || {
             let tofu =
                 env::var_os(TOFU_VARIABLE).map_or_else(|| PathBuf::from("tofu"), PathBuf::from);
-            let bridge = env::current_dir()
-                .map_err(BridgeError::Io)
-                .and_then(|project| Bridge::open(serve_command(&tofu, &project), CLIENT, PROTOCOL));
+            let bridge = Bridge::open(serve_command(&tofu, &project), CLIENT, PROTOCOL);
             sender.send(bridge).ok();
         });
         let mut chat = Chat::new(Link::Starting, store, window, cx);
@@ -215,8 +225,64 @@ impl Chat {
             current: 0,
             finding: false,
             aimed: true,
+            rows: Vec::new(),
             _drain: None,
         }
+    }
+
+    pub fn rows(&self) -> &[SessionRow] {
+        &self.rows
+    }
+
+    pub fn open_id(&self) -> Option<&str> {
+        match &self.opening {
+            Opening::Open(id) => Some(id),
+            Opening::Closed | Opening::Pending => None,
+        }
+    }
+
+    pub fn busy(&self, cx: &App) -> bool {
+        self.running(cx).is_some()
+    }
+
+    fn relist(&mut self, cx: &mut Context<Self>) {
+        self.call::<request::SessionList>(&NoParams {}, cx, |chat, listed, cx| match session_rows(
+            listed,
+        ) {
+            Ok(rows) => {
+                eprintln!("desk: session list {} rows", rows.len());
+                chat.rows = rows;
+                cx.emit(Listed);
+            }
+            Err(error) => chat.fail(error.to_string(), cx),
+        });
+    }
+
+    pub fn open_session(&mut self, session: Option<String>, cx: &mut Context<Self>) {
+        if session.is_some() && session.as_deref() == self.open_id() {
+            return;
+        }
+        if self.busy(cx) {
+            return self.fail(
+                "a turn is running: stop it before opening another session".to_owned(),
+                cx,
+            );
+        }
+        self.restart(cx);
+        self.problem = None;
+        self.opening = Opening::Pending;
+        let params = SessionOpenParams {
+            asking: Some(self.asking.clone()),
+            session,
+            ..SessionOpenParams::default()
+        };
+        self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
+            eprintln!("desk: session {} opened", opened.session);
+            chat.opening = Opening::Open(opened.session);
+            chat.refresh(cx);
+            chat.relist(cx);
+        });
+        cx.notify();
     }
 
     fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
@@ -288,6 +354,7 @@ impl Chat {
         let events = bridge.events().clone();
         self.project = hello.project;
         self.link = Link::Ready(bridge);
+        self.relist(cx);
         cx.notify();
         Some(events)
     }
@@ -378,6 +445,9 @@ impl Chat {
             }
             Event::Notification(Notification::TurnCompleted(completed)) => {
                 self.said(completed, cx);
+                if let Link::Ready(_) = self.link {
+                    self.relist(cx);
+                }
                 (&completed.session, Entry::Done(completed.turn.clone()))
             }
             Event::Notification(Notification::ShellStarted(started)) => {
@@ -546,6 +616,7 @@ impl Chat {
                         String::from(chat.asking.clone())
                     );
                     chat.opening = Opening::Open(opened.session);
+                    chat.relist(cx);
                     chat.send(&text, cx);
                 });
             }
@@ -624,6 +695,19 @@ impl Chat {
                 cx.quit();
             }
         }
+    }
+}
+
+impl Drop for Chat {
+    fn drop(&mut self) {
+        let Link::Ready(bridge) = std::mem::replace(&mut self.link, Link::Gone) else {
+            return;
+        };
+        let pid = bridge.pid();
+        thread::spawn(move || match bridge.stop() {
+            Ok(status) => eprintln!("desk: tofu pid {pid} stopped: {status}"),
+            Err(error) => eprintln!("desk: tofu pid {pid} did not stop: {error}"),
+        });
     }
 }
 
