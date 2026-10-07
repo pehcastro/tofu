@@ -604,6 +604,7 @@ type traceRequest struct {
 	ProviderRequestID string `json:"provider_request_id,omitempty"`
 	DurationMS        int64  `json:"duration_ms,omitempty"`
 	Error             string `json:"error,omitempty"`
+	RecordedIn        string `json:"recorded_in,omitempty"`
 }
 
 type traceCall struct {
@@ -622,6 +623,7 @@ type traceCall struct {
 	Refused    bool            `json:"refused,omitempty"`
 	Gate       string          `json:"gate,omitempty"`
 	Hooks      []turn.HookRun  `json:"hooks,omitempty"`
+	RecordedIn string          `json:"recorded_in,omitempty"`
 }
 
 type traceHook struct {
@@ -653,6 +655,7 @@ type sessionTraceReport struct {
 	Inserted []session.TracedInsert `json:"inserted,omitempty"`
 	Changes  []session.TracedChange `json:"list_changes,omitempty"`
 	Notices  []session.TracedNotice `json:"notices,omitempty"`
+	Outlived []traceOutlived        `json:"outlived,omitempty"`
 }
 
 type traceResult struct {
@@ -727,11 +730,18 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	report := sessionTraceReport{Session: header.ID, Error: header.Error, Events: len(events), Agents: append([]session.AgentRun{}, header.Agents...),
-		Requests: []traceRequest{}, Calls: []traceCall{}}
-	if header.Name != nil {
-		report.Name = *header.Name
+	report, err := traceBody(store, header.ID, events, func(string, time.Time) bool { return true })
+	if err != nil {
+		return sessionTraceReport{}, err
 	}
+	report.Session, report.Name, report.Error, report.Events = header.ID, header.Named(), header.Error, len(events)
+	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
+	return withAncestorsSubAgents(store, header, report)
+}
+
+func traceBody(store *session.Store, id string, events []session.Event, keep func(agent string, at time.Time) bool) (sessionTraceReport, error) {
+	report := sessionTraceReport{Requests: []traceRequest{}, Calls: []traceCall{}}
+	events = slices.DeleteFunc(slices.Clone(events), func(event session.Event) bool { return !keep(event.Agent, event.At) })
 	placed := map[string]int{}
 	for _, event := range events {
 		switch event.Kind {
@@ -769,13 +779,14 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 			}
 		}
 	}
-	traced, err := store.Traced(header.ID, events)
+	traced, err := store.Traced(id, events)
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	report.Requests = tracedRequests(report.Requests, traced.Exchanges)
-	if len(traced.Exchanges) > 0 {
-		sizes := store.Sizes(header.ID)
+	exchanges := slices.DeleteFunc(traced.Exchanges, func(exchange session.Exchange) bool { return !keep(exchange.Agent, exchange.At) })
+	report.Requests = tracedRequests(report.Requests, exchanges)
+	if len(exchanges) > 0 {
+		sizes := store.Sizes(id)
 		report.Sizes = &sizes
 	}
 	report.Inserted, report.Changes, report.Notices = traced.Inserted, traced.Changes, traced.Notices
@@ -805,6 +816,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 		if request.Error != "" {
 			requests[i].Mark, requests[i].Detail = cli.Fail, oneLine(request.Error)
 		}
+		requests[i].Detail = recordedIn(request.RecordedIn) + requests[i].Detail
 	}
 	calls := make([]cli.Row, len(report.Calls))
 	for i, call := range report.Calls {
@@ -823,6 +835,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 		for _, ran := range call.Hooks {
 			calls[i].Detail += " · " + ran.Event + " hook ran " + strconv.Itoa(ran.Ran) + strings.TrimSuffix(" "+cmp.Or(ran.Block, ran.Ask), " ")
 		}
+		calls[i].Detail = recordedIn(call.RecordedIn) + calls[i].Detail
 	}
 	hooks := make([]cli.Row, len(report.Hooks))
 	for i, ran := range report.Hooks {
@@ -873,7 +886,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	for _, section := range []struct {
 		name string
 		rows []cli.Row
-	}{{"sub-agents", agents}, {"requests", requests}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
+	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
 		if len(section.rows) > 0 {
 			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
 		}

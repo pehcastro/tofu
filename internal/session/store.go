@@ -242,6 +242,20 @@ func (s *Store) Header(handle string) (Header, error) {
 	return s.read(id)
 }
 
+func (s *Store) Ancestors(id string) ([]Header, error) {
+	var chain []Header
+	header, err := s.read(id)
+	for err == nil && header.Parent != "" && header.Parent != id && !slices.ContainsFunc(chain, func(seen Header) bool { return seen.ID == header.Parent }) {
+		if header, err = s.read(header.Parent); err == nil {
+			chain = append(chain, header)
+		}
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return chain, nil
+	}
+	return chain, err
+}
+
 func (s *Store) holding(handle string) (string, string) {
 	id, part, _ := strings.Cut(handle, TurnMark)
 	if _, err := s.read(id); part != "" || err == nil {

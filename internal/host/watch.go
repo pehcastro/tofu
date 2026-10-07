@@ -15,7 +15,6 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
-	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -204,52 +203,6 @@ func (a *watcher) called(call llm.ToolCall, asker string) {
 	a.noteWholeFile(call)
 	a.marks.Unlock()
 	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker, Args: call.Arguments})
-}
-
-func resumedChat(carry Carry, dir string) []Event {
-	if carry.Session == "" {
-		return nil
-	}
-	var chat []Event
-	mask := sys.LoadKeyRedactor().Redact
-	watch := &watcher{emit: func(event Event) { chat = append(chat, redacted(event, mask)) }, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
-	root := carry.Session
-	if store, err := session.OpenIn(dir); err == nil {
-		if header, err := store.Header(carry.Session); err == nil {
-			root = cmp.Or(header.Root, root)
-		}
-	}
-	watch.emit(Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: root})
-	for _, message := range carry.Messages {
-		switch message.Role {
-		case llm.RoleUser:
-			watch.emit(Event{Kind: EventTask, Text: carry.taskIn(message.Content)})
-		case llm.RoleAssistant:
-			if text := strings.TrimSpace(message.Content); text != "" {
-				watch.emit(Event{Kind: EventText, Text: text})
-			}
-			for _, call := range message.ToolCalls {
-				watch.called(call, "")
-			}
-		case llm.RoleTool:
-			watch.result(message, "")
-		case llm.RoleSystem, llm.RoleUnknown:
-		}
-	}
-	return chat
-}
-
-func (carry Carry) taskIn(content string) string {
-	if !strings.HasPrefix(content, envOpen) {
-		return content
-	}
-	for _, task := range carry.Tasks {
-		if task != "" && strings.HasSuffix(content, task) {
-			return task
-		}
-	}
-	_, after, _ := strings.Cut(content, envClose)
-	return strings.TrimSpace(after)
 }
 
 func (a *watcher) result(message llm.Message, asker string) {

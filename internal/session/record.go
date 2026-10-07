@@ -250,6 +250,13 @@ type Header struct {
 
 func (h Header) Ended() bool { return h.EndedAt != nil }
 
+func (h Header) Named() string {
+	if h.Name == nil {
+		return ""
+	}
+	return *h.Name
+}
+
 func (h Header) LastAt() time.Time {
 	if h.EndedAt == nil {
 		return h.At
