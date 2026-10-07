@@ -943,7 +943,7 @@ func (h *heldSubAgent) remember(round Row) {
 	}
 	h.kept.Lock()
 	defer h.kept.Unlock()
-	h.history = resumable(round.Conversation)
+	h.history = Sendable(round.Conversation)
 }
 
 func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (SubAgentModel, error) {
