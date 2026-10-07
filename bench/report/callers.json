@@ -18,5 +18,10 @@
     "point": "read_worth",
     "file": "cmd/tofu/sift.go",
     "symbol": "sift.Length"
+  },
+  {
+    "point": "memory_offer",
+    "file": "interface/tui/memory.go",
+    "symbol": "memory.OfferFor"
   }
 ]
