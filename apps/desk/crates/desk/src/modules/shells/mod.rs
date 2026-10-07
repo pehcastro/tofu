@@ -1,22 +1,25 @@
-mod chrome;
-mod fixture;
-mod paint;
+use super::chat::cassette;
 
 use std::borrow::Cow;
-use std::sync::Arc;
+use std::time::{Duration, Instant};
 
+use desk_core::bridge::Event;
+use desk_core::model::{Session, Store};
+use desk_ui::components::card::{Header, inner_card, shell};
+use desk_ui::components::glyph::Glyph;
+use desk_ui::components::shells::{Shell, ShellEvent, ShellState, Shells as ShellsTile};
+use desk_ui::components::term::TermStatus;
+use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyElement, AnyView, App, AppContext, BoxShadow, Context, Div, Image, ImageFormat, IntoElement,
-    Render, SharedString, Stateful, Window, div, point, prelude::*, px,
+    AnyView, App, AppContext, Context, IntoElement, Render, SharedString, Window, div, prelude::*,
+    px,
 };
 
-use fixture::{SHELLS, SUMMARY, Shell};
-use paint::{
-    ARROW, CLOSE, PROMPT, T2, T3, TRACE, TRACE_MARK, glyph, hex, medium, mono, spacer, square,
-    text, tint, white,
-};
+use cassette::{Replay, Step};
 
-const BACKDROP: &[u8] = include_bytes!("../chat/assets/backdrop.jpg");
+const BOARD: &str = "36-agents";
+const TILE_WIDTH: f32 = 640.0;
+const INSET: f32 = 8.0;
 const FONTS: [&[u8]; 6] = [
     include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
     include_bytes!("../../../../../assets/fonts/Geist-Medium.ttf"),
@@ -26,366 +29,209 @@ const FONTS: [&[u8]; 6] = [
     include_bytes!("../../../../../assets/fonts/GeistMono-SemiBold.ttf"),
 ];
 
-const OPEN_SAYS: &str = "Opens this shell as a Terminal tile you can type into.";
-const KILL_SAYS: &str =
-    "Kills the process after a confirm; the agent that started it is told it ended by your hand.";
-const MENTION_SAYS: &str = "Mentions this in the chat as a reference the lead can read.";
-const CLOSE_TAB_SAYS: &str =
-    "Closes this tab. The process keeps running; it stays in the shell list.";
-
 struct Shells {
-    backdrop: Arc<Image>,
-    selected: usize,
-    menu: bool,
-    told: Option<SharedString>,
+    store: Store,
+    replay: Option<Replay>,
+    opened_at: Instant,
+    shells: Vec<Shell>,
+    active: usize,
+    listing: bool,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    let menu = match board {
-        None | Some("IWY-9") => false,
-        Some("S-WORK-7") => true,
-        Some(other) => {
-            return Err(format!(
-                "the shells module draws IWY-9 and S-WORK-7, not {other}"
-            ));
-        }
-    };
+    if board.is_some_and(|board| board != BOARD) {
+        return Err(format!("the shells module replays {BOARD}, not {board:?}"));
+    }
     cx.text_system()
         .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
         .map_err(|error| format!("the shells module cannot load the Geist fonts: {error}"))?;
-    let backdrop = Arc::new(Image::from_bytes(ImageFormat::Jpeg, BACKDROP.to_vec()));
+    let replay = Replay::read()?;
     Ok(cx
         .new(|_| Shells {
-            backdrop,
-            selected: 0,
-            menu,
-            told: None,
+            store: Store::default(),
+            replay: Some(replay),
+            opened_at: Instant::now(),
+            shells: Vec::new(),
+            active: 0,
+            listing: false,
         })
         .into())
 }
 
-impl Shells {
-    fn teller(
-        &self,
-        id: impl Into<gpui::ElementId>,
-        says: &'static str,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        div()
-            .id(id)
-            .cursor_pointer()
-            .on_click(cx.listener(move |shells, _, _, cx| {
-                shells.told = Some(says.into());
-                cx.notify();
-            }))
-    }
-
-    fn tab(&self, index: usize, shell: &Shell, scale: f32, cx: &mut Context<Self>) -> Div {
-        let on = index == self.selected;
-        let ink = if on { white(1.0) } else { white(0.5) };
-        div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .h(px(31.0))
-            .pr(px(3.0))
-            .rounded_t(px(9.0))
-            .when(on, |tab| tab.bg(white(0.05)).shadow(top_line()))
-            .child(
-                div()
-                    .id(("shell-tab", index))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(7.0))
-                    .h(px(31.0))
-                    .pl(px(10.0))
-                    .pr(px(6.0))
-                    .on_click(cx.listener(move |shells, _, _, cx| {
-                        shells.selected = index;
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .flex_none()
-                            .size(px(6.0))
-                            .rounded(px(3.0))
-                            .bg(shell.state.dot()),
-                    )
-                    .child(mono(12.0, 12.0, ink, format!("shell-{}", index + 1))),
-            )
-            .child(
-                self.teller(("shell-close", index), CLOSE_TAB_SAYS, cx)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(px(18.0))
-                    .rounded(px(5.0))
-                    .when(on, |close| {
-                        close.child(glyph(CLOSE, 11.0, white(0.45), scale))
-                    }),
-            )
-    }
-
-    fn details(&self, shell: &Shell, scale: f32, cx: &mut Context<Self>) -> Div {
-        let quiet = white(T3);
-        let word = |body: &'static str| text(11.5, 23.0, quiet, body);
-        div()
-            .flex()
-            .items_center()
-            .gap(px(12.0))
-            .pt(px(10.0))
-            .px(px(14.0))
-            .pb(px(4.0))
-            .child(
-                mono(12.0, 23.0, white(T2), format!("$ {}", shell.command))
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden(),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(10.0))
-                    .child(mono(11.5, 23.0, quiet, shell.pid))
-                    .child(
-                        div()
-                            .flex()
-                            .child(word("by "))
-                            .child(text(11.5, 23.0, shell.ink, shell.by)),
-                    )
-                    .when(!shell.port.is_empty(), |row| {
-                        row.child(mono(11.5, 23.0, white(T2), shell.port))
-                    })
-                    .child(word(shell.age))
-                    .child(self.teller("shell-open", OPEN_SAYS, cx).child(text(
-                        11.5,
-                        23.0,
-                        white(T2),
-                        "open",
-                    )))
-                    .child(self.teller("shell-kill", KILL_SAYS, cx).child(text(
-                        11.5,
-                        23.0,
-                        white(T2),
-                        "kill",
-                    )))
-                    .child(
-                        self.teller("shell-mention", MENTION_SAYS, cx)
-                            .opacity(0.7)
-                            .child(glyph(TRACE_MARK, 13.0, TRACE, scale)),
-                    ),
-            )
-    }
-
-    fn panel(&self, scale: f32, cx: &mut Context<Self>) -> Div {
-        let shell = &SHELLS[self.selected];
-        div()
-            .flex_1()
-            .min_h_0()
-            .mb(px(8.0))
-            .flex()
-            .flex_col()
-            .px(px(3.0))
-            .pb(px(3.0))
-            .rounded(px(12.0))
-            .bg(hex(0x19181f))
-            .shadow(vec![ring(white(0.06))])
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(6.0))
-                    .h(px(28.0))
-                    .pl(px(9.0))
-                    .pr(px(6.0))
-                    .child(glyph(PROMPT, 13.0, white(0.55), scale))
-                    .child(medium(12.0, 12.0, white(0.55), "Shells"))
-                    .child(spacer())
-                    .child(text(12.0, 12.0, white(T3), SUMMARY)),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .overflow_hidden()
-                    .rounded(px(11.0))
-                    .relative()
-                    .shadow(top_line())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_end()
-                            .h(px(36.0))
-                            .pl(px(12.0))
-                            .pr(px(8.0))
-                            .children(
-                                SHELLS
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(index, shell)| self.tab(index, shell, scale, cx)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_h_0()
-                            .flex()
-                            .flex_col()
-                            .bg(white(0.045))
-                            .child(self.details(shell, scale, cx))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_h_0()
-                                    .pt(px(4.0))
-                                    .px(px(14.0))
-                                    .pb(px(14.0))
-                                    .children(shell.output.iter().map(|line| {
-                                        mono(12.0, 19.0, white(0.68), *line).h(px(19.0))
-                                    })),
-                            ),
-                    )
-                    .when(self.menu, |inner| inner.child(self.menu(cx))),
-            )
-    }
-
-    fn menu(&self, cx: &mut Context<Self>) -> Div {
-        div()
-            .absolute()
-            .left(px(8.0))
-            .top(px(38.0))
-            .w(px(440.0))
-            .p(px(6.0))
-            .rounded(px(12.0))
-            .bg(tint(0x1e1d24, 0.94))
-            .shadow(vec![
-                ring(white(0.12)),
-                BoxShadow {
-                    color: tint(0x000000, 0.6).into(),
-                    offset: point(px(0.0), px(22.0)),
-                    blur_radius: px(50.0),
-                    spread_radius: px(0.0),
-                    inset: false,
+fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell, since: Instant) -> Shell {
+    let (state, status) = match (stored.exited, stored.exit_code) {
+        (false, _) => (ShellState::Running, TermStatus::Running { since }),
+        (true, code) => {
+            let code = code.and_then(|code| i32::try_from(code).ok()).unwrap_or(-1);
+            let state = if code == 0 && !stored.killed {
+                ShellState::Running
+            } else {
+                ShellState::Failed
+            };
+            (
+                state,
+                TermStatus::Exited {
+                    code,
+                    took: Duration::ZERO,
                 },
-            ])
-            .children(SHELLS.iter().enumerate().map(|(index, shell)| {
-                div()
-                    .id(("shell-menu-row", index))
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.0))
-                    .h(px(37.0))
-                    .px(px(10.0))
-                    .rounded(px(8.0))
-                    .when(index == self.selected, |row| row.bg(white(0.07)))
-                    .on_click(cx.listener(move |shells, _, _, cx| {
-                        shells.selected = index;
-                        shells.menu = false;
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .flex_none()
-                            .size(px(6.0))
-                            .rounded(px(3.0))
-                            .bg(shell.state.dot()),
-                    )
-                    .child(
-                        mono(12.0, 23.0, white(0.9), format!("shell-{}", index + 1))
-                            .flex_none()
-                            .w(px(58.0)),
-                    )
-                    .child(
-                        mono(12.0, 23.0, white(T2), shell.command)
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden(),
-                    )
-                    .child(text(12.0, 23.0, shell.ink, shell.by))
-            }))
-    }
-
-    fn toast(&self, scale: f32, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let said = self.told.clone()?;
-        Some(
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .bottom(px(44.0))
-                .flex()
-                .justify_center()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.0))
-                        .max_w(px(620.0))
-                        .py(px(9.0))
-                        .pl(px(14.0))
-                        .pr(px(10.0))
-                        .rounded(px(12.0))
-                        .bg(tint(0x1e1d24, 0.96))
-                        .shadow(vec![ring(white(0.12))])
-                        .text_size(px(13.0))
-                        .line_height(px(18.0))
-                        .child(glyph(ARROW, 13.0, white(T3), scale))
-                        .child(div().flex_1().min_w_0().child(said))
-                        .child(
-                            text(11.0, 18.0, white(T3), "not drawn yet")
-                                .px(px(7.0))
-                                .rounded(px(999.0))
-                                .bg(white(0.06)),
-                        )
-                        .child(
-                            square(22.0, 7.0)
-                                .id("toast-dismiss")
-                                .cursor_pointer()
-                                .on_click(cx.listener(|shells, _, _, cx| {
-                                    shells.told = None;
-                                    cx.notify();
-                                }))
-                                .child(glyph(CLOSE, 11.0, white(0.45), scale)),
-                        ),
-                )
-                .into_any_element(),
+            )
+        }
+    };
+    let starter = stored.agent.as_ref().map(|id| {
+        session.agents.get(id).map_or_else(
+            || SharedString::from(id.clone()),
+            |agent| format!("{} {}", agent.kind, agent.number).into(),
         )
+    });
+    Shell {
+        name: name.to_owned().into(),
+        state,
+        command: stored.command.clone().into(),
+        pid: stored.pid,
+        starter,
+        port: stored.port,
+        run_time: stored
+            .started_at
+            .as_deref()
+            .and_then(|at| at.get(11..19))
+            .map(|at| format!("since {at}").into()),
+        lines: stored
+            .output
+            .lines()
+            .map(|line| line.to_owned().into())
+            .collect(),
+        status,
     }
 }
 
-fn ring(color: gpui::Rgba) -> BoxShadow {
-    BoxShadow {
-        color: color.into(),
-        offset: point(px(0.0), px(0.0)),
-        blur_radius: px(0.0),
-        spread_radius: px(1.0),
-        inset: true,
+impl Shells {
+    fn session(&self) -> Option<&Session> {
+        self.store.sessions.values().next()
+    }
+
+    fn rebuild(&mut self) {
+        let since = self.opened_at;
+        self.shells = self.session().map_or_else(Vec::new, |session| {
+            session
+                .shells
+                .iter()
+                .map(|(name, stored)| shown(session, name, stored, since))
+                .collect()
+        });
+        self.active = self.active.min(self.shells.len().saturating_sub(1));
+    }
+
+    fn feed(&mut self, event: &Event) {
+        if let Err(error) = self.store.apply_batch(std::slice::from_ref(event)) {
+            eprintln!("desk: the store refused an event from the cassette: {error}");
+        }
+    }
+
+    fn settle(&mut self) -> Result<(), String> {
+        self.replay = None;
+        self.store = Store::default();
+        let mut whole = Replay::read()?;
+        while let Step::Feed(event) = whole.step()? {
+            self.feed(&event);
+        }
+        self.rebuild();
+        let pids: Vec<String> = self
+            .shells
+            .iter()
+            .map(|shell| {
+                shell.pid.map_or_else(
+                    || format!("{} no pid", shell.name),
+                    |pid| format!("{} pid {pid}", shell.name),
+                )
+            })
+            .collect();
+        eprintln!(
+            "desk: shells from the store: {} shells ({}); cassette: {} shell.started events",
+            self.shells.len(),
+            pids.join(", "),
+            cassette_started()
+        );
+        Ok(())
+    }
+
+    fn frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(replay) = &mut self.replay else {
+            return;
+        };
+        window.request_animation_frame();
+        let stepped = match replay.step() {
+            Ok(Step::Feed(event)) => {
+                self.feed(&event);
+                self.rebuild();
+                Ok(())
+            }
+            Ok(Step::Restart) => {
+                self.store = Store::default();
+                Ok(())
+            }
+            Ok(Step::Report) => self.settle(),
+            Err(error) => Err(error),
+        };
+        if let Err(error) = stepped {
+            eprintln!("desk: the cassette has a bad line: {error}");
+            cx.quit();
+        }
+    }
+
+    fn apply(&mut self, event: ShellEvent) {
+        match event {
+            ShellEvent::Pick(at) => {
+                self.active = at;
+                self.listing = false;
+            }
+            ShellEvent::More => self.listing = true,
+            ShellEvent::Dismiss => self.listing = false,
+            ShellEvent::Close(at) | ShellEvent::Open(at) | ShellEvent::Trace(at) => {
+                eprintln!("desk: shells: {event:?} on shell {at} is not wired");
+            }
+        }
     }
 }
 
-fn top_line() -> Vec<BoxShadow> {
-    vec![BoxShadow {
-        color: white(0.07).into(),
-        offset: point(px(0.0), px(1.0)),
-        blur_radius: px(0.0),
-        spread_radius: px(0.0),
-        inset: true,
-    }]
+fn cassette_started() -> usize {
+    include_str!("../../../../../cassettes/36-agents.cassette")
+        .lines()
+        .filter(|line| line.contains("\"method\": \"shell.started\""))
+        .count()
 }
 
 impl Render for Shells {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let scale = window.scale_factor();
-        let panel = self.panel(scale, cx);
-        let toast = self.toast(scale, cx);
-        chrome::window(&self.backdrop, scale, panel, toast)
+        self.frame(window, cx);
+        let theme = ActiveTheme::theme(cx);
+        let tile = ShellsTile::new(
+            "shells",
+            self.shells.clone(),
+            self.active,
+            self.listing,
+            cx.listener(|module, event: &ShellEvent, _, cx| {
+                module.apply(*event);
+                cx.notify();
+            }),
+        )
+        .on_kill(|picked: &usize, _, _| {
+            eprintln!("desk: shells: kill shell {picked}: desk_core's bridge has no kill request");
+        });
+        let meter = self.replay.as_ref().map(Replay::meter);
+        div()
+            .size_full()
+            .flex()
+            .items_start()
+            .justify_center()
+            .p(px(INSET))
+            .child(
+                shell(
+                    Header::Title(Some(Glyph::Terminal), "Shells".into(), None),
+                    &theme,
+                )
+                .w(px(TILE_WIDTH))
+                .child(inner_card(&theme).child(tile)),
+            )
+            .children(meter)
     }
 }
