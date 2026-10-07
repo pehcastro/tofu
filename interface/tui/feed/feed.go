@@ -301,17 +301,10 @@ func fromTop(rows, height, scroll int) int {
 }
 
 func (m Model) layout(through string) (cards []card, starts []int, rows int) {
-	drafts, width := m.drafts(), m.feedWidth()
-	cover, passed, below := m.scroll+2*m.pageHeight(), through == "", 0
+	drafts, width, height := m.drafts(), m.feedWidth(), m.pageHeight()
 	cards = make([]card, len(drafts))
-	for i := len(drafts) - 1; i >= 0; i-- {
-		if below < cover || !passed {
-			cards[i] = m.card(width, drafts[i])
-		} else {
-			cards[i] = m.sized(width, drafts[i])
-		}
-		passed = passed || cards[i].id == through
-		below += cards[i].height + m.gap
+	for i := range drafts {
+		cards[i] = m.sized(width, drafts[i])
 	}
 	starts = make([]int, len(cards))
 	for i, c := range cards {
@@ -320,6 +313,12 @@ func (m Model) layout(through string) (cards []card, starts []int, rows int) {
 		}
 		starts[i] = rows
 		rows += c.height
+	}
+	top := fromTop(rows, height, m.scroll)
+	for i, c := range cards {
+		if c.id == through || starts[i] < top+2*height && starts[i]+c.height > top-height {
+			cards[i] = m.card(width, drafts[i])
+		}
 	}
 	return cards, starts, rows
 }

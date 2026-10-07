@@ -22,7 +22,7 @@ const (
 	cardPadY         = 1
 	cardBorderRows   = 2
 	cardBorderSides  = 2
-	headAndMetaRows  = 2
+	tabSpaces        = "    "
 	detailIndent     = "  "
 	headMinWidth     = 16
 	headInset        = 12
@@ -63,10 +63,18 @@ type cachedCard struct {
 	height int
 }
 
+type heldHeight struct {
+	width    int
+	expanded bool
+	event    Event
+	height   int
+}
+
 type cardCache struct {
-	cards map[string]cachedCard
-	order []string
-	prose markdown.Renderer
+	cards   map[string]cachedCard
+	order   []string
+	heights map[string]heldHeight
+	prose   markdown.Renderer
 }
 
 func sameEvent(a, b Event) bool {
@@ -148,31 +156,23 @@ func textWidth(width int) int {
 	return max(cardMinWidth, width-2) - 2*cardPadX - cardBorderSides
 }
 
-func wrappedRows(text string, room int) int {
-	return strings.Count(text, "\n") + 1 + len(text)/room
+func (m Model) sized(width int, d draft) card {
+	e, key, c := *d.event, m.cardKey(width, d.event), m.cards
+	if held, ok := c.heights[e.ID]; ok && held.width == width && held.expanded == key.expanded && sameEvent(held.event, e) {
+		return card{id: e.ID, height: held.height}
+	}
+	wrapped := lipgloss.Wrap(strings.ReplaceAll(strings.Join(d.lines(c, e, key), "\n"), "\t", tabSpaces), textWidth(width), "")
+	height := cardBorderRows + 2*cardPadY + lipgloss.Height(wrapped)
+	c.hold(heldHeight{width, key.expanded, e, height})
+	return card{id: e.ID, height: height}
 }
 
-func (m Model) sized(width int, d draft) card {
-	e, expanded := d.event, m.expanded[d.event.ID]
-	if cached, ok := m.cards.cards[e.ID]; ok && cached.key.width == width && cached.key.expanded == expanded && sameEvent(cached.event, *e) {
-		return card{id: e.ID, height: cached.height}
+func (c *cardCache) hold(held heldHeight) {
+	if c.heights == nil {
+		c.heights = make(map[string]heldHeight)
 	}
-	room := textWidth(width)
-	height := cardBorderRows + 2*cardPadY + headAndMetaRows + wrappedRows(e.Title, room)
-	if e.Body != "" {
-		height += wrappedRows(e.Body, room)
-	}
-	shown := e.Detail[:min(len(e.Detail), detailPreview)]
-	if expanded {
-		shown = e.Detail
-	}
-	for _, line := range shown {
-		height += wrappedRows(line, room-len(detailIndent))
-	}
-	if len(shown) < len(e.Detail) {
-		height++
-	}
-	return card{id: e.ID, height: height}
+	held.event.Detail = slices.Clone(held.event.Detail)
+	c.heights[held.event.ID] = held
 }
 
 func (m Model) card(width int, d draft) card {
@@ -194,6 +194,7 @@ func (m Model) card(width int, d draft) card {
 	height := lipgloss.Height(view)
 	e.Detail = slices.Clone(e.Detail)
 	c.cards[e.ID] = cachedCard{key, e, view, height}
+	c.hold(heldHeight{width, key.expanded, e, height})
 	return card{e.ID, view, height}
 }
 

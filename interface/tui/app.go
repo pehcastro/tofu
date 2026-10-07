@@ -256,6 +256,7 @@ type App struct {
 	liveShells     []shells.Entry
 	shellsTicking  bool
 	happened       []feed.Event
+	happenedIndex  map[string]int
 	feedStale      bool
 	reached        []string
 	board          paste.Board
@@ -321,22 +322,23 @@ func New(options Options) *App {
 		}})
 	}
 	app := &App{
-		options:      options,
-		requirements: options.Requirements,
-		view:         session.New(options.Now, new(markdown.Renderer).Lines),
-		feed:         feed.New(options.Now),
-		edits:        edits.Model{Root: options.Root},
-		shells:       shells.New(options.Now),
-		settings:     settings.Model{Providers: options.Providers, Scopes: []string{"global", "project"}},
-		store:        options.Settings,
-		defaults:     isettings.Default(),
-		shortcuts:    keymap.LoadShortcuts(options.Keymap),
-		width:        defaultWidth,
-		height:       defaultHeight,
-		started:      options.Now(),
-		reports:      map[string]string{},
-		moves:        map[string]movement{},
-		board:        paste.Default(options.Paste),
+		options:       options,
+		requirements:  options.Requirements,
+		view:          session.New(options.Now, new(markdown.Renderer).Lines),
+		feed:          feed.New(options.Now),
+		edits:         edits.Model{Root: options.Root},
+		shells:        shells.New(options.Now),
+		settings:      settings.Model{Providers: options.Providers, Scopes: []string{"global", "project"}},
+		store:         options.Settings,
+		defaults:      isettings.Default(),
+		shortcuts:     keymap.LoadShortcuts(options.Keymap),
+		width:         defaultWidth,
+		height:        defaultHeight,
+		started:       options.Now(),
+		reports:       map[string]string{},
+		moves:         map[string]movement{},
+		happenedIndex: map[string]int{},
+		board:         paste.Default(options.Paste),
 	}
 	if options.PromptHistory != "" {
 		app.prompts = isession.OpenPromptHistory(options.PromptHistory)

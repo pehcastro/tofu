@@ -360,8 +360,7 @@ func (a *App) absorb(event Event) {
 			a.view.TakePartial()
 		}
 		if at := a.happenedAt(short(event.ID)); event.ID != "" && at >= 0 {
-			a.happened = slices.Delete(a.happened, at, at+1)
-			a.feedStale = true
+			a.forget(at)
 		}
 	case EventThinking:
 		if event.Agent == "" {
@@ -513,14 +512,27 @@ func lines(text string) []string {
 }
 
 func (a *App) happenedAt(id string) int {
-	return slices.IndexFunc(a.happened, func(held feed.Event) bool { return held.ID == id })
+	if at, held := a.happenedIndex[id]; held {
+		return at
+	}
+	return -1
 }
 
 func (a *App) record(event feed.Event) {
 	if at := a.happenedAt(event.ID); at >= 0 {
 		a.happened[at] = event
 	} else {
+		a.happenedIndex[event.ID] = len(a.happened)
 		a.happened = append(a.happened, event)
+	}
+	a.feedStale = true
+}
+
+func (a *App) forget(at int) {
+	a.happened = slices.Delete(a.happened, at, at+1)
+	clear(a.happenedIndex)
+	for index, held := range a.happened {
+		a.happenedIndex[held.ID] = index
 	}
 	a.feedStale = true
 }

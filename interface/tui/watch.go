@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -21,18 +20,26 @@ const (
 	stalledDetail = "stalled: no new output, step or request"
 )
 
+type progressMark struct{ steps, calls, answered int }
+
 type movement struct {
-	steps, output string
-	moved         time.Time
+	mark   progressMark
+	output string
+	moved  time.Time
 }
 
 func (a *App) stepped(row subagent.Row) {
-	steps := fmt.Sprint(row.Steps, row.Calls)
+	mark := progressMark{steps: row.Steps, calls: len(row.Calls)}
+	for _, call := range row.Calls {
+		if call.Result != "" {
+			mark.answered++
+		}
+	}
 	held, seen := a.moves[row.Name]
-	if !seen || held.steps != steps {
+	if !seen || held.mark != mark {
 		held.moved = a.options.Now()
 	}
-	held.steps = steps
+	held.mark = mark
 	a.moves[row.Name] = held
 }
 
