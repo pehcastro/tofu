@@ -47,7 +47,7 @@ pub struct Launch {
 
 const USAGE: &str = "usage: drive <script.json> <out dir>
 script: {\"page\": \"tiling\", \"theme\": \"...\", \"mode\": \"dark|light\", \"size\": [w, h], \"steps\": [...]}
-steps: [\"move\", [x,y]] [\"down\", [x,y], \"left|right\"] [\"up\", [x,y], \"left|right\"]
+steps: [\"move\", [x,y]] [\"down|up|click\", [x,y], \"left|right\", \"alt-shift-ctrl\"] (modifiers optional)
        [\"drag\", [x,y], [x,y], steps] (moves with the held button) [\"key\", \"ctrl-alt-e\"]
        [\"scroll\", [x,y], dy] [\"wait\", ms] [\"shot\", \"name\"]
        [\"ime\", \"mark|commit\", \"text\"] (to the focused text area's input handler)";
@@ -62,14 +62,22 @@ const VISIBLE: f32 = 0.01;
 
 enum Step {
     Move(Point<Pixels>),
-    Down(Point<Pixels>, MouseButton),
-    Up(Point<Pixels>, MouseButton),
+    Down(Press),
+    Up(Press),
+    Click(Press),
     Drag(Point<Pixels>, Point<Pixels>, usize),
     Key(Keystroke),
     Scroll(Point<Pixels>, f32),
     Wait(Duration),
     Shot(String),
     Ime(Ime, String),
+}
+
+#[derive(Clone, Copy)]
+struct Press {
+    at: Point<Pixels>,
+    button: MouseButton,
+    modifiers: Modifiers,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -115,6 +123,23 @@ fn button(value: Option<&Value>) -> Result<MouseButton, String> {
     }
 }
 
+fn modifiers(value: Option<&Value>) -> Result<Modifiers, String> {
+    let mut held = Modifiers::none();
+    let Some(value) = value else {
+        return Ok(held);
+    };
+    let spelled = value.as_str().ok_or("modifiers are not a string")?;
+    for name in spelled.split('-') {
+        match name {
+            "alt" => held.alt = true,
+            "shift" => held.shift = true,
+            "ctrl" => held.control = true,
+            other => return Err(format!("modifier {other:?} is not alt, shift or ctrl")),
+        }
+    }
+    Ok(held)
+}
+
 fn whole(value: Option<&Value>, what: &str) -> Result<u64, String> {
     value
         .and_then(Value::as_u64)
@@ -143,8 +168,18 @@ fn step(value: &Value) -> Result<Step, String> {
     let arg = |index: usize| items.get(index);
     Ok(match verb {
         "move" => Step::Move(at(arg(1))?),
-        "down" => Step::Down(at(arg(1))?, button(arg(2))?),
-        "up" => Step::Up(at(arg(1))?, button(arg(2))?),
+        "down" | "up" | "click" => {
+            let press = Press {
+                at: at(arg(1))?,
+                button: button(arg(2))?,
+                modifiers: modifiers(arg(3))?,
+            };
+            match verb {
+                "down" => Step::Down(press),
+                "up" => Step::Up(press),
+                _ => Step::Click(press),
+            }
+        }
         "drag" => {
             let count = usize::try_from(whole(arg(3), "drag steps")?)
                 .map_err(|error| format!("drag steps: {error}"))?;
@@ -723,6 +758,58 @@ fn moved(
     )
 }
 
+fn pressed(session: &mut Session, pointer: &mut Pointer, press: Press) -> Result<String, String> {
+    let Press {
+        at,
+        button,
+        modifiers,
+    } = press;
+    moved(session, pointer, at)?;
+    pointer.held = Some(button);
+    let result = dispatch(
+        session,
+        PlatformInput::MouseDown(MouseDownEvent {
+            button,
+            position: at,
+            modifiers,
+            click_count: 1,
+            first_mouse: false,
+        }),
+    )?;
+    Ok(format!("down {button:?}{} {result}", held(modifiers)))
+}
+
+fn released(session: &mut Session, pointer: &mut Pointer, press: Press) -> Result<String, String> {
+    let Press {
+        at,
+        button,
+        modifiers,
+    } = press;
+    moved(session, pointer, at)?;
+    pointer.held = None;
+    let result = dispatch(
+        session,
+        PlatformInput::MouseUp(MouseUpEvent {
+            button,
+            position: at,
+            modifiers,
+            click_count: 1,
+        }),
+    )?;
+    Ok(format!("up {button:?}{} {result}", held(modifiers)))
+}
+
+fn held(modifiers: Modifiers) -> String {
+    [
+        (modifiers.control, " ctrl"),
+        (modifiers.alt, " alt"),
+        (modifiers.shift, " shift"),
+    ]
+    .into_iter()
+    .filter_map(|(on, name)| on.then_some(name))
+    .collect()
+}
+
 fn compose(
     areas: &Areas,
     kind: Ime,
@@ -767,34 +854,11 @@ impl Run<'_> {
         let pointer = &mut self.pointer;
         let line = match step {
             Step::Move(at) => format!("move {}", moved(session, pointer, *at)?),
-            Step::Down(at, button) => {
-                moved(session, pointer, *at)?;
-                pointer.held = Some(*button);
-                let result = dispatch(
-                    session,
-                    PlatformInput::MouseDown(MouseDownEvent {
-                        button: *button,
-                        position: *at,
-                        modifiers: Modifiers::none(),
-                        click_count: 1,
-                        first_mouse: false,
-                    }),
-                )?;
-                format!("down {button:?} {result}")
-            }
-            Step::Up(at, button) => {
-                moved(session, pointer, *at)?;
-                pointer.held = None;
-                let result = dispatch(
-                    session,
-                    PlatformInput::MouseUp(MouseUpEvent {
-                        button: *button,
-                        position: *at,
-                        modifiers: Modifiers::none(),
-                        click_count: 1,
-                    }),
-                )?;
-                format!("up {button:?} {result}")
+            Step::Down(press) => pressed(session, pointer, *press)?,
+            Step::Up(press) => released(session, pointer, *press)?,
+            Step::Click(press) => {
+                let down = pressed(session, pointer, *press)?;
+                format!("{down}, {}", released(session, pointer, *press)?)
             }
             Step::Drag(from, to, count) => {
                 for at in 0..=*count {

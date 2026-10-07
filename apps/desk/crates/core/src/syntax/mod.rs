@@ -251,6 +251,10 @@ impl Syntax {
             let Some(Some(kind)) = self.kinds.get(capture.index as usize) else {
                 continue;
             };
+            let kind = match capture.node.kind() {
+                "integer_literal" | "float_literal" => &Kind::Number,
+                _ => kind,
+            };
             let range = capture.node.byte_range();
             let clipped = range.start.max(from)..range.end.min(to);
             if !clipped.is_empty() {
