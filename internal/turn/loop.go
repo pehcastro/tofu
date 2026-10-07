@@ -1137,17 +1137,18 @@ func hookRefusal(ctx context.Context, config Config, request GateRequest, pre ho
 	case config.Person == nil:
 		return "this call did not run: a PreToolUse hook asks the person first, and no person was available to answer: " + pre.Ask
 	}
-	if config.Notify != nil {
+	who := answerer(ctx)
+	if config.Notify != nil && SubAgentAsking(ctx) == "" {
 		config.Notify("a PreToolUse hook asks you before " + request.Tool + " runs: " + pre.Ask)
 	}
-	answer, err := config.Person(ctx, request, GateDecision{})
+	answer, err := config.Person(ctx, request, GateDecision{HookAsk: pre.Ask})
 	switch {
 	case err != nil:
-		return "this call did not run: a PreToolUse hook asks the person first, and the person could not be asked: " + err.Error()
+		return "this call did not run: a PreToolUse hook asks " + who + " first, and " + who + " could not be asked: " + err.Error()
 	case answer.allows():
 		return ""
 	}
-	return "this call did not run: a PreToolUse hook asked the person, and the person did not allow it: " + pre.Ask
+	return "this call did not run: a PreToolUse hook asked " + who + ", and " + who + " did not allow it: " + pre.Ask
 }
 
 func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {

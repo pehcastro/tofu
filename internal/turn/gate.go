@@ -26,6 +26,7 @@ type GateDecision struct {
 	Answers    []ledger.Answer
 	Reason     *ledger.Reason
 	PersonOnly bool
+	HookAsk    string
 }
 
 type Gate interface {
@@ -119,10 +120,7 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 		if person == nil {
 			return "the verdict is ask" + standing(decision.Reason) + ", and no person was available to answer"
 		}
-		who := "the person"
-		if SubAgentAsking(ctx) != "" {
-			who = "the orchestrator"
-		}
+		who := answerer(ctx)
 		answer, err := person(ctx, request, decision)
 		switch {
 		case err != nil:
@@ -135,16 +133,27 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 	panic("turn: unknown verdict " + string(decision.Verdict))
 }
 
+func answerer(ctx context.Context) string {
+	if SubAgentAsking(ctx) != "" {
+		return "the orchestrator"
+	}
+	return "the person"
+}
+
 const orchestratorAnswerWait = 5 * time.Minute
 
 func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Person {
 	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
 		id := held.agent.ID
-		if decision.Verdict != ledger.VerdictAsk || decision.PersonOnly {
+		if decision.PersonOnly || decision.HookAsk == "" && decision.Verdict != ledger.VerdictAsk {
 			return PersonDenied, errors.New("only the person answers this " + request.Tool + " question, and a sub-agent never asks the person")
 		}
-		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because the gate's verdict is ask%s. it waits up to %s for you: call message with to %s and answer allow or deny. with no answer the call is refused.",
-			id, request.Tool, request.Args, standing(decision.Reason), orchestratorAnswerWait, id)
+		because := "the gate's verdict is ask" + standing(decision.Reason)
+		if decision.HookAsk != "" {
+			because = "a PreToolUse hook asks first: " + decision.HookAsk
+		}
+		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s for you: call message with to %s and answer allow or deny. with no answer the call is refused.",
+			id, request.Tool, request.Args, because, orchestratorAnswerWait, id)
 		t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
 		defer t.roster.Reached(id, subagent.Working, "")
 		site.notice(id, asked)

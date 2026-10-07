@@ -87,7 +87,8 @@ next step. When idle, a new message or report starts a turn.
 - **A sub-agent's call the gate asks about**: it goes to the lead, never to
   you, with the call, jev's verdict and its risk. The lead answers with
   `message` and `answer` allow or deny, and the sub-agent waits up to 5
-  minutes. With no answer the call is refused. A sub-agent's own sub-agent
+  minutes. With no answer the call is refused. A PreToolUse hook's ask goes
+  to the lead the same way. A sub-agent's own sub-agent
   asks the sub-agent that started it.
 - **Progress**: `subagents` lists each sub-agent's state and its last tool
   call.

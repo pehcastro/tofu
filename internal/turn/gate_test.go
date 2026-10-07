@@ -93,3 +93,48 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 		t.Errorf("the lead allowed the write and the file holds %q: %v", written, err)
 	}
 }
+
+func TestASubAgentsPreToolUseAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
+	project, bash := hookedProject(t, `{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"a write under mine needs a yes\"}}'"}]}]}`)
+	model := &leadAndSubAgent{
+		lead: []llm.Decision{
+			spawnCall("call-spawn", "note the run under mine/", "mine/**"),
+			called("message", map[string]any{"to": "sub-1", "answer": "allow"}),
+			claimDecision("allowed sub-1's bash"),
+			claimDecision("sub-1 noted the run"),
+		},
+		subAgent: []llm.Decision{
+			called("bash", map[string]any{"command": "mkdir -p mine && echo ran > mine/ran.txt"}),
+			claimDecision("noted the run in mine/ran.txt"),
+		},
+	}
+	var personAsked []string
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, Project: project,
+		ArtifactDir: filepath.Join(project, "artifacts"), NewID: func() string { return "turn-lead" },
+		Person: func(_ context.Context, request GateRequest, _ GateDecision) (PersonAnswer, error) {
+			if request.Tool == "hooks" {
+				return PersonAllowedOnce, nil
+			}
+			personAsked = append(personAsked, request.Tool)
+			return PersonDenied, nil
+		}}
+	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	lead := base
+	lead.Task, lead.Tools, lead.Inbox = "hand the note to a sub-agent", NewRegistry(spawn), spawn.Inbox
+	startLead(t.Context(), lead, nil).wait(t)
+
+	if len(personAsked) != 0 {
+		t.Errorf("the person was asked about %v for a sub-agent's call", personAsked)
+	}
+	if len(model.leadSaw) < 2 {
+		t.Fatalf("the lead was asked %d times, want a second turn for the hook's ask", len(model.leadSaw))
+	}
+	for _, want := range []string{"sub-1", "bash", "a write under mine needs a yes", "answer allow or deny"} {
+		if !strings.Contains(model.leadSaw[1], want) {
+			t.Errorf("the lead's second turn opens without %q:\n%s", want, model.leadSaw[1])
+		}
+	}
+	if written, err := os.ReadFile(filepath.Join(project, "mine", "ran.txt")); err != nil || strings.TrimSpace(string(written)) != "ran" {
+		t.Errorf("the lead allowed the bash call and mine/ran.txt holds %q: %v", written, err)
+	}
+}
