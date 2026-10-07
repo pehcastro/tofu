@@ -55,6 +55,7 @@ pub enum Page {
     Sheet,
     Drawer,
     Palette,
+    Find,
     Tooltips,
     Empty,
     Composer,
@@ -99,7 +100,7 @@ pub const UNBUILT: [(Group, &str); 10] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 40] = [
+    pub const ALL: [Page; 41] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -128,6 +129,7 @@ impl Page {
         Page::Sheet,
         Page::Drawer,
         Page::Palette,
+        Page::Find,
         Page::Tooltips,
         Page::Empty,
         Page::Composer,
@@ -387,6 +389,16 @@ impl Page {
                 "components/palette.rs; form.rs TextArea, list.rs HoverList, overlay.rs menu_surface, chip.rs kbd",
                 "closed, open with six groups, filtered, nothing found, highlighted by keys and pointer, picked, closed by Escape or outside click",
                 "keeping the highlighted row in view when the list is taller than the panel: ScrollArea keeps its handle private",
+            ),
+            Page::Find => sheet(
+                "find",
+                "Find",
+                Group::Overlays,
+                "Ctrl F: a bar at the top right of the focused module that marks every match, case-insensitive. Enter and Shift Enter move to the next and previous match and wrap, Escape closes.",
+                "13-keyboard.md Global keys",
+                "components/find.rs FindBar, find_ranges, match_highlights; form.rs TextArea, overlay.rs menu_surface, button.rs, chip.rs kbd, card.rs header_action",
+                "closed, open and empty, matches with the current one, next and previous with wrap, no matches, closed by Escape",
+                "",
             ),
             Page::Tooltips => sheet(
                 "tooltips",

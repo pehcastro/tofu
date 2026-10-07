@@ -9,6 +9,7 @@ mod diff;
 mod editor;
 mod empty;
 mod file_edits;
+mod find;
 mod focus;
 mod foundations;
 mod graph;
@@ -56,6 +57,7 @@ use decide::Crossfade;
 use diff::DiffPage;
 use editor::{HistoryPage, TreePage};
 use file_edits::FileEditsPage;
+use find::FindPage;
 use focus::FocusPage;
 use foundations::FoundationsState;
 use graph::GraphPage;
@@ -98,6 +100,7 @@ pub struct Book {
     graph: GraphPage,
     tiling: TilingPage,
     palette: PalettePage,
+    find: FindPage,
     settings: SettingsPage,
 }
 
@@ -139,6 +142,7 @@ impl Book {
             graph: GraphPage::new(cx),
             tiling: TilingPage::new(cx),
             palette: PalettePage::new(window, cx),
+            find: FindPage::new(window, cx),
             settings: SettingsPage::new(),
         }
     }
@@ -164,6 +168,7 @@ impl Book {
             Page::Delegation => self.graph.key(key),
             Page::Tiling => self.tiling.key(event),
             Page::Palette => self.palette.key(event, window, cx),
+            Page::Find => self.find.key(event, window, cx),
             Page::Focus => self.focus_page.key(event, window, cx),
             _ => self.content.key(page, key) || self.controls.key(page, key),
         };
@@ -465,6 +470,7 @@ impl Book {
             Page::Delegation => self.graph.render(theme, window, cx),
             Page::Tiling => self.tiling.render(theme, window, cx),
             Page::Palette => self.palette.render(theme, cx),
+            Page::Find => self.find.render(theme, cx),
             Page::Settings => self.settings.render(theme, cx),
         }
     }
