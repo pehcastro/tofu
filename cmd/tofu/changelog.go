@@ -22,6 +22,7 @@ const (
 	changelogHeadingMark = "## "
 	changelogSectionMark = "### "
 	changelogBulletMark  = "- "
+	changelogFixMark     = "fix"
 )
 
 var (
@@ -49,8 +50,8 @@ func (v semver) after(other semver) bool {
 	if v.patch != other.patch {
 		return v.patch > other.patch
 	}
-	if v.prerelease == "" || other.prerelease == "" {
-		return v.prerelease == "" && other.prerelease != ""
+	if v.stage() != other.stage() || v.prerelease == "" {
+		return v.stage() > other.stage()
 	}
 	mine, theirs := prereleaseRun.FindAllString(v.prerelease, -1), prereleaseRun.FindAllString(other.prerelease, -1)
 	for i := range min(len(mine), len(theirs)) {
@@ -66,6 +67,24 @@ func (v semver) after(other semver) bool {
 		}
 	}
 	return len(mine) > len(theirs)
+}
+
+type releaseStage int
+
+const (
+	preRelease releaseStage = iota
+	release
+	fixRelease
+)
+
+func (v semver) stage() releaseStage {
+	switch {
+	case v.prerelease == "":
+		return release
+	case strings.HasPrefix(v.prerelease, changelogFixMark):
+		return fixRelease
+	}
+	return preRelease
 }
 
 func parseSemver(text string) (semver, bool) {

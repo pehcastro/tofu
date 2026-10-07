@@ -106,6 +106,7 @@ func TestChangelogOrdersByNumbersThenPrereleaseWithItsDigitsAsNumbers(t *testing
 		"0.3.9", "0.3.10", "0.4.19",
 		"0.5.0-rc", "0.5.0-rc-fix1", "0.5.0-rc-fix2", "0.5.0-rc-fix9", "0.5.0-rc-fix10", "0.5.0",
 		"0.5.1-rc-fix99999999999999999999", "0.5.1-rc-fix100000000000000000000", "0.5.1",
+		"0.5.1-fix1", "0.5.1-fix2", "0.5.1-fix10", "0.5.2-rc", "0.5.2",
 	}
 	for i, older := range ascending {
 		low, ok := parseSemver(older)
