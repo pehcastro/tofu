@@ -41,6 +41,7 @@ pub enum Page {
     Table,
     Feed,
     Sidebar,
+    Chrome,
     Avatar,
     Chip,
     Button,
@@ -88,19 +89,18 @@ pub struct Sheet {
     pub missing: &'static str,
 }
 
-pub const UNBUILT: [(Group, &str); 8] = [
+pub const UNBUILT: [(Group, &str); 7] = [
     (Group::Foundations, "Theme classes"),
     (Group::Foundations, "Theme preview"),
     (Group::Foundations, "Intro background"),
     (Group::Controls, "Window controls"),
     (Group::Controls, "Scrollbar"),
     (Group::Controls, "Progress bar"),
-    (Group::Content, "Status bar"),
     (Group::Content, "Sections"),
 ];
 
 impl Page {
-    pub const ALL: [Page; 43] = [
+    pub const ALL: [Page; 44] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -143,6 +143,7 @@ impl Page {
         Page::Charts,
         Page::Delegation,
         Page::Settings,
+        Page::Chrome,
         Page::Tiling,
     ];
 
@@ -581,6 +582,16 @@ impl Page {
                 "components/settings.rs; card.rs caption, chip.rs chip kbd Tone, form.rs switch segmented",
                 "default, global and project sources; switch, segmented, value chip and key binding rows; a key that conflicts",
                 "a bare switch track: form.rs switch always lays out its label",
+            ),
+            Page::Chrome => sheet(
+                "chrome",
+                "Chrome",
+                Group::Layout,
+                "The window's title bar and status bar: sidebar toggle, the name, workspace tabs, palette, bell, account and window keys over the work; branch, session, context, quota, classifier and cron under it.",
+                "IWIN-1 IWY-4",
+                "components/title_bar.rs, components/status_bar.rs; component.rs control icon_button status_item, tabs.rs header_tabs",
+                "IWIN-1 values with three workspace tabs, the bell dot and the account letter; no session, no account and no tabs",
+                "the account disc is drawn in title_bar.rs: avatar.rs draws agents only",
             ),
             Page::Tiling => sheet(
                 "tiling",

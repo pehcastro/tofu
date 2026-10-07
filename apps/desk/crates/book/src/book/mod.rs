@@ -1,6 +1,7 @@
 mod agents;
 mod charts;
 mod chat;
+mod chrome;
 mod code;
 mod composer;
 mod content;
@@ -462,6 +463,7 @@ impl Book {
             Page::Tooltips => tips::tips(theme, window, cx),
             Page::Empty => empty::empty_page(theme, window, cx),
             Page::Sidebar => sidebar::sidebar_page(theme, cx),
+            Page::Chrome => chrome::chrome_page(theme, cx),
             Page::Composer => self.composer.render(theme, window, cx),
             Page::Shell => self.shell.render(theme, window, cx),
             Page::Diff => self.diff.render(theme, window, cx),

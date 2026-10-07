@@ -1,6 +1,8 @@
 use crate::modules::chat::Find;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::Work;
+use crate::status_bar::status_bar;
+use crate::title_bar::title_bar;
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
@@ -8,6 +10,7 @@ use desk_tiling::Rect;
 use desk_tiling::{Key, SHORTCUTS};
 use desk_ui::components::card::{inner_card, outer_card};
 use desk_ui::components::overlay::toast;
+use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sidebar::SIDEBAR_COLUMN;
@@ -33,6 +36,8 @@ pub const BOARD_VIEWPORT_HEIGHT: f32 = 900.0;
 const GUTTER: f32 = 8.0;
 const TILE_TOP: f32 = 2.0;
 const TILE_BOTTOM: f32 = 8.0;
+const WINDOW_RADIUS: f32 = 8.0;
+const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
@@ -59,6 +64,7 @@ struct Shown {
 
 pub struct Desk {
     sidebar_open: bool,
+    account: Option<SharedString>,
     toast: Option<Toast>,
     screens: Vec<Screen>,
     shown: Shown,
@@ -123,6 +129,14 @@ impl Shown {
     }
 }
 
+fn account_letter() -> Option<SharedString> {
+    let name = std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .ok()?;
+    let first = name.chars().next()?;
+    Some(first.to_lowercase().collect::<String>().into())
+}
+
 fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
     let screens = screens.iter().map(|screen| PaletteItem {
         id: format!("{SCREEN_ID}{}", screen.name).into(),
@@ -164,6 +178,7 @@ impl Desk {
         palette.update(cx, |palette, _| palette.on_pick(picked));
         Desk {
             sidebar_open: true,
+            account: account_letter(),
             toast: None,
             screens,
             shown: Shown::new(name, view),
@@ -306,13 +321,6 @@ impl Desk {
         }
     }
 
-    pub fn teller(
-        control: Control,
-        cx: &mut Context<Self>,
-    ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
-        cx.listener(move |desk, _: &ClickEvent, _, cx| desk.tell(control, cx))
-    }
-
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_open = !self.sidebar_open;
         let state = if self.sidebar_open { "open" } else { "closed" };
@@ -336,7 +344,7 @@ impl Desk {
         cx.stop_propagation();
     }
 
-    fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
+    pub fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
         let expiry = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(TOAST_LIFETIME).await;
             this.update(cx, |desk, cx| {
@@ -396,16 +404,12 @@ impl Render for Desk {
             })
             .flex()
             .flex_col()
+            .rounded(px(WINDOW_RADIUS))
             .bg(theme.color(ColorToken::SurfaceWindow))
+            .shadow(vec![ring(ink(&theme, WINDOW_RING))])
             .text_size(px(TEXT))
             .text_color(theme.color(ColorToken::TextBase))
-            .child(crate::title_bar::render(
-                self.sidebar_open,
-                tabs,
-                &theme,
-                window,
-                cx,
-            ))
+            .child(title_bar(self.sidebar_open, self.account.clone(), tabs, cx))
             .child(
                 div()
                     .flex_1()
@@ -432,7 +436,7 @@ impl Render for Desk {
                             .child(content),
                     ),
             )
-            .child(crate::status_bar::render(&theme, &problems, cx))
+            .child(status_bar(&problems, cx))
             .child(self.palette.clone())
             .children(toast_layer)
     }
