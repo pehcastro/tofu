@@ -879,6 +879,9 @@ impl Workspace {
     }
 
     pub fn even(&self) -> Self {
+        if self.locked {
+            return self.clone();
+        }
         let mut tree = self.tree.clone();
         if let Some(tree) = &mut tree {
             Self::evened(tree, None);
@@ -887,6 +890,9 @@ impl Workspace {
     }
 
     pub fn even_split(&self, divider: &Divider) -> Self {
+        if self.locked {
+            return self.clone();
+        }
         let mut tree = self.tree.clone();
         if let Some(tree) = &mut tree {
             Self::evened(tree, Some(&divider.path));
@@ -904,6 +910,9 @@ impl Workspace {
     }
 
     pub fn reset(&self) -> Self {
+        if self.locked {
+            return self.clone();
+        }
         let mut id = self.next;
         let tree = self.preset.tree(&mut id);
         let mut next = self.changed(tree, None);
