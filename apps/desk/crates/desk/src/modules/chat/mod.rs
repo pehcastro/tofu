@@ -1,4 +1,4 @@
-mod cassette;
+pub(crate) mod cassette;
 mod items;
 
 use std::collections::BTreeMap;
