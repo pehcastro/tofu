@@ -73,6 +73,11 @@ type SubAgent struct {
 	Steps        int
 	Calling      []string
 	CallsDropped int
+	Released     bool
+}
+
+func (s SubAgent) Holds() bool {
+	return !s.Released && !s.State.settled()
 }
 
 type RoundCapError struct {
@@ -95,11 +100,10 @@ func (ReopenReasonError) Error() string {
 }
 
 type CollisionError struct {
-	SubAgent     string
-	Glob         string
-	Holder       string
-	HolderGlob   string
-	HolderReport string
+	SubAgent   string
+	Glob       string
+	Holder     string
+	HolderGlob string
 }
 
 func (e CollisionError) Error() string {
@@ -114,23 +118,78 @@ type Roster struct {
 func (r *Roster) Hold(agent SubAgent) error {
 	r.held.Lock()
 	defer r.held.Unlock()
+	if err := r.collides(agent); err != nil {
+		return err
+	}
+	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
+	r.agents = append(r.agents, agent)
+	return nil
+}
+
+func (r *Roster) collides(agent SubAgent) error {
 	for _, glob := range agent.Owns {
 		if err := validGlob(glob); err != nil {
 			return err
 		}
 		for _, held := range r.agents {
-			if held.State.settled() {
+			if held.ID == agent.ID || !held.Holds() {
 				continue
 			}
 			for _, other := range held.Owns {
 				if overlap(glob, other) {
-					return CollisionError{SubAgent: agent.ID, Glob: glob, Holder: held.ID, HolderGlob: other, HolderReport: held.Report}
+					return CollisionError{SubAgent: agent.ID, Glob: glob, Holder: held.ID, HolderGlob: other}
 				}
 			}
 		}
 	}
-	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
+	return nil
+}
+
+func (r *Roster) Restore(agent SubAgent) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	agent.Released, agent.Active, agent.Round = true, agent.Started, 1
 	r.agents = append(r.agents, agent)
+}
+
+func (r *Roster) index(id string) int {
+	return slices.IndexFunc(r.agents, func(agent SubAgent) bool { return agent.ID == id })
+}
+
+func (r *Roster) SubAgent(id string) (SubAgent, bool) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	at := r.index(id)
+	if at < 0 {
+		return SubAgent{}, false
+	}
+	agent := r.agents[at]
+	agent.Calling = slices.Clone(agent.Calling)
+	return agent, true
+}
+
+func (r *Roster) Release(id string) (SubAgent, bool) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	at := r.index(id)
+	if at < 0 {
+		return SubAgent{}, false
+	}
+	r.agents[at].Released = true
+	return r.agents[at], true
+}
+
+func (r *Roster) Reclaim(id, report string) error {
+	r.held.Lock()
+	defer r.held.Unlock()
+	at := r.index(id)
+	if at < 0 {
+		return fmt.Errorf("subagent: %s is not on the roster, so it cannot take its paths back", id)
+	}
+	if err := r.collides(r.agents[at]); err != nil {
+		return err
+	}
+	r.agents[at].State, r.agents[at].Report, r.agents[at].Released = Working, report, false
 	return nil
 }
 

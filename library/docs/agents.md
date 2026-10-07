@@ -16,6 +16,13 @@ When the model hands one a piece of work, it names the paths that
 sub-agent may change. A sub-agent given no paths still starts: it reads,
 runs commands and reports, and every write or edit it tries is refused.
 
+In a session the model steers its sub-agents with two tools. `subagents`
+lists them with the paths each holds, and with a name it reads one's
+report and conversation or diagnoses what it is doing now. `message`
+sends one more work, and its `do` stops, kills, releases or backs one up.
+A sub-agent from before a restart holds no paths until a message resumes
+it, so a new one can start on them.
+
 A name is one plain lower-case word: letters, digits and `-`, starting
 with a letter, like `planner` or `ts-dev`.
 

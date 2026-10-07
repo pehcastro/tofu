@@ -26,7 +26,6 @@ import (
 	"tofu/internal/settings"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
-	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -684,10 +683,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	naming.passed(site.call)
 	if err := holding; err != nil {
 		var collision subagent.CollisionError
-		if errors.As(err, &collision) && collision.HolderReport != "" {
-			return Result{Command: "handback " + collision.Holder, Content: fmt.Sprintf(
-				"no sub-agent was started: %s already holds %q, and %q overlaps it. Send this work to %s with the message tool rather than starting a rival.\n\n%s has reported:\n%s",
-				collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder, collision.Holder, collision.HolderReport)}, nil
+		if errors.As(err, &collision) {
+			return Result{}, fmt.Errorf("spawn refused: %s already holds %q, which overlaps %q. send this work to %s with message, or free its paths with message and do release, or do kill if it runs",
+				collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder)
 		}
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
@@ -705,23 +703,17 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		task += t.SubAgents.Brief(definition, args.Task)
 	}
 	started = true
-	t.Inbox.hold(site.log)
+	t.Inbox.hold(held, site.log)
 	go t.background(runCtx, cancel, held, opened, site, task, warm)
 	return Result{Content: narrowed + held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
 func (t *SpawnTool) proseStore() *recall.Store {
-	if t.base.TruncateResults {
+	dir, err := t.artifactDir()
+	if t.base.TruncateResults || err != nil {
 		return nil
 	}
-	if t.base.ArtifactDir != "" {
-		return recall.NewStore(t.base.ArtifactDir)
-	}
-	state, err := sys.ProjectStateDir()
-	if err != nil {
-		return nil
-	}
-	return recall.NewStore(filepath.Join(state, "artifacts"))
+	return recall.NewStore(dir)
 }
 
 func (t *SpawnTool) clock() time.Time {
@@ -782,14 +774,14 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		case tool.Name() == "bash":
 			tool = ownedShell{tool: tool, boundary: held.boundary}
 		}
-		owned = append(owned, tool)
+		owned = append(owned, watchedTool{tool: tool, held: held})
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns) == 0, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
-	subAgent.Tools = NewRegistry(append(owned, askTool{orchestrator: t, asking: held.agent, conversation: site.conversation})...)
+	subAgent.Tools = NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	subAgent.System, subAgent.Environment, subAgent.History = held.system, held.environment, held.history
@@ -827,13 +819,97 @@ type heldSubAgent struct {
 	inbox       *Inbox
 	trace       spawnTrace
 	history     []llm.Message
+	reload      func() ([]llm.Message, error)
+	kept        sync.Mutex
 	restored    bool
 	running     bool
+	log         *session.Log
 	check       *checkIn
 	cancel      context.CancelFunc
 	answer      chan bool
 	forking     sync.Mutex
 	forked      []Row
+	calls       sync.Mutex
+	open        []*openCall
+	stopping    bool
+}
+
+type openCall struct {
+	tool   string
+	target string
+	since  time.Time
+}
+
+func (h *heldSubAgent) started(cancel context.CancelFunc) {
+	h.calls.Lock()
+	defer h.calls.Unlock()
+	h.running, h.cancel, h.stopping = true, cancel, false
+}
+
+func (h *heldSubAgent) stop() {
+	h.calls.Lock()
+	defer h.calls.Unlock()
+	h.stopping = true
+	if len(h.open) == 0 {
+		h.cancel()
+	}
+}
+
+func (h *heldSubAgent) opened(tool string, raw json.RawMessage) *openCall {
+	var target struct{ Command, Path string }
+	_ = json.Unmarshal(raw, &target)
+	call := &openCall{tool: tool, target: cmp.Or(target.Command, target.Path, string(raw)), since: time.Now()}
+	h.calls.Lock()
+	defer h.calls.Unlock()
+	h.open = append(h.open, call)
+	return call
+}
+
+func (h *heldSubAgent) closed(call *openCall) {
+	h.calls.Lock()
+	defer h.calls.Unlock()
+	h.open = slices.DeleteFunc(h.open, func(open *openCall) bool { return open == call })
+	if h.stopping && len(h.open) == 0 {
+		h.cancel()
+	}
+}
+
+func (h *heldSubAgent) openCalls() []openCall {
+	h.calls.Lock()
+	defer h.calls.Unlock()
+	var open []openCall
+	for _, call := range h.open {
+		open = append(open, *call)
+	}
+	return open
+}
+
+func (h *heldSubAgent) conversation() ([]llm.Message, error) {
+	h.kept.Lock()
+	defer h.kept.Unlock()
+	if h.reload == nil {
+		return h.history, nil
+	}
+	history, err := h.reload()
+	if err == nil {
+		h.history, h.reload = history, nil
+	}
+	return h.history, err
+}
+
+type watchedTool struct {
+	tool Tool
+	held *heldSubAgent
+}
+
+func (w watchedTool) Name() string { return w.tool.Name() }
+
+func (w watchedTool) Definition() llm.Tool { return w.tool.Definition() }
+
+func (w watchedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	call := w.held.opened(w.tool.Name(), raw)
+	defer w.held.closed(call)
+	return w.tool.Run(ctx, raw)
 }
 
 func (h *heldSubAgent) runsAs() string {
@@ -862,9 +938,12 @@ func (h *heldSubAgent) forkedSoFar() []Row {
 }
 
 func (h *heldSubAgent) remember(round Row) {
-	if len(round.Conversation) > 0 {
-		h.history = resumable(round.Conversation)
+	if len(round.Conversation) == 0 {
+		return
 	}
+	h.kept.Lock()
+	defer h.kept.Unlock()
+	h.history = resumable(round.Conversation)
 }
 
 func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (SubAgentModel, error) {
@@ -957,7 +1036,16 @@ type messageArgs struct {
 	Text   string `json:"text"`
 	Stop   bool   `json:"stop,omitempty"`
 	Answer string `json:"answer,omitempty"`
+	Do     string `json:"do,omitempty"`
+	From   string `json:"from,omitempty"`
 }
+
+const (
+	doStop    = "stop"
+	doKill    = "kill"
+	doRelease = "release"
+	doBackup  = "backup"
+)
 
 func (messageTool) Name() string { return "message" }
 
@@ -966,15 +1054,22 @@ func (messageTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "message",
 		Description: "sends a sub-agent more work or a correction, from this turn or any earlier one, and returns at once. " +
-			"a running sub-agent reads it at its next step; one that has ended resumes in the background with its whole conversation and the paths it held, " +
+			"a running sub-agent reads text at its next step; one that has ended or was released resumes in the background with its conversation, taking back its paths if no other sub-agent holds them, " +
 			"so use it rather than spawning a new sub-agent for those paths. either way its answer comes to you later as a report, as spawn's does. " +
 			"to is the sub-agent's name as its report gives it, such as ts-dev-1. " +
-			"stop true, with no text, stops a running sub-agent instead: it reports where it stopped and keeps its conversation, so a later message resumes it. " +
-			"answer allow or deny answers a sub-agent's call that waits on you because the gate asked; any text goes to the sub-agent with it",
+			"answer allow or deny answers a sub-agent's call that waits on you because the gate asked; any text goes to the sub-agent with it. " +
+			"do acts on the sub-agent instead of sending text. stop: a running one ends after the call it is in, keeping its paths and its conversation; one that is not running is released. " +
+			"kill: it ends now, every shell it or its own sub-agents started is killed, and its paths are freed. " +
+			"release: one that is not running frees its paths with no run. " +
+			"backup: a copy of its conversation and of the files it wrote is kept, under a name the result gives. " +
+			"from, a backup's name, with text, resumes it from that backup's conversation instead of its latest. " +
+			"subagents with a name reads or diagnoses one without any of this",
 		Parameters: map[string]any{
-			"type":       "object",
-			"properties": map[string]any{"to": text, "text": text, "stop": map[string]any{"type": "boolean"}, "answer": map[string]any{"type": "string", "enum": []string{"allow", "deny"}}},
-			"required":   []string{"to"},
+			"type": "object",
+			"properties": map[string]any{"to": text, "text": text, "from": text,
+				"answer": map[string]any{"type": "string", "enum": []string{"allow", "deny"}},
+				"do":     map[string]any{"type": "string", "enum": []string{doStop, doKill, doRelease, doBackup}}},
+			"required": []string{"to"},
 		},
 	}
 }
@@ -985,6 +1080,25 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		return Result{}, fmt.Errorf("message: arguments are not the expected shape: %w", err)
 	}
 	t := m.orchestrator
+	if args.Stop {
+		args.Do = doStop
+	}
+	switch args.Do {
+	case "":
+	case doStop:
+		if _, stopping := t.Inbox.halt(args.To, (*heldSubAgent).stop); stopping {
+			return Result{Content: args.To + " is stopping after the call it is in. its report, saying where it stopped, comes to you as a message.", Command: "stop " + args.To, SubAgent: args.To}, nil
+		}
+		return t.release(args.To, "was not running")
+	case doRelease:
+		return t.release(args.To, "is not running")
+	case doKill:
+		return t.kill(ctx, args.To)
+	case doBackup:
+		return t.backup(args.To)
+	default:
+		return Result{}, fmt.Errorf("message refused: do is %s, %s, %s or %s, not %q", doStop, doKill, doRelease, doBackup, args.Do)
+	}
 	if args.Answer != "" {
 		if args.Answer != "allow" && args.Answer != "deny" {
 			return Result{}, fmt.Errorf("message refused: answer is allow or deny, not %q", args.Answer)
@@ -994,25 +1108,23 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		case held == nil:
 			return Result{}, t.unknown(args.To)
 		case !waiting:
-			return Result{}, fmt.Errorf("message refused: no call of %s waits for an answer", args.To)
+			return Result{}, fmt.Errorf("message refused: no call of %s waits for an answer now: the ask ended with the run that made it, or with a restart. "+
+				"send text to resume it with your answer, or do release to free its paths", args.To)
 		}
 		if strings.TrimSpace(args.Text) != "" {
 			held.inbox.post(args.Text)
 		}
 		return Result{Content: args.To + "'s call is answered " + args.Answer + ", and it goes on.", Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
 	}
-	if args.Stop {
-		held, stopped := t.Inbox.stop(args.To)
-		switch {
-		case held == nil:
-			return Result{}, t.unknown(args.To)
-		case !stopped:
-			return Result{}, fmt.Errorf("message refused: %s is not running, so there is nothing to stop", args.To)
-		}
-		return Result{Content: args.To + " is stopping. its report, saying where it stopped, comes to you as a message.", Command: "stop " + args.To, SubAgent: args.To}, nil
-	}
 	if strings.TrimSpace(args.Text) == "" {
-		return Result{}, errors.New("message: text is required unless stop is true")
+		return Result{}, errors.New("message: text is required unless do or answer is given")
+	}
+	var backup []llm.Message
+	if args.From != "" {
+		var err error
+		if backup, err = t.restoreBackup(args.To, args.From); err != nil {
+			return Result{}, fmt.Errorf("message refused: %w", err)
+		}
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	held, posted, err := t.Inbox.resume(args.To, args.Text, t.limits().Running, cancel)
@@ -1027,6 +1139,11 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	case posted:
 		return Result{Content: args.To + " is running and reads this at its next step. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
 	}
+	if backup != nil {
+		held.kept.Lock()
+		held.history, held.reload = backup, nil
+		held.kept.Unlock()
+	}
 	err = t.recompose(held)
 	var opened SubAgentModel
 	if err == nil {
@@ -1034,7 +1151,7 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	}
 	if err == nil {
 		t.tree.mu.Lock()
-		err = t.rehold(held.agent)
+		err = t.roster.Reclaim(held.agent.ID, resumedWords)
 		t.tree.mu.Unlock()
 	}
 	if err != nil {
@@ -1046,7 +1163,7 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		return Result{}, fmt.Errorf("message refused: %w", err)
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
-	t.Inbox.hold(site.log)
+	t.Inbox.hold(held, site.log)
 	go t.background(runCtx, cancel, held, opened, site, args.Text, nil)
 	return Result{Content: args.To + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
 }
@@ -1057,18 +1174,46 @@ type subAgentsTool struct {
 
 func (subAgentsTool) Name() string { return "subagents" }
 
+const (
+	showRead     = "read"
+	showDiagnose = "diagnose"
+)
+
 func (subAgentsTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "subagents",
 		Description: "lists every sub-agent of this session and what it is doing now, and returns at once without waiting for any of them: " +
-			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, and the last tool it called. " +
-			"use it rather than guessing whether a sub-agent still runs",
-		Parameters: map[string]any{"type": "object", "properties": map[string]any{}},
+			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, the last tool it called, and the paths it holds, or released when it holds none. " +
+			"use it rather than guessing whether a sub-agent still runs or who holds a path. " +
+			"name with show read gives that sub-agent's report, the files it changed and its conversation, without resuming it. " +
+			"name with show diagnose gives what it is doing now: its open calls and how long each has run, its shells and their last lines, its last request, and its failed requests and calls since the last that worked",
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+			"show": map[string]any{"type": "string", "enum": []string{showRead, showDiagnose}},
+		}},
 	}
 }
 
-func (l subAgentsTool) Run(context.Context, json.RawMessage) (Result, error) {
+func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	t := l.orchestrator
+	var args struct {
+		Name string `json:"name"`
+		Show string `json:"show"`
+	}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return Result{}, fmt.Errorf("subagents: arguments are not the expected shape: %w", err)
+		}
+	}
+	switch {
+	case args.Name == "" && args.Show == "":
+	case args.Show == showRead:
+		return t.read(args.Name)
+	case args.Show == showDiagnose:
+		return t.diagnose(ctx, args.Name)
+	default:
+		return Result{}, fmt.Errorf("subagents refused: name goes with show %s or %s, and show %q with name %q is neither", showRead, showDiagnose, args.Show, args.Name)
+	}
 	effort := map[string]llm.Effort{}
 	for _, ran := range t.Spawned() {
 		effort[ran.ID] = ran.Effort
@@ -1093,6 +1238,12 @@ func (l subAgentsTool) Run(context.Context, json.RawMessage) (Result, error) {
 		if len(agent.Calling) > 0 {
 			line += ", last tool " + agent.Calling[len(agent.Calling)-1]
 		}
+		switch {
+		case agent.Released:
+			line += ", released"
+		case agent.Holds() && len(agent.Owns) > 0:
+			line += ", holding " + strings.Join(agent.Owns, " ")
+		}
 		lines = append(lines, line+": "+agent.Mission)
 	}
 	if len(lines) > 0 {
@@ -1107,23 +1258,9 @@ func (t *SpawnTool) unknown(name string) error {
 		names = append(names, known.ID)
 	}
 	if len(names) == 0 {
-		return fmt.Errorf("message refused: no sub-agent is named %q, and none has been spawned", name)
+		return fmt.Errorf("refused: no sub-agent is named %q, and none has been spawned", name)
 	}
-	return fmt.Errorf("message refused: no sub-agent is named %q; the sub-agents are %s", name, strings.Join(names, ", "))
-}
-
-func (t *SpawnTool) rehold(agent subagent.SubAgent) error {
-	var others subagent.Roster
-	for _, other := range t.roster.SubAgents() {
-		if other.ID != agent.ID && other.State != subagent.Finished && other.State != subagent.Errored {
-			_ = others.Hold(other)
-		}
-	}
-	if err := others.Hold(agent); err != nil {
-		return err
-	}
-	t.roster.Reached(agent.ID, subagent.Working, resumedWords)
-	return nil
+	return fmt.Errorf("refused: no sub-agent is named %q; the sub-agents are %s", name, strings.Join(names, ", "))
 }
 
 var briefPath = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z0-9]+`)

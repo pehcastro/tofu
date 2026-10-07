@@ -2,7 +2,7 @@
 title: Sub-agents
 description: You talk to one lead. It plans, splits the work, and checks it. Sub-agents write the code in the background, each in its own paths and with the rules for its language.
 order: 2
-updated: 2026-10-05
+updated: 2026-10-07
 ---
 
 You talk to one model, the **lead**. The lead does not write the code. It
@@ -80,8 +80,15 @@ The lead has one inbox. Your messages and finished
 reports both go into it. In the middle of a turn, the lead reads it at its
 next step. When idle, a new message or report starts a turn.
 
-- **The lead to a sub-agent**: `message` adds work, corrects it, or stops it.
-  A finished sub-agent starts again with its conversation kept.
+- **The lead to a sub-agent**: `message` adds work or corrects it. A
+  finished sub-agent starts again with its conversation kept, from its
+  latest fork, and takes its paths back if nobody else holds them.
+- **The lead controls a sub-agent**: `message` with `do`:
+  - `stop`: a running one ends after the call it is in and keeps its paths
+  - `kill`: it ends now, its shells are killed, its paths are freed
+  - `release`: one that is not running frees its paths with no run
+  - `backup`: its conversation and the files it wrote are kept under a
+    name, and `message` with `from` resumes it from there
 - **A sub-agent to the lead**: `ask` sends one question with a default. With
   no reply in 30 seconds, the default stands, and the report says so.
 - **A sub-agent's call the gate asks about**: it goes to the lead, never to
@@ -90,8 +97,13 @@ next step. When idle, a new message or report starts a turn.
   minutes. With no answer the call is refused. A PreToolUse hook's ask goes
   to the lead the same way. A sub-agent's own sub-agent
   asks the sub-agent that started it.
-- **Progress**: `subagents` lists each sub-agent's state and its last tool
-  call.
+- **Progress**: `subagents` lists each sub-agent's state, its last tool
+  call and the paths it holds. With a name, `show read` gives its report,
+  files and conversation without resuming it, and `show diagnose` gives its
+  open calls, shells, last requests and failures.
+
+After a restart, the sub-agents of the session come back holding no paths,
+so the lead can start a new one on the same files at once.
 
 ## Paths
 

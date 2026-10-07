@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -170,8 +171,34 @@ func (b *Inbox) unreserve() {
 func (b *Inbox) keep(held *heldSubAgent, cancel context.CancelFunc) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	held.running, held.cancel = true, cancel
+	held.started(cancel)
 	b.held[held.agent.ID] = held
+}
+
+func (b *Inbox) adopt(held *heldSubAgent) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.held[held.agent.ID] == nil {
+		b.held[held.agent.ID] = held
+	}
+}
+
+func (b *Inbox) find(to string) (*heldSubAgent, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	held := b.held[to]
+	return held, held != nil && held.running
+}
+
+func (h *heldSubAgent) lineage() []string {
+	ids := []string{h.agent.ID}
+	h.inbox.mu.Lock()
+	nested := slices.Collect(maps.Values(h.inbox.held))
+	h.inbox.mu.Unlock()
+	for _, child := range nested {
+		ids = append(ids, child.lineage()...)
+	}
+	return ids
 }
 
 func (b *Inbox) resume(to, text string, limit int, cancel context.CancelFunc) (*heldSubAgent, bool, error) {
@@ -188,18 +215,18 @@ func (b *Inbox) resume(to, text string, limit int, cancel context.CancelFunc) (*
 		return held, false, BreadthLimitError{Running: b.running, Limit: limit}
 	}
 	b.running++
-	held.running, held.cancel = true, cancel
+	held.started(cancel)
 	return held, false, nil
 }
 
-func (b *Inbox) stop(to string) (*heldSubAgent, bool) {
+func (b *Inbox) halt(to string, halt func(*heldSubAgent)) (*heldSubAgent, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	held := b.held[to]
 	if held == nil || !held.running {
 		return held, false
 	}
-	held.cancel()
+	halt(held)
 	return held, true
 }
 
@@ -278,9 +305,10 @@ func (b *Inbox) open(store *session.Store, header session.Header) (*session.Log,
 	return log, err
 }
 
-func (b *Inbox) hold(log *session.Log) {
+func (b *Inbox) hold(held *heldSubAgent, log *session.Log) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	held.log = log
 	if _, kept := b.logs[log]; kept {
 		b.logs[log]++
 	}

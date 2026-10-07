@@ -12,6 +12,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ### Added
 
+- **The lead controls its sub-agents.** `subagents` lists the paths each one holds, and with a name reads one's conversation or shows what it is doing now. `message` with `do` stops, kills (its shells too), releases or backs one up, and `from` resumes one from a backup.
+
 - **Two hook events only tofu has.** `GateVerdict` runs after the gate decides on a call and can turn an ask into allow or deny, or a deny into ask, never a deny into allow. `SubagentSpawn` runs before a sub-agent starts and can refuse it or narrow its owns, never widen them. See `tofu docs hooks`.
 
 - **`tofu session trace` lists every hook run** with its event, call, exit code, time, decision and stderr, and names the relaxation that let a call over `risk_ask_at` run.
@@ -29,6 +31,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - **`tofu --continue` opens in under a second on a long chain of sessions**: 0.9 s where it took 12 s on a chain of 21 sessions with 84 sub-agents. Each session file is read once at open.
 
 - **A continued or resumed conversation over the context target forks before its first request**, instead of sending the whole history first.
+
+- **After a restart, earlier sub-agents hold no paths**, so a spawn on their files starts instead of being refused, and a refused spawn now reads as failed. A resumed sub-agent carries only its conversation since its latest fork.
 
 - **Shift+Enter adds a line past the eighth.** The input stops growing at 8 rows and scrolls; before, every line after the eighth was joined onto it.
 
