@@ -52,8 +52,9 @@ func resumedChat(carry Carry, dir string) []Event {
 		calls:   map[string]*recordedCall{},
 		origins: map[string]string{},
 	}
-	if store, err := session.OpenIn(dir); err == nil {
+	if store, err := carry.reading(dir); err == nil {
 		lead.read(store, carry.Session)
+		store.ForgetRead()
 	}
 	lead.watch.emit(Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: lead.root})
 	for _, message := range carry.Messages {

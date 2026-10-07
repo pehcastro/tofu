@@ -101,6 +101,7 @@ type sessionResume struct {
 
 	messages []llm.Message
 	tasks    []string
+	read     *session.Store
 }
 
 func sessionOperands(subcommand string) (string, int, bool) {
@@ -245,6 +246,7 @@ func continueCarry(store *session.Store) sessionResume {
 }
 
 func resumeOf(store *session.Store, id string) (sessionResume, error) {
+	store = store.ReadOnce()
 	row, messages, err := sessionDetail(store, id)
 	if err != nil {
 		return sessionResume{}, err
@@ -258,6 +260,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 		Carried:  row.Carried,
 		messages: messages,
 		tasks:    row.tasks,
+		read:     store,
 	}
 	var busy session.BusyError
 	switch err := store.Busy(row.ID); {
@@ -270,7 +273,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 }
 
 func (carry sessionResume) hosted() host.Carry {
-	return host.Carry{Session: carry.Session, Name: carry.Name, Messages: carry.messages, Tasks: carry.tasks}
+	return host.Carry{Session: carry.Session, Name: carry.Name, Messages: carry.messages, Tasks: carry.tasks, Store: carry.read}
 }
 
 func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error) {

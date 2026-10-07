@@ -383,9 +383,8 @@ func unreported(err error, reported []error) error {
 
 func forkOf(ended turn.Row) Fork {
 	forked := Fork{From: ended.Session, To: ended.ForkedInto}
-	if last := len(ended.Steps) - 1; last >= 0 && ended.Steps[last].Fork != nil {
-		step := ended.Steps[last].Fork
-		forked.Kind, forked.Before, forked.After = string(step.Kind), step.TokensBefore, step.TokensAfter
+	if fork := ended.EndedInFork; fork != nil {
+		forked.Kind, forked.Before, forked.After = string(fork.Kind), fork.TokensBefore, fork.TokensAfter
 	}
 	return forked
 }

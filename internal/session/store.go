@@ -31,7 +31,16 @@ type Store struct {
 	settings Settings
 	readFile func(path string) ([]byte, error)
 	rename   func(from, to string) error
+	parsed   map[string][]Event
 }
+
+func (s *Store) ReadOnce() *Store {
+	once := *s
+	once.parsed = map[string][]Event{}
+	return &once
+}
+
+func (s *Store) ForgetRead() { s.parsed = nil }
 
 func NewStore(dir string) *Store {
 	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename}
@@ -280,6 +289,17 @@ func (s *Store) holding(handle string) (string, string) {
 }
 
 func (s *Store) Events(id string) ([]Event, error) {
+	if events, read := s.parsed[id]; read {
+		return events, nil
+	}
+	events, err := s.events(id)
+	if err == nil && s.parsed != nil {
+		s.parsed[id] = events
+	}
+	return events, err
+}
+
+func (s *Store) events(id string) ([]Event, error) {
 	if err := namesOneSession(id); err != nil {
 		return nil, err
 	}
@@ -299,6 +319,10 @@ func (s *Store) Body(handle string) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
+	return s.Part(events, part)
+}
+
+func (s *Store) Part(events []Event, part string) ([]Event, error) {
 	var kept []Event
 	for _, event := range events {
 		if event.Agent == part || (part != "" && event.Agent == "" && event.Turn == part) {

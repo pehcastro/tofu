@@ -180,11 +180,11 @@ func reportsWrittenBeforeReportEvents(leadReports []string, order []*recordedSub
 func subAgentHistory(store *session.Store, chain []recordedSession, agentID string) ([]llm.Message, error) {
 	var events []session.Event
 	for _, recorded := range chain {
-		body, err := store.Body(recorded.id + session.TurnMark + agentID)
+		part, err := store.Part(recorded.events, agentID)
 		if err != nil {
 			return nil, err
 		}
-		events = append(events, body...)
+		events = append(events, part...)
 	}
 	conversation, err := ConversationFrom(events)
 	return resumable(conversation), err

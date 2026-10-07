@@ -139,6 +139,7 @@ type Row struct {
 	ForkedFrom   string       `json:"forked_from,omitempty"`
 	ForkedInto   string       `json:"forked_into,omitempty"`
 	ForkKind     ForkKind     `json:"fork_kind,omitempty"`
+	EndedInFork  *Fork        `json:"ended_in_fork,omitempty"`
 	Warnings     []string     `json:"warnings,omitempty"`
 	SubAgentIDs  []string     `json:"sub_agent_ids"`
 	Outcome      Outcome      `json:"outcome"`

@@ -26,6 +26,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 - **`tofu session trace` on a continued session lists the sub-agents that kept working in the session before it**, marked with the session they were recorded in.
 
+- **`tofu --continue` opens in under a second on a long chain of sessions**: 0.9 s where it took 12 s on a chain of 21 sessions with 84 sub-agents. Each session file is read once at open.
+
+- **A continued or resumed conversation over the context target forks before its first request**, instead of sending the whole history first.
+
 - **A PreToolUse hook that asks before a sub-agent's call asks the lead**, as the gate's ask does, instead of refusing the call.
 
 - **A finished sub-agent call no longer reads as open**, so a 1 ms write no longer shows as "stalled write, open 22m".

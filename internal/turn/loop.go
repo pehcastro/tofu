@@ -427,6 +427,57 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants, stopContinuations := 0, 0, 0
+	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
+		ended := row
+		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
+		ended.WallClockMS = now().Sub(start).Milliseconds()
+		if config.EndedSession != nil {
+			written.Add(1)
+			go func() {
+				defer written.Done()
+				if err := config.EndedSession(ended); err != nil {
+					forkWrites.Lock()
+					forkWriteErrs = append(forkWriteErrs, err.Error())
+					forkWrites.Unlock()
+				}
+			}()
+		}
+		row = Row{
+			ID:          fork.Into,
+			Schema:      SchemaVersion,
+			At:          now(),
+			Task:        config.Task,
+			Wire:        config.Wire,
+			Model:       row.Model,
+			Spend:       config.Spend,
+			Root:        origin,
+			Account:     account.ID,
+			ForkedFrom:  ended.ID,
+			ForkKind:    fork.Kind,
+			SpawnedFrom: config.SpawnedFrom,
+			SpawnedBy:   config.SpawnedBy,
+			Budget:      budget,
+			System:      row.System,
+			Tools:       row.Tools,
+		}
+		if moved != nil {
+			row.Account = moved.ID
+			row.Warnings = append(row.Warnings, movedAccountWords(account, *moved, fork.TokensAfter))
+			account = *moved
+			if moved.Model != nil {
+				model = moved.Model
+			}
+		}
+		recorded.fork(ended, row, fork, row.At)
+		row.Session = recorded.session()
+		recorded.listChange("fork", string(fork.Kind)+" fork "+strconv.Itoa(forks)+" "+when+" from "+ended.Session+", "+
+			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
+		messages, sent, answering = begun, 0, ""
+		if fork.Kind == ForkCompact {
+			compacted()
+		}
+		flush()
+	}
 	askedAgainAfterBlank := false
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
@@ -465,6 +516,18 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return fail(err)
 		}
 		budget = budget.Sending(artifacts.preview, string(schemas))
+		if step == 1 && !config.NoFork && len(config.History) > 0 {
+			beforeFork := slices.Clone(messages)
+			fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, "", forks+1, config.Caps.MaxForks)
+			if err != nil {
+				return fail(err)
+			}
+			if fork != nil {
+				forks++
+				fork.Into = origin + "-f" + strconv.Itoa(forks+1)
+				forkInto(fork, "before step 1", beforeFork, begun, nil)
+			}
+		}
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
 		decision, timing, requestID, err := ask("step "+strconv.Itoa(step), llm.Request{Messages: messages, Tools: definitions})
 		if overflowed(err) {
@@ -698,7 +761,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				return finish(OutcomeStopped), nil
 			}
 			if !config.NoFork {
-				moved, moving, forced := Account{}, false, ForkKind("")
+				var moved *Account
+				forced := ForkKind("")
 				if config.Accounts.Next != nil {
 					next, spent, nextErr := config.Accounts.Next(ctx, account)
 					switch {
@@ -706,7 +770,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 						row.Warnings = append(row.Warnings,
 							"the pinned account's windows could not be read, so this session stays on it: "+nextErr.Error())
 					case spent:
-						moved, moving, forced = next, true, ForkAccountSpent
+						moved, forced = &next, ForkAccountSpent
 					}
 				}
 				beforeFork := slices.Clone(messages)
@@ -728,55 +792,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					fork.Step, fork.Into = step, origin+"-f"+strconv.Itoa(forks+1)
 					stepRow.Fork = fork
 					keep(stepRow)
-					ended := row
-					ended.Outcome, ended.ForkedInto, ended.Conversation = OutcomeForked, fork.Into, messages[afterSystem:]
-					ended.WallClockMS = now().Sub(start).Milliseconds()
-					if config.EndedSession != nil {
-						written.Add(1)
-						go func() {
-							defer written.Done()
-							if err := config.EndedSession(ended); err != nil {
-								forkWrites.Lock()
-								forkWriteErrs = append(forkWriteErrs, err.Error())
-								forkWrites.Unlock()
-							}
-						}()
-					}
-					row = Row{
-						ID:          fork.Into,
-						Schema:      SchemaVersion,
-						At:          now(),
-						Task:        config.Task,
-						Wire:        config.Wire,
-						Model:       row.Model,
-						Spend:       config.Spend,
-						Root:        origin,
-						Account:     account.ID,
-						ForkedFrom:  ended.ID,
-						ForkKind:    fork.Kind,
-						SpawnedFrom: config.SpawnedFrom,
-						SpawnedBy:   config.SpawnedBy,
-						Budget:      budget,
-						System:      row.System,
-						Tools:       row.Tools,
-					}
-					if moving {
-						row.Account = moved.ID
-						row.Warnings = append(row.Warnings, movedAccountWords(account, moved, fork.TokensAfter))
-						account = moved
-						if moved.Model != nil {
-							model = moved.Model
-						}
-					}
-					recorded.fork(ended, row, fork, row.At)
-					row.Session = recorded.session()
-					recorded.listChange("fork", string(fork.Kind)+" fork "+strconv.Itoa(forks)+" after step "+strconv.Itoa(step)+" from "+ended.Session+", "+
-						strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages", beforeFork, begun)
-					messages, sent, answering = begun, 0, ""
-					if fork.Kind == ForkCompact {
-						compacted()
-					}
-					flush()
+					forkInto(fork, "after step "+strconv.Itoa(step), beforeFork, begun, moved)
 					continue
 				}
 			}

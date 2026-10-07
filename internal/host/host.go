@@ -50,6 +50,7 @@ type Carry struct {
 	Name     string
 	Messages []llm.Message
 	Tasks    []string
+	Store    *session.Store
 }
 
 type Config struct {
@@ -133,7 +134,7 @@ func New(cfg Config) (*Host, []string) {
 		h.play = h.run
 	}
 	var troubles []string
-	if err := h.carry(h.id, cfg.Resumed.Messages); err != nil {
+	if err := h.carry(cfg.Resumed); err != nil {
 		troubles = append(troubles, err.Error())
 	}
 	if h.id == "" {
@@ -336,28 +337,35 @@ func cronFile(store *session.Store, id string) string {
 	return filepath.Join(store.Dir(id), "cron.json")
 }
 
-func (h *Host) carry(id string, messages []llm.Message) error {
+func (h *Host) carry(resumed Carry) error {
 	if h.engine != nil {
 		h.engine.Renew()
 	}
 	h.reads, h.inbox, h.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
-	h.ran, h.carried = nil, messages
-	for _, message := range messages {
+	h.ran, h.carried = nil, resumed.Messages
+	for _, message := range resumed.Messages {
 		if message.ToolCallID != "" {
 			h.shown[message.ToolCallID] = true
 		}
 	}
-	if id == "" {
+	if resumed.Session == "" {
 		return nil
 	}
-	store, err := session.OpenIn(h.dir)
+	store, err := resumed.reading(h.dir)
 	if err == nil {
-		err = turn.RestoreSubAgents(store, id, h.roster, h.inbox)
+		err = turn.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox)
 	}
 	if err != nil {
-		return fmt.Errorf("the sub-agents of %s were not all read back: %w", id, err)
+		return fmt.Errorf("the sub-agents of %s were not all read back: %w", resumed.Session, err)
 	}
 	return nil
+}
+
+func (c Carry) reading(dir string) (*session.Store, error) {
+	if c.Store != nil {
+		return c.Store, nil
+	}
+	return session.OpenIn(dir)
 }
 
 func (h *Host) Fresh() error {
@@ -367,7 +375,7 @@ func (h *Host) Fresh() error {
 		return errTurnRunning
 	}
 	h.letGo()
-	_ = h.carry("", nil)
+	_ = h.carry(Carry{})
 	h.id, h.pending, h.started, h.readOnly = "", nil, SourceCleared, nil
 	return h.cron.Load("")
 }
@@ -384,7 +392,7 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 	}
 	h.readOnly = nil
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
-	restoreErr := h.carry(carry.Session, carry.Messages)
+	restoreErr := h.carry(carry)
 	h.mu.Unlock()
 	chat := resumedChat(carry, h.dir)
 	if restoreErr != nil {
