@@ -1,61 +1,73 @@
-use super::chat::cassette;
+use super::replayed::{self, Replayed};
 
-use std::borrow::Cow;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use desk_core::bridge::Event;
 use desk_core::model::{Session, Store};
-use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::shells::{Shell, ShellEvent, ShellState, Shells as ShellsTile};
 use desk_ui::components::term::TermStatus;
-use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyView, App, AppContext, Context, IntoElement, Render, SharedString, Window, div, prelude::*,
-    px,
+    AnyView, App, AppContext, Context, Entity, IntoElement, Render, SharedString, Subscription,
+    Window,
 };
-
-use cassette::{Replay, Step};
 
 const BOARD: &str = "36-agents";
 const TILE_WIDTH: f32 = 640.0;
-const INSET: f32 = 8.0;
-const FONTS: [&[u8]; 6] = [
-    include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-SemiBold.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-SemiBold.ttf"),
-];
 
-struct Shells {
-    store: Store,
-    replay: Option<Replay>,
+pub type Kill = Rc<dyn Fn(SharedString, &mut App)>;
+
+pub struct Shells {
+    store: Entity<Store>,
+    stale: bool,
+    kill: Kill,
     opened_at: Instant,
     shells: Vec<Shell>,
     active: usize,
     listing: bool,
+    _watch: Subscription,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     if board.is_some_and(|board| board != BOARD) {
         return Err(format!("the shells module replays {BOARD}, not {board:?}"));
     }
-    cx.text_system()
-        .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
-        .map_err(|error| format!("the shells module cannot load the Geist fonts: {error}"))?;
-    let replay = Replay::read()?;
-    Ok(cx
-        .new(|_| Shells {
-            store: Store::default(),
-            replay: Some(replay),
-            opened_at: Instant::now(),
-            shells: Vec::new(),
-            active: 0,
-            listing: false,
-        })
-        .into())
+    replayed::fonts(cx)?;
+    let store = cx.new(|_| Store::default());
+    let kill: Kill = Rc::new(|shell, _| {
+        eprintln!("desk: shells: kill {shell}: a replayed cassette has no tofu to ask");
+    });
+    let module = mount(store.clone(), kill, cx);
+    let counted = module.clone();
+    Replayed::open(
+        store,
+        module.into(),
+        (Glyph::Terminal, "Shells", TILE_WIDTH),
+        move |cx| {
+            let line = counted.update(cx, |module, cx| module.counted(cx));
+            eprintln!(
+                "desk: shells from the store: {line}; cassette: {} shell.started events",
+                cassette_started()
+            );
+        },
+        cx,
+    )
+}
+
+pub fn mount(store: Entity<Store>, kill: Kill, cx: &mut App) -> Entity<Shells> {
+    cx.new(|cx: &mut Context<Shells>| Shells {
+        _watch: cx.observe(&store, |module, _, cx| {
+            module.stale = true;
+            cx.notify();
+        }),
+        store,
+        stale: true,
+        kill,
+        opened_at: Instant::now(),
+        shells: Vec::new(),
+        active: 0,
+        listing: false,
+    })
 }
 
 fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell, since: Instant) -> Shell {
@@ -105,13 +117,15 @@ fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell, since:
 }
 
 impl Shells {
-    fn session(&self) -> Option<&Session> {
-        self.store.sessions.values().next()
+    pub fn count(&self) -> usize {
+        self.shells.len()
     }
 
-    fn rebuild(&mut self) {
+    fn rebuild(&mut self, cx: &App) {
+        self.stale = false;
         let since = self.opened_at;
-        self.shells = self.session().map_or_else(Vec::new, |session| {
+        let session = self.store.read(cx).sessions.values().next();
+        self.shells = session.map_or_else(Vec::new, |session| {
             session
                 .shells
                 .iter()
@@ -121,61 +135,19 @@ impl Shells {
         self.active = self.active.min(self.shells.len().saturating_sub(1));
     }
 
-    fn feed(&mut self, event: &Event) {
-        if let Err(error) = self.store.apply_batch(std::slice::from_ref(event)) {
-            eprintln!("desk: the store refused an event from the cassette: {error}");
-        }
-    }
-
-    fn settle(&mut self) -> Result<(), String> {
-        self.replay = None;
-        self.store = Store::default();
-        let mut whole = Replay::read()?;
-        while let Step::Feed(event) = whole.step()? {
-            self.feed(&event);
-        }
-        self.rebuild();
-        let pids: Vec<String> = self
+    pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
+        self.rebuild(cx);
+        let shells: Vec<String> = self
             .shells
             .iter()
             .map(|shell| {
-                shell.pid.map_or_else(
-                    || format!("{} no pid", shell.name),
-                    |pid| format!("{} pid {pid}", shell.name),
-                )
+                let pid = shell
+                    .pid
+                    .map_or_else(|| "no pid".to_owned(), |pid| format!("pid {pid}"));
+                format!("{} {pid} {:?}", shell.name, shell.state)
             })
             .collect();
-        eprintln!(
-            "desk: shells from the store: {} shells ({}); cassette: {} shell.started events",
-            self.shells.len(),
-            pids.join(", "),
-            cassette_started()
-        );
-        Ok(())
-    }
-
-    fn frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(replay) = &mut self.replay else {
-            return;
-        };
-        window.request_animation_frame();
-        let stepped = match replay.step() {
-            Ok(Step::Feed(event)) => {
-                self.feed(&event);
-                self.rebuild();
-                Ok(())
-            }
-            Ok(Step::Restart) => {
-                self.store = Store::default();
-                Ok(())
-            }
-            Ok(Step::Report) => self.settle(),
-            Err(error) => Err(error),
-        };
-        if let Err(error) = stepped {
-            eprintln!("desk: the cassette has a bad line: {error}");
-            cx.quit();
-        }
+        format!("{} shells ({})", self.shells.len(), shells.join(", "))
     }
 
     fn apply(&mut self, event: ShellEvent) {
@@ -201,10 +173,13 @@ fn cassette_started() -> usize {
 }
 
 impl Render for Shells {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.frame(window, cx);
-        let theme = ActiveTheme::theme(cx);
-        let tile = ShellsTile::new(
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.stale {
+            self.rebuild(cx);
+        }
+        let names: Vec<SharedString> = self.shells.iter().map(|shell| shell.name.clone()).collect();
+        let kill = self.kill.clone();
+        ShellsTile::new(
             "shells",
             self.shells.clone(),
             self.active,
@@ -214,24 +189,9 @@ impl Render for Shells {
                 cx.notify();
             }),
         )
-        .on_kill(|picked: &usize, _, _| {
-            eprintln!("desk: shells: kill shell {picked}: desk_core's bridge has no kill request");
-        });
-        let meter = self.replay.as_ref().map(Replay::meter);
-        div()
-            .size_full()
-            .flex()
-            .items_start()
-            .justify_center()
-            .p(px(INSET))
-            .child(
-                shell(
-                    Header::Title(Some(Glyph::Terminal), "Shells".into(), None),
-                    &theme,
-                )
-                .w(px(TILE_WIDTH))
-                .child(inner_card(&theme).child(tile)),
-            )
-            .children(meter)
+        .on_kill(move |picked: &usize, _, cx| match names.get(*picked) {
+            Some(name) => kill(name.clone(), cx),
+            None => eprintln!("desk: shells: kill names shell {picked}, which is not listed"),
+        })
     }
 }

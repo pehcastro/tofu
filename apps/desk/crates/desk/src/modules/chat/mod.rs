@@ -11,8 +11,8 @@ use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
     ApprovalAnswer, ApprovalDecision, ApprovalRequest, InitializeResult, Notification, PROTOCOL,
-    Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, TurnCompleted, TurnParams,
-    TurnSendParams, TurnSteerParams, request,
+    Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, ShellParams, TurnCompleted,
+    TurnParams, TurnSendParams, TurnSteerParams, request,
 };
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::fail;
@@ -49,6 +49,7 @@ enum Link {
     Ready(Bridge),
     Gone,
     Recorded(Replay),
+    Fed,
 }
 
 enum Opening {
@@ -65,7 +66,7 @@ struct Approval {
 
 pub struct Chat {
     link: Link,
-    store: Store,
+    store: Entity<Store>,
     orders: BTreeMap<String, Vec<Entry>>,
     opening: Opening,
     items: Rc<Vec<Item>>,
@@ -81,12 +82,13 @@ pub struct Chat {
 }
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
+    let store = cx.new(|_| Store::default());
     match board {
-        None => Ok(live(window, cx).into()),
+        None => Ok(live(store, window, cx).into()),
         Some("36-agents") => {
             let replay = Replay::read()?;
             Ok(cx
-                .new(|cx| Chat::new(Link::Recorded(replay), window, cx))
+                .new(|cx| Chat::new(Link::Recorded(replay), store, window, cx))
                 .into())
         }
         Some(other) => Err(format!(
@@ -95,7 +97,11 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
     }
 }
 
-pub fn live(window: &mut Window, cx: &mut App) -> Entity<Chat> {
+pub fn fed(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Chat> {
+    cx.new(|cx| Chat::new(Link::Fed, store, window, cx))
+}
+
+pub fn live(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Chat> {
     cx.new(|cx| {
         let (sender, opened) = flume::bounded::<Opened>(1);
         thread::spawn(move || {
@@ -106,7 +112,7 @@ pub fn live(window: &mut Window, cx: &mut App) -> Entity<Chat> {
                 .and_then(|project| Bridge::open(serve_command(&tofu, &project), CLIENT, PROTOCOL));
             sender.send(bridge).ok();
         });
-        let mut chat = Chat::new(Link::Starting, window, cx);
+        let mut chat = Chat::new(Link::Starting, store, window, cx);
         chat._drain = Some(cx.spawn(async move |this, cx| {
             let Ok(opened) = opened.recv_async().await else {
                 return;
@@ -160,7 +166,7 @@ impl Approval {
 }
 
 impl Chat {
-    fn new(link: Link, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(link: Link, store: Entity<Store>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let submit = cx.listener(|chat, text: &str, _, cx| chat.send(text, cx));
         let area = cx.new(|cx| {
             TextArea::new(PLACEHOLDER.into(), window, cx)
@@ -171,7 +177,7 @@ impl Chat {
         cx.observe(&area, |_, _, cx| cx.notify()).detach();
         Chat {
             link,
-            store: Store::default(),
+            store,
             orders: BTreeMap::new(),
             opening: Opening::Closed,
             items: Rc::default(),
@@ -217,7 +223,7 @@ impl Chat {
     fn stopped(&mut self, cx: &mut Context<Self>) {
         let said = match &self.link {
             Link::Ready(bridge) => bridge.log().pop().unwrap_or_default(),
-            Link::Starting | Link::Gone | Link::Recorded(_) => String::new(),
+            Link::Starting | Link::Gone | Link::Recorded(_) | Link::Fed => String::new(),
         };
         self.link = Link::Gone;
         self.fail(format!("tofu stopped: {said}"), cx);
@@ -229,30 +235,55 @@ impl Chat {
         cx.notify();
     }
 
-    fn take(&mut self, batch: &[Event], cx: &mut Context<Self>) {
+    pub fn take(&mut self, batch: &[Event], cx: &mut Context<Self>) {
         for event in batch {
-            self.apply(event);
+            self.apply(event, cx);
         }
-        if let (Link::Recorded(_), Opening::Closed) = (&self.link, &self.opening)
-            && let Some(id) = self.store.sessions.keys().next()
+        self.store.update(cx, |_, cx| cx.notify());
+        if let (Link::Recorded(_) | Link::Fed, Opening::Closed) = (&self.link, &self.opening)
+            && let Some(id) = self.store.read(cx).sessions.keys().next()
         {
             self.opening = Opening::Open(id.clone());
         }
         self.refresh(cx);
     }
 
-    fn apply(&mut self, event: &Event) {
-        let before: Vec<(String, usize)> = self
-            .store
-            .sessions
-            .iter()
-            .map(|(id, session)| (id.clone(), session.messages.len()))
-            .collect();
-        if let Err(error) = self.store.apply_batch(slice::from_ref(event)) {
-            eprintln!("desk: the store refused an event from tofu: {error}");
-            return;
-        }
-        for (id, session) in &self.store.sessions {
+    pub fn restart(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, cx| {
+            *store = Store::default();
+            cx.notify();
+        });
+        self.orders.clear();
+        self.opening = Opening::Closed;
+        self.items = Rc::default();
+        self.transcript.reset(0);
+    }
+
+    pub fn kill(&mut self, shell: SharedString, cx: &mut Context<Self>) {
+        eprintln!("desk: shell.kill {shell} sent");
+        let params = ShellParams {
+            shell: shell.to_string(),
+            offset: None,
+        };
+        self.call::<request::ShellKill>(&params, cx, move |_, ack, _| {
+            eprintln!("desk: shell.kill {shell} answered ok {}", ack.ok);
+        });
+    }
+
+    fn apply(&mut self, event: &Event, cx: &mut Context<Self>) {
+        let applied = self.store.update(cx, |store, _| {
+            let before: Vec<(String, usize)> = store
+                .sessions
+                .iter()
+                .map(|(id, session)| (id.clone(), session.messages.len()))
+                .collect();
+            store.apply_batch(slice::from_ref(event)).map(|()| before)
+        });
+        let before = match applied {
+            Ok(before) => before,
+            Err(error) => return eprintln!("desk: the store refused an event from tofu: {error}"),
+        };
+        for (id, session) in &self.store.read(cx).sessions {
             let was = before
                 .iter()
                 .find(|(seen, _)| seen == id)
@@ -268,8 +299,20 @@ impl Chat {
                 (&started.session, Entry::Agent(started.instance.clone()))
             }
             Event::Notification(Notification::TurnCompleted(completed)) => {
-                self.said(completed);
+                self.said(completed, cx);
                 (&completed.session, Entry::Done(completed.turn.clone()))
+            }
+            Event::Notification(Notification::ShellStarted(started)) => {
+                return eprintln!(
+                    "desk: session {} shell {} started pid {}: {}",
+                    started.session, started.shell, started.pid, started.command
+                );
+            }
+            Event::Notification(Notification::ShellExited(exited)) => {
+                return eprintln!(
+                    "desk: session {} shell {} exited code {:?} killed {}",
+                    exited.session, exited.shell, exited.exit_code, exited.killed
+                );
             }
             Event::Request { request, .. } => {
                 eprintln!("desk: tofu asks {request:?}");
@@ -280,9 +323,10 @@ impl Chat {
         self.orders.entry(session.clone()).or_default().push(entry);
     }
 
-    fn said(&self, completed: &TurnCompleted) {
+    fn said(&self, completed: &TurnCompleted, cx: &App) {
         let answer = self
             .store
+            .read(cx)
             .sessions
             .get(&completed.session)
             .and_then(|session| {
@@ -303,11 +347,11 @@ impl Chat {
         );
     }
 
-    fn running(&self) -> Option<(String, String)> {
+    fn running(&self, cx: &App) -> Option<(String, String)> {
         let Opening::Open(id) = &self.opening else {
             return None;
         };
-        let session = self.store.sessions.get(id)?;
+        let session = self.store.read(cx).sessions.get(id)?;
         let (turn, _) = session
             .turns
             .iter()
@@ -319,7 +363,7 @@ impl Chat {
         let Opening::Open(id) = &self.opening else {
             return;
         };
-        let Some(session) = self.store.sessions.get(id) else {
+        let Some(session) = self.store.read(cx).sessions.get(id) else {
             return;
         };
         let next = items::items(session, self.orders.get(id).map_or(&[], Vec::as_slice));
@@ -386,7 +430,7 @@ impl Chat {
         }
         self.area.update(cx, |area, cx| area.clear(cx));
         self.problem = None;
-        match (&self.opening, self.running()) {
+        match (&self.opening, self.running(cx)) {
             (_, Some((session, turn))) => {
                 let params = TurnSteerParams {
                     expected_turn_id: turn,
@@ -429,7 +473,7 @@ impl Chat {
     }
 
     fn stop(&mut self, cx: &mut Context<Self>) {
-        let Some((session, turn)) = self.running() else {
+        let Some((session, turn)) = self.running(cx) else {
             return;
         };
         self.call::<request::TurnStop>(&TurnParams { session, turn }, cx, |_, _, _| {});
@@ -492,13 +536,7 @@ impl Chat {
         window.request_animation_frame();
         match replay.step() {
             Ok(Step::Feed(event)) => self.take(&[event], cx),
-            Ok(Step::Restart) => {
-                self.store = Store::default();
-                self.orders.clear();
-                self.opening = Opening::Closed;
-                self.items = Rc::default();
-                self.transcript.reset(0);
-            }
+            Ok(Step::Restart) => self.restart(cx),
             Ok(Step::Report) => cx.quit(),
             Err(error) => {
                 eprintln!("desk: the cassette has a bad line: {error}");
@@ -548,7 +586,7 @@ impl Render for Chat {
             .on_click(cx.listener(|chat, _: &ClickEvent, _, cx| chat.flip(cx)));
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let composer = Composer::new("chat-composer", self.area.clone())
-            .busy(self.running().is_some())
+            .busy(self.running(cx).is_some())
             .phase(if waiting { "waiting on you" } else { "working" })
             .effort(mode)
             .on_send(cx.listener(|chat, text: &str, _, cx| chat.send(text, cx)))
@@ -571,7 +609,7 @@ impl Render for Chat {
             .map(|problem| fail("tofu", problem, "", &theme));
         let meter = match &self.link {
             Link::Recorded(replay) => Some(replay.meter()),
-            Link::Starting | Link::Ready(_) | Link::Gone => None,
+            Link::Starting | Link::Ready(_) | Link::Gone | Link::Fed => None,
         };
         div()
             .track_focus(&self.focus)

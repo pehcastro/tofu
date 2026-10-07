@@ -37,13 +37,20 @@ mod modules {
     pub mod data_studio;
     #[cfg(feature = "module-editor")]
     pub mod editor;
-    #[cfg(feature = "module-file-edits")]
+    #[cfg(any(feature = "module-file-edits", feature = "screen-work"))]
     pub mod file_edits;
     #[cfg(feature = "module-git")]
     pub mod git;
-    #[cfg(feature = "module-shells")]
+    #[cfg(any(
+        feature = "module-subagents",
+        feature = "module-file-edits",
+        feature = "module-shells",
+        feature = "screen-work"
+    ))]
+    pub mod replayed;
+    #[cfg(any(feature = "module-shells", feature = "screen-work"))]
     pub mod shells;
-    #[cfg(feature = "module-subagents")]
+    #[cfg(any(feature = "module-subagents", feature = "screen-work"))]
     pub mod subagents;
 }
 
@@ -140,7 +147,8 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
             .open_window(
                 desk::window_options(desk::WINDOW_TITLE.into(), desk::desk_client(), cx),
                 |window, cx| {
-                    let chat = modules::chat::live(window, cx);
+                    let store = cx.new(|_| desk_core::model::Store::default());
+                    let chat = modules::chat::live(store, window, cx);
                     cx.new(|_| desk::Desk::new(chat))
                 },
             )

@@ -194,7 +194,7 @@ impl Accounts {
                     .flex_wrap()
                     .gap_1p5()
                     .children(group.sources.iter().map(|(name, tell)| {
-                        button(*name, name, None, ButtonKind::Plain, theme)
+                        button(*name, *name, None, ButtonKind::Plain, theme)
                             .on_click(Self::tell(tell, cx))
                     }))
                     .into_any_element(),

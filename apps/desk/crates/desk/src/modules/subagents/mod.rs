@@ -1,44 +1,29 @@
 mod board;
-use super::chat::cassette;
+use super::replayed::{self, Replayed};
 
-use std::borrow::Cow;
 use std::rc::Rc;
 
-use desk_core::bridge::Event;
 use desk_core::model::{Session, Store};
-use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile, summary};
+use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile};
 use desk_ui::components::avatar::{Agent, AgentStatus};
-use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::glyph::Glyph;
-use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
-use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyView, App, AppContext, Context, Entity, IntoElement, Render, SharedString, Window, div,
-    prelude::*, px,
+    AnyView, App, AppContext, Context, Entity, IntoElement, KeyDownEvent, Render, Subscription,
+    Window, div, prelude::*,
 };
-
-use cassette::{Replay, Step};
 
 const BOARD: &str = "36-agents";
 const IWY4: [usize; 4] = [12, 3, 3, 17];
 const TILE_WIDTH: f32 = 513.0;
-const TILE_INSET: f32 = 8.0;
-const FONTS: [&[u8]; 6] = [
-    include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-SemiBold.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-SemiBold.ttf"),
-];
 
-struct Subagents {
-    store: Store,
-    replay: Option<Replay>,
+pub struct Subagents {
+    store: Entity<Store>,
+    stale: bool,
     board: Rc<AgentBoard>,
     tile: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
     expanded: Option<Agent>,
+    _watch: Subscription,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
@@ -47,41 +32,32 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             "the sub-agents module replays {BOARD}, not {board:?}"
         ));
     }
-    cx.text_system()
-        .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
-        .map_err(|error| format!("the sub-agents module cannot load the Geist fonts: {error}"))?;
-    let replay = Replay::read()?;
-    Ok(cx
-        .new(|cx| {
-            let board = Rc::new(AgentBoard {
-                lines: Vec::new(),
-                events: Vec::new(),
-            });
-            let (tile, screen) = Subagents::views(&board, cx);
-            Subagents {
-                store: Store::default(),
-                replay: Some(replay),
-                board,
-                tile,
-                screen,
-                expanded: None,
-            }
-        })
-        .into())
+    replayed::fonts(cx)?;
+    let store = cx.new(|_| Store::default());
+    let module = mount(store.clone(), cx);
+    let counted = module.clone();
+    Replayed::open(
+        store,
+        module.into(),
+        (Glyph::Agents, "Sub-agents", TILE_WIDTH),
+        move |cx| {
+            let line = counted.update(cx, |module, cx| module.counted(cx));
+            eprintln!(
+                "desk: sub-agents from the store: {line}; IWY-4: Working {} Asking {} Failed {} Finished {} of {}",
+                IWY4[0],
+                IWY4[1],
+                IWY4[2],
+                IWY4[3],
+                IWY4.iter().sum::<usize>()
+            );
+        },
+        cx,
+    )
 }
 
-fn mention(agent: &Agent, _: &mut Window, _: &mut App) {
-    eprintln!(
-        "desk: {} mentioned, and this window has no chat",
-        agent.name()
-    );
-}
-
-impl Subagents {
-    fn views(
-        board: &Rc<AgentBoard>,
-        cx: &mut Context<Self>,
-    ) -> (Entity<AgentTile>, Entity<AgentScreen>) {
+pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
+    cx.new(|cx: &mut Context<Subagents>| {
+        let board = Rc::new(empty());
         let this = cx.weak_entity();
         let expand = move |agent: &Agent, _: &mut Window, cx: &mut App| {
             this.update(cx, |module, cx| module.expand(Some(*agent), cx))
@@ -89,21 +65,47 @@ impl Subagents {
         };
         let tile = cx.new(|cx| AgentTile::new(board.clone(), mention, expand, cx));
         let screen = cx.new(|_| AgentScreen::new(board.clone(), mention));
-        (tile, screen)
-    }
+        Subagents {
+            _watch: cx.observe(&store, |module, _, cx| {
+                module.stale = true;
+                cx.notify();
+            }),
+            store,
+            stale: true,
+            board,
+            tile,
+            screen,
+            expanded: None,
+        }
+    })
+}
 
-    fn session(&self) -> Option<&Session> {
-        self.store.sessions.values().next()
+fn empty() -> AgentBoard {
+    AgentBoard {
+        lines: Vec::new(),
+        events: Vec::new(),
+    }
+}
+
+fn mention(agent: &Agent, _: &mut Window, _: &mut App) {
+    eprintln!(
+        "desk: {} mentioned, and the composer takes no mention yet",
+        agent.name()
+    );
+}
+
+fn session(store: &Store) -> Option<&Session> {
+    store.sessions.values().next()
+}
+
+impl Subagents {
+    pub fn live(&self) -> usize {
+        self.board.live()
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        self.board = Rc::new(self.session().map_or_else(
-            || AgentBoard {
-                lines: Vec::new(),
-                events: Vec::new(),
-            },
-            board::board,
-        ));
+        self.stale = false;
+        self.board = Rc::new(session(self.store.read(cx)).map_or_else(empty, board::board));
         let board = self.board.clone();
         self.tile
             .update(cx, |tile, cx| tile.set_board(board.clone(), cx));
@@ -126,156 +128,46 @@ impl Subagents {
         cx.notify();
     }
 
-    fn feed(&mut self, event: &Event) {
-        if let Err(error) = self.store.apply_batch(std::slice::from_ref(event)) {
-            eprintln!("desk: the store refused an event from the cassette: {error}");
-        }
-    }
-
-    fn counts(&self) {
-        let Some(session) = self.session() else {
-            return eprintln!("desk: sub-agents: the store holds no session");
+    pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
+        self.rebuild(cx);
+        let Some(session) = session(self.store.read(cx)) else {
+            return "no session".to_owned();
         };
-        let count = |status| {
-            session
-                .agents
-                .values()
-                .filter(|agent| board::status(&agent.state) == status)
+        let [working, asking, failed, finished] = AgentStatus::ALL.map(|status| {
+            self.board
+                .lines
+                .iter()
+                .filter(|line| line.agent.status == status)
                 .count()
-        };
-        let [working, asking, failed, finished] = AgentStatus::ALL.map(count);
+        });
         let unshown = session
             .agents
             .values()
             .filter(|agent| board::shown(agent).is_none())
             .count();
-        eprintln!(
-            "desk: sub-agents from the store: Working {working} Asking {asking} Failed {failed} Finished {finished} of {}, {unshown} with no desk_ui kind; IWY-4: Working {} Asking {} Failed {} Finished {} of {}",
-            session.agents.len(),
-            IWY4[0],
-            IWY4[1],
-            IWY4[2],
-            IWY4[3],
-            IWY4.iter().sum::<usize>()
-        );
-    }
-
-    fn settle(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
-        self.replay = None;
-        self.store = Store::default();
-        let mut whole = Replay::read()?;
-        while let Step::Feed(event) = whole.step()? {
-            self.feed(&event);
-        }
-        self.counts();
-        self.rebuild(cx);
-        Ok(())
-    }
-
-    fn frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(replay) = &mut self.replay else {
-            return;
-        };
-        window.request_animation_frame();
-        let stepped = match replay.step() {
-            Ok(Step::Feed(event)) => {
-                self.feed(&event);
-                self.rebuild(cx);
-                Ok(())
-            }
-            Ok(Step::Restart) => {
-                self.store = Store::default();
-                Ok(())
-            }
-            Ok(Step::Report) => self.settle(cx),
-            Err(error) => Err(error),
-        };
-        if let Err(error) = stepped {
-            eprintln!("desk: the cassette has a bad line: {error}");
-            cx.quit();
-        }
-    }
-
-    fn tabs(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let session = self.session();
-        let count = |n: usize| u32::try_from(n).ok();
-        let tab = |label: SharedString, icon, count| Tab {
-            label,
-            icon: Some(icon),
-            count,
-            mark: TabMark::Close,
-        };
-        let mut tabs = vec![
-            tab("Sub-agents".into(), Glyph::Agents, count(self.board.live())),
-            tab(
-                "File edits".into(),
-                Glyph::File,
-                session.and_then(|s| count(s.files.len())),
-            ),
-            tab(
-                "Shells".into(),
-                Glyph::Terminal,
-                session.and_then(|s| count(s.shells.len())),
-            ),
-        ];
-        tabs.extend(
-            self.expanded
-                .map(|agent| tab(agent.name(), Glyph::Agents, None)),
-        );
-        let active = if self.expanded.is_some() { 3 } else { 0 };
-        let this = cx.weak_entity();
-        connected_tabs(
-            "subagents-tabs",
-            &tabs,
-            active,
-            usize::MAX,
-            &ActiveTheme::theme(cx),
-            move |event, _, cx| {
-                let shown = match event {
-                    TabEvent::Select(0) | TabEvent::Close(3) => None,
-                    TabEvent::Select(_) | TabEvent::Close(_) | TabEvent::More | TabEvent::New => {
-                        return;
-                    }
-                };
-                this.update(cx, |module, cx| module.expand(shown, cx)).ok();
-            },
+        format!(
+            "Working {working} Asking {asking} Failed {failed} Finished {finished} of {}, {unshown} with no desk_ui kind",
+            session.agents.len()
         )
     }
 }
 
 impl Render for Subagents {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.frame(window, cx);
-        let theme = ActiveTheme::theme(cx);
-        let tabs = self.tabs(cx).into_any_element();
-        let card = match self.expanded {
-            None => shell(Header::Tabs(tabs, None), &theme)
-                .w(px(TILE_WIDTH))
-                .child(
-                    inner_card(&theme)
-                        .flex_1()
-                        .min_h_0()
-                        .child(self.tile.clone()),
-                ),
-            Some(_) => shell(
-                Header::Tabs(tabs, Some(summary(&self.board, &theme).into_any_element())),
-                &theme,
-            )
-            .flex_1()
-            .child(
-                inner_card(&theme)
-                    .flex_1()
-                    .min_h_0()
-                    .child(self.screen.clone()),
-            ),
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.stale {
+            self.rebuild(cx);
+        }
+        let shown: AnyView = match self.expanded {
+            None => self.tile.clone().into(),
+            Some(_) => self.screen.clone().into(),
         };
-        let meter = self.replay.as_ref().map(Replay::meter);
         div()
             .size_full()
-            .flex()
-            .justify_center()
-            .p(px(TILE_INSET))
-            .child(card.h_full())
-            .children(meter)
+            .on_key_down(cx.listener(|module, event: &KeyDownEvent, _, cx| {
+                if event.keystroke.key == "escape" && module.expanded.is_some() {
+                    module.expand(None, cx);
+                }
+            }))
+            .child(shown)
     }
 }

@@ -1,41 +1,29 @@
-use super::chat::cassette;
+use super::replayed::{self, Replayed};
 
-use std::borrow::Cow;
 use std::rc::Rc;
 
-use desk_core::bridge::Event;
 use desk_core::model::{Session, Store};
 use desk_core::protocol::{FileEdit as Edit, FileEditOp, HunkLineKind};
-use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::diff::{FileChange, FileDiff};
 use desk_ui::components::file_edits::{EditedFile, FileEdit, file_edits, file_history};
 use desk_ui::components::glyph::Glyph;
+use desk_ui::components::sheet::Drawer;
 use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyView, App, AppContext, Context, IntoElement, Render, SharedString, Window, div, prelude::*,
-    px,
+    AnyView, App, AppContext, Context, Entity, IntoElement, Render, SharedString, Subscription,
+    Window, div, prelude::*,
 };
-
-use cassette::{Replay, Step};
 
 const BOARD: &str = "36-agents";
 const TILE_WIDTH: f32 = 513.0;
-const HISTORY_WIDTH: f32 = 495.0;
-const INSET: f32 = 8.0;
-const FONTS: [&[u8]; 6] = [
-    include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-SemiBold.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-SemiBold.ttf"),
-];
 
-struct FileEdits {
-    store: Store,
-    replay: Option<Replay>,
+pub struct FileEdits {
+    store: Entity<Store>,
+    stale: bool,
     files: Vec<EditedFile>,
     opened: usize,
+    drawer: bool,
+    _watch: Subscription,
 }
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
@@ -44,18 +32,37 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             "the file edits module replays {BOARD}, not {board:?}"
         ));
     }
-    cx.text_system()
-        .add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
-        .map_err(|error| format!("the file edits module cannot load the Geist fonts: {error}"))?;
-    let replay = Replay::read()?;
-    Ok(cx
-        .new(|_| FileEdits {
-            store: Store::default(),
-            replay: Some(replay),
-            files: Vec::new(),
-            opened: 0,
-        })
-        .into())
+    replayed::fonts(cx)?;
+    let store = cx.new(|_| Store::default());
+    let module = mount(store.clone(), cx);
+    let counted = module.clone();
+    Replayed::open(
+        store,
+        module.into(),
+        (Glyph::File, "File edits", TILE_WIDTH),
+        move |cx| {
+            let line = counted.update(cx, |module, cx| module.counted(cx));
+            eprintln!(
+                "desk: file edits from the store: {line}; cassette: {} file.edit events",
+                cassette_edits()
+            );
+        },
+        cx,
+    )
+}
+
+pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<FileEdits> {
+    cx.new(|cx: &mut Context<FileEdits>| FileEdits {
+        _watch: cx.observe(&store, |module, _, cx| {
+            module.stale = true;
+            cx.notify();
+        }),
+        store,
+        stale: true,
+        files: Vec::new(),
+        opened: 0,
+        drawer: false,
+    })
 }
 
 fn patch(edit: &Edit) -> String {
@@ -140,62 +147,32 @@ fn files(session: &Session) -> Vec<EditedFile> {
 }
 
 impl FileEdits {
-    fn session(&self) -> Option<&Session> {
-        self.store.sessions.values().next()
+    pub fn count(&self) -> usize {
+        self.files.len()
     }
 
-    fn rebuild(&mut self) {
-        self.files = self.session().map_or_else(Vec::new, files);
+    fn rebuild(&mut self, cx: &App) {
+        self.stale = false;
+        self.files = self
+            .store
+            .read(cx)
+            .sessions
+            .values()
+            .next()
+            .map_or_else(Vec::new, files);
     }
 
-    fn feed(&mut self, event: &Event) {
-        if let Err(error) = self.store.apply_batch(std::slice::from_ref(event)) {
-            eprintln!("desk: the store refused an event from the cassette: {error}");
-        }
-    }
-
-    fn settle(&mut self) -> Result<(), String> {
-        self.replay = None;
-        self.store = Store::default();
-        let mut whole = Replay::read()?;
-        while let Step::Feed(event) = whole.step()? {
-            self.feed(&event);
-        }
-        self.rebuild();
-        let stored = self
-            .session()
+    pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
+        self.rebuild(cx);
+        let stored: usize = self
+            .store
+            .read(cx)
+            .sessions
+            .values()
+            .next()
             .map_or(0, |s| s.files.values().map(Vec::len).sum());
         let shown: usize = self.files.iter().map(|file| file.edits.len()).sum();
-        eprintln!(
-            "desk: file edits from the store: {} files, {stored} edits, {shown} shown; cassette: {} file.edit events",
-            self.files.len(),
-            cassette_edits()
-        );
-        Ok(())
-    }
-
-    fn frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(replay) = &mut self.replay else {
-            return;
-        };
-        window.request_animation_frame();
-        let stepped = match replay.step() {
-            Ok(Step::Feed(event)) => {
-                self.feed(&event);
-                self.rebuild();
-                Ok(())
-            }
-            Ok(Step::Restart) => {
-                self.store = Store::default();
-                Ok(())
-            }
-            Ok(Step::Report) => self.settle(),
-            Err(error) => Err(error),
-        };
-        if let Err(error) = stepped {
-            eprintln!("desk: the cassette has a bad line: {error}");
-            cx.quit();
-        }
+        format!("{} files, {stored} edits, {shown} shown", self.files.len())
     }
 }
 
@@ -207,48 +184,47 @@ fn cassette_edits() -> usize {
 }
 
 impl Render for FileEdits {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.frame(window, cx);
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.stale {
+            self.rebuild(cx);
+        }
         let theme = ActiveTheme::theme(cx);
-        let this = cx.weak_entity();
-        let open = move |ix: usize, _: &mut Window, cx: &mut App| {
-            this.update(cx, |module, cx| {
-                module.opened = ix;
-                cx.notify();
-            })
-            .ok();
+        let (opener, closer) = (cx.weak_entity(), cx.weak_entity());
+        let open = move |at: usize, _: &mut Window, cx: &mut App| {
+            opener
+                .update(cx, |module, cx| {
+                    module.opened = at;
+                    module.drawer = true;
+                    cx.notify();
+                })
+                .ok();
         };
-        let tile = shell(
-            Header::Title(Some(Glyph::File), "File edits".into(), None),
-            &theme,
-        )
-        .w(px(TILE_WIDTH))
-        .h_full()
-        .child(inner_card(&theme).flex_1().min_h_0().child(file_edits(
-            "file-edits",
-            &self.files,
-            &theme,
-            open,
-        )));
-        let history = self.files.get(self.opened).map(|file| {
-            div()
-                .id("file-history-scroll")
-                .w(px(HISTORY_WIDTH))
-                .h_full()
-                .flex_none()
-                .overflow_y_scroll()
-                .child(file_history(("file-history", self.opened), file, &theme))
-        });
-        let meter = self.replay.as_ref().map(Replay::meter);
+        let history = self
+            .files
+            .get(self.opened)
+            .map(|file| file_history(("file-history", self.opened), file, &theme));
         div()
+            .relative()
             .size_full()
-            .flex()
-            .items_start()
-            .justify_center()
-            .gap_3()
-            .p(px(INSET))
-            .child(tile)
-            .children(history)
-            .children(meter)
+            .child(file_edits("file-edits", &self.files, &theme, open))
+            .child(
+                Drawer::new("file-edits-drawer")
+                    .open(self.drawer && history.is_some())
+                    .on_close(move |_, cx| {
+                        closer
+                            .update(cx, |module, cx| {
+                                module.drawer = false;
+                                cx.notify();
+                            })
+                            .ok();
+                    })
+                    .child(
+                        div()
+                            .id("file-history-scroll")
+                            .size_full()
+                            .overflow_y_scroll()
+                            .children(history),
+                    ),
+            )
     }
 }
