@@ -1,4 +1,4 @@
-use crate::palette;
+use crate::palette::Palette;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui::{
@@ -64,6 +64,7 @@ pub(crate) fn prepare(
     origin: Point<Pixels>,
     cell: Size<Pixels>,
     focused: bool,
+    palette: &Palette,
     window: &Window,
 ) -> Painted {
     let at = |row: usize, col: usize| {
@@ -83,6 +84,7 @@ pub(crate) fn prepare(
             cursor,
             Bounds::new(at(cursor.row, cursor.col), cell),
             focused,
+            palette.cursor,
         )
     });
     let solid = frame
@@ -119,7 +121,7 @@ pub(crate) fn prepare(
                 start = col;
             }
             let color = match solid {
-                Some(cursor) if cursor.row == row && cursor.col == col => palette::background(),
+                Some(cursor) if cursor.row == row && cursor.col == col => palette.background,
                 _ => glyph.fg,
             };
             let weight = if glyph.flags.contains(Flags::BOLD) {
@@ -187,24 +189,29 @@ pub(crate) fn prepare(
     }
 }
 
-fn cursor_quad(cursor: Cursor, cell: Bounds<Pixels>, focused: bool) -> Option<PaintQuad> {
+fn cursor_quad(
+    cursor: Cursor,
+    cell: Bounds<Pixels>,
+    focused: bool,
+    color: Hsla,
+) -> Option<PaintQuad> {
     let bar = px(BAR_WIDTH);
     match (cursor.shape, focused) {
         (CursorShape::Hidden, _) => None,
-        (CursorShape::Block, true) => Some(fill(cell, palette::cursor())),
+        (CursorShape::Block, true) => Some(fill(cell, color)),
         (CursorShape::Block | CursorShape::HollowBlock, _) => {
-            Some(outline(cell, palette::cursor(), BorderStyle::Solid))
+            Some(outline(cell, color, BorderStyle::Solid))
         }
         (CursorShape::Beam, _) => Some(fill(
             Bounds::new(cell.origin, size(bar, cell.size.height)),
-            palette::cursor(),
+            color,
         )),
         (CursorShape::Underline, _) => Some(fill(
             Bounds::new(
                 point(cell.left(), cell.bottom() - bar),
                 size(cell.size.width, bar),
             ),
-            palette::cursor(),
+            color,
         )),
     }
 }

@@ -5,6 +5,7 @@ mod pty;
 
 use crate::keys::{KeyInput, key_input};
 use crate::paint::{Cursor, Frame, Glyph};
+pub use crate::palette::Palette;
 use crate::pty::{Output, Pty};
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Scroll;
@@ -14,11 +15,11 @@ use alacritty_terminal::vte::ansi::Processor;
 use desk_core::limits::TERMINAL_SCROLLBACK_LINES;
 use futures::StreamExt;
 use gpui::{
-    App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, Pixels, Render,
+    App, Context, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Pixels, Render,
     ScrollWheelEvent, Task, Window, canvas, div, prelude::*, px,
 };
 use std::cell::RefCell;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 const INITIAL_COLS: u16 = 80;
@@ -38,11 +39,18 @@ impl EventListener for Replies {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TerminalEvent {
+    Exited(Option<u32>),
+}
+
 pub struct Terminal {
     term: Term<Replies>,
     parser: Processor,
     replies: Replies,
     pty: Option<Pty>,
+    cwd: PathBuf,
+    palette: Palette,
     grid: (u16, u16),
     line_height: Pixels,
     scrolled: f32,
@@ -50,29 +58,61 @@ pub struct Terminal {
     _pump: Option<Task<()>>,
 }
 
+impl EventEmitter<TerminalEvent> for Terminal {}
+
+fn blank_term(grid: (u16, u16), replies: Replies) -> Term<Replies> {
+    let config = Config {
+        scrolling_history: TERMINAL_SCROLLBACK_LINES,
+        ..Config::default()
+    };
+    Term::new(
+        config,
+        &TermSize::new(grid.0.into(), grid.1.into()),
+        replies,
+    )
+}
+
 impl Terminal {
     pub fn new(cwd: &Path, cx: &mut Context<Self>) -> Self {
         let replies = Replies::default();
-        let config = Config {
-            scrolling_history: TERMINAL_SCROLLBACK_LINES,
-            ..Config::default()
-        };
-        let size = TermSize::new(INITIAL_COLS.into(), INITIAL_ROWS.into());
+        let grid = (INITIAL_COLS, INITIAL_ROWS);
         let mut terminal = Terminal {
-            term: Term::new(config, &size, replies.clone()),
+            term: blank_term(grid, replies.clone()),
             parser: Processor::new(),
             replies,
             pty: None,
-            grid: (INITIAL_COLS, INITIAL_ROWS),
+            cwd: cwd.to_path_buf(),
+            palette: Palette::default(),
+            grid,
             line_height: px(1.),
             scrolled: 0.,
             focus: cx.focus_handle(),
             _pump: None,
         };
-        match Pty::spawn(cwd, INITIAL_COLS, INITIAL_ROWS) {
+        terminal.start(cx);
+        terminal
+    }
+
+    pub fn set_palette(&mut self, palette: Palette, cx: &mut Context<Self>) {
+        if self.palette != palette {
+            self.palette = palette;
+            cx.notify();
+        }
+    }
+
+    pub fn restart(&mut self, cx: &mut Context<Self>) {
+        self.term = blank_term(self.grid, self.replies.clone());
+        self.parser = Processor::new();
+        self.scrolled = 0.;
+        self.start(cx);
+        cx.notify();
+    }
+
+    fn start(&mut self, cx: &mut Context<Self>) {
+        match Pty::spawn(&self.cwd, self.grid.0, self.grid.1) {
             Ok((pty, mut output)) => {
-                terminal.pty = Some(pty);
-                terminal._pump = Some(cx.spawn(async move |this, cx| {
+                self.pty = Some(pty);
+                self._pump = Some(cx.spawn(async move |this, cx| {
                     while let Some(output) = output.next().await {
                         if this
                             .update(cx, |terminal, cx| terminal.receive(output, cx))
@@ -83,9 +123,12 @@ impl Terminal {
                     }
                 }));
             }
-            Err(error) => terminal.feed(format!("{error}\r\n").as_bytes()),
+            Err(error) => {
+                self.pty = None;
+                self._pump = None;
+                self.feed(format!("{error}\r\n").as_bytes());
+            }
         }
-        terminal
     }
 
     fn receive(&mut self, output: Output, cx: &mut Context<Self>) {
@@ -93,8 +136,9 @@ impl Terminal {
             Output::Bytes(bytes) => self.feed(&bytes),
             Output::Exited(code) => {
                 self.pty = None;
-                let code = code.map_or_else(|| "unknown".to_owned(), |code| code.to_string());
-                self.feed(format!("\r\n[shell exited with code {code}]\r\n").as_bytes());
+                let shown = code.map_or_else(|| "unknown".to_owned(), |code| code.to_string());
+                self.feed(format!("\r\n[shell exited with code {shown}]\r\n").as_bytes());
+                cx.emit(TerminalEvent::Exited(code));
             }
         }
         cx.notify();
@@ -135,7 +179,7 @@ impl Terminal {
                 continue;
             };
             if let Some(line) = lines.get_mut(at.line) {
-                let (fg, bg) = palette::cell_colors(indexed.cell);
+                let (fg, bg) = self.palette.cell_colors(indexed.cell);
                 line.push(Glyph {
                     ch: if indexed.cell.c == '\t' {
                         ' '
@@ -196,10 +240,11 @@ impl Render for Terminal {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let terminal = cx.entity();
         let focused = self.focus.is_focused(window);
+        let palette = self.palette;
         div()
             .size_full()
             .p(px(PADDING))
-            .bg(palette::background())
+            .bg(palette.background)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
             .on_scroll_wheel(cx.listener(Self::scroll_wheel))
@@ -211,7 +256,7 @@ impl Render for Terminal {
                         let rows = (bounds.size.height / cell.height).floor().max(MIN_ROWS) as u16;
                         let frame = terminal
                             .update(cx, |terminal, _| terminal.frame(cols, rows, cell.height));
-                        paint::prepare(&frame, bounds.origin, cell, focused, window)
+                        paint::prepare(&frame, bounds.origin, cell, focused, &palette, window)
                     },
                     |_, painted, window, cx| painted.paint(window, cx),
                 )

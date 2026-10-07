@@ -1,32 +1,39 @@
 use std::path::{Path, PathBuf};
 
-use desk_terminal::Terminal;
-use desk_ui::components::chip::mono;
-use desk_ui::components::paint::ink;
-use desk_ui::components::size::{FONT_SMALL, T2};
+use desk_terminal::{Palette, Terminal, TerminalEvent};
 use desk_ui::components::terminal::{TerminalState, TerminalTile};
-use desk_ui::theme::Theme;
+use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AppContext, ClickEvent, Context, Div, Entity, SharedString, Window, div,
-    prelude::*, px,
+    AppContext, ClickEvent, Context, Div, Entity, SharedString, Subscription, Window, div,
+    prelude::*, px, rgb_to_hsla,
 };
 
 use super::Book;
 use super::kit::label;
 
 const BOARD_WIDTH: f32 = 640.0;
-const LIVE_HEIGHT: f32 = 360.0;
-const EXITED_HEIGHT: f32 = 240.0;
-const SCREEN_PAD: f32 = 8.0;
+const TILE_HEIGHT: f32 = 300.0;
 const REPOSITORY_DEPTH: usize = 4;
+const UNKNOWN_EXIT: i32 = -1;
 const SCRATCH: [&str; 5] = [".local", "desk-app", "shots", "desk-139", "scratch"];
-const LAST_SCREEN: [&str; 6] = [
-    "$ go test ./notes/ -run TestDelete",
-    "--- FAIL: TestDelete (0.00s)",
-    "    notes_test.go:41: want 2, got 3",
-    "FAIL",
-    "$ exit 1",
-    "[shell exited with code 1]",
+const TITLES: [&str; 2] = ["Terminal", "Terminal 2"];
+const ANSI: [ColorToken; 16] = [
+    ColorToken::AnsiBlack,
+    ColorToken::AnsiRed,
+    ColorToken::AnsiGreen,
+    ColorToken::AnsiYellow,
+    ColorToken::AnsiBlue,
+    ColorToken::AnsiMagenta,
+    ColorToken::AnsiCyan,
+    ColorToken::AnsiWhite,
+    ColorToken::AnsiBrightBlack,
+    ColorToken::AnsiBrightRed,
+    ColorToken::AnsiBrightGreen,
+    ColorToken::AnsiBrightYellow,
+    ColorToken::AnsiBrightBlue,
+    ColorToken::AnsiBrightMagenta,
+    ColorToken::AnsiBrightCyan,
+    ColorToken::AnsiBrightWhite,
 ];
 
 fn scratch() -> Result<PathBuf, String> {
@@ -44,20 +51,29 @@ fn scratch() -> Result<PathBuf, String> {
     Ok(folder)
 }
 
-enum Screen {
-    Last,
-    Live(Entity<Terminal>),
+fn palette(theme: &Theme) -> Palette {
+    let color = |token| rgb_to_hsla(theme.color(token));
+    Palette {
+        foreground: color(ColorToken::TextBase),
+        background: color(ColorToken::CardsInnerFill),
+        cursor: color(ColorToken::TextStrong),
+        ansi: ANSI.map(color),
+    }
+}
+
+struct Shell {
+    terminal: Entity<Terminal>,
+    state: TerminalState,
+    _exits: Subscription,
 }
 
 struct Shells {
     folder: PathBuf,
-    live: Entity<Terminal>,
-    exited: Screen,
+    tiles: Vec<Shell>,
 }
 
 pub(super) struct TerminalPage {
     shells: Option<Result<Shells, String>>,
-    restarts: usize,
     readout: SharedString,
 }
 
@@ -65,27 +81,30 @@ impl TerminalPage {
     pub(super) fn new(_: &mut Context<Book>) -> Self {
         TerminalPage {
             shells: None,
-            restarts: 0,
-            readout: "on_restart: not called yet".into(),
+            readout: "type exit 1 into a tile to see it exit".into(),
         }
-    }
-
-    fn last_screen(theme: &Theme) -> Div {
-        div()
-            .size_full()
-            .p(px(SCREEN_PAD))
-            .font_family(mono(theme))
-            .text_size(px(FONT_SMALL))
-            .text_color(ink(theme, T2))
-            .children(LAST_SCREEN.map(|line| div().child(line)))
     }
 
     pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, cx: &mut Context<Book>) -> Div {
         let shells = self.shells.get_or_insert_with(|| {
             scratch().map(|folder| Shells {
-                live: cx.new(|cx| Terminal::new(&folder, cx)),
+                tiles: (0..TITLES.len())
+                    .map(|index| {
+                        let terminal = cx.new(|cx| Terminal::new(&folder, cx));
+                        let exits = cx.subscribe(
+                            &terminal,
+                            move |book: &mut Book, _, event: &TerminalEvent, cx| {
+                                book.terminal.exited(index, *event, cx)
+                            },
+                        );
+                        Shell {
+                            terminal,
+                            state: TerminalState::Running,
+                            _exits: exits,
+                        }
+                    })
+                    .collect(),
                 folder,
-                exited: Screen::Last,
             })
         });
         let shells = match shells {
@@ -93,57 +112,73 @@ impl TerminalPage {
             Err(error) => return div().child(label(error.clone(), theme)),
         };
         let cwd = SharedString::from(shells.folder.display().to_string());
-        let (state, body): (TerminalState, AnyElement) = match &shells.exited {
-            Screen::Last => (
-                TerminalState::Exited { code: 1 },
-                Self::last_screen(theme).into_any_element(),
-            ),
-            Screen::Live(terminal) => (TerminalState::Running, terminal.clone().into_any_element()),
-        };
-        let live = TerminalTile::new(
-            "terminal-live",
-            "Terminal",
-            cwd.clone(),
-            TerminalState::Running,
-            shells.live.clone(),
-        );
-        let exited = TerminalTile::new("terminal-exited", "Terminal 2", cwd, state, body)
-            .on_restart(cx.listener(|this, _: &ClickEvent, _, cx| this.terminal.restart(cx)));
-        let tile = |caption: &'static str, height: f32, shown: TerminalTile| {
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(label(caption, theme))
-                .child(div().w(px(BOARD_WIDTH)).h(px(height)).child(shown))
-        };
+        let palette = palette(theme);
+        let tiles = shells
+            .tiles
+            .iter()
+            .zip(TITLES)
+            .enumerate()
+            .map(|(index, (shell, title))| {
+                shell
+                    .terminal
+                    .update(cx, |terminal, cx| terminal.set_palette(palette, cx));
+                let tile =
+                    TerminalTile::new(
+                        format!("terminal-{index}"),
+                        title,
+                        cwd.clone(),
+                        shell.state,
+                        shell.terminal.clone(),
+                    )
+                    .on_restart(cx.listener(
+                        move |book, _: &ClickEvent, _, cx| book.terminal.restart(index, cx),
+                    ));
+                div().w(px(BOARD_WIDTH)).h(px(TILE_HEIGHT)).child(tile)
+            })
+            .collect::<Vec<_>>();
         div()
             .flex()
             .flex_col()
             .gap_4()
             .child(label(self.readout.clone(), theme))
-            .child(tile(
-                "running: the platform shell in a scratch folder; click it and type",
-                LIVE_HEIGHT,
-                live,
-            ))
-            .child(tile(
-                "exited with code 1: the last screen dimmed, the code and Restart",
-                EXITED_HEIGHT,
-                exited,
-            ))
+            .children(tiles)
     }
 
-    fn restart(&mut self, cx: &mut Context<Book>) {
-        let Some(Ok(shells)) = &mut self.shells else {
+    fn shell(&mut self, index: usize) -> Option<&mut Shell> {
+        match &mut self.shells {
+            Some(Ok(shells)) => shells.tiles.get_mut(index),
+            _ => None,
+        }
+    }
+
+    fn exited(&mut self, index: usize, event: TerminalEvent, cx: &mut Context<Book>) {
+        let TerminalEvent::Exited(code) = event;
+        let code = code
+            .and_then(|code| i32::try_from(code).ok())
+            .unwrap_or(UNKNOWN_EXIT);
+        let Some(shell) = self.shell(index) else {
             return;
         };
-        let folder = shells.folder.clone();
-        shells.exited = Screen::Live(cx.new(|cx| Terminal::new(&folder, cx)));
-        self.restarts += 1;
+        shell.state = TerminalState::Exited { code };
         self.readout = format!(
-            "on_restart: called {}x, Terminal 2 runs a new shell",
-            self.restarts
+            "{}: Exited {{ code: {code} }}",
+            TITLES.get(index).unwrap_or(&"?")
+        )
+        .into();
+        cx.notify();
+    }
+
+    fn restart(&mut self, index: usize, cx: &mut Context<Book>) {
+        let Some(shell) = self.shell(index) else {
+            return;
+        };
+        shell.state = TerminalState::Running;
+        shell
+            .terminal
+            .update(cx, |terminal, cx| terminal.restart(cx));
+        self.readout = format!(
+            "{}: restart called, Running",
+            TITLES.get(index).unwrap_or(&"?")
         )
         .into();
         cx.notify();
