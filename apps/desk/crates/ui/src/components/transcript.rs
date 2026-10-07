@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, App, ElementId, FollowMode, ListAlignment, ListState, Window, div, list,
+    AnyElement, App, ElementId, FollowMode, ListAlignment, ListState, Pixels, Window, div, list,
     prelude::*, px,
 };
 
@@ -12,13 +12,22 @@ const OVERDRAW: f32 = 200.0;
 
 pub struct Transcript {
     list: ListState,
+    content_width: Option<Pixels>,
 }
 
 impl Transcript {
     pub fn new(count: usize) -> Self {
         let list = ListState::new(count, ListAlignment::Top, px(OVERDRAW));
         list.set_follow_mode(FollowMode::Tail);
-        Transcript { list }
+        Transcript {
+            list,
+            content_width: None,
+        }
+    }
+
+    pub fn content_width(mut self, width: Pixels) -> Self {
+        self.content_width = Some(width);
+        self
     }
 
     pub fn reset(&mut self, count: usize) {
@@ -59,6 +68,16 @@ pub fn transcript(
     theme: &Theme,
     row: impl Fn(usize, &mut Window, &mut App) -> AnyElement + 'static,
 ) -> AnyElement {
+    let width = state.content_width;
+    let row = move |at, window: &mut Window, cx: &mut App| match width {
+        None => row(at, window, cx),
+        Some(width) => div()
+            .w_full()
+            .flex()
+            .justify_center()
+            .child(div().w_full().max_w(width).child(row(at, window, cx)))
+            .into_any_element(),
+    };
     div()
         .relative()
         .flex()

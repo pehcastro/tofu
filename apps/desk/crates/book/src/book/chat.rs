@@ -30,6 +30,7 @@ use super::Book;
 use super::kit::{block, label, toggle};
 
 const BOARD_WIDTH: f32 = 760.0;
+const CONTENT_WIDTH: f32 = 672.0;
 const NARROW_WIDTH: f32 = 320.0;
 const COLUMN_HEIGHT: f32 = 560.0;
 const COLUMN_TOP: f32 = 22.0;
@@ -954,7 +955,7 @@ impl ChatPage {
             narrow: Column::new("chat-narrow", NARROW_WIDTH, true, rows),
             asking: Rc::new(RefCell::new(Asking::new(build()))),
             stream: Rc::new(RefCell::new(Stream {
-                transcript: Transcript::new(STREAM_ROWS),
+                transcript: Transcript::new(STREAM_ROWS).content_width(px(CONTENT_WIDTH)),
                 count: STREAM_ROWS,
                 said: String::new(),
             })),

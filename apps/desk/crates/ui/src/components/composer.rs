@@ -227,6 +227,7 @@ pub struct Composer {
     on_remove: Option<OnIndex>,
     on_remove_trace: Option<OnIndex>,
     on_unqueue: Option<OnIndex>,
+    content_width: Option<Pixels>,
 }
 
 impl Composer {
@@ -248,7 +249,13 @@ impl Composer {
             on_remove: None,
             on_remove_trace: None,
             on_unqueue: None,
+            content_width: None,
         }
+    }
+
+    pub fn content_width(mut self, width: Pixels) -> Self {
+        self.content_width = Some(width);
+        self
     }
 
     pub fn variant(mut self, variant: ComposerVariant) -> Self {
@@ -502,6 +509,9 @@ impl RenderOnce for Composer {
         });
         div()
             .id(self.id)
+            .when_some(self.content_width, |column, width| {
+                column.w_full().max_w(width).mx_auto()
+            })
             .flex()
             .flex_col()
             .gap(px(ROW_GAP))

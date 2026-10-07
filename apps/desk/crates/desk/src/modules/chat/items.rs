@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use desk_core::model::{Role, Session};
 use desk_core::protocol::AgentState;
 use desk_ui::components::chat::{
@@ -13,9 +15,23 @@ const ARGUMENT_KEYS: [&str; 4] = ["command", "path", "pattern", "url"];
 #[derive(Clone, PartialEq)]
 pub enum Entry {
     Message(usize),
+    Task(String),
     Tool(String),
     Agent(String),
     Done(String),
+}
+
+#[derive(Clone)]
+pub struct Lead {
+    time: SharedString,
+    text: SharedString,
+    blocks: Rc<Vec<Block>>,
+}
+
+impl PartialEq for Lead {
+    fn eq(&self, other: &Self) -> bool {
+        self.time == other.time && self.text == other.text
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -24,10 +40,7 @@ pub enum Item {
         time: SharedString,
         text: SharedString,
     },
-    Lead {
-        time: SharedString,
-        text: SharedString,
-    },
+    Lead(Lead),
     Tool {
         busy: bool,
         text: SharedString,
@@ -44,14 +57,16 @@ pub enum Item {
     Foot(SharedString),
 }
 
-pub fn items(session: &Session, order: &[Entry]) -> Vec<Item> {
-    order
-        .iter()
-        .filter_map(|entry| item(session, entry))
-        .collect()
+pub fn settled(session: &Session, entry: &Entry) -> bool {
+    match entry {
+        Entry::Message(at) => session.messages.get(*at).is_none_or(|m| m.complete),
+        Entry::Tool(id) => session.tools.get(id).is_none_or(|t| t.output.is_some()),
+        Entry::Agent(_) => false,
+        Entry::Task(_) | Entry::Done(_) => true,
+    }
 }
 
-fn item(session: &Session, entry: &Entry) -> Option<Item> {
+pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
     match entry {
         Entry::Message(at) => {
             let message = session.messages.get(*at).filter(|m| m.agent.is_none())?;
@@ -59,11 +74,22 @@ fn item(session: &Session, entry: &Entry) -> Option<Item> {
             let time = clock(session, &message.turn);
             match message.role {
                 Role::User | Role::Steer => Some(Item::You { time, text }),
-                Role::Assistant if !text.is_empty() => Some(Item::Lead { time, text }),
+                Role::Assistant if !text.is_empty() => Some(Item::Lead(Lead {
+                    blocks: Rc::new(blocks(&text)),
+                    time,
+                    text,
+                })),
                 Role::Assistant | Role::Thinking => None,
                 Role::Note => Some(Item::Note(text)),
                 Role::Failure => Some(Item::Failure(text)),
             }
+        }
+        Entry::Task(turn) => {
+            let task = &session.turns.get(turn)?.task;
+            (!task.is_empty()).then(|| Item::You {
+                time: clock(session, turn),
+                text: task.clone().into(),
+            })
         }
         Entry::Tool(id) => {
             let tool = session.tools.get(id).filter(|tool| tool.agent.is_none())?;
@@ -161,7 +187,7 @@ fn spans(text: &str) -> Vec<Span> {
 pub fn pieces(item: &Item) -> Vec<String> {
     match item {
         Item::You { text, .. } => vec![text.to_string()],
-        Item::Lead { text, .. } => chat::pieces(&blocks(text)),
+        Item::Lead(said) => chat::pieces(&said.blocks),
         Item::Tool { .. }
         | Item::Agent { .. }
         | Item::Note(_)
@@ -182,9 +208,7 @@ pub fn render(item: &Item, at: usize, marks: &[Marks], theme: &Theme) -> AnyElem
             theme,
         )
         .into_any_element(),
-        Item::Lead { time, text } => {
-            lead(time.clone(), &blocks(text), marks, theme).into_any_element()
-        }
+        Item::Lead(said) => lead(said.time.clone(), &said.blocks, marks, theme).into_any_element(),
         Item::Tool {
             busy,
             text,

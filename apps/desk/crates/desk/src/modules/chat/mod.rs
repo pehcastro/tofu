@@ -36,6 +36,7 @@ const TOFU_VARIABLE: &str = "DESK_TOFU";
 const PLACEHOLDER: &str = "Ask tofu to build, inspect, or delegate";
 const FIELD_LINES: usize = 8;
 const ROW_INSET: f32 = 24.0;
+const CONTENT_WIDTH: f32 = 672.0;
 const COLUMN_TOP: f32 = 16.0;
 const DOCK_GAP: f32 = 8.0;
 const DOCK_INSET: f32 = 16.0;
@@ -63,6 +64,11 @@ enum Opening {
     Open(String),
 }
 
+struct Slot {
+    item: Option<Item>,
+    settled: bool,
+}
+
 struct Approval {
     key: String,
     id: RequestId,
@@ -73,6 +79,7 @@ pub struct Chat {
     link: Link,
     store: Entity<Store>,
     orders: BTreeMap<String, Vec<Entry>>,
+    slots: Vec<Slot>,
     opening: Opening,
     items: Rc<Vec<Item>>,
     transcript: Transcript,
@@ -209,9 +216,10 @@ impl Chat {
             link,
             store,
             orders: BTreeMap::new(),
+            slots: Vec::new(),
             opening: Opening::Closed,
             items: Rc::default(),
-            transcript: Transcript::new(0),
+            transcript: Transcript::new(0).content_width(px(CONTENT_WIDTH)),
             area,
             approval: None,
             asking: SessionOpenParamsAsking::Auto,
@@ -393,6 +401,7 @@ impl Chat {
             cx.notify();
         });
         self.orders.clear();
+        self.slots.clear();
         self.opening = Opening::Closed;
         self.items = Rc::default();
         self.transcript.reset(0);
@@ -437,6 +446,9 @@ impl Chat {
             order.extend((was..session.messages.len()).map(Entry::Message));
         }
         let (session, entry) = match event {
+            Event::Notification(Notification::TurnStarted(started)) => {
+                (&started.session, Entry::Task(started.turn.clone()))
+            }
             Event::Notification(Notification::ToolStarted(started)) => {
                 (&started.session, Entry::Tool(started.item.clone()))
             }
@@ -514,21 +526,51 @@ impl Chat {
         let Some(session) = self.store.read(cx).sessions.get(id) else {
             return;
         };
-        let next = items::items(session, self.orders.get(id).map_or(&[], Vec::as_slice));
-        let same = self
-            .items
-            .iter()
-            .zip(&next)
-            .take_while(|(was, now)| was == now)
-            .count();
-        if let Some(Item::Lead { text, .. }) = next.get(same) {
-            eprintln!("desk: lead row streams {} chars", text.len());
+        let order = self.orders.get(id).map_or(&[][..], Vec::as_slice);
+        let shown = Rc::make_mut(&mut self.items);
+        let (mut at, mut changed) = (0, false);
+        for (index, entry) in order.iter().enumerate() {
+            if let Some(slot) = self.slots.get(index)
+                && slot.settled
+            {
+                at += usize::from(slot.item.is_some());
+                continue;
+            }
+            let now = items::item(session, entry);
+            let settled = items::settled(session, entry);
+            let was = match self.slots.get_mut(index) {
+                Some(slot) => {
+                    slot.settled = settled;
+                    std::mem::replace(&mut slot.item, now.clone())
+                }
+                None => {
+                    self.slots.push(Slot {
+                        item: now.clone(),
+                        settled,
+                    });
+                    None
+                }
+            };
+            match (was, now) {
+                (None, None) => {}
+                (Some(was), Some(now)) if was == now => at += 1,
+                (Some(_), Some(now)) => {
+                    shown[at] = now;
+                    self.transcript.splice(at..at + 1, 1);
+                    (at, changed) = (at + 1, true);
+                }
+                (None, Some(now)) => {
+                    shown.insert(at, now);
+                    self.transcript.splice(at..at, 1);
+                    (at, changed) = (at + 1, true);
+                }
+                (Some(_), None) => {
+                    shown.remove(at);
+                    self.transcript.splice(at..at + 1, 0);
+                    changed = true;
+                }
+            }
         }
-        if same < self.items.len() || next.len() > same {
-            self.transcript
-                .splice(same..self.items.len(), next.len() - same);
-        }
-        self.items = Rc::new(next);
         let kept = self
             .approval
             .as_ref()
@@ -542,7 +584,7 @@ impl Chat {
                 .map(|(asked_id, asked)| Approval::new(asked_id.clone(), asked, &self.project));
             self.refocus |= shown || self.approval.is_some();
         }
-        if !self.query.is_empty() {
+        if changed && !self.query.is_empty() {
             self.search(cx);
         }
         cx.notify();
@@ -752,6 +794,7 @@ impl Render for Chat {
             .on_click(cx.listener(|chat, _: &ClickEvent, _, cx| chat.flip(cx)));
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let composer = Composer::new("chat-composer", self.area.clone())
+            .content_width(px(CONTENT_WIDTH))
             .busy(self.running(cx).is_some())
             .phase(if waiting { "waiting on you" } else { "working" })
             .effort(mode)
