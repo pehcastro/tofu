@@ -98,6 +98,31 @@ func TestAnIDMatchingTwoTurnsAndAnIDMatchingNoneEachComeBackWithTheirOwnMessage(
 	}
 }
 
+func TestQuoteReadsATurnFromEitherSideOfAFork(t *testing.T) {
+	store := session.NewStore(t.TempDir())
+	parent, child := "turn-18d7474e7fae0900", "turn-18d7474e7fae0901"
+	if err := store.Write(session.Header{ID: parent, Root: parent, At: time.Now(), ForkedInto: child},
+		[]session.Event{spoke(t, "0f2c9b1a-4444-4aaa-8bbb-ddddddaa0001", session.RoleUser, "never create .bak copies")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Write(session.Header{ID: child, Root: parent, At: time.Now(), CarriedFrom: &session.Carried{Session: parent}},
+		[]session.Event{spoke(t, "0f2c9b1a-5555-4aaa-8bbb-eeeeeebb0002", session.RoleUser, "change the port to 9090")}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ held, id, want, in string }{
+		{child, "#aa0001", "never create .bak copies", parent},
+		{parent, "#bb0002", "change the port to 9090", child},
+	} {
+		content, err := quoted(t, tools.NewQuote(store, c.held), c.id)
+		if err != nil || !strings.Contains(content, c.want) || !strings.Contains(content, c.in) {
+			t.Fatalf("quoting %s from %s gave %v:\n%s", c.id, c.held, err, content)
+		}
+	}
+	if _, err := quoted(t, tools.NewQuote(store, child), "#000000"); !errors.Is(err, session.ErrEventHashNotFound) {
+		t.Fatalf("an id no session in the chain carries came back as %v", err)
+	}
+}
+
 func TestATurnRecordedBeforeEventIDsExistedIsQuotableByItsPlaceInTheSession(t *testing.T) {
 	tool := recordedQuote(t,
 		spoke(t, "", session.RoleUser, "what did the gate decide"),

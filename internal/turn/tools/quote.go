@@ -103,7 +103,7 @@ func (q Quote) quotedInChain(hash string) (session.Conversation, session.Utteran
 			return talk, said, at, err
 		}
 	}
-	return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: no turn in the %d sessions of this chain ends with %q: ask for the reference again rather than quoting the nearest turn", len(chain), hash)
+	return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w in the %d sessions of this chain: %q: ask for the reference again rather than quoting the nearest turn", session.ErrEventHashNotFound, len(chain), hash)
 }
 
 func quotedTurn(talk session.Conversation, hash string) (session.Utterance, int, error) {
