@@ -53,6 +53,7 @@ pub enum Page {
     Toast,
     Sheet,
     Drawer,
+    Palette,
     Tooltips,
     Empty,
     Composer,
@@ -96,7 +97,7 @@ pub const UNBUILT: [(Group, &str); 10] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 37] = [
+    pub const ALL: [Page; 38] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -123,6 +124,7 @@ impl Page {
         Page::Toast,
         Page::Sheet,
         Page::Drawer,
+        Page::Palette,
         Page::Tooltips,
         Page::Empty,
         Page::Composer,
@@ -361,6 +363,16 @@ impl Page {
                 "components/sheet.rs Drawer",
                 "entering, open, dragged, closed",
                 "",
+            ),
+            Page::Palette => sheet(
+                "palette",
+                "Palette",
+                Group::Overlays,
+                "Ctrl K on every platform: a field that filters every command by its label, grouped in the caller's order. Up and Down move, Enter or a click picks, Escape or a click outside closes.",
+                "04-ui-model.md Palette, 13-keyboard.md",
+                "components/palette.rs; form.rs TextArea, list.rs HoverList, overlay.rs menu_surface, chip.rs kbd",
+                "closed, open with six groups, filtered, nothing found, highlighted by keys and pointer, picked, closed by Escape or outside click",
+                "keeping the highlighted row in view when the list is taller than the panel: ScrollArea keeps its handle private",
             ),
             Page::Tooltips => sheet(
                 "tooltips",

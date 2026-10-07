@@ -18,6 +18,7 @@ pub mod history;
 pub mod list;
 pub mod overlay;
 pub mod paint;
+pub mod palette;
 pub mod scroll;
 pub mod sheet;
 pub mod shells;

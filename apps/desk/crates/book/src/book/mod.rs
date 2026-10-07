@@ -13,6 +13,7 @@ mod foundations;
 mod graph;
 mod kit;
 mod lists;
+mod palette;
 mod shell;
 mod shells;
 mod terminal;
@@ -57,6 +58,7 @@ use foundations::FoundationsState;
 use graph::GraphPage;
 use kit::{MODELS, label};
 use lists::ListsState;
+use palette::PalettePage;
 use shell::ShellPage;
 use shells::ShellsPage;
 use terminal::TerminalPage;
@@ -90,6 +92,7 @@ pub struct Book {
     charts: ChartsPage,
     graph: GraphPage,
     tiling: TilingPage,
+    palette: PalettePage,
 }
 
 impl Book {
@@ -128,10 +131,11 @@ impl Book {
             charts: ChartsPage::new(cx),
             graph: GraphPage::new(cx),
             tiling: TilingPage::new(cx),
+            palette: PalettePage::new(window, cx),
         }
     }
 
-    fn key(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
         if key == "f12" {
             Profiler::toggle_overlay(cx);
@@ -151,6 +155,7 @@ impl Book {
             Page::Charts => self.charts.key(key),
             Page::Delegation => self.graph.key(key),
             Page::Tiling => self.tiling.key(event),
+            Page::Palette => self.palette.key(event, window, cx),
             _ => self.content.key(page, key) || self.controls.key(page, key),
         };
         if used {
@@ -449,6 +454,7 @@ impl Book {
             Page::Charts => self.charts.render(theme, window, cx),
             Page::Delegation => self.graph.render(theme, window, cx),
             Page::Tiling => self.tiling.render(theme, window, cx),
+            Page::Palette => self.palette.render(theme, cx),
         }
     }
 }
