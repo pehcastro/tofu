@@ -70,6 +70,7 @@ pub enum Page {
     FileEdits,
     Charts,
     Delegation,
+    Settings,
     Tiling,
 }
 
@@ -98,7 +99,7 @@ pub const UNBUILT: [(Group, &str); 10] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 39] = [
+    pub const ALL: [Page; 40] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -137,6 +138,7 @@ impl Page {
         Page::AskBar,
         Page::Charts,
         Page::Delegation,
+        Page::Settings,
         Page::Tiling,
     ];
 
@@ -535,6 +537,16 @@ impl Page {
                 "components/graph.rs",
                 "nothing picked, agent picked with its cross link, file picked and undone, edge hover; board width and 320 px",
                 "",
+            ),
+            Page::Settings => sheet(
+                "settings",
+                "Settings",
+                Group::Content,
+                "A settings page: its title, groups of rows each with a name, a sentence, where the value comes from and a control, and key bindings with a conflict.",
+                "ISET-1",
+                "components/settings.rs; card.rs caption, chip.rs chip kbd Tone, form.rs switch segmented",
+                "default, global and project sources; switch, segmented, value chip and key binding rows; a key that conflicts",
+                "a bare switch track: form.rs switch always lays out its label",
             ),
             Page::Tiling => sheet(
                 "tiling",

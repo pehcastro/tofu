@@ -20,6 +20,7 @@ pub mod overlay;
 pub mod paint;
 pub mod palette;
 pub mod scroll;
+pub mod settings;
 pub mod sheet;
 pub mod shells;
 pub mod size;

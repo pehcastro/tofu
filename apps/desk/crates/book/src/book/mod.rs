@@ -15,6 +15,7 @@ mod graph;
 mod kit;
 mod lists;
 mod palette;
+mod settings;
 mod shell;
 mod shells;
 mod terminal;
@@ -61,6 +62,7 @@ use graph::GraphPage;
 use kit::{MODELS, label};
 use lists::ListsState;
 use palette::PalettePage;
+use settings::SettingsPage;
 use shell::ShellPage;
 use shells::ShellsPage;
 use terminal::TerminalPage;
@@ -96,6 +98,7 @@ pub struct Book {
     graph: GraphPage,
     tiling: TilingPage,
     palette: PalettePage,
+    settings: SettingsPage,
 }
 
 impl Book {
@@ -136,6 +139,7 @@ impl Book {
             graph: GraphPage::new(cx),
             tiling: TilingPage::new(cx),
             palette: PalettePage::new(window, cx),
+            settings: SettingsPage::new(),
         }
     }
 
@@ -461,6 +465,7 @@ impl Book {
             Page::Delegation => self.graph.render(theme, window, cx),
             Page::Tiling => self.tiling.render(theme, window, cx),
             Page::Palette => self.palette.render(theme, cx),
+            Page::Settings => self.settings.render(theme, cx),
         }
     }
 }
