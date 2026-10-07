@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.5.6-fix2"
+const Version = "0.5.6-fix3"
 
 const RecipeFailuresAside = 2
 
@@ -243,6 +243,12 @@ const (
 const (
 	CatalogStaleHours = 24
 	CatalogRetryHours = 1
+)
+
+const (
+	UpdateCheckHours   = 1
+	UpdateWatchSeconds = 30
+	UpdateProbeSeconds = 10
 )
 
 const (

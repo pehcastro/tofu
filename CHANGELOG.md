@@ -10,6 +10,18 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.6-fix3 - 2026-10-07
+
+### Added
+
+- **tofu updates itself.** The app looks up the latest release at most once an hour, installs a newer one in the background and says `tofu X is installed · restart to use it`. `tofu settings set autoUpdate false` leaves only `tofu X is out · tofu update installs it`. A session left open also says so when any newer tofu is put on disk.
+
+### Fixed
+
+- **Sub-agents above the composer fold into one line**, for example `(13) agents waiting for an answer · (2) agents running bash`; the sub-agents screen keeps the per-agent detail.
+
+- **Only a question open right now counts as waiting.** A sub-agent whose write was refused by its owns ends finished, needing context, instead of waiting for an answer forever.
+
 ## 0.5.6-fix2 - 2026-10-07
 
 ### Fixed
