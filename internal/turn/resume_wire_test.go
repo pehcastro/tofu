@@ -31,21 +31,27 @@ func TestAContinuationForkCarryingParallelCallsReadsBackAsAListAnthropicAccepts(
 	lead := crewLead(t, model)
 	lead.Sessions, lead.Session, lead.Budget = store, first, recall.Budget{Bands: recall.Bands{Recent: 6000}}
 	turns := startLead(context.Background(), lead, nil).wait(t)
-	events, err := store.Events(first)
+	listing, err := store.Listing()
 	if err != nil {
 		t.Fatal(err)
 	}
-	tail := 0
-	for _, event := range events {
-		var forked struct {
-			Fork *Fork `json:"fork"`
+	var tails []int
+	for _, header := range listing.Sessions {
+		events, err := store.Events(header.ID)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if event.Kind == session.EventCompaction && json.Unmarshal(event.Body, &forked) == nil && forked.Fork != nil {
-			tail = forked.Fork.TailMessages
+		for _, event := range events {
+			var forked struct {
+				Fork *Fork `json:"fork"`
+			}
+			if event.Kind == session.EventCompaction && json.Unmarshal(event.Body, &forked) == nil && forked.Fork != nil && forked.Fork.Kind == ForkContinuation {
+				tails = append(tails, forked.Fork.TailMessages)
+			}
 		}
 	}
-	if len(turns) != 1 || turns[0].Session == first || tail == 0 {
-		t.Fatalf("the turn ended in %s with a fork tail of %d messages, want a continuation fork that carried calls", turns[0].Session, tail)
+	if len(turns) != 1 || turns[0].Session == first || !slices.ContainsFunc(tails, func(tail int) bool { return tail > 0 }) {
+		t.Fatalf("the turn ended in %s after continuation forks carrying %v tail messages, want one that carried calls", turns[0].Session, tails)
 	}
 	for i, request := range model.requests(leadKey) {
 		sent := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Role == llm.RoleSystem })
