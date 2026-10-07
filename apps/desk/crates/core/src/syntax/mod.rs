@@ -9,7 +9,7 @@ use tree_sitter::{
     StreamingIterator, Tree,
 };
 
-use crate::buffer::Buffer;
+use crate::buffer::{Applied, Buffer};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {
@@ -186,7 +186,7 @@ impl Syntax {
         parser
             .set_language(&grammar)
             .map_err(SyntaxError::Language)?;
-        let rope = Rope::from_str(&buffer.text());
+        let rope = buffer.rope().clone();
         let tree = parse(&mut parser, &rope, None)?;
         Ok(Self {
             rope,
@@ -197,29 +197,36 @@ impl Syntax {
         })
     }
 
-    pub fn edit(&mut self, chars: Range<usize>, text: &str) -> Result<(), SyntaxError> {
-        let len = self.rope.len_chars();
-        if chars.start > chars.end || chars.end > len {
-            return Err(SyntaxError::OutOfRange {
-                index: chars.end,
-                len,
+    pub fn sync(&mut self, buffer: &mut Buffer) -> Result<(), SyntaxError> {
+        let applied = buffer.take_applied();
+        if applied.is_empty() {
+            return Ok(());
+        }
+        for Applied { chars, text } in &applied {
+            let len = self.rope.len_chars();
+            if chars.start > chars.end || chars.end > len {
+                return Err(SyntaxError::OutOfRange {
+                    index: chars.end,
+                    len,
+                });
+            }
+            let start_byte = self.rope.char_to_byte(chars.start);
+            let old_end_byte = self.rope.char_to_byte(chars.end);
+            let start_position = point(&self.rope, start_byte);
+            let old_end_position = point(&self.rope, old_end_byte);
+            self.rope.remove(chars.clone());
+            self.rope.insert(chars.start, text);
+            let new_end_byte = start_byte + text.len();
+            self.tree.edit(&InputEdit {
+                start_byte,
+                old_end_byte,
+                new_end_byte,
+                start_position,
+                old_end_position,
+                new_end_position: point(&self.rope, new_end_byte),
             });
         }
-        let start_byte = self.rope.char_to_byte(chars.start);
-        let old_end_byte = self.rope.char_to_byte(chars.end);
-        let start_position = point(&self.rope, start_byte);
-        let old_end_position = point(&self.rope, old_end_byte);
-        self.rope.remove(chars.clone());
-        self.rope.insert(chars.start, text);
-        let new_end_byte = start_byte + text.len();
-        self.tree.edit(&InputEdit {
-            start_byte,
-            old_end_byte,
-            new_end_byte,
-            start_position,
-            old_end_position,
-            new_end_position: point(&self.rope, new_end_byte),
-        });
+        self.rope = buffer.rope().clone();
         self.tree = parse(&mut self.parser, &self.rope, Some(&self.tree))?;
         Ok(())
     }

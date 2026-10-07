@@ -39,6 +39,12 @@ impl From<io::Error> for BufferError {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Applied {
+    pub chars: Range<usize>,
+    pub text: String,
+}
+
 struct Change {
     at: usize,
     removed: String,
@@ -63,6 +69,7 @@ pub struct Buffer {
     typed_at: Option<Instant>,
     next_id: u64,
     saved_id: u64,
+    applied: Vec<Applied>,
 }
 
 impl Buffer {
@@ -83,7 +90,25 @@ impl Buffer {
             typed_at: None,
             next_id: 0,
             saved_id: 0,
+            applied: Vec::new(),
         }
+    }
+
+    pub fn rope(&self) -> &Rope {
+        &self.rope
+    }
+
+    pub fn take_applied(&mut self) -> Vec<Applied> {
+        std::mem::take(&mut self.applied)
+    }
+
+    fn replace(&mut self, chars: Range<usize>, text: &str) {
+        self.rope.remove(chars.clone());
+        self.rope.insert(chars.start, text);
+        self.applied.push(Applied {
+            chars,
+            text: text.to_string(),
+        });
     }
 
     pub fn load(path: &Path) -> Result<Self, BufferError> {
@@ -162,8 +187,7 @@ impl Buffer {
         let mut changes = Vec::with_capacity(targets.len());
         for range in targets.iter().rev() {
             let removed = self.rope.slice(range.clone()).to_string();
-            self.rope.remove(range.clone());
-            self.rope.insert(range.start, &text);
+            self.replace(range.clone(), &text);
             changes.push(Change {
                 at: range.start,
                 removed,
@@ -212,9 +236,10 @@ impl Buffer {
             return false;
         };
         for change in step.changes.iter().rev() {
-            self.rope
-                .remove(change.at..change.at + change.inserted_chars);
-            self.rope.insert(change.at, &change.removed);
+            self.replace(
+                change.at..change.at + change.inserted_chars,
+                &change.removed,
+            );
         }
         self.selections.clone_from(&step.before);
         self.redos.push(step);
@@ -227,9 +252,10 @@ impl Buffer {
             return false;
         };
         for change in &step.changes {
-            self.rope
-                .remove(change.at..change.at + change.removed_chars);
-            self.rope.insert(change.at, &change.inserted);
+            self.replace(
+                change.at..change.at + change.removed_chars,
+                &change.inserted,
+            );
         }
         self.selections.clone_from(&step.after);
         self.undos.push(step);
