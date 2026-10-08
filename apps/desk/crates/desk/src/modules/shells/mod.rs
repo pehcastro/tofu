@@ -20,7 +20,6 @@ pub type Kill = Rc<dyn Fn(SharedString, &mut App)>;
 pub struct Shells {
     store: Entity<Store>,
     kill: Kill,
-    opened_at: Instant,
     shells: Vec<Shell>,
     active: usize,
     listing: bool,
@@ -62,16 +61,38 @@ pub fn mount(store: Entity<Store>, kill: Kill, cx: &mut App) -> Entity<Shells> {
         }),
         store,
         kill,
-        opened_at: Instant::now(),
         shells: Vec::new(),
         active: 0,
         listing: false,
     })
 }
 
-fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell, since: Instant) -> Shell {
+fn moment(at: Option<&str>) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    at.and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+}
+
+fn since(stored: &desk_core::model::Shell) -> Instant {
+    moment(stored.started_at.as_deref())
+        .and_then(|at| (chrono::Utc::now() - at.to_utc()).to_std().ok())
+        .and_then(|age| Instant::now().checked_sub(age))
+        .unwrap_or(stored.first_seen)
+}
+
+fn took(stored: &desk_core::model::Shell) -> Duration {
+    moment(stored.started_at.as_deref())
+        .zip(moment(stored.ended_at.as_deref()))
+        .and_then(|(started, ended)| (ended - started).to_std().ok())
+        .unwrap_or(Duration::ZERO)
+}
+
+fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell) -> Shell {
     let (state, status) = match (stored.exited, stored.exit_code) {
-        (false, _) => (ShellState::Running, TermStatus::Running { since }),
+        (false, _) => (
+            ShellState::Running,
+            TermStatus::Running {
+                since: since(stored),
+            },
+        ),
         (true, code) => {
             let code = code.and_then(|code| i32::try_from(code).ok()).unwrap_or(-1);
             let state = if code == 0 && !stored.killed {
@@ -83,7 +104,7 @@ fn shown(session: &Session, name: &str, stored: &desk_core::model::Shell, since:
                 state,
                 TermStatus::Exited {
                     code,
-                    took: Duration::ZERO,
+                    took: took(stored),
                 },
             )
         }
@@ -121,13 +142,12 @@ impl Shells {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        let since = self.opened_at;
         let session = self.store.read(cx).open_session();
         self.shells = session.map_or_else(Vec::new, |session| {
             session
                 .shells
                 .iter()
-                .map(|(name, stored)| shown(session, name, stored, since))
+                .map(|(name, stored)| shown(session, name, stored))
                 .collect()
         });
         self.active = self.active.min(self.shells.len().saturating_sub(1));

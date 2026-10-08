@@ -73,6 +73,8 @@ pub struct Shell {
     pub exited: bool,
     pub pid: Option<i64>,
     pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub first_seen: std::time::Instant,
     pub port: Option<u16>,
 }
 
@@ -340,6 +342,8 @@ impl Session {
                         exited: false,
                         pid: Some(e.pid),
                         started_at: Some(e.started_at.clone()),
+                        ended_at: None,
+                        first_seen: std::time::Instant::now(),
                         port: None,
                     },
                 );
@@ -359,6 +363,7 @@ impl Session {
                 shell.exit_code = e.exit_code;
                 shell.killed = e.killed;
                 shell.exited = true;
+                shell.ended_at.clone_from(&e.ended_at);
             }
             N::Decision(e) => self.decisions.push((**e).clone()),
             N::ApprovalResolved(e) => {
