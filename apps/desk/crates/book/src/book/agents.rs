@@ -249,7 +249,22 @@ fn seeds() -> Vec<Seed> {
     seeds
 }
 
-fn line(seed: &Seed) -> AgentLine {
+fn line(seed: &Seed, events: &[AgentEvent]) -> AgentLine {
+    let edits = events.iter().filter_map(|event| match &event.step {
+        AgentStep::Edit {
+            path,
+            added,
+            removed,
+            ..
+        } => Some((path, *added, *removed)),
+        _ => None,
+    });
+    let mut paths = edits.clone().map(|(path, _, _)| path).collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+    let sum = |pick: fn((&SharedString, u32, u32)) -> u32| {
+        edits.clone().map(pick).map(|n| n as usize).sum()
+    };
     let kind = seed.agent.kind;
     let (started, worked) = (f32::from(seed.started), f32::from(seed.worked));
     let (now, time) = match seed.agent.status {
@@ -274,6 +289,21 @@ fn line(seed: &Seed) -> AgentLine {
         time: time.into(),
         owns: seed.owns.into(),
         thinking: thinking(kind).into(),
+        added: sum(|(_, added, _)| added),
+        removed: sum(|(_, _, removed)| removed),
+        files: paths.len(),
+        tools: events
+            .iter()
+            .filter(|event| {
+                !matches!(
+                    event.step,
+                    AgentStep::Spawn { .. }
+                        | AgentStep::Report { .. }
+                        | AgentStep::Fail { .. }
+                        | AgentStep::Ask { .. }
+                )
+            })
+            .count(),
     }
 }
 
@@ -536,11 +566,18 @@ fn seeded(mut seeds: Vec<Seed>, swapped: bool) -> AgentBoard {
     if let Some(first) = seeds.first_mut().filter(|_| swapped) {
         first.agent.status = AgentStatus::Failed;
     }
-    let mut events: Vec<AgentEvent> = seeds.iter().flat_map(events).collect();
-    events.sort_by(|a, b| a.minutes.total_cmp(&b.minutes));
+    let mut lines = Vec::new();
+    let mut all = Vec::new();
+    for seed in &seeds {
+        let made = events(seed);
+        lines.push(line(seed, &made));
+        all.extend(made);
+    }
+    all.sort_by(|a, b| a.minutes.total_cmp(&b.minutes));
     AgentBoard {
-        lines: seeds.iter().map(line).collect(),
-        events,
+        lines,
+        events: all,
+        attributed: true,
     }
 }
 
@@ -558,6 +595,7 @@ pub(super) struct AgentsPage {
     board: Rc<AgentBoard>,
     tile: Entity<AgentTile>,
     narrow: Entity<AgentTile>,
+    wide: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
     swapped: bool,
     pending: bool,
@@ -584,11 +622,14 @@ impl AgentsPage {
         let few = seeds().into_iter().take(NARROW_AGENTS).collect();
         let narrow = Rc::new(seeded(few, false));
         let narrow = cx.new(|cx| AgentTile::new(narrow, mention(book.clone()), |_, _, _| {}, cx));
+        let wide =
+            cx.new(|cx| AgentTile::new(board.clone(), mention(book.clone()), |_, _, _| {}, cx));
         let tile = cx.new(|cx| AgentTile::new(board.clone(), mention(book), expand, cx));
         AgentsPage {
             board,
             tile,
             narrow,
+            wide,
             screen,
             swapped: false,
             pending: false,
@@ -600,6 +641,8 @@ impl AgentsPage {
         self.swapped = !self.swapped;
         self.board = Rc::new(board(self.swapped));
         self.tile
+            .update(cx, |tile, cx| tile.set_board(self.board.clone(), cx));
+        self.wide
             .update(cx, |tile, cx| tile.set_board(self.board.clone(), cx));
         self.screen
             .update(cx, |screen, cx| screen.set_board(self.board.clone(), cx));
@@ -668,6 +711,13 @@ impl AgentsPage {
         .w(px(NARROW_WIDTH))
         .h(px(NARROW_HEIGHT))
         .child(inner_card(theme).child(self.narrow.clone()));
+        let wide = shell(
+            Header::Title(Some(Glyph::Agents), "Sub-agents".into(), None),
+            theme,
+        )
+        .w_full()
+        .h(px(NARROW_HEIGHT))
+        .child(inner_card(theme).child(self.wide.clone()));
         let screen = shell(
             Header::Title(
                 Some(Glyph::Agents),
@@ -690,6 +740,10 @@ impl AgentsPage {
             .child(column(
                 "Narrow, DESK-208: the same tile 190 px wide with two agents, as in a 720 x 420 board with the sidebar open. Under 48 px for doing, the doing column drops and agent and time stay.",
                 narrow,
+            ))
+            .child(column(
+                "Wide, DESK-216: the same tile across the page. A row keeps the narrow row's height and two lines; width adds LINES from 560 px, FILES from 640 px and TOOLS from 760 px. Under 48 px for doing, TIME shrinks to its text and the agent name keeps the rest.",
+                wide,
             ))
             .child(column(
                 "Screen, IWY-7: the expanded tab. A row on the left shows that agent on the right in place; All activity goes back.",

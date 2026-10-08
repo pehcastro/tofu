@@ -4,7 +4,7 @@ use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
     Animation, AnimationExt, AnyElement, App, ClickEvent, Context, Div, ElementId, FocusHandle,
     FontWeight, KeyDownEvent, MouseDownEvent, Pixels, Rgba, SharedString, Stateful, Transformation,
-    Window, div, prelude::*, px, radians, relative,
+    Window, canvas, div, prelude::*, px, radians, relative,
 };
 
 use crate::component::icon;
@@ -48,6 +48,12 @@ const TILE_ROW_PAD_Y: f32 = 3.0;
 const TILE_AVATAR_GAP: f32 = 8.0;
 const LINE_TASK: f32 = 17.0;
 const DOING_LEAST: f32 = 48.0;
+const LINES_FROM: f32 = 560.0;
+const FILES_FROM: f32 = 640.0;
+const TOOLS_FROM: f32 = 760.0;
+const GRID_LINES: f32 = 64.0;
+const GRID_COUNT: f32 = 40.0;
+const LINES_GAP: f32 = 6.0;
 
 const DRAWER_PAD_X: f32 = 16.0;
 const DRAWER_HEAD_PAD_BOTTOM: f32 = 10.0;
@@ -146,6 +152,10 @@ pub struct AgentLine {
     pub time: SharedString,
     pub owns: SharedString,
     pub thinking: SharedString,
+    pub added: usize,
+    pub removed: usize,
+    pub files: usize,
+    pub tools: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -249,6 +259,7 @@ impl AgentEvent {
 pub struct AgentBoard {
     pub lines: Vec<AgentLine>,
     pub events: Vec<AgentEvent>,
+    pub attributed: bool,
 }
 
 impl AgentBoard {
@@ -881,26 +892,55 @@ fn grid(id: impl Into<ElementId>) -> Stateful<Div> {
         .px(px(GRID_PAD_X))
 }
 
-fn who() -> Div {
-    div().w(px(GRID_WHO)).flex_shrink_1().min_w_0()
+fn who(fit: Fit) -> Div {
+    if fit.doing {
+        div().w(px(GRID_WHO)).flex_shrink_1().min_w_0()
+    } else {
+        div().flex_1().min_w_0()
+    }
 }
 
 fn doing() -> Div {
     div().flex_1().min_w_0()
 }
 
-fn when() -> Div {
-    div().w(px(GRID_WHEN)).flex_none().min_w_0().truncate()
+fn when(fit: Fit) -> Div {
+    if fit.doing {
+        div().w(px(GRID_WHEN)).flex_none().min_w_0().truncate()
+    } else {
+        div().flex_none().flex().justify_end().whitespace_nowrap()
+    }
+}
+
+fn figure(width: f32) -> Div {
+    div()
+        .w(px(width))
+        .flex_none()
+        .flex()
+        .justify_end()
+        .gap(px(LINES_GAP))
+        .whitespace_nowrap()
+}
+
+fn first_line(text: &SharedString) -> SharedString {
+    text.lines().next().unwrap_or_default().to_owned().into()
 }
 
 fn tile_row(
     ix: usize,
     line: &AgentLine,
-    (picked, fit): (bool, DoingFit),
+    (picked, fit): (bool, Fit),
     theme: &Theme,
 ) -> Stateful<Div> {
     let agent = &line.agent;
     let t3 = ink(theme, T3);
+    let count = |value: usize| {
+        figure(GRID_COUNT)
+            .text_size(px(FONT_WHO))
+            .font_features(tabular())
+            .text_color(t3)
+            .child(value.to_string())
+    };
     grid(("tile-row", ix))
         .min_h(px(GRID_ROW))
         .py(px(TILE_ROW_PAD_Y))
@@ -908,7 +948,7 @@ fn tile_row(
         .text_size(px(FONT_TAB))
         .when(picked, |row| row.bg(ink(theme, GRID_ON)))
         .child(
-            who()
+            who(fit)
                 .flex()
                 .items_center()
                 .gap(px(TILE_AVATAR_GAP))
@@ -922,22 +962,41 @@ fn tile_row(
                         .child(agent.name()),
                 ),
         )
-        .when(fit == DoingFit::Shown, |row| {
+        .when(fit.doing, |row| {
             row.child(
                 doing()
                     .line_height(px(LINE_TASK))
-                    .child(div().truncate().child(line.task.clone()))
+                    .child(div().truncate().child(first_line(&line.task)))
                     .child(
                         div()
                             .truncate()
                             .text_size(px(FONT_WHO))
                             .text_color(t3)
-                            .child(line.now.clone()),
+                            .child(first_line(&line.now)),
                     ),
             )
         })
+        .when(fit.lines, |row| {
+            row.child(
+                figure(GRID_LINES)
+                    .text_size(px(FONT_WHO))
+                    .font_features(tabular())
+                    .child(
+                        div()
+                            .text_color(Tone::Added.color(theme))
+                            .child(format!("+{}", line.added)),
+                    )
+                    .child(
+                        div()
+                            .text_color(Tone::Deleted.color(theme))
+                            .child(format!("-{}", line.removed)),
+                    ),
+            )
+        })
+        .when(fit.files, |row| row.child(count(line.files)))
+        .when(fit.tools, |row| row.child(count(line.tools)))
         .child(
-            when()
+            when(fit)
                 .text_size(px(FONT_WHO))
                 .font_features(tabular())
                 .text_color(t3)
@@ -945,33 +1004,43 @@ fn tile_row(
         )
 }
 
-fn columns(fit: DoingFit, theme: &Theme) -> Stateful<Div> {
+fn columns(fit: Fit, theme: &Theme) -> Stateful<Div> {
     grid("tile-columns")
         .pt(px(COLUMNS_PAD_TOP))
         .pb(px(COLUMNS_PAD_BOTTOM))
         .whitespace_nowrap()
-        .child(who().child(caption("agent", theme)))
-        .when(fit == DoingFit::Shown, |row| {
+        .child(who(fit).child(caption("agent", theme)))
+        .when(fit.doing, |row| {
             row.child(doing().child(caption("doing", theme).truncate()))
         })
-        .child(when().child(caption("time", theme)))
+        .when(fit.lines, |row| {
+            row.child(figure(GRID_LINES).child(caption("lines", theme)))
+        })
+        .when(fit.files, |row| {
+            row.child(figure(GRID_COUNT).child(caption("files", theme)))
+        })
+        .when(fit.tools, |row| {
+            row.child(figure(GRID_COUNT).child(caption("tools", theme)))
+        })
+        .child(when(fit).child(caption("time", theme)))
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum DoingFit {
-    Shown,
-    Dropped,
+#[derive(Clone, Copy)]
+struct Fit {
+    doing: bool,
+    lines: bool,
+    files: bool,
+    tools: bool,
 }
 
-impl DoingFit {
-    fn of(tile: Option<Pixels>) -> Self {
-        let room = tile.map_or(f32::INFINITY, |width| {
-            width.as_f32() - 2.0 * GRID_PAD_X - 2.0 * GRID_GAP - GRID_WHO - GRID_WHEN
-        });
-        if room < DOING_LEAST {
-            DoingFit::Dropped
-        } else {
-            DoingFit::Shown
+impl Fit {
+    fn of(tile: Option<Pixels>, attributed: bool) -> Self {
+        let board = tile.map_or(f32::INFINITY, |width| width.as_f32());
+        Fit {
+            doing: board - 2.0 * GRID_PAD_X - 2.0 * GRID_GAP - GRID_WHO - GRID_WHEN >= DOING_LEAST,
+            lines: attributed && board >= LINES_FROM,
+            files: attributed && board >= FILES_FROM,
+            tools: attributed && board >= TOOLS_FROM,
         }
     }
 }
@@ -1157,7 +1226,7 @@ impl Render for AgentTile {
         let theme = ActiveTheme::theme(cx);
         let glide = RowGlide::new("tile-glide", HoverVariant::Glide, &theme, window, cx);
         let width = Width::of(format!("tile-width-{}", cx.entity_id()), window, cx);
-        let fit = DoingFit::of(width.get(cx));
+        let fit = Fit::of(width.get(cx), self.board.attributed);
         let mut table = div()
             .flex()
             .flex_col()
@@ -1220,7 +1289,21 @@ impl Render for AgentTile {
             .flex()
             .flex_col()
             .text_color(ink(&theme, T1))
-            .child(width.probe())
+            .child(
+                canvas(
+                    move |bounds, window, cx| {
+                        if width.get(cx) != Some(bounds.size.width) {
+                            width.record(bounds.size.width, cx);
+                            window.request_animation_frame();
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full(),
+            )
             .child(ScrollArea::new("tile-scroll").child(glide.frame("tile-rows", table)))
             .child(drawer)
     }

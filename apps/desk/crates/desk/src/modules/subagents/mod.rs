@@ -86,6 +86,7 @@ fn empty() -> AgentBoard {
     AgentBoard {
         lines: Vec::new(),
         events: Vec::new(),
+        attributed: false,
     }
 }
 

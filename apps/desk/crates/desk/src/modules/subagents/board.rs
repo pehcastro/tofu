@@ -52,6 +52,26 @@ pub fn board(session: &Session) -> AgentBoard {
             .values()
             .find(|(_, asked)| asked.agent.as_deref() == Some(id.as_str()))
             .map(|(_, asked)| format!("{} {}", asked.tool, argument(&asked.args)));
+        let edited: Vec<Vec<&FileEdit>> = session
+            .files
+            .values()
+            .map(|edits| {
+                edits
+                    .iter()
+                    .filter(|edit| edit.agent.as_deref() == Some(id.as_str()))
+                    .collect::<Vec<_>>()
+            })
+            .filter(|mine| !mine.is_empty())
+            .collect();
+        let changed = |kind: HunkLineKind| {
+            edited
+                .iter()
+                .flatten()
+                .flat_map(|edit| &edit.hunks)
+                .flat_map(|hunk| &hunk.lines)
+                .filter(|line| line.kind == kind)
+                .count()
+        };
         let report = member.report.clone().unwrap_or_default();
         let (now_doing, time) = match agent.status {
             AgentStatus::Working => (
@@ -114,11 +134,25 @@ pub fn board(session: &Session) -> AgentBoard {
             time,
             owns: member.owns.join(", ").into(),
             thinking: member.thinking.clone().into(),
+            added: changed(HunkLineKind::Added),
+            removed: changed(HunkLineKind::Removed),
+            files: edited.len(),
+            tools: tools.len(),
         });
     }
     events.reverse();
     events.sort_by(|a, b| a.minutes.total_cmp(&b.minutes));
-    AgentBoard { lines, events }
+    let attributed = session.tools.values().any(|tool| tool.agent.is_some())
+        || session
+            .files
+            .values()
+            .flatten()
+            .any(|edit| edit.agent.is_some());
+    AgentBoard {
+        lines,
+        events,
+        attributed,
+    }
 }
 
 fn step(tool: &Tool, edit: Option<&FileEdit>) -> Option<AgentStep> {
