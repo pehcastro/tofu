@@ -47,6 +47,8 @@ type Decision struct {
 	PromptAccounting PromptAccounting
 	CacheReadTokens  int
 	CacheWriteTokens int
+	CacheWrite5m     int
+	CacheWrite1h     int
 	FirstTokenMS     int64
 	Warnings         []string
 }

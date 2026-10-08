@@ -79,7 +79,8 @@ exit 0
         "at": "AT",
         "text": "it keeps one log per session"
       }
-    ]
+    ],
+    "cache": {}
   },
   "problems": []
 }

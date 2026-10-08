@@ -137,7 +137,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	watch.spawner, watch.maxSteps, watch.decisions = prepared.Spawner, prepared.MaxSteps, prepared.Decisions
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
-	config.History = h.carried
+	config.History, config.Prefix = h.carried, h.prefix
 	config.TaskOrigin.Source = live.Origin.recorded()
 	switch h.asking {
 	case AskingAsk:
@@ -198,6 +198,9 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 			h.carried = turn.Sendable(row.Conversation)
 		}
 		forked := row.Session != "" && row.Session != h.id
+		if forked {
+			h.prefix = &turn.Prefix{}
+		}
 		if row.Session != "" {
 			h.id = row.Session
 		}

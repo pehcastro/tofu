@@ -20,6 +20,7 @@ import (
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
@@ -343,6 +344,7 @@ type SubAgentLimits struct {
 	Depth     int
 	WallClock time.Duration
 	CheckIn   time.Duration
+	CacheTTL  string
 }
 
 type SpawnTool struct {
@@ -763,6 +765,9 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		defer opened.Close()
 	}
 	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
+	if ttl := t.limits().CacheTTL; ttl != "" {
+		ctx = anthropic.WithCacheTTL(ctx, ttl)
+	}
 	check := &checkIn{id: held.agent.ID, started: t.clock(), missed: func(run Row) []string {
 		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns(), []Row{run})
 	}}
@@ -815,7 +820,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.Tools = NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
-	subAgent.System, subAgent.Environment, subAgent.History = held.system, held.environment, held.history
+	subAgent.System, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.environment, held.history, &held.prefix
 	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
 	subAgent.Person = t.orchestratorAnswers(held, site)
 	subAgent.AgentType = held.definition.Name
@@ -847,6 +852,7 @@ type heldSubAgent struct {
 	askedEffort llm.Effort
 	system      string
 	environment string
+	prefix      Prefix
 	boundary    *subagent.Boundary
 	inbox       *Inbox
 	trace       spawnTrace

@@ -699,6 +699,7 @@ type sessionTraceReport struct {
 	Changes  []session.TracedChange `json:"list_changes,omitempty"`
 	Notices  []session.TracedNotice `json:"notices,omitempty"`
 	Outlived []traceOutlived        `json:"outlived,omitempty"`
+	Cache    traceCache             `json:"cache"`
 }
 
 type traceResult struct {
@@ -846,7 +847,7 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 		return sessionTraceReport{}, err
 	}
 	exchanges := slices.DeleteFunc(traced.Exchanges, func(exchange session.Exchange) bool { return !keep(exchange.Agent, exchange.At) })
-	report.Requests = tracedRequests(report.Requests, exchanges)
+	report.Requests, report.Cache = tracedRequests(report.Requests, exchanges), cacheTrace(events, exchanges)
 	if len(exchanges) > 0 {
 		sizes := store.Sizes(id)
 		report.Sizes = &sizes
@@ -872,6 +873,9 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 		cells := []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model}
 		if request.Messages > 0 {
 			cells = append(cells, countOf(request.Messages, "message")+", "+strconv.Itoa(request.New)+" new")
+		}
+		if words := report.Cache.Lifetimes[request.Request]; words != "" {
+			cells = append(cells, words)
 		}
 		cells = append(cells, "in "+strconv.Itoa(request.Usage.InputTokens)+" · out "+strconv.Itoa(request.Usage.OutputTokens), dollars(request.CostUSD))
 		requests[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: request.Why}
@@ -956,7 +960,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	for _, section := range []struct {
 		name string
 		rows []cli.Row
-	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"messages", messages}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
+	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"cache breaks", cacheBreakRows(report.Cache.Breaks)}, {"messages", messages}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
 		if len(section.rows) > 0 {
 			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
 		}

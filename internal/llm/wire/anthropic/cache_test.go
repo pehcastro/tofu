@@ -78,6 +78,27 @@ func TestTheEncodedRequestPlacesItsMarkersWhereTheGoldenSays(t *testing.T) {
 	golden.Assert(t, "history-caching.golden", indented.String())
 }
 
+func TestTheWriteSplitFromMessageStartSurvivesTheClosingUsage(t *testing.T) {
+	var stream strings.Builder
+	for _, event := range []string{
+		`{"type":"message_start","message":{"id":"msg_1","model":"claude-test","usage":{"input_tokens":3,"cache_read_input_tokens":7,"cache_creation_input_tokens":30,"cache_creation":{"ephemeral_5m_input_tokens":10,"ephemeral_1h_input_tokens":20}}}}`,
+		`{"type":"content_block_start","index":0,"content_block":{"type":"text"}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}`,
+		`{"type":"content_block_stop","index":0}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2,"cache_creation_input_tokens":30}}`,
+		`{"type":"message_stop"}`,
+	} {
+		stream.WriteString("data: " + event + "\n\n")
+	}
+	result, err := ReadStream(strings.NewReader(stream.String()), true, nil, nil)
+	if err != nil {
+		t.Fatalf("reading: %v", err)
+	}
+	if want := (Usage{Input: 3, Output: 2, CacheRead: 7, CacheWrite: 30, CacheWrite5m: 10, CacheWrite1h: 20}); result.Usage != want {
+		t.Fatalf("usage %+v, want %+v", result.Usage, want)
+	}
+}
+
 func minimalRequest() Request {
 	return Request{
 		Model:    "claude-opus-4-1-20250805",

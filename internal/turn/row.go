@@ -103,6 +103,8 @@ type StepRow struct {
 	ReasoningTokens  int               `json:"reasoning_tokens,omitempty"`
 	CacheReadTokens  int               `json:"cache_read_tokens"`
 	CacheWriteTokens int               `json:"cache_write_tokens"`
+	CacheWrite5m     int               `json:"cache_write_5m_tokens,omitempty"`
+	CacheWrite1h     int               `json:"cache_write_1h_tokens,omitempty"`
 	CostUSD          float64           `json:"cost_usd"`
 	DurationMS       int64             `json:"duration_ms"`
 	FirstTokenMS     int64             `json:"first_token_ms"`

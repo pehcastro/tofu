@@ -95,6 +95,7 @@ type Host struct {
 	id        string
 	started   string
 	carried   []llm.Message
+	prefix    *turn.Prefix
 	pending   []pendingImage
 	ran       []string
 	release   func() error
@@ -343,7 +344,7 @@ func (h *Host) carry(resumed Carry) error {
 		h.engine.Renew()
 	}
 	h.reads, h.inbox, h.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
-	h.ran, h.carried = nil, resumed.Messages
+	h.ran, h.carried, h.prefix = nil, resumed.Messages, &turn.Prefix{}
 	for _, message := range resumed.Messages {
 		if message.ToolCallID != "" {
 			h.shown[message.ToolCallID] = true
@@ -411,7 +412,7 @@ func (h *Host) Opening(carry Carry) []Event { return resumedChat(carry, h.dir) }
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.id, h.carried = into, messages
+	h.id, h.carried, h.prefix = into, messages, &turn.Prefix{}
 	return h.hold(into)
 }
 

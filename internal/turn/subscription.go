@@ -53,6 +53,8 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		PromptAccounting: llm.PromptAccountingFor(anthropic.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
 		CacheWriteTokens: result.Usage.CacheWrite,
+		CacheWrite5m:     result.Usage.CacheWrite5m,
+		CacheWrite1h:     result.Usage.CacheWrite1h,
 		FirstTokenMS:     result.FirstTokenMS,
 		Warnings:         result.Warnings,
 	}

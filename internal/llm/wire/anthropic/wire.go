@@ -75,7 +75,16 @@ type Dump struct {
 	Attestation Attestation
 }
 
+type cacheTTLKey struct{}
+
+func WithCacheTTL(ctx context.Context, ttl string) context.Context {
+	return context.WithValue(ctx, cacheTTLKey{}, ttl)
+}
+
 func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
+	if ttl, set := ctx.Value(cacheTTLKey{}).(string); set && request.CacheTTL != "" {
+		request.CacheTTL = ttl
+	}
 	request.Model = cmp.Or(request.Model, w.config.Model)
 	request.SessionID = cmp.Or(request.SessionID, w.config.SessionID)
 	request.AccountID = cmp.Or(request.AccountID, w.config.AccountID)

@@ -765,7 +765,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	spawner.Limits = func() turn.SubAgentLimits {
 		return turn.SubAgentLimits{Running: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify),
-			CheckIn: time.Duration(settingInt(dir, settingspkg.SubAgentCheckSeconds, run.notify)) * time.Second}
+			CheckIn: time.Duration(settingInt(dir, settingspkg.SubAgentCheckSeconds, run.notify)) * time.Second, CacheTTL: settingText(dir, settingspkg.SubAgentCache, run.notify)}
 	}
 	own := slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return slices.Contains(leadNeverCalls(), tool.Name()) })
 	if settingText(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {

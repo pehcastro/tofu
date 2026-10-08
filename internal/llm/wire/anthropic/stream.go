@@ -25,10 +25,12 @@ const (
 )
 
 type Usage struct {
-	Input      int
-	Output     int
-	CacheRead  int
-	CacheWrite int
+	Input        int
+	Output       int
+	CacheRead    int
+	CacheWrite   int
+	CacheWrite5m int
+	CacheWrite1h int
 }
 
 type Result struct {
@@ -81,6 +83,10 @@ type wireUsage struct {
 	Output     *int `json:"output_tokens"`
 	CacheRead  *int `json:"cache_read_input_tokens"`
 	CacheWrite *int `json:"cache_creation_input_tokens"`
+	Lifetimes  *struct {
+		FiveMinutes *int `json:"ephemeral_5m_input_tokens"`
+		OneHour     *int `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
 }
 
 func (u wireUsage) applyTo(usage *Usage) {
@@ -95,6 +101,12 @@ func (u wireUsage) applyTo(usage *Usage) {
 	}
 	if u.CacheWrite != nil {
 		usage.CacheWrite = *u.CacheWrite
+	}
+	if u.Lifetimes != nil && u.Lifetimes.FiveMinutes != nil {
+		usage.CacheWrite5m = *u.Lifetimes.FiveMinutes
+	}
+	if u.Lifetimes != nil && u.Lifetimes.OneHour != nil {
+		usage.CacheWrite1h = *u.Lifetimes.OneHour
 	}
 }
 

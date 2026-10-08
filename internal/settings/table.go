@@ -72,6 +72,7 @@ const (
 	OneTurnPerProject      = "oneTurnPerProject"
 	SubAgentsPerTurn       = "subAgentsPerTurn"
 	SubAgentDepth          = "subAgentDepth"
+	SubAgentCache          = "subAgentCache"
 	SubAgentCheckSeconds   = "subAgentCheckSeconds"
 	SubAgentWatchSeconds   = "subAgentWatchSeconds"
 	VerifySubAgents        = "verifySubAgents"
@@ -257,6 +258,8 @@ func Default() []Spec {
 			Least: 1, Most: math.MaxInt32, Unit: "sub-agents running at once"},
 		{Key: SubAgentDepth, Label: "Sub-agent depth", Description: "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentDepthDefault,
 			Least: 1, Most: math.MaxInt32, Unit: "levels of sub-agents"},
+		{Key: SubAgentCache, Label: "Sub-agent cache", Description: "how long a sub-agent's prompt cache lives; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour. the lead always keeps 1h, and the next spawn reads the new value", Category: "Turn", Kind: Text, DefaultText: konst.SubscriptionCacheTTL,
+			Choices: []string{"1h", "5m"}},
 		{Key: SubAgentCheckSeconds, Label: "Sub-agent check", Description: "every this many seconds the lead is sent a check on each running sub-agent, built from what tofu records with no model call: its steps, the files it changed, its gate and its last tool. 0 sends none; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentCheckSecondsDefault,
 			Least: 0, Most: math.MaxInt32, Unit: "seconds between checks on a running sub-agent, where 0 sends none"},
 		{Key: SubAgentWatchSeconds, Label: "Sub-agent watch", Description: "a sub-agent call open this many seconds gets a line in the chat saying what it is doing: waiting for the orchestrator's answer, running bash or building; a sub-agent with no new output, step or request for this long is shown as stalled", Category: "Turn", Kind: Int, Default: konst.SubAgentWatchSecondsDefault,

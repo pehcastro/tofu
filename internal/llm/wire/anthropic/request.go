@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/transport"
 )
@@ -40,7 +39,6 @@ type Request struct {
 }
 
 const (
-	historyCacheMinMessages       = 3
 	historyCacheMinPrefixChars    = 4096
 	historyCacheCommittedMinChars = 4096
 	cacheBreakpointsPerRequest    = 4
@@ -150,7 +148,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), r.CacheTTL)
 	head := applyHeadCaching(system, tools, r.CacheTTL)
 	if !r.HistoryCacheOff {
-		applyHistoryCaching(messages, map[bool]string{true: konst.HistoryCacheTTL}[r.CacheTTL != ""], cacheBreakpointsPerRequest-head)
+		applyHistoryCaching(messages, r.CacheTTL, cacheBreakpointsPerRequest-head)
 	}
 
 	userID, err := metadataUserID(r, oauth)
@@ -274,7 +272,7 @@ func lastStableSystemBlock(system []systemBlock) int {
 }
 
 func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {
-	if budget < 1 || len(messages) < historyCacheMinMessages || historyChars(messages) < historyCacheMinPrefixChars {
+	if budget < 1 || historyChars(messages) < historyCacheMinPrefixChars {
 		return
 	}
 	markPrefixEnd(messages[len(messages)-1].Content, ttl)

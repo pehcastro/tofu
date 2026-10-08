@@ -135,7 +135,7 @@ const (
 	TurnLoopGuardWindow             = 6
 	TurnStepCapNoticeShare          = 0.1
 	SubscriptionCacheTTL            = "1h"
-	HistoryCacheTTL                 = "1h"
+	CacheBreakSlackTokens           = 50
 	PromptHistoryEntries            = 1000
 	PromptHistoryEntryBytes         = 16384
 	PromptHistoryFileBytes          = 2097152

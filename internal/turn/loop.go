@@ -122,6 +122,7 @@ type Config struct {
 	Environment     string
 	Instructions    string
 	Memory          string
+	Prefix          *Prefix
 	ImagesOf        func(said string) []llm.Image
 	Caps            Caps
 	Sift            *ShellSift
@@ -165,6 +166,29 @@ func (c Config) FirstUserMessage(notes ...string) string {
 		return first
 	}
 	return first + NotesAfterTheTask + strings.Join(notes, "\n\n")
+}
+
+type Prefix struct {
+	held   bool
+	system string
+	tools  []llm.Tool
+}
+
+func (p *Prefix) hold(system string, tools []llm.Tool) string {
+	if p == nil {
+		return system
+	}
+	if !p.held {
+		p.held, p.system, p.tools = true, system, tools
+	}
+	return p.system
+}
+
+func (p *Prefix) toolsOr(tools []llm.Tool) []llm.Tool {
+	if p == nil || !p.held {
+		return tools
+	}
+	return p.tools
 }
 
 func (c Config) SystemMessage() string {
@@ -309,7 +333,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
-	if system := config.SystemMessage(); system != "" {
+	if system := config.Prefix.hold(config.SystemMessage(), currentTools().Definitions()); system != "" {
 		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
 	}
 	afterSystem := len(messages)
@@ -478,7 +502,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), inserted(sourceLastWord, lead+andThisIsItsLastStep, time.Time{}))
-		request := llm.Request{Messages: messages, Tools: currentTools().Definitions()}
+		request := llm.Request{Messages: messages, Tools: config.Prefix.toolsOr(currentTools().Definitions())}
 		if len(request.Tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
@@ -508,7 +532,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if promptRefused != "" {
 		return fail(errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused))
 	}
-	schemas, err := json.Marshal(currentTools().Definitions())
+	schemas, err := json.Marshal(config.Prefix.toolsOr(currentTools().Definitions()))
 	if err != nil {
 		return fail(err)
 	}
@@ -608,7 +632,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 
 		stepTools := currentTools()
-		definitions := stepTools.Definitions()
+		definitions := config.Prefix.toolsOr(stepTools.Definitions())
 		schemas, err := json.Marshal(definitions)
 		if err != nil {
 			return fail(err)
@@ -1050,6 +1074,8 @@ func stepFrom(id string, index int, timing requestTiming, decision llm.Decision)
 		ReasoningTokens:  decision.Usage.ReasoningTokens,
 		CacheReadTokens:  decision.CacheReadTokens,
 		CacheWriteTokens: decision.CacheWriteTokens,
+		CacheWrite5m:     decision.CacheWrite5m,
+		CacheWrite1h:     decision.CacheWrite1h,
 		CostUSD:          decision.Usage.Cost,
 		Warnings:         decision.Warnings,
 	}

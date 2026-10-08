@@ -17,7 +17,7 @@ The settings come in groups:
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills, memory, autoMemory, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
-- Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn, subAgentDepth, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor
 
 `gatePrompt` is `auto` by default, which is auto mode: Jev decides at every
@@ -30,6 +30,12 @@ allow it here from now on. A project hook that asks, a rule override and
 the model changing a setting ask you in both modes: no classifier answers
 the first two, and the last could otherwise turn its own gate off.
 `tofu run` has nobody to ask, so there an ask is refused in both modes.
+
+`subAgentCache` is how long a sub-agent's prompt cache lives, `1h` by
+default. `tofu settings set subAgentCache 5m` writes a sub-agent's cache at
+the cheaper five minute rate; a sub-agent idle past five minutes then
+writes its prefix again. The lead keeps one hour either way, and
+`tofu session trace` shows each request's write at the lifetime it got.
 
 ## Where it lives
 

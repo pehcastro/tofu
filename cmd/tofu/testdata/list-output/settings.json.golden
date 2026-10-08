@@ -208,6 +208,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "subAgentCache",
+        "category": "Turn",
+        "value": "1h",
+        "source": "default"
+      },
+      {
         "key": "subAgentCheckSeconds",
         "category": "Turn",
         "value": 1800,

@@ -18,9 +18,9 @@ What it is
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
-    subAgentDepth, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents,
-    agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
-    modelTier.dumb
+    subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds,
+    verifySubAgents, agentSources, modelTier.genius, modelTier.smart,
+    modelTier.worker, modelTier.dumb
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor
 
@@ -34,6 +34,12 @@ What it is
   a setting ask you in both modes: no classifier answers the first two, and the
   last could otherwise turn its own gate off. `tofu run` has nobody to ask, so
   there an ask is refused in both modes.
+
+  `subAgentCache` is how long a sub-agent's prompt cache lives, `1h` by default.
+  `tofu settings set subAgentCache 5m` writes a sub-agent's cache at the cheaper
+  five minute rate; a sub-agent idle past five minutes then writes its prefix
+  again. The lead keeps one hour either way, and `tofu session trace` shows each
+  request's write at the lifetime it got.
 
 Where it lives
 
@@ -217,6 +223,11 @@ Turn
       at least 1 levels of sub-agents
       how deep a sub-agent may spawn its own sub-agents; the next spawn reads
       the new value
+    subAgentCache           1h
+      one of 1h, 5m
+      how long a sub-agent's prompt cache lives; 5m writes cost less and expire
+      after five idle minutes, 1h writes cost more and last an hour. the lead
+      always keeps 1h, and the next spawn reads the new value
     subAgentCheckSeconds    1800
       at least 0 seconds between checks on a running sub-agent, where 0 sends
       none
