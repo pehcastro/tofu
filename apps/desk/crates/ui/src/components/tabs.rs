@@ -556,9 +556,20 @@ struct Pick {
 }
 
 fn close(ix: usize, look: Look, theme: &Theme, shut: Shut) -> Stateful<Div> {
+    round(("close", ix).into(), Icon::Close, ix, look, theme, shut)
+}
+
+fn round(
+    id: ElementId,
+    mark: Icon,
+    ix: usize,
+    look: Look,
+    theme: &Theme,
+    shut: Shut,
+) -> Stateful<Div> {
     let faint = ink(theme, HOVER * look.tint);
     div()
-        .id(("close", ix))
+        .id(id)
         .aria_label("Close tab")
         .flex()
         .flex_none()
@@ -573,11 +584,12 @@ fn close(ix: usize, look: Look, theme: &Theme, shut: Shut) -> Stateful<Div> {
             cx.stop_propagation();
             shut(ix, window, cx)
         })
-        .child(icon(Icon::Close, ICON_TINY, ink(theme, CAPTION_TEXT)))
+        .child(icon(mark, ICON_TINY, ink(theme, CAPTION_TEXT)))
 }
 
-pub(crate) fn close_tile(
+pub(crate) fn tile_control(
     id: SharedString,
+    (mark, label): (Icon, &'static str),
     shown: bool,
     theme: &Theme,
     (window, cx): (&mut Window, &mut App),
@@ -585,7 +597,7 @@ pub(crate) fn close_tile(
 ) -> Stateful<Div> {
     let now = Instant::now();
     let target = if shown { 1.0 } else { 0.0 };
-    let fade = window.use_keyed_state(id, cx, |_, _| Fade::rest(target, now));
+    let fade = window.use_keyed_state(id.clone(), cx, |_, _| Fade::rest(target, now));
     let span = ms(
         theme,
         if shown {
@@ -608,13 +620,15 @@ pub(crate) fn close_tile(
     };
     let hover = theme.color(ColorToken::StateHover);
     pressed(
-        close(
+        round(
+            SharedString::from(format!("{id}-button")).into(),
+            mark,
             0,
             look,
             theme,
             Rc::new(move |_, window, cx| shut(window, cx)),
         )
-        .aria_label("Close tile")
+        .aria_label(label)
         .cursor_pointer()
         .hover(move |style| style.bg(hover)),
         theme.color(ColorToken::CardsInnerFill),

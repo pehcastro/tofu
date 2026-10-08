@@ -24,7 +24,7 @@ use crate::components::paint::{ink, tint};
 use crate::components::size::{
     CAPTION_TEXT, FONT_SMALL, HEADER, RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_ROW, T1,
 };
-use crate::components::tabs::{Tab, TabEvent, TabMark, close_tile, connected_tabs};
+use crate::components::tabs::{Tab, TabEvent, TabMark, connected_tabs, tile_control};
 use crate::icon::Icon;
 use crate::metrics::ICON_SMALL;
 use crate::theme::{ColorToken, NumberToken, Theme};
@@ -44,6 +44,7 @@ pub type Body<V> = Box<dyn Fn(&Stack, Rect, &Theme, &mut Context<V>) -> AnyEleme
 pub type Title = Box<dyn Fn(&Module, TabMark, &App) -> Tab>;
 pub type Subtitle = Box<dyn Fn(&Module, &App) -> Option<AnyElement>>;
 pub type Settled = Box<dyn Fn(&[Workspace], usize, Rect)>;
+pub type Expand<V> = Box<dyn Fn(&Module, &mut Window, &mut Context<V>)>;
 
 pub struct Host<V: 'static> {
     pub board: Lens<V>,
@@ -53,6 +54,7 @@ pub struct Host<V: 'static> {
     pub spawnable: Vec<Module>,
     pub spawns: Vec<Module>,
     pub settled: Settled,
+    pub expand: Expand<V>,
     pub origin: (f32, f32),
     pub below: f32,
 }
@@ -416,6 +418,11 @@ impl<V: 'static> TilingBoard<V> {
 
     fn aimed_tile(&self) -> Option<TileId> {
         self.hovered.or(self.current()?.focus())
+    }
+
+    pub fn aimed_module(&self) -> Option<Module> {
+        let stack = self.current()?.stack(self.aimed_tile()?)?;
+        stack.modules.get(stack.active).cloned()
     }
 
     fn send_to_new(&mut self) {
@@ -817,9 +824,25 @@ impl<V: 'static> TilingBoard<V> {
             false => TabMark::Close,
         };
         let board = cx.entity().downgrade();
-        let close = close_tile(
+        let headed = self.headed == Some(tile);
+        let expanding = cx.entity().downgrade();
+        let module = shown.modules.get(shown.active).cloned();
+        let expand = tile_control(
+            SharedString::from(format!("tiling-expand-{}", tile.0)),
+            (Icon::Expand, "Expand"),
+            headed,
+            theme,
+            (window, &mut **cx),
+            move |window, cx| {
+                if let (Some(view), Some(module)) = (expanding.upgrade(), module.as_ref()) {
+                    view.update(cx, |view, cx| (lens(view).host.expand)(module, window, cx));
+                }
+            },
+        );
+        let close = tile_control(
             SharedString::from(format!("tiling-close-{}", tile.0)),
-            self.headed == Some(tile),
+            (Icon::Close, "Close tile"),
+            headed,
             theme,
             (window, &mut **cx),
             move |_, cx| {
@@ -838,6 +861,7 @@ impl<V: 'static> TilingBoard<V> {
             .right(relative(1.0))
             .flex()
             .items_center()
+            .child(expand)
             .child(close);
         if let [module] = shown.modules.as_slice() {
             let tab = (self.host.title)(module, mark, cx);

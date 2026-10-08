@@ -72,9 +72,12 @@ pub const SHORTCUTS: [Shortcut; 15] = [
     },
     Shortcut {
         action: Action::SendToNewWorkspace,
-        mods: CTRL_SHIFT,
+        mods: Mods {
+            alt: true,
+            ..CTRL_SHIFT
+        },
         key: Key::Named("enter"),
-        keys: "Ctrl Shift Enter",
+        keys: "Ctrl Alt Shift Enter",
         label: "move to a new workspace",
     },
     Shortcut {

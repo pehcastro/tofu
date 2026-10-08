@@ -15,8 +15,8 @@ use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
 use gpui::{
-    AnyElement, AnyView, App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, Render, SharedString, Subscription, Window, div, prelude::*, px,
+    AnyElement, AnyView, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, Render, SharedString, Subscription, Window, div, prelude::*, px,
 };
 
 use crate::modules::chat::cassette::{Replay, Step};
@@ -114,6 +114,7 @@ fn build(
         let bodies = mounted.clone();
         let titles = mounted.clone();
         let sessions = mounted.store.clone();
+        let expandable = mounted.clone();
         let board = TilingBoard::new(
             workspaces,
             Host {
@@ -139,6 +140,7 @@ fn build(
                 spawnable: OPENABLE.to_vec(),
                 spawns: OPENABLE.to_vec(),
                 settled: settled(layouts),
+                expand: Box::new(move |module, _, cx| expand(&expandable, module, cx)),
                 origin: (0.0, 0.0),
                 below: 0.0,
             },
@@ -244,6 +246,38 @@ fn body(mounted: &Mounted, module: &Module, theme: &Theme) -> AnyElement {
             |_, _, _| {},
         )
         .into_any_element(),
+    }
+}
+
+pub struct Expanded {
+    pub name: &'static str,
+    pub view: AnyView,
+}
+
+impl EventEmitter<Expanded> for Work {}
+
+pub const EXPANDABLE: [&str; 4] = ["Chat", "Sub-agents", "File edits", "Shells"];
+
+fn expand(mounted: &Mounted, module: &Module, cx: &mut Context<Work>) {
+    let view: AnyView = match module {
+        Module::Chat => mounted.chat.clone().into(),
+        Module::SubAgents => mounted.subagents.clone().into(),
+        Module::FileEdits => mounted.file_edits.clone().into(),
+        Module::Shells => mounted.shells.clone().into(),
+        Module::Editor
+        | Module::Terminal
+        | Module::Browser
+        | Module::SourceControl
+        | Module::Plugin(_) => {
+            return eprintln!(
+                "desk: work: {} is not mounted, so it does not expand",
+                module.name()
+            );
+        }
+    };
+    match EXPANDABLE.into_iter().find(|name| *name == module.name()) {
+        Some(name) => cx.emit(Expanded { name, view }),
+        None => eprintln!("desk: work: {} has no tab name", module.name()),
     }
 }
 
@@ -425,6 +459,13 @@ impl Work {
         let stroke = &event.keystroke;
         let held = stroke.modifiers;
         let key = stroke.key.as_str();
+        if key == "enter" && held.control && held.shift && !held.alt {
+            match self.board.aimed_module() {
+                Some(module) => expand(&self.mounted, &module, cx),
+                None => eprintln!("desk: work: no tile is focused, so nothing expands"),
+            }
+            return;
+        }
         if self.board.key(event) {
             self.nudge = None;
             self.focus.focus(window, cx);

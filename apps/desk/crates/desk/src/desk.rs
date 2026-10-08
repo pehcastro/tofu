@@ -304,7 +304,7 @@ impl Desk {
         if let Body::Work(work) = &desk.shown.body {
             let work = work.clone();
             match project::launch() {
-                Ok(folder) => desk.adopt(folder, &work, cx),
+                Ok(folder) => desk.adopt(folder, &work, window, cx),
                 Err(error) => eprintln!("desk: {error}"),
             }
         }
@@ -478,6 +478,19 @@ impl Desk {
             },
             work::Strip::Open(name) => self.show(name, window, cx),
         }
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn expand(&mut self, expanded: &work::Expanded, window: &mut Window, cx: &mut Context<Self>) {
+        let name = expanded.name;
+        if !self.tabbed.contains(&name) {
+            self.tabbed.insert(0, name);
+            self.parked.push(Shown {
+                name: name.into(),
+                body: Body::View(expanded.view.clone()),
+            });
+        }
+        self.show(name, window, cx);
     }
 
     #[cfg(feature = "screen-work")]
@@ -657,13 +670,27 @@ impl Desk {
         chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
     }
 
-    fn adopt(&mut self, folder: PathBuf, work: &Entity<Work>, cx: &mut Context<Self>) {
+    fn adopt(
+        &mut self,
+        folder: PathBuf,
+        work: &Entity<Work>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
         eprintln!("desk: project {}", folder.display());
         let chat = work.read(cx).chat().clone();
         let store = chat.read(cx).store().clone();
         self.projects.active.clear();
         self.projects.renaming = None;
+        self.parked
+            .retain(|parked| !work::EXPANDABLE.contains(&&*parked.name));
+        self.tabbed.retain(|name| !work::EXPANDABLE.contains(name));
         self.projects._watch = vec![
+            cx.subscribe_in(
+                work,
+                window,
+                |desk, _, expanded: &work::Expanded, window, cx| desk.expand(expanded, window, cx),
+            ),
             cx.subscribe(&chat, |desk, _, _: &Listed, cx| {
                 desk.track_running(cx);
                 cx.notify();
@@ -1120,7 +1147,7 @@ impl Desk {
             self.parked.push(left);
         }
         work.focus_handle(cx).focus(window, cx);
-        self.adopt(folder, &work, cx);
+        self.adopt(folder, &work, window, cx);
     }
 
     fn switch_sheet(&self, cx: &mut Context<Self>) -> Option<AnyElement> {

@@ -14,10 +14,11 @@ pub enum Icon {
     Close,
     Branch,
     Arrow,
+    Expand,
 }
 
 impl Icon {
-    const ALL: [Icon; 10] = [
+    const ALL: [Icon; 11] = [
         Icon::Sidebar,
         Icon::Plus,
         Icon::Search,
@@ -28,6 +29,7 @@ impl Icon {
         Icon::Close,
         Icon::Branch,
         Icon::Arrow,
+        Icon::Expand,
     ];
 
     pub fn path(self) -> &'static str {
@@ -42,6 +44,7 @@ impl Icon {
             Icon::Close => "icons/close.svg",
             Icon::Branch => "icons/branch.svg",
             Icon::Arrow => "icons/arrow.svg",
+            Icon::Expand => "icons/expand.svg",
         }
     }
 
@@ -57,6 +60,7 @@ impl Icon {
             Icon::Close => include_str!("../assets/icons/cancel.svg"),
             Icon::Branch => include_str!("../assets/icons/branch.svg"),
             Icon::Arrow => include_str!("../assets/icons/arrow-right.svg"),
+            Icon::Expand => include_str!("../assets/icons/full-screen-maximize.svg"),
         }
     }
 
