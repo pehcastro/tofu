@@ -243,8 +243,9 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal}}
 	process := &live{tree: spawned, finished: make(chan struct{})}
 	if err := r.list(got.Shell, process); err != nil {
-		_ = cmd.Process.Kill()
+		_ = killTree(cmd.Process.Pid)
 		spawned.release()
+		_ = logFile.Close()
 		return Yielded{}, err
 	}
 	exited := func(waitErr error) (Yielded, error) {
@@ -670,20 +671,60 @@ func (r *Registry) Restart(name string) (Shell, error) {
 	return r.Start(entry.Dir, name, entry.Command, entry.Owner)
 }
 
-func (r *Registry) Owning(command string) []Shell {
-	fields := strings.Fields(command)
-	if len(fields) < 2 || !slices.Contains([]string{"kill", "taskkill", "pkill"}, strings.TrimSuffix(filepath.Base(fields[0]), ".exe")) {
+func processName(word string) string {
+	name := filepath.Base(strings.Trim(word, `"'`))
+	if strings.EqualFold(filepath.Ext(name), ".exe") {
+		return strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	return name
+}
+
+func killed(fields []string) []int {
+	if len(fields) < 2 {
+		return nil
+	}
+	program := strings.ToLower(processName(fields[0]))
+	if program == "powershell" || program == "pwsh" {
+		at := slices.IndexFunc(fields, func(field string) bool { return slices.Contains([]string{"-command", "-c"}, strings.ToLower(field)) })
+		if at < 0 {
+			return nil
+		}
+		return killed(fields[at+1:])
+	}
+	if !slices.Contains([]string{"kill", "taskkill", "pkill", "stop-process"}, program) {
 		return nil
 	}
 	var pids []int
-	for _, field := range fields[1:] {
+	for at := 1; at < len(fields); at++ {
+		field := strings.Trim(fields[at], `"'`)
+		flag := strings.ToLower(strings.TrimLeft(field, "-/"))
+		names := program == "pkill" && !strings.HasPrefix(field, "-")
+		if (program == "taskkill" && flag == "im" || program == "stop-process" && flag == "name") && at+1 < len(fields) {
+			at, field, names = at+1, strings.Trim(fields[at+1], `"'`), true
+		}
 		pid, err := strconv.Atoi(field)
 		switch {
 		case err == nil && pid > 0:
 			pids = append(pids, pid)
+		case names:
+			for _, name := range strings.Split(field, ",") {
+				named := processesNamed(name)
+				if len(named) == 0 {
+					return nil
+				}
+				pids = append(pids, named...)
+			}
 		case !strings.HasPrefix(field, "-") && !strings.HasPrefix(field, "/"):
 			return nil
 		}
+	}
+	return pids
+}
+
+func (r *Registry) Owning(command string) []Shell {
+	pids := killed(strings.Fields(command))
+	if len(pids) == 0 {
+		return nil
 	}
 	listed, _ := r.List()
 	var owned []Shell

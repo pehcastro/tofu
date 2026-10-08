@@ -3,7 +3,6 @@ package shell
 import (
 	"bytes"
 	"io"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -11,11 +10,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
-)
 
-const (
-	consoleColumns = 1024
-	consoleRows    = 50
+	"tofu/internal/konst"
 )
 
 type screenText struct {
@@ -56,7 +52,7 @@ func (s *screenText) step(rest []byte, text *bytes.Buffer) int {
 		if len(rest) < 2 {
 			return 0
 		}
-		wrapped := s.column == consoleColumns
+		wrapped := s.column == konst.ShellConsoleColumns
 		s.column = 0
 		if rest[1] != '\n' {
 			text.WriteByte('\r')
@@ -124,13 +120,9 @@ func pipelines(command string) [][][]string {
 	return all
 }
 
-func program(fields []string) string {
-	return strings.TrimSuffix(filepath.Base(fields[0]), ".exe")
-}
-
 func blocksOnAPipe(fields []string) bool {
 	lineFlags := map[string][]string{"grep": {"--line-buffered"}, "sed": {"-u", "--unbuffered"}, "awk": nil, "cut": nil, "tr": nil, "uniq": nil}
-	flags, filter := lineFlags[program(fields)]
+	flags, filter := lineFlags[processName(fields[0])]
 	return filter && !slices.ContainsFunc(fields, func(field string) bool { return slices.Contains(flags, field) })
 }
 
@@ -148,7 +140,7 @@ func heldBy(command string, terminal bool) string {
 				continue
 			}
 			piped := "tofu: piped into " + strings.Join(fields[:min(2, len(fields))], " ")
-			switch program(fields) {
+			switch processName(fields[0]) {
 			case "tail":
 				if !slices.ContainsFunc(fields, func(flag string) bool { return slices.Contains([]string{"-f", "-F", "--follow"}, flag) }) {
 					return piped + ", which prints when the command ends"

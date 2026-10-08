@@ -12,6 +12,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"tofu/internal/konst"
 )
 
 func closeHandles(handles ...windows.Handle) {
@@ -31,7 +33,7 @@ func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime) (tree, <-chan
 		return tree{}, nil, err
 	}
 	defer closeHandles(outWrite)
-	err := windows.CreatePseudoConsole(windows.Coord{X: consoleColumns, Y: consoleRows}, inRead, outWrite, 0, &console)
+	err := windows.CreatePseudoConsole(windows.Coord{X: konst.ShellConsoleColumns, Y: konst.ShellConsoleRows}, inRead, outWrite, 0, &console)
 	if err != nil {
 		closeHandles(inWrite, outRead)
 		return tree{}, nil, err

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 func TestTerminalOnlyWhereAFilterEndsAPipeline(t *testing.T) {
@@ -31,7 +33,7 @@ func TestTerminalOnlyWhereAFilterEndsAPipeline(t *testing.T) {
 }
 
 func TestTerminalTextFromTheConsole(t *testing.T) {
-	wide := strings.Repeat("a", consoleColumns)
+	wide := strings.Repeat("a", konst.ShellConsoleColumns)
 	stream := "\x1b[2J\x1b[m\x1b[Hline 1\r\n\x1b]0;C:\\Program Files\\Git\\bin\\bash.exe\a\x1b[?25h" +
 		"\x1b[8CTAB\r\n" +
 		"\x1b[31mred\x1b[m\r\n" +

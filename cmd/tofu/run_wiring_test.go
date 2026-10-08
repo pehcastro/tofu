@@ -963,7 +963,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 	}
 }
 
-func TestTheLeadEndsOnACleanSingleReportWhetherOrNotItChecksSubAgents(t *testing.T) {
+func TestTheLeadTakesACleanReportUncheckedOnlyWithTheCheckOff(t *testing.T) {
 	spawn := `{"text":"spawning go-dev to add Extra","tools":[{"name":"spawn","args":{"agent":"go-dev","task":"add func Extra to package stats in stats/extra.go","owns":["stats/**"]}}]}`
 	gated := []string{
 		`{"agent":"c1","tools":[{"name":"write","args":{"path":"stats/extra.go","content":"package stats\n\nfunc Extra() int { return 1 }\n"}}]}`,
@@ -981,7 +981,7 @@ func TestTheLeadEndsOnACleanSingleReportWhetherOrNotItChecksSubAgents(t *testing
 		agent    []string
 		checked  string
 	}{
-		{"clean", `{"verifySubAgents": 1}`, gated, refused},
+		{"clean_checked_before_it_is_taken", `{"verifySubAgents": 1}`, gated, ran},
 		{"done_with_concerns", `{"verifySubAgents": 1}`, concerns, ran},
 		{"clean_with_the_check_off", `{"verifySubAgents": 0}`, gated, refused},
 		{"done_with_concerns_with_the_check_off", `{"verifySubAgents": 0}`, concerns, ran},

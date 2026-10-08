@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"tofu/internal/konst"
 )
 
 func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime) (tree, <-chan error, error) {
@@ -72,7 +74,7 @@ func openFollower(leader *os.File) (*os.File, error) {
 		err = unix.IoctlSetTermios(fd, unix.TCSETS, state)
 	}
 	if err == nil {
-		err = unix.IoctlSetWinsize(fd, unix.TIOCSWINSZ, &unix.Winsize{Row: consoleRows, Col: consoleColumns})
+		err = unix.IoctlSetWinsize(fd, unix.TIOCSWINSZ, &unix.Winsize{Row: konst.ShellConsoleRows, Col: konst.ShellConsoleColumns})
 	}
 	if err != nil {
 		_ = follower.Close()

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -34,6 +36,20 @@ func treeAlive(pid int) bool { return syscall.Kill(-pid, 0) == nil }
 func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func processesNamed(name string) []int {
+	listed, err := exec.Command("pgrep", "-x", processName(name)).Output()
+	if err != nil {
+		return nil
+	}
+	var pids []int
+	for _, field := range strings.Fields(string(listed)) {
+		if pid, err := strconv.Atoi(field); err == nil {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
 }
 
 func treeHas(root, pid int) bool {

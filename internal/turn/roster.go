@@ -447,7 +447,7 @@ func restoredHeld(agent subagent.SubAgent, depth int, reload func() ([]llm.Messa
 
 func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 	var order []*recordedSubAgent
-	ran, briefs := map[string]*recordedSubAgent{}, map[string]string{}
+	ran, briefs, regrants := map[string]*recordedSubAgent{}, map[string]string{}, map[string]messageArgs{}
 	for _, recorded := range chain {
 		var leadReports []string
 		reportEvents := false
@@ -469,8 +469,19 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				if event.Agent == "" && call.Tool == "spawn" && json.Unmarshal(call.Args, &args) == nil {
 					briefs[event.Call] = args.Task
 				}
+				var message messageArgs
+				if call.Tool == (messageTool{}).Name() && json.Unmarshal(call.Args, &message) == nil && slices.Contains([]string{doGrant, doRevoke, doReplace}, message.Do) {
+					regrants[event.Call] = message
+				}
 				if run != nil {
 					run.calls = append(run.calls, call.Tool)
+				}
+			case event.Kind == session.EventToolResult && regrants[event.Call].Do != "":
+				message := regrants[event.Call]
+				var result session.ResultBody
+				if granted := ran[message.To]; granted != nil && json.Unmarshal(event.Body, &result) == nil && result.ToolOutcome == session.ToolOutcomeRan {
+					granted.agent.Owns = ownsAfter(message.Do, granted.agent.Owns, message.Owns)
+					granted.agent.Regranted = append(granted.agent.Regranted, subagent.OwnsChange{At: event.At, Did: message.Do, Paths: message.Owns})
 				}
 			case event.Kind == session.EventMessage && event.Agent == "":
 				var message session.MessageBody

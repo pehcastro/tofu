@@ -161,8 +161,6 @@ func answerer(ctx context.Context) string {
 	return allowedByThePerson
 }
 
-const orchestratorAnswerWait = 5 * time.Minute
-
 func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Person {
 	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
 		id := held.agent.ID
@@ -177,14 +175,15 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 		if decision.HookAsk != "" {
 			because = "a PreToolUse hook asks first: " + decision.HookAsk
 		}
+		wait := konst.SubAgentGateAnswerMillis * time.Millisecond
 		shown := cutOnRuneBoundary(string(request.Args), konst.GateAskArgsBytes, "\n...(%s of this call cut here: lookup with call "+request.Call+" returns it whole)...\n")
 		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s for you: call message with to %s and answer allow or deny. with no answer the call is refused.",
-			id, request.Tool, shown, because, orchestratorAnswerWait, id)
+			id, request.Tool, shown, because, wait, id)
 		t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
 		defer t.roster.Reached(id, subagent.Working, "")
 		site.notice(id, asked)
 		started, answer := t.clock(), t.Inbox.ask(held, asked)
-		within, cancel := context.WithTimeout(ctx, orchestratorAnswerWait)
+		within, cancel := context.WithTimeout(ctx, wait)
 		defer cancel()
 		var allowed bool
 		select {

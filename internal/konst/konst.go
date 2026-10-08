@@ -155,6 +155,8 @@ const (
 
 	ShellLogClockSlackMillis = 1000
 	ShellRewriteHeadBytes    = 64
+	ShellConsoleColumns      = 1024
+	ShellConsoleRows         = 50
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000
@@ -183,19 +185,20 @@ const (
 	SubAgentCheckSecondsDefault = 1800
 	SubAgentWatchSecondsDefault = 600
 
-	SubAgentRetainedRows    = 4
-	SubAgentMissionChars    = 60
-	SubAgentMaxProcessDepth = 1
-	SubAgentCallsWatched    = 17
-	SubAgentMaxRounds       = 3
-	SubAgentReferenceBytes  = 16384
-	SubAgentProseBytes      = 16384
-	SubAgentProseEndBytes   = 2048
-	SubAgentWarmMillis      = 8000
-	SubAgentSleepSeconds    = 5
-	SubAgentAskMillis       = 30000
-	SubAgentMaxForks        = 10
-	SubAgentMaxSteps        = 150
+	SubAgentRetainedRows     = 4
+	SubAgentMissionChars     = 60
+	SubAgentMaxProcessDepth  = 1
+	SubAgentCallsWatched     = 17
+	SubAgentMaxRounds        = 3
+	SubAgentReferenceBytes   = 16384
+	SubAgentProseBytes       = 16384
+	SubAgentProseEndBytes    = 2048
+	SubAgentWarmMillis       = 8000
+	SubAgentSleepSeconds     = 5
+	SubAgentAskMillis        = 30000
+	SubAgentGateAnswerMillis = 300000
+	SubAgentMaxForks         = 10
+	SubAgentMaxSteps         = 150
 
 	SubAgentWallClockSeconds = 3600
 

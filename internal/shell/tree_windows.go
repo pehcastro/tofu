@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -170,6 +171,23 @@ func processAlive(pid int) bool {
 	defer func() { _ = windows.CloseHandle(process) }()
 	state, err := windows.WaitForSingleObject(process, 0)
 	return err == nil && state == uint32(windows.WAIT_TIMEOUT)
+}
+
+func processesNamed(name string) []int {
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = windows.CloseHandle(snapshot) }()
+	var entry windows.ProcessEntry32
+	entry.Size = uint32(unsafe.Sizeof(entry))
+	var pids []int
+	for err := windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
+		if strings.EqualFold(processName(windows.UTF16ToString(entry.ExeFile[:])), processName(name)) {
+			pids = append(pids, int(entry.ProcessID))
+		}
+	}
+	return pids
 }
 
 func memberIDs(job windows.Handle, assigned uint32) ([]uint32, error) {

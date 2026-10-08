@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -104,10 +105,17 @@ func TestStopKillsTheServerTheWrapperStartedAndRestartBringsItBack(t *testing.T)
 
 func TestAKillOfAShellPidIsRoutedToStopAndAStrangerIsNot(t *testing.T) {
 	registry, ctx, started, port := serving(t)
+	outside := exec.Command("node", "-e", "setTimeout(() => {}, 60000)")
+	if err := outside.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = outside.Process.Kill(); _ = outside.Wait() })
 	for _, stranger := range []string{
 		"taskkill //PID 999999 //F",
 		"netstat -ano | grep 8799 | awk '{print $5}' | xargs taskkill //F //PID",
 		"taskkill //IM node.exe //F",
+		"Stop-Process -Name node -Force",
+		"pkill node",
 		"echo " + strconv.Itoa(started.PID),
 	} {
 		if owned := registry.Owning(stranger); len(owned) != 0 {
@@ -140,6 +148,54 @@ func TestAKillOfAShellPidIsRoutedToStopAndAStrangerIsNot(t *testing.T) {
 	}
 	if owned := registry.Owning("taskkill //PID " + strconv.Itoa(started.PID) + " //F"); len(owned) != 0 {
 		t.Fatalf("a stopped shell's pid still reads as owned: %+v", owned)
+	}
+}
+
+func TestAKillByANameOnlyTofusShellsRunIsRoutedToStop(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not on PATH, so no named process can be started")
+	}
+	if node, err = filepath.EvalSymlinks(node); err != nil {
+		t.Fatal(err)
+	}
+	name := "tofu-window-" + strconv.Itoa(os.Getpid())
+	probe := filepath.Join(t.TempDir(), name+filepath.Ext(node))
+	if err := os.Link(node, probe); err != nil {
+		t.Skipf("no hard link of node could be made beside the test: %v", err)
+	}
+	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	started, err := registry.Start(t.TempDir(), "bash-1", strconv.Quote(filepath.ToSlash(probe))+` -e "setTimeout(() => {}, 60000)"`, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = registry.Kill("bash-1") })
+	for deadline := time.Now().Add(15 * time.Second); len(registry.Owning("pkill "+name)) == 0; time.Sleep(100 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("%s never showed up in bash-1's tree under pid %d", name, started.PID)
+		}
+	}
+	for _, own := range []string{
+		"taskkill //IM " + name + ".exe //F",
+		"Stop-Process -Name " + strings.ToUpper(name) + " -Force",
+		`powershell -NoProfile -Command "Stop-Process -Name ` + name + `"`,
+		"pkill " + name,
+	} {
+		if owned := registry.Owning(own); len(owned) != 1 || owned[0].Name != "bash-1" {
+			t.Errorf("%q was not read as a kill of bash-1: %+v", own, owned)
+		}
+	}
+	bash, err := turn.NewBashTool(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(map[string]string{"command": "Stop-Process -Name " + name})
+	result, err := bash.Run(turn.WithShellRegistry(context.Background(), registry), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := registry.Read("bash-1"); after.State != shell.Killed {
+		t.Fatalf("the routed Stop-Process left bash-1 %s, want killed\n%s", after.State, result.Content)
 	}
 }
 
