@@ -178,10 +178,12 @@ func composerRows() []keyRow {
 			call, found := a.view.LastCall()
 			return a.copy(callUnit, call, found), true
 		}},
-		{turnGroup, []string{"esc"}, "stop a ! command, or a turn if composer empty", func(a *App) (tea.Cmd, bool) {
+		{turnGroup, []string{"esc"}, "stop a ! command, send the queue now, or stop a turn if composer empty", func(a *App) (tea.Cmd, bool) {
 			switch {
 			case a.stopCommand != nil:
 				a.stopCommand()
+			case a.busy && a.view.Value() == "" && !a.sentNow && a.sendNow(""):
+				a.sentNow = true
 			case a.busy && a.view.Value() == "":
 				a.stopTurn()
 			default:
@@ -190,6 +192,7 @@ func composerRows() []keyRow {
 			return nil, true
 		}},
 		{turnGroup, []string{"ctrl+x"}, "drop the queued prompt", done((*App).unqueue)},
+		{turnGroup, []string{"alt+s"}, "send the queued prompt now", done((*App).sendPickedNow)},
 		{turnGroup, []string{"alt+up"}, "pick an earlier queued", done(func(a *App) { a.view.PickQueued(-1) })},
 		{turnGroup, []string{"alt+down"}, "pick a later queued", done(func(a *App) { a.view.PickQueued(1) })},
 	}

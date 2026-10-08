@@ -40,6 +40,8 @@ answers. This page is what serve sends without being asked.
   sessions, and a cron fire that joined a running turn, read as `person`
 - `cron.updated` and `query.cron` carry `live`, `goals` and each job's `id`,
   `schedule`, `prompt`, `paused`, `next` and `ended`
+- `turn.steered`: the lead read a message sent mid-turn; until it comes, the
+  message is still queued
 - `quota.updated`: when a session opens, after every turn and every five
   minutes, with each window's `percent`; `windows: []` means none answered
 - `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
@@ -74,6 +76,14 @@ takes that wire's default.
 `turn.send` takes the same three, and `images`, a list of `{"path": ...}`.
 Each is copied into the session and `[Image #N]` is added to the text. A png,
 jpg, gif or webp is taken; anything else refuses the whole send.
+
+A message sent with `turn.steer` while a turn runs waits until the lead's
+next step reads it. `turn.sendNow` sends it now: tofu drops the lead's model
+request in flight and asks that step again with the message, keeping every
+tool result, sub-agent and shell. One message, or every queued one, which is
+Esc in the terminal; Esc again, or Esc with nothing queued, is `turn.stop`.
+The lead is asked for one line saying what the message changes before its
+next tool call, and `tofu session trace` warns on a step that skipped it.
 
 `--cassette PATH` answers every model call from a recorded cassette, as
 `tofu drive` does, so a frontend is built with no model and no network.

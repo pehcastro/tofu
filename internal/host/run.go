@@ -146,7 +146,8 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		config.Person = person.RunsWhatJevAsks()
 	}
 	h.mu.Unlock()
-	config.Steering = func() []string { return h.steering.take(emit) }
+	var steps atomic.Int64
+	config.Steering = func() []string { return h.steering.take(emit, int(steps.Load())+1) }
 	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	config.Appended = func(logged session.Event) {
@@ -154,6 +155,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	var endedSession atomic.Pointer[string]
 	config.Step = func(step turn.StepRow) {
+		steps.Store(int64(step.Index))
 		if prepared.Plan != nil {
 			emit(Event{Kind: EventPlan, Plan: statedPlan(prepared.Plan.Items())})
 		}
@@ -177,11 +179,12 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		return nil
 	}
 	stopClocks := watch.clockRunningSubAgents()
-	stopListening := watch.stop.listen(live.LeadStop)
-	heard := func(typed string) { emit(Event{Kind: EventSteered, Text: typed}) }
+	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
+	heard := func(typed string) { emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1}) }
 	var reported []error
 	leadErr := turn.Lead(turn.WithShellRegistry(ctx, h.shells), config, live.Steering, heard, func(row turn.Row, err error) {
 		watch.stop.reset()
+		steps.Store(0)
 		if err != nil {
 			reported = append(reported, err)
 		}

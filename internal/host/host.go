@@ -76,6 +76,7 @@ type Host struct {
 	answers  chan Answer
 	steering steerQueue
 	stopLead chan struct{}
+	sendNow  chan struct{}
 	cron     *cron.Book
 	cronMove chan struct{}
 	readOnly error
@@ -127,6 +128,7 @@ func New(cfg Config) (*Host, []string) {
 		answers:  make(chan Answer, 1),
 		steering: steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
 		stopLead: make(chan struct{}, 1),
+		sendNow:  make(chan struct{}, 1),
 		cron:     &cron.Book{Check: cfg.Check, Changed: cronMove},
 		cronMove: cronMove,
 		id:       cfg.Resumed.Session,

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -78,32 +79,37 @@ func (c watchedSubAgent) Ask(ctx context.Context, request llm.Request) (llm.Deci
 }
 
 func (a *watcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if a.stop != nil && turn.SubAgentAsking(ctx) == "" {
-		var release context.CancelFunc
-		ctx, release = a.stop.during(ctx)
-		defer release()
-		if err := ctx.Err(); err != nil {
-			return llm.Decision{}, err
-		}
+	if a.stop == nil || turn.SubAgentAsking(ctx) != "" {
+		return a.askThrough(ctx, a.inner, request)
 	}
-	return a.askThrough(ctx, a.inner, request)
+	ctx, release := a.stop.during(ctx)
+	defer release()
+	if err := ctx.Err(); err != nil {
+		return llm.Decision{}, err
+	}
+	decision, err := a.askThrough(ctx, a.inner, request)
+	if err != nil && errors.Is(context.Cause(ctx), turn.SentNow{}) {
+		a.emit(Event{Kind: EventStreamReset})
+		return decision, turn.SentNow{}
+	}
+	return decision, err
 }
 
 type leadStop struct {
 	mu      sync.Mutex
 	stopped bool
-	cancel  context.CancelFunc
+	cancel  context.CancelCauseFunc
 }
 
-func (l *leadStop) during(ctx context.Context) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
+func (l *leadStop) during(ctx context.Context) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.stopped {
-		cancel()
+		cancel(nil)
 	}
 	l.cancel = cancel
-	return ctx, cancel
+	return ctx, func() { cancel(nil) }
 }
 
 func (l *leadStop) stop() {
@@ -111,7 +117,15 @@ func (l *leadStop) stop() {
 	defer l.mu.Unlock()
 	l.stopped = true
 	if l.cancel != nil {
-		l.cancel()
+		l.cancel(nil)
+	}
+}
+
+func (l *leadStop) sendNow() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.cancel != nil {
+		l.cancel(turn.SentNow{})
 	}
 }
 
@@ -121,13 +135,15 @@ func (l *leadStop) reset() {
 	l.stopped, l.cancel = false, nil
 }
 
-func (l *leadStop) listen(stops <-chan struct{}) (quiet func()) {
+func (l *leadStop) listen(stops, sendNow <-chan struct{}) (quiet func()) {
 	done := make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-stops:
 				l.stop()
+			case <-sendNow:
+				l.sendNow()
 			case <-done:
 				return
 			}

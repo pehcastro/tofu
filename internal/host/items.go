@@ -100,8 +100,10 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	case EventThinking:
 		return append(out, notify("thinking.delta", &Text{Identity: id, Text: event.Text}))
 	case EventSteered:
-		id.Item = s.mint("steered")
-		return append(out, notify("turn.steered", &Text{Identity: id, Text: event.Text}))
+		if id.Item == "" {
+			id.Item = s.mint("steered")
+		}
+		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Step: event.Step, ReadAt: now}))
 	case EventToolCall:
 		var args struct {
 			Path string `json:"path"`

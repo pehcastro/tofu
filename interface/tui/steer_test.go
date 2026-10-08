@@ -239,14 +239,22 @@ func TestEscAndCtrlCWhileOnlyASubAgentRunsLeaveItRunning(t *testing.T) {
 	endTurn(t, app)
 }
 
-func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
-	alive, told, release, steering := make(chan bool, 1), make(chan bool, 1), make(chan struct{}), make(chan (<-chan string), 1)
+func leadWithASubAgent(stops chan<- (<-chan struct{}), live host.Live) {
+	stops <- live.LeadStop
+	live.Emit(Event{Kind: EventRequesting})
+	live.Emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
+	live.Emit(Event{Kind: EventRequesting})
+	live.Emit(Event{Kind: EventText, Text: "the lead keeps going"})
+}
+
+func TestEscWithMessagesQueuedSendsThemIntoTheTurnAndEscWithNoneStopsTheLeadAlone(t *testing.T) {
+	alive, told, proceed, release := make(chan bool, 1), make(chan bool, 1), make(chan struct{}), make(chan struct{})
+	stops := make(chan (<-chan struct{}), 1)
 	app := steerApp(t, func(ctx context.Context, _ Pick, _ string, live host.Live) {
-		steering <- live.Steering
-		live.Emit(Event{Kind: EventRequesting})
-		live.Emit(Event{Kind: EventDone, Text: "finished in", SubAgents: runningSubAgent()})
-		live.Emit(Event{Kind: EventRequesting})
-		live.Emit(Event{Kind: EventText, Text: "the lead keeps going"})
+		leadWithASubAgent(stops, live)
+		<-proceed
+		live.Emit(Event{Kind: EventSteered, Text: <-live.Steering, Step: 2})
+		live.Emit(Event{Kind: EventText, Text: "the lead answers it"})
 		select {
 		case <-live.LeadStop:
 			told <- true
@@ -264,18 +272,43 @@ func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
 	pumpUntil(t, app, EventText)
 	typeAndSend(app, secondTask)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	pumpUntil(t, app, EventDone)
 
+	if stop := <-stops; len(stop) != 0 || len(app.view.Queued()) != 1 {
+		t.Fatalf("esc with a message queued stopped the lead (%d stops) or dropped the message (queue %q)", len(stop), app.view.Queued())
+	}
+	close(proceed)
+	pumpUntil(t, app, EventText)
+	if plain := ansi.Strip(app.View().Content); len(app.view.Queued()) != 0 || !strings.Contains(plain, "read by the lead at step 2") {
+		t.Errorf("the message the lead read is not drawn under a read row, queue %q\n%s", app.view.Queued(), plain)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if !<-told {
-		t.Error("esc mid lead turn never told the lead to stop")
+		t.Error("esc with nothing queued never told the lead to stop")
 	}
-	if held := len(<-steering); held != 1 || len(app.view.Queued()) != 1 {
-		t.Errorf("the stop dropped the message typed before it: %d steered, queue %q", held, app.view.Queued())
-	}
+	pumpUntil(t, app, EventDone)
 	close(release)
 	if !<-alive {
-		t.Error("esc mid lead turn cancelled the loop, and the sub-agent with it")
+		t.Error("esc cancelled the loop, and the sub-agent with it")
 	}
+	endTurn(t, app)
+}
+
+func TestASecondEscBeforeTheLeadReadsTheQueueStopsTheLead(t *testing.T) {
+	stops, release := make(chan (<-chan struct{}), 1), make(chan struct{})
+	app := steerApp(t, func(_ context.Context, _ Pick, _ string, live host.Live) {
+		leadWithASubAgent(stops, live)
+		<-release
+	})
+	typeAndSend(app, firstTask)
+	pumpUntil(t, app, EventText)
+	typeAndSend(app, secondTask)
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if stop := <-stops; len(stop) != 1 {
+		t.Errorf("a second esc before the lead read the queue sent %d stops, want one", len(stop))
+	}
+	close(release)
 	endTurn(t, app)
 }
 

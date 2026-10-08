@@ -43,13 +43,13 @@ func (m *Model) Release() (string, bool) {
 	tasks := m.Queued()
 	m.Append(Entry{Kind: User})
 	for _, row := range m.queue {
-		m.joinTaken(row)
+		m.joinTaken(&m.entries[len(m.entries)-1], row)
 	}
 	m.queue, m.pick = nil, 0
 	return strings.Join(tasks, takenJoin), true
 }
 
-func (m *Model) Delivered(task string) {
+func (m *Model) Delivered(task, read string) {
 	at := slices.IndexFunc(m.queue, func(row pending) bool { return row.task == task })
 	if at < 0 {
 		return
@@ -60,14 +60,16 @@ func (m *Model) Delivered(task string) {
 		m.pick--
 	}
 	m.pick = min(m.pick, max(len(m.queue)-1, 0))
-	if last := len(m.entries) - 1; last < 0 || !m.entries[last].taken {
+	last := len(m.entries) - 1
+	if last < 1 || !m.entries[last-1].taken || m.entries[last].Kind != Note || m.entries[last].Body != read {
 		m.Append(Entry{Kind: User, taken: true})
+		m.Append(Entry{Kind: Note, Body: read})
+		last = len(m.entries) - 1
 	}
-	m.joinTaken(row)
+	m.joinTaken(&m.entries[last-1], row)
 }
 
-func (m *Model) joinTaken(row pending) {
-	block := &m.entries[len(m.entries)-1]
+func (m *Model) joinTaken(block *Entry, row pending) {
 	if block.Body != "" {
 		block.Body += takenJoin
 	}

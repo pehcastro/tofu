@@ -49,7 +49,12 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `requests`, `calls`, `hooks`, `failures`, `messages`, `agents` and `cache`
 - `turn.send`: takes `session`, `text`, `mentions`, `images`, `wire`, `model`
   and `effort`; answers `turn`. `turn.steer` takes `session`,
-  `expectedTurnId` and `text`. `turn.unsteer` takes `text`, answers `removed`.
+  `expectedTurnId` and `text`; answers `turn` and `id`, the queued message.
+  `turn.sendNow` (capability `sendNow`) takes `id`, or none for every queued
+  message; answers `ok`, and errs `-32000` when no turn runs or that id is not
+  queued. `turn.steered` follows each message the lead reads: `item` is its
+  `id`, with `text`, `step` and `readAt`; messages read together share a
+  `step`. `turn.unsteer` takes `text`, answers `removed`.
   `turn.stop` takes `turn`, and `lead: true` stops the lead alone. `undo` takes
   `session` and `turns`
 - `shell.run`: takes `command`, runs it as `!` does, answers `output` and

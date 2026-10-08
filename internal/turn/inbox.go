@@ -20,6 +20,7 @@ const (
 	sourceHandback      = "turn end check"
 	sourceTyped         = "typed by the person"
 	sourceSteer         = "steer"
+	sourceMidTurnNote   = "mid-turn message note"
 	sourceStepCapNotice = "step cap notice"
 	sourceStopHook      = "stop hook"
 	sourceLastWord      = "last word"

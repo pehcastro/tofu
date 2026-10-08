@@ -248,6 +248,8 @@ type App struct {
 	gateOff        bool
 	running        int
 	pressedAt      time.Time
+	steered        map[string]string
+	sentNow        bool
 	stopCommand    context.CancelFunc
 	subAgentCalls  []string
 	subAgents      []subagent.Row
@@ -341,6 +343,7 @@ func New(options Options) *App {
 		started:       options.Now(),
 		reports:       map[string]string{},
 		moves:         map[string]movement{},
+		steered:       map[string]string{},
 		happenedIndex: map[string]int{},
 		board:         paste.Default(options.Paste),
 	}
@@ -675,7 +678,8 @@ func (a *App) clearDialogs() tea.Cmd {
 
 func (a *App) closed() tea.Cmd {
 	a.busy, a.leading, a.edits.Busy = false, false, false
-	a.running, a.pressedAt = 0, time.Time{}
+	a.running, a.pressedAt, a.sentNow = 0, time.Time{}, false
+	clear(a.steered)
 	a.parkSubAgentsTheTurnLeftBehind()
 	a.drawHeldReports()
 	a.stopWhatStillRuns()

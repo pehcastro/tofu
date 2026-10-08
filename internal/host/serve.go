@@ -169,6 +169,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.send)
 	case "turn.steer":
 		return handle(raw, s.steer)
+	case "turn.sendNow":
+		return handle(raw, s.sendNow)
 	case "turn.stop":
 		return handle(raw, s.stop)
 	case "turn.unsteer":
@@ -376,8 +378,14 @@ func (s *server) steer(p TurnSteerParams) (any, error) {
 	if !running || turn != p.ExpectedTurnID {
 		return nil, &Refusal{Code: CodeRefused, Message: "turn " + strconv.Quote(p.ExpectedTurnID) + " is not running, so nothing was steered"}
 	}
-	s.Host.Steer(p.Text)
-	return TurnResult{Turn: turn}, nil
+	return SteerResult{Turn: turn, ID: s.Host.Steer(p.Text)}, nil
+}
+
+func (s *server) sendNow(p SendNowParams) (any, error) {
+	if _, running := s.Host.Turn(); !running || !s.Host.SendNow(p.ID) {
+		return nil, &Refusal{Code: CodeRefused, Message: "no turn is running with that message queued, so nothing was sent"}
+	}
+	return Ack{OK: true}, nil
 }
 
 func (s *server) stop(p TurnParams) (any, error) {

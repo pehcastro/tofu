@@ -43,6 +43,9 @@ const (
 	orchestrator       = "orchestrator"
 	verdictLine        = "verdict "
 	noEngine           = "no engine is wired to this app"
+	sentNowNote        = "sent to the lead now"
+	readHead           = "read by the lead at step "
+	readClock          = "15:04"
 )
 
 func gateOffNote(why jev.Why) string {
@@ -123,7 +126,21 @@ func (a *App) jumpToID(typed string) {
 
 func (a *App) steer(task string) {
 	if a.options.Host != nil {
-		a.options.Host.Steer(task)
+		a.steered[task] = a.options.Host.Steer(task)
+	}
+}
+
+func (a *App) sendNow(task string) bool {
+	sent := a.options.Host != nil && a.options.Host.SendNow(a.steered[task])
+	if sent {
+		a.notify(sentNowNote)
+	}
+	return sent
+}
+
+func (a *App) sendPickedNow() {
+	if picked, queued := a.view.PickedQueued(); queued && a.busy {
+		a.sendNow(picked)
 	}
 }
 
@@ -352,7 +369,9 @@ func (a *App) absorb(event Event) {
 		}
 		a.view.Requesting()
 	case EventTask:
-		a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
+		if event.Origin.Kind != host.OriginTofu {
+			a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
+		}
 	case EventText:
 		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
 	case EventTextDelta:
@@ -424,7 +443,8 @@ func (a *App) absorb(event Event) {
 	case EventPersisted:
 		a.recorded(event)
 	case EventSteered:
-		a.view.Delivered(event.Text)
+		a.view.Delivered(event.Text, readHead+strconv.Itoa(event.Step)+" · "+at.Format(readClock))
+		a.sentNow = false
 	case EventForkStart:
 		a.forking = true
 	case EventForkEnd:

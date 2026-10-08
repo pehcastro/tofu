@@ -148,6 +148,13 @@ type Text struct {
 	Text string `json:"text"`
 }
 
+type Steered struct {
+	Identity
+	Text   string    `json:"text"`
+	Step   int       `json:"step"`
+	ReadAt time.Time `json:"readAt"`
+}
+
 type OriginKind string
 
 const (
@@ -622,6 +629,15 @@ type TurnParams struct {
 	Lead    bool   `json:"lead,omitempty"`
 }
 
+type SteerResult struct {
+	Turn string `json:"turn"`
+	ID   string `json:"id"`
+}
+
+type SendNowParams struct {
+	ID string `json:"id,omitempty"`
+}
+
 type UnsteerParams struct {
 	Text string `json:"text"`
 }
@@ -742,7 +758,7 @@ func notifications() []method {
 	return []method{
 		{name: "turn.started", params: TurnStarted{}},
 		{name: "turn.completed", params: TurnCompleted{}},
-		{name: "turn.steered", params: Text{}},
+		{name: "turn.steered", params: Steered{}},
 		{name: "message.user", params: UserMessage{}},
 		{name: "message.started", params: Marker{}},
 		{name: "message.delta", params: Text{}},
@@ -786,7 +802,8 @@ func requests() []method {
 		{name: "session.set", params: SessionSetParams{}, result: Ack{}},
 		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
 		{name: "turn.send", params: TurnSendParams{}, result: TurnResult{}},
-		{name: "turn.steer", params: TurnSteerParams{}, result: TurnResult{}},
+		{name: "turn.steer", params: TurnSteerParams{}, result: SteerResult{}},
+		{name: "turn.sendNow", params: SendNowParams{}, result: Ack{}},
 		{name: "turn.stop", params: TurnParams{}, result: Ack{}},
 		{name: "turn.unsteer", params: UnsteerParams{}, result: UnsteerResult{}},
 		{name: "session.compact", params: NoParams{}, result: Compaction{}},
@@ -842,7 +859,7 @@ func requests() []method {
 }
 
 func capabilities() []string {
-	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "run", "compact", "history", "ledger",
+	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
 		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes"}
 }
 

@@ -93,6 +93,17 @@ const andThisIsItsLastStep = ", and this is its last step: answer now from what 
 
 const theLastStepRunsNoTool = "this was the turn's last step, which runs no tool"
 
+const aMessageArrivedMidTurn = "the person's next message arrived while you were working. before your next tool call, " +
+	"write one line saying what it changes in what you are doing, or that it changes nothing."
+
+const theLeadSkippedTheLine = "the lead read a message from the person mid-turn and called a tool without a line saying what it changes"
+
+type SentNow struct{}
+
+func (SentNow) Error() string {
+	return "the person sent a queued message now, so this request was dropped and the step asked again with it"
+}
+
 type CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked func(StepRow)
 
 type CalledAsEachToolCallAnswersAndBeforeTheNextRequest func(llm.Message)
@@ -594,6 +605,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		flush()
 	}
 	askedAgainAfterBlank := false
+	steeredAt := 0
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
@@ -601,6 +613,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
+				if steeredAt != step {
+					messages = append(messages, inserted(sourceMidTurnNote, aMessageArrivedMidTurn, time.Time{}))
+				}
+				steeredAt = step
 				said := inserted(sourceSteer, steered, time.Time{})
 				if config.ImagesOf != nil {
 					said.Images = config.ImagesOf(steered)
@@ -664,6 +680,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		keepNewestPictures(messages)
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
 		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), llm.Request{Messages: messages, Tools: definitions})
+		if errors.Is(err, SentNow{}) {
+			step--
+			continue
+		}
 		if overflowed(err) {
 			before := slices.Clone(messages)
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
@@ -699,6 +719,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
+		if steeredAt == step && decision.Outcome == llm.OutcomeToolCalls && strings.TrimSpace(decision.Content) == "" {
+			stepRow.Warnings = append(stepRow.Warnings, theLeadSkippedTheLine)
+		}
 
 		if decision.Outcome == llm.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
 			if askedAgainAfterBlank {

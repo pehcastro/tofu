@@ -75,6 +75,7 @@ type Event struct {
 	Fork      *Fork
 	Origin    Origin
 	LastAt    time.Time
+	Step      int
 }
 
 type Status string
