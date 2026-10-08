@@ -10,8 +10,10 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"tofu/internal/host"
+	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/turn"
 )
@@ -96,9 +98,13 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	open, quota := openAppWire, serveQuota
+	kept, err := quota.NewPoller(nil, time.Now, nil, recordQuotaReading)
+	if err != nil {
+		return serveFail(errOut, err)
+	}
+	open, polled := openAppWire, serveQuota(kept)
 	if deck != nil {
-		open, quota = driveWire(deck), nil
+		open, polled = driveWire(deck), nil
 	}
 	launch := launchOf(dir, sessionResume{}, true)
 	engine := &appEngine{dir: dir, open: open, tabs: launch.tabs}
@@ -108,7 +114,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintln(errOut, "tofu serve: "+line)
 		}
 	}
-	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: quota})
+	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled})
 	engine.warm.Close()
 	live.Close()
 	for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
@@ -147,14 +153,16 @@ func serveVerbs(errOut io.Writer) func([]string) (host.VerbResult, error) {
 	}
 }
 
-func serveQuota() []host.QuotaWindow {
-	var windows []host.QuotaWindow
-	for _, quota := range appQuota() {
-		window := host.QuotaWindow{Account: quota.Account, Window: quota.Label, Percent: quota.Fraction * percentOfOne, Reported: quota.Reported}
-		if !quota.ResetsAt.IsZero() {
-			window.ResetsAt = &quota.ResetsAt
+func serveQuota(kept *quota.Poller) func() []host.QuotaWindow {
+	return func() []host.QuotaWindow {
+		var windows []host.QuotaWindow
+		for _, read := range quotaFrames(pollCredentials(context.Background(), time.Now, kept)) {
+			window := host.QuotaWindow{Account: read.Account, Window: read.Label, Percent: read.Fraction * percentOfOne, Reported: read.Reported}
+			if !read.ResetsAt.IsZero() {
+				window.ResetsAt = &read.ResetsAt
+			}
+			windows = append(windows, window)
 		}
-		windows = append(windows, window)
+		return windows
 	}
-	return windows
 }

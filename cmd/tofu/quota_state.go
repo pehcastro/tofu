@@ -107,7 +107,7 @@ func quotaState(result pollResult, now time.Time) string {
 	panic("tofu usage: unknown quota condition")
 }
 
-func pollCredentials(ctx context.Context, now func() time.Time) ([]pollResult, error) {
+func pollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poller) ([]pollResult, error) {
 	path, err := cred.Path()
 	if err != nil {
 		return nil, err
@@ -124,6 +124,9 @@ func pollCredentials(ctx context.Context, now func() time.Time) ([]pollResult, e
 	rows, err := store.List()
 	if err != nil {
 		return nil, err
+	}
+	if kept != nil {
+		return pollRowsOn(ctx, store, rows, now, nil, kept)
 	}
 	return pollRows(ctx, store, rows, now, nil)
 }

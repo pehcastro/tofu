@@ -519,7 +519,10 @@ func appKillShell(registry *shell.Registry, openErr error) func(string) error {
 }
 
 func appQuota() []frame.Quota {
-	results, err := pollCredentials(context.Background(), time.Now)
+	return quotaFrames(pollCredentials(context.Background(), time.Now, nil))
+}
+
+func quotaFrames(results []pollResult, err error) []frame.Quota {
 	if err != nil {
 		return nil
 	}

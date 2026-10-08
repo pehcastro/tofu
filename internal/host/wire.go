@@ -316,6 +316,34 @@ type QuotaWindow struct {
 	ResetsAt *time.Time `json:"resetsAt,omitempty"`
 }
 
+type CronState struct {
+	Live  int       `json:"live"`
+	Goals int       `json:"goals"`
+	Jobs  []CronJob `json:"jobs"`
+}
+
+type CronJob struct {
+	ID       string     `json:"id"`
+	Schedule string     `json:"schedule"`
+	Prompt   string     `json:"prompt"`
+	Paused   bool       `json:"paused"`
+	Next     *time.Time `json:"next,omitempty"`
+	Ended    string     `json:"ended,omitempty"`
+}
+
+type CronUpdated struct {
+	Identity
+	CronState
+}
+
+type CronCommandParams struct {
+	Line string `json:"line"`
+}
+
+type CronCommandResult struct {
+	Note string `json:"note"`
+}
+
 type SessionForked struct {
 	Identity
 	From   string `json:"from"`
@@ -500,6 +528,7 @@ func notifications() []method {
 		{name: "context.updated", params: ContextUpdated{}},
 		{name: "usage.updated", params: UsageUpdated{}},
 		{name: "quota.updated", params: QuotaUpdated{}},
+		{name: "cron.updated", params: CronUpdated{}},
 		{name: "session.forked", params: SessionForked{}},
 		{name: "session.updated", params: SessionUpdated{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
@@ -523,6 +552,8 @@ func requests() []method {
 		{name: "label", params: LabelParams{}, result: verb},
 		{name: "settings.set", params: SettingsSetParams{}, result: verb},
 		{name: "login.start", params: LoginParams{}, result: verb},
+		{name: "cron.command", params: CronCommandParams{}, result: CronCommandResult{}},
+		{name: queryPrefix + "cron", params: NoParams{}, result: CronState{}},
 	}
 	for _, query := range queries() {
 		methods = append(methods, method{name: queryPrefix + query.name, params: NoParams{}, result: verb})

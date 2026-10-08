@@ -388,8 +388,9 @@ const (
 )
 
 const (
-	ServeQueue           = 128
-	ServeLineBytes       = 16 << 20
-	ServeShellPollMillis = 250
-	ServeStopMillis      = 10000
+	ServeQueue            = 128
+	ServeLineBytes        = 16 << 20
+	ServeShellPollMillis  = 250
+	ServeStopMillis       = 10000
+	ServeQuotaPollMinutes = 5
 )

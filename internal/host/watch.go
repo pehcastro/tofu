@@ -155,6 +155,9 @@ func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.
 	a.sendSubAgents()
 	if asker == "" {
 		a.emit(Event{Kind: EventRequesting})
+	}
+	inChat := asker == "" && !turn.AskedQuietly(ctx)
+	if inChat {
 		request.OnDelta = func(text string) {
 			streamed = true
 			a.emit(Event{Kind: EventTextDelta, Text: text})
@@ -176,7 +179,7 @@ func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.
 		stats.Decisions = a.decisions()
 	}
 	a.emit(stats)
-	if text := strings.TrimSpace(decision.Content); text != "" && !streamed && asker == "" {
+	if text := strings.TrimSpace(decision.Content); text != "" && !streamed && inChat {
 		a.emit(Event{Kind: EventText, Text: text})
 	}
 	for _, call := range decision.ToolCalls {

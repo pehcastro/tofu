@@ -89,7 +89,7 @@ func usageFail(errOut io.Writer, err error) int {
 }
 
 func readUsage(now time.Time) (usageReport, error) {
-	results, err := pollCredentials(context.Background(), time.Now)
+	results, err := pollCredentials(context.Background(), time.Now, nil)
 	if err != nil {
 		return usageReport{}, err
 	}

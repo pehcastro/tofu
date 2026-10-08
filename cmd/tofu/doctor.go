@@ -319,7 +319,7 @@ func gateSource(located jev.Located) string {
 }
 
 func doctorCredentials(now time.Time) []credentialReport {
-	results, err := pollCredentials(context.Background(), time.Now)
+	results, err := pollCredentials(context.Background(), time.Now, nil)
 	if err != nil {
 		return []credentialReport{{Provider: "credentials", State: doctorUnreadable + err.Error()}}
 	}

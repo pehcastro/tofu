@@ -100,11 +100,12 @@ type Change struct {
 }
 
 type Book struct {
-	Check Checker
-	mu    sync.Mutex
-	path  string
-	made  int
-	jobs  []*Job
+	Check   Checker
+	Changed chan<- struct{}
+	mu      sync.Mutex
+	path    string
+	made    int
+	jobs    []*Job
 }
 
 type kept struct {
@@ -116,6 +117,7 @@ func (b *Book) Load(path string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.path, b.made, b.jobs = path, 0, nil
+	defer b.changed()
 	if path == "" {
 		return nil
 	}
@@ -180,6 +182,13 @@ func (b *Book) save() error {
 	return os.Rename(temporary, b.path)
 }
 
+func (b *Book) changed() {
+	select {
+	case b.Changed <- struct{}{}:
+	default:
+	}
+}
+
 func (b *Book) find(id string) (*Job, error) {
 	at := slices.IndexFunc(b.jobs, func(job *Job) bool { return job.ID == id })
 	if at < 0 {
@@ -231,6 +240,7 @@ func (b *Book) Create(spec Spec, by By, reason string, now time.Time) (Job, erro
 	b.made++
 	job := &Job{ID: idPrefix + strconv.Itoa(b.made), Versions: []Version{{N: 1, At: now, By: by, Reason: reason, Spec: spec}}, Next: schedule.Next(now)}
 	b.jobs = append(b.jobs, job)
+	b.changed()
 	return *job, b.save()
 }
 
@@ -274,6 +284,7 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 	if after.Schedule != before.Schedule || before.Paused && !after.Paused {
 		job.Next = schedule.Next(now)
 	}
+	b.changed()
 	return *job, b.save()
 }
 
@@ -300,6 +311,7 @@ func (b *Book) Delete(id string) error {
 		return err
 	}
 	b.jobs = slices.DeleteFunc(b.jobs, func(job *Job) bool { return job.ID == id })
+	b.changed()
 	return b.save()
 }
 
@@ -370,6 +382,9 @@ func (b *Book) Due(ctx context.Context, now time.Time, moment Moment) []Fire {
 	defer b.mu.Unlock()
 	for _, one := range due {
 		fires = append(fires, fire(one, now))
+	}
+	if len(fires) > 0 {
+		b.changed()
 	}
 	if err := b.save(); err != nil {
 		fires = append(fires, Fire{Line: "cron jobs were not written: " + err.Error()})
@@ -442,6 +457,7 @@ func (b *Book) Finished(id, result string) string {
 		job.Unchanged = 0
 	}
 	job.LastResult = result
+	b.changed()
 	switch {
 	case job.Unchanged >= konst.CronUnchangedStop:
 		job.Ended = strconv.Itoa(konst.CronUnchangedStop) + " fires in a row changed nothing"

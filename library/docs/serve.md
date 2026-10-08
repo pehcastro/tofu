@@ -23,9 +23,17 @@ three lines of context.
 
 - the requests: `initialize`, `session.list`, `session.open`, `turn.send`,
   `turn.steer`, `turn.stop`, `undo`, `shell.read`, `shell.kill`, `label`,
-  `settings.set`, `login.start`, and the reads `query.usage`,
+  `settings.set`, `login.start`, `cron.command`, and the reads `query.usage`,
   `query.context`, `query.rules`, `query.agents`, `query.models`,
-  `query.ledger`, `query.settings` and `query.library`
+  `query.ledger`, `query.settings`, `query.library` and `query.cron`
+- cron jobs: `cron.command` takes the line you would type, such as
+  `/loop 10m check the build` or `/cron pause c1`. `query.cron` answers
+  `live`, `goals` and every job with its `id`, `schedule`, `prompt`, `paused`,
+  `next` and `ended`, and `cron.updated` carries the same whenever a job is
+  added, changed, fired or removed, by you or by the agent
+- account quota: `quota.updated` arrives when a session opens, after every
+  turn and every five minutes, with each account window's `percent`.
+  `windows: []` means no account answered
 - the schema: `tofu serve --schema` prints the JSON Schema of every line
   tofu writes, and of every line it reads under `$defs.clientMessage`
 - a session another tofu holds: `session.open` answers with the error

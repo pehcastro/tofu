@@ -75,6 +75,7 @@ type Host struct {
 	steering steerQueue
 	stopLead chan struct{}
 	cron     *cron.Book
+	cronMove chan struct{}
 	readOnly error
 
 	mu        sync.Mutex
@@ -112,6 +113,7 @@ type pendingImage struct {
 }
 
 func New(cfg Config) (*Host, []string) {
+	cronMove := make(chan struct{}, 1)
 	h := &Host{
 		dir:      cfg.Dir,
 		engine:   cfg.Engine,
@@ -122,7 +124,8 @@ func New(cfg Config) (*Host, []string) {
 		answers:  make(chan Answer, 1),
 		steering: steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
 		stopLead: make(chan struct{}, 1),
-		cron:     &cron.Book{Check: cfg.Check},
+		cron:     &cron.Book{Check: cfg.Check, Changed: cronMove},
+		cronMove: cronMove,
 		id:       cfg.Resumed.Session,
 		started:  SourceStartup,
 		shown:    map[string]bool{},

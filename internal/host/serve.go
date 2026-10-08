@@ -52,6 +52,7 @@ func Serve(cfg ServeConfig) error {
 	var workers sync.WaitGroup
 	workers.Go(func() { s.pump(quit) })
 	workers.Go(func() { s.watchShells(quit) })
+	workers.Go(func() { s.pollQuota(quit) })
 	err := s.read()
 	s.windDown()
 	close(quit)
@@ -136,7 +137,18 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "session.list":
 		return handle(raw, verb("session", "list"))
 	case "session.open":
-		return handle(raw, s.open)
+		result, err := handle(raw, s.open)
+		if err == nil {
+			go s.quota()
+		}
+		return result, err
+	case "cron.command":
+		return handle(raw, func(p CronCommandParams) (any, error) {
+			reply, err := s.Host.CronCommand(p.Line)
+			return CronCommandResult{Note: reply.Note}, err
+		})
+	case queryPrefix + "cron":
+		return handle(raw, func(NoParams) (any, error) { return s.cronState(), nil })
 	case "turn.send":
 		return handle(raw, s.send)
 	case "turn.steer":
@@ -344,6 +356,11 @@ func (s *server) pump(quit <-chan struct{}) {
 		select {
 		case event := <-s.Host.Events():
 			s.publish(event)
+		case <-s.Host.cronMove:
+			s.mu.Lock()
+			id := s.items.identity("", "cron")
+			s.mu.Unlock()
+			s.box.push(merged("cron.updated", "", &CronUpdated{Identity: id, CronState: s.cronState()}))
 		case <-quit:
 			for events := s.Host.Events(); len(events) > 0; {
 				s.publish(<-events)
@@ -365,11 +382,28 @@ func (s *server) publish(event Event) {
 			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked, Approval: event.ID, Decision: Cancelled, By: "tofu"}))
 		}
 	case EventTurnEnded:
-		if s.Quota != nil {
-			go s.quota(s.items.identity("", s.items.turn))
-		}
+		go s.quota()
 	}
 	s.translated(event)
+}
+
+func (s *server) cronState() CronState {
+	state := CronState{Jobs: []CronJob{}}
+	for _, job := range s.Host.Cron().Jobs() {
+		spec := job.Spec()
+		one := CronJob{ID: job.ID, Schedule: spec.Schedule, Prompt: spec.Prompt, Paused: spec.Paused, Ended: job.Ended}
+		if !job.Next.IsZero() {
+			one.Next = &job.Next
+		}
+		if job.Live() {
+			state.Live++
+		}
+		if job.Live() && job.Noun() == "goal" {
+			state.Goals++
+		}
+		state.Jobs = append(state.Jobs, one)
+	}
+	return state
 }
 
 func (s *server) translated(event Event) {
@@ -378,12 +412,28 @@ func (s *server) translated(event Event) {
 	}
 }
 
-func (s *server) quota(id Identity) {
-	windows := s.Quota()
-	if len(windows) == 0 {
+func (s *server) quota() {
+	if s.Quota == nil {
 		return
 	}
+	windows := append([]QuotaWindow{}, s.Quota()...)
+	s.mu.Lock()
+	id := s.items.identity("", s.items.turn)
+	s.mu.Unlock()
 	s.box.push(merged("quota.updated", "", &QuotaUpdated{Identity: id, Windows: windows}))
+}
+
+func (s *server) pollQuota(quit <-chan struct{}) {
+	every := time.NewTicker(konst.ServeQuotaPollMinutes * time.Minute)
+	defer every.Stop()
+	for {
+		select {
+		case <-quit:
+			return
+		case <-every.C:
+			s.quota()
+		}
+	}
 }
 
 type watchedShell struct {
