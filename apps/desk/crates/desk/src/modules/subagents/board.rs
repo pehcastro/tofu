@@ -1,7 +1,7 @@
 use desk_core::model::{Agent as Member, Session, Tool};
 use desk_core::protocol::{AgentState, FileEdit, HunkLineKind};
 use desk_ui::components::agents::{
-    AgentBoard, AgentEvent, AgentLine, AgentStep, DiffLine, DiffSign, ago,
+    AgentBoard, AgentEvent, AgentLine, AgentStep, DiffLine, DiffSign, ago, lasted,
 };
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
 use gpui::SharedString;
@@ -79,7 +79,7 @@ pub fn board(session: &Session) -> AgentBoard {
                     .iter()
                     .max_by(|(_, a), (_, b)| a.started_at.cmp(&b.started_at))
                     .map_or_else(|| "starting".to_owned(), |(_, tool)| doing(tool)),
-                format!("for {}m", since(&member.started_at).round()).into(),
+                lasted(since(&member.started_at)),
             ),
             AgentStatus::Asking => (
                 format!("asked: {}", asked.clone().unwrap_or_default()),
@@ -90,11 +90,7 @@ pub fn board(session: &Session) -> AgentBoard {
             AgentStatus::Failed => (report.clone(), ago(since(&member.ended_at))),
             AgentStatus::Finished => (
                 report.clone(),
-                format!(
-                    "worked {}m",
-                    (since(&member.started_at) - since(&member.ended_at)).round()
-                )
-                .into(),
+                lasted(since(&member.started_at) - since(&member.ended_at)),
             ),
         };
         let mut steps = vec![(
@@ -118,7 +114,7 @@ pub fn board(session: &Session) -> AgentBoard {
             }),
             AgentStatus::Finished => Some(AgentStep::Report {
                 text: report.into(),
-                worked: time.clone(),
+                worked: format!("worked {time}").into(),
             }),
         };
         steps.extend(last.map(|last| (since(&member.ended_at), last)));

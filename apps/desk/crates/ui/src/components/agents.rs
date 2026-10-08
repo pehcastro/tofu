@@ -25,6 +25,7 @@ use crate::components::size::{
     RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_LIST, RADIUS_TAB, ROW_GAP, ROW_PAD_X, SHELL_TEXT, T1,
     T2, T3,
 };
+use crate::components::tooltip::{Edge, tooltip};
 use crate::components::width::Width;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -40,6 +41,7 @@ const JUST_NOW: f32 = 3.0;
 const FEW_MINUTES: f32 = 8.0;
 const TWENTY_MINUTES: f32 = 20.0;
 const MINUTES_PER_HOUR: f32 = 60.0;
+const SECONDS_PER_MINUTE: f32 = 60.0;
 
 const TILE_PAD_TOP: f32 = 2.0;
 const TILE_PAD_BOTTOM: f32 = 8.0;
@@ -122,7 +124,7 @@ const NOTE_AFTER_GAP: f32 = 2.0;
 const REPORT_HEAD_GAP: f32 = 7.0;
 const REPORT_HEAD_AFTER: f32 = 3.0;
 
-const LIST_WIDTH: f32 = 340.0;
+const LIST_WIDTH: f32 = 240.0;
 const LIST_LEAST: f32 = 132.0;
 const FEED_LEAST: f32 = 320.0;
 const LIST_PAD_X: f32 = 6.0;
@@ -316,6 +318,23 @@ pub fn ago(minutes: f32) -> SharedString {
         format!("{}m ago", minutes.round()).into()
     } else {
         format!("{}h ago", (minutes / MINUTES_PER_HOUR).round()).into()
+    }
+}
+
+pub fn lasted(minutes: f32) -> SharedString {
+    let seconds = (minutes * SECONDS_PER_MINUTE).round().max(0.0);
+    let whole = (seconds / SECONDS_PER_MINUTE).floor();
+    if whole < 1.0 {
+        format!("{seconds}s").into()
+    } else if whole < MINUTES_PER_HOUR {
+        format!("{whole}m").into()
+    } else {
+        format!(
+            "{}h {}m",
+            (whole / MINUTES_PER_HOUR).floor(),
+            whole % MINUTES_PER_HOUR
+        )
+        .into()
     }
 }
 
@@ -1432,9 +1451,10 @@ impl AgentScreen {
                 let Some(line) = self.board.lines.get(ix) else {
                     continue;
                 };
-                let row = screen_row(ix, line, self.picked == Some(ix), theme).on_click(
-                    cx.listener(move |screen, _: &ClickEvent, _, cx| screen.pick(Some(ix), cx)),
-                );
+                let row = screen_row(ix, line, self.picked == Some(ix), theme, window, cx)
+                    .on_click(
+                        cx.listener(move |screen, _: &ClickEvent, _, cx| screen.pick(Some(ix), cx)),
+                    );
                 rows = rows.child(glide.row(slot, row));
                 slot += 1;
             }
@@ -1585,9 +1605,41 @@ impl AgentScreen {
     }
 }
 
-fn screen_row(ix: usize, line: &AgentLine, picked: bool, theme: &Theme) -> Stateful<Div> {
+fn screen_row(
+    ix: usize,
+    line: &AgentLine,
+    picked: bool,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Stateful<Div> {
     let agent = &line.agent;
     let t3 = ink(theme, T3);
+    let mission = line.task.lines().next().unwrap_or_default().to_owned();
+    let place = line.owns.split(", ").next().unwrap_or_default().to_owned();
+    let tip: SharedString = match agent.status {
+        AgentStatus::Finished => format!("worked {}", line.time).into(),
+        AgentStatus::Working => format!("running for {}", line.time).into(),
+        AgentStatus::Asking | AgentStatus::Failed => line.time.clone(),
+    };
+    let clock = tooltip(
+        ("screen-time-tip", ix),
+        div()
+            .id(("screen-time", ix))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(EVENT_HEAD_GAP))
+            .text_size(px(FONT_KBD))
+            .text_color(t3)
+            .child(glyph(Glyph::Cron, ICON_TINY, t3))
+            .child(line.time.clone()),
+        Edge::Frame,
+        tip,
+        theme,
+        window,
+        cx,
+    );
     div()
         .id(("screen-row", ix))
         .flex()
@@ -1617,20 +1669,31 @@ fn screen_row(ix: usize, line: &AgentLine, picked: bool, theme: &Theme) -> State
                                 .text_color(agent.kind.color(theme))
                                 .child(agent.name()),
                         )
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_size(px(FONT_KBD))
-                                .text_color(t3)
-                                .child(line.time.clone()),
-                        ),
+                        .child(clock),
                 )
                 .child(
                     div()
-                        .truncate()
+                        .flex()
+                        .gap(px(EVENT_HEAD_GAP))
                         .text_size(px(FONT_WHO))
-                        .text_color(t3)
-                        .child(line.now.clone()),
+                        .child(
+                            div()
+                                .flex_shrink_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_color(ink(theme, T2))
+                                .child(mission),
+                        )
+                        .when(!place.is_empty(), |second| {
+                            second.child(
+                                div()
+                                    .flex_shrink_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_color(t3)
+                                    .child(place),
+                            )
+                        }),
                 ),
         )
 }
