@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::bridge::Event;
-use crate::protocol::{CronState, Notification, ServerRequest};
+use crate::protocol::{CronState, Notification, QuotaWindow, ServerRequest};
+use crate::query::{Answer, Usage};
 
 pub use session::{Agent, Message, Role, Session, Shell, Tool, Turn};
 
@@ -36,6 +37,8 @@ impl std::error::Error for ModelError {}
 #[derive(Debug, Default)]
 pub struct Store {
     pub sessions: BTreeMap<String, Session>,
+    pub usage: Answer<Usage>,
+    pub quota: Vec<QuotaWindow>,
 }
 
 impl Store {
@@ -58,6 +61,10 @@ impl Store {
                 Err(ModelError::UnknownEvent(method.clone()))
             }
             Event::Notification(notification) => {
+                if let Notification::QuotaUpdated(updated) = notification {
+                    self.quota.clone_from(&updated.windows);
+                    self.usage.notified();
+                }
                 let id = session_of(notification)?;
                 self.session(id).apply(notification)
             }

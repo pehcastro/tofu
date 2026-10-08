@@ -15,6 +15,7 @@ use desk_core::protocol::{
     SessionOpenParamsAsking, SessionRenameParams, ShellParams, TurnCompleted, TurnParams,
     TurnSendParams, TurnSteerParams, request,
 };
+use desk_core::query::{self, Provider, QueryError};
 use desk_core::sessions::{SessionRow, session_rows};
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
@@ -407,6 +408,7 @@ impl Chat {
         self.tofu = hello.tofu;
         self.link = Link::Ready(bridge);
         self.relist(cx);
+        self.ask_due(cx);
         cx.notify();
         Some(events)
     }
@@ -437,11 +439,12 @@ impl Chat {
             self.opening = Opening::Open(id.clone());
         }
         self.refresh(cx);
+        self.ask_due(cx);
     }
 
     pub fn restart(&mut self, cx: &mut Context<Self>) {
         self.store.update(cx, |store, cx| {
-            *store = Store::default();
+            store.sessions.clear();
             cx.notify();
         });
         self.orders.clear();
@@ -659,22 +662,90 @@ impl Chat {
     ) where
         R::Result: 'static,
     {
+        self.request::<R>(params, cx, |chat, reply, cx| match reply {
+            Ok(result) => then(chat, result, cx),
+            Err(error) => chat.fail(error, cx),
+        });
+    }
+
+    fn request<R: Request>(
+        &mut self,
+        params: &R::Params,
+        cx: &mut Context<Self>,
+        then: impl FnOnce(&mut Self, Result<R::Result, String>, &mut Context<Self>) + 'static,
+    ) where
+        R::Result: 'static,
+    {
         let Link::Ready(bridge) = &self.link else {
-            self.fail("tofu is not running, so nothing was sent".to_owned(), cx);
-            return;
+            return then(
+                self,
+                Err("tofu is not running, so nothing was sent".to_owned()),
+                cx,
+            );
         };
         let pending = match bridge.request::<R>(params) {
             Ok(pending) => pending,
-            Err(error) => return self.fail(error.to_string(), cx),
+            Err(error) => return then(self, Err(error.to_string()), cx),
         };
         cx.spawn(async move |this, cx| {
             let reply = pending.reply().await;
-            this.update(cx, |chat, cx| match reply {
-                Ok(result) => then(chat, result, cx),
-                Err(error) => chat.fail(format!("{}: {error}", R::METHOD), cx),
+            this.update(cx, |chat, cx| {
+                then(
+                    chat,
+                    reply.map_err(|error| format!("{}: {error}", R::METHOD)),
+                    cx,
+                )
             })
         })
         .detach();
+    }
+
+    pub fn want_usage(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.usage.want());
+        self.ask_due(cx);
+    }
+
+    pub fn reread_usage(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.usage.again());
+        self.ask_due(cx);
+    }
+
+    fn ask_due(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.link, Link::Ready(_)) {
+            return;
+        }
+        let (asked, stale) = self.store.update(cx, |store, cx| {
+            let asked = store.usage.take_due();
+            if asked {
+                cx.notify();
+            }
+            (asked, store.usage.stale)
+        });
+        if !asked {
+            return;
+        }
+        eprintln!("desk: query.usage asked, stale {stale}");
+        self.request::<request::QueryUsage>(&NoParams {}, cx, |chat, reply, cx| {
+            let answer = reply
+                .map_err(|reason| QueryError::Unanswered {
+                    method: request::QueryUsage::METHOD,
+                    reason,
+                })
+                .and_then(query::usage);
+            match &answer {
+                Ok(read) => eprintln!(
+                    "desk: query.usage read at {}: {}",
+                    read.at,
+                    windows_said(&read.value.providers)
+                ),
+                Err(error) => eprintln!("desk: {error}"),
+            }
+            chat.store.update(cx, |store, cx| {
+                store.usage.answered(answer);
+                cx.notify();
+            });
+            chat.ask_due(cx);
+        });
     }
 
     fn send(&mut self, text: &str, cx: &mut Context<Self>) {
@@ -800,6 +871,21 @@ impl Chat {
             }
         }
     }
+}
+
+pub fn windows_said(providers: &[Provider]) -> String {
+    let said: Vec<String> = providers
+        .iter()
+        .map(|provider| {
+            let windows: Vec<String> = provider
+                .windows
+                .iter()
+                .map(|window| format!("{} {:.0}%", window.id, window.used_fraction * 100.0))
+                .collect();
+            format!("{} [{}]", provider.provider, windows.join(", "))
+        })
+        .collect();
+    said.join("; ")
 }
 
 impl Drop for Chat {

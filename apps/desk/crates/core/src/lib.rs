@@ -5,5 +5,6 @@ pub mod git;
 pub mod limits;
 pub mod model;
 pub mod protocol;
+pub mod query;
 pub mod sessions;
 pub mod syntax;

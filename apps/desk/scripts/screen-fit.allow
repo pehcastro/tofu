@@ -9,7 +9,6 @@ crates/desk/src/screens/library/agents.rs:left(px(3.0*scale))  glyph drawn insid
 crates/desk/src/screens/library/agents.rs:left(px(8.0*scale-0.5))  glyph drawn inside a 16 px icon
 crates/desk/src/screens/library/agents.rs:top(px(2.5*scale))  glyph drawn inside a 16 px icon
 crates/desk/src/screens/library/agents.rs:top(px(5.0*scale))  glyph drawn inside a 16 px icon
-crates/desk/src/screens/limits/mod.rs:top(px(-3.0))  tick overhangs its 24 px track by 3 px
 crates/desk/src/screens/intro/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
 crates/desk/src/screens/intro/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket
 crates/desk/src/screens/intro/chrome.rs:top(px(6.0))  whole-window mock-up, refit is its own ticket

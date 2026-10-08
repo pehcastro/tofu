@@ -3,6 +3,8 @@ use crate::modules::chat::Find;
 use crate::modules::chat::{Chat, Listed, Touched};
 #[cfg(feature = "screen-work")]
 use crate::project::{self, Head};
+#[cfg(all(feature = "screen-work", feature = "screen-limits"))]
+use crate::screens::limits::Limits;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
@@ -70,7 +72,7 @@ const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
-const LIVE_SCREENS: [&str; 1] = ["theme"];
+const LIVE_SCREENS: [&str; 2] = ["theme", "limits"];
 #[cfg(feature = "screen-work")]
 const CRON_PROMPT_CHARS: usize = 32;
 
@@ -318,6 +320,8 @@ impl Desk {
         };
         let left = std::mem::replace(&mut self.shown, next);
         self.parked.push(left);
+        #[cfg(all(feature = "screen-work", feature = "screen-limits"))]
+        self.feed_limits(cx);
         let focus = match &self.shown.body {
             #[cfg(feature = "screen-work")]
             Body::Work(work) => work.focus_handle(cx),
@@ -646,7 +650,26 @@ impl Desk {
         }
         self.projects.head = Some(Head::empty(folder));
         self.reread_head(cx);
+        #[cfg(feature = "screen-limits")]
+        self.feed_limits(cx);
         cx.notify();
+    }
+
+    #[cfg(feature = "screen-limits")]
+    fn feed_limits(&mut self, cx: &mut Context<Self>) {
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return;
+        };
+        let limits =
+            std::iter::once(&self.shown)
+                .chain(&self.parked)
+                .find_map(|shown| match &shown.body {
+                    Body::View(view) => view.clone().downcast::<Limits>().ok(),
+                    Body::Work(_) => None,
+                });
+        if let Some(limits) = limits {
+            limits.update(cx, |limits, cx| limits.read_from(&chat, cx));
+        }
     }
 
     fn reread_head(&mut self, cx: &mut Context<Self>) {
