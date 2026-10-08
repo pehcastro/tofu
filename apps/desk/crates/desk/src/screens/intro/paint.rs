@@ -5,7 +5,6 @@ use gpui::{
     prelude::*, px,
 };
 
-pub const BACKDROP: &[u8] = include_bytes!("../../../../../assets/intro/backdrop.jpg");
 const FONTS: [&[u8]; 6] = [
     include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
     include_bytes!("../../../../../assets/fonts/Geist-Medium.ttf"),

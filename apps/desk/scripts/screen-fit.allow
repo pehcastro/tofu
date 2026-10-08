@@ -1,21 +1,6 @@
 # path:key  reason. key is a const name, or the offset call the check printed.
 crates/desk/src/screens/accounts/mod.rs:POP_WIDTH  popover width, fits the 470 px area at the minimum window with the sidebar open
 crates/desk/src/screens/accounts/mod.rs:top(px(POP_TOP))  popover anchored under its trigger, not a board coordinate
-crates/desk/src/screens/settings/intro.rs:LEFT_WIDTH  max width of the background pane
-crates/desk/src/screens/intro/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/intro/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/intro/chrome.rs:top(px(6.0))  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/intro/chrome.rs:top(px(top))  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/intro/mod.rs:COMPOSER_WIDTH  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/onboarding/setup.rs:BLURRED_HEIGHT  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/onboarding/setup.rs:SHELL_WIDTH  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/agents.rs:top(px(11.0))  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/agents.rs:top(px(7.0))  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/chat.rs:BUBBLE_MAX  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/chrome.rs:TAB_TEXT  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/mod.rs:BOARD_WIDTH  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/paint.rs:left(px(x))  whole-window mock-up, refit is its own ticket
-crates/desk/src/screens/platforms/paint.rs:top(px(y))  whole-window mock-up, refit is its own ticket
 crates/desk/src/modules/browser/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
 crates/desk/src/modules/browser/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket
 crates/desk/src/modules/browser/chrome.rs:top(px(6.0))  whole-window mock-up, refit is its own ticket

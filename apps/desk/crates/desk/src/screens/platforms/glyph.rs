@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use gpui::{Div, Image, ImageFormat, Rgba, div, img, prelude::*, px};
 
-use super::paint::at;
-
 #[derive(Clone, Copy)]
 pub enum Glyph {
     Sidebar,
@@ -83,8 +81,4 @@ pub fn glyph(shape: Glyph, size: f32, color: Rgba) -> Div {
         )))
         .size(px(size)),
     )
-}
-
-pub fn glyph_at(shape: Glyph, size: f32, color: Rgba, x: f32, y: f32) -> Div {
-    at(glyph(shape, size, color), x, y)
 }

@@ -9,13 +9,15 @@ use gpui::{
 };
 
 use super::intro::effects::hero;
-use super::intro::{chrome, paint};
+use super::intro::paint;
 use fixture::{IMPORT, START, TAGLINE, TELL_IMPORT, TELL_START, TITLE};
-use paint::{BACKDROP, hex, jpeg, load_fonts, shadow, white};
+use paint::{hex, jpeg, load_fonts, shadow, white};
 
 const WELCOME: &[u8] = include_bytes!("../../../../../assets/intro/welcome.jpg");
 const WELCOME_BLURRED: &[u8] = include_bytes!("../../../../../assets/intro/welcome-blur.jpg");
-const WELCOME_BOTTOM: f32 = 150.0;
+const STAGE_PAD: f32 = 16.0;
+const ABOVE_WELCOME: f32 = 7.0;
+const BELOW_WELCOME: f32 = 3.0;
 
 #[derive(Default)]
 struct Connected {
@@ -25,7 +27,6 @@ struct Connected {
 }
 
 struct Onboarding {
-    backdrop: Arc<Image>,
     image: Arc<Image>,
     blurred: Arc<Image>,
     step: usize,
@@ -52,7 +53,6 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
     };
     Ok(cx
         .new(|_| Onboarding {
-            backdrop: jpeg(BACKDROP),
             image: jpeg(WELCOME),
             blurred: jpeg(WELCOME_BLURRED),
             step,
@@ -83,10 +83,10 @@ impl Onboarding {
             .flex()
             .flex_col()
             .items_center()
-            .justify_end()
-            .pb(px(WELCOME_BOTTOM))
+            .px(px(STAGE_PAD))
             .gap(px(18.0))
             .text_center()
+            .child(div().flex_grow(ABOVE_WELCOME))
             .child(
                 div()
                     .text_size(px(96.0))
@@ -130,6 +130,7 @@ impl Onboarding {
                     .on_click(cx.listener(Self::tell(TELL_IMPORT)))
                     .child(IMPORT),
             )
+            .child(div().flex_grow(BELOW_WELCOME))
     }
 }
 
@@ -137,24 +138,21 @@ impl Render for Onboarding {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let scale = window.scale_factor();
         let over = if self.step == 0 {
-            Self::welcome(cx)
+            Self::welcome(cx).into_any_element()
         } else {
-            self.setup(scale, cx)
+            self.setup(scale, cx).into_any_element()
         };
-        let main = div()
-            .relative()
-            .flex_1()
-            .child(hero(&self.image))
-            .child(over);
-        chrome::window(&self.backdrop, scale, main).children(self.told.clone().map(|message| {
-            paint::toast(
-                message,
-                scale,
-                cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.told = None;
-                    cx.notify();
-                }),
-            )
-        }))
+        hero(&self.image)
+            .child(over)
+            .children(self.told.clone().map(|message| {
+                paint::toast(
+                    message,
+                    scale,
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.told = None;
+                        cx.notify();
+                    }),
+                )
+            }))
     }
 }

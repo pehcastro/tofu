@@ -1,4 +1,3 @@
-pub mod chrome;
 pub mod effects;
 mod fixture;
 pub mod paint;
@@ -16,7 +15,7 @@ use fixture::{
     TELL_BRANCH, TELL_CHECKOUT, TELL_FOLDER, TELL_MODEL, TELL_SESSION,
 };
 use paint::{
-    BACKDROP, BRANCH, CARET, DOWN, FOLDER, LIVE, MONO, PLUS, POP, SEND, T3, WARN, glyph, hex, jpeg,
+    BRANCH, CARET, DOWN, FOLDER, LIVE, MONO, PLUS, POP, SEND, T3, WARN, glyph, hex, jpeg,
     load_fonts, medium, ringed, shadow, spacer, text, tint, white,
 };
 
@@ -26,8 +25,11 @@ const DUSK: &[u8] = include_bytes!("../../../../../assets/intro/dusk.jpg");
 const STREET_CARD: &[u8] = include_bytes!("../../../../../assets/intro/card-street.jpg");
 const ROOM_CARD: &[u8] = include_bytes!("../../../../../assets/intro/card-room.jpg");
 const DUSK_CARD: &[u8] = include_bytes!("../../../../../assets/intro/card-dusk.jpg");
-const COMPOSER_TOP: f32 = 330.0;
-const COMPOSER_WIDTH: f32 = 740.0;
+const COMPOSER_SHARE: f32 = 0.56;
+const COMPOSER_LEAST: f32 = 340.0;
+const STAGE_PAD: f32 = 16.0;
+const ABOVE_COMPOSER: f32 = 5.6;
+const BELOW_COMPOSER: f32 = 4.4;
 const LINK_INK: f32 = 0.72;
 const CHEVRON_INK: f32 = 0.43;
 
@@ -39,7 +41,6 @@ enum Menu {
 }
 
 struct Intro {
-    backdrop: Arc<Image>,
     image: Arc<Image>,
     behind_card: Arc<Image>,
     project: usize,
@@ -63,7 +64,6 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
     };
     Ok(cx
         .new(|_| Intro {
-            backdrop: jpeg(BACKDROP),
             image: jpeg(image),
             behind_card: jpeg(behind_card),
             project: 0,
@@ -114,6 +114,7 @@ fn pop(width: f32) -> Div {
         .absolute()
         .right_0()
         .w(px(width))
+        .max_w_full()
         .p(px(6.0))
         .bg(POP)
         .shadow(shadow(25.0, 22.0, 0.6))
@@ -355,7 +356,10 @@ impl Render for Intro {
         let latest = project.sessions[0].name;
         let column = div()
             .relative()
-            .w(px(COMPOSER_WIDTH))
+            .flex_none()
+            .w(relative(COMPOSER_SHARE))
+            .min_w(px(COMPOSER_LEAST))
+            .max_w_full()
             .flex()
             .flex_col()
             .gap(px(10.0))
@@ -394,6 +398,7 @@ impl Render for Intro {
                         div()
                             .id("resume")
                             .flex()
+                            .min_w_0()
                             .items_center()
                             .gap(px(6.0))
                             .cursor_pointer()
@@ -406,7 +411,13 @@ impl Render for Intro {
                                 scale,
                             ))
                             .child("Resume")
-                            .child(div().text_color(white(T3)).child(format!("· {latest}")))
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_color(white(T3))
+                                    .child(format!("· {latest}")),
+                            )
                             .child(glyph(DOWN, 13.0, white(CHEVRON_INK), scale)),
                     ),
             )
@@ -414,25 +425,27 @@ impl Render for Intro {
             .when(self.menu == Menu::Projects, |column| {
                 column.child(self.projects(scale, cx))
             });
-        let main = div().relative().flex_1().child(hero(&self.image)).child(
-            div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .flex_col()
-                .items_center()
-                .pt(px(COMPOSER_TOP))
-                .child(column),
-        );
-        chrome::window(&self.backdrop, scale, main).children(self.told.clone().map(|message| {
-            paint::toast(
-                message,
-                scale,
-                cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.told = None;
-                    cx.notify();
-                }),
-            )
-        }))
+        let stage = div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .flex_col()
+            .items_center()
+            .px(px(STAGE_PAD))
+            .child(div().flex_grow(ABOVE_COMPOSER))
+            .child(column)
+            .child(div().flex_grow(BELOW_COMPOSER));
+        hero(&self.image)
+            .child(stage)
+            .children(self.told.clone().map(|message| {
+                paint::toast(
+                    message,
+                    scale,
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.told = None;
+                        cx.notify();
+                    }),
+                )
+            }))
     }
 }

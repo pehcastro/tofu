@@ -1,57 +1,72 @@
-use gpui::{Div, FontWeight, div, prelude::*, px};
+use gpui::{Context, Div, FontWeight, div, prelude::*, px, relative};
 
 use super::fixture::{
     ASK, ASK_BUTTONS, COMPOSER, EFFORT, FAIL_ROW, FLEET, LEAD_FAIL, LEAD_FAIL_TIME, LEAD_FIRST,
-    LEAD_LAST, MODEL, RUNNING_TOOL, TOOLS, WAITING, YOU_SAID, YOU_TIME,
+    LEAD_LAST, MODEL, RUNNING_TOOL, SESSION, TOOLS, WAITING, YOU_SAID, YOU_TIME,
 };
-use super::glyph::{Glyph, glyph_at};
+use super::glyph::{Glyph, glyph};
 use super::paint::{
-    CAPTION, DEL_INK, FAINT, LEAD, LEAD_INK, RED, SOFT, STRONG, WARN, at, ink, medium, mono, rgb,
-    ring, strong, text, tint, word_list, words,
+    CAPTION, DEL_INK, FAINT, LEAD, LEAD_INK, RED, SOFT, STRONG, WARN, dropping, ink, medium, mono,
+    rgb, ring, strong, text, tint, word_list, words,
 };
+use super::{Action, Platforms};
 
 const EDGE: f32 = 29.0;
-const BUBBLE_MAX: f32 = 548.0;
+const BUBBLE_SHARE: f32 = 0.86;
 const BODY: f32 = 14.0;
 const LEADING: f32 = 23.0;
-const HALF_LEADING: f32 = 2.5;
 const CARD_EDGE: f32 = 15.0;
+const COMPOSER_TALL: f32 = 40.0;
+const ASK_TELLS: [&str; 3] = [
+    "Allowed once: bash runs npm run build.",
+    "Denied: the lead is told npm run build was refused.",
+    "Always here: npm run build is allowed in notes-app from now on.",
+];
+const ATTACH: &str =
+    "Attaches a file or an image; it goes to the lead as a reference, like an @ mention.";
+const PICK_MODEL: &str =
+    "Picks the model the lead runs on from your accounts; the change applies from the next turn.";
+const CYCLE_EFFORT: &str = "Cycles the effort: low, medium, high.";
 
-fn lead_head(time: &str, top: f32) -> [Div; 2] {
-    [
-        at(
+fn lead(time: &str, says: Div) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(4.0))
+        .child(
             div()
-                .h(px(17.5))
-                .px(px(7.0))
-                .pt(px(1.0))
-                .rounded(px(6.0))
-                .bg(tint(LEAD, 0.14))
-                .child(medium("lead", 11.5, LEAD_INK)),
-            EDGE,
-            top + 0.3,
-        ),
-        at(text(time.to_owned(), 11.5, FAINT), EDGE + 45.2, top + 1.0),
-    ]
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .px(px(7.0))
+                        .rounded(px(6.0))
+                        .bg(tint(LEAD, 0.14))
+                        .child(medium("lead", 11.5, LEAD_INK)),
+                )
+                .child(text(time.to_owned(), 11.5, FAINT)),
+        )
+        .child(says)
 }
 
-fn spinner(x: f32, y: f32) -> Div {
-    at(
-        div()
-            .size(px(11.0))
-            .rounded_full()
-            .border(px(1.5))
-            .border_color(ink(0.2)),
-        x,
-        y,
-    )
+fn spinner() -> Div {
+    div()
+        .flex_none()
+        .size(px(11.0))
+        .rounded_full()
+        .border(px(1.5))
+        .border_color(ink(0.2))
 }
 
-fn paragraph(content: &str, top: f32, width: f32) -> Div {
-    at(
-        words(content, BODY, LEADING, STRONG).w(px(width)),
-        EDGE,
-        top - HALF_LEADING,
-    )
+fn line(children: impl IntoIterator<Item = Div>) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.0))
+        .min_w_0()
+        .overflow_hidden()
+        .children(children)
 }
 
 fn button(label: &str, key: &str, primary: bool) -> Div {
@@ -67,6 +82,7 @@ fn button(label: &str, key: &str, primary: bool) -> Div {
     };
     div()
         .flex()
+        .flex_none()
         .items_center()
         .gap(px(6.0))
         .h(px(26.0))
@@ -76,184 +92,202 @@ fn button(label: &str, key: &str, primary: bool) -> Div {
         .child(medium(label.to_owned(), 12.5, ink_color))
         .child(
             div()
-                .w(px(18.6))
-                .h(px(18.0))
-                .rounded(px(5.0))
-                .bg(key_fill)
                 .flex()
                 .justify_center()
-                .pt(px(2.0))
+                .w(px(18.6))
+                .rounded(px(5.0))
+                .bg(key_fill)
                 .child(mono(key.to_owned(), 11.0, key_ink).font_weight(FontWeight::MEDIUM)),
         )
 }
 
 fn chip(label: &str) -> Div {
     div()
+        .flex()
+        .flex_none()
+        .items_center()
         .h(px(24.0))
         .px(px(9.0))
-        .pt(px(2.8))
         .rounded(px(7.0))
         .child(medium(label.to_owned(), 12.5, ink(0.85)))
 }
 
-pub fn body(width: f32, height: f32) -> Vec<Div> {
-    let column = width - 2.0 * EDGE;
-    let bubble = BUBBLE_MAX.min(column - 19.4);
-    let card = width - 2.0 * CARD_EDGE;
-    let (failing, code, rest) = (LEAD_FAIL[0], LEAD_FAIL[1], LEAD_FAIL[2]);
-    let mut out = vec![
-        at(
-            div()
-                .w(px(bubble))
-                .pt(px(7.0))
-                .pb(px(10.5))
-                .px(px(14.0))
-                .rounded(px(14.0))
-                .bg(ink(0.08))
-                .child(
-                    div()
-                        .flex()
-                        .gap(px(8.0))
-                        .h(px(18.0))
-                        .pt(px(1.0))
-                        .child(text("You", 11.5, CAPTION))
-                        .child(text(YOU_TIME, 11.5, FAINT)),
-                )
-                .child(words(YOU_SAID, BODY, LEADING, STRONG).mt(px(1.5))),
-            width - EDGE - bubble,
-            46.0,
-        ),
-        glyph_at(Glyph::Right, 13.0, SOFT, 29.0, 142.5),
-        glyph_at(Glyph::Plus, 16.0, CAPTION, 27.0, height - 43.0),
-        glyph_at(Glyph::Up, 13.0, FAINT, width - 143.8, height - 41.5),
-        glyph_at(
-            Glyph::Send,
-            16.0,
-            rgb(0, 0, 0, 0.6),
-            width - 43.0,
-            height - 43.0,
-        ),
-        at(text(TOOLS.0, 13.0, SOFT), 50.0, 140.0),
-        at(text(TOOLS.1, 13.0, FAINT), 98.7, 140.0),
-        paragraph(LEAD_FIRST.1, 195.0, column),
-        spinner(EDGE, 276.5),
-        at(text(FLEET.0, 13.0, ink(0.85)), 48.0, 273.0),
-        at(text(FLEET.1, 13.0, FAINT), 143.0, 273.0),
-        at(
-            words(failing, BODY, LEADING, STRONG)
-                .w(px(column))
-                .child(
-                    div()
-                        .flex_none()
-                        .h(px(21.0))
-                        .mt(px(1.0))
-                        .px(px(6.0))
-                        .pt(px(1.0))
-                        .rounded(px(6.0))
-                        .bg(ink(0.08))
-                        .child(mono(code, 12.5, ink(0.92))),
-                )
-                .children(word_list(rest)),
-            EDGE,
-            328.0 - HALF_LEADING,
-        ),
-        at(
-            div()
-                .w(px(column))
+impl Platforms {
+    pub(super) fn chat(cx: &mut Context<Self>) -> Div {
+        let (failing, code, rest) = (LEAD_FAIL[0], LEAD_FAIL[1], LEAD_FAIL[2]);
+        let transcript = div()
+            .id("platforms-transcript")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap(px(14.0))
+            .px(px(EDGE))
+            .py(px(16.0))
+            .child(
+                div()
+                    .self_end()
+                    .max_w(relative(BUBBLE_SHARE))
+                    .pt(px(7.0))
+                    .pb(px(10.0))
+                    .px(px(14.0))
+                    .rounded(px(14.0))
+                    .bg(ink(0.08))
+                    .child(line([
+                        text("You", 11.5, CAPTION),
+                        text(YOU_TIME, 11.5, FAINT),
+                    ]))
+                    .child(words(YOU_SAID, BODY, LEADING, STRONG)),
+            )
+            .child(line([
+                glyph(Glyph::Right, 13.0, SOFT),
+                text(TOOLS.0, 13.0, SOFT),
+                text(TOOLS.1, 13.0, FAINT),
+            ]))
+            .child(lead(
+                LEAD_FIRST.0,
+                words(LEAD_FIRST.1, BODY, LEADING, STRONG),
+            ))
+            .child(line([
+                spinner(),
+                text(FLEET.0, 13.0, ink(0.85)),
+                text(FLEET.1, 13.0, FAINT).flex_shrink_1().truncate(),
+            ]))
+            .child(lead(
+                LEAD_FAIL_TIME,
+                words(failing, BODY, LEADING, STRONG)
+                    .child(
+                        div()
+                            .flex_none()
+                            .px(px(6.0))
+                            .rounded(px(6.0))
+                            .bg(ink(0.08))
+                            .child(mono(code, 12.5, ink(0.92))),
+                    )
+                    .children(word_list(rest)),
+            ))
+            .child(
+                line([
+                    mono("!", 13.0, DEL_INK),
+                    text(FAIL_ROW.0, 13.0, STRONG),
+                    text(FAIL_ROW.1, 13.0, FAINT).flex_shrink_1().truncate(),
+                    div().flex_1(),
+                    text(FAIL_ROW.2, 12.0, FAINT),
+                ])
+                .flex_none()
                 .h(px(32.0))
+                .px(px(12.0))
                 .rounded(px(9.0))
                 .bg(tint(RED, 0.07))
                 .shadow(vec![ring(tint(RED, 0.18))]),
-            EDGE,
-            378.0,
-        ),
-        at(mono("!", 13.0, DEL_INK), 41.6, 385.0),
-        at(
+            )
+            .child(lead(LEAD_LAST.0, words(LEAD_LAST.1, BODY, LEADING, STRONG)))
+            .child(line([
+                spinner(),
+                mono(RUNNING_TOOL.0, 12.5, SOFT),
+                text(RUNNING_TOOL.1, 12.5, WARN),
+            ]));
+        let asks =
+            ASK_BUTTONS
+                .iter()
+                .zip(ASK_TELLS)
+                .enumerate()
+                .map(|(index, ((label, key), tell))| {
+                    Self::hot(button(label, key, index == 0), Action::Tell(tell), cx)
+                });
+        let asks: Vec<Div> = asks.collect();
+        let ask = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .px(px(12.0))
+            .py(px(10.0))
+            .rounded(px(13.0))
+            .bg(tint(WARN, 0.06))
+            .shadow(vec![ring(tint(WARN, 0.24))])
+            .child(line([
+                strong("?", 13.0, WARN),
+                text(ASK.0, 13.0, STRONG),
+                mono(ASK.1, 12.5, STRONG)
+                    .flex_shrink_1()
+                    .min_w_0()
+                    .truncate(),
+                div().flex_1(),
+                text(ASK.2, 12.0, FAINT).flex_shrink_1().truncate(),
+            ]))
+            .child(div().flex().flex_wrap().gap(px(6.0)).children(asks));
+        let composer = line([
+            Self::hot(
+                div().flex_none().child(glyph(Glyph::Plus, 16.0, CAPTION)),
+                Action::Tell(ATTACH),
+                cx,
+            ),
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(text(COMPOSER, BODY, FAINT).truncate()),
+            dropping(COMPOSER_TALL)
+                .child(Self::hot(
+                    chip(MODEL)
+                        .gap(px(4.0))
+                        .child(glyph(Glyph::Up, 13.0, FAINT)),
+                    Action::Tell(PICK_MODEL),
+                    cx,
+                ))
+                .child(Self::hot(chip(EFFORT), Action::Tell(CYCLE_EFFORT), cx)),
             div()
                 .flex()
-                .child(text(FAIL_ROW.0, 13.0, STRONG))
-                .child(text(FAIL_ROW.1, 13.0, FAINT)),
-            60.0,
-            385.0,
-        ),
-        at(
-            div()
-                .w(px(column - 10.0))
-                .flex()
-                .justify_end()
-                .child(text(FAIL_ROW.2, 12.0, FAINT)),
-            EDGE,
-            386.0,
-        ),
-        paragraph(LEAD_LAST.1, 446.0, column),
-        spinner(EDGE, 481.5),
-        at(mono(RUNNING_TOOL.0, 12.5, SOFT), 48.0, 478.0),
-        at(text(RUNNING_TOOL.1, 12.5, WARN), 191.0, 478.0),
-        spinner(17.0, height - 159.0),
-        at(text(WAITING.0, 12.0, FAINT), 36.0, height - 162.0),
-        at(text(WAITING.1, 12.0, FAINT), 123.5, height - 162.0),
-        at(
-            div()
-                .w(px(card))
-                .h(px(75.0))
-                .px(px(12.0))
-                .pt(px(11.0))
-                .rounded(px(13.0))
-                .bg(tint(WARN, 0.06))
-                .shadow(vec![ring(tint(WARN, 0.24))])
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .h(px(23.0))
-                        .child(strong("?", 13.0, WARN).mr(px(8.0)))
-                        .child(text(ASK.0, 13.0, STRONG).mr(px(8.0)))
-                        .child(mono(ASK.1, 12.5, STRONG))
-                        .child(div().flex_1())
-                        .child(text(ASK.2, 12.0, FAINT)),
-                )
-                .child(
-                    div().flex().gap(px(6.0)).children(
-                        ASK_BUTTONS
-                            .iter()
-                            .enumerate()
-                            .map(|(index, (label, key))| button(label, key, index == 0)),
-                    ),
-                ),
-            CARD_EDGE,
-            height - 138.0,
-        ),
-        at(
-            div()
-                .w(px(card))
-                .h(px(40.0))
-                .rounded(px(16.0))
-                .bg(rgb(0, 0, 0, 0.22))
-                .shadow(vec![ring(ink(0.09))])
-                .flex()
+                .flex_none()
                 .items_center()
-                .pl(px(40.0))
-                .pr(px(6.0))
-                .child(text(COMPOSER, BODY, FAINT))
-                .child(div().flex_1())
-                .child(
-                    div()
-                        .flex()
-                        .pr(px(4.0))
-                        .child(chip(MODEL))
-                        .child(div().w(px(14.0))),
-                )
-                .child(chip(EFFORT).mr(px(4.0)))
-                .child(div().size(px(28.0)).rounded(px(14.0)).bg(ink(0.18))),
-            CARD_EDGE,
-            height - 55.0,
-        ),
-    ];
-    out.extend(lead_head(LEAD_FIRST.0, 173.0));
-    out.extend(lead_head(LEAD_FAIL_TIME, 306.0));
-    out.extend(lead_head(LEAD_LAST.0, 424.0));
-    out
+                .justify_center()
+                .size(px(28.0))
+                .rounded_full()
+                .bg(ink(0.18))
+                .child(glyph(Glyph::Send, 16.0, rgb(0, 0, 0, 0.6))),
+        ])
+        .flex_none()
+        .h(px(COMPOSER_TALL))
+        .pl(px(12.0))
+        .pr(px(6.0))
+        .rounded(px(16.0))
+        .bg(rgb(0, 0, 0, 0.22))
+        .shadow(vec![ring(ink(0.09))]);
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(
+                line([
+                    glyph(Glyph::Chat, 13.0, ink(0.6)),
+                    medium("Chat", 12.0, SOFT),
+                    div().flex_1(),
+                    medium(SESSION, 12.0, FAINT).flex_shrink_1().truncate(),
+                ])
+                .flex_none()
+                .h(px(28.0))
+                .px(px(12.0)),
+            )
+            .child(transcript)
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .flex_col()
+                    .gap(px(10.0))
+                    .px(px(CARD_EDGE))
+                    .pb(px(CARD_EDGE))
+                    .child(
+                        line([
+                            spinner(),
+                            text(WAITING.0, 12.0, FAINT),
+                            text(WAITING.1, 12.0, FAINT),
+                        ])
+                        .pl(px(2.0)),
+                    )
+                    .child(ask)
+                    .child(composer),
+            )
+    }
 }

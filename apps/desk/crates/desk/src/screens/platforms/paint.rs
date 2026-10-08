@@ -3,6 +3,19 @@ use gpui::{BoxShadow, Div, FontWeight, Rgba, SharedString, div, point, prelude::
 use super::fixture::Kind;
 
 pub const SANS: &str = "Geist";
+
+pub fn dropping(height: f32) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .justify_end()
+        .items_center()
+        .flex_shrink_1()
+        .min_w_0()
+        .h(px(height))
+        .overflow_hidden()
+        .child(div().w_0().h(px(height)))
+}
 pub const MONO: &str = "Geist Mono";
 const BASELINE_DROP: f32 = 1.0;
 
@@ -94,10 +107,6 @@ pub fn mono(content: impl Into<SharedString>, size: f32, color: Rgba) -> Div {
 
 pub fn caption(content: &str) -> Div {
     strong(content.to_uppercase(), 10.0, CAPTION)
-}
-
-pub fn at(element: Div, x: f32, y: f32) -> Div {
-    element.absolute().left(px(x)).top(px(y))
 }
 
 pub fn ring(color: Rgba) -> BoxShadow {

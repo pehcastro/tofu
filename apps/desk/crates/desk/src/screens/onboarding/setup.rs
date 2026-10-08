@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use gpui::{
-    ClickEvent, Context, Div, FontWeight, Image, ImageFormat, Rgba, SharedString, Stateful, Window,
-    div, img, prelude::*, px,
+    ClickEvent, Context, Div, FontWeight, Image, ImageFormat, ObjectFit, Rgba, SharedString,
+    Stateful, StyledImage, Window, div, img, prelude::*, px, relative,
 };
 
 use super::Onboarding;
@@ -18,10 +18,11 @@ const TICK: &str = r#"<path d="M3.5 8.5l3 3 6-7"/>"#;
 const KEY: &str = r#"<circle cx="5.5" cy="10.5" r="2.5"/><path d="M7.5 8.5l5-5M11 5l1.5 1.5"/>"#;
 const ADD: Rgba = hex(0x7fd6a6);
 const INK: Rgba = white(0.9);
-const SHELL_TOP: f32 = 150.0;
-const SHELL_WIDTH: f32 = 780.0;
-const BLURRED_HEIGHT: f32 = 634.0;
-const SHELL_SHIFT: f32 = 6.0;
+const SHELL_SHARE: f32 = 0.66;
+const SHELL_LEAST: f32 = 400.0;
+const STAGE_PAD: f32 = 16.0;
+const ABOVE_SHELL: f32 = 1.0;
+const BELOW_SHELL: f32 = 2.0;
 
 fn icon(bytes: &'static [u8]) -> gpui::Img {
     img(Arc::new(Image::from_bytes(
@@ -73,11 +74,12 @@ fn button(
 fn two_lines(title: impl Into<SharedString>, sub: Div) -> Div {
     div()
         .flex_1()
+        .min_w_0()
         .flex()
         .flex_col()
         .line_height(px(19.0))
         .child(title.into())
-        .child(sub)
+        .child(sub.whitespace_normal())
 }
 
 fn badge(label: impl Into<SharedString>) -> Div {
@@ -149,7 +151,13 @@ impl Onboarding {
                     })
             }))
             .child(spacer())
-            .child(div().pb(px(8.0)).child(text(12.0, 12.0, white(T3), HINT)))
+            .child(
+                text(12.0, 12.0, white(T3), HINT)
+                    .flex_shrink_1()
+                    .min_w_0()
+                    .truncate()
+                    .pb(px(8.0)),
+            )
     }
 
     fn models(&self, scale: f32, cx: &mut Context<Self>) -> Div {
@@ -293,7 +301,7 @@ impl Onboarding {
                                             this.key_open = false;
                                         })))),
                                 )
-                                .child(text(12.0, 16.0, white(T3), "checked with one free call, then stored in ~/.tofu/agent.db; never printed, never sent to the chat")),
+                                .child(text(12.0, 16.0, white(T3), "checked with one free call, then stored in ~/.tofu/agent.db; never printed, never sent to the chat").whitespace_normal()),
                         )
                     }),
             )
@@ -315,7 +323,6 @@ impl Onboarding {
                             .text_size(px(13.5))
                             .line_height(px(21.0))
                             .text_color(white(0.85))
-                            .whitespace_nowrap()
                             .child("A small model tofu asks at fixed points: may this command run, is this output worth reading, is the work really done.")
                             .child("It answers in milliseconds, so the lead does not have to."),
                     ),
@@ -375,6 +382,7 @@ impl Onboarding {
                     .child(text(18.0, 23.0, INK, "Pick a project").font_weight(FontWeight::SEMIBOLD))
                     .child(
                         text(13.5, 23.0, white(0.85), "A folder to work in. tofu reads it for git, past sessions and rules; it never commits.")
+                            .whitespace_normal()
                             .mt(px(6.0)),
                     ),
             )
@@ -468,26 +476,31 @@ impl Onboarding {
             })
     }
 
-    pub(super) fn setup(&self, scale: f32, cx: &mut Context<Self>) -> Div {
+    pub(super) fn setup(&self, scale: f32, cx: &mut Context<Self>) -> Stateful<Div> {
         let body = match self.step {
             1 => self.models(scale, cx),
             2 => self.classifiers(cx),
             _ => self.projects(scale, cx),
         };
         div()
+            .id("setup")
             .absolute()
             .inset_0()
+            .overflow_y_scroll()
             .flex()
-            .justify_center()
-            .items_start()
-            .pt(px(SHELL_TOP))
-            .pr(px(SHELL_SHIFT))
+            .flex_col()
+            .items_center()
+            .p(px(STAGE_PAD))
+            .child(div().flex_grow(ABOVE_SHELL))
             .child(
                 div()
                     .relative()
+                    .flex_none()
                     .rounded(px(12.0))
                     .overflow_hidden()
-                    .w(px(SHELL_WIDTH))
+                    .w(relative(SHELL_SHARE))
+                    .min_w(px(SHELL_LEAST))
+                    .max_w_full()
                     .flex()
                     .flex_col()
                     .px(px(3.0))
@@ -496,10 +509,9 @@ impl Onboarding {
                     .child(
                         img(self.blurred.clone())
                             .absolute()
-                            .top_0()
-                            .left_0()
-                            .w(px(SHELL_WIDTH))
-                            .h(px(BLURRED_HEIGHT)),
+                            .inset_0()
+                            .size_full()
+                            .object_fit(ObjectFit::Cover),
                     )
                     .child(div().absolute().inset_0().bg(tint(0x0a090e, 0.82)))
                     .child(ringed(12.0, 0.1).absolute().inset_0())
@@ -521,5 +533,6 @@ impl Onboarding {
                             .child(self.footer(cx)),
                     ),
             )
+            .child(div().flex_grow(BELOW_SHELL))
     }
 }

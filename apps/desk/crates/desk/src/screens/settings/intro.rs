@@ -24,7 +24,7 @@ use super::fixture::{
 const TITLE: f32 = 19.0;
 const DESC: f32 = 13.0;
 const SMALL: f32 = 12.0;
-const LEFT_WIDTH: f32 = 420.0;
+const LEFT_WIDTH: f32 = 400.0;
 const LEFT_LEAST: f32 = 300.0;
 const PREVIEW_LEAST: f32 = 320.0;
 const PREVIEW_TALL: f32 = 360.0;
