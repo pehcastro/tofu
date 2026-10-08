@@ -13,9 +13,9 @@ use desk_core::protocol::{
     ApprovalAnswer, ApprovalDecision, ApprovalRequest, CronCommandParams, InitializeResult,
     NoParams, Notification, PROTOCOL, Request, RequestId, SessionOpenParams,
     SessionOpenParamsAsking, SessionRenameParams, ShellParams, TurnCompleted, TurnParams,
-    TurnSendParams, TurnSteerParams, request,
+    TurnSendParams, TurnSteerParams, VerbResult, request,
 };
-use desk_core::query::{self, Provider, QueryError};
+use desk_core::query::{self, Answer, Definition, Provider, QueryError, Read};
 use desk_core::sessions::{SessionRow, session_rows};
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
@@ -710,38 +710,94 @@ impl Chat {
         self.ask_due(cx);
     }
 
+    pub fn want_library(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| {
+            store.agents.want();
+            store.rules.want();
+        });
+        self.ask_due(cx);
+    }
+
+    pub fn reread_library(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| {
+            store.agents.again();
+            store.rules.again();
+        });
+        self.ask_due(cx);
+    }
+
     fn ask_due(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.link, Link::Ready(_)) {
             return;
         }
+        self.ask::<request::QueryUsage, _>(
+            |store| &mut store.usage,
+            query::usage,
+            |usage| windows_said(&usage.providers),
+            cx,
+        );
+        self.ask::<request::QueryAgents, _>(
+            |store| &mut store.agents,
+            query::agents,
+            |agents| agents_said(&agents.definitions),
+            cx,
+        );
+        self.ask::<request::QueryRules, _>(
+            |store| &mut store.rules,
+            query::rules,
+            |rules| {
+                let ids: Vec<&str> = rules.rules.iter().map(|rule| rule.id.as_str()).collect();
+                format!(
+                    "{} rules from {} [{}]",
+                    ids.len(),
+                    rules.origin,
+                    ids.join(", ")
+                )
+            },
+            cx,
+        );
+    }
+
+    fn ask<R, T: 'static>(
+        &mut self,
+        slot: fn(&mut Store) -> &mut Answer<T>,
+        decode: fn(VerbResult) -> Result<Read<T>, QueryError>,
+        said: fn(&T) -> String,
+        cx: &mut Context<Self>,
+    ) where
+        R: Request<Params = NoParams, Result = VerbResult>,
+    {
         let (asked, stale) = self.store.update(cx, |store, cx| {
-            let asked = store.usage.take_due();
+            let answer = slot(store);
+            let asked = answer.take_due();
+            let stale = answer.stale;
             if asked {
                 cx.notify();
             }
-            (asked, store.usage.stale)
+            (asked, stale)
         });
         if !asked {
             return;
         }
-        eprintln!("desk: query.usage asked, stale {stale}");
-        self.request::<request::QueryUsage>(&NoParams {}, cx, |chat, reply, cx| {
+        eprintln!("desk: {} asked, stale {stale}", R::METHOD);
+        self.request::<R>(&NoParams {}, cx, move |chat, reply, cx| {
             let answer = reply
                 .map_err(|reason| QueryError::Unanswered {
-                    method: request::QueryUsage::METHOD,
+                    method: R::METHOD,
                     reason,
                 })
-                .and_then(query::usage);
+                .and_then(decode);
             match &answer {
                 Ok(read) => eprintln!(
-                    "desk: query.usage read at {}: {}",
+                    "desk: {} read at {}: {}",
+                    R::METHOD,
                     read.at,
-                    windows_said(&read.value.providers)
+                    said(&read.value)
                 ),
                 Err(error) => eprintln!("desk: {error}"),
             }
             chat.store.update(cx, |store, cx| {
-                store.usage.answered(answer);
+                slot(store).answered(answer);
                 cx.notify();
             });
             chat.ask_due(cx);
@@ -886,6 +942,14 @@ pub fn windows_said(providers: &[Provider]) -> String {
         })
         .collect();
     said.join("; ")
+}
+
+fn agents_said(definitions: &[Definition]) -> String {
+    let names: Vec<&str> = definitions
+        .iter()
+        .map(|definition| definition.name.as_str())
+        .collect();
+    format!("{} agents [{}]", names.len(), names.join(", "))
 }
 
 impl Drop for Chat {

@@ -5,6 +5,8 @@ use crate::modules::chat::{Chat, Listed, Touched};
 use crate::project::{self, Head};
 #[cfg(all(feature = "screen-work", feature = "screen-classifier"))]
 use crate::screens::classifier::Classifier;
+#[cfg(all(feature = "screen-work", feature = "screen-library"))]
+use crate::screens::library::Library;
 #[cfg(all(feature = "screen-work", feature = "screen-limits"))]
 use crate::screens::limits::Limits;
 #[cfg(feature = "screen-work")]
@@ -74,7 +76,7 @@ const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
-const LIVE_SCREENS: [&str; 3] = ["theme", "limits", "classifier"];
+const LIVE_SCREENS: [&str; 4] = ["theme", "limits", "classifier", "library"];
 #[cfg(feature = "screen-work")]
 const CRON_PROMPT_CHARS: usize = 32;
 
@@ -324,7 +326,11 @@ impl Desk {
         self.parked.push(left);
         #[cfg(all(
             feature = "screen-work",
-            any(feature = "screen-limits", feature = "screen-classifier")
+            any(
+                feature = "screen-limits",
+                feature = "screen-classifier",
+                feature = "screen-library"
+            )
         ))]
         self.feed_screens(cx);
         let focus = match &self.shown.body {
@@ -655,12 +661,20 @@ impl Desk {
         }
         self.projects.head = Some(Head::empty(folder));
         self.reread_head(cx);
-        #[cfg(any(feature = "screen-limits", feature = "screen-classifier"))]
+        #[cfg(any(
+            feature = "screen-limits",
+            feature = "screen-classifier",
+            feature = "screen-library"
+        ))]
         self.feed_screens(cx);
         cx.notify();
     }
 
-    #[cfg(any(feature = "screen-limits", feature = "screen-classifier"))]
+    #[cfg(any(
+        feature = "screen-limits",
+        feature = "screen-classifier",
+        feature = "screen-library"
+    ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
             return;
@@ -678,8 +692,12 @@ impl Desk {
                 limits.update(cx, |limits, cx| limits.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-classifier")]
-            if let Ok(classifier) = view.downcast::<Classifier>() {
+            if let Ok(classifier) = view.clone().downcast::<Classifier>() {
                 classifier.update(cx, |classifier, cx| classifier.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-library")]
+            if let Ok(library) = view.downcast::<Library>() {
+                library.update(cx, |library, cx| library.read_from(&chat, cx));
             }
         }
     }

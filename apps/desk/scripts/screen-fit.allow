@@ -4,10 +4,6 @@ crates/desk/src/screens/accounts/mod.rs:top(px(POP_TOP))  popover anchored under
 crates/desk/src/screens/context/mod.rs:CHART  viewbox of a vector chart that is scaled to its bounds
 crates/desk/src/screens/session/mod.rs:RIBBONS  drawing space of the fork ribbons, every position is a fraction of it
 crates/desk/src/screens/settings/intro.rs:LEFT_WIDTH  max width of the background pane
-crates/desk/src/screens/library/agents.rs:left(px(3.0*scale))  glyph drawn inside a 16 px icon
-crates/desk/src/screens/library/agents.rs:left(px(8.0*scale-0.5))  glyph drawn inside a 16 px icon
-crates/desk/src/screens/library/agents.rs:top(px(2.5*scale))  glyph drawn inside a 16 px icon
-crates/desk/src/screens/library/agents.rs:top(px(5.0*scale))  glyph drawn inside a 16 px icon
 crates/desk/src/screens/intro/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
 crates/desk/src/screens/intro/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket
 crates/desk/src/screens/intro/chrome.rs:top(px(6.0))  whole-window mock-up, refit is its own ticket

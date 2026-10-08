@@ -1,321 +1,216 @@
-use desk_ui::components::card::inner_card;
-use desk_ui::components::paint::{ink, ring, tint};
-use desk_ui::theme::{ColorToken, Theme};
-use gpui::{ClickEvent, Context, Div, Stateful, div, prelude::*, px};
+use std::iter;
 
-use super::fixture::{
-    BUILT_IN, Mode, RECENT, RULES, Rule, TELL_EDIT_RULE, TELL_NEW_RULE, TELL_RUN_CHECK,
-    TELL_SAVE_OVERRIDE, TELL_WHICH_RULES,
-};
-use super::kit::{
-    BASE, GAP, ROW_ON, Spark, T2, T3, WELL, button, cap, ellipsis, faint, fraction, mono, panes,
-    pill, primary, shade, shell, shell_head, spark,
-};
-use super::{Filter, Library, group, segment};
+use desk_core::query::{Override, RuleKind, RuleListing, RuleMode, Rules};
+use desk_ui::components::card::{caption, inner_card};
+use desk_ui::components::chip::{badge, mono};
+use desk_ui::components::empty::empty_state;
+use desk_ui::components::list::row;
+use desk_ui::components::paint::ink;
+use desk_ui::components::size::T2;
+use desk_ui::theme::Theme;
+use gpui::{AnyElement, ClickEvent, Context, Div, div, prelude::*, px};
 
-const SUMMARY: &str = "142 rules · 3 overridden · 1 stale";
-const LIST_LEAST: f32 = 400.0;
-const DETAIL_LEAST: f32 = 340.0;
-const RULE_COLUMN: f32 = 120.0;
+use super::frame::{SHELL_PILLS, fraction, note, panel, pills};
+use super::{Library, fact, warn};
+
+const ID_LEAST: f32 = 200.0;
+const KIND_COLUMN: f32 = 84.0;
 const MODE_COLUMN: f32 = 76.0;
-const LAYER_COLUMN: f32 = 64.0;
-const FIRED_COLUMN: f32 = 92.0;
-const KEY_COLUMN: f32 = 90.0;
-const ROW_LINE: f32 = 18.0;
-const DETAIL_LINE: f32 = 21.0;
-const HEAD_LIGHT: f32 = 0.85;
+const ORIGIN_COLUMN: f32 = 76.0;
+const KINDS: [RuleKind; 4] = [
+    RuleKind::Human,
+    RuleKind::Structural,
+    RuleKind::Decision,
+    RuleKind::Measured,
+];
 
 impl Library {
-    fn mode_of(&self, index: usize, rule: &Rule) -> Mode {
-        self.modes
-            .get(index)
-            .copied()
-            .flatten()
-            .unwrap_or(rule.mode)
-    }
-
-    fn shown(&self, index: usize, rule: &Rule) -> bool {
-        match self.filter {
-            Filter::All => true,
-            Filter::Fired => rule.fires > 0,
-            Filter::Overridden => {
-                rule.layer != BUILT_IN || self.modes.get(index).copied().flatten().is_some()
-            }
-        }
-    }
-
-    pub(super) fn rules(&self, top: Div, theme: &Theme, cx: &mut Context<Self>) -> (Div, Div) {
-        let top = top.child(faint(SUMMARY, 12.5, T3, theme)).child(
-            button("new-rule", "+ New rule", 28.0, theme)
-                .on_click(cx.listener(Self::tell(TELL_NEW_RULE))),
-        );
-        let content = panes()
-            .child(fraction(self.rule_list(theme, cx), 3.0, LIST_LEAST))
-            .child(fraction(self.rule_detail(theme, cx), 2.0, DETAIL_LEAST));
-        (top, content)
-    }
-
-    fn rule_list(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let filters = [
-            (Filter::All, "All"),
-            (Filter::Fired, "Fired here"),
-            (Filter::Overridden, "Overridden"),
-        ];
-        let head = shell_head(theme)
-            .child(
-                group(0.04, 8.0, theme).children(filters.map(|(filter, label)| {
-                    segment(label, label, filter == self.filter, theme)
-                        .py(px(3.0))
-                        .px(px(10.0))
-                        .rounded(px(6.0))
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            this.filter = filter;
-                            cx.notify();
-                        }))
-                })),
-            )
-            .child(div().flex_1())
-            .child(ellipsis(faint(
-                "layers: built in · global · this project",
-                12.0,
-                T3,
+    pub(super) fn rules_tab(
+        &self,
+        rules: &Rules,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if rules.rules.is_empty() {
+            return empty_state(
+                "library-no-rules",
+                "No rules",
+                Some(format!("tofu rules list found none from {}", rules.origin).into()),
+                &[],
+                &[],
                 theme,
-            )));
-        let columns = div()
-            .flex()
-            .pt(px(6.0))
-            .pb(px(7.0))
-            .px(px(10.0))
-            .child(fraction(cap("Rule", 11.5, theme), 3.0, RULE_COLUMN))
-            .child(fraction(cap("Mode", 11.5, theme), 1.0, MODE_COLUMN))
-            .child(fraction(cap("Layer", 11.5, theme), 1.0, LAYER_COLUMN))
-            .child(
-                fraction(cap("Fired, 7 days", 11.5, theme), 1.0, FIRED_COLUMN)
-                    .whitespace_nowrap()
-                    .flex()
-                    .justify_end(),
-            );
-        let rows = RULES
+                |_, _, _| {},
+            )
+            .into_any_element();
+        }
+        let overridden: Vec<&Override> = rules
+            .rules
             .iter()
+            .filter_map(|rule| rule.overridden.as_ref())
+            .collect();
+        let stale = overridden.iter().filter(|over| over.stale).count();
+        let kinds: Vec<(Option<RuleKind>, &'static str)> = iter::once((None, "All"))
+            .chain(
+                KINDS
+                    .into_iter()
+                    .filter(|kind| rules.rules.iter().any(|rule| rule.kind == *kind))
+                    .map(|kind| (Some(kind), kind_name(kind))),
+            )
+            .collect();
+        let filter = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(10.0))
+            .px(px(6.0))
+            .pt(px(4.0))
+            .pb(px(6.0))
+            .child(pills(
+                "library-kind",
+                &kinds,
+                self.kind,
+                &SHELL_PILLS,
+                theme,
+                cx,
+                |library, kind| library.kind = kind,
+            ))
+            .child(note(
+                format!(
+                    "from {}, {} overridden, {stale} stale",
+                    rules.origin,
+                    overridden.len()
+                ),
+                theme,
+            ));
+        let columns = line(
+            caption("Rule", theme),
+            caption("Kind", theme),
+            caption("Mode", theme),
+            caption("Layer", theme),
+        )
+        .px(px(10.0))
+        .pb(px(6.0));
+        let rows = rules
+            .rules
+            .iter()
+            .filter(|rule| self.kind.is_none_or(|kind| kind == rule.kind))
             .enumerate()
-            .filter(|(index, rule)| self.shown(*index, rule))
-            .map(|(index, rule)| self.rule_row(index, rule, theme, cx));
-        shell(theme)
-            .child(head)
-            .child(inner_card(theme).p(px(6.0)).child(columns).children(rows))
+            .map(|(at, rule)| self.rule_row(at, rule, theme, cx));
+        panel(format!("{} rules", rules.rules.len()), None, theme)
+            .child(
+                inner_card(theme)
+                    .p(px(6.0))
+                    .child(filter)
+                    .child(columns)
+                    .children(rows),
+            )
+            .into_any_element()
     }
 
     fn rule_row(
         &self,
-        index: usize,
-        rule: &'static Rule,
+        at: usize,
+        rule: &RuleListing,
         theme: &Theme,
         cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let mode = self.mode_of(index, rule);
-        let fired = rule.fires > 0;
-        div()
-            .id(rule.id)
-            .flex()
-            .items_center()
-            .py(px(8.0))
-            .px(px(10.0))
-            .rounded(px(8.0))
-            .cursor_pointer()
-            .text_size(px(13.0))
-            .when(index == self.rule, |row| row.bg(ink(theme, ROW_ON)))
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                this.rule = index;
-                cx.notify();
-            }))
-            .child(
-                fraction(div(), 3.0, RULE_COLUMN)
-                    .line_height(px(ROW_LINE))
-                    .child(
-                        div()
-                            .font_family(mono(theme))
-                            .text_size(px(12.5))
-                            .truncate()
-                            .child(rule.id),
-                    )
-                    .child(faint(rule.text, 12.0, T3, theme).truncate()),
-            )
-            .child(
-                fraction(div(), 1.0, MODE_COLUMN).flex().child(
-                    pill(mode.name(), mode.look().colors(theme), 11.5, 8.0)
-                        .py(px(1.0))
-                        .line_height(px(15.0)),
-                ),
-            )
-            .child(fraction(faint(rule.layer, 12.5, T2, theme), 1.0, LAYER_COLUMN).truncate())
-            .child(
-                fraction(div(), 1.0, FIRED_COLUMN)
-                    .flex()
-                    .items_center()
-                    .justify_end()
-                    .gap_2()
-                    .child(spark(Spark {
-                        values: &rule.week,
-                        width: 64.0,
-                        height: 18.0,
-                        floor: 16.0,
-                        rise: 14.0,
-                        stroke: ink(theme, if fired { 0.7 } else { 0.18 }),
-                        area: fired.then(|| ink(theme, 0.07)),
-                        dashed: !fired,
-                        dot: None,
-                    }))
-                    .child(
-                        faint(rule.fires.to_string(), 12.0, T2, theme)
-                            .font_family(mono(theme))
-                            .min_w(px(20.0))
-                            .flex()
-                            .justify_end(),
-                    ),
-            )
-    }
-
-    fn rule_detail(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let index = self.rule;
-        let Some(rule) = RULES.get(index) else {
-            return shell(theme);
-        };
-        let mode = self.mode_of(index, rule);
-        let head = shell_head(theme)
-            .child(
-                div()
-                    .font_family(mono(theme))
-                    .text_color(ink(theme, HEAD_LIGHT))
-                    .child(rule.id),
-            )
-            .child(div().flex_1())
-            .child(ellipsis(faint(rule.file, 12.0, T3, theme)));
-        let modes = group(0.05, 7.0, theme).children(Mode::ALL.map(|choice| {
-            segment(choice.name(), choice.name(), choice == mode, theme)
-                .py(px(2.0))
-                .px(px(9.0))
-                .rounded(px(5.0))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    if let Some(slot) = this.modes.get_mut(index) {
-                        *slot = Some(choice);
-                    }
-                    cx.notify();
-                }))
-        }));
-        let facts = div()
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
-            .text_size(px(12.5))
-            .child(fact("kind", div().child(rule.kind), theme))
-            .child(fact("fires when", div().child(rule.trigger), theme))
-            .child(fact("mode", modes, theme));
-        let reason = (mode == Mode::Off && rule.mode != Mode::Off).then(|| {
+    ) -> Div {
+        let more = rule.file.is_some() || rule.switch.is_some() || rule.overridden.is_some();
+        let open = more && self.rule.as_deref() == Some(rule.id.as_str());
+        let id = rule.id.clone();
+        let cells = line(
+            div().font_family(mono(theme)).child(rule.id.clone()),
+            div().text_color(ink(theme, T2)).child(kind_name(rule.kind)),
             div()
                 .flex()
-                .flex_col()
-                .gap_2()
-                .py(px(10.0))
-                .px(px(12.0))
-                .rounded(px(10.0))
-                .bg(shade(theme, WELL))
-                .text_size(px(13.0))
-                .child(faint("Turning a rule off needs a reason; it is written as an override in this project and shown in tofu doctor.", 13.0, T2, theme))
-                .child(
-                    div()
-                        .py(px(6.0))
-                        .px(px(10.0))
-                        .rounded(px(7.0))
-                        .bg(ink(theme, 0.05))
-                        .text_color(ink(theme, T3))
-                        .child("we test blank titles elsewhere"),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .gap_1p5()
-                        .items_center()
-                        .child(primary("save-override", "Save override", 26.0, theme).on_click(cx.listener(Self::tell(TELL_SAVE_OVERRIDE))))
-                        .child(faint("undo: tofu rules restore", 11.5, T3, theme).font_family(mono(theme))),
-                )
-        });
-        let stale = rule.stale.then(|| {
-            let warn = theme.color(ColorToken::StatusWarn);
-            div()
-                .py(px(10.0))
-                .px(px(12.0))
-                .rounded(px(10.0))
-                .bg(tint(warn, 0.07))
-                .shadow(vec![ring(tint(warn, 0.22))])
-                .text_size(px(13.0))
-                .text_color(warn)
-                .child("Your override was written for @1; tofu now ships @2, so the shipped rule runs unchanged until you review it.")
-        });
-        let recent = div()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .text_size(px(12.5))
-            .children(RECENT.map(|(at, file, found)| {
-                div()
-                    .flex()
-                    .gap(px(GAP))
-                    .child(
-                        faint(at, 12.5, T3, theme)
-                            .font_family(mono(theme))
-                            .min_w(px(44.0)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .font_family(mono(theme))
-                            .child(file),
-                    )
-                    .child(faint(found, 12.5, T2, theme))
-            }));
-        let actions = div()
-            .flex()
-            .flex_wrap()
-            .gap_1p5()
-            .child(
-                button("edit-rule", "Edit in this project", 28.0, theme)
-                    .on_click(cx.listener(Self::tell(TELL_EDIT_RULE))),
-            )
-            .child(
-                button("run-check", "Run check now", 28.0, theme)
-                    .on_click(cx.listener(Self::tell(TELL_RUN_CHECK))),
-            )
-            .child(
-                button("which-rules", "Which rules fire for a task", 28.0, theme)
-                    .on_click(cx.listener(Self::tell(TELL_WHICH_RULES))),
-            );
-        shell(theme).child(head).child(
-            inner_card(theme)
-                .py(px(16.0))
-                .px(px(18.0))
-                .gap(px(14.0))
-                .text_size(px(13.5))
-                .line_height(px(DETAIL_LINE))
-                .text_color(ink(theme, BASE))
-                .child(div().child(rule.text))
-                .child(facts)
-                .children(reason)
-                .children(stale)
-                .child(cap("Recent fires", 10.0, theme))
-                .child(recent)
-                .child(div().flex_1())
-                .child(actions),
-        )
+                .children(rule.mode.map(|mode| badge(mode_name(mode), theme))),
+            div().text_color(ink(theme, T2)).child(rule.origin.clone()),
+        );
+        let face = row(("rule", at), open, false, theme).child(cells);
+        let face = if more {
+            face.on_click(cx.listener(move |library, _: &ClickEvent, _, cx| {
+                library.rule = (library.rule.as_deref() != Some(id.as_str())).then(|| id.clone());
+                cx.notify();
+            }))
+        } else {
+            face.cursor_default()
+        };
+        div()
+            .child(face)
+            .children(open.then(|| rule_detail(rule, theme)))
     }
 }
 
-fn fact(key: &'static str, value: Div, theme: &Theme) -> Div {
+fn line(id: Div, kind: Div, mode: Div, origin: Div) -> Div {
+    div()
+        .w_full()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .child(fraction(id, 1.0, ID_LEAST))
+        .child(
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .child(kind.w(px(KIND_COLUMN)))
+                .child(mode.w(px(MODE_COLUMN)))
+                .child(origin.w(px(ORIGIN_COLUMN))),
+        )
+}
+
+fn rule_detail(rule: &RuleListing, theme: &Theme) -> Div {
+    let file = |path: &str| div().font_family(mono(theme)).child(path.to_owned());
     div()
         .flex()
-        .items_center()
-        .gap_3()
-        .child(faint(key, 12.5, T3, theme).min_w(px(KEY_COLUMN)))
-        .child(value.min_w_0())
+        .flex_col()
+        .gap(px(6.0))
+        .py(px(8.0))
+        .px(px(14.0))
+        .text_size(px(12.5))
+        .children(rule.file.as_deref().map(|path| fact("file", file(path), theme)))
+        .children(rule.switch.clone().map(|switch| fact("switch", switch, theme)))
+        .children(rule.overridden.as_ref().map(|over| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(6.0))
+                .child(fact(
+                    "override",
+                    format!("{} in {}", over.change, over.layer),
+                    theme,
+                ))
+                .children(over.text.clone().map(|text| fact("text", text, theme)))
+                .children(over.reason.clone().map(|reason| fact("reason", reason, theme)))
+                .children(over.by.clone().map(|by| fact("by", by, theme)))
+                .children(over.at.clone().map(|at| fact("at", at, theme)))
+                .child(fact("written in", file(&over.file), theme))
+                .when(over.stale, |facts| {
+                    facts.child(warn(
+                        match (over.version, over.current) {
+                            (Some(version), Some(current)) => format!(
+                                "written for @{version}; tofu now ships @{current}, so the shipped rule runs until this override is reviewed"
+                            ),
+                            _ => "this override is stale, so the shipped rule runs until it is reviewed".to_owned(),
+                        },
+                        theme,
+                    ))
+                })
+        }))
+}
+
+fn kind_name(kind: RuleKind) -> &'static str {
+    match kind {
+        RuleKind::Human => "Human",
+        RuleKind::Structural => "Structural",
+        RuleKind::Decision => "Decision",
+        RuleKind::Measured => "Measured",
+    }
+}
+
+fn mode_name(mode: RuleMode) -> &'static str {
+    match mode {
+        RuleMode::Shadow => "shadow",
+        RuleMode::Enforced => "enforced",
+        RuleMode::Off => "off",
+    }
 }

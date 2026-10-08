@@ -5,7 +5,7 @@ use std::fmt;
 
 use crate::bridge::Event;
 use crate::protocol::{CronState, Notification, QuotaWindow, ServerRequest};
-use crate::query::{Answer, Usage};
+use crate::query::{Agents, Answer, Rules, Usage};
 
 pub use session::{Agent, Message, Role, Session, Shell, Tool, Turn};
 
@@ -38,6 +38,8 @@ impl std::error::Error for ModelError {}
 pub struct Store {
     pub sessions: BTreeMap<String, Session>,
     pub usage: Answer<Usage>,
+    pub agents: Answer<Agents>,
+    pub rules: Answer<Rules>,
     pub quota: Vec<QuotaWindow>,
 }
 

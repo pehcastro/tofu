@@ -161,8 +161,140 @@ pub struct Missing {
 
 pub const SERVING: &str = "serving";
 
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Agents {
+    pub definitions: Vec<Definition>,
+    #[serde(default)]
+    pub broken: Vec<Broken>,
+    #[serde(default)]
+    pub notices: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Definition {
+    pub name: String,
+    pub description: String,
+    pub origin: String,
+    pub path: String,
+    pub runs: Runs,
+    pub model: Option<String>,
+    pub written_model: Option<String>,
+    pub assigned_in: Option<String>,
+    pub effort: Option<String>,
+    pub language: Option<String>,
+    pub domain: Option<String>,
+    #[serde(default)]
+    pub tools: Vec<String>,
+    #[serde(default)]
+    pub gate: Vec<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
+    pub instructions: String,
+    #[serde(default)]
+    pub refused: Vec<String>,
+    #[serde(default)]
+    pub ignored: Vec<String>,
+    #[serde(default)]
+    pub ignored_tools: Vec<String>,
+    #[serde(default)]
+    pub shadowed: Vec<Definition>,
+    pub from: Option<String>,
+    #[serde(default)]
+    pub notices: Vec<String>,
+    #[serde(default)]
+    pub references: Vec<Reference>,
+    #[serde(default)]
+    pub cut_references: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Runs {
+    Model,
+    Inherit,
+    Disabled,
+    Refused,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Reference {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Broken {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rules {
+    pub origin: String,
+    pub rules: Vec<RuleListing>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuleListing {
+    pub id: String,
+    pub kind: RuleKind,
+    pub origin: String,
+    pub mode: Option<RuleMode>,
+    pub file: Option<String>,
+    pub switch: Option<String>,
+    #[serde(rename = "override")]
+    pub overridden: Option<Override>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleKind {
+    Structural,
+    Decision,
+    Human,
+    Measured,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleMode {
+    Shadow,
+    Enforced,
+    Off,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Override {
+    pub rule_id: String,
+    pub version: Option<i64>,
+    pub current: Option<i64>,
+    pub layer: String,
+    pub change: String,
+    pub text: Option<String>,
+    pub reason: Option<String>,
+    pub by: Option<String>,
+    pub at: Option<String>,
+    pub stale: bool,
+    pub file: String,
+}
+
 pub fn usage(result: VerbResult) -> Result<Read<Usage>, QueryError> {
     enveloped(result, "usage")
+}
+
+pub fn agents(result: VerbResult) -> Result<Read<Agents>, QueryError> {
+    enveloped(result, "agents")
+}
+
+pub fn rules(result: VerbResult) -> Result<Read<Rules>, QueryError> {
+    enveloped(result, "rules list")
 }
 
 fn enveloped<T: DeserializeOwned>(
