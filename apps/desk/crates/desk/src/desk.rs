@@ -27,7 +27,7 @@ use desk_core::limits::TOAST_LIFETIME;
 use desk_core::protocol::CronJob;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
-use desk_tiling::{Key, SHORTCUTS};
+use desk_tiling::{Action, Key, SHORTCUTS};
 use desk_ui::components::card::{inner_card, outer_card};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
@@ -46,6 +46,8 @@ use desk_ui::components::status_bar::Status;
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, cron_trigger};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tabs::{Tab, TabMark};
+#[cfg(feature = "screen-work")]
+use desk_ui::components::tiling_board::Reopened;
 use desk_ui::live::ActiveTheme;
 #[cfg(feature = "screen-work")]
 use desk_ui::metrics::STATUS_BAR_HEIGHT;
@@ -64,6 +66,8 @@ use gpui::{
 use gpui::{ClipboardItem, Focusable};
 #[cfg(feature = "screen-work")]
 use std::path::PathBuf;
+#[cfg(feature = "screen-work")]
+use std::time::Instant;
 
 pub const WINDOW_TITLE: &str = "Tofu Desk";
 pub const BOARD_VIEWPORT_WIDTH: f32 = 1440.0;
@@ -77,6 +81,8 @@ const SETTINGS: &str = "settings";
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
 const OPEN_SETTINGS_ID: &str = "settings.open";
+#[cfg(feature = "screen-work")]
+const REOPEN_ID: &str = "tab.reopen";
 #[cfg(feature = "screen-work")]
 const RECENT_ID: &str = "project.recent.";
 #[cfg(feature = "screen-work")]
@@ -137,6 +143,14 @@ struct Shown {
     body: Body,
 }
 
+#[cfg(feature = "screen-work")]
+struct ClosedScreen {
+    name: &'static str,
+    shown: Shown,
+    tab: usize,
+    at: Instant,
+}
+
 pub struct Desk {
     sidebar_open: bool,
     toast: Option<Toast>,
@@ -150,6 +164,8 @@ pub struct Desk {
     projects: Projects,
     #[cfg(feature = "screen-work")]
     tabbed: Vec<&'static str>,
+    #[cfg(feature = "screen-work")]
+    closed_screens: Vec<ClosedScreen>,
     #[cfg(feature = "screen-work")]
     cron: Entity<MenuButton>,
 }
@@ -250,7 +266,7 @@ fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
     });
     let layout = SHORTCUTS
         .iter()
-        .filter(|shortcut| shortcut.key != Key::Digit)
+        .filter(|shortcut| shortcut.key != Key::Digit && shortcut.action != Action::ReopenTab)
         .map(|shortcut| PaletteItem {
             id: format!("{LAYOUT_ID}{}", shortcut.label).into(),
             label: shortcut.label.into(),
@@ -263,10 +279,16 @@ fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
         group: "Settings".into(),
         keys: Some("Ctrl ,".into()),
     };
-    screens
-        .chain(layout)
-        .chain(std::iter::once(settings))
-        .collect()
+    let mut items: Vec<PaletteItem> = screens.chain(layout).collect();
+    #[cfg(feature = "screen-work")]
+    items.push(PaletteItem {
+        id: REOPEN_ID.into(),
+        label: "Reopen closed tab".into(),
+        group: "Tabs".into(),
+        keys: Some("Ctrl Shift T".into()),
+    });
+    items.push(settings);
+    items
 }
 
 impl Desk {
@@ -297,6 +319,8 @@ impl Desk {
             projects: Projects::default(),
             #[cfg(feature = "screen-work")]
             tabbed: Vec::new(),
+            #[cfg(feature = "screen-work")]
+            closed_screens: Vec::new(),
             #[cfg(feature = "screen-work")]
             cron: cron_button(cx),
         };
@@ -371,6 +395,10 @@ impl Desk {
         }
         if id == OPEN_SETTINGS_ID {
             return self.show(SETTINGS, window, cx);
+        }
+        #[cfg(feature = "screen-work")]
+        if id == REOPEN_ID {
+            return self.reopen(window, cx);
         }
         let action = id
             .strip_prefix(LAYOUT_ID)
@@ -498,10 +526,55 @@ impl Desk {
         if self.shown.name == name {
             self.show(WORK_SCREEN, window, cx);
         }
-        self.parked.retain(|parked| parked.name != name);
+        let tab = self.tabbed.iter().position(|tabbed| *tabbed == name);
+        if let (Some(tab), Some(at)) = (
+            tab,
+            self.parked.iter().position(|parked| parked.name == name),
+        ) {
+            self.closed_screens.push(ClosedScreen {
+                name,
+                shown: self.parked.remove(at),
+                tab,
+                at: Instant::now(),
+            });
+        }
         self.tabbed.retain(|tabbed| *tabbed != name);
         eprintln!("desk: screen {name} closed");
         cx.notify();
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn reopen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let work = std::iter::once(&self.shown)
+            .chain(&self.parked)
+            .find_map(|shown| match &shown.body {
+                Body::Work(work) => Some(work.clone()),
+                Body::View(_) => None,
+            });
+        let board_at = work
+            .as_ref()
+            .and_then(|work| work.read(cx).last_closed_at());
+        let screen_at = self.closed_screens.last().map(|closed| closed.at);
+        if screen_at > board_at
+            && let Some(closed) = self.closed_screens.pop()
+        {
+            self.tabbed
+                .insert(closed.tab.min(self.tabbed.len()), closed.name);
+            self.parked.push(closed.shown);
+            eprintln!("desk: reopen screen {}", closed.name);
+            return self.show(closed.name, window, cx);
+        }
+        let Some(work) = work.filter(|_| board_at.is_some()) else {
+            return eprintln!("desk: reopen: nothing closed");
+        };
+        if self.shown.name != WORK_SCREEN {
+            self.show(WORK_SCREEN, window, cx);
+        }
+        match work.update(cx, |work, cx| work.reopen(window, cx)) {
+            Some(Reopened::Tile(name)) => eprintln!("desk: reopen tile {name}"),
+            Some(Reopened::Workspace(name)) => eprintln!("desk: reopen workspace {name}"),
+            None => eprintln!("desk: reopen: nothing closed"),
+        }
     }
 
     #[cfg_attr(
@@ -546,14 +619,16 @@ impl Desk {
     fn global_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let held = stroke.modifiers;
-        if !held.control || held.alt || held.shift || held.platform {
+        if !held.control || held.alt || held.platform {
             return;
         }
-        match stroke.key.as_str() {
-            "b" => self.toggle_sidebar(cx),
-            "k" => self.open_palette(window, cx),
-            "f" => window.dispatch_action(Box::new(Find), cx),
-            "," => self.show(SETTINGS, window, cx),
+        match (held.shift, stroke.key.as_str()) {
+            #[cfg(feature = "screen-work")]
+            (true, "t") => self.reopen(window, cx),
+            (false, "b") => self.toggle_sidebar(cx),
+            (false, "k") => self.open_palette(window, cx),
+            (false, "f") => window.dispatch_action(Box::new(Find), cx),
+            (false, ",") => self.show(SETTINGS, window, cx),
             _ => return,
         }
         cx.stop_propagation();
@@ -685,6 +760,7 @@ impl Desk {
         self.parked
             .retain(|parked| !work::EXPANDABLE.contains(&&*parked.name));
         self.tabbed.retain(|name| !work::EXPANDABLE.contains(name));
+        self.closed_screens.clear();
         self.projects._watch = vec![
             cx.subscribe_in(
                 work,

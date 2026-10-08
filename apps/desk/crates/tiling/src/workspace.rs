@@ -41,8 +41,76 @@ pub struct Workspace {
     focus: Option<TileId>,
     zoom: Option<TileId>,
     history: Vec<Option<Node>>,
-    closed: Vec<(Module, usize)>,
+    closed: Vec<Closed>,
     next: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Home {
+    neighbour: TileId,
+    side: Side,
+    size: Size,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Closed {
+    module: Module,
+    at: usize,
+    home: Option<Home>,
+}
+
+fn home_of(tree: &mut Node, tile: TileId) -> Option<Home> {
+    let path = path_of(tree, tile)?;
+    let (index, parent) = path.split_last()?;
+    let Node::Split { axis, parts } = at_mut(tree, parent)? else {
+        return None;
+    };
+    let size = parts.get(*index)?.size;
+    let (leading, trailing) = match axis {
+        Axis::Row => (Side::Left, Side::Right),
+        Axis::Column => (Side::Top, Side::Bottom),
+    };
+    let tile_at = |at: Option<usize>| match at.and_then(|at| parts.get(at)) {
+        Some(Part {
+            node: Node::Tile(stack),
+            ..
+        }) => Some(stack.id),
+        _ => None,
+    };
+    let (neighbour, side) = match (tile_at(index.checked_add(1)), tile_at(index.checked_sub(1))) {
+        (Some(after), _) => (after, leading),
+        (None, Some(before)) => (before, trailing),
+        (None, None) => return None,
+    };
+    Some(Home {
+        neighbour,
+        side,
+        size,
+    })
+}
+
+fn rehome(tree: Option<Node>, home: Home, fresh: Stack) -> Result<Node, Refusal> {
+    let mut root = tree.ok_or(Refusal::NoSuchTile)?;
+    let path = path_of(&root, home.neighbour).ok_or(Refusal::NoSuchTile)?;
+    if let Some((index, parent)) = path.split_last()
+        && let Some(Node::Split { axis, parts }) = at_mut(&mut root, parent)
+        && *axis == home.side.axis()
+    {
+        let at = if home.side.leads() { *index } else { index + 1 };
+        parts.insert(
+            at,
+            Part {
+                size: home.size,
+                node: Node::Tile(fresh),
+            },
+        );
+        return Ok(root);
+    }
+    place(
+        Some(root),
+        Target::Tile(home.neighbour, Zone::Side(home.side)),
+        fresh,
+    )
 }
 
 fn walk_mut(node: &mut Node, visit: &mut dyn FnMut(&mut Stack) -> bool) -> bool {
@@ -687,6 +755,7 @@ impl Workspace {
             .find(|(stack, _)| stack.id == tile)
             .ok_or(Refusal::NoSuchTile)?;
         let mut tree = tree.clone();
+        let home = home_of(&mut tree, tile);
         let mut removed = Vec::new();
         let found = walk_mut(&mut tree, &mut |stack| {
             if stack.id != tile || module.is_some_and(|module| module >= stack.modules.len()) {
@@ -703,6 +772,10 @@ impl Workspace {
             return Err(Refusal::NoSuchTile);
         }
         let tree = pruned(tree, tile);
+        let home = home.filter(|_| {
+            tree.as_ref()
+                .is_none_or(|tree| path_of(tree, tile).is_none())
+        });
         let (cx, cy) = centre(gone);
         let focus = tree.as_ref().and_then(|tree| {
             solve(tree, area)
@@ -722,7 +795,11 @@ impl Workspace {
             self.focus
         };
         let mut next = self.changed(tree, focus);
-        next.closed.extend(removed);
+        next.closed.extend(
+            removed
+                .into_iter()
+                .map(|(module, at)| Closed { module, at, home }),
+        );
         let excess = next.closed.len().saturating_sub(CLOSED_DEPTH);
         next.closed.drain(..excess);
         Ok(next)
@@ -741,12 +818,21 @@ impl Workspace {
         }
     }
 
+    pub fn closed(&self) -> impl DoubleEndedIterator<Item = &Module> + ExactSizeIterator {
+        self.closed.iter().map(|closed| &closed.module)
+    }
+
     pub fn reopen(&self, area: Rect) -> Result<Self, Refusal> {
         let mut closed = self.closed.clone();
-        let (module, at) = closed.pop().ok_or(Refusal::NothingClosed)?;
-        let mut next = match self.focus {
-            Some(tile) => self.open_at(module, Target::Tile(tile, Zone::Stack { at }), area),
-            None => self.open(module, area),
+        let Closed { module, at, home } = closed.pop().ok_or(Refusal::NothingClosed)?;
+        let mut next = match (home, self.focus) {
+            (Some(home), _) if self.stack(home.neighbour).is_some() && !self.locked => {
+                let fresh = self.fresh(module);
+                let tree = rehome(self.tree.clone(), home, fresh.clone())?;
+                self.with_new(tree, area, fresh.id)
+            }
+            (_, Some(tile)) => self.open_at(module, Target::Tile(tile, Zone::Stack { at }), area),
+            (_, None) => self.open(module, area),
         }?;
         next.closed = closed;
         Ok(next)

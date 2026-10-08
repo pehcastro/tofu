@@ -83,6 +83,31 @@ enum Gesture {
     },
 }
 
+enum Closed {
+    Tile {
+        workspace: usize,
+        at: Instant,
+    },
+    Workspace {
+        workspace: Box<Workspace>,
+        index: usize,
+        at: Instant,
+    },
+}
+
+impl Closed {
+    fn at(&self) -> Instant {
+        match self {
+            Closed::Tile { at, .. } | Closed::Workspace { at, .. } => *at,
+        }
+    }
+}
+
+pub enum Reopened {
+    Tile(String),
+    Workspace(String),
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Menu {
     Closed,
@@ -104,6 +129,7 @@ pub struct TilingBoard<V: 'static> {
     hovered: Option<TileId>,
     headed: Option<TileId>,
     slot: Option<(TileId, usize)>,
+    closed: Vec<Closed>,
     host: Host<V>,
 }
 
@@ -161,6 +187,7 @@ impl<V: 'static> TilingBoard<V> {
             hovered: None,
             headed: None,
             slot: None,
+            closed: Vec::new(),
             host,
         }
     }
@@ -217,7 +244,13 @@ impl<V: 'static> TilingBoard<V> {
         };
         match change(workspace, area) {
             Ok(next) => {
+                let added = next.closed().len().saturating_sub(workspace.closed().len());
                 *workspace = next;
+                let at = Instant::now();
+                self.closed.extend((0..added).map(|_| Closed::Tile {
+                    workspace: self.active,
+                    at,
+                }));
                 self.refusal = None;
                 self.structural |= structural;
             }
@@ -488,7 +521,7 @@ impl<V: 'static> TilingBoard<V> {
                     workspace.focus_tile(tile)?.split(area)
                 });
             }
-            Action::ReopenTab => self.apply(true, |workspace, area| workspace.reopen(area)),
+            Action::ReopenTab => return self.reopen().is_some(),
             Action::NextTab => self.apply(false, |workspace, _| workspace.step_tab(true)),
             Action::PrevTab => self.apply(false, |workspace, _| workspace.step_tab(false)),
         }
@@ -618,7 +651,24 @@ impl<V: 'static> TilingBoard<V> {
         {
             return;
         }
-        self.workspaces.remove(index);
+        let workspace = self.workspaces.remove(index);
+        self.closed.retain_mut(|closed| match closed {
+            Closed::Tile { workspace, .. } if *workspace == index => false,
+            Closed::Tile { workspace, .. }
+            | Closed::Workspace {
+                index: workspace, ..
+            } => {
+                if *workspace > index {
+                    *workspace -= 1;
+                }
+                true
+            }
+        });
+        self.closed.push(Closed::Workspace {
+            workspace: Box::new(workspace),
+            index,
+            at: Instant::now(),
+        });
         if self.workspaces.is_empty() {
             self.workspaces
                 .push(Workspace::new("workspace 1", Preset::Empty));
@@ -629,6 +679,46 @@ impl<V: 'static> TilingBoard<V> {
             Ordering::Greater => {}
         }
         self.settle();
+    }
+
+    pub fn last_closed_at(&self) -> Option<Instant> {
+        self.closed.last().map(Closed::at)
+    }
+
+    pub fn reopen(&mut self) -> Option<Reopened> {
+        match self.closed.pop()? {
+            Closed::Tile { workspace, .. } => {
+                let name = self
+                    .workspaces
+                    .get(workspace)?
+                    .closed()
+                    .next_back()?
+                    .name()
+                    .to_owned();
+                self.switch(workspace);
+                self.apply(true, |workspace, area| workspace.reopen(area));
+                Some(Reopened::Tile(name))
+            }
+            Closed::Workspace {
+                workspace, index, ..
+            } => {
+                let index = index.min(self.workspaces.len());
+                let name = workspace.name.clone();
+                self.workspaces.insert(index, *workspace);
+                for closed in &mut self.closed {
+                    if let Closed::Tile { workspace, .. }
+                    | Closed::Workspace {
+                        index: workspace, ..
+                    } = closed
+                        && *workspace >= index
+                    {
+                        *workspace += 1;
+                    }
+                }
+                self.show(index);
+                Some(Reopened::Workspace(name))
+            }
+        }
     }
 
     pub fn workspace_tabs(&self, theme: &Theme, cx: &mut Context<V>) -> Div {

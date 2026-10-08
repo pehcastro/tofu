@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Instant;
 
 use desk_core::model::Store;
 use desk_tiling::{
@@ -10,7 +11,7 @@ use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
 use desk_ui::components::tabs::{Tab, TabEvent, header_tabs, new_tab_glyph};
-use desk_ui::components::tiling_board::{Host, Settled, TilingBoard};
+use desk_ui::components::tiling_board::{Host, Reopened, Settled, TilingBoard};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
@@ -367,6 +368,17 @@ fn settled(layouts: Layouts) -> Settled {
 impl Work {
     pub fn chat(&self) -> &Entity<Chat> {
         &self.mounted.chat
+    }
+
+    pub fn last_closed_at(&self) -> Option<Instant> {
+        self.board.last_closed_at()
+    }
+
+    pub fn reopen(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<Reopened> {
+        let reopened = self.board.reopen();
+        self.focus.focus(window, cx);
+        cx.notify();
+        reopened
     }
 
     pub fn fit(&mut self, below: f32) {
