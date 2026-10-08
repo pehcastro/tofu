@@ -7,7 +7,8 @@ use desk_motion::tokens::{EASE_OUT, PANEL_OUT_MS};
 use desk_motion::{Glide, GlideKind, reduced_motion};
 use gpui::{
     AnyElement, App, Bounds, Corners, Div, ElementId, Entity, FocusHandle, MouseButton, Pixels,
-    Point, Rgba, SharedString, Stateful, Window, canvas, div, point, prelude::*, px, size,
+    Point, Rgba, ScrollHandle, SharedString, Stateful, Window, canvas, div, point, prelude::*, px,
+    size,
 };
 
 use crate::component::icon;
@@ -30,6 +31,7 @@ const HEADER_GAP: f32 = 4.0;
 const NEW_BUTTON_GAP: f32 = 2.0;
 const MORE_LIST_MIN: f32 = 180.0;
 const DIRTY_DOT: f32 = 7.0;
+const TAB_MIN_WIDTH: f32 = 72.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TabMark {
@@ -216,6 +218,8 @@ struct Motion {
     listing: bool,
     list_focus: FocusHandle,
     strip_focus: FocusHandle,
+    scroll: ScrollHandle,
+    revealed: Option<(usize, Option<Pixels>)>,
 }
 
 fn close_box(tab: Bounds<Pixels>) -> Bounds<Pixels> {
@@ -252,6 +256,18 @@ impl Motion {
             widths: Vec::new(),
             more: px(TAB_MAX_WIDTH),
             fixed: px(0.0),
+            scroll: ScrollHandle::new(),
+            revealed: None,
+        }
+    }
+
+    fn reveal(&mut self, chosen: Option<usize>, room: Option<Pixels>) {
+        let wanted = chosen.map(|at| (at, room));
+        if self.revealed != wanted {
+            self.revealed = wanted;
+            if let Some(at) = chosen {
+                self.scroll.scroll_to_item(at + 1);
+            }
         }
     }
 
@@ -643,8 +659,8 @@ fn tab_frame(
     div()
         .id((id.clone(), ix))
         .flex()
-        .flex_none()
         .items_center()
+        .min_w(px(TAB_MIN_WIDTH))
         .max_w(px(TAB_MAX_WIDTH))
         .when_some(press, |tab, press| {
             tab.on_mouse_down(MouseButton::Left, move |event, window, cx| {
@@ -1046,6 +1062,11 @@ impl RenderOnce for TabStrip {
         };
         let slots = Rc::new(slots);
         let chosen = slots.iter().position(|slot| slot.holds(active));
+        let room = width.get(cx);
+        let scroll = state.update(cx, |motion, _| {
+            motion.reveal(chosen, room);
+            motion.scroll.clone()
+        });
         let spans = (
             ms(&theme, NumberToken::MotionBase),
             ms(&theme, NumberToken::MotionFast),
@@ -1137,12 +1158,7 @@ impl RenderOnce for TabStrip {
                             .into_any_element()
                     }))
                     .collect::<Vec<_>>();
-                let frame = div()
-                    .flex()
-                    .items_stretch()
-                    .h(px(TAB_IN_HEADER))
-                    .min_w_0()
-                    .overflow_hidden();
+                let frame = div().flex().items_stretch().h(px(TAB_IN_HEADER)).min_w_0();
                 (frame, children, theme.color(ColorToken::TabsFill), top)
             }
             Shape::Header { screens } => {
@@ -1201,12 +1217,7 @@ impl RenderOnce for TabStrip {
                                 .map(|(ix, tab)| header(tabs.len() + ix, tab, true)),
                         )
                         .collect::<Vec<AnyElement>>();
-                let frame = div()
-                    .flex()
-                    .items_center()
-                    .gap(px(HEADER_GAP))
-                    .min_w_0()
-                    .overflow_hidden();
+                let frame = div().flex().items_center().gap(px(HEADER_GAP)).min_w_0();
                 let corners = Corners::all(px(header_radius(screen)));
                 (frame, children, header_fill(screen, &theme), corners)
             }
@@ -1233,11 +1244,18 @@ impl RenderOnce for TabStrip {
         let (measured, mover, leaver) = (state.clone(), state.clone(), state);
         let (seen, felt, left) = (slots.clone(), slots.clone(), slots);
         let flow = tabs.len();
+        let shifted = scroll.clone();
         frame
             .relative()
             .w_full()
             .on_children_prepainted(move |bounds, window, cx| {
-                let items = bounds.get(1..).unwrap_or_default().to_vec();
+                let shift = shifted.offset();
+                let items: Vec<Bounds<Pixels>> = bounds
+                    .get(1..)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|item| Bounds::new(item.origin + shift, item.size))
+                    .collect();
                 let mouse = window.mouse_position();
                 let moved = measured.update(cx, |motion, _| {
                     motion.learn(&items, &seen, flow, gap);
@@ -1248,6 +1266,9 @@ impl RenderOnce for TabStrip {
                 }
             })
             .id(id)
+            .overflow_hidden()
+            .overflow_x_scroll()
+            .track_scroll(&scroll)
             .track_focus(&focus)
             .on_key_down(move |event, window, cx| {
                 if let Some(to) = arrowed(event, active, count) {

@@ -391,13 +391,18 @@ impl RenderOnce for TitleBar {
                 .min_w_0()
                 .child(tabs)
                 .into_any_element(),
-            None => control("new-workspace", Control::NewWorkspace.label(), &theme)
-                .occlude()
-                .h(px(TAB_HEIGHT))
-                .px_2p5()
-                .rounded(px(RADIUS_TAB))
-                .child(icon(Icon::Plus, ICON_SMALL, tab))
-                .on_click(self.picked(TitlePick::NewWorkspace))
+            None => div()
+                .flex_1()
+                .flex()
+                .child(
+                    control("new-workspace", Control::NewWorkspace.label(), &theme)
+                        .occlude()
+                        .h(px(TAB_HEIGHT))
+                        .px_2p5()
+                        .rounded(px(RADIUS_TAB))
+                        .child(icon(Icon::Plus, ICON_SMALL, tab))
+                        .on_click(self.picked(TitlePick::NewWorkspace)),
+                )
                 .into_any_element(),
         };
         let title = &self.title;
@@ -503,7 +508,6 @@ impl RenderOnce for TitleBar {
                     }),
             )
             .child(tabs)
-            .child(div().flex_1())
             .child(
                 control("palette", "Command palette", &theme)
                     .occlude()

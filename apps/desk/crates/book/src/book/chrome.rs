@@ -16,6 +16,7 @@ use super::Book;
 use super::kit::named;
 
 const BOARD_WIDTH: f32 = 960.0;
+const NARROW_WIDTH: f32 = 720.0;
 const WORKSPACES: [&str; 3] = ["work", "editor", "data"];
 const POP_ROOM: f32 = 250.0;
 const SESSIONS_HEIGHT: f32 = 300.0;
@@ -160,6 +161,25 @@ fn with_screen(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
     )
 }
 
+fn narrow(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
+    let tab = |name: &str| Tab {
+        label: name.to_owned().into(),
+        icon: None,
+        count: None,
+        mark: TabMark::Close,
+    };
+    header_tabs(
+        "chrome-workspaces-narrow",
+        &[tab("work")],
+        2,
+        &[tab("session"), tab("usage")],
+        theme,
+        cx.listener(|book, event: &TabEvent, _, cx| {
+            book.tell(format!("Workspace tabs: {event:?}"), cx)
+        }),
+    )
+}
+
 fn plus_menu(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
     let items: Vec<MenuItem> = [MenuItem::Action {
         label: "New workspace".into(),
@@ -266,6 +286,16 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
                 "chrome-title-screen",
                 board_title(None),
                 Some(with_screen(theme, cx).into_any_element()),
+                picked_title(cx),
+            )),
+        ))
+        .child(named(
+            "Title bar, 720 wide, the last screen tab active",
+            theme,
+            div().w(px(NARROW_WIDTH)).child(TitleBar::new(
+                "chrome-title-narrow",
+                board_title(None),
+                Some(narrow(theme, cx).into_any_element()),
                 picked_title(cx),
             )),
         ))
