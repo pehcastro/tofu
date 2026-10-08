@@ -296,9 +296,6 @@ impl Session {
         );
         div()
             .gap(px(10.0))
-            .pt(px(6.0))
-            .px(px(6.0))
-            .pb(px(8.0))
             .child(header)
             .child(stats)
             .child(panes().flex_1().child(turns).child(detail))
@@ -592,7 +589,7 @@ impl Session {
                     .child(branch),
             ),
         );
-        div().pb(px(8.0)).child(shell)
+        div().child(shell)
     }
 }
 

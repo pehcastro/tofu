@@ -25,6 +25,7 @@ const FONTS: [&[u8]; 6] = [
 ];
 
 const GAP: f32 = 10.0;
+const FRAME_PAD: f32 = 20.0;
 const SHELL_RING: f32 = 0.06;
 pub const BODY_TEXT: f32 = 0.9;
 const FONT_BASE: f32 = 14.0;
@@ -290,7 +291,9 @@ pub fn window(theme: &Theme, body: Div) -> Div {
         .text_size(px(FONT_BASE))
         .line_height(px(LINE))
         .text_color(ink(theme, BODY_TEXT))
-        .child(ScrollArea::new("screen").child(body.min_h_full().flex().flex_col()))
+        .child(
+            ScrollArea::new("screen").child(body.min_h_full().p(px(FRAME_PAD)).flex().flex_col()),
+        )
 }
 
 pub fn panes() -> Div {

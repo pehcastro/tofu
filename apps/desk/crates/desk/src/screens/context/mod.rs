@@ -458,25 +458,19 @@ fn growth(theme: &Theme) -> Div {
 impl Render for ContextScreen {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let body = div()
-            .gap(px(10.0))
-            .pt(px(6.0))
-            .px(px(6.0))
-            .pb(px(8.0))
-            .child(self.header(&theme, cx))
-            .child(
-                panes()
-                    .flex_1()
-                    .child(
-                        fraction(div(), 1.375, WINDOW_LEAST)
-                            .flex()
-                            .flex_col()
-                            .gap(px(10.0))
-                            .child(self.window_panel(&theme))
-                            .child(growth(&theme)),
-                    )
-                    .child(self.parts_panel(&theme, cx)),
-            );
+        let body = div().gap(px(10.0)).child(self.header(&theme, cx)).child(
+            panes()
+                .flex_1()
+                .child(
+                    fraction(div(), 1.375, WINDOW_LEAST)
+                        .flex()
+                        .flex_col()
+                        .gap(px(10.0))
+                        .child(self.window_panel(&theme))
+                        .child(growth(&theme)),
+                )
+                .child(self.parts_panel(&theme, cx)),
+        );
         let told = told(self.told, &theme, cx, |screen: &mut ContextScreen| {
             screen.told = None
         });

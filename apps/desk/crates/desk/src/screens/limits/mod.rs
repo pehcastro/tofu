@@ -701,9 +701,6 @@ impl Render for Limits {
         let theme = ActiveTheme::theme(cx);
         let body = div()
             .gap(px(8.0))
-            .pt(px(4.0))
-            .px(px(4.0))
-            .pb(px(8.0))
             .child(self.header(&theme, cx))
             .child(self.runway(&theme, cx))
             .child(

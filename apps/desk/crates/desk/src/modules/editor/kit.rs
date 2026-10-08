@@ -43,7 +43,7 @@ pub const SEND: &str = r#"<path d="M8 12.5v-9M4.5 7L8 3.5 11.5 7"/>"#;
 
 const UNDERLAY: u32 = 0x232329;
 const SHELL: u32 = 0x18171e;
-const FRAME: [f32; 4] = [268.0, 60.0, 28.0, 56.0];
+const FRAME_PAD: f32 = 20.0;
 const TOAST_BOTTOM: f32 = 44.0;
 
 const FONTS: [&[u8]; 6] = [
@@ -101,6 +101,10 @@ pub fn text(size: f32, line: f32, color: Rgba, body: impl Into<SharedString>) ->
 
 pub fn medium(size: f32, line: f32, color: Rgba, body: impl Into<SharedString>) -> Div {
     text(size, line, color, body).font_weight(FontWeight::MEDIUM)
+}
+
+pub fn ellipsis(item: Div) -> Div {
+    item.flex_shrink_1().min_w_0().truncate()
 }
 
 pub fn ring(color: Rgba) -> BoxShadow {
@@ -218,15 +222,12 @@ pub fn frame(
     told: Option<SharedString>,
     on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let [left, top, right, bottom] = FRAME;
     div()
         .size_full()
+        .min_w_0()
         .relative()
         .flex()
-        .pl(px(left))
-        .pt(px(top))
-        .pr(px(right))
-        .pb(px(bottom))
+        .p(px(FRAME_PAD))
         .bg(rgb(UNDERLAY))
         .font_family(SANS)
         .text_size(px(14.0))

@@ -18,6 +18,8 @@ const CARD_FILL: f32 = 0.2;
 const CARD_RING: f32 = 0.05;
 const CARD_RADIUS: f32 = 11.0;
 const ROW_GAP: f32 = 14.0;
+const ROW_WRAP_GAP: f32 = 8.0;
+const LABEL_MIN: f32 = 140.0;
 const ROW_PAD_Y: f32 = 11.0;
 const ROW_RULE: f32 = 0.04;
 const ROW_LINE: f32 = 18.0;
@@ -114,8 +116,10 @@ pub fn page_title(
 pub fn setting_row(row: SettingRow, theme: &Theme) -> Div {
     div()
         .flex()
+        .flex_wrap()
         .items_center()
-        .gap(px(ROW_GAP))
+        .gap_x(px(ROW_GAP))
+        .gap_y(px(ROW_WRAP_GAP))
         .py(px(ROW_PAD_Y))
         .px_4()
         .border_b_1()
@@ -123,7 +127,7 @@ pub fn setting_row(row: SettingRow, theme: &Theme) -> Div {
         .child(
             div()
                 .flex_1()
-                .min_w_0()
+                .min_w(px(LABEL_MIN))
                 .flex()
                 .flex_col()
                 .line_height(px(ROW_LINE))

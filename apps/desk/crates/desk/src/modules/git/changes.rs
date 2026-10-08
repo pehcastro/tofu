@@ -15,7 +15,6 @@ use super::fixture::{TELL_DISCARD_HUNK, TELL_STAGE_HUNK};
 use super::kit::{self, ADD, AGENT_TEXT, BASE, DANGER, DEL, T3};
 use super::{Changes, Git};
 
-const SIDE: f32 = 440.0;
 const CODE_LINE: f32 = 22.0;
 const GUTTER: f32 = 70.0;
 const FIXTURE_BRANCH: &str = "main \u{2191}2";
@@ -50,8 +49,7 @@ impl Git {
             ),
             theme,
         )
-        .flex_none()
-        .w(px(SIDE))
+        .map(kit::side)
         .child(
             inner_card(theme)
                 .child(commit_box(

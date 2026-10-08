@@ -12,17 +12,10 @@ use gpui::{
 };
 
 const UNDERLAY: u32 = 0x232329;
-const EDGE: u32 = 0x111015;
-const FADE: u32 = 0x0f0e13;
-const FADE_LEFT: f32 = 1200.0;
-const FADE_HEIGHT: f32 = 108.0;
-const SHADE: u32 = 0x15171b;
-const SHADE_FLOOR: u32 = 0x101015;
-const SHADE_LEFT: f32 = 700.0;
-const SHADE_RIGHT_LEFT: f32 = 1000.0;
-const SHADE_TOP: f32 = 270.0;
-const SHADE_RAMP: f32 = 150.0;
-const FRAME: [f32; 4] = [268.0, 60.0, 28.0, 56.0];
+const FRAME_PAD: f32 = 20.0;
+const SIDE_SHARE: f32 = 0.4;
+const SIDE_LEAST: f32 = 260.0;
+const SIDE_MOST: f32 = 400.0;
 const TOAST_BOTTOM: f32 = 44.0;
 const SHELL: u32 = 0x18171e;
 
@@ -60,21 +53,12 @@ pub fn load_fonts(cx: &App) -> Result<(), String> {
         .map_err(|error| format!("the git module cannot load Geist: {error}"))
 }
 
-fn layer(top: f32, height: Option<f32>, left: f32, angle: f32, from: u32, to: u32) -> Div {
-    let placed = div()
-        .absolute()
-        .top(px(top))
-        .left(px(left))
-        .right(px(FRAME[2]));
-    match height {
-        Some(height) => placed.h(px(height)),
-        None => placed.bottom_0(),
-    }
-    .bg(linear_gradient(
-        angle,
-        linear_color_stop(rgb(from), 0.0),
-        linear_color_stop(rgb(to), 1.0),
-    ))
+pub fn side(column: Div) -> Div {
+    column
+        .flex_none()
+        .w(relative(SIDE_SHARE))
+        .min_w(px(SIDE_LEAST))
+        .max_w(px(SIDE_MOST))
 }
 
 pub fn frame(
@@ -83,61 +67,17 @@ pub fn frame(
     told: Option<SharedString>,
     on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let [left, top, right, bottom] = FRAME;
     div()
         .size_full()
+        .min_w_0()
         .relative()
         .flex()
-        .pl(px(left))
-        .pt(px(top))
-        .pr(px(right))
-        .pb(px(bottom))
+        .p(px(FRAME_PAD))
         .bg(rgb(UNDERLAY))
         .font_family(theme.word(WordToken::ShapeFont))
         .text_size(px(14.0))
         .line_height(px(23.0))
         .text_color(ink(theme, BASE))
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .right_0()
-                .w(px(right))
-                .bg(rgb(EDGE)),
-        )
-        .child(layer(
-            0.0,
-            Some(FADE_HEIGHT),
-            FADE_LEFT,
-            90.0,
-            UNDERLAY,
-            FADE,
-        ))
-        .child(layer(
-            FADE_HEIGHT,
-            Some(SHADE_TOP - FADE_HEIGHT),
-            SHADE_RIGHT_LEFT,
-            90.0,
-            UNDERLAY,
-            SHADE_FLOOR,
-        ))
-        .child(layer(
-            SHADE_TOP,
-            Some(SHADE_RAMP),
-            SHADE_LEFT,
-            180.0,
-            UNDERLAY,
-            SHADE,
-        ))
-        .child(layer(
-            SHADE_TOP + SHADE_RAMP,
-            None,
-            SHADE_LEFT,
-            180.0,
-            SHADE,
-            SHADE_FLOOR,
-        ))
         .child(body.flex_1().min_w_0().min_h_0().flex())
         .children(told.map(|message| {
             div()

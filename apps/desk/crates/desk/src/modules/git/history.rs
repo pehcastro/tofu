@@ -12,7 +12,6 @@ use super::fixture::{
 };
 use super::kit::{self, ADD, AGENT, ANA, BASE, DEL, T2, T3, WARN, YOU, edge};
 
-const SIDE: f32 = 460.0;
 const ROW: f32 = 28.0;
 
 fn file_row(id: impl Into<ElementId>, left: f32) -> Stateful<Div> {
@@ -41,9 +40,7 @@ impl Git {
     pub(super) fn history(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
         div()
             .child(
-                kit::shell()
-                    .flex_none()
-                    .w(px(SIDE))
+                kit::side(kit::shell())
                     .child(
                         kit::shell_head(theme)
                             .child(kit::cap("History", theme).pl(px(19.0)))

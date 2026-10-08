@@ -381,32 +381,26 @@ fn swatch(swatch: Swatch, theme: &Theme) -> Rgba {
 impl Render for Usage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let body = div()
-            .gap(px(10.0))
-            .pt(px(6.0))
-            .px(px(6.0))
-            .pb(px(8.0))
-            .child(self.header(&theme, cx))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.0))
-                    .child(
-                        panes()
-                            .flex_grow(1.25)
-                            .child(self.activity(&theme, cx))
-                            .child(where_it_went(&theme)),
-                    )
-                    .child(
-                        panes()
-                            .flex_grow(1.0)
-                            .child(self.sources(&theme, cx))
-                            .child(self.sessions(&theme, cx)),
-                    ),
-            );
+        let body = div().gap(px(10.0)).child(self.header(&theme, cx)).child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .gap(px(10.0))
+                .child(
+                    panes()
+                        .flex_grow(1.25)
+                        .child(self.activity(&theme, cx))
+                        .child(where_it_went(&theme)),
+                )
+                .child(
+                    panes()
+                        .flex_grow(1.0)
+                        .child(self.sources(&theme, cx))
+                        .child(self.sessions(&theme, cx)),
+                ),
+        );
         let told = told(self.told, &theme, cx, |usage: &mut Usage| usage.told = None);
         window(&theme, body).children(told)
     }

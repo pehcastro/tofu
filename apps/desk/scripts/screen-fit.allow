@@ -41,14 +41,5 @@ crates/desk/src/modules/editor/boards.rs:left(px(150.0))  context menu anchored 
 crates/desk/src/modules/editor/boards.rs:top(px(126.0))  context menu anchored at its row, not a board coordinate
 crates/desk/src/modules/editor/boards.rs:top(px(40.0))  popover anchored under its trigger
 crates/desk/src/modules/editor/boards.rs:top(px(74.0))  popover anchored under its trigger
-crates/desk/src/modules/editor/boards.rs:left(px(246.0))  header buttons inside the fixed 290 px tree head
-crates/desk/src/modules/editor/boards.rs:top(px(6.0))  header buttons inside the fixed 290 px tree head
 crates/desk/src/modules/editor/parts.rs:left(px(17.0))  tree indent guide
 crates/desk/src/modules/git/history.rs:top(px(40.0))  popover anchored under its trigger
-crates/desk/src/modules/git/changes.rs:SIDE  board width, refit pending: modules/git is outside DESK-194 owns
-crates/desk/src/modules/git/history.rs:SIDE  board width, refit pending: modules/git is outside DESK-194 owns
-crates/desk/src/modules/git/kit.rs:FADE_LEFT  board backdrop, delete pending: modules/git is outside DESK-194 owns
-crates/desk/src/modules/git/kit.rs:SHADE_LEFT  board backdrop, delete pending: modules/git is outside DESK-194 owns
-crates/desk/src/modules/git/kit.rs:SHADE_RIGHT_LEFT  board backdrop, delete pending: modules/git is outside DESK-194 owns
-crates/desk/src/modules/git/kit.rs:left(px(left))  board backdrop, delete pending: modules/git is outside DESK-194 owns
-crates/desk/src/modules/git/kit.rs:top(px(top))  board backdrop, delete pending: modules/git is outside DESK-194 owns

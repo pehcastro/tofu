@@ -2,8 +2,8 @@ use gpui::{AnyElement, Div, FontWeight, Rgba, div, prelude::*, px};
 
 use super::fixture::{Change, Git, Icon, Ink, Line};
 use super::kit::{
-    ADD, CONFLICT, DANGER, DEL, FN, KW, MODIFIED, MONO, ST, T3, TY, UNTRACKED, file_icon, medium,
-    text, tint, white,
+    ADD, CONFLICT, DANGER, DEL, FN, KW, MODIFIED, MONO, ST, T3, TY, UNTRACKED, ellipsis, file_icon,
+    medium, text, tint, white,
 };
 
 pub const ROW: f32 = 22.0;
@@ -104,8 +104,7 @@ pub fn tree_row(
     let label = div()
         .flex_1()
         .min_w_0()
-        .overflow_hidden()
-        .whitespace_nowrap()
+        .truncate()
         .text_color(git_ink(git))
         .child(name);
     div()
@@ -145,7 +144,7 @@ pub fn tree_row(
 pub fn tab(icon: Icon, label: &'static str, on: bool, scale: f32) -> Div {
     div()
         .flex()
-        .flex_none()
+        .min_w_0()
         .items_center()
         .gap(px(7.0))
         .h(px(31.0))
@@ -154,12 +153,12 @@ pub fn tab(icon: Icon, label: &'static str, on: bool, scale: f32) -> Div {
         .rounded_t(px(9.0))
         .when(on, |tab| tab.bg(white(0.05)))
         .child(file_icon(icon.bytes(), 14.0, scale))
-        .child(medium(
+        .child(ellipsis(medium(
             12.5,
             14.0,
             if on { white(1.0) } else { white(0.5) },
             label,
-        ))
+        )))
 }
 
 pub fn close_mark() -> Div {

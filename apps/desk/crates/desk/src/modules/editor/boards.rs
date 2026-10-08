@@ -9,7 +9,7 @@ use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, Context, Div, FontWeight, SharedString, div, linear_color_stop, linear_gradient,
-    prelude::*, px,
+    prelude::*, px, relative,
 };
 
 use crate::modules::chat::Find;
@@ -17,8 +17,8 @@ use crate::modules::chat::Find;
 use super::fixture::{COUNT, COUNT_TEST, Git, Icon, Line, MENU, STORE, STORE_DIFF, TOP, WEB};
 use super::kit::{
     ADD, AGENT, AGENT_FILL, AGENT_TEXT, CHAT, COLLAPSE, DANGER, DEL, DOWN, MODIFIED, MONO, PLUS,
-    POP, PREFS, ROBOT, SEND, SPLIT, T2, T3, TRACE, black, cap, file_icon, glyph, hex, inner,
-    medium, pop_shadow, ring, shell, square, text, tint, white,
+    POP, PREFS, ROBOT, SEND, SPLIT, T2, T3, TRACE, black, cap, ellipsis, file_icon, glyph, hex,
+    inner, medium, pop_shadow, ring, shell, square, text, tint, white,
 };
 use super::parts::{close_mark, code, dot, kbd, quiet, tab, tree_row};
 use super::{Editor, File, Mode, OnDisk, Source};
@@ -29,6 +29,11 @@ const REMOVED_LINE: usize = 9;
 const MODIFIED_LINE: usize = 21;
 const CURSOR_LINE: usize = 13;
 const STORE_BLAME_LINE: usize = 4;
+const SIDE_SHARE: f32 = 0.3;
+const SIDE_LEAST: f32 = 180.0;
+const CHAT_SHARE: f32 = 0.3;
+const CHAT_LEAST: f32 = 240.0;
+const CHAT_MOST: f32 = 360.0;
 
 fn marked(gutter: ColorToken) -> LineMarks {
     LineMarks {
@@ -83,7 +88,15 @@ pub fn store_marks() -> Marks {
     )])
 }
 
-fn head(left: f32) -> Div {
+fn side_width(column: Div, most: f32) -> Div {
+    column
+        .flex_none()
+        .w(relative(SIDE_SHARE))
+        .min_w(px(SIDE_LEAST))
+        .max_w(px(most))
+}
+
+fn head(most: f32, tools: Option<Div>) -> Div {
     div()
         .flex()
         .flex_none()
@@ -93,16 +106,15 @@ fn head(left: f32) -> Div {
         .pl(px(4.0))
         .pr(px(6.0))
         .child(
-            div()
+            side_width(div(), most)
                 .flex()
-                .flex_none()
                 .items_center()
                 .gap(px(8.0))
-                .w(px(left))
                 .h(px(24.0))
                 .mb(px(6.0))
                 .pl(px(8.0))
-                .child(cap("Editor").flex_1()),
+                .child(cap("Editor").flex_1())
+                .children(tools),
         )
 }
 
@@ -113,12 +125,10 @@ fn icon_button(id: &'static str, body: &str, size: f32, scale: f32) -> gpui::Sta
         .child(glyph(body, 13.0, white(0.45), scale))
 }
 
-fn tree(width: f32) -> Div {
-    div()
+fn tree(most: f32) -> Div {
+    side_width(div(), most)
         .flex()
         .flex_col()
-        .flex_none()
-        .w(px(width))
         .px(px(4.0))
         .py(px(8.0))
         .border_r_1()
@@ -140,8 +150,13 @@ fn strip(when: &'static str, scale: f32) -> Div {
         .text_size(px(12.5))
         .line_height(px(23.0))
         .child(glyph(ROBOT, 13.0, AGENT, scale))
-        .child(text(12.5, 23.0, AGENT_TEXT, "Recently edited by go-dev"))
-        .child(quiet(12.5, when))
+        .child(ellipsis(text(
+            12.5,
+            23.0,
+            AGENT_TEXT,
+            "Recently edited by go-dev",
+        )))
+        .child(ellipsis(quiet(12.5, when)))
 }
 
 fn blame(scale: f32) -> Div {
@@ -203,24 +218,20 @@ fn pop_row(label: &'static str, color: gpui::Rgba, key: Option<&'static str>) ->
 impl Editor {
     pub fn edit_board(&mut self, scale: f32, cx: &mut Context<Self>) -> Div {
         let notes = self.file == File::Notes;
-        let header = head(290.0).child(
-            div()
-                .flex()
-                .gap(px(8.0))
-                .mb(px(6.0))
-                .absolute()
-                .left(px(246.0))
-                .top(px(6.0))
-                .child(
-                    icon_button("new-file", PLUS, 24.0, scale).on_click(cx.listener(Self::tell(
-                        "Creates a file in the selected folder and opens it in a new tab.",
-                    ))),
-                )
-                .child(
-                    icon_button("collapse", COLLAPSE, 24.0, scale)
-                        .on_click(cx.listener(Self::update(|this| this.notes_open = false))),
-                ),
-        );
+        let tools = div()
+            .flex()
+            .flex_none()
+            .gap(px(8.0))
+            .child(
+                icon_button("new-file", PLUS, 24.0, scale).on_click(cx.listener(Self::tell(
+                    "Creates a file in the selected folder and opens it in a new tab.",
+                ))),
+            )
+            .child(
+                icon_button("collapse", COLLAPSE, 24.0, scale)
+                    .on_click(cx.listener(Self::update(|this| this.notes_open = false))),
+            );
+        let header = head(290.0, Some(tools));
         let header = match &self.source {
             Source::Disk { file, .. } => {
                 header.child(self.file_tab(file.as_ref().map(|(_, disk)| disk), cx))
@@ -378,24 +389,24 @@ impl Editor {
                         quiet(12.5, "›"),
                     ]
                 }))
-                .child(text(12.5, 23.0, white(T2), disk.name.clone()))
+                .child(ellipsis(text(12.5, 23.0, white(T2), disk.name.clone())))
                 .child(div().flex_1())
-                .child(quiet(
+                .child(ellipsis(quiet(
                     11.5,
                     if disk.dirty {
                         "modified · unsaved"
                     } else {
                         "saved"
                     },
-                )),
+                ))),
             Source::Fixture { .. } => crumbs
                 .child(quiet(12.5, "notes"))
                 .child(quiet(12.5, "›"))
                 .child(file_icon(Icon::Go.bytes(), 13.0, scale))
-                .child(text(12.5, 23.0, white(T2), crumb))
-                .child(quiet(12.5, symbol))
+                .child(ellipsis(text(12.5, 23.0, white(T2), crumb)))
+                .child(ellipsis(quiet(12.5, symbol)))
                 .child(div().flex_1())
-                .child(quiet(11.5, state)),
+                .child(ellipsis(quiet(11.5, state))),
         };
         let agent = strip("this session · turn 4 · 2 min ago", scale)
             .child(div().flex_1())
@@ -668,7 +679,7 @@ impl Editor {
                 .when(on, |segment| segment.bg(white(0.12)))
                 .child(label)
         };
-        let header = head(228.0)
+        let header = head(228.0, None)
             .child(tab(Icon::Go, "store.go", true, scale).child(
                 close_mark().id("close-store").on_click(
                     cx.listener(Self::tell("Closes store.go. It has no unsaved changes.")),
@@ -842,8 +853,10 @@ impl Editor {
                 .on_click(cx.listener(Self::tell(tell)))
         };
         shell()
-            .w(px(360.0))
             .flex_none()
+            .w(relative(CHAT_SHARE))
+            .min_w(px(CHAT_LEAST))
+            .max_w(px(CHAT_MOST))
             .child(
                 div()
                     .flex()
@@ -908,7 +921,7 @@ impl Editor {
     }
 
     pub fn split_board(&mut self, scale: f32, cx: &mut Context<Self>) -> Div {
-        let header = head(258.0)
+        let header = head(258.0, None)
             .child(
                 tab(Icon::Go, "notes.go", true, scale).child(
                     close_mark()
