@@ -1,3 +1,4 @@
+use desk_ui::components::overlay::{MenuItem, actions, menu};
 use desk_ui::components::sidebar::SIDEBAR_COLUMN;
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
@@ -101,6 +102,45 @@ fn workspaces(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
     )
 }
 
+fn with_screen(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
+    let tab = |name: &str| Tab {
+        label: name.to_owned().into(),
+        icon: None,
+        count: None,
+        mark: TabMark::Close,
+    };
+    let tabs: Vec<Tab> = WORKSPACES.iter().map(|name| tab(name)).collect();
+    header_tabs(
+        "chrome-workspaces-screen",
+        &tabs,
+        0,
+        &[tab("theme")],
+        theme,
+        cx.listener(|book, event: &TabEvent, _, cx| {
+            book.tell(format!("Workspace tabs: {event:?}"), cx)
+        }),
+    )
+}
+
+fn plus_menu(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
+    let items: Vec<MenuItem> = [MenuItem::Action {
+        label: "New workspace".into(),
+        keys: Some("Ctrl T".into()),
+    }]
+    .into_iter()
+    .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
+    .chain(actions(["Chat", "Sub-agents", "File edits", "Shells"]))
+    .chain([MenuItem::Caption("Screens, open as a tab".into())])
+    .chain(actions(["theme"]))
+    .collect();
+    menu(
+        "chrome-plus-menu",
+        &items,
+        theme,
+        cx.listener(|book, pick: &usize, _, cx| book.tell(format!("Plus menu: {pick}"), cx)),
+    )
+}
+
 fn frame(bar: impl IntoElement) -> Div {
     div().w(px(BOARD_WIDTH)).child(bar)
 }
@@ -161,6 +201,17 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
                 picked_title(cx),
             )),
         ))
+        .child(named(
+            "Title bar, a screen tab after the workspaces",
+            theme,
+            frame(TitleBar::new(
+                "chrome-title-screen",
+                board_title(None),
+                Some(with_screen(theme, cx).into_any_element()),
+                picked_title(cx),
+            )),
+        ))
+        .child(named("Title bar, + menu open", theme, plus_menu(theme, cx)))
         .child(named(
             "Title bar, empty",
             theme,

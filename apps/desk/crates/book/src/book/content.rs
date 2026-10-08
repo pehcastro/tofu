@@ -4,7 +4,8 @@ use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{inner_card, shell};
 use desk_ui::components::form::{SelectableText, TextInput};
 use desk_ui::components::overlay::{
-    Dropdown, DropdownTrigger, MenuButton, Placement, Popover, Side, ToastKind, context_menu,
+    Dropdown, DropdownTrigger, MenuButton, MenuItem, Placement, Popover, Side, ToastKind, actions,
+    context_menu,
 };
 use desk_ui::components::sheet::{Drawer, Sheet};
 use desk_ui::theme::{ColorToken, Theme};
@@ -30,6 +31,38 @@ const FIELD: &str = "Type here, select it, right click";
 const PROSE: &str = "Drag across this sentence, then right click it to copy or select all.";
 const MENU_TRIGGERS: [&str; 2] = ["Menu, top", "Menu, bottom: opens upward"];
 const MENU: [&str; 5] = ["Rename", "Pin", "Lock", "Reset layout", "Reset to preset"];
+const SPAWNS: [&str; 4] = ["Chat", "Sub-agents", "File edits", "Shells"];
+const GROUPED_PICKS: [&str; 11] = [
+    "",
+    "Rename",
+    "Pin",
+    "Lock",
+    "",
+    "",
+    "Spawn",
+    "Chat",
+    "Sub-agents",
+    "File edits",
+    "Shells",
+];
+
+fn grouped() -> Vec<MenuItem> {
+    vec![
+        MenuItem::Caption("Workspace".into()),
+        MenuItem::Action {
+            label: "Rename".into(),
+            keys: Some("F2".into()),
+        },
+        MenuItem::action("Pin"),
+        MenuItem::action("Lock"),
+        MenuItem::Separator,
+        MenuItem::Caption("Tiles".into()),
+        MenuItem::Submenu {
+            label: "Spawn".into(),
+            items: actions(SPAWNS),
+        },
+    ]
+}
 const TOASTS: [(&str, &str, ToastKind, &str); 3] = [
     (
         "toast-success",
@@ -144,7 +177,7 @@ impl ContentState {
             },
             popover: None,
             menus: MENU_TRIGGERS.map(|name| {
-                let menu = MenuButton::new(name.into(), MENU.map(SharedString::from).to_vec(), cx);
+                let menu = MenuButton::new(name.into(), actions(MENU), cx);
                 let picked = cx.listener(|this, row: &usize, _, cx| {
                     if let Some(label) = MENU.get(*row) {
                         this.tell(format!("Menu: {label}"), cx);
@@ -156,9 +189,9 @@ impl ContentState {
                 });
                 menu
             }),
-            dropdowns: [(); 2].map(|_| Dropdown::new(models(), cx)),
+            dropdowns: [(); 2].map(|_| Dropdown::new(actions(models()), cx)),
             badges: [models(), efforts()].map(|items| {
-                let badge = Dropdown::new(items, cx);
+                let badge = Dropdown::new(actions(items), cx);
                 badge.update(cx, |badge, _| badge.trigger(DropdownTrigger::Chip));
                 badge
             }),
@@ -263,10 +296,24 @@ impl ContentState {
                 "Right click anywhere in the area, pick a model",
                 theme,
                 inner_card(theme).w(px(AREA_WIDTH)).p_3().child(
-                    context_menu(models())
+                    context_menu(actions(models()))
                         .id("context-area")
                         .on_pick(Book::picked_model(cx))
                         .child(label("Right click anywhere in here.", theme)),
+                ),
+            ))
+            .child(block(
+                "Grouped: a caption heads each group, Spawn opens a submenu on hover or Right",
+                theme,
+                inner_card(theme).w(px(AREA_WIDTH)).p_3().child(
+                    context_menu(grouped())
+                        .id("context-grouped")
+                        .on_pick(cx.listener(|this, at: &usize, _, cx| {
+                            if let Some(label) = GROUPED_PICKS.get(*at).filter(|l| !l.is_empty()) {
+                                this.tell(format!("Menu: {label}"), cx);
+                            }
+                        }))
+                        .child(label("Right click for the grouped menu.", theme)),
                 ),
             ))
             .child(block(

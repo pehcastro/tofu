@@ -9,7 +9,7 @@ use crate::components::button::{ButtonKind, button};
 use crate::components::card::caption;
 use crate::components::chip::{GitStatus, git_name, mono, tabular};
 use crate::components::glyph::Glyph;
-use crate::components::overlay::MenuButton;
+use crate::components::overlay::{MenuButton, actions};
 use crate::components::paint::{glyph, ink, tint};
 use crate::components::size::{
     CAPTION_TEXT, FONT_BODY, FONT_SMALL, FONT_TREE, HOVER, NUMBER_TEXT, RADIUS_BADGE, RADIUS_ROW,
@@ -114,7 +114,7 @@ impl History {
         writer: Option<SharedString>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let picker = MenuButton::new("Branch".into(), branches.clone(), cx);
+        let picker = MenuButton::new("Branch".into(), actions(branches.clone()), cx);
         let history = cx.entity().downgrade();
         picker.update(cx, |picker, _| {
             picker.on_pick(move |at, _, cx| {

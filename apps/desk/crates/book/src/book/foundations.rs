@@ -761,7 +761,10 @@ impl FoundationsState {
                     .child(label("spring", theme)),
             );
 
-        let items = MOTION_MENU.map(|(label, keys)| MenuItem::Action { label, keys });
+        let items = MOTION_MENU.map(|(label, keys)| MenuItem::Action {
+            label: label.into(),
+            keys: keys.map(Into::into),
+        });
         let presence = div()
             .relative()
             .h(px(MENU_TILE))

@@ -12,7 +12,7 @@ use gpui::{
     prelude::*, px, rgb_to_hsla, size,
 };
 
-use crate::components::overlay::{ContextMenu, context_menu};
+use crate::components::overlay::{ContextMenu, actions, context_menu};
 use crate::components::paint::{arrowed, focus_ring, ink, pressed, tint};
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
@@ -382,8 +382,7 @@ fn edit_menu<T: Spanned>(
     cx: &mut Context<T>,
 ) -> ContextMenu {
     let entity = cx.entity();
-    let items = T::EDITS.iter().map(|edit| edit.label().into()).collect();
-    context_menu(items)
+    context_menu(actions(T::EDITS.iter().map(|edit| edit.label())))
         .id(ElementId::NamedInteger(
             id.into(),
             entity.entity_id().as_u64(),

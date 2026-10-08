@@ -13,7 +13,7 @@ use desk_ui::components::chip::{
 };
 use desk_ui::components::form::{SelectableText, TextArea, TextInput, segmented, switch};
 use desk_ui::components::glyph::Glyph;
-use desk_ui::components::overlay::{Dropdown, MenuItem, menu};
+use desk_ui::components::overlay::{Dropdown, actions, menu};
 use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::size::CAPTION_TEXT;
 use desk_ui::icon::Icon;
@@ -117,7 +117,7 @@ impl ControlsState {
             spinner_note: SelectableText::new(SPINNER_NOTE.into(), cx),
             panel_note: SelectableText::new(PANEL_NOTE.into(), cx),
             buttons_note: SelectableText::new(BUTTONS_NOTE.into(), cx),
-            branch: Dropdown::new(BRANCHES.map(SharedString::from).to_vec(), cx),
+            branch: Dropdown::new(actions(BRANCHES), cx),
             segments: [0, 1, 2],
             switches: [true, true, false],
             clicks: 0,
@@ -258,7 +258,7 @@ impl ControlsState {
             )
         });
         let picked = WORKSPACES.get(self.flat_pick).copied().unwrap_or_default();
-        let items = WORKSPACES.map(|label| MenuItem::Action { label, keys: None });
+        let items = actions(WORKSPACES);
         let flat_menu = div()
             .absolute()
             .top(px(FLAT_MENU_DROP))

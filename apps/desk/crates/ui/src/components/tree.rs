@@ -12,7 +12,7 @@ use gpui::{
 use serde_json::Value;
 
 use crate::components::chip::{GitStatus, git_name};
-use crate::components::overlay::context_menu;
+use crate::components::overlay::{actions, context_menu};
 use crate::components::paint::ink;
 use crate::components::size::{
     FONT_TREE, HOVER, RADIUS_CHIP, ROW_ON, ROW_PAD_X, TREE_GAP, TREE_ROW,
@@ -814,7 +814,7 @@ impl Render for FileTree {
             .min_w_0()
             .children(highlight)
             .children(rows);
-        context_menu(TREE_MENU.map(SharedString::from).to_vec())
+        context_menu(actions(TREE_MENU))
             .id(ElementId::Name(format!("{}-menu", self.id).into()))
             .on_pick(cx.listener(Self::picked))
             .child(list)

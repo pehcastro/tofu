@@ -6,7 +6,7 @@ use desk_ui::components::composer::{
     Composer, ComposerVariant, HomeComposer, HomeProject, HomeSession, SessionStatus,
 };
 use desk_ui::components::form::TextArea;
-use desk_ui::components::overlay::{Dropdown, DropdownTrigger};
+use desk_ui::components::overlay::{Dropdown, DropdownTrigger, actions};
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     ClickEvent, Context, Div, Entity, Result, SharedString, Task, Window, div, prelude::*, px,
@@ -214,7 +214,7 @@ impl ComposerPage {
             attachments: shared(&ATTACHED),
             traces: shared(&TRACED),
             pickers: [models(), efforts()].map(|items| {
-                let picker = Dropdown::new(items, cx);
+                let picker = Dropdown::new(actions(items), cx);
                 picker.update(cx, |picker, _| picker.trigger(DropdownTrigger::Flat));
                 picker
             }),
