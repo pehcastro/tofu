@@ -222,6 +222,23 @@ struct Motion {
     revealed: Option<(usize, Option<Pixels>)>,
 }
 
+fn unlearned_width(tab: &Tab, font: f32, window: &Window) -> Pixels {
+    let mut style = window.text_style();
+    style.font_weight = gpui::FontWeight::MEDIUM;
+    let run = style.to_run(tab.label.len());
+    let label = window
+        .text_system()
+        .layout_line(&tab.label, px(font), &[run], None)
+        .width;
+    let lead = if tab.icon.is_some() {
+        px(ICON_SMALL + TAB_GAP)
+    } else {
+        px(0.0)
+    };
+    (label + lead + px(TAB_PAD_LEFT + TAB_PAD_LINK + TAB_PAD_TAIL + CLOSE_BOX))
+        .clamp(px(TAB_MIN_WIDTH), px(TAB_MAX_WIDTH))
+}
+
 fn close_box(tab: Bounds<Pixels>) -> Bounds<Pixels> {
     let side = px(CLOSE_BOX);
     Bounds::new(
@@ -293,7 +310,13 @@ impl Motion {
         self.fixed = fixed;
     }
 
-    fn fitting(&self, tabs: &[Tab], room: Option<Pixels>) -> usize {
+    fn fitting(
+        &self,
+        tabs: &[Tab],
+        room: Option<Pixels>,
+        (font, gap): (f32, f32),
+        window: &Window,
+    ) -> usize {
         let Some(room) = room.map(|room| room - self.fixed) else {
             return tabs.len();
         };
@@ -303,7 +326,10 @@ impl Motion {
                 .widths
                 .iter()
                 .find(|(known, _)| *known == tab.label)
-                .map_or(px(TAB_MAX_WIDTH), |(_, width)| *width);
+                .map_or_else(
+                    || unlearned_width(tab, font, window) + px(gap),
+                    |(_, width)| *width,
+                );
             let more = if at + 1 < tabs.len() {
                 self.more
             } else {
@@ -1033,13 +1059,16 @@ impl RenderOnce for TabStrip {
             close: tab.mark == TabMark::Close,
         };
         let width = Width::of(format!("{id}-width"), window, cx);
-        let (cap, gap) = match &shape {
-            Shape::Connected { room } => (tabs.len().min(*room), 0.0),
-            Shape::Header { .. } => (tabs.len(), HEADER_GAP),
+        let (cap, gap, font) = match &shape {
+            Shape::Connected { room } => (tabs.len().min(*room), 0.0, FONT_TAB),
+            Shape::Header { .. } => (tabs.len(), HEADER_GAP, FONT_BODY),
         };
-        let fit = state
-            .read(cx)
-            .fitting(tabs.get(..cap).unwrap_or_default(), width.get(cx));
+        let fit = state.read(cx).fitting(
+            tabs.get(..cap).unwrap_or_default(),
+            width.get(cx),
+            (font, gap),
+            window,
+        );
         let visible = shown(tabs.len(), cap.min(fit), active);
         let hidden = tabs.len().saturating_sub(visible.len());
         let flow = visible

@@ -32,6 +32,8 @@ const FEED_TOKENS: [u32; 5] = [12_400, 830, 3_150, 48_900, 7_020];
 const SELECTED_ROW: usize = 2;
 pub const CONNECTED_ROOM: usize = 4;
 const STATIC_ROW_WIDTH: f32 = 360.0;
+const SHORT_FIT_WIDTH: f32 = 360.0;
+const SHORT_FOLD_WIDTH: f32 = 200.0;
 
 #[derive(Clone)]
 pub struct Strip {
@@ -113,6 +115,21 @@ impl Strip {
             tabs,
             screens: usize::from(screen),
             picked: 1,
+            made: 0,
+        }
+    }
+
+    fn short() -> Self {
+        let tabs = ["work", "logs", "diff"].map(|name| Tab {
+            label: name.into(),
+            icon: None,
+            count: None,
+            mark: TabMark::Close,
+        });
+        Strip {
+            tabs: tabs.to_vec(),
+            screens: 0,
+            picked: 0,
             made: 0,
         }
     }
@@ -265,6 +282,8 @@ pub struct TabPage {
     header: Strip,
     bare: Strip,
     files: Strip,
+    fit: Strip,
+    fold: Strip,
 }
 
 impl TabPage {
@@ -275,6 +294,8 @@ impl TabPage {
             header: Strip::workspaces(true),
             bare: Strip::workspaces(false),
             files: Strip::files(),
+            fit: Strip::short(),
+            fold: Strip::short(),
         }
     }
 }
@@ -420,6 +441,12 @@ impl ListsState {
             .connected("file-tabs", usize::MAX, theme, cx, |book| {
                 Some(&mut book.lists.tabs.files)
             });
+        let fit = page.fit.header("short-fit", theme, cx, |book| {
+            Some(&mut book.lists.tabs.fit)
+        });
+        let fold = page.fold.header("short-fold", theme, cx, |book| {
+            Some(&mut book.lists.tabs.fold)
+        });
         let tile = |strip: TabStrip, shown: &Strip, about: &'static str| {
             shell(Header::Tabs(strip.into_any_element(), None), theme)
                 .min_h(px(TILE_HEIGHT / 2.0))
@@ -485,6 +512,16 @@ impl ListsState {
                     "Without a screen tab",
                     theme,
                     workspace(bare, &page.bare),
+                ))
+                .child(block(
+                    "Three short tabs with room: all shown",
+                    theme,
+                    div().w(px(SHORT_FIT_WIDTH)).child(workspace(fit, &page.fit)),
+                ))
+                .child(block(
+                    "The same three without room: they fold",
+                    theme,
+                    div().w(px(SHORT_FOLD_WIDTH)).child(workspace(fold, &page.fold)),
                 )),
             )
             .child(
