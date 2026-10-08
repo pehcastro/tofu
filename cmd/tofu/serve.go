@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/host"
+	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
 	"tofu/internal/turn"
@@ -102,9 +103,9 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	open, polled := openAppWire, serveQuota(kept)
+	open, polled, wires := openAppWire, serveQuota(kept), signedInWires
 	if deck != nil {
-		open, polled = driveWire(deck), nil
+		open, polled, wires = driveWire(deck), nil, func() []string { return append(runWires(), wireMeta) }
 	}
 	launch := launchOf(dir, sessionResume{}, true)
 	engine := &appEngine{dir: dir, open: open, tabs: launch.tabs}
@@ -114,7 +115,8 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintln(errOut, "tofu serve: "+line)
 		}
 	}
-	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled})
+	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled,
+		Sessions: serveSessions, Wires: wires, Sources: wireSources()})
 	engine.warm.Close()
 	live.Close()
 	for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
@@ -139,6 +141,41 @@ func serveCarry(handle string) (host.Carry, error) {
 	}
 	carry, err := resumeOf(store, handle)
 	return carry.hosted(), err
+}
+
+func serveSessions(open string) (host.SessionList, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return host.SessionList{}, err
+	}
+	report, err := sessionListing(store, sessionstore.DefaultSettings().Lifetime, time.Now())
+	if err != nil {
+		return host.SessionList{}, err
+	}
+	opened, _ := store.Identity(open)
+	list := host.SessionList{Head: report.Head, Sessions: make([]host.SessionRow, len(report.Sessions))}
+	for index, row := range report.Sessions {
+		list.Sessions[index] = host.SessionRow{ID: row.ID, Name: row.Name, Handle: row.Handle, Family: row.Family, Generation: row.Generation, Generations: row.Generations,
+			At: row.At, LastAt: row.LastAt, Task: row.Task, Turns: row.Turns, SubAgents: row.Agents, Wire: row.Wire, Model: row.Model, CostUSD: row.CostUSD,
+			EndedAt: row.EndedAt, EndReason: string(row.EndReason), Expired: row.Expired, Open: row.ID == open || opened.Family != "" && row.Family == opened.Family}
+		var held sessionstore.BusyError
+		if errors.As(store.Busy(row.ID), &held) {
+			list.Sessions[index].HeldBy = &host.SessionHolder{PID: held.PID, Since: held.Since}
+		}
+	}
+	return list, nil
+}
+
+func wireSources() map[string]string {
+	return map[string]string{wireSubscription: string(models.ClaudeSub), wireCodex: string(models.CodexSub), wireKey: string(models.OpenRouter), wireMeta: string(models.Meta)}
+}
+
+func signedInWires() []string {
+	var names []string
+	for _, wire := range appWires() {
+		names = append(names, wire.Name)
+	}
+	return names
 }
 
 func serveVerbs(errOut io.Writer) func([]string) (host.VerbResult, error) {

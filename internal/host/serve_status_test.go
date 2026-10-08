@@ -68,11 +68,11 @@ func (c *wireClient) cronUpdated(live int) CronState {
 	return state
 }
 
-func serving(t *testing.T, quota func() []QuotaWindow) (*wireClient, *Host, string) {
+func serving(t *testing.T, play Play, cfg ServeConfig) (*wireClient, *Host, string) {
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	h, _ := New(Config{Dir: project})
+	h, _ := New(Config{Dir: project, Play: play})
 	t.Cleanup(h.Close)
 	clientIn, serveIn := io.Pipe()
 	serveOut, clientOut := io.Pipe()
@@ -88,7 +88,8 @@ func serving(t *testing.T, quota func() []QuotaWindow) (*wireClient, *Host, stri
 	}()
 	served := make(chan error, 1)
 	go func() {
-		served <- Serve(ServeConfig{Host: h, Dir: project, In: clientIn, Out: clientOut, Quota: quota})
+		cfg.Host, cfg.Dir, cfg.In, cfg.Out = h, project, clientIn, clientOut
+		served <- Serve(cfg)
 	}()
 	t.Cleanup(func() {
 		_ = serveIn.Close()
@@ -99,9 +100,9 @@ func serving(t *testing.T, quota func() []QuotaWindow) (*wireClient, *Host, stri
 }
 
 func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
-	c, h, _ := serving(t, func() []QuotaWindow {
+	c, h, _ := serving(t, nil, ServeConfig{Quota: func() []QuotaWindow {
 		return []QuotaWindow{{Account: "#1", Window: "claude-sub 5h", Percent: 34, Reported: true}}
-	})
+	}})
 
 	c.ask("1", "initialize", `{"client":"scratch"}`)
 	c.ask("2", "session.open", `{}`)

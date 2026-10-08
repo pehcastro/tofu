@@ -21,51 +21,55 @@ three lines of context.
 
 ## Where it lives
 
-- the requests: `initialize`, `session.list`, `session.open`,
-  `session.rename`, `turn.send`,
-  `turn.steer`, `turn.stop`, `undo`, `shell.read`, `shell.kill`, `label`,
-  `settings.set`, `login.start`, `cron.command`, and the reads `query.usage`,
+- sessions: `session.list`, `session.open`, `session.state`, `session.set`,
+  `session.rename`. Turns: `turn.send`, `turn.steer`, `turn.stop`, `undo`.
+  Shells: `shell.read`, `shell.kill`. Others: `initialize`, `label`,
+  `settings.set`, `login.start`, `cron.command`. Reads: `query.usage`,
   `query.context`, `query.rules`, `query.agents`, `query.models`,
-  `query.ledger`, `query.settings`, `query.library` and `query.cron`
-- cron jobs: `cron.command` takes the line you would type, such as
-  `/loop 10m check the build` or `/cron pause c1`. `query.cron` answers
-  `live`, `goals` and every job with its `id`, `schedule`, `prompt`, `paused`,
-  `next` and `ended`, and `cron.updated` carries the same whenever a job is
-  added, changed, fired or removed, by you or by the agent
-- who started it: `turn.started` and every `message.user`, live or in a
-  reopened session's history, carry `origin`. `{"kind":"person"}` is you,
-  `{"kind":"cron","job":"c1","schedule":"every 30m"}` a cron fire,
-  `{"kind":"agent","name":"research-1"}` a sub-agent's report, and
-  `{"kind":"tofu","source":"stop hook"}` a line tofu added itself. A session
-  written before this release reads every cron fire as `person`, and a cron
-  fire that arrives while a turn runs joins it as a steer, so a reopened
-  session reads that one as `person` too
-- activity: each `session.list` row and `session.updated` carry `lastAt`,
-  the last time anything was recorded in the session. `session.updated`
-  follows every turn with the new value
-- account quota: `quota.updated` arrives when a session opens, after every
-  turn and every five minutes, with each account window's `percent`.
-  `windows: []` means no account answered
-- the schema: `tofu serve --schema` prints the JSON Schema of every line
-  tofu writes, and of every line it reads under `$defs.clientMessage`
-- renaming: `session.rename` takes `session`, an id, and `name`, and names
-  every generation of that session's family, as `tofu session rename` does.
-  `session.updated` follows with the new `name` and `handle`; a name with no
-  letter or digit, or a session not here, is refused
-- a session another tofu holds: `session.open` answers with the error
-  `session.busy`, carrying the process that holds it
-- the log: every line tofu writes to the session's `events.jsonl` is
-  announced as `item.persisted`, with its `logSeq`, so history after a seq
-  is a read of the log. A tool call's notice names the same item as its
-  `tool.started`
-- a slow reader: tofu never waits on it. Past 128 queued lines it drops
-  what it cannot hold and sends `resync`, and the reader asks again for
-  what it missed
+  `query.ledger`, `query.settings`, `query.library`, `query.cron`
+- `initialize`: answers `capabilities`, one name a family of methods (`list`,
+  `state`, `set`, `images`, `cron` and so on), so a client tells an older tofu
+  from a newer one without a version table
+- `session.list`: takes `search` and `limit`, both optional; one row a
+  session with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
+  `model`, `costUsd`, `open` for the one open here, `running` while a turn
+  runs in it, and `heldBy` when another tofu holds it. `session.listed`
+  sends the open row again when a turn starts or ends, after a fork and after
+  a rename, so a sidebar never asks
+- `session.state`: everything a client that missed lines or opened mid-turn
+  needs: `running` and its `turn`, `asking` (absent while `gatePrompt`
+  decides), the `pick` of wire, model and effort, waiting approvals,
+  sub-agents, shells, the context window and the cron jobs. It answers `resync`
+- `session.rename`: takes `session` and `name` and names the whole family, as
+  `tofu session rename` does; `session.updated` follows. A name with no letter
+  or digit, or a session not here, is refused
+- `session.open` on a session another tofu holds: the error `session.busy`,
+  carrying the process that holds it
+- cron: `cron.command` takes the line you would type, such as `/loop 10m check
+  the build`. `query.cron` and `cron.updated` carry `live`, `goals` and each
+  job's `id`, `schedule`, `prompt`, `paused`, `next` and `ended`
+- `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`,
+  `{"kind":"cron","job":"c1","schedule":"every 30m"}`,
+  `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop
+  hook"}`: you, a cron fire, a sub-agent's report, a line tofu added. Older
+  sessions, and a cron fire that joined a running turn, read as `person`
+- `lastAt`, the last time anything was recorded, on every `session.list` row,
+  `session.listed` and `session.updated`, which follows every turn
+- `quota.updated`: when a session opens, after every turn and every five
+  minutes, with each window's `percent`; `windows: []` means none answered
+- `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
+  so history after a seq is a read of the log; a tool call's notice names the
+  item of its `tool.started`
+- a slow reader: past 128 queued lines tofu drops what it cannot hold and
+  sends `resync`, and never waits
+- `tofu serve --schema` prints the JSON Schema of every line written, and of
+  every line read under `$defs.clientMessage`
 
 ## Change it
 
 Confirmations follow the setting `gatePrompt`, auto unless you changed it.
-`session.open` takes `asking`, `ask` or `auto`, for that session alone:
+`session.open` and `session.set` take `asking`, `ask` or `auto`, for that
+session alone:
 
 - `auto`: no request is sent; every gate still sends a `decision` event
 - `ask`: a gate jev would ask about sends `tofu/requestApproval` as a
@@ -73,9 +77,18 @@ Confirmations follow the setting `gatePrompt`, auto unless you changed it.
   `reject_once`, `reject_always`, or `cancelled`, which stops the turn. The
   first answer wins, and `approval.resolved` says which it was
 
+`session.set` also takes `wire`, `model` and `effort`, and holds them for
+every later turn and cron fire; `session.settings` tells every client. A
+`wire` is the source that pays, as the picker spells it: `claude-sub`,
+`codex-sub`, `openrouter` or `meta`. One nobody here is signed in on is
+refused, and a new `wire` with no `model` takes that wire's default.
+
+`turn.send` takes the same three, and `images`, a list of `{"path": ...}`.
+Each is copied into the session and `[Image #N]` is added to the text. A png,
+jpg, gif or webp is taken; anything else refuses the whole send.
+
 `--cassette PATH` answers every model call from a recorded cassette, as
-`tofu drive` does, so a frontend is built and tested with no model and no
-network.
+`tofu drive` does, so a frontend is built with no model and no network.
 
 ## Check it
 

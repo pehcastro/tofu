@@ -12,7 +12,7 @@ import (
 )
 
 func TestSessionRenameNamesTheWholeFamilyAndLeavesTheOpenSessionWhereItWas(t *testing.T) {
-	c, _, project := serving(t, nil)
+	c, _, project := serving(t, nil, ServeConfig{})
 	store, err := session.OpenIn(project)
 	if err != nil {
 		t.Fatal(err)

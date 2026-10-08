@@ -15,21 +15,23 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
 
 type ServeConfig struct {
-	Host   *Host
-	Dir    string
-	In     io.Reader
-	Out    io.Writer
-	Shells *shell.Registry
-	Carry  func(handle string) (Carry, error)
-	Verb   func(args []string) (VerbResult, error)
-	Quota  func() []QuotaWindow
+	Host     *Host
+	Dir      string
+	In       io.Reader
+	Out      io.Writer
+	Shells   *shell.Registry
+	Carry    func(handle string) (Carry, error)
+	Verb     func(args []string) (VerbResult, error)
+	Quota    func() []QuotaWindow
+	Sessions func(open string) (SessionList, error)
+	Wires    func() []string
+	Sources  map[string]string
 }
 
 type server struct {
@@ -39,12 +41,12 @@ type server struct {
 	items   items
 	client  string
 	ready   bool
-	pending map[string]Identity
+	pending map[string]ApprovalRequest
 	shells  map[string]*watchedShell
 }
 
 func Serve(cfg ServeConfig) error {
-	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]Identity{}, shells: map[string]*watchedShell{},
+	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, shells: map[string]*watchedShell{},
 		items: items{session: cfg.Host.ID(), tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
@@ -135,7 +137,11 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "initialize":
 		return handle(raw, s.initialize)
 	case "session.list":
-		return handle(raw, verb("session", "list"))
+		return handle(raw, s.sessions)
+	case "session.state":
+		return handle(raw, func(NoParams) (any, error) { return s.state(), nil })
+	case "session.set":
+		return handle(raw, s.set)
 	case "session.open":
 		result, err := handle(raw, s.open)
 		if err == nil {
@@ -186,19 +192,18 @@ func (s *server) initialize(p InitializeParams) (any, error) {
 	s.mu.Lock()
 	s.client, s.ready = p.Client, true
 	s.mu.Unlock()
-	return InitializeResult{Protocol: Protocol, Tofu: konst.Version, Project: s.Dir, Capabilities: []string{"approvals", "resync", "shells", "queries"}}, nil
+	return InitializeResult{Protocol: Protocol, Tofu: konst.Version, Project: s.Dir, Capabilities: capabilities()}, nil
 }
 
 func (s *server) open(p SessionOpenParams) (any, error) {
 	if p.Project != "" && filepath.Clean(p.Project) != filepath.Clean(s.Dir) {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu serves " + s.Dir + ", not " + p.Project}
 	}
-	switch p.Asking {
-	case AskingAsk, AskingAuto:
+	if err := checkAsking(p.Asking); err != nil {
+		return nil, err
+	}
+	if p.Asking != "" {
 		s.Host.SetAsking(p.Asking)
-	case "":
-	default:
-		return nil, &Refusal{Code: CodeBadParams, Message: "asking is ask or auto, not " + strconv.Quote(string(p.Asking))}
 	}
 	if p.Session == "" {
 		id, err := s.Host.OpenFresh()
@@ -237,6 +242,7 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 		return nil, err
 	}
 	s.box.push(sessionUpdated(Identity{Session: header.ID, Item: header.ID}, labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID})))
+	go s.listed()
 	return Ack{OK: true}, nil
 }
 
@@ -265,19 +271,23 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	if err := s.sameSession(p.Session); err != nil {
 		return nil, err
 	}
-	pick := Pick{Model: p.Model}
-	if p.Effort != "" {
-		effort, err := llm.ParseEffort(p.Effort)
-		if err != nil {
-			return nil, &Refusal{Code: CodeBadParams, Message: err.Error()}
-		}
-		pick.Effort = effort
+	if _, running := s.Host.Turn(); running {
+		return nil, errTurnRunning
+	}
+	_, picked := s.Host.Settings()
+	pick, err := s.chosen(picked, p.ModelPick)
+	if err != nil {
+		return nil, err
 	}
 	task := p.Text
 	for _, mention := range p.Mentions {
 		task += " @" + mention
 	}
-	if !s.Host.Send(pick, task) {
+	tokens, err := s.attach(p.Images)
+	if err != nil {
+		return nil, err
+	}
+	if !s.Host.Send(pick, task+tokens) {
 		return nil, errTurnRunning
 	}
 	turn, _ := s.Host.Turn()
@@ -363,7 +373,7 @@ func (s *server) answered(id, result json.RawMessage) {
 		return
 	}
 	delete(s.pending, approval)
-	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked, Approval: approval, Decision: answer.Decision, By: s.client}))
+	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client}))
 }
 
 func (s *server) pump(quit <-chan struct{}) {
@@ -390,14 +400,17 @@ func (s *server) publish(event Event) {
 	defer s.mu.Unlock()
 	switch event.Kind {
 	case EventAwaitPerson:
-		s.pending[event.ID] = s.items.identity(event.Agent, event.ID)
+		s.pending[event.ID] = approvalRequest(s.items.identity(event.Agent, event.ID), event)
 	case EventResumed:
 		if asked, pending := s.pending[event.ID]; pending {
 			delete(s.pending, event.ID)
-			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked, Approval: event.ID, Decision: Cancelled, By: "tofu"}))
+			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: event.ID, Decision: Cancelled, By: "tofu"}))
 		}
 	case EventTurnEnded:
 		go s.quota()
+		go s.listed()
+	case EventTurnStarted, EventForkEnd:
+		go s.listed()
 	}
 	s.translated(event)
 }

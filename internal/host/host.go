@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -213,6 +214,12 @@ func (h *Host) SetAsking(asking AskingMode) {
 	h.mu.Lock()
 	h.asking = asking
 	h.mu.Unlock()
+}
+
+func (h *Host) Settings() (AskingMode, Pick) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.asking, h.pick
 }
 
 func (h *Host) OpenFresh() (string, error) {
@@ -483,15 +490,9 @@ func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
 
 func imageMediaType(name string) string {
 	ext := strings.ToLower(filepath.Ext(name))
-	switch ext {
-	case ".png":
-		return "image/png"
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	}
-	return "image/" + strings.TrimPrefix(ext, ".")
+	return cmp.Or(imageMediaTypes()[ext], "image/"+strings.TrimPrefix(ext, "."))
+}
+
+func imageMediaTypes() map[string]string {
+	return map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 }

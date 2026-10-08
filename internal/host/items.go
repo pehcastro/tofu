@@ -27,7 +27,9 @@ type openTool struct {
 type items struct {
 	session string
 	turn    string
+	task    string
 	began   time.Time
+	context *ContextUse
 	status  Status
 	message string
 	written string
@@ -54,7 +56,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	id := s.identity(event.Agent, event.ID)
 	switch event.Kind {
 	case EventTurnStarted:
-		s.turn, s.began, s.status = event.ID, now, StatusFailed
+		s.turn, s.task, s.began, s.status = event.ID, event.Text, now, StatusFailed
 		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: now}))
 	case EventTurnEnded:
 		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))
@@ -118,7 +120,8 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, merged("usage.updated", event.Agent, &UsageUpdated{Identity: id, Model: event.Model, TokensIn: event.TokensIn, TokensOut: event.TokensOut, CacheRead: event.CacheRead, Decisions: event.Decisions}))
 	case EventContext:
 		id.Item = session.EventIDFor(s.turn, "context")
-		return append(out, merged("context.updated", "", &ContextUpdated{Identity: id, Used: event.Context.Used, Budget: event.Context.Budget}))
+		s.context = &ContextUse{Used: event.Context.Used, Budget: event.Context.Budget}
+		return append(out, merged("context.updated", "", &ContextUpdated{Identity: id, ContextUse: *s.context}))
 	case EventPlan:
 		id.Item = session.EventIDFor(s.turn, "plan")
 		steps := make([]PlanStep, 0, len(event.Plan))
@@ -137,12 +140,8 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		forked := *event.Fork
 		return append(out, kept("session.forked", &SessionForked{Identity: s.identity("", forked.To), From: forked.From, To: forked.To, Kind: forked.Kind, Before: forked.Before, After: forked.After}))
 	case EventAwaitPerson:
-		asked := &ApprovalRequest{Identity: id, Approval: event.ID, Tool: event.Tool, Target: event.Text, Args: wholeJSON(event.Args)}
-		if event.Decision != nil {
-			judged := judgementOf(*event.Decision)
-			asked.Judged = &judged
-		}
-		request := kept(ApprovalMethod, asked)
+		asked := approvalRequest(id, event)
+		request := kept(ApprovalMethod, &asked)
 		request.msg.ID, _ = json.Marshal(event.ID)
 		return append(out, request)
 	case EventPersisted:
@@ -167,6 +166,15 @@ func sessionUpdated(id Identity, event Event) outgoing {
 		updated.Name, updated.Tag, updated.Generation, updated.Handle, updated.Started = family.Name, family.Tag, family.Generation, family.Handle(), family.Started
 	}
 	return kept("session.updated", updated)
+}
+
+func approvalRequest(id Identity, event Event) ApprovalRequest {
+	asked := ApprovalRequest{Identity: id, Approval: event.ID, Tool: event.Tool, Target: event.Text, Args: wholeJSON(event.Args)}
+	if event.Decision != nil {
+		judged := judgementOf(*event.Decision)
+		asked.Judged = &judged
+	}
+	return asked
 }
 
 func wholeJSON(raw json.RawMessage) json.RawMessage {

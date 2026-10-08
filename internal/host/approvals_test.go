@@ -15,7 +15,7 @@ func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	h, _ := New(Config{})
-	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), pending: map[string]Identity{},
+	s := &server{ServeConfig: ServeConfig{Host: h}, box: newOutbox(), pending: map[string]ApprovalRequest{},
 		items: items{tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
 	awaited := make(chan string, 2)
 	emit := func(event Event) {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"tofu/internal/llm"
+	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
 )
 
@@ -318,6 +320,10 @@ type PlanStep struct {
 
 type ContextUpdated struct {
 	Identity
+	ContextUse
+}
+
+type ContextUse struct {
 	Used   int `json:"used"`
 	Budget int `json:"budget"`
 }
@@ -453,12 +459,123 @@ type SessionOpenResult struct {
 	Fresh   bool   `json:"fresh"`
 }
 
+type SessionListParams struct {
+	Search string `json:"search,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+}
+
+type SessionList struct {
+	Head     string       `json:"head,omitempty"`
+	Sessions []SessionRow `json:"sessions"`
+}
+
+type SessionRow struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name,omitempty"`
+	Handle      string         `json:"handle"`
+	Family      string         `json:"family,omitempty"`
+	Generation  int            `json:"generation,omitempty"`
+	Generations int            `json:"generations,omitempty"`
+	At          time.Time      `json:"at"`
+	LastAt      time.Time      `json:"lastAt,omitzero"`
+	Task        string         `json:"task,omitempty"`
+	Turns       int            `json:"turns"`
+	SubAgents   int            `json:"subAgents"`
+	Wire        string         `json:"wire,omitempty"`
+	Model       string         `json:"model,omitempty"`
+	CostUSD     float64        `json:"costUsd,omitempty"`
+	EndedAt     *time.Time     `json:"endedAt,omitempty"`
+	EndReason   string         `json:"endReason,omitempty"`
+	Expired     bool           `json:"expired"`
+	Open        bool           `json:"open"`
+	Running     bool           `json:"running"`
+	HeldBy      *SessionHolder `json:"heldBy,omitempty"`
+}
+
+type SessionHolder struct {
+	PID   int       `json:"pid"`
+	Since time.Time `json:"since"`
+}
+
+type SessionListed struct {
+	Identity
+	SessionRow
+}
+
+type ModelPick struct {
+	Wire   string     `json:"wire,omitempty"`
+	Model  string     `json:"model,omitempty"`
+	Effort llm.Effort `json:"effort,omitempty"`
+}
+
+type SessionSetParams struct {
+	Asking AskingMode `json:"asking,omitempty"`
+	ModelPick
+}
+
+type SessionSettings struct {
+	Identity
+	Asking AskingMode `json:"asking,omitempty"`
+	Pick   ModelPick  `json:"pick"`
+}
+
+type SessionState struct {
+	Session   string            `json:"session"`
+	Running   bool              `json:"running"`
+	Turn      *RunningTurn      `json:"turn,omitempty"`
+	Asking    AskingMode        `json:"asking,omitempty"`
+	Pick      ModelPick         `json:"pick"`
+	Approvals []ApprovalRequest `json:"approvals"`
+	Agents    []AgentNow        `json:"agents"`
+	Shells    []ShellNow        `json:"shells"`
+	Context   *ContextUse       `json:"context,omitempty"`
+	Cron      CronState         `json:"cron"`
+}
+
+type RunningTurn struct {
+	ID        string    `json:"id"`
+	Task      string    `json:"task"`
+	StartedAt time.Time `json:"startedAt"`
+}
+
+type AgentNow struct {
+	Instance  string     `json:"instance"`
+	Kind      string     `json:"kind"`
+	Task      string     `json:"task"`
+	Owns      []string   `json:"owns"`
+	Model     string     `json:"model"`
+	State     AgentState `json:"state"`
+	Steps     int        `json:"steps"`
+	Tokens    int        `json:"tokens"`
+	StartedAt time.Time  `json:"startedAt"`
+}
+
+type ShellNow struct {
+	Shell     string     `json:"shell"`
+	Command   string     `json:"command"`
+	PID       int        `json:"pid"`
+	State     ShellState `json:"state"`
+	StartedAt time.Time  `json:"startedAt"`
+	ExitCode  *int       `json:"exitCode,omitempty"`
+	EndedAt   *time.Time `json:"endedAt,omitempty"`
+}
+
+type ShellState string
+
+func (ShellState) enum() []string {
+	return []string{string(shell.Running), string(shell.Exited), string(shell.Killed)}
+}
+
 type TurnSendParams struct {
-	Session  string   `json:"session"`
-	Text     string   `json:"text"`
-	Mentions []string `json:"mentions,omitempty"`
-	Model    string   `json:"model,omitempty"`
-	Effort   string   `json:"effort,omitempty"`
+	Session  string          `json:"session"`
+	Text     string          `json:"text"`
+	Mentions []string        `json:"mentions,omitempty"`
+	Images   []AttachedImage `json:"images,omitempty"`
+	ModelPick
+}
+
+type AttachedImage struct {
+	Path string `json:"path"`
 }
 
 type TurnSteerParams struct {
@@ -565,6 +682,8 @@ func notifications() []method {
 		{name: "cron.updated", params: CronUpdated{}},
 		{name: "session.forked", params: SessionForked{}},
 		{name: "session.updated", params: SessionUpdated{}},
+		{name: "session.listed", params: SessionListed{}},
+		{name: "session.settings", params: SessionSettings{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
 		{name: "item.persisted", params: Persisted{}},
 		{name: resyncMethod, params: Resync{}},
@@ -575,8 +694,10 @@ func requests() []method {
 	verb := VerbResult{}
 	methods := []method{
 		{name: "initialize", params: InitializeParams{}, result: InitializeResult{}},
-		{name: "session.list", params: NoParams{}, result: verb},
+		{name: "session.list", params: SessionListParams{}, result: SessionList{}},
 		{name: "session.open", params: SessionOpenParams{}, result: SessionOpenResult{}},
+		{name: "session.state", params: NoParams{}, result: SessionState{}},
+		{name: "session.set", params: SessionSetParams{}, result: Ack{}},
 		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
 		{name: "turn.send", params: TurnSendParams{}, result: TurnResult{}},
 		{name: "turn.steer", params: TurnSteerParams{}, result: TurnResult{}},
@@ -594,6 +715,10 @@ func requests() []method {
 		methods = append(methods, method{name: queryPrefix + query.name, params: NoParams{}, result: verb})
 	}
 	return methods
+}
+
+func capabilities() []string {
+	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images"}
 }
 
 const queryPrefix = "query."
