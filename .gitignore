@@ -25,3 +25,4 @@ rtk/
 /Microsoft/
 
 apps/desk/**/.scratch/
+apps/desk/target-agent/

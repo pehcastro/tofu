@@ -88,6 +88,7 @@ pub struct Chat {
     approval: Option<Approval>,
     asking: SessionOpenParamsAsking,
     project: String,
+    tofu: String,
     problem: Option<SharedString>,
     focus: FocusHandle,
     refocus: bool,
@@ -229,6 +230,7 @@ impl Chat {
             approval: None,
             asking: SessionOpenParamsAsking::Auto,
             project: String::new(),
+            tofu: String::new(),
             problem: None,
             focus: cx.focus_handle(),
             refocus: true,
@@ -321,6 +323,10 @@ impl Chat {
         cx.notify();
     }
 
+    pub fn tofu_version(&self) -> &str {
+        &self.tofu
+    }
+
     pub fn problem(&self) -> Option<&SharedString> {
         self.problem.as_ref()
     }
@@ -398,6 +404,7 @@ impl Chat {
         );
         let events = bridge.events().clone();
         self.project = hello.project;
+        self.tofu = hello.tofu;
         self.link = Link::Ready(bridge);
         self.relist(cx);
         cx.notify();

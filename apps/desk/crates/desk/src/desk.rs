@@ -6,7 +6,7 @@ use crate::project::{self, Head};
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
-use crate::title_bar::title_bar;
+use crate::title_bar::{Bell, title_bar};
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
@@ -122,6 +122,7 @@ pub struct Desk {
     parked: Vec<Shown>,
     palette: Entity<Palette>,
     focus: FocusHandle,
+    bell: Bell,
     #[cfg(feature = "screen-work")]
     projects: Projects,
     #[cfg(feature = "screen-work")]
@@ -177,15 +178,15 @@ pub fn window_options(title: SharedString, client: Size<Pixels>, cx: &App) -> Wi
         }));
     #[cfg(target_os = "windows")]
     {
-        options.windows_window_background = gpui::WindowsWindowBackground::Transparent;
+        options.windows_window_background = gpui::WindowsWindowBackground::Blurred;
     }
     #[cfg(target_os = "macos")]
     {
-        options.macos_window_background = gpui::MacosWindowBackground::Transparent;
+        options.macos_window_background = gpui::MacosWindowBackground::Blurred;
     }
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
-        options.linux_window_background = gpui::LinuxWindowBackground::Transparent;
+        options.linux_window_background = gpui::LinuxWindowBackground::Blurred;
     }
     options
 }
@@ -268,6 +269,7 @@ impl Desk {
             parked: Vec::new(),
             palette,
             focus: cx.focus_handle(),
+            bell: Bell::default(),
             #[cfg(feature = "screen-work")]
             projects: Projects::default(),
             #[cfg(feature = "screen-work")]
@@ -508,6 +510,11 @@ impl Desk {
         cx.stop_propagation();
     }
 
+    pub fn read_notices(&mut self, cx: &mut Context<Self>) {
+        self.bell.read();
+        cx.notify();
+    }
+
     pub fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
         self.toast(control.tell().into(), Some(TELL_BADGE), cx);
     }
@@ -558,6 +565,14 @@ impl Desk {
     }
 
     #[cfg(not(feature = "screen-work"))]
+    pub fn open_notice(&mut self, _: usize, _: &mut Context<Self>) {}
+
+    #[cfg(not(feature = "screen-work"))]
+    fn tofu_version(&self, _: &App) -> Option<SharedString> {
+        None
+    }
+
+    #[cfg(not(feature = "screen-work"))]
     fn sidebar_project(&self, _: &App) -> Option<Project> {
         None
     }
@@ -589,6 +604,22 @@ impl Desk {
             })
     }
 
+    fn tofu_version(&self, cx: &App) -> Option<SharedString> {
+        let version = self.work()?.read(cx).chat().read(cx).tofu_version();
+        (!version.is_empty()).then(|| version.to_owned().into())
+    }
+
+    pub fn open_notice(&mut self, ix: usize, cx: &mut Context<Self>) {
+        let Some(id) = self.bell.session(ix).map(str::to_owned) else {
+            return eprintln!("desk: bell: notice {ix} is gone");
+        };
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return eprintln!("desk: bell: no work screen for session {id}");
+        };
+        eprintln!("desk: bell: open {id}");
+        chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
+    }
+
     fn adopt(&mut self, folder: PathBuf, work: &Entity<Work>, cx: &mut Context<Self>) {
         eprintln!("desk: project {}", folder.display());
         let chat = work.read(cx).chat().clone();
@@ -602,7 +633,12 @@ impl Desk {
             }),
             cx.subscribe(&chat, |desk, _, _: &Touched, cx| desk.reread_head(cx)),
             cx.observe(&chat, |desk, _, cx| desk.track_running(cx)),
-            cx.observe(&store, |_, _, cx| cx.notify()),
+            cx.observe(&store, |desk, store, cx| {
+                for (id, session) in &store.read(cx).sessions {
+                    desk.bell.gather(id, session);
+                }
+                cx.notify();
+            }),
         ];
         match project::remember(&folder) {
             Ok(recents) => self.projects.recents = recents,
@@ -1070,6 +1106,8 @@ impl Render for Desk {
                 self.sidebar_open,
                 self.tiles_x(),
                 status.quota.as_ref(),
+                &self.bell,
+                self.tofu_version(cx),
                 tabs,
                 cx,
             ))

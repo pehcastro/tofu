@@ -15,13 +15,14 @@ use gpui::{App, Context, Div, IntoElement, Window, div, prelude::*, px};
 use super::Book;
 use super::kit::named;
 
-const BOARD_WIDTH: f32 = 1400.0;
+const BOARD_WIDTH: f32 = 960.0;
 const WORKSPACES: [&str; 3] = ["work", "editor", "data"];
 const POP_ROOM: f32 = 250.0;
 const SESSIONS_HEIGHT: f32 = 300.0;
 
 fn board_title(open: Option<TitlePop>) -> Title {
-    let notice = |text: &str, code: Option<&str>, detail: &str, needs_you| Notice {
+    let notice = |glyph, text: &str, code: Option<&str>, detail: &str, needs_you| Notice {
+        glyph,
         text: text.to_owned().into(),
         code: code.map(|code| code.to_owned().into()),
         detail: detail.to_owned().into(),
@@ -32,31 +33,35 @@ fn board_title(open: Option<TitlePop>) -> Title {
         palette_keys: "Ctrl K".into(),
         notices: vec![
             notice(
-                "quiet-amber-heron wants to run",
+                Glyph::Lock,
+                "shell wants to run",
                 Some("rm -rf build/"),
-                "waiting 2m \u{b7} opens the approval",
+                "2m ago",
                 true,
             ),
             notice(
-                "ts-dev finished: sort order is now by date",
-                None,
-                "12m \u{b7} opens Sub-agents",
+                Glyph::Agents,
+                "ts-dev finished",
+                Some("sort order is now by date"),
+                "12m ago",
                 false,
             ),
+            notice(Glyph::Cron, "Cron nightly fired", None, "1h ago", false),
             notice(
-                "claude-sub \u{b7} work is back in 40m",
-                None,
-                "1h \u{b7} opens Limits",
+                Glyph::Trace,
+                "A turn failed",
+                Some("fix the build"),
+                "2h ago",
                 false,
             ),
         ],
+        unread: true,
         letter: Some("p".into()),
         account: Some(Account {
             name: "pehcastro".into(),
-            found: "found through gh and git config".into(),
-            accounts: Some(5),
+            found: "5h window at 34%".into(),
         }),
-        whats_new: Some("0.5.1".into()),
+        version: Some("0.5.1".into()),
         keys: WindowKeys::Shown,
         open,
         tabs_x: SIDEBAR_COLUMN,
@@ -95,9 +100,10 @@ fn empty_title(open: Option<TitlePop>) -> Title {
         sidebar_open: true,
         palette_keys: "Ctrl K".into(),
         notices: Vec::new(),
+        unread: false,
         letter: None,
         account: None,
-        whats_new: None,
+        version: None,
         keys: WindowKeys::Shown,
         open,
         tabs_x: SIDEBAR_COLUMN,

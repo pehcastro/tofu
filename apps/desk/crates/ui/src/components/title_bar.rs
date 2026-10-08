@@ -9,10 +9,12 @@ use gpui::{
 use crate::component::{control, icon, icon_button};
 use crate::components::avatar::{PersonSize, person_avatar};
 use crate::components::card::caption;
-use crate::components::chip::{kbd, mono};
-use crate::components::list::{bare_row, separator};
+use crate::components::chip::mono;
+use crate::components::empty::empty_state;
+use crate::components::glyph::Glyph;
+use crate::components::list::bare_row;
 use crate::components::overlay::{Align, Placement, Popover, Side};
-use crate::components::paint::ink;
+use crate::components::paint::{glyph, ink};
 use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T2, T3};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -29,7 +31,6 @@ const BELL_DOT_INSET: f32 = 6.0;
 const POP_OFFSET: f32 = 4.0;
 const BELL_POP_WIDTH: f32 = 330.0;
 const ACCOUNT_POP_WIDTH: f32 = 250.0;
-const NOTICE_MARK: f32 = 8.0;
 const NOTICE_LINE: f32 = 18.0;
 const ACCOUNT_LINE: f32 = 17.0;
 const POP_CAPTION_X: f32 = 10.0;
@@ -37,12 +38,8 @@ const POP_CAPTION_TOP: f32 = 8.0;
 const POP_CAPTION_GROUP_TOP: f32 = 10.0;
 const POP_CAPTION_BOTTOM: f32 = 6.0;
 const ACCOUNT_HEAD_BOTTOM: f32 = 10.0;
-const DIVIDER_INSET: f32 = 6.0;
-const DIVIDER_GAP: f32 = 4.0;
-const NOTICE_GLYPH: &str = "\u{25cf}";
-const NO_NOTICES: &str = "Nothing has arrived yet.";
+const NO_NOTICES: &str = "No notices";
 const NO_ACCOUNT: &str = "no account";
-const SETTINGS_KEYS: &str = "ctrl ,";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TitlePick {
@@ -50,10 +47,7 @@ pub enum TitlePick {
     NewWorkspace,
     Palette,
     Notice(usize),
-    Accounts,
-    Settings,
-    WhatsNew,
-    Docs,
+    NoticesRead,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,6 +64,7 @@ pub enum WindowKeys {
 
 #[derive(Clone)]
 pub struct Notice {
+    pub glyph: Glyph,
     pub text: SharedString,
     pub code: Option<SharedString>,
     pub detail: SharedString,
@@ -80,7 +75,6 @@ pub struct Notice {
 pub struct Account {
     pub name: SharedString,
     pub found: SharedString,
-    pub accounts: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -88,9 +82,10 @@ pub struct Title {
     pub sidebar_open: bool,
     pub palette_keys: SharedString,
     pub notices: Vec<Notice>,
+    pub unread: bool,
     pub letter: Option<SharedString>,
     pub account: Option<Account>,
-    pub whats_new: Option<SharedString>,
+    pub version: Option<SharedString>,
     pub keys: WindowKeys,
     pub open: Option<TitlePop>,
     pub tabs_x: f32,
@@ -192,12 +187,11 @@ fn notice_row(ix: usize, notice: &Notice, rows: &PopRow, theme: &Theme) -> impl 
         .items_start()
         .line_height(px(NOTICE_LINE))
         .on_click(rows.picked(TitlePick::Notice(ix)))
-        .child(
-            div()
-                .text_size(px(NOTICE_MARK))
-                .text_color(mark)
-                .child(NOTICE_GLYPH),
-        )
+        .child(div().h(px(NOTICE_LINE)).flex().items_center().child(glyph(
+            notice.glyph,
+            ICON_SMALL,
+            mark,
+        )))
         .child(
             div()
                 .flex_1()
@@ -228,11 +222,16 @@ fn notice_row(ix: usize, notice: &Notice, rows: &PopRow, theme: &Theme) -> impl 
 fn notices(title: &Title, rows: &PopRow, theme: &Theme) -> Vec<AnyElement> {
     if title.notices.is_empty() {
         return vec![
-            bare_row("title-no-notices", false, false, theme)
-                .cursor_default()
-                .text_color(ink(theme, T3))
-                .child(NO_NOTICES)
-                .into_any_element(),
+            empty_state(
+                "title-no-notices",
+                NO_NOTICES,
+                None,
+                &[],
+                &[],
+                theme,
+                |_, _, _| {},
+            )
+            .into_any_element(),
         ];
     }
     let mut out = Vec::new();
@@ -255,21 +254,13 @@ fn notices(title: &Title, rows: &PopRow, theme: &Theme) -> Vec<AnyElement> {
     out
 }
 
-fn account_menu(title: &Title, rows: &PopRow, theme: &Theme) -> Div {
+fn account_menu(title: &Title, theme: &Theme) -> Div {
     let t3 = ink(theme, T3);
     let small = |text: SharedString| div().text_size(px(FONT_SMALL)).text_color(t3).child(text);
-    let row = |id: &'static str, pick: TitlePick| {
-        bare_row(id, false, false, theme).on_click(rows.picked(pick))
-    };
     let (name, found) = match &title.account {
         Some(account) => (account.name.clone(), Some(account.found.clone())),
         None => (NO_ACCOUNT.into(), None),
     };
-    let count = title
-        .account
-        .as_ref()
-        .and_then(|account| account.accounts)
-        .map(|count| small(format!("{count} accounts").into()));
     div()
         .flex()
         .flex_col()
@@ -291,28 +282,12 @@ fn account_menu(title: &Title, rows: &PopRow, theme: &Theme) -> Div {
                         .children(found.map(small)),
                 ),
         )
-        .child(
-            row("title-accounts", TitlePick::Accounts)
-                .child(div().flex_1().child("Accounts and models"))
-                .children(count),
-        )
-        .child(
-            row("title-settings", TitlePick::Settings)
-                .child(div().flex_1().child("Settings"))
-                .child(kbd(SETTINGS_KEYS, theme)),
-        )
-        .child(separator(theme).mx(px(DIVIDER_INSET)).my(px(DIVIDER_GAP)))
-        .child(pop_caption("Resources", POP_CAPTION_BOTTOM, theme))
-        .children(title.whats_new.clone().map(|version| {
-            row("title-whats-new", TitlePick::WhatsNew)
-                .text_color(ink(theme, T2))
-                .child(format!("What's new in {version}"))
+        .children(title.version.clone().map(|version| {
+            div()
+                .px(px(POP_CAPTION_X))
+                .pb(px(POP_CAPTION_BOTTOM))
+                .child(caption(format!("{PRODUCT_NAME} {version}"), theme))
         }))
-        .child(
-            row("title-docs", TitlePick::Docs)
-                .text_color(ink(theme, T2))
-                .child("Docs"),
-        )
 }
 
 #[derive(Clone, Copy)]
@@ -440,7 +415,7 @@ impl RenderOnce for TitleBar {
             on_pick: self.on_pick.clone(),
         };
         let toggle = |pop: TitlePop| {
-            let (state, focus) = (state.clone(), focus.clone());
+            let (state, focus, on_pick) = (state.clone(), focus.clone(), self.on_pick.clone());
             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
                 let next = (shown != Some(pop)).then_some(pop);
                 state.update(cx, |opened, cx| {
@@ -449,6 +424,9 @@ impl RenderOnce for TitleBar {
                 });
                 if next.is_some() {
                     window.focus(&focus, cx);
+                }
+                if next == Some(TitlePop::Notifications) {
+                    on_pick(&TitlePick::NoticesRead, window, cx);
                 }
             }
         };
@@ -459,7 +437,7 @@ impl RenderOnce for TitleBar {
         };
         let column = title.tabs_x.max(SIDEBAR_CLOSED_WIDTH + TITLE_GAP) - TITLE_GAP;
         let warn = theme.color(ColorToken::StatusWarn);
-        let unread = title.notices.iter().any(|notice| notice.needs_you);
+        let unread = title.unread;
         let bell = icon_button(
             "notifications",
             Icon::Bell,
@@ -554,7 +532,7 @@ impl RenderOnce for TitleBar {
                     .open(shown == Some(TitlePop::Account))
                     .placement(under)
                     .width(ACCOUNT_POP_WIDTH)
-                    .child(rows.body(&focus).child(account_menu(title, &rows, &theme))),
+                    .child(rows.body(&focus).child(account_menu(title, &theme))),
             )
             .when(!cfg!(target_os = "macos"), |bar| {
                 bar.child(captions(title.keys, window.is_maximized(), &theme))
