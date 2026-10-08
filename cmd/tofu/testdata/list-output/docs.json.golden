@@ -65,7 +65,7 @@ exit 0
       {
         "topic": "learn",
         "title": "Learn",
-        "summary": "read your own sessions for what keeps going wrong, and get at most five proposals with the evidence behind each"
+        "summary": "read your own sessions for what keeps going wrong, sorted into tofu's bugs, tofu's rules, your own rules, settings and your project, with at most five findings to act on"
       },
       {
         "topic": "memory",

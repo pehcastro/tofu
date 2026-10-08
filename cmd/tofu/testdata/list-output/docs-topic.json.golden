@@ -294,10 +294,10 @@ exit 0
       {
         "key": "verifySubAgents",
         "category": "Turn",
-        "default": "false",
+        "default": "true",
         "takes": "true or false",
         "restart": false,
-        "description": "the lead checks each sub-agent's work itself before it reports, reading the files and running the build or the tests again; off takes the report as the result unless you ask for a check. A text override of the rule verify_sub_agents in tofu rules turns it on too"
+        "description": "the lead checks each sub-agent's work itself before it reports, reading what it changed, running the build or the tests again and opening what it made; off takes the report as the result unless you ask for a check. tofu rules off verify_sub_agents turns it off too, whatever this says"
       },
       {
         "key": "agentSources",

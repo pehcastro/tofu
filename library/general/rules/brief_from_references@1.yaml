@@ -1,0 +1,7 @@
+id: brief_from_references
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: when the person points at a reference, a file, an image, a mockup, a page, a ticket or an earlier message, open it yourself before you write the brief, and never brief from your summary of it or from memory. the brief names each reference by its path or url and quotes word for word the lines the work depends on. a reference you can drive, a page or a running app, you open, use and capture first, and the brief names the capture. a sub-agent whose tools cannot open the reference gets the quote or the capture, never only the name.
+notes: a composer was rebuilt three times and a view mixed up a tile with a screen because the lead briefed from its own summary, corrected 8 times. it guards against briefs that carry the lead's memory instead of the reference.

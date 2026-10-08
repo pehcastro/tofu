@@ -916,8 +916,8 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 	if !strings.Contains(lead, "from the rule verify_scoped]") {
 		t.Error("the lead lost the process rule verify_scoped along with the code rules")
 	}
-	if strings.Contains(lead, "from the rule verify_sub_agents]") {
-		t.Error("the lead carries verify_sub_agents, which ships off and no setting turned on")
+	if !strings.Contains(lead, "from the rule verify_sub_agents]") {
+		t.Error("the lead lost verify_sub_agents, which ships on and no setting turned off")
 	}
 	for _, unused := range leadNeverCalls() {
 		if slices.Contains(leadTools, unused) {
@@ -975,8 +975,8 @@ func TestTheLeadEndsOnACleanSingleReportWhetherOrNotItChecksSubAgents(t *testing
 	}{
 		{"clean", `{"verifySubAgents": 1}`, gated, refused},
 		{"done_with_concerns", `{"verifySubAgents": 1}`, concerns, ran},
-		{"clean_with_the_check_off", `{}`, gated, refused},
-		{"done_with_concerns_with_the_check_off", `{}`, concerns, ran},
+		{"clean_with_the_check_off", `{"verifySubAgents": 0}`, gated, refused},
+		{"done_with_concerns_with_the_check_off", `{"verifySubAgents": 0}`, concerns, ran},
 	} {
 		t.Run(run.name, func(t *testing.T) {
 			home, dir := t.TempDir(), t.TempDir()

@@ -222,7 +222,7 @@ exit 0
       {
         "key": "verifySubAgents",
         "category": "Turn",
-        "value": false,
+        "value": true,
         "source": "default"
       },
       {

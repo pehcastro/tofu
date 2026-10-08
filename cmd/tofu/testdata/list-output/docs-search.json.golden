@@ -53,10 +53,6 @@ exit 0
         "do": "tofu docs keys"
       },
       {
-        "text": "Learn",
-        "do": "tofu docs learn"
-      },
-      {
         "text": "Models",
         "do": "tofu docs models"
       },
@@ -187,6 +183,10 @@ exit 0
       {
         "text": "Instruction files",
         "do": "tofu docs instructions"
+      },
+      {
+        "text": "Learn",
+        "do": "tofu docs learn"
       },
       {
         "text": "Memory",

@@ -48,7 +48,7 @@ Turn
     subAgentDepth           2                   default
     subAgentCheckSeconds    1800                default
     subAgentWatchSeconds    600                 default
-    verifySubAgents         false               default
+    verifySubAgents         true                default
     agentSources            tofu,agents,claude  default
     modelTier.genius        empty               default
     modelTier.smart         empty               default

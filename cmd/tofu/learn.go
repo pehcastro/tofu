@@ -25,10 +25,11 @@ import (
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
+	"tofu/library/changelog"
 )
 
 const (
-	learnUsage  = `tofu learn scan [--chain <session>|--last N|--global] [--local] [--all] [--dir project] [--json], tofu learn show|upstream <n>, tofu learn apply <n> [--project] [--dir project], tofu learn reject <n> --reason "<why>", tofu learn upstream --list`
+	learnUsage  = `tofu learn scan [--chain <session or family>|--last N|--global] [--local] [--all] [--dir project] [--json], tofu learn show|upstream <n>, tofu learn apply <n> [--project] [--dir project], tofu learn reject <n> --reason "<why>", tofu learn upstream --list`
 	learnRuleID = "learned_"
 	timeOfDay   = "15:04"
 	dayAndTime  = "2006-01-02 15:04"
@@ -114,16 +115,16 @@ func learnVerb(args []string, out, errOut io.Writer) int {
 	if len(opts.rest) == 1 {
 		id, err = strconv.Atoi(opts.rest[0])
 	}
-	proposal, found := run.Find(id)
+	finding, found := run.Find(id)
 	if err != nil || !found {
-		return o.usage(fmt.Errorf("no proposal %q in the last run, %s", strings.Join(opts.rest, " "), run.ID))
+		return o.usage(fmt.Errorf("no finding %q in the last run, %s", strings.Join(opts.rest, " "), run.ID))
 	}
 	decide := func(action learn.Action) error {
-		return home.Decide(learn.Decision{At: time.Now(), Run: run.ID, ID: proposal.ID, Key: proposal.Key, Action: action, Places: proposal.Places, Reason: opts.reason})
+		return home.Decide(learn.Decision{At: time.Now(), Run: run.ID, ID: finding.ID, Key: finding.Key, Action: action, Places: finding.Sessions, Reason: opts.reason})
 	}
 	switch args[0] {
 	case "show":
-		return o.done(true, proposal, func(page cli.Page) []string { return showLines(page, run, proposal) })
+		return o.done(true, finding, func(page cli.Page) []string { return showLines(page, run, finding) })
 	case "reject":
 		if opts.reason == "" {
 			return o.usage(errors.New(`a rejection says why: --reason "<why>"`))
@@ -131,16 +132,16 @@ func learnVerb(args []string, out, errOut io.Writer) int {
 		if err := decide(learn.ActionReject); err != nil {
 			return o.fail(err)
 		}
-		return o.done(true, proposal, func(page cli.Page) []string {
-			return []string{page.Glyph(cli.Removed) + " rejected " + strconv.Itoa(proposal.ID) + page.Label(" · quiet until more sessions than "+strconv.Itoa(proposal.Places)+" support it")}
+		return o.done(true, finding, func(page cli.Page) []string {
+			return []string{page.Glyph(cli.Removed) + " rejected " + strconv.Itoa(finding.ID) + page.Label(" · quiet until more sessions than "+strconv.Itoa(finding.Sessions)+" support it")}
 		})
 	case "upstream":
-		if proposal.Target != learn.TargetUpstream {
-			return o.usage(fmt.Errorf("proposal %d changes something of yours; tofu learn apply %d", proposal.ID, proposal.ID))
+		if finding.Target() != learn.TargetUpstream {
+			return o.usage(fmt.Errorf("finding %d changes something of yours; tofu learn apply %d", finding.ID, finding.ID))
 		}
-		return learnDraft(o, home, proposal, decide)
+		return learnDraft(o, home, finding, decide)
 	}
-	return learnApply(o, opts, home, proposal, decide)
+	return learnApply(o, opts, home, finding, decide)
 }
 
 func learnSources(opts learnOpts) ([]learn.Source, string, error) {
@@ -151,7 +152,7 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 		}
 		if opts.chain != "" {
 			headers, err := learn.Chain(store, opts.chain)
-			return []learn.Source{{Store: store, Headers: headers}}, "the chain ending in " + opts.chain, err
+			return []learn.Source{{Store: store, Headers: headers}}, opts.chain, err
 		}
 		headers, err := learn.Recent(store, opts.last)
 		return []learn.Source{{Store: store, Headers: headers}}, countOf(len(headers), "session") + " of the last " + strconv.Itoa(opts.last) + " conversations of this project", err
@@ -186,15 +187,20 @@ func learnScan(o verbOutput, opts learnOpts, home learn.Home) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	run, err := learn.Scan(sources, learn.Known{Memory: append(shelves.Global.Entries, shelves.Project.Entries...), Decisions: decisions}, time.Now())
+	known := learn.Known{Memory: append(shelves.Global.Entries, shelves.Project.Entries...), Decisions: decisions, Releases: learn.Releases(changelog.Markdown), Settings: map[string]string{}}
+	for _, spec := range settingspkg.Default() {
+		known.Settings[spec.Key] = spec.Description
+	}
+	run, err := learn.Scan(sources, known, time.Now())
 	if err != nil {
 		return o.fail(err)
 	}
 	run.Scope, run.Sent.Local = scope, opts.local || !learnOn(opts.dir)
-	if !run.Sent.Local {
-		if err := errors.Join(labelWindows(&run, o.errOut), writeStatements(&run, opts.dir)); err != nil {
+	if !run.Sent.Local && len(run.Said) > 0 {
+		if err := labelWindows(&run, o.errOut); err != nil {
 			return o.fail(err)
 		}
+		groupByMeaning(&run, known, opts.dir, o.errOut)
 	}
 	file, err := home.Save(run)
 	if err != nil {
@@ -258,93 +264,98 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	return nil
 }
 
-func writeStatements(run *learn.Run, dir string) error {
+func groupByMeaning(run *learn.Run, known learn.Known, dir string, errOut io.Writer) {
 	opts := onTheBoundKeyWire(runOpts{dir: dir, wire: wireSubscription, effort: llm.EffortDefault})
 	if opts.wire == wireKey {
-		return errors.New("the lead model is reached through the OpenRouter key, which is for Jev only; tofu learn --local writes the statements without a model")
+		run.Sent.Kept = "the lead model is reached through the OpenRouter key, which is for Jev only"
+		return
 	}
 	selected, err := chooseModel(opts)
-	if err != nil {
-		return err
-	}
-	lead := subscriptionModel{opts}
-	for _, proposals := range [][]learn.Proposal{run.Proposals, run.Held} {
-		for i, p := range proposals {
-			if p.Target != learn.TargetMemory {
-				continue
-			}
-			decision, err := lead.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: p.Prompt()}}})
-			text, ok := learn.Statement(decision.Content)
-			switch {
-			case err != nil:
-				run.Sent.Kept = err.Error()
-			case !ok:
-				run.Sent.Kept = "the reply was not one statement: " + strconv.Quote(clip(cmp.Or(text, decision.Refusal), learn.ShownTextRunes))
-			default:
-				proposals[i].Text, proposals[i].WrittenBy = text, selected.Slug()
-				run.Sent.Written++
-			}
+	if err == nil {
+		prompt := run.Prompt(known)
+		run.Sent.GroupBytes = len(prompt)
+		page := cli.Detect(errOut, os.Environ())
+		_ = page.Print(errOut, []string{page.Label(fmt.Sprintf("grouping %d messages by meaning with %s on your subscription, one request, %d bytes", len(run.Said), selected.Slug(), len(prompt)))})
+		var decision llm.Decision
+		decision, err = subscriptionModel{opts}.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: prompt}}})
+		run.Sent.GroupTokens = decision.Usage.InputTokens + decision.Usage.OutputTokens
+		if err == nil {
+			err = run.Group(cmp.Or(decision.Content, decision.Refusal), known, selected.Slug())
 		}
 	}
-	return nil
+	if err != nil {
+		run.Sent.Kept = err.Error()
+	}
 }
 
-func learnApply(o verbOutput, opts learnOpts, home learn.Home, proposal learn.Proposal, decide func(learn.Action) error) int {
-	switch proposal.Target {
+func learnApply(o verbOutput, opts learnOpts, home learn.Home, finding learn.Finding, decide func(learn.Action) error) int {
+	switch finding.Target() {
 	case learn.TargetUpstream:
-		return learnDraft(o, home, proposal, decide)
-	case learn.TargetRule:
+		return learnDraft(o, home, finding, decide)
+	case learn.TargetNone:
+		return o.usage(fmt.Errorf("finding %d is about your project, not tofu; there is nothing to apply", finding.ID))
+	case learn.TargetSetting:
+		if code := settingsVerb([]string{"set", "--scope", "project", finding.Setting, finding.Value}, o.out, o.errOut); code != exitOK {
+			return code
+		}
+		if err := decide(learn.ActionApply); err != nil {
+			return o.fail(err)
+		}
+		return exitOK
+	}
+	if finding.Rule == "" {
+		return o.usage(fmt.Errorf("finding %d has no rule worded yet; with tofu settings set learn true a scan words it with your lead model, or tofu memory add \"<rule>\" keeps your own", finding.ID))
+	}
+	if finding.Target() == learn.TargetRule {
 		flag, again := "--project", "tofu memory add"
-		if proposal.Scope == memory.Global {
+		if finding.Scope == memory.Global {
 			flag, again = "--global", again+" --global"
 		}
-		if code := rulesAddVerb([]string{flag, "--dir", opts.dir, learnRuleID + proposal.Key, proposal.Text}, o.out, o.errOut); code != exitOK {
+		if code := rulesAddVerb([]string{flag, "--dir", opts.dir, learnRuleID + finding.Key, finding.Rule}, o.out, o.errOut); code != exitOK {
 			return code
 		}
 		shelves, err := memory.Open(opts.dir)
 		if err == nil {
-			_, err = shelves.Remove(proposal.Scope, proposal.Retire)
+			_, err = shelves.Remove(finding.Scope, finding.Retire)
 		}
 		if err = errors.Join(err, decide(learn.ActionApply)); err != nil {
 			return o.fail(err)
 		}
-		return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeRemoved, What: "memory " + proposal.Retire + ", now the rule " + learnRuleID + proposal.Key}},
-			Undo: again + " --said " + strconv.Quote(proposal.Said) + " " + strconv.Quote(proposal.Text)})
-	case learn.TargetMemory:
-		shelves, err := memory.Open(opts.dir)
-		if err != nil {
-			return o.fail(err)
-		}
-		scope := proposal.Scope
-		if opts.project {
-			scope = memory.Project
-		}
-		added, err := shelves.Add(memory.Entry{Scope: scope, Kind: memory.KindPerson, Text: proposal.Text, Said: proposal.Said, Session: proposal.Session, At: time.Now(), By: memory.ByOffer}, "")
-		if err = errors.Join(err, decide(learn.ActionApply)); err != nil {
-			return o.fail(err)
-		}
-		undo := "tofu memory remove " + added.ID
-		if added.Scope == memory.Global {
-			undo = "tofu memory remove --global " + added.ID
-		}
-		if opts.dir != "." {
-			undo += " --dir " + strconv.Quote(opts.dir)
-		}
-		return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeAdded, What: "memory " + added.ID + " · " + string(added.Scope), File: added.File}}, Undo: undo})
+		return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeRemoved, What: "memory " + finding.Retire + ", now the rule " + learnRuleID + finding.Key}},
+			Undo: again + " --said " + strconv.Quote(finding.Said) + " " + strconv.Quote(finding.Rule)})
 	}
-	panic("tofu: unknown learn target " + string(proposal.Target))
+	shelves, err := memory.Open(opts.dir)
+	if err != nil {
+		return o.fail(err)
+	}
+	scope := finding.Scope
+	if opts.project {
+		scope = memory.Project
+	}
+	added, err := shelves.Add(memory.Entry{Scope: scope, Kind: memory.KindPerson, Text: finding.Rule, Said: finding.Said, Session: finding.Session, At: time.Now(), By: memory.ByOffer}, "")
+	if err = errors.Join(err, decide(learn.ActionApply)); err != nil {
+		return o.fail(err)
+	}
+	undo := "tofu memory remove " + added.ID
+	if added.Scope == memory.Global {
+		undo = "tofu memory remove --global " + added.ID
+	}
+	if opts.dir != "." {
+		undo += " --dir " + strconv.Quote(opts.dir)
+	}
+	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeAdded, What: "memory " + added.ID + " · " + string(added.Scope), File: added.File}}, Undo: undo})
 }
 
-func learnDraft(o verbOutput, home learn.Home, proposal learn.Proposal, decide func(learn.Action) error) int {
+func learnDraft(o verbOutput, home learn.Home, finding learn.Finding, decide func(learn.Action) error) int {
 	build := learn.Build{Version: frame.Release(sys.Version(), sys.BuildRevision()), Commit: sys.BuildRevision(), Platform: sys.OS() + "/" + sys.Arch()}
-	file, text, err := home.WriteDraft(learn.DraftOf(proposal, build, time.Now()))
+	file, text, err := home.WriteDraft(learn.DraftOf(finding, build, time.Now()))
 	if err = errors.Join(err, decide(learn.ActionDraft)); err != nil {
 		return o.fail(err)
 	}
 	if !o.asJSON {
 		_, _ = fmt.Fprintln(o.out, text)
 	}
-	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeAdded, What: "upstream draft " + proposal.Key + " · written, not sent", File: file}}, Undo: "delete " + file})
+	return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeAdded, What: "upstream draft " + finding.Key + " · written, not sent", File: file}}, Undo: "delete " + file})
 }
 
 func learnDrafts(o verbOutput, home learn.Home) int {
@@ -368,64 +379,100 @@ func learnDrafts(o verbOutput, home learn.Home) int {
 
 func scanLines(page cli.Page, run learn.Run, opts learnOpts, file string) []string {
 	read := run.Read
-	head := page.Subject("Learn") + page.Label(" · "+strconv.Itoa(len(read.Sessions))+" sessions")
-	if len(read.Sessions) > 0 {
-		head += page.Label(" · " + read.Sessions[0] + " → " + read.Sessions[len(read.Sessions)-1])
+	head := page.Subject("Learn") + page.Label(" · "+countOf(len(read.Sessions), "session")+" · "+run.Scope)
+	if read.Typed > 0 {
+		head += page.Label(" · " + read.From.Local().Format(time.DateOnly) + " to " + read.To.Local().Format(time.DateOnly))
 	}
-	sent := []string{fmt.Sprintf("%d windows, one request each, %d bytes, %.6f USD, %d failed", run.Sent.Windows, run.Sent.Bytes, run.Sent.Cost, run.Sent.Failed), "labels uncalibrated, shown and not used"}
-	switch {
-	case opts.local:
-		sent = []string{"nothing, --local"}
-	case run.Sent.Local:
-		sent = []string{"nothing: learn is off", "tofu settings set learn true sends the windows"}
+	how := "grouped by shared words only, with no model: the weaker mode; tofu settings set learn true groups by meaning"
+	if run.Mode == learn.ModeModel {
+		how = fmt.Sprintf("grouped by meaning by %s on your subscription, one request, %d tokens", run.Model, run.Sent.GroupTokens)
 	}
-	lines := []string{head,
-		fmt.Sprintf("  read      %d of your messages, %d repeated prompts set aside", read.Typed, read.Repeated),
-		fmt.Sprintf("            %d lead calls, %d sub-agent reports, %d forks", read.Calls, read.Reports, read.Forks),
-		"  between   " + read.From.Local().Format(dayAndTime) + " and " + read.To.Local().Format(dayAndTime),
-		"  to Jev    " + sent[0]}
-	for _, more := range sent[1:] {
-		lines = append(lines, "            "+more)
-	}
-	if !run.Sent.Local {
-		lines = append(lines, fmt.Sprintf("  lead      wrote %d statements", run.Sent.Written))
-	}
+	lines := []string{head, "  " + page.Label(how)}
 	if run.Sent.Kept != "" {
-		lines = append(lines, "            a template was kept: "+run.Sent.Kept)
+		lines = append(lines, "  "+page.Label("the model did not group them, so the weaker grouping is shown: "+clip(run.Sent.Kept, learn.ShownTextRunes)))
 	}
-	lines = append(lines, "", page.Subject("You said it more than once")+page.Label(" · "+strconv.Itoa(len(run.Corrections))))
-	for _, theme := range run.Corrections {
-		lines = append(lines, "  "+page.Glyph(cli.Fail)+" "+theme.Label(),
-			page.Label(fmt.Sprintf("    %d sessions · in the request when it came back: %d of %d", theme.Places, theme.Present(), len(theme.Checks))))
-		lines = append(lines, quoteLines(page, theme.Quotes)...)
+	lines = append(lines, "", page.Subject("What keeps going wrong"))
+	for i, wrong := range run.Summary.Wrong {
+		lines = append(lines, fmt.Sprintf("  %d %s", i+1, wrong))
 	}
-	proposals := len(run.Proposals) + len(run.Held)
-	lines = append(lines, "", page.Subject("Proposals")+page.Label(fmt.Sprintf(" · %d of %d, the cap is %d", len(run.Proposals), proposals, learn.ProposalCap)))
-	lines = append(lines, proposalLines(page, run.Proposals)...)
-	if len(run.Held) > 0 {
-		lines = append(lines, "", page.Subject("Held back by the cap")+page.Label(" · "+strconv.Itoa(len(run.Held))))
-		lines = append(lines, proposalLines(page, run.Held)...)
+	if len(run.Summary.Wrong) == 0 {
+		lines = append(lines, "  nothing said again in two or more sessions")
 	}
-	for _, section := range []struct {
-		name   string
-		themes []learn.Theme
-	}{{"Watching, one session so far", run.Watching}, {"Seen, about your project rather than tofu", run.Seen}} {
-		lines = append(lines, "", page.Subject(section.name)+page.Label(" · "+strconv.Itoa(len(section.themes))))
-		shown := section.themes
+	lines = append(lines, "  "+page.Label(fmt.Sprintf("it cost you %s, and the lead %s answering them", countOf(run.Summary.Repeats, "repeat"), countOf(run.Summary.Calls, "call"))))
+	if len(run.Summary.Do) > 0 {
+		lines = append(lines, "  "+page.Hint(strings.Join(run.Summary.Do, " · ")))
+	}
+	all := len(run.Findings) + len(run.Held)
+	lines = append(lines, "", page.Subject("Findings")+page.Label(fmt.Sprintf(" · %d of %d, the cap is %d", len(run.Findings), all, learn.ProposalCap)))
+	for _, f := range run.Findings {
+		lines = append(lines, findingLines(page, f)...)
+	}
+	sections := []struct {
+		name     string
+		findings []learn.Finding
+	}{{"Held back by the cap", run.Held}, {"Fixed in a later tofu", run.Fixed}, {"Already applied, rejected or drafted, until more sessions say it", run.Decided}, {"Watching, one session so far", run.Watching}, {"About your project, not tofu's business", run.Project}}
+	for _, section := range sections {
+		if len(section.findings) == 0 {
+			continue
+		}
+		lines = append(lines, "", page.Subject(section.name)+page.Label(" · "+strconv.Itoa(len(section.findings))))
+		shown := section.findings
 		if !opts.all {
-			shown = shown[:min(len(shown), learn.ShownThemesInSection)]
+			shown = shown[:min(len(shown), learn.ProposalCap)]
 		}
-		for _, theme := range shown {
-			lines = append(lines, "  "+theme.Label()+page.Label(fmt.Sprintf(" · %d times in %d sessions", len(theme.Quotes), theme.Places)), quoteLines(page, theme.Quotes[:1])[0])
+		for _, f := range shown {
+			lines = append(lines, "  "+clip(f.Title, learn.ShownTextRunes), "    "+page.Label(briefOf(f)))
 		}
 	}
-	return append(lines, "", page.Hint("tofu learn show <n> for the evidence"), page.Hint("apply <n> · reject <n> --reason \"...\" · upstream <n>"), page.Label("  run kept at "+page.Path(file)))
+	sent := "nothing, --local"
+	switch {
+	case run.Sent.Local && !opts.local:
+		sent = "nothing: learn is off; tofu settings set learn true sends the windows"
+	case !run.Sent.Local:
+		sent = fmt.Sprintf("%d windows, %d bytes, %.6f USD, %d failed; labels uncalibrated, shown and not used", run.Sent.Windows, run.Sent.Bytes, run.Sent.Cost, run.Sent.Failed)
+	}
+	lines = append(lines, "", page.Subject("Read"),
+		fmt.Sprintf("  %d of your messages, %d repeated prompts set aside · %d lead calls, %d sub-agent reports, %d forks", read.Typed, read.Repeated, read.Calls, read.Reports, read.Forks),
+		"  to Jev  "+sent)
+	if run.Sent.Dropped > 0 {
+		lines = append(lines, fmt.Sprintf("  the model's answer: %d fields refused, such as %s", run.Sent.Dropped, strings.Join(run.Sent.Refused[:min(len(run.Sent.Refused), 2)], "; ")))
+	}
+	return append(lines, "  "+page.Label("run kept at ")+page.Path(file), page.Hint("tofu learn show <n> for the evidence · apply <n> · reject <n> --reason \"...\" · upstream <n>"))
 }
 
-func quoteLines(page cli.Page, quotes []learn.Quote) []string {
-	var lines []string
-	for _, q := range quotes {
-		lines = append(lines, fmt.Sprintf("      %s %-17s %s", q.At.Local().Format(timeOfDay), q.Session, page.Label(strconv.Quote(clip(q.Text, learn.ShownQuoteRunes)))))
+func briefOf(f learn.Finding) string {
+	brief := fmt.Sprintf("%s in %s · %s", countOf(f.Times, "time"), countOf(f.Sessions, "session"), f.Class.Label())
+	if f.FixedIn != "" {
+		brief += " · fixed in " + f.FixedIn + ", last seen on " + f.Built
+		if f.FixedSameDay {
+			brief += ", released the day it was last seen"
+		}
+	}
+	if command := f.Command(); command != "" && f.ID > 0 {
+		brief += " · " + command
+	}
+	return brief
+}
+
+func findingLines(page cli.Page, f learn.Finding) []string {
+	lines := []string{fmt.Sprintf("  %-2d %s", f.ID, f.Title),
+		"     " + page.Label(fmt.Sprintf("%s in %s · %s · %s confidence", countOf(f.Times, "time"), countOf(f.Sessions, "session"), f.Class.Label(), f.Confidence)),
+		"     why   " + clip(f.Reason, learn.ShownTextRunes)}
+	switch {
+	case f.Target() == learn.TargetUpstream:
+		lines = append(lines, "     fix   a report for tofu, written to a file and never sent")
+	case f.Setting != "":
+		lines = append(lines, "     fix   tofu settings set --scope project "+f.Setting+" "+f.Value)
+	case f.Rule != "":
+		lines = append(lines, "     fix   "+string(f.Target())+": "+clip(f.Rule, learn.ShownTextRunes))
+	default:
+		lines = append(lines, "     fix   no rule worded without a model")
+	}
+	if command := f.Command(); command != "" {
+		lines = append(lines, "           "+page.Hint(command))
+	}
+	for _, q := range f.Quotes[:min(len(f.Quotes), learn.ShownQuotes)] {
+		lines = append(lines, "     "+page.Label(fmt.Sprintf("%s %s %s", q.At.Local().Format(timeOfDay), q.Session, strconv.Quote(clip(q.Text, learn.ShownQuoteRunes)))))
 	}
 	return lines
 }
@@ -438,47 +485,32 @@ func clip(text string, runes int) string {
 	return string([]rune(text)[:runes]) + "..."
 }
 
-func proposalLines(page cli.Page, proposals []learn.Proposal) []string {
-	var lines []string
-	for _, p := range proposals {
-		where := string(p.Target)
-		if p.Scope != "" {
-			where += ", " + string(p.Scope)
-		}
-		act := "tofu learn apply " + strconv.Itoa(p.ID)
-		if p.Target == learn.TargetUpstream {
-			where, act = p.Mechanism, "tofu learn upstream "+strconv.Itoa(p.ID)
-		}
-		lines = append(lines, fmt.Sprintf("  %-2d %s · %s", p.ID, p.Bucket, where), "     "+clip(p.Text, learn.ShownTextRunes), "     "+page.Hint(act))
+func showLines(page cli.Page, run learn.Run, f learn.Finding) []string {
+	lines := append([]string{page.Subject("Finding "+strconv.Itoa(f.ID)) + page.Label(" · run "+run.ID), "  " + f.Title}, findingLines(page, f)[1:3]...)
+	if f.Rule != "" {
+		lines = append(lines, "  rule: "+f.Rule)
 	}
-	return lines
-}
-
-func showLines(page cli.Page, run learn.Run, p learn.Proposal) []string {
-	lines := []string{page.Subject("Proposal "+strconv.Itoa(p.ID)) + page.Label(" · "+string(p.Bucket)+" · "+string(p.Target)+" · "+strconv.Itoa(p.Places)+" sessions · run "+run.ID), "  " + p.Text}
-	if p.Said != "" {
-		lines = append(lines, "  "+page.Label("your words: "+strconv.Quote(p.Said)+"  "+p.Session))
+	if f.Retire != "" {
+		lines = append(lines, "  "+page.Label("retires memory "+f.Retire+" in the "+string(f.Scope)+" scope"))
 	}
-	if p.Retire != "" {
-		lines = append(lines, "  "+page.Label("retires memory "+p.Retire+" in the "+string(p.Scope)+" scope"))
+	if f.Built != "" {
+		lines = append(lines, "  "+page.Label("last seen on tofu "+f.Built+", from the day it was said and the release dates"))
 	}
-	for _, theme := range p.Themes {
-		lines = append(lines, "", page.Subject(theme.Label()))
-		for _, q := range theme.Quotes {
-			lines = append(lines, fmt.Sprintf("  %s %-18s %s", q.At.Local().Format(dayAndTime), q.Session, strconv.Quote(oneLine(q.Text))))
-			at := slices.IndexFunc(run.Said, func(s learn.Said) bool { return s.At.Equal(q.At) && s.Session == q.Session })
-			if at >= 0 && at < len(run.Labels) {
-				label := run.Labels[at]
-				lines = append(lines, page.Label(fmt.Sprintf("    jev, uncalibrated: %v %v %s", label.Answers, label.Chosen, label.Failure)))
-			}
+	lines = append(lines, "")
+	for _, q := range f.Quotes {
+		lines = append(lines, fmt.Sprintf("  %s %-18s %s", q.At.Local().Format(dayAndTime), q.Session, strconv.Quote(oneLine(q.Text))))
+		at := slices.IndexFunc(run.Said, func(s learn.Said) bool { return s.At.Equal(q.At) && s.Session == q.Session })
+		if at >= 0 && at < len(run.Labels) {
+			label := run.Labels[at]
+			lines = append(lines, page.Label(fmt.Sprintf("    jev, uncalibrated: %v %v %s", label.Answers, label.Chosen, label.Failure)))
 		}
-		for _, c := range theme.Checks {
-			held := page.Glyph(cli.Fail) + " absent"
-			if c.Present {
-				held = page.Glyph(cli.Done) + " present"
-			}
-			lines = append(lines, fmt.Sprintf("  %s when it recurred at %s in %s, request %s", held, c.At.Local().Format(timeOfDay), c.Session, c.Request))
+	}
+	for _, c := range f.Checks {
+		held := page.Glyph(cli.Fail) + " absent"
+		if c.Present {
+			held = page.Glyph(cli.Done) + " present"
 		}
+		lines = append(lines, fmt.Sprintf("  %s when it recurred at %s in %s, request %s", held, c.At.Local().Format(timeOfDay), c.Session, c.Request))
 	}
 	return lines
 }

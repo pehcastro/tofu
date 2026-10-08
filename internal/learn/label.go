@@ -37,9 +37,9 @@ func (r Run) Windows() []WindowState {
 	for i, s := range r.Said {
 		states[i] = WindowState{Message: s.Text, Before: s.Before, After: s.After}
 	}
-	for _, theme := range slices.Concat(r.Corrections, r.Watching, r.Seen) {
-		first := theme.Quotes[0]
-		for _, q := range theme.Quotes[1:] {
+	for _, f := range r.All() {
+		first := f.Quotes[0]
+		for _, q := range f.Quotes[1:] {
 			at := slices.IndexFunc(r.Said, func(s Said) bool { return s.At.Equal(q.At) && s.Session == q.Session })
 			if at >= 0 && q.Session != first.Session && states[at].Earlier == "" {
 				states[at].Earlier = first.Text
@@ -60,11 +60,14 @@ type Label struct {
 }
 
 type Sent struct {
-	Windows int     `json:"windows"`
-	Bytes   int     `json:"bytes"`
-	Cost    float64 `json:"cost"`
-	Failed  int     `json:"failed"`
-	Local   bool    `json:"local"`
-	Written int     `json:"statements_written"`
-	Kept    string  `json:"template_kept_because,omitempty"`
+	Windows     int      `json:"windows"`
+	Bytes       int      `json:"bytes"`
+	Cost        float64  `json:"cost"`
+	Failed      int      `json:"failed"`
+	Local       bool     `json:"local"`
+	GroupBytes  int      `json:"group_bytes,omitempty"`
+	GroupTokens int      `json:"group_tokens,omitempty"`
+	Dropped     int      `json:"model_fields_dropped,omitempty"`
+	Refused     []string `json:"model_fields_refused,omitempty"`
+	Kept        string   `json:"local_kept_because,omitempty"`
 }

@@ -33,6 +33,7 @@ type Said struct {
 	Before   string    `json:"before"`
 	After    string    `json:"after"`
 	Answered string    `json:"answered,omitempty"`
+	Calls    int       `json:"calls"`
 	Place    string    `json:"place"`
 	id       string
 	store    *session.Store
@@ -66,13 +67,19 @@ func Chain(store *session.Store, handle string) ([]session.Header, error) {
 	if err != nil {
 		return nil, err
 	}
-	last := named[0]
-	chain, err := store.Ancestors(last.ID)
+	listing, err := store.Listing()
 	if err != nil {
 		return nil, err
 	}
-	slices.Reverse(chain)
-	return append(chain, last), nil
+	family, _, err := listing.FamilyOf(named[0].ID)
+	if err != nil {
+		return nil, err
+	}
+	last := slices.IndexFunc(family.Generations, func(h session.Header) bool { return h.ID == named[0].ID })
+	if ref := strings.TrimPrefix(strings.TrimPrefix(handle, family.Name), session.FamilyMark); ref == "" || ref == family.Tag {
+		last = len(family.Generations) - 1
+	}
+	return family.Generations[:last+1], nil
 }
 
 func Recent(store *session.Store, count int) ([]session.Header, error) {
@@ -259,8 +266,11 @@ func windowOf(said Said, s sitting, until time.Time) Said {
 		}
 	}
 	for _, request := range s.requests {
-		if request.At.Before(said.At) {
+		switch {
+		case request.At.Before(said.At):
 			said.Answered = request.Request
+		case until.IsZero() || request.At.Before(until):
+			said.Calls++
 		}
 	}
 	return said

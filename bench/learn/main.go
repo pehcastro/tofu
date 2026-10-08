@@ -79,9 +79,9 @@ func bench(chain, dir, file string, dump, arm bool) error {
 		for i, s := range run.Said {
 			fmt.Printf("=== %s %s\nbefore: %s\nmessage: %s\nafter: %s\nearlier: %s\n\n", s.Session, s.At.Local().Format(moment), oneLine(s.Before), s.Text, oneLine(s.After), states[i].Earlier)
 		}
-		for _, theme := range slices.Concat(run.Corrections, run.Watching, run.Seen) {
-			fmt.Printf("theme %v places %d about agent %v present %d of %d\n", theme.Words, theme.Places, theme.AboutAgent, theme.Present(), len(theme.Checks))
-			for _, q := range theme.Quotes {
+		for _, f := range run.All() {
+			fmt.Printf("finding %s · %s · %d sessions · present %d of %d\n", f.Title, f.Class, f.Sessions, f.Present(), len(f.Checks))
+			for _, q := range f.Quotes {
 				fmt.Printf("    %s %s %q\n", q.Session, q.At.Local().Format(moment), q.Text)
 			}
 		}

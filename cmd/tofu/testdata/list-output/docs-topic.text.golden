@@ -231,12 +231,12 @@ Turn
       what it is doing: waiting for the orchestrator's answer, running bash or
       building; a sub-agent with no new output, step or request for this long is
       shown as stalled
-    verifySubAgents         false
+    verifySubAgents         true
       true or false
       the lead checks each sub-agent's work itself before it reports, reading
-      the files and running the build or the tests again; off takes the report
-      as the result unless you ask for a check. A text override of the rule
-      verify_sub_agents in tofu rules turns it on too
+      what it changed, running the build or the tests again and opening what it
+      made; off takes the report as the result unless you ask for a check. tofu
+      rules off verify_sub_agents turns it off too, whatever this says
     agentSources            tofu,agents,claude
       a comma list of tofu, agents, claude
       the folders sub-agents are read from, in order, as a comma list of tofu,

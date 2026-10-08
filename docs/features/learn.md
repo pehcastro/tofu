@@ -1,38 +1,40 @@
 ---
 title: Learn
-description: tofu reads your own sessions for the correction you keep repeating, and proposes the fix with your words from every session behind it.
+description: tofu reads your own sessions for what keeps going wrong, tells tofu's bugs from your own rules, and proposes the fix with your words behind it.
 order: 15
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 `tofu learn` reads your sessions when you run it and finds what you had
-to say more than once. It prints at most five proposals, each with your
-own words from every session it came from, and changes nothing until you
-apply one.
+to say more than once. It opens with a short summary, what keeps going
+wrong, what it cost you, and what to run, then at most five findings,
+and changes nothing until you apply one.
 
 ## Why learn works the way it does
 
-**Two sessions or it is not a pattern.** A correction counts only when
-you said it in two or more sessions. One session is listed as watching,
-never proposed.
+**Grouped by meaning, then checked.** With `tofu settings set learn true`
+your own lead model groups your messages by what they are about, in one
+request on your subscription. tofu then checks every answer: a rule that
+copies your words, names someone or carries filler is refused, and so is
+a version or a setting that does not exist. `--local` sends nothing and
+groups only on several shared words, and says it is the weaker mode.
+
+**Tofu's bugs are not your rules.** Each finding is a tofu defect, a tofu
+library rule, your own rule, a setting, or about your project, with the
+reason. A defect becomes a draft for tofu, never a memory entry, and a
+remark about your project is listed and never proposed.
+
+**It knows what was fixed since.** Each session is placed on the tofu
+version that recorded it, from its day and the release dates in tofu's
+changelog. A finding a later version fixed is listed as fixed in that
+version, not proposed again.
 
 **It checks whose fault it was.** For every correction that came back,
-learn opens the request the model was answering at that moment and looks
-for your earlier words in it. If they were missing, tofu lost them, and
-that becomes a draft for tofu itself. If they were there, the model
-ignored them, and a memory entry or a rule is the fix you can apply.
+learn opens the request the model was answering and looks for your
+earlier words in it. Missing means tofu lost them.
 
-**A turn that ends asking you is a finding.** When the lead ended its
-turn handing you a choice and your next message corrected it, learn
-counts it across sessions.
-
-**Code decides, and nothing leaves by default.** Finding the corrections,
-the in-request check, the counting and the cap are code, with no model.
-`--local` sends nothing. With `tofu settings set learn true`, each window is also
-labelled by Jev after the count and bytes are printed, and those labels
-are shown, not acted on, until a calibration backs them, and your own lead
-model writes each memory statement as one rule that names no one, with your words kept
-under it as evidence.
+**Two sessions or it is not a pattern.** One session is watched, never
+proposed. Confidence rises with the number of sessions.
 
 **Drafts describe, they do not quote.** An upstream draft says what
 happened in general terms, with counts, the tofu version and platform,
@@ -41,8 +43,8 @@ session name or a path, and it is never sent.
 
 ## Using learn
 
-- **Scan this project**: `tofu learn scan --local`, or `--chain <session>`
-  for one chain of forks, or `--last 40`.
+- **Scan a conversation**: `tofu learn scan --chain <name>` reads every
+  generation of that conversation; `--local` keeps it on your machine.
 - **Read the evidence**: `tofu learn show <n>`.
 - **Apply one**: `tofu learn apply <n>`; `--project` keeps a memory entry
   to this project.
@@ -54,7 +56,7 @@ session name or a path, and it is never sent.
 ## Commands
 
 ```
-tofu learn scan [--chain <session>|--last N|--global] [--local] [--all] [--dir path] [--json]
+tofu learn scan [--chain <name>|--last N|--global] [--local] [--all] [--dir path] [--json]
 tofu learn show <n>
 tofu learn apply <n> [--project] [--dir path]
 tofu learn reject <n> --reason "<why>"

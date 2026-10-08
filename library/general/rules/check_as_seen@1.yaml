@@ -1,0 +1,7 @@
+id: check_as_seen
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: check visual or interactive work where the person sees it: the real window or page, at the size, scale, scroll position, theme and state the reported bug needs, on the build you just made. a hidden window, a headless run or any check that could not have shown the reported bug does not close it, and you say so. before you hand a build to the person, build it, close the window you opened earlier, open the new one yourself, and name its path, the time it was built and the few things to look at.
+notes: tooltips came back fixed nine times from a hidden window at another scale while the person looked at a real window scrolled down, and builds were handed over unopened or older than the fix. it guards against checks that cannot show the bug and stale builds on the person's screen.

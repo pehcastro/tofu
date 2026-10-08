@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"tofu/internal/memory"
 	"tofu/internal/sys"
 )
 
@@ -24,27 +25,42 @@ const (
 )
 
 type Run struct {
-	ID          string     `json:"id"`
-	At          time.Time  `json:"at"`
-	Scope       string     `json:"scope"`
-	Read        Read       `json:"read"`
-	Said        []Said     `json:"said"`
-	Corrections []Theme    `json:"corrections,omitempty"`
-	Proposals   []Proposal `json:"proposals"`
-	Held        []Proposal `json:"held,omitempty"`
-	Watching    []Theme    `json:"watching,omitempty"`
-	Seen        []Theme    `json:"seen,omitempty"`
-	Labels      []Label    `json:"labels,omitempty"`
-	Sent        Sent       `json:"sent"`
+	ID       string    `json:"id"`
+	At       time.Time `json:"at"`
+	Scope    string    `json:"scope"`
+	Mode     Mode      `json:"mode"`
+	Model    string    `json:"grouped_by,omitempty"`
+	Read     Read      `json:"read"`
+	Summary  Summary   `json:"summary"`
+	Findings []Finding `json:"findings"`
+	Held     []Finding `json:"held,omitempty"`
+	Watching []Finding `json:"watching,omitempty"`
+	Fixed    []Finding `json:"fixed,omitempty"`
+	Project  []Finding `json:"project,omitempty"`
+	Decided  []Finding `json:"decided,omitempty"`
+	Sent     Sent      `json:"sent"`
+	Labels   []Label   `json:"labels,omitempty"`
+	Said     []Said    `json:"said"`
 }
 
-func (r Run) Find(id int) (Proposal, bool) {
-	for _, p := range slices.Concat(r.Proposals, r.Held) {
-		if p.ID == id {
-			return p, true
+type Known struct {
+	Memory    []memory.Entry
+	Decisions []Decision
+	Releases  []Release
+	Settings  map[string]string
+}
+
+func (r Run) All() []Finding {
+	return slices.Concat(r.Findings, r.Held, r.Watching, r.Fixed, r.Project, r.Decided)
+}
+
+func (r Run) Find(id int) (Finding, bool) {
+	for _, f := range slices.Concat(r.Findings, r.Held) {
+		if f.ID == id {
+			return f, true
 		}
 	}
-	return Proposal{}, false
+	return Finding{}, false
 }
 
 func Scan(sources []Source, known Known, at time.Time) (Run, error) {
@@ -52,24 +68,8 @@ func Scan(sources []Source, known Known, at time.Time) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
-	themes := themesOf(said, requests{})
-	run := Run{ID: at.Format(runStamp), At: at, Read: read, Said: said}
-	for _, theme := range themes {
-		switch {
-		case !theme.AboutAgent && theme.Places >= CorroboratingPlaces:
-			run.Seen = append(run.Seen, theme)
-		case theme.AboutAgent && theme.Places < CorroboratingPlaces:
-			run.Watching = append(run.Watching, theme)
-		case theme.AboutAgent:
-			run.Corrections = append(run.Corrections, theme)
-		}
-	}
-	proposals := propose(themes, known)
-	for i := range proposals {
-		proposals[i].ID = i + 1
-	}
-	cut := min(len(proposals), ProposalCap)
-	run.Proposals, run.Held = proposals[:cut], proposals[cut:]
+	run := Run{ID: at.Format(runStamp), At: at, Read: read, Said: said, Mode: ModeLocal}
+	run.settle(localFindings(said, requests{}), known)
 	return run, nil
 }
 
@@ -91,8 +91,8 @@ type Decision struct {
 	Reason string    `json:"reason,omitempty"`
 }
 
-func quiet(p Proposal, decisions []Decision) bool {
-	return slices.ContainsFunc(decisions, func(d Decision) bool { return d.Key == p.Key && p.Places <= d.Places })
+func quiet(f Finding, decisions []Decision) bool {
+	return slices.ContainsFunc(decisions, func(d Decision) bool { return d.Key == f.Key && f.Sessions <= d.Places })
 }
 
 type Home struct{ Dir string }

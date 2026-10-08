@@ -2,7 +2,7 @@
 title: How a rule fires
 description: A rule is one instruction with triggers, and it reaches a prompt only when the task matches them.
 order: 2
-updated: 2026-10-04
+updated: 2026-10-08
 ---
 
 A rule is one YAML file, `<id>@1.yaml`, holding one instruction the model
@@ -33,6 +33,18 @@ four states of a view, declares `shapes: design` and reaches the lead too, so
 its brief can ask for it. A lead running alone, with `turnMaySpawn` off,
 writes the code itself and gets every rule. On a React task this cuts the
 lead's system prompt from 27,743 bytes to 23,297.
+
+The lead also carries tofu's working rules, the same for every project:
+
+| Rule | What the lead does |
+|---|---|
+| `verify_sub_agents` | Checks a sub-agent's work itself before calling it done: reads what changed, runs the build or tests, opens or drives what it made, and says what it saw. The `verifySubAgents` setting switches it |
+| `brief_from_references` | Opens the file, image, page or message you pointed at before briefing, and quotes it word for word in the brief |
+| `check_as_seen` | Checks visual work in the real window at the size and state your bug needs, and hands you the build it just made, with its path and time |
+| `stay_in_scope` | Changes only what you asked or corrected, and offers anything more instead of doing it |
+
+A sub-agent carries `sub_agent_boundaries`: it opens every reference in its
+brief and reports anything more it would change rather than changing it.
 
 `touches:` is a regular expression read against a sub-agent's task and the
 paths it owns. A rule that declares it reaches a sub-agent only when the task

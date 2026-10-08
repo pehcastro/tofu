@@ -106,8 +106,9 @@ keys  the keys the app answers to, which ones you can rebind, and finding a
   find a prompt I sent in another session
     → ctrl+p in the app, type part of it, then enter
 
-learn  read your own sessions for what keeps going wrong, and get at most five
-  proposals with the evidence behind each
+learn  read your own sessions for what keeps going wrong, sorted into tofu's
+  bugs, tofu's rules, your own rules, settings and your project, with at most
+  five findings to act on
   find what I keep having to tell tofu again
     → tofu learn scan --local
   turn what I keep repeating into a memory entry or a rule

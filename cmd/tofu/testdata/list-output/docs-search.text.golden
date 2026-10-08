@@ -24,8 +24,6 @@ Docs · "change the colours"                                           50 matche
     → tofu docs hooks
   Keys
     → tofu docs keys
-  Learn
-    → tofu docs learn
   Models
     → tofu docs models
   Serving a project to another program
@@ -92,6 +90,8 @@ Docs · "change the colours"                                           50 matche
     → tofu docs files
   Instruction files
     → tofu docs instructions
+  Learn
+    → tofu docs learn
   Memory
     → tofu docs memory
   Rules

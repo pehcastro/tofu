@@ -1,6 +1,7 @@
 package learn
 
 import (
+	"cmp"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -54,30 +55,28 @@ type Draft struct {
 	Mark        string    `json:"mark"`
 }
 
-func DraftOf(p Proposal, build Build, at time.Time) Draft {
-	draft := Draft{Kind: DraftFailure, Key: p.Key, Mechanism: p.Mechanism, Build: build, Written: at, Sessions: p.Places}
-	var examples []string
-	for _, theme := range p.Themes {
-		draft.Recurrences += len(theme.Checks)
-		draft.Present += theme.Present()
-		examples = append(examples, fmt.Sprintf("- the person corrected how the lead behaved (%s) %d times in %d sessions; the earlier correction was in the request the model answered %d of %d times it came back.",
-			theme.Label(), len(theme.Quotes), theme.Places, theme.Present(), len(theme.Checks)))
-	}
-	happened, did, expected := "", "", ""
-	switch p.Mechanism {
-	case forkCarry:
-		draft.Title = "A fork drops what the person said, and the lead repeats a mistake the person had already corrected"
-		happened = "across " + strconv.Itoa(p.Places) + " sessions of one chain, the person corrected the lead, the chain forked, and the lead made the corrected mistake again. In " +
+func DraftOf(f Finding, build Build, at time.Time) Draft {
+	draft := Draft{Kind: DraftBug, Key: f.Key, Mechanism: cmp.Or(f.Mechanism, string(f.Class)), Build: build, Written: at, Sessions: f.Sessions,
+		Recurrences: len(f.Checks), Present: f.Present(), Title: f.Title}
+	happened := fmt.Sprintf("the person raised it %d times in %d sessions; where an earlier mention could have been in the request the model answered, it was there %d of %d times.",
+		f.Times, f.Sessions, draft.Present, draft.Recurrences)
+	did, expected := "", ""
+	switch {
+	case f.Mechanism == forkCarry:
+		draft.Kind, draft.Title = DraftFailure, "A fork drops what the person said, and the lead repeats a mistake the person had already corrected"
+		happened = "across " + strconv.Itoa(f.Sessions) + " sessions of one chain, the person corrected the lead, the chain forked, and the lead made the corrected mistake again. In " +
 			strconv.Itoa(draft.Recurrences-draft.Present) + " of " + strconv.Itoa(draft.Recurrences) + " recurrences the earlier correction was not in the request the model answered."
 		did, expected = "the fork carry that starts the next session did not hold the person's earlier words.", "what the person asked for still holds after every fork."
-	case leadTurnEnd:
-		draft.Title = "The lead ends a turn handing the person a choice it could have made, and the person corrects it"
-		happened = "in " + strconv.Itoa(p.Places) + " sessions the lead ended its turn asking the person to decide or whether to go on, and the person's next message corrected it."
+	case f.Mechanism == leadTurnEnd:
+		draft.Kind, draft.Title = DraftFailure, "The lead ends a turn handing the person a choice it could have made, and the person corrects it"
+		happened = "in " + strconv.Itoa(f.Sessions) + " sessions the lead ended its turn asking the person to decide or whether to go on, and the person's next message corrected it."
 		did, expected = "only a sub-agent's turn end is judged; nothing judges whether the lead should end its turn.", "the lead keeps working on what it can do and asks only what only the person can decide."
+	case f.Class == ClassLibrary:
+		draft.Kind, did, expected = DraftLibrary, f.Reason, f.Rule
 	default:
-		panic("learn: no draft for the mechanism " + p.Mechanism)
+		did, expected = f.Reason, "tofu does not do this."
 	}
-	draft.Body = strings.Join([]string{"What happened: " + happened, "", "Examples, in general terms:", strings.Join(examples, "\n"), "",
+	draft.Body = strings.Join([]string{"What happened: " + happened, "",
 		"What tofu did: " + did, "What was expected: " + expected, "",
 		"Not included: quotes, session names, transcripts, file contents, paths, project names. Not sent."}, "\n")
 	return draft
