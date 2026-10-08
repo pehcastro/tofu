@@ -1,17 +1,20 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyView, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, SharedString,
-    Stateful, Window, div, prelude::*, px,
+    AnyView, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, Rgba, SharedString,
+    Stateful, Window, div, prelude::*, px, relative,
 };
 
 use crate::component::{icon, status_item};
 use crate::components::card::caption;
-use crate::components::list::bare_row;
+use crate::components::chip::tabular;
+use crate::components::glyph::Glyph;
+use crate::components::list::{row, separator};
 use crate::components::overlay::{Align, Placement, Popover, Side};
-use crate::components::paint::ink;
+use crate::components::paint::{glyph, ink};
 use crate::components::size::{
-    CAPTION_TEXT, FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T3,
+    CAPTION_TEXT, CHIP_FILL, FONT_BODY, FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
+    RADIUS_CHIP_SMALL, ROW_GAP, ROW_PAD_X, T1, T2, T3,
 };
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -20,19 +23,26 @@ use crate::theme::{ColorToken, Theme};
 
 const PRODUCT_NAME: &str = "tofu";
 const NO_ACCOUNT: &str = "no account";
+const NO_ACCOUNT_CONNECTED: &str = "No account connected";
 const ALL_PROVIDERS: &str = "View all providers";
 const POP_OFFSET: f32 = 4.0;
 const QUOTA_POP_WIDTH: f32 = 250.0;
-const ACCOUNT_LINE: f32 = 17.0;
-const POP_CAPTION_X: f32 = 10.0;
-const POP_CAPTION_TOP: f32 = 8.0;
-const POP_CAPTION_BOTTOM: f32 = 6.0;
-const ACCOUNT_HEAD_BOTTOM: f32 = 10.0;
+const SECTION_TOP: f32 = 8.0;
+const SECTION_BOTTOM: f32 = 10.0;
+const SECTION_GAP: f32 = 12.0;
+const SECTION_BREAK: f32 = 4.0;
+const METER_GAP: f32 = 7.0;
+const TILE: f32 = 24.0;
+const EMPTY_GLYPH: f32 = 14.0;
+const FOOTER_TOP: f32 = 4.0;
+const FOOTER_BOTTOM: f32 = 6.0;
+const WARN_FROM: u8 = 70;
+const NEAR_LIMIT_FROM: u8 = 90;
 const CTX_BAR_WIDTH: f32 = 40.0;
-const CTX_BAR_HEIGHT: f32 = 5.0;
-const CTX_BAR_RADIUS: f32 = 3.0;
-const CTX_TRACK: f32 = 0.08;
-const CTX_FILL: f32 = 0.6;
+const BAR_HEIGHT: f32 = 5.0;
+const BAR_RADIUS: f32 = 3.0;
+const BAR_TRACK: f32 = 0.08;
+const BAR_FILL: f32 = 0.6;
 
 #[derive(Clone)]
 pub struct Branch {
@@ -144,19 +154,11 @@ impl StatusBar {
                 .child(dim(quota.window.clone(), theme))
                 .child(format!("{}%", quota.percent)),
         };
-        let small = |text: SharedString| {
-            div()
-                .text_size(px(FONT_SMALL))
-                .text_color(ink(theme, T3))
-                .child(text)
+        let section = match &self.status.quota {
+            Some(quota) => account_card(quota, theme),
+            None => no_account(theme),
         };
-        let (name, found) = match &self.status.quota {
-            Some(quota) => (
-                quota.account.clone(),
-                Some(format!("{} window at {}%", quota.window, quota.percent).into()),
-            ),
-            None => (NO_ACCOUNT.into(), None),
-        };
+        let hover = theme.color(ColorToken::StateHover);
         let (escaper, outside, picker) = (state.clone(), state.clone(), state);
         let on_pick = self.on_pick.clone();
         let body = div()
@@ -172,32 +174,28 @@ impl StatusBar {
                 }
             })
             .on_mouse_down_out(move |_, _, cx| set_open(&outside, false, cx))
+            .child(section)
+            .child(separator(theme).mx_0().my(px(SECTION_BREAK)))
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .pt(px(POP_CAPTION_TOP))
-                    .px(px(POP_CAPTION_X))
-                    .pb(px(ACCOUNT_HEAD_BOTTOM))
-                    .line_height(px(ACCOUNT_LINE))
-                    .child(name)
-                    .children(found.map(small)),
-            )
-            .children(self.version.clone().map(|version| {
-                div()
-                    .px(px(POP_CAPTION_X))
-                    .pb(px(POP_CAPTION_BOTTOM))
-                    .child(caption(format!("{PRODUCT_NAME} {version}"), theme))
-            }))
-            .child(
-                bare_row("status-all-providers", false, false, theme)
+                row("status-all-providers", false, false, theme)
+                    .hover(move |style| style.bg(hover))
                     .on_click(move |_, window, cx| {
                         set_open(&picker, false, cx);
                         on_pick(&StatusPick::AllProviders, window, cx);
                     })
                     .child(div().flex_1().child(ALL_PROVIDERS))
                     .child(icon(Icon::Arrow, ICON_SMALL, ink(theme, CAPTION_TEXT))),
-            );
+            )
+            .children(self.version.clone().map(|version| {
+                div()
+                    .px(px(ROW_PAD_X))
+                    .pt(px(FOOTER_TOP))
+                    .pb(px(FOOTER_BOTTOM))
+                    .text_size(px(FONT_SMALL))
+                    .font_features(tabular())
+                    .text_color(ink(theme, T3))
+                    .child(format!("{PRODUCT_NAME} {version}"))
+            }));
         Popover::new("status-quota-pop", trigger)
             .open(open)
             .placement(Placement {
@@ -249,20 +247,155 @@ fn dim(text: impl Into<SharedString>, theme: &Theme) -> Div {
     div().text_color(ink(theme, T3)).child(text.into())
 }
 
-fn context_bar(share: f32, theme: &Theme) -> Div {
+fn meter_bar(share: f32, fill: Rgba, theme: &Theme) -> Div {
     div()
         .flex_none()
-        .w(px(CTX_BAR_WIDTH))
-        .h(px(CTX_BAR_HEIGHT))
-        .rounded(px(CTX_BAR_RADIUS))
-        .bg(ink(theme, CTX_TRACK))
+        .h(px(BAR_HEIGHT))
+        .rounded(px(BAR_RADIUS))
+        .bg(ink(theme, BAR_TRACK))
         .overflow_hidden()
         .child(
             div()
                 .h_full()
-                .w(px(CTX_BAR_WIDTH * share.clamp(0.0, 1.0)))
-                .rounded(px(CTX_BAR_RADIUS))
-                .bg(ink(theme, CTX_FILL)),
+                .w(relative(share.clamp(0.0, 1.0)))
+                .rounded(px(BAR_RADIUS))
+                .bg(fill),
+        )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Level {
+    Normal,
+    Warning,
+    NearLimit,
+}
+
+impl Level {
+    fn of(percent: u8) -> Level {
+        match percent {
+            NEAR_LIMIT_FROM.. => Level::NearLimit,
+            WARN_FROM.. => Level::Warning,
+            _ => Level::Normal,
+        }
+    }
+
+    fn fill(self, theme: &Theme) -> Rgba {
+        match self {
+            Level::Normal => ink(theme, BAR_FILL),
+            Level::Warning => theme.color(ColorToken::StatusWarn),
+            Level::NearLimit => theme.color(ColorToken::StatusDanger),
+        }
+    }
+
+    fn text(self, theme: &Theme) -> Rgba {
+        match self {
+            Level::Normal => ink(theme, T1),
+            Level::Warning | Level::NearLimit => self.fill(theme),
+        }
+    }
+}
+
+fn tile(theme: &Theme) -> Div {
+    div()
+        .flex_none()
+        .size(px(TILE))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(RADIUS_CHIP_SMALL))
+        .bg(ink(theme, CHIP_FILL))
+}
+
+fn account_card(quota: &Quota, theme: &Theme) -> Div {
+    let (provider, window) = quota
+        .window
+        .split_once(' ')
+        .unwrap_or((quota.account.as_ref(), quota.window.as_ref()));
+    let letter: String = provider
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .take(1)
+        .flat_map(char::to_uppercase)
+        .collect();
+    let account = (quota.account.as_ref() != provider).then(|| quota.account.clone());
+    let level = Level::of(quota.percent);
+    let share = f32::from(quota.percent) / 100.0;
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(SECTION_GAP))
+        .px(px(ROW_PAD_X))
+        .pt(px(SECTION_TOP))
+        .pb(px(SECTION_BOTTOM))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(ROW_GAP))
+                .min_w_0()
+                .child(
+                    tile(theme)
+                        .text_size(px(FONT_SMALL))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(ink(theme, T2))
+                        .child(letter),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(FONT_BODY))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(ink(theme, T1))
+                        .child(provider.to_owned()),
+                )
+                .children(account.map(|account| {
+                    div()
+                        .flex_none()
+                        .text_size(px(FONT_SMALL))
+                        .text_color(ink(theme, T3))
+                        .child(account)
+                })),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(METER_GAP))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(caption(window.to_owned(), theme))
+                        .child(
+                            div()
+                                .text_size(px(FONT_SMALL))
+                                .font_weight(FontWeight::MEDIUM)
+                                .font_features(tabular())
+                                .text_color(level.text(theme))
+                                .child(format!("{}%", quota.percent)),
+                        ),
+                )
+                .child(meter_bar(share, level.fill(theme), theme).w_full()),
+        )
+}
+
+fn no_account(theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(ROW_GAP))
+        .px(px(ROW_PAD_X))
+        .pt(px(SECTION_TOP))
+        .pb(px(SECTION_BOTTOM))
+        .child(tile(theme).child(glyph(Glyph::Lock, EMPTY_GLYPH, ink(theme, T3))))
+        .child(
+            div()
+                .text_size(px(FONT_BODY))
+                .text_color(ink(theme, T2))
+                .child(NO_ACCOUNT_CONNECTED),
         )
 }
 
@@ -292,7 +425,7 @@ impl RenderOnce for StatusBar {
         let context = self
             .item(StatusPick::Context, "Context", &theme)
             .child("ctx")
-            .child(context_bar(share, &theme))
+            .child(meter_bar(share, ink(&theme, BAR_FILL), &theme).w(px(CTX_BAR_WIDTH)))
             .children(
                 status
                     .context
