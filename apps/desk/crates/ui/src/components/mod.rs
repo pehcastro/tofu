@@ -14,6 +14,7 @@ pub mod empty;
 pub mod feed;
 pub mod file_edits;
 pub mod find;
+pub mod fork_chain;
 pub mod form;
 pub mod glyph;
 pub mod graph;

@@ -48,6 +48,7 @@ pub struct Store {
     pub rules: Answer<RuleListReport>,
     pub context: Answer<ContextReport>,
     pub info: Answer<SessionInfo>,
+    pub lineage: BTreeMap<String, Answer<SessionInfo>>,
     pub quota: Vec<QuotaWindow>,
 }
 
@@ -62,6 +63,7 @@ impl Default for Store {
             rules: Answer::default(),
             context: Answer::default(),
             info: Answer::default(),
+            lineage: BTreeMap::new(),
             quota: Vec::new(),
         }
     }
@@ -85,6 +87,7 @@ impl Store {
             Event::Notification(Notification::SessionForked(fork)) => {
                 self.session(&fork.session).forks.push((**fork).clone());
                 self.session(&fork.to).forked_from = Some(fork.from.clone());
+                self.lineage.values_mut().for_each(Answer::again);
                 Ok(())
             }
             Event::Notification(Notification::SessionListed(_)) => Ok(()),

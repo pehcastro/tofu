@@ -18,7 +18,7 @@ gpui_platform.workspace = true
 serde_json = "1.0.149"
 
 [features]
-default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-usage"]
+default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-usage"]
 screen-work = []
 screen-settings = []
 screen-accounts = []
@@ -29,6 +29,7 @@ screen-usage = []
 screen-limits = []
 screen-context = []
 screen-session = []
+screen-forks = []
 module-subagents = []
 module-file-edits = []
 module-shells = []
@@ -39,7 +40,7 @@ module-data-studio = []
 screen-platforms = []
 screen-intro = []
 screen-onboarding = ["screen-intro"]
-all-screens = ["screen-work", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "module-subagents", "module-file-edits", "module-shells", "module-git", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
+all-screens = ["screen-work", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "module-subagents", "module-file-edits", "module-shells", "module-git", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
 
 [lints]
 workspace = true

@@ -11,13 +11,16 @@ mod screens {
     pub mod classifier;
     #[cfg(feature = "screen-context")]
     pub mod context;
+    #[cfg(feature = "screen-forks")]
+    pub mod forks;
     #[cfg(any(
         feature = "screen-usage",
         feature = "screen-limits",
         feature = "screen-classifier",
         feature = "screen-library",
         feature = "screen-context",
-        feature = "screen-session"
+        feature = "screen-session",
+        feature = "screen-forks"
     ))]
     pub mod frame;
     #[cfg(feature = "screen-intro")]
@@ -115,9 +118,9 @@ const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>]
 --file opens a file in the editor screen\n\
 --dir lists a folder in the editor screen's file tree\n\
 --repo opens a git repository in the git screen\n\
-screens: work settings accounts theme library classifier usage limits context session intro onboarding platforms\n\
+screens: work settings accounts theme library classifier usage limits context session forks intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
-const SCREENS: [&str; 13] = [
+const SCREENS: [&str; 14] = [
     "work",
     "settings",
     "accounts",
@@ -128,6 +131,7 @@ const SCREENS: [&str; 13] = [
     "limits",
     "context",
     "session",
+    "forks",
     "intro",
     "onboarding",
     "platforms",
@@ -173,6 +177,7 @@ fn screen(name: &str) -> Result<Open, String> {
         "limits" => gated!("screen-limits", screens::limits::open),
         "context" => gated!("screen-context", screens::context::open),
         "session" => gated!("screen-session", screens::session::open),
+        "forks" => gated!("screen-forks", screens::forks::open),
         "intro" => gated!("screen-intro", screens::intro::open),
         "onboarding" => gated!("screen-onboarding", screens::onboarding::open),
         "chat" => ("chat", Some(modules::chat::open as Open)),

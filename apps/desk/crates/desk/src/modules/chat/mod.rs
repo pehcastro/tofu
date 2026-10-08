@@ -763,6 +763,24 @@ impl Chat {
         self.ask_due(cx);
     }
 
+    pub fn want_lineage(&mut self, session: &str, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| {
+            store.lineage.entry(session.to_owned()).or_default().want();
+        });
+        self.ask_due(cx);
+    }
+
+    pub fn forget_lineage(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.lineage.clear());
+    }
+
+    pub fn reread_lineage(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| {
+            store.lineage.values_mut().for_each(Answer::again);
+        });
+        self.ask_due(cx);
+    }
+
     fn ask_due(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.link, Link::Ready(_)) {
             return;
@@ -772,6 +790,18 @@ impl Chat {
         };
         self.ask::<request::QueryContext>(&open, |store| &mut store.context, context_said, cx);
         self.ask::<request::SessionInfo>(&open, |store| &mut store.info, info_said, cx);
+        let lineage: Vec<String> = self.store.read(cx).lineage.keys().cloned().collect();
+        for session in lineage {
+            let params = SessionParams {
+                session: Some(session.clone()),
+            };
+            self.ask::<request::SessionInfo>(
+                &params,
+                move |store| store.lineage.entry(session.clone()).or_default(),
+                info_said,
+                cx,
+            );
+        }
         self.ask::<request::QueryUsage>(
             &NoParams {},
             |store| &mut store.usage,
@@ -803,7 +833,7 @@ impl Chat {
     fn ask<R: Request>(
         &mut self,
         params: &R::Params,
-        slot: fn(&mut Store) -> &mut Answer<R::Result>,
+        slot: impl Fn(&mut Store) -> &mut Answer<R::Result> + 'static,
         said: fn(&R::Result) -> String,
         cx: &mut Context<Self>,
     ) where

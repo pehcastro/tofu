@@ -1,3 +1,4 @@
+use desk_ui::components::fork_chain::{Fork, ForkChain, Generation};
 use desk_ui::components::graph::{
     AgentNode, Change, Cross, DelegationMap, FileLeaf, Fit, Leaves, Node, Tone,
 };
@@ -114,6 +115,103 @@ fn map(id: String, theme: &Theme, picked: Option<Node>, undone: bool, fit: Fit) 
     }
 }
 
+fn generation(
+    name: &str,
+    at: &str,
+    place: &str,
+    (current, head): (bool, bool),
+    facts: &[(&str, &str)],
+    into: Option<Fork>,
+) -> Generation {
+    Generation {
+        name: SharedString::from(name.to_owned()),
+        handle: Some(SharedString::from(format!("{name}#06r84.{at}"))),
+        place: SharedString::from(place.to_owned()),
+        current,
+        head,
+        facts: facts
+            .iter()
+            .map(|(label, value)| {
+                (
+                    SharedString::from((*label).to_owned()),
+                    SharedString::from((*value).to_owned()),
+                )
+            })
+            .collect(),
+        into,
+    }
+}
+
+fn compact(tokens: &str, fill: (f32, f32)) -> Option<Fork> {
+    Some(Fork {
+        kind: "compact".into(),
+        tokens: Some(SharedString::from(tokens.to_owned())),
+        fill: Some(fill),
+    })
+}
+
+fn chains() -> [(&'static str, Vec<Generation>); 2] {
+    let ended = [
+        ("turns", "9"),
+        ("steps", "31"),
+        ("outcome", "stopped"),
+        ("end reason", "fork"),
+        ("started", "2026-10-08 05:37:49"),
+        ("ended", "2026-10-08 10:27:49"),
+    ];
+    [
+        (
+            "three generations, the second open, the third the head",
+            vec![
+                generation(
+                    "crisp-azure-swift",
+                    "1",
+                    "generation 1 of 3",
+                    (false, false),
+                    &ended,
+                    None,
+                ),
+                generation(
+                    "crisp-azure-swift",
+                    "2",
+                    "generation 2 of 3",
+                    (true, false),
+                    &ended,
+                    compact("238,000 → 31,000 tokens, 207,000 dropped", (0.95, 0.12)),
+                ),
+                generation(
+                    "crisp-azure-swift",
+                    "3",
+                    "generation 3 of 3",
+                    (false, true),
+                    &[
+                        ("turns", "0"),
+                        ("steps", "0"),
+                        ("started", "2026-10-08 10:27:49"),
+                    ],
+                    compact("181,000 → 12,000 tokens, 169,000 dropped", (0.72, 0.05)),
+                ),
+            ],
+        ),
+        (
+            "never forked: one generation",
+            vec![generation(
+                "rapid-linen-swift",
+                "1",
+                "generation 1",
+                (true, true),
+                &[
+                    ("turns", "1"),
+                    ("steps", "2"),
+                    ("outcome", "stopped"),
+                    ("started", "2026-10-08 05:37:49"),
+                ],
+                None,
+            )],
+        ),
+    ]
+}
+
 pub(super) struct GraphPage;
 
 impl GraphPage {
@@ -167,6 +265,32 @@ impl GraphPage {
                     .child(column("board width", Fit::Board, None))
                     .child(column("320 px", Fit::Outline, Some(NARROW_WIDTH))),
             )
+            .child(label(
+                "Fork chain: one card per generation, root first. The ribbon between two is the context carried across the fork, before above and after below, against the ceiling.",
+                theme,
+            ))
+            .child(div().flex().items_start().gap_6().children(
+                [None, Some(NARROW_WIDTH)].into_iter().map(|width| {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_4()
+                        .min_w_0()
+                        .map(|frame| match width {
+                            Some(width) => frame.flex_none().w(px(width)),
+                            None => frame.flex_1(),
+                        })
+                        .children(chains().into_iter().map(|(state, generations)| {
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .min_w_0()
+                                .child(label(state, theme))
+                                .child(ForkChain::new(theme, generations))
+                        }))
+                }),
+            ))
     }
 
     pub(super) fn key(&mut self, _: &str) -> bool {

@@ -7,6 +7,8 @@ use crate::project::{self, Head};
 use crate::screens::classifier::Classifier;
 #[cfg(all(feature = "screen-work", feature = "screen-context"))]
 use crate::screens::context::ContextScreen;
+#[cfg(all(feature = "screen-work", feature = "screen-forks"))]
+use crate::screens::forks::ForksScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-library"))]
 use crate::screens::library::Library;
 #[cfg(all(feature = "screen-work", feature = "screen-limits"))]
@@ -82,13 +84,14 @@ const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
-const LIVE_SCREENS: [&str; 7] = [
+const LIVE_SCREENS: [&str; 8] = [
     "theme",
     "limits",
     "classifier",
     "library",
     "context",
     "session",
+    "forks",
     "usage",
 ];
 #[cfg(feature = "screen-work")]
@@ -346,6 +349,7 @@ impl Desk {
                 feature = "screen-library",
                 feature = "screen-context",
                 feature = "screen-session",
+                feature = "screen-forks",
                 feature = "screen-usage"
             )
         ))]
@@ -685,6 +689,7 @@ impl Desk {
             feature = "screen-library",
             feature = "screen-context",
             feature = "screen-session",
+            feature = "screen-forks",
             feature = "screen-usage"
         ))]
         self.feed_screens(cx);
@@ -697,6 +702,7 @@ impl Desk {
         feature = "screen-library",
         feature = "screen-context",
         feature = "screen-session",
+        feature = "screen-forks",
         feature = "screen-usage"
     ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
@@ -730,6 +736,10 @@ impl Desk {
             #[cfg(feature = "screen-session")]
             if let Ok(session) = view.clone().downcast::<SessionScreen>() {
                 session.update(cx, |session, cx| session.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-forks")]
+            if let Ok(forks) = view.clone().downcast::<ForksScreen>() {
+                forks.update(cx, |forks, cx| forks.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-usage")]
             if let Ok(usage) = view.downcast::<UsageScreen>() {
