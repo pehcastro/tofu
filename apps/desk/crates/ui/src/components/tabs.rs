@@ -533,6 +533,52 @@ fn close(ix: usize, look: Look, theme: &Theme, shut: Shut) -> Stateful<Div> {
         .child(icon(Icon::Close, ICON_TINY, ink(theme, CAPTION_TEXT)))
 }
 
+pub(crate) fn close_tile(
+    id: SharedString,
+    shown: bool,
+    theme: &Theme,
+    (window, cx): (&mut Window, &mut App),
+    shut: impl Fn(&mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    let now = Instant::now();
+    let target = if shown { 1.0 } else { 0.0 };
+    let fade = window.use_keyed_state(id, cx, |_, _| Fade::rest(target, now));
+    let span = ms(
+        theme,
+        if shown {
+            NumberToken::MotionBase
+        } else {
+            NumberToken::MotionFast
+        },
+    );
+    let (reveal, moving) = fade.update(cx, |fade, _| {
+        fade.aim(target, span, now);
+        (fade.value(now), fade.moving(now))
+    });
+    if moving {
+        window.request_animation_frame();
+    }
+    let look = Look {
+        lit: false,
+        reveal,
+        tint: 0.0,
+    };
+    let hover = theme.color(ColorToken::StateHover);
+    pressed(
+        close(
+            0,
+            look,
+            theme,
+            Rc::new(move |_, window, cx| shut(window, cx)),
+        )
+        .aria_label("Close tile")
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover)),
+        theme.color(ColorToken::CardsInnerFill),
+    )
+    .when(reveal <= 0.0, |close| close.invisible())
+}
+
 fn mark(tab: &Tab, ix: usize, look: Look, theme: &Theme, shut: &Shut) -> Div {
     let slot = div()
         .flex()
@@ -756,8 +802,12 @@ fn header_fill(screen: bool, theme: &Theme) -> Rgba {
 
 fn new_tab(id: &SharedString, theme: &Theme, on: &OnTab) -> Stateful<Div> {
     let new = on.clone();
-    div()
-        .id((id.clone(), usize::MAX))
+    new_tab_glyph(id.clone(), theme).on_click(move |_, window, cx| new(&TabEvent::New, window, cx))
+}
+
+pub fn new_tab_glyph(id: impl Into<SharedString>, theme: &Theme) -> Stateful<Div> {
+    let glyph = div()
+        .id((id.into(), usize::MAX))
         .aria_label("New workspace")
         .flex()
         .flex_none()
@@ -766,8 +816,8 @@ fn new_tab(id: &SharedString, theme: &Theme, on: &OnTab) -> Stateful<Div> {
         .size(px(NEW_TAB))
         .rounded(px(RADIUS_TAB))
         .cursor_pointer()
-        .on_click(move |_, window, cx| new(&TabEvent::New, window, cx))
-        .child(icon(Icon::Plus, ICON, ink(theme, SHELL_TEXT)))
+        .child(icon(Icon::Plus, ICON, ink(theme, SHELL_TEXT)));
+    pressed(glyph, theme.color(ColorToken::CardsOuterFill))
 }
 
 fn separator(theme: &Theme) -> Div {
@@ -805,6 +855,7 @@ pub struct TabStrip {
     press: Option<Press>,
     pointed: Option<Pointed>,
     focus: Option<FocusHandle>,
+    new_button: Option<AnyElement>,
 }
 
 impl TabStrip {
@@ -863,7 +914,13 @@ impl TabStrip {
             press: None,
             pointed: None,
             focus: None,
+            new_button: None,
         }
+    }
+
+    pub fn new_button(mut self, button: impl IntoElement) -> Self {
+        self.new_button = Some(button.into_any_element());
+        self
     }
 
     pub fn focus(mut self, focus: &FocusHandle) -> Self {
@@ -937,6 +994,7 @@ impl RenderOnce for TabStrip {
             press,
             pointed,
             focus,
+            new_button,
         } = self;
         let reduced = reduced_motion(cx);
         let state =
@@ -972,7 +1030,9 @@ impl RenderOnce for TabStrip {
             .filter_map(|ix| Some(slot(*ix, tabs.get(*ix)?)))
             .chain((hidden > 0).then_some(Slot::More));
         let slots: Vec<Slot> = match &shape {
-            Shape::Connected { .. } => flow.collect(),
+            Shape::Connected { .. } => flow
+                .chain(new_button.is_some().then_some(Slot::Button))
+                .collect(),
             Shape::Header { screens } => flow
                 .chain([Slot::Button, Slot::Inert])
                 .chain(
@@ -1066,6 +1126,14 @@ impl RenderOnce for TabStrip {
                     })
                     .map(|item| pressed(item, backdrop).into_any_element())
                     .chain(more)
+                    .chain(new_button.map(|button| {
+                        div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .child(button)
+                            .into_any_element()
+                    }))
                     .collect::<Vec<_>>();
                 let frame = div()
                     .flex()
@@ -1110,7 +1178,7 @@ impl RenderOnce for TabStrip {
                     .map(|(ix, tab)| header(ix, tab, false))
                     .chain(more)
                     .chain([
-                        pressed(new_tab(&id, &theme, &on), backdrop).into_any_element(),
+                        new_button.unwrap_or_else(|| new_tab(&id, &theme, &on).into_any_element()),
                         separator(&theme)
                             .when(screens.is_empty(), |line| line.invisible())
                             .into_any_element(),

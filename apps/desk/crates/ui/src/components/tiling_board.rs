@@ -11,17 +11,17 @@ use desk_tiling::{
 use gpui::{
     AnyElement, App, Bounds, Context, CursorStyle, Deferred, Div, KeyDownEvent, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Stateful, Window,
-    canvas, deferred, div, point, prelude::*, px, size,
+    canvas, deferred, div, point, prelude::*, px, relative, size,
 };
 
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::{Header, header_action, inner_card, shell};
 use crate::components::chip::kbd;
 use crate::components::empty::{EmptyAction, EmptyHint, empty_state};
-use crate::components::overlay::menu_surface;
+use crate::components::overlay::{MenuButton, actions, menu_surface};
 use crate::components::paint::{ink, tint};
 use crate::components::size::{CAPTION_TEXT, FONT_SMALL, HEADER, RADIUS_CHIP, RADIUS_ROW, T1};
-use crate::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
+use crate::components::tabs::{Tab, TabEvent, TabMark, close_tile, connected_tabs};
 use crate::icon::Icon;
 use crate::theme::{ColorToken, NumberToken, Theme};
 
@@ -79,7 +79,6 @@ enum Gesture {
 enum Menu {
     Closed,
     Spawn,
-    Into(TileId),
 }
 
 pub struct TilingBoard<V: 'static> {
@@ -95,6 +94,7 @@ pub struct TilingBoard<V: 'static> {
     glides: HashMap<TileId, (Rect, Glide)>,
     structural: bool,
     hovered: Option<TileId>,
+    headed: Option<TileId>,
     slot: Option<(TileId, usize)>,
     host: Host<V>,
 }
@@ -151,6 +151,7 @@ impl<V: 'static> TilingBoard<V> {
             glides: HashMap::new(),
             structural: false,
             hovered: None,
+            headed: None,
             slot: None,
             host,
         }
@@ -225,7 +226,7 @@ impl<V: 'static> TilingBoard<V> {
         self.settle();
     }
 
-    fn spawn(&mut self, module: Module) {
+    pub fn spawn(&mut self, module: Module) {
         let Some(workspace) = self.current() else {
             return;
         };
@@ -265,6 +266,18 @@ impl<V: 'static> TilingBoard<V> {
         let name = format!("workspace {}", self.workspaces.len() + 1);
         self.workspaces.push(Workspace::new(name, Preset::Empty));
         self.switch(self.workspaces.len() - 1);
+    }
+
+    pub fn rename(&mut self, index: usize) {
+        self.switch(index);
+        self.renaming = self.current().map(|workspace| workspace.name.clone());
+    }
+
+    pub fn toggle_pin(&mut self, index: usize) {
+        if let Some(workspace) = self.workspaces.get_mut(index) {
+            workspace.pinned = !workspace.pinned;
+        }
+        self.settle();
     }
 
     fn renamed(&mut self, key: &str, typed: Option<&str>) {
@@ -350,18 +363,9 @@ impl<V: 'static> TilingBoard<V> {
     }
 
     fn picked(&mut self, module: Module) {
-        let menu = std::mem::replace(&mut self.menu, Menu::Closed);
+        self.menu = Menu::Closed;
         self.gesture = Gesture::Idle;
-        match menu {
-            Menu::Into(tile) => self.apply(true, |workspace, area| {
-                workspace.open_at(
-                    module,
-                    Target::Tile(tile, Zone::Stack { at: usize::MAX }),
-                    area,
-                )
-            }),
-            Menu::Spawn | Menu::Closed => self.spawn(module),
-        }
+        self.spawn(module);
     }
 
     fn pointer_moved(&mut self, event: &MouseMoveEvent, cx: &mut Context<V>) {
@@ -451,7 +455,7 @@ impl<V: 'static> TilingBoard<V> {
             }
             Action::Even => self.apply(true, |workspace, _| Ok(workspace.even())),
             Action::Reset => self.apply(true, |workspace, _| Ok(workspace.reset())),
-            Action::Lock => self.toggle_lock(),
+            Action::Lock => self.toggle_lock(self.active),
             Action::Undo => self.apply(true, |workspace, _| workspace.undo()),
             Action::Cancel => return self.cancel(),
             Action::CloseTab => {
@@ -477,8 +481,8 @@ impl<V: 'static> TilingBoard<V> {
         true
     }
 
-    fn toggle_lock(&mut self) {
-        if let Some(workspace) = self.workspaces.get_mut(self.active) {
+    pub fn toggle_lock(&mut self, index: usize) {
+        if let Some(workspace) = self.workspaces.get_mut(index) {
             workspace.locked = !workspace.locked;
         }
         self.settle();
@@ -610,24 +614,7 @@ impl<V: 'static> TilingBoard<V> {
 
     pub fn workspace_tabs(&self, theme: &Theme, cx: &mut Context<V>) -> Div {
         let lens = self.host.board;
-        let tabs: Vec<Tab> = self
-            .workspaces
-            .iter()
-            .enumerate()
-            .map(|(index, workspace)| {
-                let name = match (&self.renaming, index == self.active) {
-                    (Some(buffer), true) => format!("{buffer}|"),
-                    _ => workspace.name.clone(),
-                };
-                let zoomed = workspace.zoomed().map(|_| " · zoomed");
-                Tab {
-                    label: format!("{name}{}", zoomed.unwrap_or_default()).into(),
-                    icon: None,
-                    count: None,
-                    mark: TabMark::Close,
-                }
-            })
-            .collect();
+        let tabs = self.tabs();
         let strip = connected_tabs(
             "tiling-tabs",
             &tabs,
@@ -674,6 +661,30 @@ impl<V: 'static> TilingBoard<V> {
             .child(add)
     }
 
+    pub fn tabs(&self) -> Vec<Tab> {
+        self.workspaces
+            .iter()
+            .enumerate()
+            .map(|(index, workspace)| {
+                let name = match (&self.renaming, index == self.active) {
+                    (Some(buffer), true) => format!("{buffer}|"),
+                    _ => workspace.name.clone(),
+                };
+                let zoomed = workspace.zoomed().map(|_| " · zoomed");
+                Tab {
+                    label: format!("{name}{}", zoomed.unwrap_or_default()).into(),
+                    icon: None,
+                    count: None,
+                    mark: match (workspace.pinned, workspace.locked) {
+                        (true, _) => TabMark::Pinned,
+                        (false, true) => TabMark::Locked,
+                        (false, false) => TabMark::Close,
+                    },
+                }
+            })
+            .collect()
+    }
+
     pub fn toolbar(&self, theme: &Theme, cx: &mut Context<V>) -> Div {
         let lens = self.host.board;
         let locked = self.current().is_some_and(|workspace| workspace.locked);
@@ -705,7 +716,7 @@ impl<V: 'static> TilingBoard<V> {
                         let page = lens(view);
                         page.menu = match page.menu {
                             Menu::Spawn => Menu::Closed,
-                            Menu::Closed | Menu::Into(_) => Menu::Spawn,
+                            Menu::Closed => Menu::Spawn,
                         };
                         cx.notify();
                     }),
@@ -779,7 +790,13 @@ impl<V: 'static> TilingBoard<V> {
         .priority(1)
     }
 
-    fn header(&self, stack: &Stack, theme: &Theme, cx: &mut Context<V>) -> Header {
+    fn header(
+        &self,
+        stack: &Stack,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<V>,
+    ) -> Header {
         let lens = self.host.board;
         let tile = stack.id;
         let shown = self.landed(tile).unwrap_or_else(|| stack.clone());
@@ -787,9 +804,38 @@ impl<V: 'static> TilingBoard<V> {
             true => TabMark::Locked,
             false => TabMark::Close,
         };
+        let board = cx.entity().downgrade();
+        let close = close_tile(
+            SharedString::from(format!("tiling-close-{}", tile.0)),
+            self.headed == Some(tile),
+            theme,
+            (window, &mut **cx),
+            move |_, cx| {
+                if let Some(view) = board.upgrade() {
+                    view.update(cx, |view, cx| {
+                        lens(view).apply(true, |workspace, area| workspace.close_tile(tile, area));
+                        cx.notify();
+                    });
+                }
+            },
+        );
+        let close = div()
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .right(relative(1.0))
+            .flex()
+            .items_center()
+            .child(close);
         if let [module] = shown.modules.as_slice() {
             let tab = (self.host.title)(module, mark, cx);
-            return Header::Title(tab.icon, tab.label, (self.host.subtitle)(module, cx));
+            let trailing = div()
+                .relative()
+                .flex()
+                .items_center()
+                .children((self.host.subtitle)(module, cx))
+                .child(close);
+            return Header::Title(tab.icon, tab.label, Some(trailing.into_any_element()));
         }
         let tabs: Vec<Tab> = shown
             .modules
@@ -812,7 +858,7 @@ impl<V: 'static> TilingBoard<V> {
                     TabEvent::Close(index) => page.apply(true, |workspace, area| {
                         workspace.close_module(tile, index, area)
                     }),
-                    TabEvent::New => page.menu = Menu::Into(tile),
+                    TabEvent::New => {}
                 }
                 cx.notify();
             }),
@@ -834,17 +880,60 @@ impl<V: 'static> TilingBoard<V> {
                 });
             }
         });
-        let plus = header_action(
-            SharedString::from(format!("tiling-plus-{}", tile.0)),
-            Icon::Plus,
-            "Add a tab",
-            theme,
+        let plus_id = SharedString::from(format!("tiling-plus-{}", tile.0));
+        let modules = self.host.spawnable.clone();
+        let plus = window
+            .use_keyed_state(plus_id.clone(), cx, |_, cx| {
+                let button = MenuButton::new(
+                    "Add a tab".into(),
+                    actions(modules.iter().map(|module| module.name().to_owned())),
+                    cx,
+                );
+                button.update(cx, |button, _| {
+                    button.trigger(move |_, theme| {
+                        header_action(plus_id.clone(), Icon::Plus, "Add a tab", theme)
+                    });
+                });
+                button
+            })
+            .read(cx)
+            .clone();
+        let adding = cx.entity().downgrade();
+        let modules = self.host.spawnable.clone();
+        plus.update(cx, |button, _| {
+            button.on_pick(move |pick, _, cx| {
+                let Some(module) = modules.get(*pick).cloned() else {
+                    return;
+                };
+                if let Some(view) = adding.upgrade() {
+                    view.update(cx, |view, cx| {
+                        let page = lens(view);
+                        let open = page
+                            .current()
+                            .and_then(|workspace| workspace.stack(tile))
+                            .and_then(|stack| stack.modules.iter().position(|at| *at == module));
+                        match open {
+                            Some(index) => {
+                                page.apply(false, |workspace, _| workspace.activate(tile, index))
+                            }
+                            None => page.apply(true, |workspace, area| {
+                                workspace.open_at(
+                                    module,
+                                    Target::Tile(tile, Zone::Stack { at: usize::MAX }),
+                                    area,
+                                )
+                            }),
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        });
+        let trailing = div().relative().child(close);
+        Header::Tabs(
+            strip.new_button(plus).into_any_element(),
+            Some(trailing.into_any_element()),
         )
-        .on_click(cx.listener(move |view, _, _, cx| {
-            lens(view).menu = Menu::Into(tile);
-            cx.notify();
-        }));
-        Header::Tabs(strip.into_any_element(), Some(plus.into_any_element()))
     }
 
     fn card(
@@ -852,6 +941,7 @@ impl<V: 'static> TilingBoard<V> {
         stack: &Stack,
         (drawn, solved): (Rect, Rect),
         theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<V>,
     ) -> Stateful<Div> {
         let lens = self.host.board;
@@ -859,7 +949,7 @@ impl<V: 'static> TilingBoard<V> {
         let active = stack.active;
         let single = stack.modules.len() == 1;
         let body = (self.host.body)(stack, solved, theme, cx);
-        placed(shell(self.header(stack, theme, cx), theme), drawn)
+        placed(shell(self.header(stack, theme, window, cx), theme), drawn)
             .flex_none()
             .id(SharedString::from(format!("tiling-card-{}", tile.0)))
             .on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
@@ -868,8 +958,22 @@ impl<V: 'static> TilingBoard<V> {
                     page.hovered = Some(tile);
                 } else if page.hovered == Some(tile) {
                     page.hovered = None;
+                    page.headed = None;
                 }
                 cx.notify();
+            }))
+            .on_mouse_move(cx.listener(move |view, event: &MouseMoveEvent, _, cx| {
+                let page = lens(view);
+                let over = page.local(event.position).1 < drawn.y + HEADER;
+                let headed = match (over, page.headed) {
+                    (true, _) => Some(tile),
+                    (false, Some(held)) if held == tile => None,
+                    (false, held) => held,
+                };
+                if headed != page.headed {
+                    page.headed = headed;
+                    cx.notify();
+                }
             }))
             .on_mouse_down(
                 MouseButton::Left,
@@ -1182,7 +1286,7 @@ impl<V: 'static> TilingBoard<V> {
                 } else {
                     shown
                 };
-                let card = self.card(stack, (drawn, *rect), theme, cx);
+                let card = self.card(stack, (drawn, *rect), theme, window, cx);
                 (shrinking, card)
             })
             .collect();
@@ -1218,16 +1322,6 @@ impl<V: 'static> TilingBoard<V> {
         )
         .absolute()
         .size_full();
-        let tile_menu = solved.iter().find_map(|(stack, rect)| {
-            (self.menu == Menu::Into(stack.id)).then(|| {
-                self.spawn_menu(
-                    (rect.x + rect.w - MENU_WIDTH, rect.y + HEADER),
-                    "click adds a tab here; drag places it",
-                    theme,
-                    cx,
-                )
-            })
-        });
         let board = div()
             .w_full()
             .relative()
@@ -1237,7 +1331,6 @@ impl<V: 'static> TilingBoard<V> {
             .children(dividers)
             .children(corners)
             .children(self.drag_overlay(theme))
-            .children(tile_menu)
             .when(solved.is_empty(), |board| {
                 board.child(div().absolute().size_full().child(self.empty(theme, cx)))
             });

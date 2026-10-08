@@ -19,6 +19,8 @@ use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
+#[cfg(feature = "screen-work")]
+use desk_ui::components::tabs::{Tab, TabMark};
 use desk_ui::live::ActiveTheme;
 #[cfg(feature = "screen-work")]
 use desk_ui::metrics::STATUS_BAR_HEIGHT;
@@ -54,6 +56,8 @@ const RECENT_ID: &str = "project.recent.";
 const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
+#[cfg(feature = "screen-work")]
+const LIVE_SCREENS: [&str; 1] = ["theme"];
 
 pub type Open = fn(Option<&str>, &mut Window, &mut App) -> Result<AnyView, String>;
 
@@ -85,6 +89,8 @@ pub struct Desk {
     focus: FocusHandle,
     #[cfg(feature = "screen-work")]
     projects: Projects,
+    #[cfg(feature = "screen-work")]
+    tabbed: Vec<&'static str>,
 }
 
 #[cfg(feature = "screen-work")]
@@ -217,6 +223,8 @@ impl Desk {
             focus: cx.focus_handle(),
             #[cfg(feature = "screen-work")]
             projects: Projects::default(),
+            #[cfg(feature = "screen-work")]
+            tabbed: Vec::new(),
         };
         #[cfg(feature = "screen-work")]
         if let Body::Work(work) = &desk.shown.body {
@@ -246,7 +254,13 @@ impl Desk {
                     return eprintln!("desk: screen {name} is not in this build");
                 };
                 match (screen.open)(None, window, cx) {
-                    Ok(view) => Shown::new(screen.name.into(), view),
+                    Ok(view) => {
+                        #[cfg(feature = "screen-work")]
+                        if screen.name != WORK_SCREEN {
+                            self.tabbed.push(screen.name);
+                        }
+                        Shown::new(screen.name.into(), view)
+                    }
                     Err(error) => return eprintln!("desk: screen {name} did not open: {error}"),
                 }
             }
@@ -320,6 +334,76 @@ impl Desk {
         }
     }
 
+    #[cfg(feature = "screen-work")]
+    fn strip(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let work =
+            std::iter::once(&self.shown)
+                .chain(&self.parked)
+                .find_map(|shown| match &shown.body {
+                    Body::Work(work) => Some(work.clone()),
+                    Body::View(_) => None,
+                })?;
+        let screens: Vec<Tab> = self
+            .tabbed
+            .iter()
+            .map(|name| Tab {
+                label: (*name).into(),
+                icon: None,
+                count: None,
+                mark: TabMark::Close,
+            })
+            .collect();
+        let openable: Vec<&'static str> = self
+            .screens
+            .iter()
+            .map(|screen| screen.name)
+            .filter(|name| LIVE_SCREENS.contains(name))
+            .collect();
+        let screen = self.tabbed.iter().position(|name| self.shown.name == *name);
+        let desk = cx.weak_entity();
+        Some(work.update(cx, |work, cx| {
+            work.tabs(
+                &screens,
+                &openable,
+                screen,
+                theme,
+                move |strip, window, cx| {
+                    desk.update(cx, |desk, cx| desk.stripped(strip, window, cx))
+                        .unwrap_or_else(|_| eprintln!("desk: the desk is gone"));
+                },
+                cx,
+            )
+        }))
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn stripped(&mut self, strip: &work::Strip, window: &mut Window, cx: &mut Context<Self>) {
+        let named = |at: &usize| self.tabbed.get(*at).copied();
+        match strip {
+            work::Strip::Work => self.show(WORK_SCREEN, window, cx),
+            work::Strip::Show(at) => match named(at) {
+                Some(name) => self.show(name, window, cx),
+                None => eprintln!("desk: screen tab {at} is not open"),
+            },
+            work::Strip::Close(at) => match named(at) {
+                Some(name) => self.close_screen(name, window, cx),
+                None => eprintln!("desk: screen tab {at} is not open"),
+            },
+            work::Strip::Open(name) => self.show(name, window, cx),
+        }
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn close_screen(&mut self, name: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.shown.name == name {
+            self.show(WORK_SCREEN, window, cx);
+        }
+        self.parked.retain(|parked| parked.name != name);
+        self.tabbed.retain(|tabbed| *tabbed != name);
+        eprintln!("desk: screen {name} closed");
+        cx.notify();
+    }
+
     #[cfg_attr(
         not(feature = "screen-work"),
         expect(
@@ -327,31 +411,29 @@ impl Desk {
             reason = "only the work screen is fitted to the window"
         )
     )]
-    fn content(&self, theme: &Theme, cx: &mut App) -> (Option<AnyElement>, AnyElement) {
-        match &self.shown.body {
+    fn content(&self, theme: &Theme, cx: &mut Context<Self>) -> (Option<AnyElement>, AnyElement) {
+        #[cfg(feature = "screen-work")]
+        let tabs = self.strip(theme, cx);
+        #[cfg(not(feature = "screen-work"))]
+        let tabs = None;
+        let body = match &self.shown.body {
             #[cfg(feature = "screen-work")]
             Body::Work(work) => {
                 work.update(cx, |work, _| {
                     work.fit(TILE_BOTTOM + STATUS_BAR_HEIGHT - WORKSPACE_EDGE)
                 });
-                let tabs = work.read(cx).tabs(work.downgrade(), theme);
-                (
-                    Some(tabs.into_any_element()),
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(work.clone())
-                        .into_any_element(),
-                )
-            }
-            Body::View(view) => (
-                None,
-                outer_card(theme)
+                div()
                     .flex_1()
-                    .child(inner_card(theme).child(view.clone()))
-                    .into_any_element(),
-            ),
-        }
+                    .min_w_0()
+                    .child(work.clone())
+                    .into_any_element()
+            }
+            Body::View(view) => outer_card(theme)
+                .flex_1()
+                .child(inner_card(theme).child(view.clone()))
+                .into_any_element(),
+        };
+        (tabs, body)
     }
 
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {

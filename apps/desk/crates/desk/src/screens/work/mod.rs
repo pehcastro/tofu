@@ -8,13 +8,14 @@ use desk_tiling::{
 };
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::glyph::Glyph;
-use desk_ui::components::tabs::{Tab, TabEvent, TabMark, TabStrip, header_tabs};
+use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
+use desk_ui::components::tabs::{Tab, TabEvent, header_tabs, new_tab_glyph};
 use desk_ui::components::tiling_board::{Host, Settled, TilingBoard};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
 use gpui::{
     AnyElement, AnyView, App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement,
-    KeyDownEvent, Render, SharedString, Subscription, WeakEntity, Window, div, prelude::*, px,
+    KeyDownEvent, Render, SharedString, Subscription, Window, div, prelude::*, px,
 };
 
 use crate::modules::chat::cassette::{Replay, Step};
@@ -141,9 +142,15 @@ fn build(
                 below: 0.0,
             },
         );
+        let plus = MenuButton::new("New".into(), Vec::new(), cx);
+        plus.update(cx, |button, _| {
+            button.trigger(|_, theme| new_tab_glyph("work-new", theme));
+        });
         Work {
             board,
             nudge: None,
+            plus,
+            pointed: 0,
             focus,
             mounted,
             replay,
@@ -155,6 +162,8 @@ fn build(
 pub struct Work {
     board: TilingBoard<Work>,
     nudge: Option<f32>,
+    plus: Entity<MenuButton>,
+    pointed: usize,
     focus: FocusHandle,
     mounted: Mounted,
     replay: Option<Replay>,
@@ -285,13 +294,14 @@ fn settled(layouts: Layouts) -> Settled {
                 })
                 .collect();
             eprintln!(
-                "desk: work: workspace {}/{}{} {:?} preset {} locked {}: {}",
+                "desk: work: workspace {}/{}{} {:?} preset {} locked {} pinned {}: {}",
                 at + 1,
                 all.len(),
                 if at == active { " active" } else { "" },
                 workspace.name,
                 workspace.preset.name(),
                 workspace.locked,
+                workspace.pinned,
                 tiles.join("; ")
             );
         }
@@ -438,42 +448,167 @@ impl Work {
         cx.notify();
     }
 
-    pub fn tabs(&self, this: WeakEntity<Self>, theme: &Theme) -> TabStrip {
-        let tabs: Vec<Tab> = self
-            .board
-            .workspaces()
-            .iter()
-            .map(|workspace| Tab {
-                label: workspace.name.clone().into(),
-                icon: None,
-                count: None,
-                mark: if workspace.locked {
-                    TabMark::Locked
-                } else {
-                    TabMark::Close
-                },
-            })
-            .collect();
-        header_tabs(
+    fn plus_menu(openable: &[&'static str]) -> Vec<MenuItem> {
+        let new = MenuItem::Action {
+            label: "New workspace".into(),
+            keys: Some("Ctrl T".into()),
+        };
+        std::iter::once(new)
+            .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
+            .chain(
+                OPENABLE
+                    .iter()
+                    .map(|module| MenuItem::action(module.name())),
+            )
+            .chain([MenuItem::Caption("Screens, open as a tab".into())])
+            .chain(openable.iter().map(|name| MenuItem::action(*name)))
+            .collect()
+    }
+
+    fn tab_menu(workspace: Option<&Workspace>) -> Vec<MenuItem> {
+        let (pinned, locked) = workspace.map_or((false, false), |at| (at.pinned, at.locked));
+        vec![
+            MenuItem::action("Rename"),
+            MenuItem::action(if pinned { "Unpin" } else { "Pin" }),
+            MenuItem::action(if locked { "Unlock" } else { "Lock" }),
+            MenuItem::action("Reset layout"),
+            MenuItem::action("Close"),
+            MenuItem::Separator,
+            MenuItem::Submenu {
+                label: "Spawn".into(),
+                items: OPENABLE
+                    .iter()
+                    .map(|module| MenuItem::action(module.name()))
+                    .collect(),
+            },
+        ]
+    }
+
+    fn picked_plus(&mut self, pick: usize, openable: &[&'static str]) -> Option<Strip> {
+        let tiles = 2..2 + OPENABLE.len();
+        match pick {
+            0 => self.board.add(),
+            at if tiles.contains(&at) => {
+                self.board.spawn(OPENABLE.get(at - tiles.start)?.clone());
+            }
+            at => {
+                let name = openable.get(at.checked_sub(tiles.end + 1)?)?;
+                return Some(Strip::Open(name));
+            }
+        }
+        None
+    }
+
+    fn picked_tab(&mut self, pick: usize, index: usize) {
+        match pick {
+            0 => self.board.rename(index),
+            1 => self.board.toggle_pin(index),
+            2 => self.board.toggle_lock(index),
+            3 => {
+                self.board.switch(index);
+                self.board.apply(true, |workspace, _| Ok(workspace.reset()));
+            }
+            4 => self.board.close_workspace(index),
+            at => {
+                if let Some(module) = at.checked_sub(7).and_then(|row| OPENABLE.get(row)) {
+                    self.board.switch(index);
+                    self.board.spawn(module.clone());
+                }
+            }
+        }
+    }
+
+    pub fn tabs(
+        &mut self,
+        screens: &[Tab],
+        openable: &[&'static str],
+        screen: Option<usize>,
+        theme: &Theme,
+        on: impl Fn(&Strip, &mut Window, &mut App) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let workspaces = self.board.tabs();
+        let count = workspaces.len();
+        let on = Rc::new(on);
+        let this = cx.weak_entity();
+        let (pointer, plus, tab, picker) = (this.clone(), this.clone(), this.clone(), on.clone());
+        let tabbed = this;
+        let opened: Vec<&'static str> = openable.to_vec();
+        let strip = header_tabs(
             "work-workspaces",
-            &tabs,
-            self.board.active(),
-            &[],
+            &workspaces,
+            screen.map_or(self.board.active(), |at| count + at),
+            screens,
             theme,
             move |event, window, cx| {
-                this.update(cx, |work, cx| {
-                    match *event {
-                        TabEvent::Select(index) => work.board.switch(index),
-                        TabEvent::Close(index) => work.board.close_workspace(index),
-                        TabEvent::New => work.board.add(),
+                let shown = match *event {
+                    TabEvent::Select(index) if index >= count => Strip::Show(index - count),
+                    TabEvent::Close(index) if index >= count => Strip::Close(index - count),
+                    TabEvent::Select(_) | TabEvent::Close(_) | TabEvent::New => Strip::Work,
+                };
+                tabbed
+                    .update(cx, |work, cx| {
+                        match *event {
+                            TabEvent::Select(index) if index < count => work.board.switch(index),
+                            TabEvent::Close(index) if index < count => {
+                                work.board.close_workspace(index)
+                            }
+                            TabEvent::New => work.board.add(),
+                            TabEvent::Select(_) | TabEvent::Close(_) => {}
+                        }
+                        work.focus.focus(window, cx);
+                        cx.notify();
+                    })
+                    .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+                picker(&shown, window, cx);
+            },
+        )
+        .on_point(move |at, _, cx| {
+            pointer
+                .update(cx, |work, cx| {
+                    if work.pointed != at {
+                        work.pointed = at;
+                        cx.notify();
                     }
+                })
+                .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+        });
+        let tab_menu = context_menu(Self::tab_menu(self.board.workspaces().get(self.pointed)))
+            .id("work-tab-menu")
+            .on_pick(move |pick, window, cx| {
+                tab.update(cx, |work, cx| {
+                    work.picked_tab(*pick, work.pointed);
                     work.focus.focus(window, cx);
                     cx.notify();
                 })
                 .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
-            },
-        )
+            })
+            .child(strip.new_button(self.plus.clone()));
+        self.plus.update(cx, |button, cx| {
+            button.items(Self::plus_menu(openable), cx);
+            button.on_pick(move |pick, window, cx| {
+                let strip = plus
+                    .update(cx, |work, cx| {
+                        let strip = work.picked_plus(*pick, &opened);
+                        cx.notify();
+                        strip
+                    })
+                    .unwrap_or_else(|_| {
+                        eprintln!("desk: work: the screen is gone");
+                        None
+                    });
+                on(&strip.unwrap_or(Strip::Work), window, cx);
+            });
+        });
+        div().flex_1().min_w_0().child(tab_menu).into_any_element()
     }
+}
+
+pub enum Strip {
+    Work,
+    Show(usize),
+    Close(usize),
+    Open(&'static str),
 }
 
 impl Focusable for Work {

@@ -9,6 +9,7 @@ use crate::{Axis, MAX_TILES, Module, Node, Part, Preset, Size, Stack, TileId, Wo
 
 const HEADER_V1: &str = "tofu-desk-layout 1";
 const HEADER_V2: &str = "tofu-desk-layout 2";
+const HEADER_V3: &str = "tofu-desk-layout 3";
 const WORKSPACE: &str = "workspace";
 const EMPTY: &str = "(empty)";
 const NO_FOCUS: &str = "-";
@@ -126,15 +127,16 @@ impl Store {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).map_err(failed)?;
         }
-        let mut text = format!("{HEADER_V2}\n");
+        let mut text = format!("{HEADER_V3}\n");
         for workspace in workspaces {
             let focus = workspace
                 .focus()
                 .map_or(NO_FOCUS.to_owned(), |focus| focus.0.to_string());
             text.push_str(&format!(
-                "{WORKSPACE} {} {} {focus} {} {}\n",
+                "{WORKSPACE} {} {} {} {focus} {} {}\n",
                 workspace.preset.name(),
                 u8::from(workspace.locked),
+                u8::from(workspace.pinned),
                 workspace.next_id(),
                 workspace.name.replace(['\n', '\r'], " "),
             ));
@@ -197,7 +199,12 @@ fn parse(text: &str) -> Result<Vec<Workspace>, String> {
                 next,
             )])
         }
-        Some(HEADER_V2) => {
+        Some(header @ (HEADER_V2 | HEADER_V3)) => {
+            let version = if header == HEADER_V3 {
+                Version::Three
+            } else {
+                Version::Two
+            };
             let mut workspaces = Vec::new();
             while let Some(line) = lines.next() {
                 if line.trim().is_empty() {
@@ -206,18 +213,30 @@ fn parse(text: &str) -> Result<Vec<Workspace>, String> {
                 let body = lines
                     .next()
                     .ok_or("a workspace line has no layout after it")?;
-                workspaces.push(workspace(line, body)?);
+                workspaces.push(workspace(line, body, version)?);
             }
             Ok(workspaces)
         }
         _ => Err(format!(
-            "the first line is neither {HEADER_V1} nor {HEADER_V2}"
+            "the first line is none of {HEADER_V1}, {HEADER_V2}, {HEADER_V3}"
         )),
     }
 }
 
-fn workspace(line: &str, body: &str) -> Result<Workspace, String> {
-    let mut words = line.splitn(6, ' ');
+fn flag(what: &str, word: Option<&str>) -> Result<bool, String> {
+    match word {
+        Some("0") => Ok(false),
+        Some("1") => Ok(true),
+        other => Err(format!(
+            "{what} is 0 or 1, not {}",
+            other.unwrap_or("nothing")
+        )),
+    }
+}
+
+fn workspace(line: &str, body: &str, version: Version) -> Result<Workspace, String> {
+    let pins = version == Version::Three;
+    let mut words = line.splitn(if pins { 7 } else { 6 }, ' ');
     if words.next() != Some(WORKSPACE) {
         return Err(format!("expected a {WORKSPACE} line, found {line}"));
     }
@@ -226,16 +245,8 @@ fn workspace(line: &str, body: &str) -> Result<Workspace, String> {
         .into_iter()
         .find(|known| known.name() == preset)
         .ok_or_else(|| format!("unknown preset {preset}"))?;
-    let locked = match words.next() {
-        Some("0") => false,
-        Some("1") => true,
-        other => {
-            return Err(format!(
-                "locked is 0 or 1, not {}",
-                other.unwrap_or("nothing")
-            ));
-        }
-    };
+    let locked = flag("locked", words.next())?;
+    let pinned = pins && flag("pinned", words.next())?;
     let focus = match words.next().ok_or("a workspace has no focus")? {
         NO_FOCUS => None,
         id => Some(TileId(
@@ -249,20 +260,23 @@ fn workspace(line: &str, body: &str) -> Result<Workspace, String> {
         .map_err(|error| format!("next tile id: {error}"))?;
     let name = words.next().map(str::trim).filter(|name| !name.is_empty());
     let name = name.ok_or("a workspace has no name")?.to_owned();
-    let (tree, next) = tree(body, Version::Two)?;
+    let (tree, next) = tree(body, version)?;
     if next > saved {
         return Err(format!(
             "workspace {name} uses tile id {} but its next id is {saved}",
             next - 1
         ));
     }
-    Ok(Workspace::restore(name, preset, locked, tree, focus, saved))
+    let mut workspace = Workspace::restore(name, preset, locked, tree, focus, saved);
+    workspace.pinned = pinned;
+    Ok(workspace)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Version {
     One,
     Two,
+    Three,
 }
 
 fn tree(body: &str, version: Version) -> Result<(Option<Node>, u32), String> {
@@ -349,7 +363,7 @@ impl<'a> Parser<'a> {
     fn tile(&mut self) -> Result<Node, String> {
         let id = match self.version {
             Version::One => TileId(self.next),
-            Version::Two => TileId(self.number("id")?),
+            Version::Two | Version::Three => TileId(self.number("id")?),
         };
         let active: usize = self.number("active index")?;
         let mut modules = Vec::new();
@@ -389,7 +403,7 @@ impl<'a> Parser<'a> {
         };
         match self.version {
             Version::One => positive(token).map(Size::Share),
-            Version::Two => match token.split_at_checked(1) {
+            Version::Two | Version::Three => match token.split_at_checked(1) {
                 Some(("s", share)) => positive(share).map(Size::Share),
                 Some(("f", pixels)) => positive(pixels).map(Size::Fixed),
                 _ => Err(format!("size {token} is neither s<share> nor f<pixels>")),
