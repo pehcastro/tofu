@@ -129,6 +129,7 @@ pub struct TitleBar {
     title: Title,
     tabs: Option<AnyElement>,
     on_pick: OnPick,
+    controls_only: bool,
 }
 
 impl TitleBar {
@@ -143,7 +144,13 @@ impl TitleBar {
             title,
             tabs,
             on_pick: Rc::new(on_pick),
+            controls_only: false,
         }
+    }
+
+    pub fn controls_only(mut self) -> Self {
+        self.controls_only = true;
+        self
     }
 
     fn picked(
@@ -405,9 +412,34 @@ fn captions(keys: WindowKeys, maximized: bool, theme: &Theme) -> impl IntoElemen
         .child(Caption::Close.button(keys, theme))
 }
 
+fn product_name(theme: &Theme) -> Div {
+    div()
+        .font_weight(FontWeight::BOLD)
+        .text_color(theme.color(ColorToken::TextName))
+        .child(PRODUCT_NAME)
+}
+
 impl RenderOnce for TitleBar {
     fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
+        let bar = div()
+            .id(self.id.clone())
+            .w_full()
+            .h(px(TITLE_BAR_HEIGHT))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(TITLE_GAP))
+            .when(self.title.keys == WindowKeys::Live, |bar| {
+                bar.window_control_area(WindowControlArea::Drag)
+            });
+        let controls = (!cfg!(target_os = "macos"))
+            .then(|| captions(self.title.keys, window.is_maximized(), &theme));
+        if self.controls_only {
+            return bar
+                .child(product_name(&theme).flex_1().pl_4())
+                .children(controls);
+        }
         let tab = theme.color(ColorToken::TextTab);
         let tabs = match self.tabs.take() {
             Some(tabs) => div()
@@ -500,74 +532,55 @@ impl RenderOnce for TitleBar {
                 account.tooltip(move |_, cx| cx.new(|_| NameTip(tip.clone())).into())
             })
             .on_click(toggle(TitlePop::Account));
-        div()
-            .id(self.id.clone())
-            .w_full()
-            .h(px(TITLE_BAR_HEIGHT))
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap(px(TITLE_GAP))
-            .when(title.keys == WindowKeys::Live, |bar| {
-                bar.window_control_area(WindowControlArea::Drag)
-            })
-            .child(
-                div()
-                    .w(px(column))
-                    .h_full()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .pl_2p5()
-                    .child(
-                        icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme)
-                            .occlude()
-                            .on_click(self.picked(TitlePick::Sidebar)),
-                    )
-                    .when(title.sidebar_open, |name| {
-                        name.child(
-                            div()
-                                .pl_1p5()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(theme.color(ColorToken::TextName))
-                                .child(PRODUCT_NAME),
-                        )
-                    }),
-            )
-            .child(tabs)
-            .child(
-                control("palette", "Command palette", &theme)
-                    .occlude()
-                    .h(px(CONTROL))
-                    .px_2p5()
-                    .gap_2()
-                    .rounded(px(RADIUS_TAB))
-                    .child(icon(Icon::Search, ICON_SMALL, tab))
-                    .child(
-                        div()
-                            .text_size(px(TEXT))
-                            .text_color(theme.color(ColorToken::TextMuted))
-                            .child(title.palette_keys.clone()),
-                    )
-                    .on_click(self.picked(TitlePick::Palette)),
-            )
-            .child(
-                Popover::new("title-bell-pop", bell)
-                    .open(shown == Some(TitlePop::Notifications))
-                    .placement(under)
-                    .width(BELL_POP_WIDTH)
-                    .child(rows.body(&focus).children(notices(title, &rows, &theme))),
-            )
-            .child(
-                Popover::new("title-account-pop", account)
-                    .open(shown == Some(TitlePop::Account))
-                    .placement(under)
-                    .width(ACCOUNT_POP_WIDTH)
-                    .child(rows.body(&focus).child(person_menu(&title.github, &theme))),
-            )
-            .when(!cfg!(target_os = "macos"), |bar| {
-                bar.child(captions(title.keys, window.is_maximized(), &theme))
-            })
+        bar.child(
+            div()
+                .w(px(column))
+                .h_full()
+                .flex_none()
+                .flex()
+                .items_center()
+                .gap_1()
+                .pl_2p5()
+                .child(
+                    icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme)
+                        .occlude()
+                        .on_click(self.picked(TitlePick::Sidebar)),
+                )
+                .when(title.sidebar_open, |name| {
+                    name.child(product_name(&theme).pl_1p5())
+                }),
+        )
+        .child(tabs)
+        .child(
+            control("palette", "Command palette", &theme)
+                .occlude()
+                .h(px(CONTROL))
+                .px_2p5()
+                .gap_2()
+                .rounded(px(RADIUS_TAB))
+                .child(icon(Icon::Search, ICON_SMALL, tab))
+                .child(
+                    div()
+                        .text_size(px(TEXT))
+                        .text_color(theme.color(ColorToken::TextMuted))
+                        .child(title.palette_keys.clone()),
+                )
+                .on_click(self.picked(TitlePick::Palette)),
+        )
+        .child(
+            Popover::new("title-bell-pop", bell)
+                .open(shown == Some(TitlePop::Notifications))
+                .placement(under)
+                .width(BELL_POP_WIDTH)
+                .child(rows.body(&focus).children(notices(title, &rows, &theme))),
+        )
+        .child(
+            Popover::new("title-account-pop", account)
+                .open(shown == Some(TitlePop::Account))
+                .placement(under)
+                .width(ACCOUNT_POP_WIDTH)
+                .child(rows.body(&focus).child(person_menu(&title.github, &theme))),
+        )
+        .children(controls)
     }
 }

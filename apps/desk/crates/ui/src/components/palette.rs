@@ -8,20 +8,26 @@ use gpui::{
     ScrollHandle, SharedString, Stateful, Window, anchored, deferred, div, point, prelude::*, px,
 };
 
+use crate::component::icon;
 use crate::components::card::caption;
 use crate::components::chip::kbd;
 use crate::components::form::TextArea;
+use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, HoverVariant, Marker, bare_row, separator};
 use crate::components::overlay::menu_surface;
-use crate::components::paint::ink;
+use crate::components::paint::{glyph, ink};
 use crate::components::scroll::ScrollArea;
 use crate::components::size::{
-    FIELD, GROUP_PAD_BOTTOM, GROUP_PAD_TOP, HOVER, MENU_PAD, RADIUS_POP, RADIUS_ROW, ROW_PAD_X,
-    ROW_PAD_Y, T3,
+    FIELD, FONT_SMALL, GROUP_PAD_BOTTOM, GROUP_PAD_TOP, HOVER, LINE_CAP, MENU_PAD, RADIUS_POP,
+    RADIUS_ROW, ROW_GAP, ROW_PAD_X, ROW_PAD_Y, T2, T3,
 };
+use crate::icon::Icon;
 use crate::live::ActiveTheme;
+use crate::metrics::{ICON_SMALL, ICON_TINY};
 use crate::theme::Theme;
 
+const META_GAP: f32 = 6.0;
+const META_DOT: &str = "·";
 const PALETTE_WIDTH: f32 = 520.0;
 const PALETTE_TOP: f32 = 96.0;
 const PALETTE_LIST: f32 = 400.0;
@@ -36,11 +42,35 @@ pub struct PaletteItem {
     pub keys: Option<SharedString>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PaletteMeta {
+    Branch(SharedString),
+    Text(SharedString),
+}
+
+impl PaletteMeta {
+    fn text(&self) -> &SharedString {
+        match self {
+            PaletteMeta::Branch(text) | PaletteMeta::Text(text) => text,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PaletteDetail {
+    pub below: SharedString,
+    pub meta: Vec<PaletteMeta>,
+    pub checked: bool,
+    pub dim: bool,
+}
+
+pub type PaletteEntry = (PaletteItem, Option<PaletteDetail>);
+
 type OnPick = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 type OnClose = Rc<dyn Fn(&mut Window, &mut App)>;
 
 pub struct Palette {
-    items: Vec<PaletteItem>,
+    items: Vec<PaletteEntry>,
     field: Entity<TextArea>,
     query: String,
     highlighted: usize,
@@ -54,6 +84,18 @@ pub struct Palette {
 
 impl Palette {
     pub fn new(items: Vec<PaletteItem>, window: &mut Window, cx: &mut App) -> Entity<Palette> {
+        Self::detailed(
+            items.into_iter().map(|item| (item, None)).collect(),
+            window,
+            cx,
+        )
+    }
+
+    pub fn detailed(
+        items: Vec<PaletteEntry>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<Palette> {
         cx.new(|cx| {
             let field = cx.new(|cx| {
                 TextArea::new(PLACEHOLDER.into(), window, cx)
@@ -83,6 +125,12 @@ impl Palette {
                 row_spans: Rc::default(),
             }
         })
+    }
+
+    pub fn replace(&mut self, items: Vec<PaletteEntry>, cx: &mut Context<Self>) {
+        self.items = items;
+        self.highlighted = self.highlighted.min(self.matched().len().saturating_sub(1));
+        cx.notify();
     }
 
     pub fn on_pick(&mut self, on_pick: impl Fn(&SharedString, &mut Window, &mut App) + 'static) {
@@ -123,7 +171,7 @@ impl Palette {
     }
 
     fn pick(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(id) = self.matched().get(at).map(|item| item.id.clone()) else {
+        let Some(id) = self.matched().get(at).map(|(item, _)| item.id.clone()) else {
             return;
         };
         self.close(window, cx);
@@ -132,10 +180,11 @@ impl Palette {
         }
     }
 
-    fn matched(&self) -> Vec<&PaletteItem> {
+    fn matched(&self) -> Vec<&PaletteEntry> {
         let query = self.query.trim().to_lowercase();
+        let found = |text: &SharedString| text.to_lowercase().contains(&query);
         let mut groups: Vec<&SharedString> = Vec::new();
-        for item in &self.items {
+        for (item, _) in &self.items {
             if !groups.contains(&&item.group) {
                 groups.push(&item.group);
             }
@@ -145,8 +194,14 @@ impl Palette {
             .flat_map(|group| {
                 self.items
                     .iter()
-                    .filter(|item| item.group == *group)
-                    .filter(|item| item.label.to_lowercase().contains(&query))
+                    .filter(|(item, _)| item.group == *group)
+                    .filter(|(item, detail)| {
+                        found(&item.label)
+                            || detail.as_ref().is_some_and(|detail| {
+                                found(&detail.below)
+                                    || detail.meta.iter().any(|meta| found(meta.text()))
+                            })
+                    })
             })
             .collect()
     }
@@ -190,7 +245,7 @@ impl Palette {
     fn row(
         &self,
         at: usize,
-        item: &PaletteItem,
+        (item, detail): &PaletteEntry,
         theme: &Theme,
         cx: &Context<Self>,
     ) -> Stateful<Div> {
@@ -215,13 +270,16 @@ impl Palette {
             .on_click(cx.listener(move |palette, _: &ClickEvent, window, cx| {
                 palette.pick(at, window, cx);
             }))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(item.label.clone()),
-            )
+            .map(|row| match detail {
+                None => row.child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(item.label.clone()),
+                ),
+                Some(detail) => row.child(detailed(&item.label, detail, theme)),
+            })
             .children(item.keys.clone().map(|keys| kbd(keys, theme)))
     }
 
@@ -248,7 +306,8 @@ impl Palette {
         let mut group = None;
         let mut marker = None;
         let mut entries = 0;
-        for (at, item) in matched.into_iter().enumerate() {
+        for (at, entry) in matched.into_iter().enumerate() {
+            let item = &entry.0;
             if group != Some(&item.group) {
                 group = Some(&item.group);
                 list = list.inert(
@@ -267,7 +326,7 @@ impl Palette {
                     corners,
                 });
             }
-            list = list.item(self.row(at, item, theme, cx));
+            list = list.item(self.row(at, entry, theme, cx));
             entries += 1;
         }
         list.keyed(marker).into_any_element()
@@ -332,4 +391,67 @@ impl Render for Palette {
         )
         .into_any_element()
     }
+}
+
+fn detailed(label: &SharedString, detail: &PaletteDetail, theme: &Theme) -> Div {
+    let dim = ink(theme, T3);
+    let meta = detail.meta.iter().enumerate().map(|(at, meta)| {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(META_GAP))
+            .when(at > 0, |part| part.child(META_DOT))
+            .when(matches!(meta, PaletteMeta::Branch(_)), |part| {
+                part.child(icon(Icon::Branch, ICON_TINY, dim))
+            })
+            .child(meta.text().clone())
+    });
+    div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(ROW_GAP))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .when(detail.dim, |name| name.text_color(dim))
+                        .child(label.clone()),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(META_GAP))
+                        .text_size(px(FONT_SMALL))
+                        .text_color(dim)
+                        .children(meta),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(ICON_SMALL))
+                        .when(detail.checked, |mark| {
+                            mark.child(glyph(Glyph::Check, ICON_SMALL, ink(theme, T2)))
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis_middle()
+                .text_size(px(FONT_SMALL))
+                .line_height(px(LINE_CAP))
+                .text_color(dim)
+                .child(detail.below.clone()),
+        )
 }

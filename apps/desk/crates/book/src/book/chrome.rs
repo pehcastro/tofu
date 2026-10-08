@@ -328,6 +328,19 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             )),
         ))
         .child(named(
+            "Title bar, controls only, over the intro and onboarding",
+            theme,
+            frame(
+                TitleBar::new(
+                    "chrome-title-controls",
+                    empty_title(None),
+                    None,
+                    picked_title(cx),
+                )
+                .controls_only(),
+            ),
+        ))
+        .child(named(
             "Status bar, IWIN-1",
             theme,
             frame(StatusBar::new(

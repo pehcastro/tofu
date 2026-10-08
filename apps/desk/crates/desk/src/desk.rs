@@ -2,7 +2,7 @@ use crate::modules::chat::Find;
 #[cfg(feature = "screen-work")]
 use crate::modules::chat::{Chat, Listed, Touched};
 #[cfg(feature = "screen-work")]
-use crate::project::{self, Head};
+use crate::project::{self, Head, Picked};
 #[cfg(all(feature = "screen-work", feature = "screen-classifier"))]
 use crate::screens::classifier::Classifier;
 #[cfg(all(feature = "screen-work", feature = "screen-context"))]
@@ -49,7 +49,7 @@ use desk_ui::components::status_bar::{Branch, ContextUse, Quota, cron_trigger};
 use desk_ui::components::tabs::{Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
-use desk_ui::components::title_bar::Github;
+use desk_ui::components::title_bar::{Github, TitleBar};
 #[cfg(feature = "screen-work")]
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -83,15 +83,12 @@ const WINDOW_RADIUS: f32 = 8.0;
 const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
 const USAGE_SCREEN: &str = "usage";
+const WHOLE_SCREENS: [&str; 2] = ["intro", "onboarding"];
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
 const OPEN_SETTINGS_ID: &str = "settings.open";
 #[cfg(feature = "screen-work")]
 const REOPEN_ID: &str = "tab.reopen";
-#[cfg(feature = "screen-work")]
-const RECENT_ID: &str = "project.recent.";
-#[cfg(feature = "screen-work")]
-const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
@@ -141,6 +138,7 @@ enum Body {
     #[cfg(feature = "screen-work")]
     Work(Entity<Work>),
     View(AnyView),
+    Whole(AnyView),
 }
 
 struct Shown {
@@ -250,10 +248,11 @@ impl Shown {
             }
             Err(view) => view,
         };
-        Shown {
-            name,
-            body: Body::View(view),
-        }
+        let body = match WHOLE_SCREENS.contains(&&*name) {
+            true => Body::Whole(view),
+            false => Body::View(view),
+        };
+        Shown { name, body }
     }
 }
 
@@ -336,13 +335,8 @@ impl Desk {
             cron: cron_button(cx),
         };
         #[cfg(feature = "screen-work")]
-        if let Body::Work(work) = &desk.shown.body {
-            let work = work.clone();
-            match project::launch() {
-                Ok(folder) => desk.adopt(folder, &work, window, cx),
-                Err(error) => eprintln!("desk: {error}"),
-            }
-        }
+        desk.adopt_launched(window, cx);
+        desk.focus_shown(window, cx);
         cx.spawn(async move |this, cx| {
             let answer = cx.background_executor().spawn(async { ask_github() }).await;
             let told = this.update(cx, |desk, cx| {
@@ -391,6 +385,8 @@ impl Desk {
         };
         let left = std::mem::replace(&mut self.shown, next);
         self.parked.push(left);
+        #[cfg(feature = "screen-work")]
+        self.adopt_launched(window, cx);
         #[cfg(all(
             feature = "screen-work",
             any(
@@ -404,14 +400,18 @@ impl Desk {
             )
         ))]
         self.feed_screens(cx);
+        self.focus_shown(window, cx);
+        eprintln!("desk: screen {name}");
+        cx.notify();
+    }
+
+    fn focus_shown(&self, window: &mut Window, cx: &mut App) {
         let focus = match &self.shown.body {
             #[cfg(feature = "screen-work")]
             Body::Work(work) => work.focus_handle(cx),
-            Body::View(_) => self.focus.clone(),
+            Body::View(_) | Body::Whole(_) => self.focus.clone(),
         };
         focus.focus(window, cx);
-        eprintln!("desk: screen {name}");
-        cx.notify();
     }
 
     fn picked(&mut self, id: &SharedString, window: &mut Window, cx: &mut Context<Self>) {
@@ -436,7 +436,7 @@ impl Desk {
             (Some(action), Body::Work(work)) => {
                 work.update(cx, |work, cx| work.run(action, "", window, cx));
             }
-            (Some(action), Body::View(_)) => eprintln!(
+            (Some(action), Body::View(_) | Body::Whole(_)) => eprintln!(
                 "desk: palette: {action:?} needs the work screen, and {} shows",
                 self.shown.name
             ),
@@ -463,7 +463,9 @@ impl Desk {
                 let focused = work.update(cx, |work, cx| work.focus_composer(window, cx));
                 eprintln!("desk: escape: the composer has focus {focused}");
             }
-            Body::View(_) => eprintln!("desk: escape: {} has no composer", self.shown.name),
+            Body::View(_) | Body::Whole(_) => {
+                eprintln!("desk: escape: {} has no composer", self.shown.name)
+            }
         }
     }
 
@@ -477,13 +479,7 @@ impl Desk {
 
     #[cfg(feature = "screen-work")]
     fn strip(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let work =
-            std::iter::once(&self.shown)
-                .chain(&self.parked)
-                .find_map(|shown| match &shown.body {
-                    Body::Work(work) => Some(work.clone()),
-                    Body::View(_) => None,
-                })?;
+        let work = self.work()?.clone();
         let screens: Vec<Tab> = self
             .tabbed
             .iter()
@@ -585,12 +581,7 @@ impl Desk {
 
     #[cfg(feature = "screen-work")]
     fn reopen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let work = std::iter::once(&self.shown)
-            .chain(&self.parked)
-            .find_map(|shown| match &shown.body {
-                Body::Work(work) => Some(work.clone()),
-                Body::View(_) => None,
-            });
+        let work = self.work().cloned();
         let board_at = work
             .as_ref()
             .and_then(|work| work.read(cx).last_closed_at());
@@ -653,8 +644,44 @@ impl Desk {
                     .child(inner_card(theme).child(view))
                     .into_any_element(),
             },
+            Body::Whole(view) => view.clone().into_any_element(),
         };
         (tabs, body)
+    }
+
+    fn tiled(&self, content: AnyElement, cx: &mut Context<Self>) -> AnyElement {
+        let status = self.status(cx);
+        let cron_menu = self.cron_menu(status.cron, cx);
+        let version = self.tofu_version(cx);
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .pr(px(GUTTER))
+                    .when(self.sidebar_open, |body| body.child(self.sidebar(cx)))
+                    .when(!self.sidebar_open, |body| body.pl(px(GUTTER)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .pt(px(TILE_TOP))
+                            .pb(px(TILE_BOTTOM))
+                            .child(content),
+                    ),
+            )
+            .child(
+                status_bar(&ActiveTheme::problems(cx), status, cx)
+                    .cron_menu(cron_menu)
+                    .version(version),
+            )
+            .into_any_element()
     }
 
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
@@ -773,7 +800,7 @@ impl Desk {
             .chain(&self.parked)
             .find_map(|shown| match &shown.body {
                 Body::Work(work) => Some(work),
-                Body::View(_) => None,
+                Body::View(_) | Body::Whole(_) => None,
             })
     }
 
@@ -791,6 +818,20 @@ impl Desk {
         };
         eprintln!("desk: bell: open {id}");
         chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
+    }
+
+    fn adopt_launched(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let Some(work) = self
+            .work()
+            .filter(|_| self.projects.head.is_none())
+            .cloned()
+        else {
+            return;
+        };
+        match project::launch() {
+            Ok(folder) => self.adopt(folder, &work, window, cx),
+            Err(error) => eprintln!("desk: {error}"),
+        }
     }
 
     fn adopt(
@@ -865,7 +906,7 @@ impl Desk {
             .chain(&self.parked)
             .filter_map(|shown| match &shown.body {
                 Body::View(view) => Some(view.clone()),
-                Body::Work(_) => None,
+                Body::Work(_) | Body::Whole(_) => None,
             })
             .collect();
         for view in views {
@@ -1159,24 +1200,12 @@ impl Desk {
     }
 
     fn open_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let recent = self
+        let current = self
             .projects
-            .recents
-            .iter()
-            .enumerate()
-            .map(|(at, folder)| PaletteItem {
-                id: format!("{RECENT_ID}{at}").into(),
-                label: folder.display().to_string().into(),
-                group: "Recent projects".into(),
-                keys: None,
-            });
-        let open = PaletteItem {
-            id: OPEN_FOLDER_ID.into(),
-            label: "Open a folder".into(),
-            group: "Open".into(),
-            keys: None,
-        };
-        let menu = Palette::new(recent.chain(std::iter::once(open)).collect(), window, cx);
+            .head
+            .as_ref()
+            .map(|head| head.folder.as_path());
+        let menu = project::picker(&self.projects.recents, current, window, cx);
         let picked =
             cx.listener(|desk, id: &SharedString, window, cx| desk.project_picked(id, window, cx));
         menu.update(cx, |menu, cx| {
@@ -1193,16 +1222,18 @@ impl Desk {
 
     fn project_picked(&mut self, id: &SharedString, window: &mut Window, cx: &mut Context<Self>) {
         eprintln!("desk: projects menu picked {id}");
-        if id == OPEN_FOLDER_ID {
-            return self.prompt_folder(window, cx);
-        }
-        let folder = id
-            .strip_prefix(RECENT_ID)
-            .and_then(|at| at.parse::<usize>().ok())
-            .and_then(|at| self.projects.recents.get(at).cloned());
-        match folder {
-            Some(folder) => self.switch(folder, window, cx),
-            None => eprintln!("desk: projects menu: {id} is not a recent project"),
+        match project::picked(id, &self.projects.recents) {
+            Picked::OpenFolder => self.prompt_folder(window, cx),
+            Picked::Switch(folder) => self.switch(folder, window, cx),
+            Picked::Forget(folder) => match project::forget(&folder) {
+                Ok(recents) => {
+                    eprintln!("desk: forgot missing project {}", folder.display());
+                    self.projects.recents = recents;
+                    cx.notify();
+                }
+                Err(error) => eprintln!("desk: recents: {error}"),
+            },
+            Picked::Unknown => eprintln!("desk: projects menu: {id} is not a recent project"),
         }
     }
 
@@ -1262,13 +1293,13 @@ impl Desk {
             Err(error) => return eprintln!("desk: {} did not open: {error}", folder.display()),
         };
         self.parked
-            .retain(|parked| matches!(parked.body, Body::View(_)));
+            .retain(|parked| !matches!(parked.body, Body::Work(_)));
         let next = Shown {
             name: WORK_SCREEN.into(),
             body: Body::Work(work.clone()),
         };
         let left = std::mem::replace(&mut self.shown, next);
-        if let Body::View(_) = left.body {
+        if !matches!(left.body, Body::Work(_)) {
             self.parked.push(left);
         }
         work.focus_handle(cx).focus(window, cx);
@@ -1310,7 +1341,6 @@ impl Render for Desk {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let edge_to_edge = window.is_maximized() || window.is_fullscreen();
         let theme = ActiveTheme::theme(cx);
-        let problems = ActiveTheme::problems(cx);
         let toast_layer = self.toast.as_ref().map(|shown| {
             div()
                 .absolute()
@@ -1329,11 +1359,28 @@ impl Render for Desk {
                     }),
                 ))
         });
+        let whole = matches!(self.shown.body, Body::Whole(_));
         let (tabs, content) = self.content(&theme, cx);
         let sheet = self.switch_sheet(cx);
-        let status = self.status(cx);
-        let cron_menu = self.cron_menu(status.cron, cx);
-        let version = self.tofu_version(cx);
+        let bar = title_bar(
+            self.sidebar_open,
+            self.tiles_x(),
+            self.github.clone(),
+            &self.bell,
+            tabs,
+            cx,
+        )
+        .when(whole, TitleBar::controls_only);
+        let body = match whole {
+            true => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(content)
+                .into_any_element(),
+            false => self.tiled(content, cx),
+        };
         #[cfg(feature = "screen-work")]
         let menu = self.projects.menu.clone();
         #[cfg(not(feature = "screen-work"))]
@@ -1354,37 +1401,8 @@ impl Render for Desk {
             .shadow(vec![ring(ink(&theme, WINDOW_RING))])
             .text_size(px(TEXT))
             .text_color(theme.color(ColorToken::TextBase))
-            .child(title_bar(
-                self.sidebar_open,
-                self.tiles_x(),
-                self.github.clone(),
-                &self.bell,
-                tabs,
-                cx,
-            ))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .pr(px(GUTTER))
-                    .when(self.sidebar_open, |body| body.child(self.sidebar(cx)))
-                    .when(!self.sidebar_open, |body| body.pl(px(GUTTER)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .pt(px(TILE_TOP))
-                            .pb(px(TILE_BOTTOM))
-                            .child(content),
-                    ),
-            )
-            .child(
-                status_bar(&problems, status, cx)
-                    .cron_menu(cron_menu)
-                    .version(version),
-            )
+            .child(bar)
+            .child(body)
             .child(self.palette.clone())
             .children(menu)
             .children(sheet)
