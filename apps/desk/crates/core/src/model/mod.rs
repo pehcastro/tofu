@@ -6,7 +6,7 @@ use std::fmt;
 use crate::bridge::Event;
 use crate::protocol::{
     ContextReport, CronState, Notification, QuotaWindow, RuleListReport, ServerRequest,
-    UsageReport, subagent,
+    SessionInfo, UsageReport, subagent,
 };
 use crate::query::Answer;
 
@@ -44,6 +44,7 @@ pub struct Store {
     pub agents: Answer<subagent::Found>,
     pub rules: Answer<RuleListReport>,
     pub context: Answer<ContextReport>,
+    pub info: Answer<SessionInfo>,
     pub quota: Vec<QuotaWindow>,
 }
 

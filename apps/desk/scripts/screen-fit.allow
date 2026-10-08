@@ -1,7 +1,6 @@
 # path:key  reason. key is a const name, or the offset call the check printed.
 crates/desk/src/screens/accounts/mod.rs:POP_WIDTH  popover width, fits the 470 px area at the minimum window with the sidebar open
 crates/desk/src/screens/accounts/mod.rs:top(px(POP_TOP))  popover anchored under its trigger, not a board coordinate
-crates/desk/src/screens/session/mod.rs:RIBBONS  drawing space of the fork ribbons, every position is a fraction of it
 crates/desk/src/screens/settings/intro.rs:LEFT_WIDTH  max width of the background pane
 crates/desk/src/screens/intro/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
 crates/desk/src/screens/intro/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket

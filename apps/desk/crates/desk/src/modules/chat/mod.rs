@@ -12,8 +12,9 @@ use desk_core::model::{Role, Store};
 use desk_core::protocol::{
     ApprovalAnswer, ApprovalDecision, ApprovalRequest, ContextReport, CredentialReport,
     CronCommandParams, InitializeResult, NoParams, Notification, PROTOCOL, Request, RequestId,
-    SessionAsking, SessionListParams, SessionOpenParams, SessionParams, SessionRenameParams,
-    ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
+    SessionAsking, SessionInfo, SessionListParams, SessionOpenParams, SessionParams,
+    SessionRenameParams, ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams,
+    request, subagent,
 };
 use desk_core::query::{Answer, QueryError, Read};
 use desk_core::sessions::SessionRow;
@@ -316,6 +317,7 @@ impl Chat {
             chat.refresh(cx);
             chat.relist(cx);
             chat.reread_context(cx);
+            chat.reread_info(cx);
         });
         cx.notify();
     }
@@ -512,6 +514,7 @@ impl Chat {
                 cx.emit(Touched);
                 if self.open_id() == Some(completed.session.as_str()) {
                     self.reread_context(cx);
+                    self.reread_info(cx);
                 }
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
@@ -735,6 +738,16 @@ impl Chat {
         self.ask_due(cx);
     }
 
+    pub fn want_info(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.info.want());
+        self.ask_due(cx);
+    }
+
+    pub fn reread_info(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.info.again());
+        self.ask_due(cx);
+    }
+
     fn ask_due(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.link, Link::Ready(_)) {
             return;
@@ -743,6 +756,7 @@ impl Chat {
             session: self.open_id().map(str::to_owned),
         };
         self.ask::<request::QueryContext>(&open, |store| &mut store.context, context_said, cx);
+        self.ask::<request::SessionInfo>(&open, |store| &mut store.info, info_said, cx);
         self.ask::<request::QueryUsage>(
             &NoParams {},
             |store| &mut store.usage,
@@ -959,6 +973,21 @@ pub fn windows_said(providers: &[CredentialReport]) -> String {
         })
         .collect();
     said.join("; ")
+}
+
+fn info_said(info: &SessionInfo) -> String {
+    format!(
+        "session {} {}: {} turns, {} steps, {} sub-agents, {} reads, {} carried, outcome {}, forked into {}",
+        info.name.as_deref().unwrap_or("unnamed"),
+        info.id,
+        info.turns,
+        info.steps,
+        info.sub_agents,
+        info.reads,
+        info.carried_messages,
+        info.outcome.as_deref().unwrap_or("none"),
+        info.forked_into.as_deref().unwrap_or("none")
+    )
 }
 
 fn context_said(report: &ContextReport) -> String {

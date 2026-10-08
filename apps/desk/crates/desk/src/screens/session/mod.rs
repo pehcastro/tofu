@@ -1,667 +1,388 @@
-mod fixture;
-
 use super::frame;
 
+use crate::modules::chat::Chat;
+use desk_core::model::Store;
+use desk_core::protocol::SessionInfo;
+use desk_core::query::Answer;
+use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
-use desk_ui::components::card::{caption, dots, inner_card, outer_card};
-use desk_ui::components::chip::{Tone, mono};
-use desk_ui::components::list::row;
+use desk_ui::components::card::{caption, inner_card, outer_card};
+use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::paint::ink;
-use desk_ui::components::size::{T2, T3};
+use desk_ui::components::size::T3;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Div, FontWeight, Rgba, Window, div, prelude::*,
-    px, relative,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, FontWeight,
+    SharedString, Subscription, WeakEntity, Window, div, prelude::*, px, relative,
 };
 
-use fixture::{
-    BRANCH_NOTE, COMPACT, FORK_HERE, FORKS, HEAD, LANES, MENTION, NAME, OPEN_WORK, OVERVIEW,
-    Outcome, PICK_NOTE, RENAME, RIBBON_NOTE, SEGMENTS, STARTED, STATS, STEP, Segment, TURNS, UNDO,
-};
-use frame::{ellipsis, fraction, note, panel, panes, title, told, window};
+use frame::{ellipsis, fraction, load_fonts, note, panel, panes, title, window};
 
-const CARD_SHADE: f32 = 0.22;
-const RIBBON_ON: f32 = 0.22;
-const RIBBON_OFF: f32 = 0.08;
-const DOT_ON: f32 = 0.9;
-const DOT_OFF: f32 = 0.45;
-const LABEL_OFF: f32 = 0.55;
-const RULE: f32 = 0.35;
-const WARN_FILL: f32 = 0.07;
-const RIBBONS: (f32, f32) = (1100.0, 300.0);
-const LABEL_SPAN: f32 = 180.0;
-const MARK_SPAN: f32 = 90.0;
-const STATS_LEAST: f32 = 120.0;
-const TURNS_LEAST: f32 = 380.0;
-const DETAIL_LEAST: f32 = 320.0;
-const COLUMN_LEAST: f32 = 240.0;
-const FACT_LEAST: f32 = 180.0;
+const NO_TOFU: &str = "The session reads session.info from the tofu the work screen runs, and no work screen is open here.";
+const NO_FORK: &str = "session.info names no fork for this session";
+const COUNT_LEAST: f32 = 120.0;
+const FACTS_LEAST: f32 = 300.0;
+const LABEL_WIDTH: f32 = 120.0;
+const FIGURE: f32 = 24.0;
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    let forks = match board {
-        None | Some(OVERVIEW) => false,
-        Some(FORKS) => true,
-        Some(other) => {
-            return Err(format!(
-                "the session screen draws {OVERVIEW} and {FORKS}, not {other}"
-            ));
-        }
-    };
-    frame::load_fonts(cx)?;
-    let step = SEGMENTS
-        .get(HEAD)
-        .map_or(0, |head| head.turns.len().saturating_sub(1));
+    if let Some(board) = board {
+        return Err(format!(
+            "the session screen draws what tofu session.info reports, not the board {board}"
+        ));
+    }
+    load_fonts(cx)?;
     Ok(cx
-        .new(|_| Session {
-            forks,
-            turn: 0,
-            segment: HEAD,
-            step,
-            branch: false,
-            told: None,
+        .new(|_| SessionScreen {
+            source: None,
+            answer: Answer::default(),
+            open: None,
         })
         .into())
 }
 
-struct Session {
-    forks: bool,
-    turn: usize,
-    segment: usize,
-    step: usize,
-    branch: bool,
-    told: Option<&'static str>,
+pub struct SessionScreen {
+    source: Option<Source>,
+    answer: Answer<SessionInfo>,
+    open: Option<String>,
 }
 
-impl Session {
-    fn tell(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        text: &'static str,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        button(id, label, None, ButtonKind::Plain, theme).on_click(cx.listener(
-            move |session, _: &ClickEvent, _, cx| {
-                session.told = Some(text);
-                cx.notify();
-            },
-        ))
+struct Source {
+    chat: WeakEntity<Chat>,
+    id: EntityId,
+    _watch: Subscription,
+}
+
+impl SessionScreen {
+    pub fn read_from(&mut self, chat: &Entity<Chat>, cx: &mut Context<Self>) {
+        if self
+            .source
+            .as_ref()
+            .is_some_and(|source| source.id == chat.entity_id())
+        {
+            return;
+        }
+        let store = chat.read(cx).store().clone();
+        let watch = cx.observe(&store, |screen, store, cx| screen.saw(&store, cx));
+        self.source = Some(Source {
+            chat: chat.downgrade(),
+            id: chat.entity_id(),
+            _watch: watch,
+        });
+        chat.update(cx, |chat, cx| chat.want_info(cx));
+        self.saw(&store, cx);
+        cx.notify();
     }
 
-    fn overview(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let header = div()
+    fn saw(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        let open = self
+            .source
+            .as_ref()
+            .and_then(|source| source.chat.upgrade())
+            .and_then(|chat| chat.read(cx).open_id().map(str::to_owned));
+        let info = &store.read(cx).info;
+        if *info == self.answer && open == self.open {
+            return;
+        }
+        if self.answer.asking
+            && !info.asking
+            && let Some(read) = &info.read
+        {
+            eprintln!(
+                "desk: session shows session.info at {} for {} {}: {} turns, {} steps, {} sub-agents, {} reads",
+                read.at,
+                read.value.name.as_deref().unwrap_or("unnamed"),
+                read.value.id,
+                read.value.turns,
+                read.value.steps,
+                read.value.sub_agents,
+                read.value.reads
+            );
+        }
+        self.answer = info.clone();
+        self.open = open;
+        cx.notify();
+    }
+
+    fn reread(&mut self, cx: &mut Context<Self>) {
+        let Some(chat) = self
+            .source
+            .as_ref()
+            .and_then(|source| source.chat.upgrade())
+        else {
+            return eprintln!("desk: session: the chat is gone, so nothing was asked");
+        };
+        eprintln!("desk: session: read again");
+        chat.update(cx, |chat, cx| chat.reread_info(cx));
+    }
+
+    fn header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let read = self.answer.read.as_ref().map(|read| {
+            format!(
+                "{}, session.info read {}",
+                read.value.name.as_deref().unwrap_or("unnamed session"),
+                read.at
+            )
+        });
+        div()
             .flex()
             .flex_none()
             .flex_wrap()
             .items_center()
             .gap(px(10.0))
             .px(px(4.0))
-            .child(
-                div()
-                    .text_size(px(9.0))
-                    .text_color(theme.color(ColorToken::StatusLive))
-                    .child("●"),
-            )
-            .child(title(NAME))
-            .child(
-                div()
-                    .text_size(px(13.0))
-                    .text_color(ink(theme, T3))
-                    .child(STARTED),
-            )
+            .child(title("Session"))
+            .children(read.map(|read| ellipsis(note(read, theme))))
             .child(div().flex_1())
-            .child(self.tell("rename", "Rename", RENAME, theme, cx))
-            .child(self.tell("compact", "Compact", COMPACT, theme, cx))
+            .when(self.answer.asking, |header| {
+                header.child(spinner("session-asking", theme))
+            })
             .child(
-                button("forks", "Forks", None, ButtonKind::Plain, theme).on_click(cx.listener(
-                    |session, _: &ClickEvent, _, cx| {
-                        session.forks = true;
-                        cx.notify();
-                    },
-                )),
-            );
-        let stats = panes()
-            .flex_none()
-            .children(STATS.iter().map(|(label, value)| {
-                let tail = match *label {
-                    "Files changed" => Some(
-                        div()
-                            .flex()
-                            .gap(px(4.0))
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::NORMAL)
-                            .child(div().text_color(Tone::Added.color(theme)).child("+412"))
-                            .child(div().text_color(Tone::Deleted.color(theme)).child("-96")),
-                    ),
-                    "Tokens" => Some(
-                        div()
-                            .text_size(px(13.0))
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(ink(theme, T3))
-                            .child("quota"),
-                    ),
-                    _ => None,
-                };
-                fraction(outer_card(theme), 1.0, STATS_LEAST)
-                    .flex_col()
-                    .px(px(3.0))
-                    .pb(px(3.0))
-                    .child(
-                        div()
-                            .h(px(30.0))
-                            .flex()
-                            .items_center()
-                            .pl(px(9.0))
-                            .child(caption(*label, theme)),
-                    )
-                    .child(
-                        inner_card(theme)
-                            .flex_row()
-                            .items_baseline()
-                            .gap(px(4.0))
-                            .px(px(14.0))
-                            .py(px(10.0))
-                            .text_size(px(24.0))
-                            .line_height(relative(1.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(*value)
-                            .children(tail),
-                    )
-            }));
-        let turns = panel("Turns", Some(note("newest first · click one", theme).into_any_element()), theme)
-            .map(|panel| fraction(panel, 3.0, TURNS_LEAST))
-            .child(
-                inner_card(theme)
-                    .p(px(8.0))
-                    .gap(px(2.0))
-                    .text_size(px(13.5))
-                    .children(TURNS.iter().enumerate().map(|(at, turn)| {
-                        let (word, color) = match turn.outcome {
-                            Outcome::Running => ("running", theme.color(ColorToken::StatusLive)),
-                            Outcome::Stopped => ("stopped", ink(theme, T3)),
-                            Outcome::LoopGuard => ("loop guard", theme.color(ColorToken::StatusWarn)),
-                        };
-                        row(("turn", at), at == self.turn, false, theme)
-                            .gap(px(12.0))
-                            .on_click(cx.listener(move |session, _: &ClickEvent, _, cx| {
-                                session.turn = at;
-                                cx.notify();
-                            }))
-                            .child(div().min_w(px(44.0)).font_family(mono(theme)).text_size(px(12.0)).text_color(ink(theme, T3)).child(turn.at))
-                            .child(ellipsis(div().flex_1()).child(turn.title))
-                            .child(ellipsis(div()).text_size(px(12.5)).text_color(ink(theme, T3)).child(turn.meta))
-                            .child(div().min_w(px(84.0)).flex().justify_end().whitespace_nowrap().text_size(px(12.5)).text_color(color).child(word))
-                    }))
-                    .child(div().flex_1())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap(px(8.0))
-                            .p(px(6.0))
-                            .child(fact("Cron", &[("every 30m", true), (" rerun the browser check, until 18:00", false)], theme))
-                            .child(fact("Undo", &[("14 turns kept, oldest Oct 1; tofu's own snapshots, never your .git", false)], theme))
-                            .child(fact("Context", &[("84k of 250k, forks at 200k", false)], theme)),
-                    ),
-            );
-        let turn = TURNS.get(self.turn).unwrap_or(&TURNS[0]);
-        let detail = panel(
-            turn.title,
-            Some(note(turn.when, theme).into_any_element()),
+                button(
+                    "session-reread",
+                    "Read again",
+                    None,
+                    ButtonKind::Plain,
+                    theme,
+                )
+                .on_click(cx.listener(|screen, _: &ClickEvent, _, cx| screen.reread(cx))),
+            )
+    }
+
+    fn elsewhere(&self, info: &SessionInfo) -> Option<String> {
+        if self.open.as_deref() == Some(info.id.as_str()) {
+            return None;
+        }
+        let name = info.name.as_deref().unwrap_or(&info.id);
+        Some(match &self.open {
+            Some(open) => format!(
+                "session.info reported {name}, read before {open} opened, and is being read again"
+            ),
+            None => format!("no session is open, so session.info reported {name}"),
+        })
+    }
+
+    fn waiting(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
+        let Some(error) = &self.answer.failed else {
+            return empty_state(
+                "session-reading",
+                "Reading the session",
+                Some("asked the tofu this project runs for session.info".into()),
+                &[],
+                &[],
+                theme,
+                |_, _, _| {},
+            )
+            .into_any_element();
+        };
+        let again = cx.listener(|screen, _: &(), _, cx| screen.reread(cx));
+        empty_state(
+            "session-failed",
+            "The session could not be read",
+            Some(error.to_string().into()),
+            &[EmptyAction {
+                label: "Try again".into(),
+                glyph: None,
+                keys: None,
+            }],
+            &[],
             theme,
+            move |_, window, cx| again(&(), window, cx),
         )
-        .map(|panel| fraction(panel, 2.0, DETAIL_LEAST))
+        .into_any_element()
+    }
+
+    fn body(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let shown = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .child(self.header(theme, cx));
+        let Some(read) = &self.answer.read else {
+            return shown.child(self.waiting(theme, cx));
+        };
+        let info = &read.value;
+        shown
+            .children(self.elsewhere(info).map(|said| warn(said, theme)))
+            .children(
+                self.answer
+                    .failed
+                    .as_ref()
+                    .map(|error| warn(format!("the last read failed: {error}"), theme)),
+            )
+            .child(
+                panes().flex_none().children(
+                    counts(info)
+                        .into_iter()
+                        .map(|(label, value)| count(label, value, theme)),
+                ),
+            )
+            .child(
+                panes()
+                    .child(facts("The session", about(info), None, theme))
+                    .child(facts("Forks", forks(info), Some(NO_FORK), theme)),
+            )
+            .child(note("every value above is a field of session.info", theme))
+    }
+}
+
+fn counts(info: &SessionInfo) -> Vec<(&'static str, String)> {
+    let mut counts = vec![
+        ("Turns", grouped(info.turns)),
+        ("Steps", grouped(info.steps)),
+        ("Sub-agents", grouped(info.sub_agents)),
+        ("Reads", grouped(info.reads)),
+        ("Carried messages", grouped(info.carried_messages)),
+    ];
+    if let Some(cost) = info.cost_usd {
+        counts.push(("Cost", format!("${cost:.2}")));
+    }
+    counts
+}
+
+fn about(info: &SessionInfo) -> Vec<(&'static str, String)> {
+    let said = |flag: Option<bool>| flag.map(|on| if on { "yes" } else { "no" }.to_owned());
+    [
+        ("name", info.name.clone()),
+        ("id", Some(info.id.clone())),
+        ("handle", Some(info.handle.clone())),
+        ("task", info.task.clone()),
+        ("model", info.model.clone()),
+        ("wire", info.wire.clone()),
+        ("started", Some(info.at.clone())),
+        ("last turn", info.last_at.clone()),
+        ("ended", info.ended_at.clone()),
+        ("outcome", info.outcome.clone()),
+        ("end reason", info.end_reason.clone()),
+        ("error", info.error.clone()),
+        ("head", said(info.head)),
+        ("expired", said(info.expired)),
+        ("auto compaction", info.auto_compaction.clone()),
+        ("context target", info.context_target.map(grouped)),
+        ("context ceiling", info.context_ceiling.map(grouped)),
+        ("unrecorded reads", info.unrecorded_reads.map(grouped)),
+    ]
+    .into_iter()
+    .filter_map(|(label, value)| Some((label, value?)))
+    .collect()
+}
+
+fn forks(info: &SessionInfo) -> Vec<(&'static str, String)> {
+    let generation = match (info.generation, info.generations) {
+        (Some(at), Some(of)) => Some(format!("{at} of {of}")),
+        (at, _) => at.map(grouped),
+    };
+    let tokens = match (info.fork_tokens_before, info.fork_tokens_after) {
+        (Some(before), Some(after)) => Some(format!("{} to {}", grouped(before), grouped(after))),
+        (before, after) => before.or(after).map(grouped),
+    };
+    [
+        ("forked into", info.forked_into.clone()),
+        ("as", info.fork_into_kind.clone()),
+        ("made by", info.fork_kind.clone()),
+        ("fork tokens", tokens),
+        ("parent", info.parent.clone()),
+        ("root", info.root.clone()),
+        ("family", info.family.clone()),
+        ("generation", generation),
+    ]
+    .into_iter()
+    .filter_map(|(label, value)| Some((label, value?)))
+    .collect()
+}
+
+fn count(label: &'static str, value: String, theme: &Theme) -> Div {
+    fraction(outer_card(theme), 1.0, COUNT_LEAST)
+        .flex_col()
+        .px(px(3.0))
+        .pb(px(3.0))
+        .child(
+            div()
+                .h(px(30.0))
+                .flex()
+                .items_center()
+                .pl(px(9.0))
+                .child(caption(label, theme)),
+        )
+        .child(
+            ellipsis(inner_card(theme))
+                .px(px(14.0))
+                .py(px(10.0))
+                .text_size(px(FIGURE))
+                .line_height(relative(1.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(value),
+        )
+}
+
+fn facts(
+    title: &'static str,
+    rows: Vec<(&'static str, String)>,
+    none: Option<&'static str>,
+    theme: &Theme,
+) -> Div {
+    let empty = rows.is_empty();
+    panel(title, None, theme)
+        .map(|panel| fraction(panel, 1.0, FACTS_LEAST))
         .child(
             inner_card(theme)
                 .px(px(16.0))
-                .py(px(14.0))
-                .gap(px(12.0))
-                .text_size(px(13.5))
-                .line_height(px(21.0))
-                .child(div().text_color(ink(theme, T2)).child(turn.summary))
-                .child(caption("Sub-agents", theme))
-                .children(turn.agents.iter().map(|agent| {
+                .py(px(12.0))
+                .gap(px(6.0))
+                .text_size(px(13.0))
+                .children(rows.into_iter().map(|(label, value)| {
                     div()
                         .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .text_size(px(13.0))
+                        .gap(px(14.0))
                         .child(
                             div()
-                                .size(px(10.0))
-                                .rounded(px(2.0))
-                                .border_1()
-                                .border_color(theme.color(ColorToken::Trace)),
-                        )
-                        .child(agent.name)
-                        .child(
-                            ellipsis(div().flex_1())
+                                .w(px(LABEL_WIDTH))
+                                .flex_none()
                                 .text_color(ink(theme, T3))
-                                .child(agent.meta),
+                                .child(label),
                         )
-                        .child(
-                            div()
-                                .font_family(mono(theme))
-                                .text_size(px(11.5))
-                                .text_color(ink(theme, T3))
-                                .child(agent.trace),
-                        )
+                        .child(div().flex_1().min_w_0().child(value))
                 }))
-                .child(caption("Files", theme))
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(6.0))
-                        .children(turn.files.iter().map(|file| {
-                            div()
-                                .h(px(22.0))
-                                .px(px(8.0))
-                                .flex()
-                                .items_center()
-                                .rounded(px(7.0))
-                                .bg(ink(theme, 0.06))
-                                .text_size(px(12.5))
-                                .child(*file)
-                        })),
-                )
-                .child(div().flex_1())
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(6.0))
-                        .child(self.tell("work", "Open in work", OPEN_WORK, theme, cx))
-                        .child(self.tell("mention", "Mention in chat", MENTION, theme, cx))
-                        .child(self.tell("undo", "Undo this turn", UNDO, theme, cx))
-                        .child(self.tell("fork", "Fork from here", FORK_HERE, theme, cx)),
-                ),
-        );
-        div()
-            .gap(px(10.0))
-            .child(header)
-            .child(stats)
-            .child(panes().flex_1().child(turns).child(detail))
-    }
+                .children(none.filter(|_| empty).map(|none| note(none, theme))),
+        )
+}
 
-    fn ribbons(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let height = |context: u16| 4.0 + f32::from(context) / 250.0 * 46.0;
-        let mut area = div()
-            .h(px(RIBBONS.1))
-            .flex_none()
-            .relative()
-            .overflow_hidden()
-            .border_b_1()
-            .border_color(Rgba::new(0.0, 0.0, 0.0, RULE))
-            .child(dots(theme))
-            .child(
-                ellipsis(placed(24.0, 14.0))
-                    .right_0()
-                    .text_size(px(12.0))
-                    .text_color(ink(theme, T3))
-                    .child(RIBBON_NOTE),
-            );
-        for (index, segment) in SEGMENTS.iter().enumerate() {
-            let on = index == self.segment;
-            let lane = LANES.get(segment.lane).copied().unwrap_or(LANES[0]);
-            let x = |at: usize| segment.x0 + at as f32 * STEP;
-            for (at, pair) in segment.context.windows(2).enumerate() {
-                let tall = (height(pair[0]) + height(pair[1])) / 2.0;
-                area = area.child(
-                    placed(x(at), lane - tall / 2.0)
-                        .w(relative(STEP / RIBBONS.0))
-                        .h(px(tall))
-                        .bg(ink(theme, if on { RIBBON_ON } else { RIBBON_OFF })),
-                );
-            }
-            for at in 0..segment.context.len() {
-                let picked = on && at == self.step;
-                let size = if picked { 9.0 } else { 5.0 };
-                area = area.child(
-                    placed(x(at), lane)
-                        .id(("dot", index * 100 + at))
-                        .ml(px(-8.0))
-                        .mt(px(-8.0))
-                        .size(px(16.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |session, _: &ClickEvent, _, cx| {
-                            session.segment = index;
-                            session.step = at;
-                            cx.notify();
-                        }))
-                        .child(div().size(px(size)).rounded_full().bg(if picked {
-                            theme.color(ColorToken::TextStrong)
-                        } else {
-                            ink(theme, if on { DOT_ON } else { DOT_OFF })
-                        })),
-                );
-            }
-            let middle = (x(0) + x(segment.context.len().saturating_sub(1))) / 2.0;
-            let top = if segment.lane == 0 {
-                lane - 62.0
-            } else {
-                lane + 22.0
-            };
-            area = area.child(
-                placed(middle - LABEL_SPAN / 2.0, top)
-                    .w(relative(LABEL_SPAN / RIBBONS.0))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .line_height(px(16.0))
-                    .text_size(px(12.5))
-                    .text_color(if on {
-                        theme.color(ColorToken::TextStrong)
-                    } else {
-                        ink(theme, LABEL_OFF)
-                    })
-                    .child(div().max_w_full().truncate().child(segment.name))
-                    .child(
-                        div()
-                            .max_w_full()
-                            .truncate()
-                            .text_size(px(11.5))
-                            .text_color(ink(theme, T3))
-                            .child(format!(
-                                "{} · {} turns",
-                                segment.kind,
-                                segment.context.len()
-                            )),
-                    ),
-            );
+fn grouped(count: i64) -> String {
+    let digits = count.unsigned_abs().to_string();
+    let mut said = String::with_capacity(digits.len() + digits.len() / 3 + 1);
+    if count < 0 {
+        said.push('-');
+    }
+    for (at, digit) in digits.chars().enumerate() {
+        if at > 0 && (digits.len() - at).is_multiple_of(3) {
+            said.push(',');
         }
-        area.child(mark(300.0, 128.0, "auto fork", "238k → 31k", theme))
-            .child(mark(460.0, 128.0, "/compact", "181k → 12k", theme))
-            .child(
-                placed(234.0, 166.0)
-                    .whitespace_nowrap()
-                    .text_size(px(11.5))
-                    .line_height(px(15.0))
-                    .text_color(ink(theme, T3))
-                    .child("fork at turn 6"),
-            )
-            .child(
-                placed(1010.0, 96.0)
-                    .whitespace_nowrap()
-                    .text_size(px(11.5))
-                    .text_color(theme.color(ColorToken::StatusLive))
-                    .child("running"),
-            )
+        said.push(digit);
     }
-
-    fn forks(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let segment: &Segment = SEGMENTS.get(self.segment).unwrap_or(&SEGMENTS[0]);
-        let step = self.step.min(segment.turns.len().saturating_sub(1));
-        let context = segment.context.get(step).copied().unwrap_or(0);
-        let column = || {
-            fraction(div(), 1.0, COLUMN_LEAST)
-                .flex()
-                .flex_col()
-                .gap(px(10.0))
-                .px(px(22.0))
-                .py(px(18.0))
-                .text_size(px(13.5))
-                .line_height(px(21.0))
-                .border_r_1()
-                .border_color(Rgba::new(0.0, 0.0, 0.0, RULE))
-        };
-        let about = column()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.0))
-                    .child(
-                        div()
-                            .text_size(px(15.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(segment.name),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.5))
-                            .text_color(ink(theme, T3))
-                            .child(segment.kind),
-                    ),
-            )
-            .child(div().text_color(ink(theme, T2)).child(segment.what))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .pt(px(4.0))
-                    .text_size(px(13.0))
-                    .child(fact_row("context carried", segment.carried, theme))
-                    .child(fact_row("ended", segment.ended, theme)),
-            )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(6.0))
-                    .child(
-                        button("open", "Open session", None, ButtonKind::Plain, theme).on_click(
-                            cx.listener(|session, _: &ClickEvent, _, cx| {
-                                session.forks = false;
-                                cx.notify();
-                            }),
-                        ),
-                    )
-                    .child(self.tell("act", segment.act, FORK_HERE, theme, cx)),
-            );
-        let turn = column()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.0))
-                    .child(
-                        caption(
-                            format!("turn {} of {}", step + 1, segment.turns.len()),
-                            theme,
-                        )
-                        .flex_1(),
-                    )
-                    .child(
-                        div()
-                            .font_family(mono(theme))
-                            .text_size(px(12.0))
-                            .text_color(ink(theme, T3))
-                            .child(format!("{context}k in context")),
-                    ),
-            )
-            .child(
-                div()
-                    .text_size(px(15.0))
-                    .line_height(px(22.0))
-                    .child(segment.turns.get(step).copied().unwrap_or("")),
-            )
-            .child(
-                note(PICK_NOTE, theme)
-                    .text_size(px(12.5))
-                    .line_height(px(19.0)),
-            )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(6.0))
-                    .child(
-                        button(
-                            "fork-turn",
-                            "Fork from this turn",
-                            None,
-                            ButtonKind::Primary,
-                            theme,
-                        )
-                        .on_click(cx.listener(
-                            |session, _: &ClickEvent, _, cx| {
-                                session.told = Some(FORK_HERE);
-                                cx.notify();
-                            },
-                        )),
-                    )
-                    .child(self.tell("mention", "Mention in chat", MENTION, theme, cx)),
-            );
-        let branch = fraction(div(), 1.0, COLUMN_LEAST)
-            .flex()
-            .flex_col()
-            .gap(px(10.0))
-            .px(px(18.0))
-            .py(px(16.0))
-            .text_size(px(13.5))
-            .child(caption("Branch", theme))
-            .child(
-                div()
-                    .id("branch")
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .px(px(10.0))
-                    .py(px(8.0))
-                    .rounded(px(9.0))
-                    .bg(Rgba::new(0.0, 0.0, 0.0, 0.25))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|session, _: &ClickEvent, _, cx| {
-                        session.branch = !session.branch;
-                        cx.notify();
-                    }))
-                    .child(div().flex_1().font_family(mono(theme)).font_weight(FontWeight::SEMIBOLD).child("main"))
-                    .child(div().text_size(px(12.5)).text_color(ink(theme, T3)).child("↑2 · 3 changed")),
-            )
-            .when(self.branch, |branch| {
-                branch.child(
-                    div()
-                        .px(px(10.0))
-                        .py(px(8.0))
-                        .rounded(px(9.0))
-                        .bg(Rgba { alpha: WARN_FILL, ..theme.color(ColorToken::StatusWarn) })
-                        .text_size(px(12.5))
-                        .line_height(px(18.0))
-                        .text_color(theme.color(ColorToken::StatusWarn))
-                        .child("A turn is running and ts-dev is writing web/. A switch waits until the turn ends, or you stop it first."),
-                )
-            })
-            .child(note(BRANCH_NOTE, theme).text_size(px(12.5)).line_height(px(19.0)));
-        let shell = panel(
-            "Forks",
-            Some(
-                note(
-                    "how clear-sable-eagle grew, and where you can pick it up",
-                    theme,
-                )
-                .into_any_element(),
-            ),
-            theme,
-        )
-        .flex_1()
-        .child(
-            inner_card(theme).child(self.ribbons(theme, cx)).child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_wrap()
-                    .child(about)
-                    .child(turn)
-                    .child(branch),
-            ),
-        );
-        div().child(shell)
-    }
+    said
 }
 
-fn fact(title: &'static str, parts: &[(&'static str, bool)], theme: &Theme) -> Div {
-    fraction(div(), 1.0, FACT_LEAST)
-        .rounded(px(10.0))
-        .bg(Rgba::new(0.0, 0.0, 0.0, CARD_SHADE))
-        .px(px(12.0))
-        .py(px(10.0))
-        .text_size(px(12.5))
-        .line_height(px(18.0))
-        .child(caption(title, theme).mb(px(4.0)))
-        .child(frame::rich(
-            &parts
-                .iter()
-                .map(|(text, code)| {
-                    (
-                        *text,
-                        if *code {
-                            frame::Mark::Mono
-                        } else {
-                            frame::Mark::Plain
-                        },
-                    )
-                })
-                .collect::<Vec<_>>(),
-            theme,
-        ))
+fn warn(text: impl Into<SharedString>, theme: &Theme) -> Div {
+    note(text, theme).text_color(theme.color(ColorToken::StatusWarn))
 }
 
-fn fact_row(label: &'static str, value: &'static str, theme: &Theme) -> Div {
-    div()
-        .flex()
-        .gap(px(14.0))
-        .child(
-            div()
-                .min_w(px(120.0))
-                .flex_none()
-                .text_color(ink(theme, T3))
-                .child(label),
-        )
-        .child(div().min_w_0().child(value))
-}
-
-fn placed(x: f32, y: f32) -> Div {
-    div()
-        .absolute()
-        .left(relative(x / RIBBONS.0))
-        .top(relative(y / RIBBONS.1))
-}
-
-fn mark(left: f32, top: f32, name: &'static str, change: &'static str, theme: &Theme) -> Div {
-    placed(left, top)
-        .w(relative(MARK_SPAN / RIBBONS.0))
-        .flex()
-        .flex_col()
-        .items_center()
-        .text_size(px(11.5))
-        .line_height(px(15.0))
-        .child(
-            div()
-                .max_w_full()
-                .truncate()
-                .text_color(ink(theme, T2))
-                .child(name),
-        )
-        .child(
-            div()
-                .max_w_full()
-                .truncate()
-                .font_family(mono(theme))
-                .text_color(ink(theme, T3))
-                .child(change),
-        )
-}
-
-impl Render for Session {
+impl Render for SessionScreen {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let body = if self.forks {
-            self.forks(&theme, cx)
-        } else {
-            self.overview(&theme, cx)
+        let body = match self.source {
+            None => empty_state(
+                "session-no-tofu",
+                "No tofu to ask",
+                Some(NO_TOFU.into()),
+                &[],
+                &[],
+                &theme,
+                |_, _, _| {},
+            )
+            .into_any_element(),
+            Some(_) => self.body(&theme, cx).into_any_element(),
         };
-        let told = told(self.told, &theme, cx, |session: &mut Session| {
-            session.told = None
-        });
-        window(&theme, body).children(told)
+        window(&theme, div().flex_1().flex().flex_col().child(body))
     }
 }

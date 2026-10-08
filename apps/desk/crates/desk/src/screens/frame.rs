@@ -65,8 +65,6 @@ pub const SHELL_PILLS: Pills = Pills {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mark {
-    #[cfg(feature = "screen-session")]
-    Plain,
     Strong,
     Warn,
     Dim,
@@ -85,8 +83,6 @@ pub fn rich(parts: &[(&str, Mark)], theme: &Theme) -> StyledText {
             ..HighlightStyle::default()
         };
         match mark {
-            #[cfg(feature = "screen-session")]
-            Mark::Plain => {}
             Mark::Strong => looks.push((
                 range,
                 HighlightStyle {
@@ -189,7 +185,7 @@ pub fn pills<V: 'static, T: Copy + PartialEq + 'static>(
         }))
 }
 
-#[cfg(any(feature = "screen-usage", feature = "screen-session"))]
+#[cfg(feature = "screen-usage")]
 pub fn told<V: 'static>(
     text: Option<&'static str>,
     theme: &Theme,

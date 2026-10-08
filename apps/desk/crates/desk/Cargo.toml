@@ -17,7 +17,7 @@ gpui_platform.workspace = true
 serde_json = "1.0.149"
 
 [features]
-default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context"]
+default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session"]
 screen-work = []
 screen-settings = []
 screen-accounts = []
