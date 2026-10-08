@@ -131,6 +131,7 @@ const LIST_PAD_X: f32 = 6.0;
 const LIST_PAD_Y: f32 = 8.0;
 const ALL_ROW: f32 = 32.0;
 const SCREEN_GROUP_PAD_TOP: f32 = 14.0;
+const SCREEN_ROW_GAP: f32 = 1.5;
 const SCREEN_GROUP_PAD_BOTTOM: f32 = 6.0;
 const SCREEN_ROW_PAD_Y: f32 = 6.0;
 const DIVIDER_SHADE: f32 = 0.35;
@@ -1403,6 +1404,7 @@ impl AgentScreen {
             .items_center()
             .gap(px(ROW_GAP))
             .h(px(ALL_ROW))
+            .mb(px(SCREEN_ROW_GAP))
             .px(px(ROW_PAD_X))
             .rounded(px(RADIUS_TAB))
             .cursor_pointer()
