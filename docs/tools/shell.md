@@ -34,7 +34,10 @@ as `bash-3`, and what it printed so far, and the command keeps running on the
 the command ends or after another 30 s, with its exit code and last lines.
 Nothing is killed at a deadline, so a 10 minute build is not lost at 10
 minutes. A `timeout_ms` of 30,000 or less is a hard limit instead: the
-command is killed there and returns what it printed.
+command is killed there and returns what it printed. The result and the
+session trace say `bash: hit the deadline after 3 s`, and the killed row
+stays on the **shells** tab ending `tofu: hit the deadline after 3 s and
+was killed`.
 
 Every command is on the **shells** tab from its first second, with its
 output as it prints, and the chat shows its last line under the working
@@ -51,10 +54,20 @@ is, so `cd apps/desk && ... -Log target/build.log` reads
 Only a path written in the command counts, not one a script computes
 inside itself.
 
-A command that holds its own output says so in its first line instead of
-showing an empty row: `tofu: piped into tail -2, which prints when the
-command ends`, and the same for `head`, `sort`, `wc`, `grep`, `sed` and
-`awk`. Python is told not to buffer its output.
+A command whose pipeline ends in `grep`, `sed`, `awk`, `cut`, `tr` or
+`uniq` runs in a pseudo terminal (ConPTY on Windows), so the filter prints
+each line as it comes instead of in blocks: a loop printing once a second
+into `| grep` shows its lines at 0.2, 1.2, 2.2, 3.3 and 4.4 s, where on a
+pipe all five arrived at 5.6 s. Every other command stays on a pipe,
+because a terminal costs about a quarter of a millisecond a line and makes
+some tools draw progress bars. `tofu shells --json` says
+`"terminal": true` for a command that ran in one.
+
+A command that still holds its own output says so in its first line
+instead of showing an empty row: `tofu: piped into tail -2, which prints
+when the command ends`, and the same for `head`, `sort`, `wc`, and a
+`grep`, `sed` or `awk` in the middle of a pipeline. Python is told not to
+buffer its output.
 
 A command that prints a lot keeps its first and last 32 KiB while
 it runs, and says how many bytes it dropped from the middle. tofu probes the project's interpreters once, in

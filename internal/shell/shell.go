@@ -53,6 +53,8 @@ type Shell struct {
 	Started  time.Time  `json:"started"`
 	Ended    *time.Time `json:"ended,omitempty"`
 	ExitCode *int       `json:"exit_code,omitempty"`
+	Terminal bool       `json:"terminal,omitempty"`
+	Deadline int64      `json:"deadline_ms,omitempty"`
 }
 
 type live struct {
@@ -139,16 +141,22 @@ func (r *Registry) claim() (string, *os.File, error) {
 	}
 }
 
-func (r *Registry) spawn(cmd *exec.Cmd, logFile *os.File) (tree, <-chan error, error) {
+func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (tree, <-chan error, bool, error) {
+	if len(cmd.Args) == 3 && cmd.Args[1] == "-c" && endsInFilter(command) {
+		cmd.Env = append(cmd.Environ(), "PAGER=cat", "GIT_PAGER=cat")
+		if spawned, waited, err := startConsole(cmd, logFile, r.Lifetime); err == nil {
+			return spawned, waited, true, nil
+		}
+	}
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	spawned, err := startTree(cmd, r.Lifetime)
 	if err != nil {
 		_ = logFile.Close()
-		return tree{}, nil, err
+		return tree{}, nil, false, err
 	}
 	waited := make(chan error, 1)
 	go func() { waited <- cmd.Wait() }()
-	return spawned, waited, nil
+	return spawned, waited, false, nil
 }
 
 func (r *Registry) list(entry Shell, process *live) error {
@@ -178,11 +186,11 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	}
 	cmd := choice.Command(context.Background(), root, command)
 	started := time.Now()
-	spawned, waited, err := r.spawn(cmd, logFile)
+	spawned, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {
 		return Shell{}, err
 	}
-	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started}
+	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal}
 	return entry, r.keep(entry, &live{tree: spawned, finished: make(chan struct{})}, waited, logFile)
 }
 
@@ -227,12 +235,12 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		return Yielded{}, err
 	}
 	started := time.Now()
-	spawned, waited, err := r.spawn(cmd, logFile)
+	spawned, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {
 		_ = os.Remove(r.logPath(name))
 		return Yielded{}, err
 	}
-	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started}}
+	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal}}
 	process := &live{tree: spawned, finished: make(chan struct{})}
 	if err := r.list(got.Shell, process); err != nil {
 		_ = cmd.Process.Kill()
@@ -428,12 +436,15 @@ func (r *Registry) Tail(name string, lines int) (string, error) {
 		return "", err
 	}
 	own, _ := readEnd(r.logPath(name), time.Time{}, konst.ShellTailBytes)
-	parts := []string{heldBy(entry.Command), lastLines(own, lines)}
+	parts := []string{heldBy(entry.Command, entry.Terminal), lastLines(own, lines)}
 	for _, path := range namedLogs(entry.Dir, entry.Command) {
 		written, _ := readEnd(path, entry.Started, konst.ShellNamedLogBytes)
 		if named := lastLines(written, lines); named != "" {
 			parts = append(parts, path+", which the command writes to, ends:\n"+named)
 		}
+	}
+	if entry.Deadline > 0 {
+		parts = append(parts, "tofu: "+HitDeadline(time.Duration(entry.Deadline)*time.Millisecond)+" and was killed")
 	}
 	return strings.TrimLeft(strings.Join(slices.DeleteFunc(parts, func(part string) bool { return part == "" }), "\n\n"), "\n"), nil
 }
@@ -490,7 +501,7 @@ func (r *Registry) Follow(name string, cursor *Cursor) (string, error) {
 		cursor.logs = map[string]*followed{}
 	}
 	var out strings.Builder
-	if note := heldBy(entry.Command); !cursor.noted && note != "" {
+	if note := heldBy(entry.Command, entry.Terminal); !cursor.noted && note != "" {
 		out.WriteString(note + "\n")
 	}
 	cursor.noted = true
@@ -563,32 +574,6 @@ func wholeRunes(raw []byte) int {
 	return len(raw)
 }
 
-func heldBy(command string) string {
-	shielded := regexp.MustCompile(`"[^"]*"|'[^']*'`).ReplaceAllStringFunc(command, func(quoted string) string {
-		return strings.NewReplacer("|", " ", ";", " ", "&", " ").Replace(quoted)
-	})
-	for _, run := range regexp.MustCompile(`&&|\|\||;`).Split(shielded, -1) {
-		for _, stage := range strings.Split(run, "|")[1:] {
-			fields := strings.Fields(stage)
-			if len(fields) == 0 || slices.ContainsFunc(fields, func(flag string) bool {
-				return slices.Contains([]string{"-f", "-F", "--follow", "--line-buffered", "-u", "--unbuffered"}, flag)
-			}) {
-				continue
-			}
-			piped := "tofu: piped into " + strings.Join(fields[:min(2, len(fields))], " ")
-			switch strings.TrimSuffix(filepath.Base(fields[0]), ".exe") {
-			case "tail", "sort", "wc", "tac":
-				return piped + ", which prints when the command ends"
-			case "head":
-				return piped + ", which prints when it has its lines"
-			case "grep", "sed", "awk", "cut", "tr", "uniq":
-				return piped + ", which prints in blocks when not on a terminal"
-			}
-		}
-	}
-	return ""
-}
-
 func lastLines(raw []byte, lines int) string {
 	if strings.TrimSpace(string(raw)) == "" {
 		return ""
@@ -649,8 +634,18 @@ var ErrNotRunning = errors.New("shell: not running")
 
 var ErrTreeGone = errors.New("shell: the process tree is already gone")
 
-func (r *Registry) Kill(name string) error {
-	process, err := r.terminate(name)
+func HitDeadline(after time.Duration) string {
+	return "hit the deadline after " + strconv.FormatFloat(after.Seconds(), 'f', -1, 64) + " s"
+}
+
+func (r *Registry) Kill(name string) error { return r.stop(name, 0) }
+
+func (r *Registry) KillAtDeadline(name string, deadline time.Duration) error {
+	return r.stop(name, deadline)
+}
+
+func (r *Registry) stop(name string, deadline time.Duration) error {
+	process, err := r.terminate(name, deadline)
 	if err != nil {
 		return err
 	}
@@ -704,7 +699,7 @@ func (r *Registry) Owning(command string) []Shell {
 	return owned
 }
 
-func (r *Registry) terminate(name string) (*live, error) {
+func (r *Registry) terminate(name string, deadline time.Duration) (*live, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry, err := r.readLocked(name)
@@ -722,6 +717,6 @@ func (r *Registry) terminate(name string) (*live, error) {
 		return nil, err
 	}
 	ended := time.Now()
-	entry.State, entry.Ended = Killed, &ended
+	entry.State, entry.Ended, entry.Deadline = Killed, &ended, deadline.Milliseconds()
 	return process, r.writeLocked(entry)
 }

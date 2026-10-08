@@ -83,9 +83,20 @@ func TestOutputNamesTheProgramThatHoldsIt(t *testing.T) {
 		"echo 'x | tail -2'":                              "",
 		"powershell -File build.ps1 -Log b.log | tail -1": "tail -1",
 	} {
-		got := heldBy(command)
+		got := heldBy(command, false)
 		if want == "" && got != "" || want != "" && !strings.Contains(got, want) {
 			t.Errorf("%q: note %q, want one naming %q", command, got, want)
+		}
+	}
+	for command, want := range map[string]string{
+		"make | grep error":                    "",
+		"make | grep error | sed s/a/b/":       "grep error",
+		"make | grep -F error":                 "",
+		"cargo build 2>&1 | grep -F warn | wc": "grep -F",
+	} {
+		got := heldBy(command, true)
+		if want == "" && got != "" || want != "" && !strings.Contains(got, want) {
+			t.Errorf("on a terminal, %q: note %q, want one naming %q", command, got, want)
 		}
 	}
 	registry := startKept(t, t.TempDir(), "for i in 1 2 3; do echo line $i; sleep 1; done | tail -1")

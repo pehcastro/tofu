@@ -19,7 +19,9 @@ soon as the command ends, or after another 30 s, with its exit code and its
 last lines. A sub-agent that can run bash can always use `shell`.
 
 A bash call with `timeout_ms` of 30,000 or less is the exception: the
-command is killed at that limit, as before.
+command is killed there. Its result and the session trace say `bash: hit
+the deadline after 3 s`, and its killed row on the shells screen ends
+`tofu: hit the deadline after 3 s and was killed`.
 
 Every bash command is on the shells screen from its first second, not
 only once it moves at 30 s; one that ends inside the 30 s leaves the
@@ -28,13 +30,11 @@ each running command under the working line:
 
     [&orchestrator] running bash, 3s  |  fg 3
 
-Each row on the shells screen shows the command, who started it, its
-latest output and, once it ends, its exit code. The screen reads it four
-times a second while any shell runs, whether a turn runs or not, and
-stops reading when none does. A line reaches the shell's log as the
-command writes it; a running shell that printed nothing says
-`nothing printed yet`. Python is told not to buffer its output, so its
-lines arrive as they print too.
+Each row shows the command, who started it, its latest output and, once
+it ends, its exit code. The screen reads it four times a second while any
+shell runs, turn or no turn. A line reaches the log as the command writes
+it; a running shell that printed nothing says `nothing printed yet`.
+Python is told not to buffer its output.
 
 When the command names its own log file, such as `-Log target/build.log`,
 `> build.log` or `tee build.log`, the row also shows the end of that file,
@@ -44,10 +44,19 @@ is read from where the command is when it writes it, so
 `apps/desk/target/build.log`. Only a path written in the command counts,
 and a file older than the shell, left by an earlier run, is not shown.
 
-Some commands hold their own output back, and the row says so in its
-first line rather than staying empty: `| tail -2`, `| sort` and `| wc`
-print when the command ends, `| head` when it has its lines, and `| grep`,
-`| sed` or `| awk` print in blocks when they do not write to a terminal:
+A pipeline ending in `| grep`, `| sed`, `| awk`, `| cut`, `| tr` or
+`| uniq` runs in a pseudo terminal (ConPTY on Windows), since those print
+in blocks to a pipe: a loop printing once a second into `| grep` shows
+its lines at 0.2, 1.2, 2.2, 3.3 and 4.4 s, against all five at 5.6 s on a
+pipe. Every other command stays on a pipe, because a terminal costs about
+a quarter of a millisecond a line and makes some tools draw progress
+bars. Exit code and log are the same either way; `tofu shells --json`
+says `"terminal": true` for one that ran in a terminal.
+
+Some commands still hold their output back, and the row's first line says
+so: `| tail -2`, `| sort` and `| wc` print when the command ends, `| head`
+when it has its lines, and a mid-pipeline filter, such as the `grep` in
+`| grep x | sed y`, in blocks:
 
     tofu: piped into tail -2, which prints when the command ends
 
@@ -93,9 +102,8 @@ which also says `ran 1m 1s, last output 2s ago`:
 
     tofu shells log bash-3
 
-A build or test command that can move to a background shell runs without
-rtk, because rtk prints nothing until the command exits; the call's proxy
-note says so.
+A build or test that can move to a background shell runs without rtk,
+which prints nothing until exit; the call's proxy note says so.
 
 In the app, alt+4 opens the shells screen. `tofu session trace` shows the
 bash call that moved a command to a shell, with the shell's name in its
@@ -108,5 +116,5 @@ Turn `persistentRegistry` back off with:
 
     tofu settings set persistentRegistry false
 
-A model that waited on a shell and gave up leaves it running; the shells
-screen still lists it until it ends or is stopped.
+A model that gave up waiting on a shell leaves it running and listed
+until it ends or is stopped.

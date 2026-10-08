@@ -37,10 +37,33 @@ func newBash(t *testing.T) *BashTool {
 	return tool
 }
 
-func TestBashTimeoutKeepsTheOutputItHad(t *testing.T) {
-	result := runBash(t, newBash(t), map[string]any{"command": "echo partial; sleep 5", "timeout_ms": 2000})
-	if !strings.Contains(result.Content, "partial") || result.Outcome == ResultSucceeded || !strings.Contains(result.FailureText, "2000 ms") {
-		t.Fatalf("outcome %v, content %q, failure %q", result.Outcome, result.Content, result.FailureText)
+func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
+	alone := runBash(t, newBash(t), map[string]any{"command": "echo partial; sleep 5", "timeout_ms": 1500})
+	if !strings.Contains(alone.Content, "partial") || alone.Outcome != ResultFailed || !strings.HasPrefix(alone.FailureText, "bash: hit the deadline after 1.5 s") {
+		t.Errorf("no registry: outcome %v, content %q, failure %q", alone.Outcome, alone.Content, alone.FailureText)
+	}
+	tool := newBash(t)
+	registry := shell.OpenAt(t.TempDir())
+	ctx := WithShellRegistry(context.Background(), registry)
+	raw, _ := json.Marshal(map[string]any{"command": "echo partial; sleep 30", "timeout_ms": 2000})
+	listed, err := tool.Run(ctx, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(listed.Content, "partial") || listed.Outcome != ResultFailed || !strings.HasPrefix(listed.FailureText, "bash: hit the deadline after 2 s") {
+		t.Errorf("registry: outcome %v, content %q, failure %q", listed.Outcome, listed.Content, listed.FailureText)
+	}
+	shells, _ := registry.List()
+	if len(shells) != 1 || shells[0].State != shell.Killed {
+		t.Fatalf("the shells screen lists %+v, want the one killed at its deadline", shells)
+	}
+	if tail, _ := registry.Tail(shells[0].Name, shell.DefaultTail); !strings.HasSuffix(tail, "tofu: hit the deadline after 2 s and was killed") {
+		t.Errorf("the shells screen reads %q", tail)
+	}
+	quick, _ := json.Marshal(map[string]any{"command": "echo quick", "timeout_ms": 5000})
+	ended, err := tool.Run(ctx, quick)
+	if after, _ := registry.List(); err != nil || ended.Content != "quick\n" || ended.Outcome != ResultSucceeded || len(after) != 1 {
+		t.Errorf("a call inside its deadline came back %q (%v), and left %d rows where 1 was", ended.Content, err, len(after))
 	}
 }
 

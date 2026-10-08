@@ -19,7 +19,6 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
-	"tofu/internal/search"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 )
@@ -404,12 +403,25 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		konst.BackgroundYieldMillis)), nil
 }
 
-func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string) (Result, error) {
-	got, err := registry.YieldReady(ctx, t.command(context.Background(), command), command, shellOwnerFrom(ctx), shell.Wait{Within: t.softLimit})
+func deadlineResult(command, output string, deadline time.Duration) Result {
+	killed := fmt.Sprintf("bash: %s: %q was killed at its deadline and its output until then is above. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
+		"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
+		shell.HitDeadline(deadline), command, konst.BashMaxDeadlineMillis)
+	return Result{Content: output + "\n" + killed, Command: command, Outcome: ResultFailed, FailureText: killed}
+}
+
+func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (Result, error) {
+	got, err := registry.YieldReady(ctx, t.command(context.Background(), command), command, shellOwnerFrom(ctx), shell.Wait{Within: min(deadline, t.softLimit)})
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
 	ran := got.Shell
+	if got.Ready == shell.ReadyWaited && deadline <= t.softLimit {
+		if err := registry.KillAtDeadline(ran.Name, deadline); err != nil && !errors.Is(err, shell.ErrNotRunning) {
+			return Result{}, fmt.Errorf("bash: %w", err)
+		}
+		return deadlineResult(command, corrected+got.Output, deadline), nil
+	}
 	switch got.Ready {
 	case shell.ReadyExited:
 		output := &heldOutput{}
@@ -542,14 +554,14 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		return t.runBackground(ctx, args)
 	}
 
-	deadline, corrected := bashDeadline(args.TimeoutMS)
-	if registry := ShellRegistryFrom(ctx); registry != nil && time.Duration(deadline)*time.Millisecond > t.softLimit {
-		return t.runOrMove(ctx, registry, args.Command, corrected)
+	millis, corrected := bashDeadline(args.TimeoutMS)
+	deadline := time.Duration(millis) * time.Millisecond
+	if registry := ShellRegistryFrom(ctx); registry != nil {
+		return t.runOrMove(ctx, registry, args.Command, corrected, deadline)
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(deadline)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
-	started := time.Now()
 	cmd := t.command(ctx, args.Command)
 	output := &heldOutput{}
 	cmd.Stdout, cmd.Stderr = output, output
@@ -563,11 +575,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	note := dropped + corrected
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		killed := "bash: " + search.Note(search.Truncated, fmt.Sprintf(
-			"%q ran %d ms and was killed at its deadline of %d ms: its output until then is above. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
-				"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
-			args.Command, time.Since(started).Milliseconds(), deadline, konst.BashMaxDeadlineMillis))
-		return Result{Content: note + text + "\n" + killed, Command: args.Command, Outcome: ResultFailed, FailureText: killed}, nil
+		return deadlineResult(args.Command, note+text, deadline), nil
 	}
 	if ctx.Err() != nil {
 		return Result{
