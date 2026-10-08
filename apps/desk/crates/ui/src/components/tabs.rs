@@ -1163,35 +1163,44 @@ impl RenderOnce for TabStrip {
                     .when(ringed && ix == active, |tab| {
                         tab.shadow(vec![ring(focus_ring)])
                     });
-                    pressed(item, backdrop).into_any_element()
+                    pressed(item, backdrop).occlude().into_any_element()
                 };
                 let more = (hidden > 0).then(|| {
                     overflow(
                         more_tab(&id, hidden, &theme)
+                            .occlude()
                             .h(px(TAB))
                             .rounded(px(RADIUS_ROW))
                             .text_size(px(FONT_BODY)),
                         cx,
                     )
                 });
-                let children = visible
-                    .iter()
-                    .filter_map(|ix| Some((*ix, tabs.get(*ix)?)))
-                    .map(|(ix, tab)| header(ix, tab, false))
-                    .chain(more)
-                    .chain([
-                        new_button.unwrap_or_else(|| new_tab(&id, &theme, &on).into_any_element()),
-                        separator(&theme)
-                            .when(screens.is_empty(), |line| line.invisible())
-                            .into_any_element(),
-                    ])
-                    .chain(
-                        screens
-                            .iter()
-                            .enumerate()
-                            .map(|(ix, tab)| header(tabs.len() + ix, tab, true)),
-                    )
-                    .collect::<Vec<AnyElement>>();
+                let children =
+                    visible
+                        .iter()
+                        .filter_map(|ix| Some((*ix, tabs.get(*ix)?)))
+                        .map(|(ix, tab)| header(ix, tab, false))
+                        .chain(more)
+                        .chain([
+                            div()
+                                .flex()
+                                .flex_none()
+                                .occlude()
+                                .child(new_button.unwrap_or_else(|| {
+                                    new_tab(&id, &theme, &on).into_any_element()
+                                }))
+                                .into_any_element(),
+                            separator(&theme)
+                                .when(screens.is_empty(), |line| line.invisible())
+                                .into_any_element(),
+                        ])
+                        .chain(
+                            screens
+                                .iter()
+                                .enumerate()
+                                .map(|(ix, tab)| header(tabs.len() + ix, tab, true)),
+                        )
+                        .collect::<Vec<AnyElement>>();
                 let frame = div()
                     .flex()
                     .items_center()

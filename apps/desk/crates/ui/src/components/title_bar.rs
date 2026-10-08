@@ -414,7 +414,6 @@ impl RenderOnce for TitleBar {
                 .id("title-tabs")
                 .flex_1()
                 .min_w_0()
-                .occlude()
                 .child(tabs)
                 .into_any_element(),
             None => control("new-workspace", Control::NewWorkspace.label(), &theme)
