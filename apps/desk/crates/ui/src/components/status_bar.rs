@@ -1,13 +1,16 @@
 use std::rc::Rc;
 
-use gpui::{App, ClickEvent, Div, ElementId, SharedString, Stateful, Window, div, prelude::*, px};
+use gpui::{
+    AnyView, App, ClickEvent, Div, ElementId, FontWeight, SharedString, Stateful, Window, div,
+    prelude::*, px,
+};
 
 use crate::component::{icon, status_item};
 use crate::components::paint::ink;
 use crate::components::size::T3;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
-use crate::metrics::{ICON_SMALL, STATUS_BAR_HEIGHT, TEXT_SMALL};
+use crate::metrics::{ICON_SMALL, STATUS_BAR_HEIGHT, STATUS_ITEM_HEIGHT, TEXT_SMALL};
 use crate::theme::{ColorToken, Theme};
 
 const CTX_BAR_WIDTH: f32 = 40.0;
@@ -63,6 +66,7 @@ pub struct StatusBar {
     id: ElementId,
     status: Status,
     on_pick: OnPick,
+    cron_menu: Option<AnyView>,
 }
 
 impl StatusBar {
@@ -75,7 +79,13 @@ impl StatusBar {
             id: id.into(),
             status,
             on_pick: Rc::new(on_pick),
+            cron_menu: None,
         }
+    }
+
+    pub fn cron_menu(mut self, menu: Option<AnyView>) -> Self {
+        self.cron_menu = menu;
+        self
     }
 
     fn item(&self, pick: StatusPick, label: &'static str, theme: &Theme) -> Stateful<Div> {
@@ -83,6 +93,23 @@ impl StatusBar {
         status_item(label, label, theme)
             .on_click(move |_: &ClickEvent, window, cx| on_pick(&pick, window, cx))
     }
+}
+
+pub fn cron_trigger(count: usize, theme: &Theme) -> Stateful<Div> {
+    status_item("Cron", "Cron", theme).child(format!("cron {count}"))
+}
+
+fn inert_cron(count: usize, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .h(px(STATUS_ITEM_HEIGHT))
+        .px_2()
+        .text_size(px(TEXT_SMALL))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme.color(ColorToken::TextStatus))
+        .child(format!("cron {count}"))
 }
 
 fn dim(text: impl Into<SharedString>, theme: &Theme) -> Div {
@@ -151,9 +178,10 @@ impl RenderOnce for StatusBar {
         let classifier = self
             .item(StatusPick::Classifier, "Classifier", &theme)
             .child(format!("classifier {}", status.classifier));
-        let cron = self
-            .item(StatusPick::Cron, "Cron", &theme)
-            .child(format!("cron {}", status.cron));
+        let cron = match self.cron_menu {
+            Some(menu) => menu.into_any_element(),
+            None => inert_cron(status.cron, &theme).into_any_element(),
+        };
         div()
             .id(self.id.clone())
             .w_full()

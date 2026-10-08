@@ -3,12 +3,14 @@ use std::collections::BTreeMap;
 use super::ModelError;
 use crate::protocol::{
     AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, Notification,
-    PlanStep, QuotaWindow, RequestId, SessionForked, TurnCompletedStatus, UsageUpdated,
+    Origin, OriginKind, PlanStep, QuotaWindow, RequestId, SessionForked, TurnCompletedStatus,
+    UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Role {
     User,
+    Cron { job: String, schedule: String },
     Assistant,
     Thinking,
     Steer,
@@ -28,6 +30,7 @@ pub struct Message {
 #[derive(Debug, Clone)]
 pub struct Turn {
     pub task: String,
+    pub origin: Origin,
     pub started_at: String,
     pub status: Option<TurnCompletedStatus>,
     pub worked_for_ms: i64,
@@ -105,6 +108,20 @@ fn known(state: &AgentState) -> Result<AgentState, ModelError> {
     }
 }
 
+fn speaker(origin: &Origin) -> Result<Role, ModelError> {
+    match &origin.kind {
+        OriginKind::Cron => Ok(Role::Cron {
+            job: origin.job.clone().unwrap_or_default(),
+            schedule: origin.schedule.clone().unwrap_or_default(),
+        }),
+        OriginKind::Person | OriginKind::Agent | OriginKind::Tofu => Ok(Role::User),
+        OriginKind::Unknown(value) => Err(ModelError::UnknownValue {
+            field: "origin kind",
+            value: value.clone(),
+        }),
+    }
+}
+
 fn orphan(event: &'static str, id: &str) -> ModelError {
     ModelError::Orphan {
         event,
@@ -147,10 +164,12 @@ impl Session {
                 self.root.clone_from(&e.root);
             }
             N::TurnStarted(e) => {
+                speaker(&e.origin)?;
                 self.turns.insert(
                     e.turn.clone(),
                     Turn {
                         task: e.task.clone(),
+                        origin: e.origin.clone(),
                         started_at: e.started_at.clone(),
                         status: None,
                         worked_for_ms: 0,
@@ -171,7 +190,10 @@ impl Session {
                 turn.status = Some(e.status.clone());
                 turn.worked_for_ms = e.worked_for_ms;
             }
-            N::MessageUser(e) => self.say(&e.turn, &e.agent, Role::User, &e.text, true),
+            N::MessageUser(e) => {
+                let role = speaker(&e.origin)?;
+                self.say(&e.turn, &e.agent, role, &e.text, true);
+            }
             N::TurnSteered(e) => self.say(&e.turn, &e.agent, Role::Steer, &e.text, true),
             N::Note(e) => self.say(&e.turn, &e.agent, Role::Note, &e.text, true),
             N::Failure(e) => self.say(&e.turn, &e.agent, Role::Failure, &e.text, true),

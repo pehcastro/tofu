@@ -10,8 +10,8 @@ use desk_ui::components::ask::{
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::chat::{
     self, Agent, AgentMark, Block, Call, FIND_RESERVE, Hit, Marks, Span, Verdict, agent_list,
-    agent_row, agents, calls, command, fail, find_hits, folding, foot, hit_marks, lead, note,
-    queued, tools, you,
+    agent_row, agents, calls, command, cron_row, fail, find_hits, folding, foot, hit_marks, lead,
+    note, queued, tools, you,
 };
 use desk_ui::components::chip::kbd;
 use desk_ui::components::find::FindBar;
@@ -69,6 +69,11 @@ enum Row {
         agents: Vec<Agent>,
     },
     Agent(Agent),
+    Cron {
+        job: &'static str,
+        schedule: &'static str,
+        prompt: &'static str,
+    },
     Command {
         busy: bool,
         text: &'static str,
@@ -97,6 +102,7 @@ impl Row {
             | Row::Tools { .. }
             | Row::Agents { .. }
             | Row::Agent(_)
+            | Row::Cron { .. }
             | Row::Command { .. }
             | Row::Fail { .. }
             | Row::Note(_)
@@ -285,6 +291,12 @@ fn conversation() -> Vec<Row> {
             )]),
         ),
         Row::Foot("cooked for 1m 24s · waited 0s"),
+        Row::Cron {
+            job: "c1",
+            schedule: "every 30m",
+            prompt: "say hi",
+        },
+        said("14:40", spoke(vec![plain("hi")])),
         asked("14:41", "push it"),
         Row::Command {
             busy: false,
@@ -824,6 +836,11 @@ fn paint(
             book,
         ),
         Some(Row::Agent(line)) => agent_row(id, line, theme),
+        Some(Row::Cron {
+            job,
+            schedule,
+            prompt,
+        }) => cron_row(*job, *schedule, *prompt, theme),
         Some(Row::Command {
             busy,
             text,

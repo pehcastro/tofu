@@ -513,6 +513,28 @@ pub fn agent_row(id: impl Into<ElementId>, line_of: &Agent, theme: &Theme) -> Di
         )
 }
 
+pub fn cron_row(
+    job: impl Into<SharedString>,
+    schedule: impl Into<SharedString>,
+    prompt: impl Into<SharedString>,
+    theme: &Theme,
+) -> Div {
+    row(theme)
+        .text_color(ink(theme, HOVER_TEXT))
+        .child(
+            div()
+                .flex_none()
+                .w(px(MARK))
+                .flex()
+                .justify_center()
+                .text_color(ink(theme, T3))
+                .child("↻"),
+        )
+        .child(agent(job, theme))
+        .child(dim(schedule, theme))
+        .child(line(prompt).text_color(ink(theme, T3)))
+}
+
 pub fn agents(
     id: impl Into<ElementId> + Clone,
     count: impl Into<SharedString>,

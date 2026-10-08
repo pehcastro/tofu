@@ -10,9 +10,10 @@ use std::{env, iter, slice, thread};
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
-    ApprovalAnswer, ApprovalDecision, ApprovalRequest, InitializeResult, NoParams, Notification,
-    PROTOCOL, Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, SessionRenameParams,
-    ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request,
+    ApprovalAnswer, ApprovalDecision, ApprovalRequest, CronCommandParams, InitializeResult,
+    NoParams, Notification, PROTOCOL, Request, RequestId, SessionOpenParams,
+    SessionOpenParamsAsking, SessionRenameParams, ShellParams, TurnCompleted, TurnParams,
+    TurnSendParams, TurnSteerParams, request,
 };
 use desk_core::sessions::{SessionRow, session_rows};
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
@@ -253,6 +254,14 @@ impl Chat {
                 store.cron_answered(&session, state);
                 cx.notify();
             });
+        });
+    }
+
+    pub fn cron_command(&mut self, line: String, cx: &mut Context<Self>) {
+        eprintln!("desk: cron.command {line}");
+        let params = CronCommandParams { line };
+        self.call::<request::CronCommand>(&params, cx, |_, said, _| {
+            eprintln!("desk: cron.command answered: {}", said.note);
         });
     }
 

@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use desk_core::model::{Role, Session};
-use desk_core::protocol::AgentState;
+use desk_core::protocol::{AgentState, Origin, OriginKind};
 use desk_ui::components::chat::{
-    self, Agent, AgentMark, Block, Marks, Span, Verdict, agent_row, command, fail, foot, lead,
-    note, you,
+    self, Agent, AgentMark, Block, Marks, Span, Verdict, agent_row, command, cron_row, fail, foot,
+    lead, note, you,
 };
 use desk_ui::theme::Theme;
 use gpui::{AnyElement, IntoElement, SharedString};
@@ -41,6 +41,11 @@ pub enum Item {
         text: SharedString,
     },
     Lead(Lead),
+    Cron {
+        job: SharedString,
+        schedule: SharedString,
+        prompt: SharedString,
+    },
     Tool {
         busy: bool,
         text: SharedString,
@@ -72,8 +77,9 @@ pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
             let message = session.messages.get(*at).filter(|m| m.agent.is_none())?;
             let text = SharedString::from(message.text.clone());
             let time = clock(session, &message.turn);
-            match message.role {
+            match &message.role {
                 Role::User | Role::Steer => Some(Item::You { time, text }),
+                Role::Cron { job, schedule } => Some(cron(session, job, schedule, &message.text)),
                 Role::Assistant if !text.is_empty() => Some(Item::Lead(Lead {
                     blocks: Rc::new(blocks(&text)),
                     time,
@@ -85,10 +91,17 @@ pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
             }
         }
         Entry::Task(turn) => {
-            let task = &session.turns.get(turn)?.task;
-            (!task.is_empty()).then(|| Item::You {
-                time: clock(session, turn),
-                text: task.clone().into(),
+            let started = session.turns.get(turn)?;
+            let task = &started.task;
+            if task.is_empty() {
+                return None;
+            }
+            Some(match speaker(&started.origin) {
+                Some((job, schedule)) => cron(session, job, schedule, task),
+                None => Item::You {
+                    time: clock(session, turn),
+                    text: task.clone().into(),
+                },
             })
         }
         Entry::Tool(id) => {
@@ -123,6 +136,29 @@ pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
             };
             Some(Item::Foot(format!("cooked for {took}").into()))
         }
+    }
+}
+
+fn speaker(origin: &Origin) -> Option<(&str, &str)> {
+    match origin.kind {
+        OriginKind::Cron => Some((
+            origin.job.as_deref().unwrap_or_default(),
+            origin.schedule.as_deref().unwrap_or_default(),
+        )),
+        OriginKind::Person | OriginKind::Agent | OriginKind::Tofu | OriginKind::Unknown(_) => None,
+    }
+}
+
+fn cron(session: &Session, job: &str, schedule: &str, said: &str) -> Item {
+    let prompt = session
+        .cron
+        .as_ref()
+        .and_then(|cron| cron.jobs.iter().find(|known| known.id == job))
+        .map_or(said, |known| known.prompt.as_str());
+    Item::Cron {
+        job: job.to_owned().into(),
+        schedule: schedule.to_owned().into(),
+        prompt: prompt.to_owned().into(),
     }
 }
 
@@ -188,7 +224,8 @@ pub fn pieces(item: &Item) -> Vec<String> {
     match item {
         Item::You { text, .. } => vec![text.to_string()],
         Item::Lead(said) => chat::pieces(&said.blocks),
-        Item::Tool { .. }
+        Item::Cron { .. }
+        | Item::Tool { .. }
         | Item::Agent { .. }
         | Item::Note(_)
         | Item::Failure(_)
@@ -209,6 +246,11 @@ pub fn render(item: &Item, at: usize, marks: &[Marks], theme: &Theme) -> AnyElem
         )
         .into_any_element(),
         Item::Lead(said) => lead(said.time.clone(), &said.blocks, marks, theme).into_any_element(),
+        Item::Cron {
+            job,
+            schedule,
+            prompt,
+        } => cron_row(job.clone(), schedule.clone(), prompt.clone(), theme).into_any_element(),
         Item::Tool {
             busy,
             text,

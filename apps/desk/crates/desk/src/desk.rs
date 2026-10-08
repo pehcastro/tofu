@@ -10,12 +10,16 @@ use crate::title_bar::title_bar;
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
+use desk_core::protocol::CronJob;
+#[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Key, SHORTCUTS};
 use desk_ui::components::card::{inner_card, outer_card};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
 use desk_ui::components::overlay::toast;
+#[cfg(feature = "screen-work")]
+use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
 use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
@@ -25,7 +29,7 @@ use desk_ui::components::sidebar::SessionAt;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
 use desk_ui::components::status_bar::Status;
 #[cfg(feature = "screen-work")]
-use desk_ui::components::status_bar::{Branch, ContextUse, Quota};
+use desk_ui::components::status_bar::{Branch, ContextUse, Quota, cron_trigger};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tabs::{Tab, TabMark};
 use desk_ui::live::ActiveTheme;
@@ -67,6 +71,29 @@ const OPEN_FOLDER_ID: &str = "project.open";
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
 const LIVE_SCREENS: [&str; 1] = ["theme"];
+#[cfg(feature = "screen-work")]
+const CRON_PROMPT_CHARS: usize = 32;
+
+#[cfg(feature = "screen-work")]
+fn cron_button(cx: &mut App) -> Entity<MenuButton> {
+    let button = MenuButton::new("Cron".into(), Vec::new(), cx);
+    button.update(cx, |button, _| {
+        button.placement(Placement {
+            side: Side::Top,
+            align: Align::End,
+            ..Placement::below()
+        });
+    });
+    button
+}
+
+#[cfg(feature = "screen-work")]
+fn shortened(prompt: &str) -> String {
+    match prompt.char_indices().nth(CRON_PROMPT_CHARS) {
+        Some((cut, _)) => format!("{}…", prompt.get(..cut).unwrap_or(prompt)),
+        None => prompt.to_owned(),
+    }
+}
 
 pub type Open = fn(Option<&str>, &mut Window, &mut App) -> Result<AnyView, String>;
 
@@ -99,6 +126,8 @@ pub struct Desk {
     projects: Projects,
     #[cfg(feature = "screen-work")]
     tabbed: Vec<&'static str>,
+    #[cfg(feature = "screen-work")]
+    cron: Entity<MenuButton>,
 }
 
 #[cfg(feature = "screen-work")]
@@ -243,6 +272,8 @@ impl Desk {
             projects: Projects::default(),
             #[cfg(feature = "screen-work")]
             tabbed: Vec::new(),
+            #[cfg(feature = "screen-work")]
+            cron: cron_button(cx),
         };
         #[cfg(feature = "screen-work")]
         if let Body::Work(work) = &desk.shown.body {
@@ -537,6 +568,11 @@ impl Desk {
     }
 
     #[cfg(not(feature = "screen-work"))]
+    fn cron_menu(&self, _: usize, _: &mut Context<Self>) -> Option<AnyView> {
+        None
+    }
+
+    #[cfg(not(feature = "screen-work"))]
     fn switch_sheet(&self, _: &mut Context<Self>) -> Option<AnyElement> {
         None
     }
@@ -645,6 +681,67 @@ impl Desk {
                 .nth(ix)
                 .map(|row| row.id.clone()),
         }
+    }
+
+    fn cron_menu(&self, live: usize, cx: &mut Context<Self>) -> Option<AnyView> {
+        let chat = self.work()?.read(cx).chat().clone();
+        let jobs: Vec<CronJob> = {
+            let chat = chat.read(cx);
+            let session = chat.store().read(cx).sessions.get(chat.open_id()?)?;
+            session
+                .cron
+                .as_ref()?
+                .jobs
+                .iter()
+                .filter(|job| job.ended.is_none())
+                .cloned()
+                .collect()
+        };
+        if jobs.is_empty() {
+            return None;
+        }
+        let mut items = Vec::new();
+        let mut lines = Vec::new();
+        for job in &jobs {
+            let toggle = if job.paused { "resume" } else { "pause" };
+            items.push(MenuItem::Submenu {
+                label: format!("{} {} {}", job.id, job.schedule, shortened(&job.prompt)).into(),
+                icon: None,
+                items: vec![
+                    MenuItem::action(if job.paused { "Resume" } else { "Pause" }),
+                    MenuItem::action("Delete"),
+                ],
+            });
+            lines.extend([
+                Vec::new(),
+                vec![format!("/cron {toggle} {}", job.id)],
+                vec![format!("/cron delete {}", job.id)],
+            ]);
+        }
+        items.extend([MenuItem::Separator, MenuItem::action("Stop all")]);
+        lines.extend([
+            Vec::new(),
+            jobs.iter()
+                .map(|job| format!("/cron delete {}", job.id))
+                .collect(),
+        ]);
+        let chat = chat.downgrade();
+        self.cron.update(cx, |button, cx| {
+            button.items(items, cx);
+            button.trigger(move |_, theme| cron_trigger(live, theme));
+            button.on_pick(move |at, _, cx| {
+                let sent = lines.get(*at).cloned().unwrap_or_default();
+                let updated = chat.update(cx, |chat, cx| {
+                    for line in sent {
+                        chat.cron_command(line, cx);
+                    }
+                });
+                if let Err(error) = updated {
+                    eprintln!("desk: cron menu lost its chat: {error}");
+                }
+            });
+        });
+        Some(self.cron.clone().into())
     }
 
     fn status(&self, cx: &App) -> Status {
@@ -947,6 +1044,7 @@ impl Render for Desk {
         let (tabs, content) = self.content(&theme, cx);
         let sheet = self.switch_sheet(cx);
         let status = self.status(cx);
+        let cron_menu = self.cron_menu(status.cron, cx);
         #[cfg(feature = "screen-work")]
         let menu = self.projects.menu.clone();
         #[cfg(not(feature = "screen-work"))]
@@ -992,7 +1090,7 @@ impl Render for Desk {
                             .child(content),
                     ),
             )
-            .child(status_bar(&problems, status, cx))
+            .child(status_bar(&problems, status, cx).cron_menu(cron_menu))
             .child(self.palette.clone())
             .children(menu)
             .children(sheet)
