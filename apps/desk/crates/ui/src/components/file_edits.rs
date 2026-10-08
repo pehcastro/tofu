@@ -25,6 +25,8 @@ const HISTORY_GAP: f32 = 10.0;
 const EDIT_GAP: f32 = 6.0;
 const HISTORY_HEAD_GAP: f32 = 3.0;
 const COMMIT_PAD_Y: f32 = 10.0;
+const DRAWER_PAD_X: f32 = 16.0;
+const DRAWER_PAD_BOTTOM: f32 = 14.0;
 
 #[derive(Clone)]
 pub struct EditedFile {
@@ -274,6 +276,8 @@ pub fn file_history(id: impl Into<ElementId>, file: &EditedFile, theme: &Theme) 
         .flex()
         .flex_col()
         .gap(px(HISTORY_GAP))
+        .px(px(DRAWER_PAD_X))
+        .pb(px(DRAWER_PAD_BOTTOM))
         .child(head)
         .children(edits)
         .into_any_element()
