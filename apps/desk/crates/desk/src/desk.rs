@@ -1,6 +1,6 @@
 use crate::modules::chat::Find;
 #[cfg(feature = "screen-work")]
-use crate::modules::chat::Listed;
+use crate::modules::chat::{Listed, Touched};
 #[cfg(feature = "screen-work")]
 use crate::project::{self, Head};
 #[cfg(feature = "screen-work")]
@@ -19,6 +19,9 @@ use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
+use desk_ui::components::status_bar::Status;
+#[cfg(feature = "screen-work")]
+use desk_ui::components::status_bar::{Branch, ContextUse, Quota};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tabs::{Tab, TabMark};
 use desk_ui::live::ActiveTheme;
@@ -80,7 +83,6 @@ struct Shown {
 
 pub struct Desk {
     sidebar_open: bool,
-    account: Option<SharedString>,
     toast: Option<Toast>,
     screens: Vec<Screen>,
     shown: Shown,
@@ -101,7 +103,7 @@ struct Projects {
     menu: Option<Entity<Palette>>,
     switching: Option<PathBuf>,
     confirming: bool,
-    _listed: Option<gpui::Subscription>,
+    _watch: Vec<gpui::Subscription>,
     _head: Option<Task<()>>,
 }
 
@@ -161,12 +163,12 @@ impl Shown {
     }
 }
 
-fn account_letter() -> Option<SharedString> {
-    let name = std::env::var("USERNAME")
-        .or_else(|_| std::env::var("USER"))
-        .ok()?;
-    let first = name.chars().next()?;
-    Some(first.to_lowercase().collect::<String>().into())
+#[cfg(feature = "screen-work")]
+fn thousands(tokens: i64) -> String {
+    match tokens {
+        ..1000 => tokens.to_string(),
+        _ => format!("{}k", tokens / 1000),
+    }
 }
 
 fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
@@ -214,7 +216,6 @@ impl Desk {
         )]
         let mut desk = Desk {
             sidebar_open: true,
-            account: account_letter(),
             toast: None,
             screens,
             shown: Shown::new(name, view),
@@ -491,6 +492,11 @@ impl Desk {
     }
 
     #[cfg(not(feature = "screen-work"))]
+    fn status(&self, _: &App) -> Status {
+        Status::default()
+    }
+
+    #[cfg(not(feature = "screen-work"))]
     fn switch_sheet(&self, _: &mut Context<Self>) -> Option<AnyElement> {
         None
     }
@@ -510,22 +516,35 @@ impl Desk {
     fn adopt(&mut self, folder: PathBuf, work: &Entity<Work>, cx: &mut Context<Self>) {
         eprintln!("desk: project {}", folder.display());
         let chat = work.read(cx).chat().clone();
-        self.projects._listed = Some(cx.subscribe(&chat, |_, _, _: &Listed, cx| cx.notify()));
+        let store = chat.read(cx).store().clone();
+        self.projects._watch = vec![
+            cx.subscribe(&chat, |_, _, _: &Listed, cx| cx.notify()),
+            cx.subscribe(&chat, |desk, _, _: &Touched, cx| desk.reread_head(cx)),
+            cx.observe(&store, |_, _, cx| cx.notify()),
+        ];
         match project::remember(&folder) {
             Ok(recents) => self.projects.recents = recents,
             Err(error) => eprintln!("desk: recents: {error}"),
         }
-        self.projects.head = Some(Head {
-            folder: folder.clone(),
-            branch: String::new(),
-            changed: 0,
-        });
+        self.projects.head = Some(Head::empty(folder));
+        self.reread_head(cx);
+        cx.notify();
+    }
+
+    fn reread_head(&mut self, cx: &mut Context<Self>) {
+        let Some(folder) = self.projects.head.as_ref().map(|head| head.folder.clone()) else {
+            return;
+        };
         self.projects._head = Some(cx.spawn(async move |this, cx| {
             let head = cx
                 .background_executor()
                 .spawn(async move { project::head(folder) })
                 .await;
             this.update(cx, |desk, cx| {
+                eprintln!(
+                    "desk: git {} ahead {} changed {}",
+                    head.branch, head.ahead, head.changed
+                );
                 desk.projects.head = Some(head);
                 cx.notify();
             })
@@ -538,6 +557,57 @@ impl Desk {
         let head = self.projects.head.as_ref()?;
         let chat = self.work()?.read(cx).chat().read(cx);
         Some(project::sidebar(head, chat.rows(), chat.open_id()))
+    }
+
+    fn status(&self, cx: &App) -> Status {
+        let branch = self
+            .projects
+            .head
+            .as_ref()
+            .filter(|head| !head.branch.is_empty())
+            .map(|head| Branch {
+                name: head.branch.clone().into(),
+                ahead: usize::try_from(head.ahead).unwrap_or(usize::MAX),
+            });
+        let chat = self.work().map(|work| work.read(cx).chat().read(cx));
+        let open = chat.and_then(|chat| {
+            let id = chat.open_id()?;
+            Some((id, chat.store().read(cx).sessions.get(id)?))
+        });
+        let Some((id, session)) = open else {
+            return Status {
+                branch,
+                ..Status::default()
+            };
+        };
+        let name = if session.name.is_empty() {
+            id
+        } else {
+            &session.name
+        };
+        Status {
+            branch,
+            session: Some(name.to_owned().into()),
+            context: session.context.map(|(used, budget)| ContextUse {
+                tokens: format!("{} / {}", thousands(used), thousands(budget)).into(),
+                share: if budget > 0 {
+                    used as f32 / budget as f32
+                } else {
+                    0.0
+                },
+            }),
+            quota: session.quota.first().map(|window| Quota {
+                account: window.account.clone().into(),
+                window: window.window.clone().into(),
+                percent: window.percent.clamp(0.0, 100.0).round() as u8,
+            }),
+            classifier: session.decisions.len(),
+            cron: session
+                .cron
+                .as_ref()
+                .map_or(0, |cron| usize::try_from(cron.live).unwrap_or(0)),
+            problem: None,
+        }
     }
 
     fn pick_from_sidebar(
@@ -740,6 +810,7 @@ impl Render for Desk {
         });
         let (tabs, content) = self.content(&theme, cx);
         let sheet = self.switch_sheet(cx);
+        let status = self.status(cx);
         #[cfg(feature = "screen-work")]
         let menu = self.projects.menu.clone();
         #[cfg(not(feature = "screen-work"))]
@@ -763,7 +834,7 @@ impl Render for Desk {
             .child(title_bar(
                 self.sidebar_open,
                 self.tiles_x(),
-                self.account.clone(),
+                status.quota.as_ref(),
                 tabs,
                 cx,
             ))
@@ -793,7 +864,7 @@ impl Render for Desk {
                             .child(content),
                     ),
             )
-            .child(status_bar(&problems, cx))
+            .child(status_bar(&problems, status, cx))
             .child(self.palette.clone())
             .children(menu)
             .children(sheet)

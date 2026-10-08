@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
-use super::{Against, BlameLine, Entry, Git, GitError, Hunk, parse};
+use super::{Against, BlameLine, Drift, Entry, Git, GitError, Hunk, parse};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -90,6 +90,10 @@ impl GitBinary {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub fn drift(&self) -> Result<Option<Drift>, GitError> {
+        parse::drift(&self.run(&["status", "--porcelain=v2", "--branch", "-uno"], None)?)
     }
 
     fn run(&self, args: &[&str], input: Option<&str>) -> Result<String, GitError> {

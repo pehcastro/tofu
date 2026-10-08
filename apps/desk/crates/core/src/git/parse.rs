@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{BlameLine, Conflict, Entry, GitError, Hunk, Lines, Mark, State};
+use super::{BlameLine, Conflict, Drift, Entry, GitError, Hunk, Lines, Mark, State};
 
 const UNCOMMITTED: &str = "0000000000000000000000000000000000000000";
 
@@ -97,6 +97,25 @@ pub fn status(out: &str) -> Result<Vec<Entry>, GitError> {
         entries.push(entry);
     }
     Ok(entries)
+}
+
+pub fn drift(out: &str) -> Result<Option<Drift>, GitError> {
+    let Some(counts) = out
+        .lines()
+        .find_map(|line| line.strip_prefix("# branch.ab "))
+    else {
+        return Ok(None);
+    };
+    let count = |sign: char, text: Option<&str>| {
+        text.and_then(|text| text.strip_prefix(sign))
+            .and_then(|digits| digits.parse::<u32>().ok())
+            .ok_or_else(|| unreadable("branch.ab header", counts))
+    };
+    let mut parts = counts.split(' ');
+    Ok(Some(Drift {
+        ahead: count('+', parts.next())?,
+        behind: count('-', parts.next())?,
+    }))
 }
 
 fn range(text: &str, line: &str) -> Result<Lines, GitError> {

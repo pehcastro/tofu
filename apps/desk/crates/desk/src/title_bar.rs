@@ -1,13 +1,14 @@
 use desk_core::control::Control;
-use desk_ui::components::title_bar::{Title, TitleBar, TitlePick, WindowKeys};
-use gpui::{AnyElement, Context, SharedString};
+use desk_ui::components::status_bar::Quota;
+use desk_ui::components::title_bar::{Account, Title, TitleBar, TitlePick, WindowKeys};
+use gpui::{AnyElement, Context};
 
 use crate::desk::Desk;
 
 pub fn title_bar(
     sidebar_open: bool,
     tabs_x: f32,
-    letter: Option<SharedString>,
+    quota: Option<&Quota>,
     tabs: Option<AnyElement>,
     cx: &mut Context<Desk>,
 ) -> TitleBar {
@@ -15,8 +16,15 @@ pub fn title_bar(
         sidebar_open,
         palette_keys: Control::Palette.label().into(),
         notices: Vec::new(),
-        letter,
-        account: None,
+        letter: quota.and_then(|quota| {
+            let first = quota.account.chars().find(|c| c.is_alphanumeric())?;
+            Some(first.to_lowercase().collect::<String>().into())
+        }),
+        account: quota.map(|quota| Account {
+            name: quota.account.clone(),
+            found: format!("{} window at {}%", quota.window, quota.percent).into(),
+            accounts: None,
+        }),
         whats_new: None,
         keys: WindowKeys::Live,
         open: None,

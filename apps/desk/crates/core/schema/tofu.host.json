@@ -337,6 +337,132 @@
       ],
       "type": "object"
     },
+    "CronCommandParams": {
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "line"
+      ],
+      "type": "object"
+    },
+    "CronCommandResult": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "type": "object"
+    },
+    "CronJob": {
+      "additionalProperties": false,
+      "properties": {
+        "ended": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "next": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "schedule",
+        "prompt",
+        "paused"
+      ],
+      "type": "object"
+    },
+    "CronState": {
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "type": "integer"
+        },
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/CronJob"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "live": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "live",
+        "goals",
+        "jobs"
+      ],
+      "type": "object"
+    },
+    "CronUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "goals": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "jobs": {
+          "items": {
+            "$ref": "#/$defs/CronJob"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "live": {
+          "type": "integer"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "live",
+        "goals",
+        "jobs"
+      ],
+      "type": "object"
+    },
     "DecisionMade": {
       "additionalProperties": false,
       "properties": {
@@ -1098,6 +1224,12 @@
         "agent": {
           "type": "string"
         },
+        "generation": {
+          "type": "integer"
+        },
+        "handle": {
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
@@ -1113,6 +1245,13 @@
         "session": {
           "type": "string"
         },
+        "started": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
         "turn": {
           "type": "string"
         }
@@ -1123,7 +1262,8 @@
         "item",
         "seq",
         "name",
-        "root"
+        "root",
+        "started"
       ],
       "type": "object"
     },
@@ -2031,6 +2171,60 @@
               "const": "2.0"
             },
             "method": {
+              "const": "cron.command"
+            },
+            "params": {
+              "$ref": "#/$defs/CronCommandParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.cron"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "query.usage"
             },
             "params": {
@@ -2771,6 +2965,26 @@
           "const": "2.0"
         },
         "method": {
+          "const": "cron.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/CronUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "session.forked"
         },
         "params": {
@@ -2923,6 +3137,12 @@
             },
             {
               "$ref": "#/$defs/ShellReadResult"
+            },
+            {
+              "$ref": "#/$defs/CronCommandResult"
+            },
+            {
+              "$ref": "#/$defs/CronState"
             }
           ]
         }
@@ -2975,6 +3195,9 @@
     },
     "context.updated": {
       "$ref": "#/$defs/ContextUpdated"
+    },
+    "cron.updated": {
+      "$ref": "#/$defs/CronUpdated"
     },
     "decision": {
       "$ref": "#/$defs/DecisionMade"
@@ -3053,6 +3276,14 @@
     }
   },
   "x-requests": {
+    "cron.command": {
+      "params": {
+        "$ref": "#/$defs/CronCommandParams"
+      },
+      "result": {
+        "$ref": "#/$defs/CronCommandResult"
+      }
+    },
     "initialize": {
       "params": {
         "$ref": "#/$defs/InitializeParams"
@@ -3091,6 +3322,14 @@
       },
       "result": {
         "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "query.cron": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/CronState"
       }
     },
     "query.ledger": {

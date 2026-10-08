@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use super::ModelError;
 use crate::protocol::{
-    AgentState, ApprovalRequest, DecisionMade, FileEdit, FileEditOp, Notification, PlanStep,
-    QuotaWindow, RequestId, SessionForked, TurnCompletedStatus, UsageUpdated,
+    AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, Notification,
+    PlanStep, QuotaWindow, RequestId, SessionForked, TurnCompletedStatus, UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +91,7 @@ pub struct Session {
     pub quota: Vec<QuotaWindow>,
     pub context: Option<(i64, i64)>,
     pub usage: Vec<UsageUpdated>,
+    pub cron: Option<CronState>,
     pub dropped: i64,
 }
 
@@ -319,6 +320,13 @@ impl Session {
             N::QuotaUpdated(e) => self.quota.clone_from(&e.windows),
             N::ContextUpdated(e) => self.context = Some((e.used, e.budget)),
             N::UsageUpdated(e) => self.usage.push((**e).clone()),
+            N::CronUpdated(e) => {
+                self.cron = Some(CronState {
+                    live: e.live,
+                    goals: e.goals,
+                    jobs: e.jobs.clone(),
+                });
+            }
             N::Resync(e) => self.dropped = self.dropped.saturating_add(e.dropped),
             N::ItemPersisted(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),

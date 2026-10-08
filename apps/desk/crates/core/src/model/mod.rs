@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::bridge::Event;
-use crate::protocol::{Notification, ServerRequest};
+use crate::protocol::{CronState, Notification, ServerRequest};
 
 pub use session::{Agent, Message, Role, Session, Shell, Tool, Turn};
 
@@ -41,6 +41,10 @@ pub struct Store {
 impl Store {
     pub fn apply_batch(&mut self, batch: &[Event]) -> Result<(), ModelError> {
         batch.iter().try_for_each(|event| self.apply(event))
+    }
+
+    pub fn cron_answered(&mut self, session: &str, state: CronState) {
+        self.session(session).cron = Some(state);
     }
 
     fn apply(&mut self, event: &Event) -> Result<(), ModelError> {
@@ -89,6 +93,7 @@ fn session_of(notification: &Notification) -> Result<&str, ModelError> {
         N::AgentUpdated(e) => &e.session,
         N::ApprovalResolved(e) => &e.session,
         N::ContextUpdated(e) => &e.session,
+        N::CronUpdated(e) => &e.session,
         N::Decision(e) => &e.session,
         N::Failure(e) | N::Note(e) => &e.session,
         N::FileEdit(e) => &e.session,

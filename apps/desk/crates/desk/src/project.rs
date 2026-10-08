@@ -18,6 +18,18 @@ pub struct Head {
     pub folder: PathBuf,
     pub branch: String,
     pub changed: usize,
+    pub ahead: u32,
+}
+
+impl Head {
+    pub fn empty(folder: PathBuf) -> Self {
+        Head {
+            folder,
+            branch: String::new(),
+            changed: 0,
+            ahead: 0,
+        }
+    }
 }
 
 pub fn launch() -> Result<PathBuf, String> {
@@ -76,17 +88,18 @@ pub fn head(folder: PathBuf) -> Head {
             .iter()
             .filter(|entry| entry.state != State::Ignored)
             .count();
-        Ok((branch, changed))
+        let ahead = git.drift()?.map_or(0, |drift| drift.ahead);
+        Ok(Head {
+            folder: folder.clone(),
+            branch,
+            changed,
+            ahead,
+        })
     });
-    let (branch, changed) = read.unwrap_or_else(|error| {
+    read.unwrap_or_else(|error| {
         eprintln!("desk: {} has no git state: {error}", folder.display());
-        (String::new(), 0)
-    });
-    Head {
-        folder,
-        branch,
-        changed,
-    }
+        Head::empty(folder)
+    })
 }
 
 pub fn sidebar(head: &Head, rows: &[SessionRow], open: Option<&str>) -> Project {

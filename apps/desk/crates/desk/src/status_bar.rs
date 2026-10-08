@@ -1,4 +1,3 @@
-use desk_core::control::Control;
 use desk_ui::components::status_bar::{Status, StatusBar, StatusPick};
 use desk_ui::theme::ThemeError;
 use gpui::Context;
@@ -13,24 +12,16 @@ fn problem_line(problems: &[ThemeError]) -> Option<String> {
     })
 }
 
-pub fn status_bar(problems: &[ThemeError], cx: &mut Context<Desk>) -> StatusBar {
+pub fn status_bar(problems: &[ThemeError], status: Status, cx: &mut Context<Desk>) -> StatusBar {
     let status = Status {
         problem: problem_line(problems).map(Into::into),
-        ..Status::default()
+        ..status
     };
     StatusBar::new(
         "status-bar",
         status,
-        cx.listener(|desk, pick: &StatusPick, _, cx| {
-            let control = match pick {
-                StatusPick::Branch => Control::Branch,
-                StatusPick::Session => Control::Session,
-                StatusPick::Context => Control::Context,
-                StatusPick::Quota => Control::Quota,
-                StatusPick::Classifier => Control::Classifier,
-                StatusPick::Cron => Control::Cron,
-            };
-            desk.tell(control, cx)
+        cx.listener(|_, pick: &StatusPick, _, _| {
+            eprintln!("desk: status {pick:?} opens a screen still on fixtures, so it stays inert")
         }),
     )
 }

@@ -104,6 +104,10 @@ pub struct Listed;
 
 impl EventEmitter<Listed> for Chat {}
 
+pub struct Touched;
+
+impl EventEmitter<Touched> for Chat {}
+
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let store = cx.new(|_| Store::default());
     match board {
@@ -238,6 +242,20 @@ impl Chat {
         }
     }
 
+    pub fn store(&self) -> &Entity<Store> {
+        &self.store
+    }
+
+    fn ask_cron(&mut self, session: String, cx: &mut Context<Self>) {
+        self.call::<request::QueryCron>(&NoParams {}, cx, move |chat, state, cx| {
+            eprintln!("desk: query.cron live {} goals {}", state.live, state.goals);
+            chat.store.update(cx, |store, cx| {
+                store.cron_answered(&session, state);
+                cx.notify();
+            });
+        });
+    }
+
     pub fn rows(&self) -> &[SessionRow] {
         &self.rows
     }
@@ -286,6 +304,7 @@ impl Chat {
         };
         self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
             eprintln!("desk: session {} opened", opened.session);
+            chat.ask_cron(opened.session.clone(), cx);
             chat.opening = Opening::Open(opened.session);
             chat.refresh(cx);
             chat.relist(cx);
@@ -457,6 +476,7 @@ impl Chat {
             }
             Event::Notification(Notification::TurnCompleted(completed)) => {
                 self.said(completed, cx);
+                cx.emit(Touched);
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
@@ -474,6 +494,13 @@ impl Chat {
                     exited.session, exited.shell, exited.exit_code, exited.killed
                 );
             }
+            Event::Notification(Notification::FileEdit(_)) => return cx.emit(Touched),
+            Event::Notification(
+                notification @ (Notification::QuotaUpdated(_)
+                | Notification::ContextUpdated(_)
+                | Notification::Decision(_)
+                | Notification::CronUpdated(_)),
+            ) => return eprintln!("desk: tofu sent {notification:?}"),
             Event::Request { request, .. } => {
                 eprintln!("desk: tofu asks {request:?}");
                 return;
@@ -657,6 +684,7 @@ impl Chat {
                         opened.session,
                         String::from(chat.asking.clone())
                     );
+                    chat.ask_cron(opened.session.clone(), cx);
                     chat.opening = Opening::Open(opened.session);
                     chat.relist(cx);
                     chat.send(&text, cx);

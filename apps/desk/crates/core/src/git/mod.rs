@@ -53,6 +53,12 @@ pub struct Entry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Drift {
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Against {
     Index,
     Head,
