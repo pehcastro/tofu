@@ -70,7 +70,7 @@ exit 0
       {
         "topic": "memory",
         "title": "Memory",
-        "summary": "what tofu remembers for you across sessions, for every project or for one, and how to add, list and forget it"
+        "summary": "what tofu remembers for you across sessions, in four scopes from you everywhere to the team in one repository, and how to add, list and forget it"
       },
       {
         "topic": "models",
@@ -116,6 +116,11 @@ exit 0
         "topic": "start",
         "title": "Start here",
         "summary": "what tofu is, the first commands to type, and where to read more"
+      },
+      {
+        "topic": "status",
+        "title": "Program status on the terminal",
+        "summary": "tofu reports what the lead, each sub-agent and each kept shell is doing with OSC 7501, so a terminal or an agent inbox reads it instead of guessing"
       },
       {
         "topic": "update",

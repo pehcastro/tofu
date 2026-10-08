@@ -1,0 +1,21 @@
+kind: memory_scopes
+table_version: 1
+notes: the weight of each memory scope. precedence says which scope wins where two entries disagree, 1 first. view_bytes is the size of the scope's view the lead reads, and a scope past it goes coarse on its old entries instead of refusing a write. promotes_to is where an entry seen often enough is proposed next, or none. the budgets are a first guess until the memory bench sets them.
+
+scopes:
+  user-local:
+    precedence: 1
+    view_bytes: 8192
+    promotes_to: user-global
+  project-local:
+    precedence: 2
+    view_bytes: 8192
+    promotes_to: none
+  project-global:
+    precedence: 3
+    view_bytes: 12288
+    promotes_to: project-local
+  user-global:
+    precedence: 4
+    view_bytes: 8192
+    promotes_to: none

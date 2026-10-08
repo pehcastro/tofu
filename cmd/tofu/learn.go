@@ -29,24 +29,25 @@ import (
 )
 
 const (
-	learnUsage  = `tofu learn scan [--chain <session or family>|--last N|--global] [--local] [--all] [--dir project] [--json], tofu learn show|upstream <n>, tofu learn apply <n> [--project] [--dir project], tofu learn reject <n> --reason "<why>", tofu learn upstream --list`
+	learnUsage  = `tofu learn scan [--chain <session or family>|--last N|--global] [--local] [--all] [--dir project] [--json], tofu learn show|upstream <n>, tofu learn apply <n> [--scope user-local|project-local|project-global|user-global] [--dir project], tofu learn reject <n> --reason "<why>", tofu learn upstream --list`
 	learnRuleID = "learned_"
 	timeOfDay   = "15:04"
 	dayAndTime  = "2006-01-02 15:04"
 )
 
 type learnOpts struct {
-	chain, dir, reason                string
-	last                              int
-	global, local, all, project, list bool
-	rest                              []string
+	chain, dir, reason       string
+	scope                    memory.Scope
+	last                     int
+	global, local, all, list bool
+	rest                     []string
 }
 
 func parseLearnArgs(args []string) (learnOpts, error) {
 	opts := learnOpts{dir: ".", last: learn.SessionsByDefault}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--chain" || arg == "--last" || arg == "--dir" || arg == "--reason" {
+		if arg == "--chain" || arg == "--last" || arg == "--dir" || arg == "--reason" || arg == "--scope" {
 			if i++; i >= len(args) {
 				return learnOpts{}, fmt.Errorf("%s needs a value", arg)
 			}
@@ -70,8 +71,12 @@ func parseLearnArgs(args []string) (learnOpts, error) {
 			opts.local = true
 		case "--all":
 			opts.all = true
-		case "--project":
-			opts.project = true
+		case "--scope":
+			scope, err := memory.ParseScope(args[i])
+			if err != nil {
+				return learnOpts{}, err
+			}
+			opts.scope = scope
 		case "--list":
 			opts.list = true
 		case jsonFlag:
@@ -187,7 +192,7 @@ func learnScan(o verbOutput, opts learnOpts, home learn.Home) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	known := learn.Known{Memory: append(shelves.Global.Entries, shelves.Project.Entries...), Decisions: decisions, Releases: learn.Releases(changelog.Markdown), Settings: map[string]string{}}
+	known := learn.Known{Memory: shelves.All(), Decisions: decisions, Releases: learn.Releases(changelog.Markdown), Settings: map[string]string{}}
 	for _, spec := range settingspkg.Default() {
 		known.Settings[spec.Key] = spec.Description
 	}
@@ -307,9 +312,9 @@ func learnApply(o verbOutput, opts learnOpts, home learn.Home, finding learn.Fin
 		return o.usage(fmt.Errorf("finding %d has no rule worded yet; with tofu settings set learn true a scan words it with your lead model, or tofu memory add \"<rule>\" keeps your own", finding.ID))
 	}
 	if finding.Target() == learn.TargetRule {
-		flag, again := "--project", "tofu memory add"
+		flag := "--project"
 		if finding.Scope == memory.Global {
-			flag, again = "--global", again+" --global"
+			flag = "--global"
 		}
 		if code := rulesAddVerb([]string{flag, "--dir", opts.dir, learnRuleID + finding.Key, finding.Rule}, o.out, o.errOut); code != exitOK {
 			return code
@@ -322,24 +327,20 @@ func learnApply(o verbOutput, opts learnOpts, home learn.Home, finding learn.Fin
 			return o.fail(err)
 		}
 		return o.receipt(writeReceipt{Changes: []fileChange{{Change: changeRemoved, What: "memory " + finding.Retire + ", now the rule " + learnRuleID + finding.Key}},
-			Undo: again + " --said " + strconv.Quote(finding.Said) + " " + strconv.Quote(finding.Rule)})
+			Undo: "tofu memory add --scope " + string(finding.Scope) + " --said " + strconv.Quote(finding.Said) + " " + strconv.Quote(finding.Rule)})
 	}
 	shelves, err := memory.Open(opts.dir)
 	if err != nil {
 		return o.fail(err)
 	}
-	scope := finding.Scope
-	if opts.project {
-		scope = memory.Project
-	}
-	added, err := shelves.Add(memory.Entry{Scope: scope, Kind: memory.KindPerson, Text: finding.Rule, Said: finding.Said, Session: finding.Session, At: time.Now(), By: memory.ByOffer}, "")
+	added, err := shelves.Add(memory.Entry{Scope: cmp.Or(opts.scope, finding.Scope), Kind: memory.KindPerson, Text: finding.Rule, Said: finding.Said, Session: finding.Session, At: time.Now(), By: memory.ByOffer}, "")
 	if err = errors.Join(err, decide(learn.ActionApply)); err != nil {
 		return o.fail(err)
 	}
-	undo := "tofu memory remove " + added.ID
-	if added.Scope == memory.Global {
-		undo = "tofu memory remove --global " + added.ID
+	for _, notice := range shelves.Notices {
+		_, _ = fmt.Fprintln(o.errOut, notice)
 	}
+	undo := added.Undo()
 	if opts.dir != "." {
 		undo += " --dir " + strconv.Quote(opts.dir)
 	}

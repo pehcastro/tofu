@@ -384,8 +384,14 @@ const (
 )
 
 const (
-	MemoryScopeBytes = 4096
-	MemoryRuleBytes  = 160
+	MemoryRuleBytes             = 160
+	MemoryIdentityTimeoutMillis = 3000
+	MemoryGhIDKeptHours         = 24
+	MemorySaltBytes             = 16
+	MemoryAuthorBytes           = 16
+	MemoryAuthorScryptCost      = 1 << 15
+	MemoryAuthorScryptBlock     = 8
+	MemoryAuthorScryptThreads   = 1
 )
 
 const (
@@ -406,4 +412,13 @@ const (
 	ServeShellPollMillis  = 250
 	ServeStopMillis       = 10000
 	ServeQuotaPollMinutes = 5
+)
+
+const (
+	AskPersonWaitSeconds    = 120
+	AskPersonQuestionsMost  = 4
+	AskPersonOptionsLeast   = 2
+	AskPersonOptionsMost    = 4
+	AskPersonHeaderRunes    = 12
+	AskPersonLabelWordsMost = 5
 )

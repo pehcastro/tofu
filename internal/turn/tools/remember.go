@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -35,13 +36,14 @@ func (Remember) Definition() llm.Tool {
 			"said must be their own words, copied exactly from a message they typed in this conversation; anything else is refused. " +
 			"statement is the rule itself and nothing else: one line, at most " + strconv.Itoa(konst.MemoryRuleBytes) + " bytes, imperative or declarative, naming no one: no name, no the person, the user, he or she, such as: " +
 			"Desk UI primitives are widened to fit a new need; never build a parallel copy in a caller. a longer statement, a second line, or one that names the person is refused with the reason. " +
-			"the person answers yes, no, or always, and picks global or project; nothing is kept before a yes. a person entry is offered for every project, a project or reference entry for this project",
+			"the person answers yes, no, or always, and picks user-global or project-global on the card; nothing is kept before a yes. scope says where it belongs: user-global the person everywhere, project-global this project in the person's home, user-local the person in this repository, project-local the team in this repository. without scope a person entry goes to user-global, a project or reference entry to project-global",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"statement": map[string]any{"type": "string", "description": "the rule itself, one line of at most " + strconv.Itoa(konst.MemoryRuleBytes) + " bytes, naming no one"},
 				"said":      map[string]any{"type": "string", "description": "the person's exact words this comes from"},
 				"kind":      map[string]any{"type": "string", "enum": []string{string(memory.KindPerson), string(memory.KindProject), string(memory.KindReference)}},
+				"scope":     map[string]any{"type": "string", "enum": []string{string(memory.UserLocal), string(memory.ProjectLocal), string(memory.Project), string(memory.Global)}},
 			},
 			"required": []string{"statement", "said", "kind"},
 		},
@@ -50,9 +52,10 @@ func (Remember) Definition() llm.Tool {
 
 func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	var args struct {
-		Statement string      `json:"statement"`
-		Said      string      `json:"said"`
-		Kind      memory.Kind `json:"kind"`
+		Statement string       `json:"statement"`
+		Said      string       `json:"said"`
+		Kind      memory.Kind  `json:"kind"`
+		Scope     memory.Scope `json:"scope"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("remember: arguments are not the expected shape: %w", err)
@@ -69,14 +72,14 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if !slices.ContainsFunc(typed, func(words string) bool { return quote != "" && strings.Contains(words, quote) }) {
 		return turn.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation; copy their words exactly, or do not offer it", args.Said)
 	}
-	entry := memory.Entry{Scope: memory.Project, Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
+	entry := memory.Entry{Scope: cmp.Or(args.Scope, args.Kind.Scope()), Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
 	if family, err := r.Store.Identity(r.Session); err == nil {
 		entry.Session = family.Family
 	}
-	if args.Kind == memory.KindPerson {
-		entry.Scope = memory.Global
-	}
-	if !r.Auto() {
+	if !r.Auto() || entry.Scope == memory.ProjectLocal {
+		if entry.Scope != memory.Global {
+			entry.Scope = memory.Project
+		}
 		if r.Ask == nil {
 			return turn.Result{Content: "no person is here to answer, so nothing was kept"}, nil
 		}

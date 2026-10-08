@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 90 asks                                                         23 topics
+Docs · 90 asks                                                         24 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -116,8 +116,8 @@ learn  read your own sessions for what keeps going wrong, sorted into tofu's
   write up a tofu problem my sessions show, without sending it
     → tofu learn upstream <n>
 
-memory  what tofu remembers for you across sessions, for every project or for
-  one, and how to add, list and forget it
+memory  what tofu remembers for you across sessions, in four scopes from you
+  everywhere to the team in one repository, and how to add, list and forget it
   remember something for every later session
     → tofu memory add --global "<what to keep>"
   forget something tofu remembers
@@ -241,6 +241,10 @@ skills  where tofu finds skills, how to add one for every project or for one,
 start  what tofu is, the first commands to type, and where to read more
   see what changed in this version
     → tofu changelog
+
+status  tofu reports what the lead, each sub-agent and each kept shell is
+  doing with OSC 7501, so a terminal or an agent inbox reads it instead of
+  guessing
 
 update  how tofu finds the latest release, installs it in the background or
   with tofu update, and says when to restart

@@ -59,6 +59,7 @@ const (
 	Memory                 = "memory"
 	AutoMemory             = "autoMemory"
 	MemoryModel            = "memoryModel"
+	MemoryFromAllUsers     = "memoryFromAllUsers"
 	Learn                  = "learn"
 	DiffContext            = "diffContext"
 	Hyperlinks             = "hyperlinks"
@@ -115,6 +116,11 @@ func InstructionFiles(choice string) []string {
 const (
 	SkillsOn  = "on"
 	SkillsOff = "off"
+)
+
+const (
+	AllUsersOn  = "on"
+	AllUsersOff = "off"
 )
 
 const (
@@ -239,6 +245,8 @@ func Default() []Spec {
 			Choices: []string{SkillsOn, SkillsOff}},
 		{Key: Memory, Label: "Memory", Description: "on sends what you asked tofu to remember to the lead on every request and lets the lead offer one short rule; off sends none and offers nothing. tofu memory lists the entries", Category: "Context", Kind: Bool, Default: 1},
 		{Key: AutoMemory, Label: "Auto memory", Description: "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on", Category: "Context", Kind: Bool},
+		{Key: MemoryFromAllUsers, Label: "Memory from all users", Description: "on applies the user local memory every author kept in this repository's .tofu folder; off applies only yours. Project local memory applies to everyone either way", Category: "Context", Kind: Text, DefaultText: AllUsersOff,
+			Choices: []string{AllUsersOn, AllUsersOff}},
 		{Key: MemoryModel, Label: "Memory model", Description: "the subscription model that writes memory summaries, one line of at most 512 bytes each, as source/model; never the OpenRouter key", Category: "Context", Kind: Text, DefaultText: "claude-sub/claude-haiku-4-5-20251001"},
 		{Key: Learn, Label: "Learn", Description: "on lets tofu learn send a window around each message you typed to Jev for labels, and write each proposal with your lead model, after printing how many windows and bytes; off runs tofu learn on this machine only", Category: "Context", Kind: Bool},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),

@@ -1,105 +1,116 @@
 ---
 topic: memory
 title: Memory
-summary: what tofu remembers for you across sessions, for every project or for one, and how to add, list and forget it
+summary: what tofu remembers for you across sessions, in four scopes from you everywhere to the team in one repository, and how to add, list and forget it
 verbs: memory
 ---
 
 ## What it is
 
 Memory is a short list of things you told tofu to keep, so you do not
-have to say them again in the next session. Each entry is one line, like
-`never run cargo with more than 2 jobs`, with your own words kept beside
-it.
+have to say them again. Each entry is one line, like `never run cargo
+with more than 2 jobs`, with your own words beside it. It is sent to the
+lead in its system message on every request in its scope and survives a
+fork; sub-agents get only what the lead writes into their brief.
 
-Every entry is sent to the lead in its system message, on every request
-of every session in its scope, and it survives a fork. Sub-agents never
-get it: the lead writes what matters into their brief.
-
-An entry has a kind:
-
-- `person`: how you work and what you want from the lead
-- `project`: a fact or a decision about this project the code does not say
-- `reference`: where something outside the project lives
-
+A kind says what it is about: `person` (how you work), `project` (a fact
+the code does not say) or `reference` (where something outside lives).
 Memory is not for what a rule, `AGENTS.md` or `CLAUDE.md` already says,
-and not for the task in front of you.
+nor for the task in front of you.
 
 ## Where it lives
 
-- `~/.tofu/memory/`: global, read in every project
-- `~/.tofu/projects/<project>/memory/`: this project only, beside its
-  sessions, never inside the project
+Global is your home, local is the repository's `.tofu` folder:
 
-Each entry is one file, `<id>.yaml`, with `id`, `kind`, `text`, `said`,
-`session`, `at` and `by` lines. A hand edit is one small file.
+- `user-global`, `~/.tofu/memory/user/`: you, in every project
+- `project-global`, `~/.tofu/projects/<project>/memory/`: this project,
+  as this machine knows it
+- `user-local`, `<repo>/.tofu/memory/user/<author>/`: you, in this
+  repository
+- `project-local`, `<repo>/.tofu/memory/project/`: the team, travelling
+  with the repository
 
-Both scopes are sent, global first. Where two entries disagree, the
-project one wins, and the block says so.
+Each scope keeps `entries.jsonl`, one json line per write, never edited:
+a removal or a replace is a new line. The repository holds only those and
+the salt, so committing `<repo>/.tofu` needs no `.gitignore`; the summary
+tree the lead reads, its view and its lock live in the home. A
+repository id carries a tag, `m3-1f81`, so two homes never write the same.
 
-Each scope holds at most 4096 bytes, about 1,000 tokens, counted as the
-lines the lead reads. A write past it is refused, with the entries listed
-and the command that removes one. Nothing is dropped on its own.
+Where two entries disagree, the first of `user-local`, `project-local`,
+`project-global`, `user-global` wins. `library/memory/scopes@1.yaml`
+sets each scope's precedence, the view budget the lead reads and where an
+entry is promoted next. A scope past its budget is never refused: old
+entries go coarse into one-line summaries that `tofu memory zoom` opens.
+
+## Who wrote it
+
+Every entry carries an `author`: scrypt of your identity with the salt in
+`<repo>/.tofu/memory/salt` (the home has its own). The identity is your
+`gh` login's numeric id, else `git config user.email`, and is never
+written into the repository. Without either the author is `unknown`,
+said once. Your `user-local` entries always apply to you, another
+author's only with `tofu settings set memoryFromAllUsers on`, and
+`project-local` applies to everyone.
 
 ## Change it
 
-Add an entry for this project, or for every project with `--global`:
-
+    tofu memory add --scope user-local "tickets before code"
     tofu memory add "this project uses gpui-ce, not gpui"
-    tofu memory add --global "cargo runs with at most 2 jobs"
 
-`--kind person|project|reference` sets the kind; the default is `person`
-with `--global` and `project` without. `--said "<your words>"` keeps the
-words it came from. `--replace <id>` rewrites an entry in place, and
-`--dir <project>` names another project.
+Without `--scope` a `person` entry goes to `user-global`, the others to
+`project-global`; without `--kind` a user scope takes `person` and a
+project scope `project`. `--said "<your words>"` keeps the words,
+`--replace <id>` writes a new version, `--dir <project>` names another
+project.
 
-In the app, `/remember <what>` keeps it at once as a global entry and
-prints the undo on the same line. A message you type is never offered as
-memory, whatever it says, `remember` included.
+In the app, `/remember <what>` keeps a `user-global` entry at once and
+prints the undo. A message you type is never offered as memory.
 
-The lead can offer one rule with its `remember` tool, but only with words
-you typed in this conversation. The statement is the rule itself and
-nothing else: one line, at most 160 bytes, naming no one. A longer one, a
-second line, or `The person wants ...` is refused with the reason. Its
-card is titled `[&orchestrator] wants to add a project memory`, with the
-rule under it: `1` yes, `2` no, `3` always, `esc` no, and `tab` switches
-between a project memory and a global one, kept in every project.
-Nothing is written until you pick. Always turns the `autoMemory` setting
-on, and the lead's later rules are then kept at once, with the undo on
-the same line. `tofu settings set memory false` sends no memory and
-gives the lead no `remember` tool.
-
-Every write is a row in the chat, `[memory#m3]`, and the lead is told in
-the same turn that it is saved.
+The lead offers one rule with its `remember` tool, only with words you
+typed in this conversation: one line, at most 160 bytes, naming no one.
+Its card, `[&orchestrator] wants to add a project-global memory`, takes
+`1` yes, `2` no, `3` always, `esc` no, and `tab` switches to
+`user-global`. Nothing is written before you pick. Always turns
+`autoMemory` on, and later rules are kept at once in the scope the lead
+named, except `project-local`, which always asks. `tofu settings set
+memory false` sends no memory and removes the tool.
+`tofu learn apply <n> --scope <scope>` keeps a finding where you say.
 
 ## Check it
 
     tofu memory
 
-prints each scope with its size against the limit and its folder, then
-every entry with its id, kind, date and text, and your words under it.
-`/memory` in the app lists them; enter on one removes it or puts it in
-the composer to edit. `tofu session trace <session>` lists each write
-under notices with its id, scope and words, and
-`tofu run --show-prompt --dir . "<task>"` prints the block at the end of
-the system message, each line with its `[memory#id]`.
+prints each scope by precedence with its bytes against its view budget,
+its promotion and its folder, then each entry's id, kind, date, `you` or
+`another`, text and your words. `/memory` in the app lists them; enter
+removes one or puts it in the composer to edit.
 
     tofu memory tree log.jsonl --budget 8192
 
-builds a summary tree over a log of items, one json line each with `kind`
-and `text`, and prints its view: recent items whole, older ones as
-one-line summaries of at most 512 bytes. The `memoryModel` setting names
-the subscription model that writes them, `claude-sub/claude-haiku-4-5-20251001`
-by default, never the OpenRouter key. The tree and the view are saved
-beside the log, so a second run makes no model call.
-`tofu memory zoom log.jsonl <id> <n>` opens the line `id+n` into its two
-halves, down to the item itself at `n` 1, and
-`tofu memory recall log.jsonl <regex>` searches the items.
+builds a summary tree over a log of `kind` and `text` json lines and
+prints its view: recent items whole, older ones as summaries of at most
+512 bytes, written by the `memoryModel` subscription model
+(`claude-sub/claude-haiku-4-5-20251001`), never the OpenRouter key. The
+tree and view are saved, so a second run calls no model.
+`tofu memory zoom log.jsonl <id> <n>` opens line `id+n` into its halves,
+down to the item at `n` 1, and `tofu memory recall log.jsonl <regex>`
+searches the items. A scope's own `log.jsonl` takes all three: beside its
+entries in the home, under `~/.tofu/projects/<project>/local/` for a
+local one.
+
+## Moving from the old shelves
+
+Up to 0.5.8 memory was `<id>.yaml` files in your home. The first
+`tofu memory` after the update moves them and prints each move: the
+global shelf and the project shelf's `person` entries to `user-global`,
+its `project` and `reference` entries to `project-global`. Nothing moves
+into a repository.
 
 ## Undo it
 
     tofu memory remove m3
-    tofu memory remove --global m3
+    tofu memory remove --scope user-local m3-1f81
 
-deletes the entry's file and prints the `tofu memory add` that puts it
-back. Every add prints its own undo line.
+writes the removal and prints the `tofu memory add` that puts it back.
+Without `--scope` the id has to be in one scope only. Every add prints its
+own undo line.

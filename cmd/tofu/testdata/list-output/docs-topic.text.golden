@@ -14,7 +14,7 @@ What it is
   - Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate
   - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images,
     projectInstructionsCap, instructionSources, skills, memory, autoMemory,
-    learn
+    memoryFromAllUsers, learn
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
@@ -167,6 +167,11 @@ Context
       true or false
       on keeps a rule the lead offers at once and prints the undo, instead of
       asking first; answering always on its card turns it on
+    memoryFromAllUsers      off
+      one of on, off
+      on applies the user local memory every author kept in this repository's
+      .tofu folder; off applies only yours. Project local memory applies to
+      everyone either way
     memoryModel             claude-sub/claude-haiku-4-5-20251001
       any text
       the subscription model that writes memory summaries, one line of at most

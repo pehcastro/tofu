@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           51 matches
+Docs · "change the colours"                                           52 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -24,6 +24,8 @@ Docs · "change the colours"                                           51 matche
     → tofu docs hooks
   Keys
     → tofu docs keys
+  Memory
+    → tofu docs memory
   Models
     → tofu docs models
   Every method tofu serve answers
@@ -34,6 +36,8 @@ Docs · "change the colours"                                           51 matche
     → tofu docs shells
   Start here
     → tofu docs start
+  Program status on the terminal
+    → tofu docs status
   Updating tofu
     → tofu docs update
   stop the animations
@@ -94,8 +98,6 @@ Docs · "change the colours"                                           51 matche
     → tofu docs instructions
   Learn
     → tofu docs learn
-  Memory
-    → tofu docs memory
   Rules
     → tofu docs rules
   Sessions

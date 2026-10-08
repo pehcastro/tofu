@@ -14,7 +14,7 @@ The settings come in groups:
 
 - Appearance: theme, density, animations, statusBar, colorMode
 - Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate
-- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills, memory, autoMemory, learn
+- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills, memory, autoMemory, memoryFromAllUsers, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
 - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb

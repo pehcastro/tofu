@@ -1,58 +1,49 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
-	"tofu/internal/konst"
 	"tofu/internal/memory"
-	"tofu/internal/widget"
 )
 
-const memoryUsage = `tofu memory [list] [--json], tofu memory add [--global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>", tofu memory remove [--global] <id>, each with [--dir project]`
+const memoryUsage = `tofu memory [list] [--json], tofu memory add [--scope user-local|project-local|project-global|user-global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>", tofu memory remove [--scope <scope>] <id>, each with [--dir project]`
 
 type memoryOpts struct {
-	scope   memory.Scope
-	dir     string
-	kind    memory.Kind
-	said    string
-	replace string
-	json    bool
-	rest    []string
+	scope              memory.Scope
+	kind               memory.Kind
+	dir, said, replace string
+	rest               []string
 }
 
-func (opts memoryOpts) flags() string {
-	flags := ""
-	if opts.scope == memory.Global {
-		flags += " --global"
+func (opts memoryOpts) dirFlag() string {
+	if opts.dir == "." {
+		return ""
 	}
-	if opts.dir != "." {
-		flags += " --dir " + strconv.Quote(opts.dir)
-	}
-	return flags
+	return " --dir " + strconv.Quote(opts.dir)
 }
 
 func parseMemoryArgs(args []string) (memoryOpts, error) {
-	opts := memoryOpts{scope: memory.Project, dir: "."}
+	opts := memoryOpts{dir: "."}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--kind" || arg == "--said" || arg == "--replace" || arg == "--dir" {
+		if arg == "--scope" || arg == "--kind" || arg == "--said" || arg == "--replace" || arg == "--dir" {
 			if i++; i >= len(args) {
 				return memoryOpts{}, fmt.Errorf("%s needs a value", arg)
 			}
 		}
+		var err error
 		switch {
-		case arg == "--global":
-			opts.scope = memory.Global
 		case arg == jsonFlag:
-			opts.json = true
+		case arg == "--scope":
+			opts.scope, err = memory.ParseScope(args[i])
 		case arg == "--kind":
 			opts.kind = memory.Kind(args[i])
 		case arg == "--said":
@@ -62,9 +53,12 @@ func parseMemoryArgs(args []string) (memoryOpts, error) {
 		case arg == "--dir":
 			opts.dir = args[i]
 		case strings.HasPrefix(arg, "-"):
-			return memoryOpts{}, fmt.Errorf("unknown argument %q", arg)
+			err = fmt.Errorf("unknown argument %q", arg)
 		default:
 			opts.rest = append(opts.rest, arg)
+		}
+		if err != nil {
+			return memoryOpts{}, err
 		}
 	}
 	return opts, nil
@@ -86,6 +80,14 @@ func memoryVerb(args []string, out, errOut io.Writer) int {
 		return o.usage(err)
 	}
 	shelves, err := memory.Open(opts.dir)
+	say := func() {
+		for _, notice := range shelves.Notices {
+			_, _ = fmt.Fprintln(errOut, notice)
+		}
+		shelves.Notices = nil
+	}
+	say()
+	defer say()
 	if err != nil {
 		return o.fail(err)
 	}
@@ -93,31 +95,40 @@ func memoryVerb(args []string, out, errOut io.Writer) int {
 	case "list":
 		return memoryList(o, shelves)
 	case "add":
-		return memoryAdd(o, opts, shelves)
+		return memoryAdd(o, opts, &shelves)
 	case "remove":
-		return memoryRemove(o, opts, shelves)
+		return memoryRemove(o, opts, &shelves)
 	}
 	return o.usage(fmt.Errorf("no memory verb %q", verb))
 }
 
 func memoryList(o verbOutput, shelves memory.Memory) int {
-	both := []memory.Shelf{shelves.Global, shelves.Project}
-	return o.done(true, host.MemoryReport{Scopes: []host.MemoryShelf{scopeReport(both[0]), scopeReport(both[1])}}, func(page cli.Page) []string {
-		count := strconv.Itoa(len(both[0].Entries)+len(both[1].Entries)) + " entries"
-		if count == "1 entries" {
-			count = "1 entry"
+	var report host.MemoryReport
+	var precedence []string
+	for _, shelf := range shelves.Shelves() {
+		report.Scopes = append(report.Scopes, host.MemoryShelf{Shelf: shelf, Bytes: shelf.Bytes(), Limit: shelf.Weight.ViewBytes})
+		precedence = append(precedence, string(shelf.Scope))
+	}
+	return o.done(true, report, func(page cli.Page) []string {
+		entries := strconv.Itoa(len(shelves.All())) + " entries"
+		if entries == "1 entries" {
+			entries = "1 entry"
 		}
-		lines := []string{page.Subject("Memory") + page.Label(" · "+count)}
-		for _, shelf := range both {
-			lines = append(lines, fmt.Sprintf("  %-8s %d · %d of %d bytes   %s", shelf.Scope, len(shelf.Entries), shelf.Bytes(), konst.MemoryScopeBytes, page.Path(shelf.Dir)))
+		lines := []string{page.Subject("Memory") + page.Label(" · "+entries+" · where two disagree the first wins: "+strings.Join(precedence, ", "))}
+		for _, scope := range report.Scopes {
+			lines = append(lines, fmt.Sprintf("  %-15s %d · %d bytes of a %d byte view · promotes to %s   %s", scope.Scope, len(scope.Entries), scope.Bytes, scope.Limit, cmp.Or(string(scope.Weight.PromotesTo), "none"), page.Path(scope.Dir)))
 		}
-		for _, shelf := range both {
-			if len(shelf.Entries) == 0 {
+		for _, scope := range report.Scopes {
+			if len(scope.Entries) == 0 {
 				continue
 			}
-			lines = append(lines, "", page.Subject(string(shelf.Scope)))
-			for _, e := range shelf.Entries {
-				lines = append(lines, fmt.Sprintf("  %-4s %-9s %s  %s", e.ID, e.Kind, e.At.Format(time.DateOnly), e.Text))
+			lines = append(lines, "", page.Subject(string(scope.Scope)))
+			for _, e := range scope.Entries {
+				author := "another"
+				if e.Yours {
+					author = "you"
+				}
+				lines = append(lines, fmt.Sprintf("  %-8s %-9s %s  %-7s  %s", e.ID, e.Kind, e.At.Format(time.DateOnly), author, e.Text))
 				if e.Said != "" {
 					lines = append(lines, "       "+page.Label(strings.TrimSpace(strconv.Quote(e.Said)+"  "+e.Session)))
 				}
@@ -127,54 +138,54 @@ func memoryList(o verbOutput, shelves memory.Memory) int {
 	})
 }
 
-func scopeReport(shelf memory.Shelf) host.MemoryShelf {
-	return host.MemoryShelf{Shelf: shelf, Bytes: shelf.Bytes(), Limit: konst.MemoryScopeBytes}
-}
-
-func memoryAdd(o verbOutput, opts memoryOpts, shelves memory.Memory) int {
+func memoryAdd(o verbOutput, opts memoryOpts, shelves *memory.Memory) int {
 	if len(opts.rest) != 1 {
 		return o.usage(errors.New("one statement, in quotes"))
 	}
-	kind := opts.kind
+	kind, scope := opts.kind, opts.scope
 	if kind == "" {
 		kind = memory.KindProject
-		if opts.scope == memory.Global {
+		if scope == memory.Global || scope == memory.UserLocal {
 			kind = memory.KindPerson
 		}
 	}
-	old, _ := shelves.Find(opts.scope, opts.replace)
-	added, err := shelves.Add(memory.Entry{Scope: opts.scope, Kind: kind, Text: opts.rest[0], Said: opts.said, At: time.Now(), By: memory.ByPerson}, opts.replace)
-	var full memory.FullError
-	if errors.As(err, &full) {
-		code := o.fail(problemError{What: full.Error(), Hint: "tofu memory remove" + opts.flags() + " <id>, or a shorter statement"})
-		if !o.asJSON {
-			page := cli.Detect(o.errOut, os.Environ())
-			for _, e := range full.Shelf.Entries {
-				row := fmt.Sprintf("    %-4s %4d bytes  %s", e.ID, e.Cost(), e.Text)
-				_, _ = fmt.Fprintln(o.errOut, widget.Fit(row, page.Width))
-			}
-		}
-		return code
+	if scope == "" {
+		scope = kind.Scope()
 	}
+	old, _ := shelves.Find(scope, opts.replace)
+	added, err := shelves.Add(memory.Entry{Scope: scope, Kind: kind, Text: opts.rest[0], Said: opts.said, At: time.Now(), By: memory.ByPerson}, opts.replace)
 	if err != nil {
 		return o.fail(err)
 	}
-	change, undo := changeAdded, "tofu memory remove"+opts.flags()+" "+added.ID
+	change, undo := changeAdded, added.Undo()+opts.dirFlag()
 	if opts.replace != "" {
-		change, undo = changeChanged, "tofu memory add"+opts.flags()+" --replace "+added.ID+" "+strconv.Quote(old.Text)
+		change, undo = changeChanged, "tofu memory add --scope "+string(scope)+opts.dirFlag()+" --replace "+added.ID+" "+strconv.Quote(old.Text)
 	}
 	return o.receipt(writeReceipt{Changes: []fileChange{{Change: change, What: "memory " + added.ID + " · " + string(added.Scope), File: added.File}}, Undo: undo})
 }
 
-func memoryRemove(o verbOutput, opts memoryOpts, shelves memory.Memory) int {
+func memoryRemove(o verbOutput, opts memoryOpts, shelves *memory.Memory) int {
 	if len(opts.rest) != 1 {
 		return o.usage(errors.New("one id, as tofu memory lists it"))
 	}
-	gone, err := shelves.Remove(opts.scope, opts.rest[0])
+	id, scope := opts.rest[0], opts.scope
+	if scope == "" {
+		var holding []string
+		for _, e := range shelves.All() {
+			if e.ID == id {
+				holding = append(holding, string(e.Scope))
+			}
+		}
+		if len(holding) != 1 {
+			return o.fail(problemError{What: fmt.Sprintf("%d scopes hold %s: %s", len(holding), id, strings.Join(holding, ", ")), Hint: "tofu memory, then tofu memory remove --scope <scope> " + id})
+		}
+		scope = memory.Scope(holding[0])
+	}
+	gone, err := shelves.Remove(scope, id)
 	if err != nil {
 		return o.fail(problemError{What: err.Error(), Hint: "tofu memory"})
 	}
-	undo := "tofu memory add" + opts.flags() + " --kind " + string(gone.Kind)
+	undo := "tofu memory add --scope " + string(gone.Scope) + opts.dirFlag() + " --kind " + string(gone.Kind)
 	if gone.Said != "" {
 		undo += " --said " + strconv.Quote(gone.Said)
 	}

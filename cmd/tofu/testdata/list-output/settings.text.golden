@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     49 declared
+Settings · 2 set                                                     50 declared
 
 Appearance
   ● theme                   Nord                                  project
@@ -26,6 +26,7 @@ Context
     skills                  on                                    default
     memory                  true                                  default
     autoMemory              false                                 default
+    memoryFromAllUsers      off                                   default
     memoryModel             claude-sub/claude-haiku-4-5-20251001  default
     learn                   false                                 default
 

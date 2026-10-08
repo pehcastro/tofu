@@ -53,6 +53,10 @@ exit 0
         "do": "tofu docs keys"
       },
       {
+        "text": "Memory",
+        "do": "tofu docs memory"
+      },
+      {
         "text": "Models",
         "do": "tofu docs models"
       },
@@ -71,6 +75,10 @@ exit 0
       {
         "text": "Start here",
         "do": "tofu docs start"
+      },
+      {
+        "text": "Program status on the terminal",
+        "do": "tofu docs status"
       },
       {
         "text": "Updating tofu",
@@ -191,10 +199,6 @@ exit 0
       {
         "text": "Learn",
         "do": "tofu docs learn"
-      },
-      {
-        "text": "Memory",
-        "do": "tofu docs memory"
       },
       {
         "text": "Rules",

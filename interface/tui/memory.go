@@ -2,7 +2,6 @@ package tui
 
 import (
 	"cmp"
-	"errors"
 	"regexp"
 	"slices"
 	"strings"
@@ -112,7 +111,7 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 }
 
 func (a *App) rememberedByTheLead(output string) {
-	saved := regexp.MustCompile(`^\[memory#(m\d+)\] (saved to memory, [^:]+: .*?)\. The words it came from`).FindStringSubmatch(output)
+	saved := regexp.MustCompile(`^\[memory#(m\d+(?:-[0-9a-f]+)?)\](saved to memory, [^:]+: .*?)\. The words it came from`).FindStringSubmatch(output)
 	if saved != nil {
 		a.view.Append(session.Entry{Kind: session.Note, Head: memoryRowHead, ID: saved[1], Body: saved[2]})
 	}
@@ -140,11 +139,7 @@ func (a *App) rememberTyped(whole string) bool {
 		added, err = shelves.Add(memory.Entry{Scope: memory.Global, Kind: memory.KindPerson, Text: rule, Said: whole, Session: a.sessionRoot, At: a.options.Now(), By: memory.ByPerson}, "")
 	}
 	if err != nil {
-		hint := ""
-		if errors.As(err, new(memory.FullError)) {
-			hint = ". tofu memory lists what to remove"
-		}
-		a.view.Append(session.Entry{Kind: session.Note, Body: "not remembered: " + err.Error() + hint})
+		a.view.Append(session.Entry{Kind: session.Note, Body: "not remembered: " + err.Error()})
 		return true
 	}
 	a.view.Append(session.Entry{Kind: session.Note, Head: memoryRowHead, ID: added.ID, Body: "remembered for you · " + string(added.Scope) + " · " + added.Text + " · undo: " + added.Undo()})
@@ -157,14 +152,12 @@ func (a *App) rememberTyped(whole string) bool {
 func (a *App) editEntry(typed string) {
 	fields := strings.SplitN(typed, " ", 3)
 	if len(fields) < 3 {
-		a.view.Append(session.Entry{Kind: session.Note, Body: "type /memory edit <global|project> <id> <the new text>"})
+		a.view.Append(session.Entry{Kind: session.Note, Body: "type /memory edit <scope> <id> <the new text>, the scope as /memory shows it"})
 		return
 	}
 	shelves, err := memory.Open(cmp.Or(a.options.Root, "."))
-	scope := memory.Scope(fields[0])
-	if err == nil && scope != memory.Global && scope != memory.Project {
-		err = errors.New("the scope is global or project, not " + fields[0])
-	}
+	scope, scopeErr := memory.ParseScope(fields[0])
+	err = cmp.Or(err, scopeErr)
 	var old memory.Entry
 	if err == nil {
 		old, err = shelves.Find(scope, fields[1])
@@ -188,7 +181,7 @@ type memoryDialog struct {
 
 func (a *App) memoryDialog() *memoryDialog {
 	shelves, err := memory.Open(cmp.Or(a.options.Root, "."))
-	entries := append(slices.Clone(shelves.Global.Entries), shelves.Project.Entries...)
+	entries := shelves.All()
 	hint := "every entry tofu remembers for you · enter removes or edits"
 	if err != nil {
 		hint = "memory could not be read: " + err.Error()
