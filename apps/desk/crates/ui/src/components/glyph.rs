@@ -19,10 +19,11 @@ pub enum Glyph {
     Agents,
     Pencil,
     Window,
+    Cron,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 13] = [
+    const ALL: [Glyph; 14] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -36,6 +37,7 @@ impl Glyph {
         Glyph::Agents,
         Glyph::Pencil,
         Glyph::Window,
+        Glyph::Cron,
     ];
 
     pub fn path(self) -> &'static str {
@@ -53,6 +55,7 @@ impl Glyph {
             Glyph::Agents => "glyphs/agents.svg",
             Glyph::Pencil => "glyphs/pencil.svg",
             Glyph::Window => "glyphs/window.svg",
+            Glyph::Cron => "glyphs/cron.svg",
         }
     }
 
@@ -71,6 +74,7 @@ impl Glyph {
             Glyph::Agents => include_str!("../../assets/icons/person-multiple.svg"),
             Glyph::Pencil => include_str!("../../assets/icons/pencil.svg"),
             Glyph::Window => include_str!("../../assets/icons/window.svg"),
+            Glyph::Cron => include_str!("../../assets/icons/clock-repeat.svg"),
         }
     }
 

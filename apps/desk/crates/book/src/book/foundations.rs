@@ -117,7 +117,7 @@ const ICONS: [(Icon, &str); 10] = [
     (Icon::Arrow, "arrow"),
 ];
 
-const GLYPHS: [(Glyph, &str); 13] = [
+const GLYPHS: [(Glyph, &str); 14] = [
     (Glyph::Pin, "pin"),
     (Glyph::Lock, "lock"),
     (Glyph::Check, "check"),
@@ -131,6 +131,7 @@ const GLYPHS: [(Glyph, &str); 13] = [
     (Glyph::Agents, "agents"),
     (Glyph::Pencil, "pencil"),
     (Glyph::Window, "window"),
+    (Glyph::Cron, "cron"),
 ];
 
 fn type_scale(sample: &Entity<TextInput>, theme: &Theme, cx: &mut Context<Book>) -> Div {

@@ -527,8 +527,7 @@ pub fn cron_row(
                 .w(px(MARK))
                 .flex()
                 .justify_center()
-                .text_color(ink(theme, T3))
-                .child("↻"),
+                .child(glyph(Glyph::Cron, ICON_SMALL, ink(theme, T3))),
         )
         .child(agent(job, theme))
         .child(dim(schedule, theme))
