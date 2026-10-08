@@ -185,33 +185,6 @@ pub fn pills<V: 'static, T: Copy + PartialEq + 'static>(
         }))
 }
 
-#[cfg(feature = "screen-usage")]
-pub fn told<V: 'static>(
-    text: Option<&'static str>,
-    theme: &Theme,
-    cx: &mut Context<V>,
-    dismiss: fn(&mut V),
-) -> Option<Div> {
-    text.map(|text| {
-        div()
-            .absolute()
-            .left_0()
-            .right_0()
-            .bottom(px(desk_ui::metrics::TOAST_BOTTOM))
-            .flex()
-            .justify_center()
-            .child(desk_ui::components::overlay::toast(
-                SharedString::from(text),
-                desk_core::control::TELL_BADGE,
-                theme,
-                cx.listener(move |view, _: &ClickEvent, _, cx| {
-                    dismiss(view);
-                    cx.notify();
-                }),
-            ))
-    })
-}
-
 pub fn window(theme: &Theme, body: Div) -> Div {
     div()
         .size_full()

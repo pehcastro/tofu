@@ -1433,6 +1433,7 @@ dependencies = [
 name = "desk"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "desk_core",
  "desk_terminal",
  "desk_tiling",

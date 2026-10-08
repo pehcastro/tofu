@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 desk_core.workspace = true
 desk_ui.workspace = true
 desk_terminal.workspace = true
@@ -17,7 +18,7 @@ gpui_platform.workspace = true
 serde_json = "1.0.149"
 
 [features]
-default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session"]
+default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-usage"]
 screen-work = []
 screen-settings = []
 screen-accounts = []

@@ -2,6 +2,7 @@ mod session;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::time::SystemTime;
 
 use crate::bridge::Event;
 use crate::protocol::{
@@ -37,8 +38,9 @@ impl fmt::Display for ModelError {
 
 impl std::error::Error for ModelError {}
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Store {
+    pub opened: SystemTime,
     pub sessions: BTreeMap<String, Session>,
     pub usage: Answer<UsageReport>,
     pub agents: Answer<subagent::Found>,
@@ -46,6 +48,21 @@ pub struct Store {
     pub context: Answer<ContextReport>,
     pub info: Answer<SessionInfo>,
     pub quota: Vec<QuotaWindow>,
+}
+
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            opened: SystemTime::now(),
+            sessions: BTreeMap::new(),
+            usage: Answer::default(),
+            agents: Answer::default(),
+            rules: Answer::default(),
+            context: Answer::default(),
+            info: Answer::default(),
+            quota: Vec::new(),
+        }
+    }
 }
 
 impl Store {

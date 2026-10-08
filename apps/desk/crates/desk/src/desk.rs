@@ -13,6 +13,8 @@ use crate::screens::library::Library;
 use crate::screens::limits::Limits;
 #[cfg(all(feature = "screen-work", feature = "screen-session"))]
 use crate::screens::session::SessionScreen;
+#[cfg(all(feature = "screen-work", feature = "screen-usage"))]
+use crate::screens::usage::UsageScreen;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
@@ -80,13 +82,14 @@ const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
-const LIVE_SCREENS: [&str; 6] = [
+const LIVE_SCREENS: [&str; 7] = [
     "theme",
     "limits",
     "classifier",
     "library",
     "context",
     "session",
+    "usage",
 ];
 #[cfg(feature = "screen-work")]
 const CRON_PROMPT_CHARS: usize = 32;
@@ -342,7 +345,8 @@ impl Desk {
                 feature = "screen-classifier",
                 feature = "screen-library",
                 feature = "screen-context",
-                feature = "screen-session"
+                feature = "screen-session",
+                feature = "screen-usage"
             )
         ))]
         self.feed_screens(cx);
@@ -679,7 +683,8 @@ impl Desk {
             feature = "screen-classifier",
             feature = "screen-library",
             feature = "screen-context",
-            feature = "screen-session"
+            feature = "screen-session",
+            feature = "screen-usage"
         ))]
         self.feed_screens(cx);
         cx.notify();
@@ -690,7 +695,8 @@ impl Desk {
         feature = "screen-classifier",
         feature = "screen-library",
         feature = "screen-context",
-        feature = "screen-session"
+        feature = "screen-session",
+        feature = "screen-usage"
     ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
@@ -721,8 +727,12 @@ impl Desk {
                 context.update(cx, |context, cx| context.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-session")]
-            if let Ok(session) = view.downcast::<SessionScreen>() {
+            if let Ok(session) = view.clone().downcast::<SessionScreen>() {
                 session.update(cx, |session, cx| session.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-usage")]
+            if let Ok(usage) = view.downcast::<UsageScreen>() {
+                usage.update(cx, |usage, cx| usage.read_from(&chat, cx));
             }
         }
     }
