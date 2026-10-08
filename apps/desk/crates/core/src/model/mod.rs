@@ -98,11 +98,10 @@ fn session_of(notification: &Notification) -> Result<&str, ModelError> {
         N::Failure(e) | N::Note(e) => &e.session,
         N::FileEdit(e) => &e.session,
         N::ItemPersisted(e) => &e.session,
-        N::MessageCompleted(e)
-        | N::MessageDelta(e)
-        | N::MessageUser(e)
-        | N::ThinkingDelta(e)
-        | N::TurnSteered(e) => &e.session,
+        N::MessageCompleted(e) | N::MessageDelta(e) | N::ThinkingDelta(e) | N::TurnSteered(e) => {
+            &e.session
+        }
+        N::MessageUser(e) => &e.session,
         N::MessageReset(e) | N::MessageStarted(e) => &e.session,
         N::PlanUpdated(e) => &e.session,
         N::QuotaUpdated(e) => &e.session,

@@ -820,6 +820,36 @@
       "required": [],
       "type": "object"
     },
+    "Origin": {
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "person",
+            "cron",
+            "agent",
+            "tofu"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
     "Persisted": {
       "additionalProperties": false,
       "properties": {
@@ -1218,6 +1248,22 @@
       ],
       "type": "object"
     },
+    "SessionRenameParams": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "name"
+      ],
+      "type": "object"
+    },
     "SessionUpdated": {
       "additionalProperties": false,
       "properties": {
@@ -1231,6 +1277,10 @@
           "type": "string"
         },
         "item": {
+          "type": "string"
+        },
+        "lastAt": {
+          "format": "date-time",
           "type": "string"
         },
         "name": {
@@ -1262,8 +1312,7 @@
         "item",
         "seq",
         "name",
-        "root",
-        "started"
+        "root"
       ],
       "type": "object"
     },
@@ -1686,6 +1735,9 @@
         "item": {
           "type": "string"
         },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
         "seq": {
           "type": "integer"
         },
@@ -1709,6 +1761,7 @@
         "item",
         "seq",
         "task",
+        "origin",
         "startedAt"
       ],
       "type": "object"
@@ -1793,6 +1846,41 @@
         "tokensOut",
         "cacheRead",
         "decisions"
+      ],
+      "type": "object"
+    },
+    "UserMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "text",
+        "origin"
       ],
       "type": "object"
     },
@@ -1905,6 +1993,33 @@
             },
             "params": {
               "$ref": "#/$defs/SessionOpenParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.rename"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionRenameParams"
             }
           },
           "required": [
@@ -2528,7 +2643,7 @@
           "const": "message.user"
         },
         "params": {
-          "$ref": "#/$defs/Text"
+          "$ref": "#/$defs/UserMessage"
         }
       },
       "required": [
@@ -3130,10 +3245,10 @@
               "$ref": "#/$defs/SessionOpenResult"
             },
             {
-              "$ref": "#/$defs/TurnResult"
+              "$ref": "#/$defs/Ack"
             },
             {
-              "$ref": "#/$defs/Ack"
+              "$ref": "#/$defs/TurnResult"
             },
             {
               "$ref": "#/$defs/ShellReadResult"
@@ -3224,7 +3339,7 @@
       "$ref": "#/$defs/Marker"
     },
     "message.user": {
-      "$ref": "#/$defs/Text"
+      "$ref": "#/$defs/UserMessage"
     },
     "note": {
       "$ref": "#/$defs/Said"
@@ -3394,6 +3509,14 @@
       },
       "result": {
         "$ref": "#/$defs/SessionOpenResult"
+      }
+    },
+    "session.rename": {
+      "params": {
+        "$ref": "#/$defs/SessionRenameParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
       }
     },
     "settings.set": {

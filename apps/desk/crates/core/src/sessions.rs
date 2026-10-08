@@ -23,6 +23,8 @@ pub struct SessionRow {
     pub end_reason: String,
     #[serde(default)]
     pub expired: bool,
+    #[serde(default, rename = "lastAt")]
+    pub last_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -74,8 +76,13 @@ impl SessionRow {
         }
     }
 
+    pub fn since(&self, now: SystemTime) -> Option<Duration> {
+        now.duration_since(instant(self.last_at.as_deref().unwrap_or(&self.at))?)
+            .ok()
+    }
+
     pub fn age(&self, now: SystemTime) -> Option<String> {
-        let since = now.duration_since(instant(&self.at)?).ok()?.as_secs();
+        let since = self.since(now)?.as_secs();
         Some(match since {
             0..MINUTE => "just now".to_owned(),
             MINUTE..HOUR => format!("{}m ago", since / MINUTE),
