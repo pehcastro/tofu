@@ -97,7 +97,7 @@ impl WindowsWindowInner {
             WM_ACTIVATE => self.handle_activate_msg(wparam),
             WM_CREATE => self.handle_create_msg(handle),
             WM_MOVE => self.handle_move_msg(handle, lparam),
-            WM_SIZE => self.handle_size_msg(wparam, lparam),
+            WM_SIZE => self.handle_size_msg(handle, wparam, lparam),
             WM_GETMINMAXINFO => self.handle_get_min_max_info_msg(lparam),
             WM_ENTERSIZEMOVE | WM_ENTERMENULOOP => self.handle_size_move_loop(handle),
             WM_EXITSIZEMOVE | WM_EXITMENULOOP => self.handle_size_move_loop_exit(handle),
@@ -236,7 +236,7 @@ impl WindowsWindowInner {
         Some(0)
     }
 
-    fn handle_size_msg(&self, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+    fn handle_size_msg(&self, handle: HWND, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
         // Don't resize the renderer when the window is minimized, but record that it was minimized so
         // that on restore the swap chain can be recreated via `update_drawable_size_even_if_unchanged`.
         if wparam.0 == SIZE_MINIMIZED as usize {
@@ -251,6 +251,9 @@ impl WindowsWindowInner {
         let new_size = size(DevicePixels(width), DevicePixels(height));
 
         let scale_factor = self.state.scale_factor.get();
+        if self.region_corners.get() {
+            self.clip_corners(handle, width, height, scale_factor);
+        }
         let mut should_resize_renderer = false;
         if let Some(restore_from_minimized) = self.state.restore_from_minimized.take() {
             self.state
@@ -789,16 +792,15 @@ impl WindowsWindowInner {
         if !self.hide_title_bar || self.state.is_fullscreen() || wparam.0 == 0 {
             return None;
         }
+        if !self.state.is_maximized() {
+            return Some(0);
+        }
 
         unsafe {
             let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
             let saved_top = (*params).rgrc[0].top;
             let result = DefWindowProcW(handle, WM_NCCALCSIZE, wparam, lparam);
-            (*params).rgrc[0].top = saved_top;
-            if self.state.is_maximized() {
-                let dpi = GetDpiForWindow(handle);
-                (*params).rgrc[0].top += get_frame_thicknessx(dpi);
-            }
+            (*params).rgrc[0].top = saved_top + get_frame_thicknessx(GetDpiForWindow(handle));
             Some(result.0 as isize)
         }
     }
@@ -995,40 +997,35 @@ impl WindowsWindowInner {
             return drag_area;
         }
 
+        if !self.is_resizable || self.state.is_maximized() {
+            return drag_area;
+        }
         let dpi = unsafe { GetDpiForWindow(handle) };
-        // We do not use the OS title bar, so the default `DefWindowProcW` will only register a 1px edge for resizes
-        // We need to calculate the frame thickness ourselves and do the hit test manually.
-        let frame_y = get_frame_thicknessx(dpi);
-        let frame_x = get_frame_thicknessy(dpi);
-        let mut cursor_point = POINT {
+        let frame_x = get_frame_thicknessx(dpi);
+        let frame_y = get_frame_thicknessy(dpi);
+        let mut cursor = POINT {
             x: lparam.signed_loword().into(),
             y: lparam.signed_hiword().into(),
         };
-
-        unsafe { ScreenToClient(handle, &mut cursor_point).ok().log_err() };
-        if self.is_resizable
-            && !self.state.is_maximized()
-            && 0 <= cursor_point.y
-            && cursor_point.y <= frame_y
-        {
-            // x-axis actually goes from -frame_x to 0
-            return Some(if cursor_point.x <= 0 {
-                HTTOPLEFT
-            } else {
-                let mut rect = Default::default();
-                unsafe { GetWindowRect(handle, &mut rect) }.log_err();
-                // right and bottom bounds of RECT are exclusive, thus `-1`
-                let right = rect.right - rect.left - 1;
-                // the bounds include the padding frames, so accommodate for both of them
-                if right - 2 * frame_x <= cursor_point.x {
-                    HTTOPRIGHT
-                } else {
-                    HTTOP
-                }
-            } as _);
-        }
-
-        drag_area
+        let mut client = RECT::default();
+        unsafe { ScreenToClient(handle, &mut cursor).ok().log_err() };
+        unsafe { GetClientRect(handle, &mut client) }.log_err();
+        let left = cursor.x < client.left + frame_x;
+        let right = cursor.x >= client.right - frame_x;
+        let top = cursor.y < client.top + frame_y;
+        let bottom = cursor.y >= client.bottom - frame_y;
+        let edge = match (top, bottom, left, right) {
+            (true, _, true, _) => HTTOPLEFT,
+            (true, _, _, true) => HTTOPRIGHT,
+            (_, true, true, _) => HTBOTTOMLEFT,
+            (_, true, _, true) => HTBOTTOMRIGHT,
+            (true, ..) => HTTOP,
+            (_, true, ..) => HTBOTTOM,
+            (.., true, _) => HTLEFT,
+            (.., true) => HTRIGHT,
+            _ => return drag_area,
+        };
+        Some(edge as _)
     }
 
     fn handle_nc_mouse_move_msg(&self, handle: HWND, lparam: LPARAM) -> Option<isize> {
@@ -1061,6 +1058,9 @@ impl WindowsWindowInner {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> Option<isize> {
+        if (HTLEFT..=HTBOTTOMRIGHT).contains(&(wparam.0 as u32)) {
+            return None;
+        }
         if let Some(mut func) = self.state.callbacks.input.take() {
             let scale_factor = self.state.scale_factor.get();
             let mut cursor_point = POINT {

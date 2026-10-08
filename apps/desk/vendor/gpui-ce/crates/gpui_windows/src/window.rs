@@ -97,6 +97,7 @@ pub(crate) struct WindowsWindowInner {
     system_settings: WindowsSystemSettings,
     pub(crate) handle: AnyWindowHandle,
     pub(crate) hide_title_bar: bool,
+    pub(crate) region_corners: Cell<bool>,
     pub(crate) is_movable: bool,
     pub(crate) is_resizable: bool,
     pub(crate) is_minimizable: bool,
@@ -248,6 +249,37 @@ impl WindowsWindowState {
 }
 
 impl WindowsWindowInner {
+    fn round_corners(&self, hwnd: HWND) {
+        let preference = DWMWCP_ROUND;
+        let refused = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &preference as *const _ as *const _,
+                std::mem::size_of_val(&preference) as u32,
+            )
+        }
+        .is_err();
+        self.region_corners.set(refused);
+        let mut client = RECT::default();
+        if refused && unsafe { GetClientRect(hwnd, &mut client) }.is_ok() {
+            let scale_factor = self.state.scale_factor.get();
+            self.clip_corners(hwnd, client.right, client.bottom, scale_factor);
+        }
+    }
+
+    pub(crate) fn clip_corners(&self, hwnd: HWND, width: i32, height: i32, scale_factor: f32) {
+        let region = (!self.state.is_maximized() && !self.state.is_fullscreen()).then(|| {
+            let diameter = (2.0 * REGION_CORNER_RADIUS * scale_factor).round() as i32;
+            unsafe { CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter) }
+        });
+        if unsafe { SetWindowRgn(hwnd, region, true) } == 0
+            && let Some(region) = region
+        {
+            unsafe { DeleteObject(region.into()) }.ok().log_err();
+        }
+    }
+
     fn new(context: &mut WindowCreateContext, hwnd: HWND, cs: &CREATESTRUCTW) -> Result<Rc<Self>> {
         let state = WindowsWindowState::new(
             hwnd,
@@ -269,6 +301,7 @@ impl WindowsWindowInner {
             state,
             handle: context.handle,
             hide_title_bar: context.hide_title_bar,
+            region_corners: Cell::new(false),
             is_movable: context.is_movable,
             is_resizable: context.is_resizable,
             is_minimizable: context.is_minimizable,
@@ -550,6 +583,9 @@ impl WindowsWindow {
         register_drag_drop(&this)?;
         set_non_rude_hwnd(hwnd, true);
         configure_dwm_dark_mode(hwnd, appearance);
+        if hide_title_bar && params.kind != WindowKind::PopUp {
+            this.round_corners(hwnd);
+        }
         this.state.border_offset.update(hwnd)?;
         let placement =
             retrieve_window_placement(hwnd, display, params.bounds, &this.state.border_offset)?;
@@ -1438,6 +1474,7 @@ enum WindowOpenState {
 }
 
 const WINDOW_CLASS_NAME: PCWSTR = w!("Zed::Window");
+const REGION_CORNER_RADIUS: f32 = 8.0;
 
 fn register_window_class(icon_handle: HICON) {
     static ONCE: Once = Once::new();
