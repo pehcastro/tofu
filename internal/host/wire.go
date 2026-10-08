@@ -414,6 +414,11 @@ type SessionOpenParams struct {
 	Asking  AskingMode `json:"asking,omitempty"`
 }
 
+type SessionRenameParams struct {
+	Session string `json:"session"`
+	Name    string `json:"name"`
+}
+
 type SessionOpenResult struct {
 	Session string `json:"session"`
 	Fresh   bool   `json:"fresh"`
@@ -543,6 +548,7 @@ func requests() []method {
 		{name: "initialize", params: InitializeParams{}, result: InitializeResult{}},
 		{name: "session.list", params: NoParams{}, result: verb},
 		{name: "session.open", params: SessionOpenParams{}, result: SessionOpenResult{}},
+		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
 		{name: "turn.send", params: TurnSendParams{}, result: TurnResult{}},
 		{name: "turn.steer", params: TurnSteerParams{}, result: TurnResult{}},
 		{name: "turn.stop", params: TurnParams{}, result: Ack{}},

@@ -21,7 +21,8 @@ three lines of context.
 
 ## Where it lives
 
-- the requests: `initialize`, `session.list`, `session.open`, `turn.send`,
+- the requests: `initialize`, `session.list`, `session.open`,
+  `session.rename`, `turn.send`,
   `turn.steer`, `turn.stop`, `undo`, `shell.read`, `shell.kill`, `label`,
   `settings.set`, `login.start`, `cron.command`, and the reads `query.usage`,
   `query.context`, `query.rules`, `query.agents`, `query.models`,
@@ -36,6 +37,10 @@ three lines of context.
   `windows: []` means no account answered
 - the schema: `tofu serve --schema` prints the JSON Schema of every line
   tofu writes, and of every line it reads under `$defs.clientMessage`
+- renaming: `session.rename` takes `session`, an id, and `name`, and names
+  every generation of that session's family, as `tofu session rename` does.
+  `session.updated` follows with the new `name` and `handle`; a name with no
+  letter or digit, or a session not here, is refused
 - a session another tofu holds: `session.open` answers with the error
   `session.busy`, carrying the process that holds it
 - the log: every line tofu writes to the session's `events.jsonl` is

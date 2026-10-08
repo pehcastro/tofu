@@ -68,7 +68,7 @@ func (c *wireClient) cronUpdated(live int) CronState {
 	return state
 }
 
-func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
+func serving(t *testing.T, quota func() []QuotaWindow) (*wireClient, *Host, string) {
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -87,9 +87,6 @@ func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
 		}
 	}()
 	served := make(chan error, 1)
-	quota := func() []QuotaWindow {
-		return []QuotaWindow{{Account: "#1", Window: "claude-sub 5h", Percent: 34, Reported: true}}
-	}
 	go func() {
 		served <- Serve(ServeConfig{Host: h, Dir: project, In: clientIn, Out: clientOut, Quota: quota})
 	}()
@@ -97,6 +94,13 @@ func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
 		_ = serveIn.Close()
 		<-served
 		_ = serveOut.Close()
+	})
+	return c, h, project
+}
+
+func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
+	c, h, _ := serving(t, func() []QuotaWindow {
+		return []QuotaWindow{{Account: "#1", Window: "claude-sub 5h", Percent: 34, Reported: true}}
 	})
 
 	c.ask("1", "initialize", `{"client":"scratch"}`)

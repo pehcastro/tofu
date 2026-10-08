@@ -128,11 +128,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, merged("plan.updated", "", &PlanUpdated{Identity: id, Items: steps}))
 	case EventSession:
 		s.session = event.ID
-		updated := &SessionUpdated{Identity: s.identity("", event.ID), Name: event.Text, Root: event.Root}
-		if family := event.Identity; family != nil {
-			updated.Name, updated.Tag, updated.Generation, updated.Handle, updated.Started = family.Name, family.Tag, family.Generation, family.Handle(), family.Started
-		}
-		return append(out, kept("session.updated", updated))
+		return append(out, sessionUpdated(s.identity("", event.ID), event))
 	case EventForkEnd:
 		if event.Fork == nil {
 			return out
@@ -163,6 +159,14 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 func (s *items) said(id Identity, event Event, kind SaidKind) *Said {
 	id.Item = cmp.Or(event.ID, s.mint("said"))
 	return &Said{Identity: id, Kind: kind, Text: event.Text}
+}
+
+func sessionUpdated(id Identity, event Event) outgoing {
+	updated := &SessionUpdated{Identity: id, Name: event.Text, Root: event.Root}
+	if family := event.Identity; family != nil {
+		updated.Name, updated.Tag, updated.Generation, updated.Handle, updated.Started = family.Name, family.Tag, family.Generation, family.Handle(), family.Started
+	}
+	return kept("session.updated", updated)
 }
 
 func wholeJSON(raw json.RawMessage) json.RawMessage {

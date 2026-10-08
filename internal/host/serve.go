@@ -142,6 +142,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 			go s.quota()
 		}
 		return result, err
+	case "session.rename":
+		return handle(raw, s.rename)
 	case "cron.command":
 		return handle(raw, func(p CronCommandParams) (any, error) {
 			reply, err := s.Host.CronCommand(p.Line)
@@ -223,6 +225,19 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 		s.translated(event)
 	}
 	return SessionOpenResult{Session: carry.Session}, nil
+}
+
+func (s *server) rename(p SessionRenameParams) (any, error) {
+	store, err := session.OpenIn(s.Host.dir)
+	if err != nil {
+		return nil, err
+	}
+	header, err := store.SetName(p.Session, p.Name)
+	if err != nil {
+		return nil, err
+	}
+	s.box.push(sessionUpdated(Identity{Session: header.ID, Item: header.ID}, labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID})))
+	return Ack{OK: true}, nil
 }
 
 func busy(err error) error {
