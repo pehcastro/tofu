@@ -16,6 +16,9 @@ use super::kit::label;
 
 const TILE_WIDTH: f32 = 538.0;
 const TILE_HEIGHT: f32 = 820.0;
+const NARROW_WIDTH: f32 = 190.0;
+const NARROW_HEIGHT: f32 = 260.0;
+const NARROW_AGENTS: usize = 2;
 const SCREEN_HEIGHT: f32 = 720.0;
 const FILE_EDITS: u32 = 20;
 const SHELLS: u32 = 6;
@@ -526,7 +529,10 @@ fn events(seed: &Seed) -> Vec<AgentEvent> {
 }
 
 fn board(swapped: bool) -> AgentBoard {
-    let mut seeds = seeds();
+    seeded(seeds(), swapped)
+}
+
+fn seeded(mut seeds: Vec<Seed>, swapped: bool) -> AgentBoard {
     if let Some(first) = seeds.first_mut().filter(|_| swapped) {
         first.agent.status = AgentStatus::Failed;
     }
@@ -551,6 +557,7 @@ fn mention(book: WeakEntity<Book>) -> impl Fn(&Agent, &mut Window, &mut App) + '
 pub(super) struct AgentsPage {
     board: Rc<AgentBoard>,
     tile: Entity<AgentTile>,
+    narrow: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
     swapped: bool,
     pending: bool,
@@ -574,10 +581,14 @@ impl AgentsPage {
                 });
             }
         };
+        let few = seeds().into_iter().take(NARROW_AGENTS).collect();
+        let narrow = Rc::new(seeded(few, false));
+        let narrow = cx.new(|cx| AgentTile::new(narrow, mention(book.clone()), |_, _, _| {}, cx));
         let tile = cx.new(|cx| AgentTile::new(board.clone(), mention(book), expand, cx));
         AgentsPage {
             board,
             tile,
+            narrow,
             screen,
             swapped: false,
             pending: false,
@@ -650,6 +661,13 @@ impl AgentsPage {
         .w(px(TILE_WIDTH))
         .h(px(TILE_HEIGHT))
         .child(inner_card(theme).child(self.tile.clone()));
+        let narrow = shell(
+            Header::Title(Some(Glyph::Agents), "Sub-agents".into(), None),
+            theme,
+        )
+        .w(px(NARROW_WIDTH))
+        .h(px(NARROW_HEIGHT))
+        .child(inner_card(theme).child(self.narrow.clone()));
         let screen = shell(
             Header::Title(
                 Some(Glyph::Agents),
@@ -668,6 +686,10 @@ impl AgentsPage {
             .child(column(
                 "Tile, IWY-4: the Sub-agents tab of the work card, 538 x 820 as in the 1440 x 900 board. A row opens the drawer over the bottom of the card; click outside it, Escape or Close shuts it, Expand opens the agent in the screen below.",
                 tile,
+            ))
+            .child(column(
+                "Narrow, DESK-208: the same tile 190 px wide with two agents, as in a 720 x 420 board with the sidebar open. Under 48 px for doing, the doing column drops and agent and time stay.",
+                narrow,
             ))
             .child(column(
                 "Screen, IWY-7: the expanded tab. A row on the left shows that agent on the right in place; All activity goes back.",

@@ -3,8 +3,8 @@ use std::rc::Rc;
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
     Animation, AnimationExt, AnyElement, App, ClickEvent, Context, Div, ElementId, FocusHandle,
-    FontWeight, KeyDownEvent, MouseDownEvent, Rgba, SharedString, Stateful, Transformation, Window,
-    div, prelude::*, px, radians, relative,
+    FontWeight, KeyDownEvent, MouseDownEvent, Pixels, Rgba, SharedString, Stateful, Transformation,
+    Window, div, prelude::*, px, radians, relative,
 };
 
 use crate::component::icon;
@@ -24,6 +24,7 @@ use crate::components::size::{
     RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_LIST, RADIUS_TAB, ROW_GAP, ROW_PAD_X, SHELL_TEXT, T1,
     T2, T3,
 };
+use crate::components::width::Width;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON_SMALL, ICON_TINY};
@@ -46,6 +47,7 @@ const COLUMNS_PAD_BOTTOM: f32 = 4.0;
 const TILE_ROW_PAD_Y: f32 = 3.0;
 const TILE_AVATAR_GAP: f32 = 8.0;
 const LINE_TASK: f32 = 17.0;
+const DOING_LEAST: f32 = 48.0;
 
 const DRAWER_PAD_X: f32 = 16.0;
 const DRAWER_HEAD_PAD_BOTTOM: f32 = 10.0;
@@ -891,7 +893,12 @@ fn when() -> Div {
     div().w(px(GRID_WHEN)).flex_none().min_w_0().truncate()
 }
 
-fn tile_row(ix: usize, line: &AgentLine, picked: bool, theme: &Theme) -> Stateful<Div> {
+fn tile_row(
+    ix: usize,
+    line: &AgentLine,
+    (picked, fit): (bool, DoingFit),
+    theme: &Theme,
+) -> Stateful<Div> {
     let agent = &line.agent;
     let t3 = ink(theme, T3);
     grid(("tile-row", ix))
@@ -915,18 +922,20 @@ fn tile_row(ix: usize, line: &AgentLine, picked: bool, theme: &Theme) -> Statefu
                         .child(agent.name()),
                 ),
         )
-        .child(
-            doing()
-                .line_height(px(LINE_TASK))
-                .child(div().truncate().child(line.task.clone()))
-                .child(
-                    div()
-                        .truncate()
-                        .text_size(px(FONT_WHO))
-                        .text_color(t3)
-                        .child(line.now.clone()),
-                ),
-        )
+        .when(fit == DoingFit::Shown, |row| {
+            row.child(
+                doing()
+                    .line_height(px(LINE_TASK))
+                    .child(div().truncate().child(line.task.clone()))
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(FONT_WHO))
+                            .text_color(t3)
+                            .child(line.now.clone()),
+                    ),
+            )
+        })
         .child(
             when()
                 .text_size(px(FONT_WHO))
@@ -936,13 +945,35 @@ fn tile_row(ix: usize, line: &AgentLine, picked: bool, theme: &Theme) -> Statefu
         )
 }
 
-fn columns(theme: &Theme) -> Stateful<Div> {
+fn columns(fit: DoingFit, theme: &Theme) -> Stateful<Div> {
     grid("tile-columns")
         .pt(px(COLUMNS_PAD_TOP))
         .pb(px(COLUMNS_PAD_BOTTOM))
+        .whitespace_nowrap()
         .child(who().child(caption("agent", theme)))
-        .child(doing().child(caption("doing", theme)))
+        .when(fit == DoingFit::Shown, |row| {
+            row.child(doing().child(caption("doing", theme).truncate()))
+        })
         .child(when().child(caption("time", theme)))
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum DoingFit {
+    Shown,
+    Dropped,
+}
+
+impl DoingFit {
+    fn of(tile: Option<Pixels>) -> Self {
+        let room = tile.map_or(f32::INFINITY, |width| {
+            width.as_f32() - 2.0 * GRID_PAD_X - 2.0 * GRID_GAP - GRID_WHO - GRID_WHEN
+        });
+        if room < DOING_LEAST {
+            DoingFit::Dropped
+        } else {
+            DoingFit::Shown
+        }
+    }
 }
 
 pub struct AgentTile {
@@ -1125,13 +1156,15 @@ impl Render for AgentTile {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let glide = RowGlide::new("tile-glide", HoverVariant::Glide, &theme, window, cx);
+        let width = Width::of(format!("tile-width-{}", cx.entity_id()), window, cx);
+        let fit = DoingFit::of(width.get(cx));
         let mut table = div()
             .flex()
             .flex_col()
             .min_w_0()
             .pt(px(TILE_PAD_TOP))
             .pb(px(TILE_PAD_BOTTOM))
-            .child(columns(&theme));
+            .child(columns(fit, &theme));
         let mut slot = 0;
         for (at, status, members) in self.board.groups() {
             let open = self.open_groups.get(at).copied().unwrap_or(false);
@@ -1158,9 +1191,10 @@ impl Render for AgentTile {
                 let Some(line) = self.board.lines.get(ix) else {
                     continue;
                 };
-                let row = tile_row(ix, line, self.open && self.shown == ix, &theme).on_click(
-                    cx.listener(move |tile, _: &ClickEvent, window, cx| tile.show(ix, window, cx)),
-                );
+                let row = tile_row(ix, line, (self.open && self.shown == ix, fit), &theme)
+                    .on_click(cx.listener(move |tile, _: &ClickEvent, window, cx| {
+                        tile.show(ix, window, cx)
+                    }));
                 table = table.child(glide.row(slot, row));
                 slot += 1;
             }
@@ -1186,6 +1220,7 @@ impl Render for AgentTile {
             .flex()
             .flex_col()
             .text_color(ink(&theme, T1))
+            .child(width.probe())
             .child(ScrollArea::new("tile-scroll").child(glide.frame("tile-rows", table)))
             .child(drawer)
     }
