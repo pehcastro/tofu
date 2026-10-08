@@ -49,6 +49,7 @@ const CTRL: Mods = Mods {
     ..PLAIN
 };
 const CTRL_ALT: Mods = Mods { alt: true, ..CTRL };
+const ALT: Mods = Mods { alt: true, ..PLAIN };
 const CTRL_SHIFT: Mods = Mods {
     shift: true,
     ..CTRL
@@ -85,9 +86,9 @@ pub const SHORTCUTS: [Shortcut; 15] = [
     },
     Shortcut {
         action: Action::Close,
-        mods: CTRL_ALT,
+        mods: ALT,
         key: Key::Named("w"),
-        keys: "Ctrl Alt W",
+        keys: "Alt W",
         label: "close tile",
     },
     Shortcut {

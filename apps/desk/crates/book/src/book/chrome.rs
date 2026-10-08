@@ -1,10 +1,12 @@
-use desk_ui::components::overlay::{MenuItem, actions, menu};
+use desk_ui::components::glyph::Glyph;
+use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::sidebar::SIDEBAR_COLUMN;
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
     Account, Notice, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
 };
+use desk_ui::icon::Icon;
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, IntoElement, Window, div, prelude::*, px};
 
@@ -126,12 +128,18 @@ fn plus_menu(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
     let items: Vec<MenuItem> = [MenuItem::Action {
         label: "New workspace".into(),
         keys: Some("Ctrl T".into()),
+        icon: Some(Icon::Plus.into()),
     }]
     .into_iter()
     .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
-    .chain(actions(["Chat", "Sub-agents", "File edits", "Shells"]))
+    .chain([
+        MenuItem::action("Chat").icon(Glyph::Chat),
+        MenuItem::action("Sub-agents").icon(Glyph::Agents),
+        MenuItem::action("File edits").icon(Glyph::File),
+        MenuItem::action("Shells").icon(Glyph::Terminal),
+    ])
     .chain([MenuItem::Caption("Screens, open as a tab".into())])
-    .chain(actions(["theme"]))
+    .chain([MenuItem::action("theme").icon(Icon::Sidebar)])
     .collect();
     menu(
         "chrome-plus-menu",

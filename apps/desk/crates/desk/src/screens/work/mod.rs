@@ -11,6 +11,7 @@ use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
 use desk_ui::components::tabs::{Tab, TabEvent, header_tabs, new_tab_glyph};
 use desk_ui::components::tiling_board::{Host, Settled, TilingBoard};
+use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
 use gpui::{
@@ -177,6 +178,14 @@ fn glyph(module: &Module) -> Option<Glyph> {
         Module::FileEdits => Some(Glyph::File),
         Module::Shells | Module::Terminal => Some(Glyph::Terminal),
         Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => None,
+    }
+}
+
+fn module_row(module: &Module) -> MenuItem {
+    let row = MenuItem::action(module.name());
+    match glyph(module) {
+        Some(mark) => row.icon(mark),
+        None => row,
     }
 }
 
@@ -452,36 +461,38 @@ impl Work {
         let new = MenuItem::Action {
             label: "New workspace".into(),
             keys: Some("Ctrl T".into()),
+            icon: Some(Icon::Plus.into()),
         };
         std::iter::once(new)
             .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
-            .chain(
-                OPENABLE
-                    .iter()
-                    .map(|module| MenuItem::action(module.name())),
-            )
+            .chain(OPENABLE.iter().map(module_row))
             .chain([MenuItem::Caption("Screens, open as a tab".into())])
-            .chain(openable.iter().map(|name| MenuItem::action(*name)))
+            .chain(
+                openable
+                    .iter()
+                    .map(|name| MenuItem::action(*name).icon(Icon::Sidebar)),
+            )
             .collect()
     }
 
     fn tab_menu(workspace: Option<&Workspace>) -> Vec<MenuItem> {
         let (pinned, locked) = workspace.map_or((false, false), |at| (at.pinned, at.locked));
-        vec![
-            MenuItem::action("Rename"),
-            MenuItem::action(if pinned { "Unpin" } else { "Pin" }),
-            MenuItem::action(if locked { "Unlock" } else { "Lock" }),
-            MenuItem::action("Reset layout"),
-            MenuItem::action("Close"),
-            MenuItem::Separator,
-            MenuItem::Submenu {
+        [
+            Some(MenuItem::action("Rename").icon(Glyph::File)),
+            Some(MenuItem::action(if pinned { "Unpin" } else { "Pin" }).icon(Glyph::Pin)),
+            Some(MenuItem::action(if locked { "Unlock" } else { "Lock" }).icon(Glyph::Lock)),
+            Some(MenuItem::action("Reset layout").icon(Icon::Restore)),
+            (!pinned).then(|| MenuItem::action("Close").icon(Icon::Close)),
+            Some(MenuItem::Separator),
+            Some(MenuItem::Submenu {
                 label: "Spawn".into(),
-                items: OPENABLE
-                    .iter()
-                    .map(|module| MenuItem::action(module.name()))
-                    .collect(),
-            },
+                icon: Some(Icon::Plus.into()),
+                items: OPENABLE.iter().map(module_row).collect(),
+            }),
         ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     fn picked_plus(&mut self, pick: usize, openable: &[&'static str]) -> Option<Strip> {
@@ -500,7 +511,12 @@ impl Work {
     }
 
     fn picked_tab(&mut self, pick: usize, index: usize) {
-        match pick {
+        let pinned = self
+            .board
+            .workspaces()
+            .get(index)
+            .is_some_and(|at| at.pinned);
+        match if pinned && pick >= 4 { pick + 1 } else { pick } {
             0 => self.board.rename(index),
             1 => self.board.toggle_pin(index),
             2 => self.board.toggle_lock(index),

@@ -444,16 +444,36 @@ impl RenderOnce for Popover {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuIcon {
+    Icon(Icon),
+    Glyph(Glyph),
+}
+
+impl From<Icon> for MenuIcon {
+    fn from(icon: Icon) -> Self {
+        MenuIcon::Icon(icon)
+    }
+}
+
+impl From<Glyph> for MenuIcon {
+    fn from(glyph: Glyph) -> Self {
+        MenuIcon::Glyph(glyph)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MenuItem {
     Action {
         label: SharedString,
         keys: Option<SharedString>,
+        icon: Option<MenuIcon>,
     },
     Separator,
     Caption(SharedString),
     Submenu {
         label: SharedString,
+        icon: Option<MenuIcon>,
         items: Vec<MenuItem>,
     },
 }
@@ -463,6 +483,23 @@ impl MenuItem {
         MenuItem::Action {
             label: label.into(),
             keys: None,
+            icon: None,
+        }
+    }
+
+    pub fn icon(self, leading: impl Into<MenuIcon>) -> Self {
+        match self {
+            MenuItem::Action { label, keys, .. } => MenuItem::Action {
+                label,
+                keys,
+                icon: Some(leading.into()),
+            },
+            MenuItem::Submenu { label, items, .. } => MenuItem::Submenu {
+                label,
+                icon: Some(leading.into()),
+                items,
+            },
+            MenuItem::Separator | MenuItem::Caption(_) => self,
         }
     }
 
@@ -518,15 +555,23 @@ enum MenuRow {
 
 fn menu_entry(id: impl Into<ElementId>, item: &MenuItem, theme: &Theme) -> MenuRow {
     match item {
-        MenuItem::Action { label, keys } => MenuRow::Pick(
+        MenuItem::Action {
+            label,
+            keys,
+            icon: lead,
+        } => MenuRow::Pick(
             menu_row(id, theme)
                 .aria_label(label.clone())
+                .children(lead.map(|lead| leading(lead, theme)))
                 .child(div().flex_1().child(label.clone()))
                 .children(keys.clone().map(|keys| kbd(keys, theme))),
         ),
-        MenuItem::Submenu { label, .. } => MenuRow::Pick(
+        MenuItem::Submenu {
+            label, icon: lead, ..
+        } => MenuRow::Pick(
             menu_row(id, theme)
                 .aria_label(label.clone())
+                .children(lead.map(|lead| leading(lead, theme)))
                 .child(div().flex_1().child(label.clone()))
                 .child(icon(Icon::Arrow, ICON_TINY, ink(theme, CAPTION_TEXT))),
         ),
@@ -569,6 +614,15 @@ pub fn menu(
             MenuRow::Inert(row) => list.inert(row),
         }
     })
+}
+
+fn leading(lead: MenuIcon, theme: &Theme) -> Div {
+    let color = ink(theme, CAPTION_TEXT);
+    let mark = match lead {
+        MenuIcon::Icon(mark) => icon(mark, ICON_TINY, color),
+        MenuIcon::Glyph(mark) => glyph(mark, ICON_TINY, color),
+    };
+    div().flex_none().mr(px(ROW_PAD_X)).child(mark)
 }
 
 fn menu_row(id: impl Into<ElementId>, theme: &Theme) -> Stateful<Div> {

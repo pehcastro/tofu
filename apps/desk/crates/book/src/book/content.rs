@@ -3,11 +3,13 @@ use std::time::Duration;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{inner_card, shell};
 use desk_ui::components::form::{SelectableText, TextInput};
+use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{
     Dropdown, DropdownTrigger, MenuButton, MenuItem, Placement, Popover, Side, ToastKind, actions,
     context_menu,
 };
 use desk_ui::components::sheet::{Drawer, Sheet};
+use desk_ui::icon::Icon;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     ClickEvent, Context, Div, ElementId, Entity, SharedString, Stateful, Window, div, prelude::*,
@@ -52,13 +54,15 @@ fn grouped() -> Vec<MenuItem> {
         MenuItem::Action {
             label: "Rename".into(),
             keys: Some("F2".into()),
+            icon: Some(Glyph::File.into()),
         },
-        MenuItem::action("Pin"),
-        MenuItem::action("Lock"),
+        MenuItem::action("Pin").icon(Glyph::Pin),
+        MenuItem::action("Lock").icon(Glyph::Lock),
         MenuItem::Separator,
         MenuItem::Caption("Tiles".into()),
         MenuItem::Submenu {
             label: "Spawn".into(),
+            icon: Some(Icon::Plus.into()),
             items: actions(SPAWNS),
         },
     ]

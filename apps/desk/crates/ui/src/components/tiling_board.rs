@@ -14,20 +14,26 @@ use gpui::{
     canvas, deferred, div, point, prelude::*, px, relative, size,
 };
 
+use crate::component::{control, icon};
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::{Header, header_action, inner_card, shell};
 use crate::components::chip::kbd;
 use crate::components::empty::{EmptyAction, EmptyHint, empty_state};
-use crate::components::overlay::{MenuButton, actions, menu_surface};
+use crate::components::overlay::{MenuButton, MenuItem, menu_surface};
 use crate::components::paint::{ink, tint};
-use crate::components::size::{CAPTION_TEXT, FONT_SMALL, HEADER, RADIUS_CHIP, RADIUS_ROW, T1};
+use crate::components::size::{
+    CAPTION_TEXT, FONT_SMALL, HEADER, RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_ROW, T1,
+};
 use crate::components::tabs::{Tab, TabEvent, TabMark, close_tile, connected_tabs};
 use crate::icon::Icon;
+use crate::metrics::ICON_SMALL;
 use crate::theme::{ColorToken, NumberToken, Theme};
 
 pub const SIDE_WIDTH: f32 = 290.0;
 const MENU_WIDTH: f32 = 200.0;
 const MENU_TOP: f32 = 36.0;
+const TILE_PLUS_BOX: f32 = 16.0;
+const TILE_PLUS_GLYPH: f32 = ICON_SMALL * 0.8;
 const DIVIDER_LINE: f32 = 2.0;
 const BADGE_OFFSET: f32 = 12.0;
 const SHRINK_SLACK: f32 = 0.5;
@@ -276,6 +282,7 @@ impl<V: 'static> TilingBoard<V> {
     pub fn toggle_pin(&mut self, index: usize) {
         if let Some(workspace) = self.workspaces.get_mut(index) {
             workspace.pinned = !workspace.pinned;
+            workspace.locked &= workspace.pinned;
         }
         self.settle();
     }
@@ -484,6 +491,7 @@ impl<V: 'static> TilingBoard<V> {
     pub fn toggle_lock(&mut self, index: usize) {
         if let Some(workspace) = self.workspaces.get_mut(index) {
             workspace.locked = !workspace.locked;
+            workspace.pinned |= workspace.locked;
         }
         self.settle();
     }
@@ -596,7 +604,11 @@ impl<V: 'static> TilingBoard<V> {
     }
 
     pub fn close_workspace(&mut self, index: usize) {
-        if index >= self.workspaces.len() {
+        if self
+            .workspaces
+            .get(index)
+            .is_none_or(|workspace| workspace.pinned || workspace.locked)
+        {
             return;
         }
         self.workspaces.remove(index);
@@ -675,9 +687,9 @@ impl<V: 'static> TilingBoard<V> {
                     label: format!("{name}{}", zoomed.unwrap_or_default()).into(),
                     icon: None,
                     count: None,
-                    mark: match (workspace.pinned, workspace.locked) {
-                        (true, _) => TabMark::Pinned,
-                        (false, true) => TabMark::Locked,
+                    mark: match (workspace.locked, workspace.pinned) {
+                        (true, _) => TabMark::Locked,
+                        (false, true) => TabMark::Pinned,
                         (false, false) => TabMark::Close,
                     },
                 }
@@ -881,17 +893,31 @@ impl<V: 'static> TilingBoard<V> {
             }
         });
         let plus_id = SharedString::from(format!("tiling-plus-{}", tile.0));
-        let modules = self.host.spawnable.clone();
+        let rows: Vec<MenuItem> = self
+            .host
+            .spawnable
+            .iter()
+            .map(|module| {
+                let row = MenuItem::action(module.name().to_owned());
+                match (self.host.title)(module, TabMark::Close, cx).icon {
+                    Some(mark) => row.icon(mark),
+                    None => row,
+                }
+            })
+            .collect();
         let plus = window
             .use_keyed_state(plus_id.clone(), cx, |_, cx| {
-                let button = MenuButton::new(
-                    "Add a tab".into(),
-                    actions(modules.iter().map(|module| module.name().to_owned())),
-                    cx,
-                );
+                let button = MenuButton::new("Add a tab".into(), rows, cx);
                 button.update(cx, |button, _| {
                     button.trigger(move |_, theme| {
-                        header_action(plus_id.clone(), Icon::Plus, "Add a tab", theme)
+                        control(plus_id.clone(), "Add a tab", theme)
+                            .size(px(TILE_PLUS_BOX))
+                            .rounded(px(RADIUS_CHIP_SMALL))
+                            .child(icon(
+                                Icon::Plus,
+                                TILE_PLUS_GLYPH,
+                                theme.color(ColorToken::TextIcon),
+                            ))
                     });
                 });
                 button

@@ -268,7 +268,7 @@ fn workspace(line: &str, body: &str, version: Version) -> Result<Workspace, Stri
         ));
     }
     let mut workspace = Workspace::restore(name, preset, locked, tree, focus, saved);
-    workspace.pinned = pinned;
+    workspace.pinned = pinned || locked;
     Ok(workspace)
 }
 

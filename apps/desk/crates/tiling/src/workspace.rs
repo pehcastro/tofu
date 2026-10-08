@@ -478,7 +478,7 @@ impl Workspace {
     pub fn spawn(&self, module: Module, area: Rect) -> Result<Spawned, Refusal> {
         match self.open(module.clone(), area) {
             Ok(next) => Ok(Spawned::Here(next)),
-            Err(Refusal::TooSmall | Refusal::TooMany) => {
+            Err(Refusal::TooSmall | Refusal::TooMany | Refusal::Locked) => {
                 Workspace::new(module.name().to_lowercase(), Preset::Empty)
                     .open(module, area)
                     .map(Spawned::NewTab)

@@ -27,6 +27,7 @@ use crate::theme::{ColorToken, NumberToken, Theme};
 
 const TRACE_VAR: &str = "DESK_MOTION_TRACE";
 const HEADER_GAP: f32 = 4.0;
+const NEW_BUTTON_GAP: f32 = 2.0;
 const MORE_LIST_MIN: f32 = 180.0;
 const DIRTY_DOT: f32 = 7.0;
 
@@ -1131,6 +1132,7 @@ impl RenderOnce for TabStrip {
                             .flex()
                             .flex_none()
                             .items_center()
+                            .pl(px(NEW_BUTTON_GAP))
                             .child(button)
                             .into_any_element()
                     }))
