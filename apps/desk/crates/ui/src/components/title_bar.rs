@@ -367,6 +367,7 @@ impl Caption {
             .id(label)
             .aria_label(label)
             .group(label)
+            .occlude()
             .w(px(CAPTION_WIDTH))
             .h(px(CONTROL))
             .flex()
@@ -409,8 +410,15 @@ impl RenderOnce for TitleBar {
         let theme = ActiveTheme::theme(cx);
         let tab = theme.color(ColorToken::TextTab);
         let tabs = match self.tabs.take() {
-            Some(tabs) => div().flex_1().min_w_0().child(tabs).into_any_element(),
+            Some(tabs) => div()
+                .id("title-tabs")
+                .flex_1()
+                .min_w_0()
+                .occlude()
+                .child(tabs)
+                .into_any_element(),
             None => control("new-workspace", Control::NewWorkspace.label(), &theme)
+                .occlude()
                 .h(px(TAB_HEIGHT))
                 .px_2p5()
                 .rounded(px(RADIUS_TAB))
@@ -459,6 +467,7 @@ impl RenderOnce for TitleBar {
             Control::Notifications.label(),
             &theme,
         )
+        .occlude()
         .when(unread, |bell| {
             bell.child(
                 div()
@@ -472,6 +481,7 @@ impl RenderOnce for TitleBar {
         })
         .on_click(toggle(TitlePop::Notifications));
         let account = control("account", Control::Account.label(), &theme)
+            .occlude()
             .size(px(CONTROL))
             .rounded_full()
             .child(person_avatar(
@@ -488,6 +498,9 @@ impl RenderOnce for TitleBar {
             .flex()
             .items_center()
             .gap(px(TITLE_GAP))
+            .when(title.keys == WindowKeys::Live, |bar| {
+                bar.window_control_area(WindowControlArea::Drag)
+            })
             .child(
                 div()
                     .w(px(column))
@@ -499,6 +512,7 @@ impl RenderOnce for TitleBar {
                     .pl_2p5()
                     .child(
                         icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme)
+                            .occlude()
                             .on_click(self.picked(TitlePick::Sidebar)),
                     )
                     .when(title.sidebar_open, |name| {
@@ -512,17 +526,10 @@ impl RenderOnce for TitleBar {
                     }),
             )
             .child(tabs)
-            .child(
-                div()
-                    .id("drag")
-                    .flex_1()
-                    .h_full()
-                    .when(title.keys == WindowKeys::Live, |drag| {
-                        drag.window_control_area(WindowControlArea::Drag)
-                    }),
-            )
+            .child(div().flex_1())
             .child(
                 control("palette", "Command palette", &theme)
+                    .occlude()
                     .h(px(CONTROL))
                     .px_2p5()
                     .gap_2()

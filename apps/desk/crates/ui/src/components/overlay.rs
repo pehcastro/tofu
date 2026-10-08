@@ -619,8 +619,8 @@ pub fn menu(
 fn leading(lead: MenuIcon, theme: &Theme) -> Div {
     let color = ink(theme, CAPTION_TEXT);
     let mark = match lead {
-        MenuIcon::Icon(mark) => icon(mark, ICON_TINY, color),
-        MenuIcon::Glyph(mark) => glyph(mark, ICON_TINY, color),
+        MenuIcon::Icon(mark) => icon(mark, ICON_SMALL, color),
+        MenuIcon::Glyph(mark) => glyph(mark, ICON_SMALL, color),
     };
     div().flex_none().mr(px(ROW_PAD_X)).child(mark)
 }

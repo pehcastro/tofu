@@ -491,7 +491,7 @@ impl<V: 'static> TilingBoard<V> {
     pub fn toggle_lock(&mut self, index: usize) {
         if let Some(workspace) = self.workspaces.get_mut(index) {
             workspace.locked = !workspace.locked;
-            workspace.pinned |= workspace.locked;
+            workspace.pinned = workspace.locked;
         }
         self.settle();
     }
