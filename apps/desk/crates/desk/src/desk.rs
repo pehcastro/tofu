@@ -574,6 +574,7 @@ impl Desk {
             SidebarPick::NewSession
             | SidebarPick::Open(_)
             | SidebarPick::CopyId(_)
+            | SidebarPick::Rename(_)
             | SidebarPick::Docs => eprintln!("desk: sidebar: {pick:?} needs the work screen"),
         }
     }
