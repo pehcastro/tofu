@@ -10,6 +10,16 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.7-fix2 - 2026-10-08
+
+### Added
+
+- **`tofu serve` says who started a turn.** `turn.started` and `message.user` carry `origin`: the person, a cron job with its schedule, or an agent, live and in a reopened session. `session.list` rows and `session.updated` carry `lastAt`, the last time anything was recorded in the session.
+
+### Fixed
+
+- **Update notices no longer appear in the chat.** A fresh session shows them under the welcome art, and a running session at the right of the status row above the composer.
+
 ## 0.5.7-fix1 - 2026-10-08
 
 ### Added
