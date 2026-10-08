@@ -67,7 +67,7 @@ type Entry struct {
 	turn      int
 	intoTurn  time.Duration
 	streaming bool
-	waiting   bool
+	taken     bool
 	asking    bool
 	asked     bool
 	rendered  []string
@@ -397,7 +397,7 @@ func (m *Model) Recorded(role, content, id string, at time.Time) {
 		}, id, at)
 	case isession.RoleUser:
 		m.link(func(entry Entry) bool {
-			return entry.Kind == User && !entry.waiting && strings.Contains(content, Expand(entry.Body, entry.Chips))
+			return entry.Kind == User && strings.Contains(content, Expand(entry.Body, entry.Chips))
 		}, id, at)
 		for m.link(func(entry Entry) bool {
 			return entry.Head == reportHead && entry.Detail != "" && strings.Contains(content, entry.Detail)

@@ -189,7 +189,7 @@ func composerRows() []keyRow {
 			}
 			return nil, true
 		}},
-		{turnGroup, []string{"ctrl+x"}, "drop the queued prompt", done(func(a *App) { a.view.Unqueue() })},
+		{turnGroup, []string{"ctrl+x"}, "drop the queued prompt", done((*App).unqueue)},
 		{turnGroup, []string{"alt+up"}, "pick an earlier queued", done(func(a *App) { a.view.PickQueued(-1) })},
 		{turnGroup, []string{"alt+down"}, "pick a later queued", done(func(a *App) { a.view.PickQueued(1) })},
 	}

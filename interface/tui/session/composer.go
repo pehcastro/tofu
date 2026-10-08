@@ -46,7 +46,7 @@ func (m *Model) transcriptRows() int {
 }
 
 func (m *Model) statusRows() int {
-	rows := len(m.turnLines())
+	rows := len(m.turnLines()) + len(m.queueLines())
 	if _, open := m.openAsk(); open {
 		rows += askBlockRows
 	}
@@ -57,7 +57,7 @@ func (m *Model) statusRows() int {
 }
 
 func (m *Model) footer() []string {
-	lines := append(m.turnLines(), m.askLines()...)
+	lines := append(append(m.turnLines(), m.askLines()...), m.queueLines()...)
 	if len(lines) > 0 {
 		lines = append([]string{""}, lines...)
 	}

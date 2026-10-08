@@ -44,10 +44,10 @@ type foldCounts struct {
 }
 
 type drawKey struct {
-	width, lead, body                                    int
-	status, verdict, spawn                               string
-	latest, picked, streaming, waiting, failed, promoted bool
-	fold                                                 foldCounts
+	width, lead, body                   int
+	status, verdict, spawn              string
+	latest, streaming, failed, promoted bool
+	fold                                foldCounts
 }
 
 type drawn struct {
@@ -120,14 +120,13 @@ func (m *Model) drawKey(start, end int) (drawKey, bool) {
 	entry := &m.entries[start]
 	key := drawKey{
 		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status, verdict: entry.verdictShown(),
-		streaming: entry.streaming, waiting: entry.waiting, failed: entry.Failed, promoted: entry.Promoted,
+		streaming: entry.streaming, failed: entry.Failed, promoted: entry.Promoted,
 	}
 	if m.folds(start) {
 		key.fold = m.foldCounts(start, end)
 		return key, m.liveFold(start, end)
 	}
 	key.latest = m.latestUser(start)
-	key.picked = entry.waiting && entry.ID == m.pickedQueue()
 	if len(entry.SubAgents) == 0 {
 		return key, entry.running()
 	}
@@ -172,11 +171,11 @@ func (m *Model) lead(start int) int {
 }
 
 func (m *Model) latestUser(index int) bool {
-	if m.entries[index].Kind != User || m.entries[index].waiting {
+	if m.entries[index].Kind != User {
 		return false
 	}
 	for later := index + 1; later < len(m.entries); later++ {
-		if m.entries[later].Kind == User && !m.entries[later].waiting {
+		if m.entries[later].Kind == User {
 			return false
 		}
 	}
@@ -258,9 +257,6 @@ func (m *Model) render(index int) []string {
 	switch entry.Kind {
 	case User:
 		lines := strings.Split(look.Style(look.Text).Render(strings.Join(widget.Wrap(entry.Body, m.textWidth()), "\n")), "\n")
-		if entry.waiting {
-			lines = []string{look.Muted(widget.Fit(oneLine(entry.Body), m.textWidth()))}
-		}
 		return m.message(entry, look.Title(you), append(lines, m.chipLines(entry.Chips)...), m.latestUser(index))
 	case Assistant:
 		return m.message(entry, look.AgentRef(orchestrator), entry.displayLines(), false)
@@ -297,12 +293,6 @@ func (m *Model) message(entry Entry, label string, body []string, tinted bool) [
 	meta := look.Faint(clock)
 	if short := trace.Short(entry.shownID()); short != "" {
 		meta = look.Faint(clock+metaGap) + look.TypedID(messageKind, short)
-	}
-	if entry.waiting {
-		meta = look.Faint(waitingWord)
-		if entry.ID == m.pickedQueue() {
-			meta = look.Accent(pickedMarker + waitingWord)
-		}
 	}
 	lines := []string{label, meta}
 	if widget.Cells(label)+widget.Cells(meta)+len(metaGap) <= width {

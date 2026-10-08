@@ -53,35 +53,76 @@ func steerApp(t *testing.T, play host.Play) *App {
 	return app
 }
 
-func TestAQueuedRowIsUnmarkedWhenTheModelTakesItAndNotWhenItWasQueued(t *testing.T) {
-	started, release := make(chan played, 2), make(chan struct{})
-	app := steerApp(t, steeringTurn(started, make(chan string, 2), release))
-	typeAndSend(app, firstTask)
-	<-started
-	typeAndSend(app, secondTask)
-
-	if row := headerOf(t, app, secondTask); !strings.Contains(row, "waiting") {
-		t.Fatalf("the queued row lost its mark before the model took it: %q", row)
+func TestThreeMessagesTakenInOneStepBecomeOneSentMessageUnderTheWorkBeforeIt(t *testing.T) {
+	release := make(chan struct{})
+	app := steerApp(t, func(_ context.Context, _ Pick, _ string, live host.Live) {
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventText, Text: "working on the first ask"})
+		<-release
+		for drained := false; !drained; {
+			select {
+			case steered := <-live.Steering:
+				live.Emit(Event{Kind: EventSteered, Text: steered})
+			default:
+				drained = true
+			}
+		}
+		live.Emit(Event{Kind: EventRequesting})
+		live.Emit(Event{Kind: EventText, Text: "read all three"})
+	})
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	typeAndSend(app, "start the work")
+	pumpUntil(t, app, EventText)
+	for _, task := range []string{firstTask, secondTask, thirdTask} {
+		typeAndSend(app, task)
 	}
-	if len(app.view.Queued()) != 1 {
-		t.Fatalf("the app stopped tracking the queued message the moment it handed it over: %q", app.view.Queued())
+	if row := headerOf(t, app, firstTask); !strings.Contains(row, "queued 3") {
+		t.Fatalf("three queued messages are not drawn under one queue head: %q\n%s", row, ansi.Strip(app.View().Content))
+	}
+	if headers := youHeaders(app); headers != 1 {
+		t.Fatalf("the queue drew %d messages from the person before the lead read any\n%s", headers, ansi.Strip(app.View().Content))
 	}
 
 	close(release)
-	for delivered := false; !delivered; {
-		msg := app.waitForEvent()()
-		app.Update(msg)
-		if _, done := msg.(Closed); done {
-			t.Fatal("the turn ended without the queued message ever reaching the model")
-		}
-		event, sent := msg.(Event)
-		delivered = sent && event.Kind == EventSteered
-	}
-	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
-		t.Errorf("the row is still marked waiting after the model took the message: %q", row)
-	}
+	pumpUntil(t, app, EventText)
 	if queued := app.view.Queued(); len(queued) != 0 {
-		t.Errorf("the queue still holds %q after the message was delivered", queued)
+		t.Errorf("the queue still holds %q after the lead took it", queued)
+	}
+	if headers := youHeaders(app); headers != 2 {
+		t.Errorf("the three taken together are drawn as %d messages, want one beside the first\n%s", headers-1, ansi.Strip(app.View().Content))
+	}
+	rows := plainRows(app.View())
+	at := func(text string) int {
+		return slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, text) })
+	}
+	if order := []int{at("working on the first"), at(firstTask), at(secondTask), at(thirdTask), at("read all three")}; slices.Contains(order, -1) || !slices.IsSorted(order) {
+		t.Errorf("want the work, then the three in order, then the answer; rows %v\n%s", order, strings.Join(rows, "\n"))
+	}
+	if plain := ansi.Strip(app.View().Content); strings.Contains(plain, "queued") {
+		t.Errorf("the queue head is still drawn after the lead took everything\n%s", plain)
+	}
+	endTurn(t, app)
+}
+
+func TestCtrlXTakesAQueuedMessageBackFromTheLead(t *testing.T) {
+	started, taken, release := make(chan played, 2), make(chan string, 4), make(chan struct{})
+	app := steerApp(t, steeringTurn(started, taken, release))
+	typeAndSend(app, "start the work")
+	<-started
+	for _, task := range []string{firstTask, secondTask, thirdTask} {
+		typeAndSend(app, task)
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModAlt})
+	app.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	close(release)
+	endTurn(t, app)
+	close(taken)
+	var read []string
+	for steered := range taken {
+		read = append(read, steered)
+	}
+	if !slices.Equal(read, []string{firstTask, thirdTask}) {
+		t.Fatalf("after ctrl+x on the second the lead read %q", read)
 	}
 }
 
@@ -238,7 +279,7 @@ func TestEscMidLeadTurnStopsTheLeadAndTheSubAgentKeepsRunning(t *testing.T) {
 	endTurn(t, app)
 }
 
-func TestAMessageTypedWhileOnlySubAgentsRunStartsALeadTurnAndIsNeverDrawnWaiting(t *testing.T) {
+func TestAMessageTypedWhileOnlySubAgentsRunIsQueuedUntilTheLeadTakesIt(t *testing.T) {
 	release := make(chan struct{})
 	app := steerApp(t, func(_ context.Context, _ Pick, _ string, live host.Live) {
 		live.Emit(Event{Kind: EventRequesting})
@@ -254,15 +295,15 @@ func TestAMessageTypedWhileOnlySubAgentsRunStartsALeadTurnAndIsNeverDrawnWaiting
 	pumpUntil(t, app, EventDone)
 	typeAndSend(app, secondTask)
 
-	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
-		t.Fatalf("a message typed while only a sub-agent runs is drawn waiting: %q", row)
-	}
-	if queued := app.view.Queued(); len(queued) != 0 {
-		t.Fatalf("a message typed while the lead is idle sits in the queue: %q", queued)
+	if row := headerOf(t, app, secondTask); !strings.Contains(row, "queued 1") {
+		t.Fatalf("a message the lead has not taken yet is drawn as sent: %q", row)
 	}
 	pumpUntil(t, app, EventText)
-	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
-		t.Errorf("the message is drawn waiting after the lead took it: %q", row)
+	if queued := app.view.Queued(); len(queued) != 0 {
+		t.Fatalf("the message sits in the queue after the lead took it: %q", queued)
+	}
+	if row := headerOf(t, app, secondTask); !strings.HasPrefix(strings.TrimSpace(row), "You") {
+		t.Errorf("the message is not drawn as sent after the lead took it: %q", row)
 	}
 	if row := turnRow(t, app); !strings.Contains(row, "thinking") && !strings.Contains(row, "requesting") {
 		t.Errorf("the lead turn the message started does not run on the status line: %q", row)

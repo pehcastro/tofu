@@ -1,18 +1,31 @@
 package session
 
-import "slices"
+import (
+	"slices"
+	"strconv"
+	"strings"
 
-const waitingWord = "waiting"
+	"tofu/interface/tui/look"
+	"tofu/internal/widget"
+)
+
+const (
+	queueShownRows = 4
+	queueHead      = "queued "
+	queueHeadTail  = " · the lead reads them as one message at its next step"
+	takenJoin      = "\n\n"
+)
 
 type pending struct {
-	id   string
-	task string
+	task  string
+	shown string
+	chips []Chip
 }
 
 func (m *Model) Queue(shown, whole string, chips []Chip) {
-	m.Append(Entry{Kind: User, Body: shown, Chips: chips, waiting: true})
-	m.queue = append(m.queue, pending{id: m.entries[len(m.entries)-1].ID, task: whole})
+	m.queue = append(m.queue, pending{task: whole, shown: shown, chips: chips})
 	m.pick = len(m.queue) - 1
+	m.revision++
 }
 
 func (m *Model) Queued() []string {
@@ -23,60 +36,83 @@ func (m *Model) Queued() []string {
 	return tasks
 }
 
-func (m *Model) queuedAt(id string) int {
-	return slices.IndexFunc(m.entries, func(entry Entry) bool { return entry.waiting && entry.ID == id })
-}
-
 func (m *Model) Release() (string, bool) {
 	if len(m.queue) == 0 {
 		return "", false
 	}
-	first := m.queue[0]
-	m.queue = m.queue[1:]
-	m.pick = max(m.pick-1, 0)
-	if at := m.queuedAt(first.id); at >= 0 {
-		m.entries[at].waiting = false
-		m.revision++
+	tasks := m.Queued()
+	m.Append(Entry{Kind: User})
+	for _, row := range m.queue {
+		m.joinTaken(row)
 	}
-	return first.task, true
+	m.queue, m.pick = nil, 0
+	return strings.Join(tasks, takenJoin), true
 }
 
 func (m *Model) Delivered(task string) {
-	if len(m.queue) > 0 && m.queue[0].task == task {
-		m.Release()
+	at := slices.IndexFunc(m.queue, func(row pending) bool { return row.task == task })
+	if at < 0 {
+		return
 	}
+	row := m.queue[at]
+	m.queue = slices.Delete(m.queue, at, at+1)
+	if at < m.pick {
+		m.pick--
+	}
+	m.pick = min(m.pick, max(len(m.queue)-1, 0))
+	if last := len(m.entries) - 1; last < 0 || !m.entries[last].taken {
+		m.Append(Entry{Kind: User, taken: true})
+	}
+	m.joinTaken(row)
+}
+
+func (m *Model) joinTaken(row pending) {
+	block := &m.entries[len(m.entries)-1]
+	if block.Body != "" {
+		block.Body += takenJoin
+	}
+	block.Body += row.shown
+	block.Chips = append(block.Chips, row.chips...)
+	m.revision++
+}
+
+func (m *Model) PickedQueued() (string, bool) {
+	if len(m.queue) == 0 {
+		return "", false
+	}
+	return m.queue[m.pick].task, true
 }
 
 func (m *Model) Unqueue() {
 	if len(m.queue) == 0 {
 		return
 	}
-	at := min(m.pick, len(m.queue)-1)
-	id := m.queue[at].id
-	m.queue = slices.Delete(m.queue, at, at+1)
-	m.pick = min(at, max(len(m.queue)-1, 0))
-	row := m.queuedAt(id)
-	if row < 0 {
-		return
-	}
-	m.entries = slices.Delete(m.entries, row, row+1)
+	m.queue = slices.Delete(m.queue, m.pick, m.pick+1)
+	m.pick = min(m.pick, max(len(m.queue)-1, 0))
 	m.revision++
-	if m.top.entry > row {
-		m.top.entry--
-	}
 }
 
 func (m *Model) PickQueued(by int) {
 	if len(m.queue) == 0 {
 		return
 	}
-	m.pick = (min(m.pick, len(m.queue)-1) + by + len(m.queue)) % len(m.queue)
+	m.pick = (m.pick + by + len(m.queue)) % len(m.queue)
 	m.revision++
 }
 
-func (m *Model) pickedQueue() string {
+func (m *Model) queueLines() []string {
 	if len(m.queue) == 0 {
-		return ""
+		return nil
 	}
-	return m.queue[min(m.pick, len(m.queue)-1)].id
+	lines := []string{margin + look.Faint(queueHead+strconv.Itoa(len(m.queue))+queueHeadTail)}
+	start := min(max(len(m.queue)-queueShownRows, 0), m.pick)
+	room := max(m.width-len(margin)-widget.Cells(pickedMarker), 1)
+	for index, row := range m.queue[start:min(start+queueShownRows, len(m.queue))] {
+		marker, text := unpickedMarker, look.Muted(widget.Fit(oneLine(row.shown), room))
+		if start+index == m.pick {
+			marker = look.Accent(pickedMarker)
+		}
+		lines = append(lines, margin+marker+text)
+	}
+	return lines
 }

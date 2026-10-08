@@ -87,8 +87,8 @@ func TestEnterDuringATurnQueuesTheTextAndClearsTheComposer(t *testing.T) {
 	if held := app.view.Value(); held != "" {
 		t.Errorf("the composer still holds %q after enter during a turn", held)
 	}
-	if row := headerOf(t, app, secondTask); !strings.Contains(row, "waiting") {
-		t.Errorf("the queued message is not marked as waiting: %q", row)
+	if row := headerOf(t, app, secondTask); !strings.Contains(row, "queued 1") {
+		t.Errorf("the queued message is not drawn under a queue head: %q", row)
 	}
 	select {
 	case ran := <-tasks:
@@ -135,7 +135,17 @@ func TestAQueuedEntryCanBeRemovedBeforeItRuns(t *testing.T) {
 	}
 }
 
-func TestTheFirstQueuedMessageStartsTheNextTurn(t *testing.T) {
+func youHeaders(app *App) int {
+	count := 0
+	for _, line := range strings.Split(ansi.Strip(app.View().Content), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "You") {
+			count++
+		}
+	}
+	return count
+}
+
+func TestEveryQueuedMessageStartsTheNextTurnAsOne(t *testing.T) {
 	tasks := make(chan string, 4)
 	app := queueApp(t, tasks)
 	typeAndSend(app, firstTask)
@@ -146,23 +156,23 @@ func TestTheFirstQueuedMessageStartsTheNextTurn(t *testing.T) {
 
 	select {
 	case ran := <-tasks:
-		if ran != secondTask {
-			t.Fatalf("the next turn was given %q, want the first queued message", ran)
+		if want := secondTask + "\n\n" + thirdTask; ran != want {
+			t.Fatalf("the next turn was given %q, want both queued messages as one %q", ran, want)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("the queued message never started a turn")
+		t.Fatal("the queued messages never started a turn")
 	}
 	if !app.busy {
 		t.Error("the app is not running the turn the queue started")
 	}
-	if queued := app.view.Queued(); len(queued) != 1 || queued[0] != thirdTask {
-		t.Fatalf("the queue holds %q, want the third message alone", queued)
+	if queued := app.view.Queued(); len(queued) != 0 {
+		t.Fatalf("the queue still holds %q after it started a turn", queued)
 	}
-	if row := headerOf(t, app, secondTask); strings.Contains(row, "waiting") {
-		t.Errorf("the message that ran is still marked as waiting: %q", row)
+	if headers := youHeaders(app); headers != 2 {
+		t.Errorf("the screen draws %d messages from the person, want the first and one for the whole queue\n%s", headers, ansi.Strip(app.View().Content))
 	}
-	if row := headerOf(t, app, thirdTask); !strings.Contains(row, "waiting") {
-		t.Errorf("the message still queued lost its mark: %q", row)
+	if row := headerOf(t, app, secondTask); !strings.HasPrefix(strings.TrimSpace(row), "You") {
+		t.Errorf("the queued messages are not drawn as one sent message: %q", row)
 	}
 }
 

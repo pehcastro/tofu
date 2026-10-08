@@ -357,10 +357,13 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		failed = append(failed, err)
 		next, said := config.Inbox.next(ctx, typed)
 		if said != "" {
-			next = append(next, inboxItem{text: said, source: sourceTyped, posted: time.Now()})
 			if heard != nil {
 				heard(said)
 			}
+			if config.Steering != nil {
+				said = strings.Join(append([]string{said}, config.Steering()...), "\n\n")
+			}
+			next = append(next, inboxItem{text: said, source: sourceTyped, posted: time.Now()})
 		}
 		if len(next) == 0 || ctx.Err() != nil {
 			return errors.Join(append(failed, config.Inbox.settle())...)

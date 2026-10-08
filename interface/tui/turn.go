@@ -88,12 +88,7 @@ func (a *App) send() tea.Cmd {
 	a.rememberPrompt(whole)
 	a.view.Reset()
 	if a.busy {
-		if a.leading {
-			a.view.Queue(task, whole, chips)
-		} else {
-			a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
-			a.handed = append(a.handed, whole)
-		}
+		a.view.Queue(task, whole, chips)
 		a.steer(whole)
 		return nil
 	}
@@ -135,6 +130,14 @@ func (a *App) steer(task string) {
 func (a *App) dropSteering() {
 	if a.options.Host != nil {
 		a.options.Host.DropSteering()
+	}
+}
+
+func (a *App) unqueue() {
+	picked, queued := a.view.PickedQueued()
+	leadTookIt := queued && a.options.Host != nil && !a.options.Host.Unsteer(picked) && a.busy && !a.view.Stopping
+	if !leadTookIt {
+		a.view.Unqueue()
 	}
 }
 
@@ -231,7 +234,6 @@ func (a *App) stopEverything() {
 	a.view.LettingToolsFinish, a.view.Stopping = false, true
 	a.options.Host.Stop()
 	a.dropSteering()
-	a.handed = nil
 	a.noteStop(stoppingNote + a.queueTail())
 }
 
@@ -423,9 +425,6 @@ func (a *App) absorb(event Event) {
 		a.recorded(event)
 	case EventSteered:
 		a.view.Delivered(event.Text)
-		if taken := slices.Index(a.handed, event.Text); taken >= 0 {
-			a.handed = slices.Delete(a.handed, taken, taken+1)
-		}
 	case EventForkStart:
 		a.forking = true
 	case EventForkEnd:

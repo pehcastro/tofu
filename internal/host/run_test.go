@@ -197,23 +197,80 @@ func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
 	}
 }
 
-func TestTheDrainTakesEveryQueuedMessageInOrderAndSaysSoOnce(t *testing.T) {
-	queue := make(chan string, 4)
-	queue <- "read the policy first"
-	queue <- "and leave the changelog alone"
+func TestTheDrainTakesEveryQueuedMessageAsOneInOrderAndSaysEachOnce(t *testing.T) {
+	h, _ := New(Config{Now: time.Now})
+	t.Cleanup(h.Close)
+	want := []string{"read the policy first", "and leave the changelog alone", "then say what changed"}
+	for _, typed := range want {
+		h.Steer(typed)
+	}
 	var told []string
-	taken := steered(queue, func(event Event) {
+	taken := h.steering.take(func(event Event) {
 		if event.Kind != EventSteered {
 			t.Errorf("the drain emitted kind %v, want a steered event", event.Kind)
 		}
 		told = append(told, event.Text)
 	})
-	want := []string{"read the policy first", "and leave the changelog alone"}
-	if !slices.Equal(taken, want) || !slices.Equal(told, want) {
-		t.Fatalf("the drain took %q and said %q, want %q for both", taken, told, want)
+	if joined := strings.Join(want, "\n\n"); !slices.Equal(taken, []string{joined}) || !slices.Equal(told, want) {
+		t.Fatalf("the drain took %q and said %q, want one message %q and each said once", taken, told, joined)
 	}
-	if again := steered(queue, func(Event) { t.Error("an empty queue said something") }); again != nil {
+	if again := h.steering.take(func(Event) { t.Error("an empty queue said something") }); again != nil {
 		t.Fatalf("a second drain took %q from an empty queue", again)
+	}
+}
+
+func TestNoMessageIsDroppedPastTheChannelAndOrderHolds(t *testing.T) {
+	h, _ := New(Config{Now: time.Now})
+	t.Cleanup(h.Close)
+	var want []string
+	for index := range konst.HostSteeringQueue + 6 {
+		want = append(want, fmt.Sprintf("message %d", index))
+	}
+	h.Steer(want[0])
+	first := <-h.steering.ready
+	for _, typed := range want[1:] {
+		h.Steer(typed)
+	}
+	var told []string
+	taken := h.steering.take(func(event Event) { told = append(told, event.Text) })
+	if got := append([]string{first}, told...); !slices.Equal(got, want) || len(taken) != 1 {
+		t.Fatalf("%d of %d messages came out, in this order: %q", len(got), len(want), got)
+	}
+}
+
+func TestDroppingTheSteeringEmptiesTheOverflowToo(t *testing.T) {
+	h, _ := New(Config{Now: time.Now})
+	t.Cleanup(h.Close)
+	for index := range konst.HostSteeringQueue + 2 {
+		h.Steer(fmt.Sprint(index))
+	}
+	h.DropSteering()
+	if taken := h.steering.take(func(Event) {}); taken != nil {
+		t.Fatalf("a dropped queue still gave the next turn %q", taken)
+	}
+	h.Steer("after the stop")
+	if taken := h.steering.take(func(Event) {}); !slices.Equal(taken, []string{"after the stop"}) {
+		t.Fatalf("the first message after a drop came out as %q", taken)
+	}
+}
+
+func TestUnsteerTakesBackOneMessageAndOnlyWhileItWaits(t *testing.T) {
+	h, _ := New(Config{Now: time.Now})
+	t.Cleanup(h.Close)
+	for _, typed := range []string{"one", "two", "two", "three"} {
+		h.Steer(typed)
+	}
+	if !h.Unsteer("two") {
+		t.Fatal("a waiting message could not be taken back")
+	}
+	if h.Unsteer("four") {
+		t.Fatal("a message never queued was taken back")
+	}
+	if taken := h.steering.take(func(Event) {}); !slices.Equal(taken, []string{"one\n\ntwo\n\nthree"}) {
+		t.Fatalf("after taking one two back the lead gets %q", taken)
+	}
+	if h.Unsteer("one") {
+		t.Fatal("a message the lead already took was taken back")
 	}
 }
 

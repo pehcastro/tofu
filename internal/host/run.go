@@ -144,7 +144,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		config.Person = person.RunsWhatJevAsks()
 	}
 	h.mu.Unlock()
-	config.Steering = func() []string { return steered(live.Steering, emit) }
+	config.Steering = func() []string { return h.steering.take(emit) }
 	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	config.Appended = func(logged session.Event) {
@@ -344,19 +344,6 @@ func recordPersonAnswer(id string, answer turn.PersonAnswer) {
 		return
 	}
 	_ = ledger.NewWriter(dir).Backfill(id, answer.Outcome())
-}
-
-func steered(queue <-chan string, emit func(Event)) []string {
-	var taken []string
-	for {
-		select {
-		case task := <-queue:
-			emit(Event{Kind: EventSteered, Text: task})
-			taken = append(taken, task)
-		default:
-			return taken
-		}
-	}
 }
 
 func askedPlace(request turn.GateRequest) string {

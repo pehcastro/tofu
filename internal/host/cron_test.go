@@ -31,7 +31,7 @@ func TestAFiredJobStartsATurnWhenIdleAndSteersWhenBusy(t *testing.T) {
 		t.Errorf("the first fire started a turn marked %q, want c1, so the push guard never knows", pick.Fired)
 	}
 	select {
-	case steered := <-h.steering:
+	case steered := <-h.steering.ready:
 		if !strings.Contains(steered, "cron c2 fired") {
 			t.Errorf("the second fire steered %q, want c2's prompt", steered)
 		}

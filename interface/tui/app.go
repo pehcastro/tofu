@@ -241,7 +241,6 @@ type App struct {
 	started        time.Time
 	busy           bool
 	leading        bool
-	handed         []string
 	afterTurn      []func() string
 	reports        map[string]string
 	heldReports    []subagent.Row
@@ -682,12 +681,7 @@ func (a *App) closed() tea.Cmd {
 	a.countCrons()
 	a.carryHeld()
 	next := tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
-	task, queued := a.view.Release()
-	if !queued && len(a.handed) > 0 {
-		task, queued = strings.Join(a.handed, "\n\n"), true
-	}
-	a.handed = nil
-	if queued {
+	if task, queued := a.view.Release(); queued {
 		a.start(task)
 	}
 	return next

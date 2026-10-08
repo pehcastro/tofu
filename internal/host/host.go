@@ -72,7 +72,7 @@ type Host struct {
 	shells   *shell.Registry
 	events   chan Event
 	answers  chan Answer
-	steering chan string
+	steering steerQueue
 	stopLead chan struct{}
 	cron     *cron.Book
 	readOnly error
@@ -120,7 +120,7 @@ func New(cfg Config) (*Host, []string) {
 		shells:   cfg.Shells,
 		events:   make(chan Event, konst.HostEventBuffer),
 		answers:  make(chan Answer, 1),
-		steering: make(chan string, konst.HostSteeringQueue),
+		steering: steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
 		stopLead: make(chan struct{}, 1),
 		cron:     &cron.Book{Check: cfg.Check},
 		id:       cfg.Resumed.Session,
@@ -188,7 +188,7 @@ func (h *Host) Send(pick Pick, task string) bool {
 func (h *Host) begin(pick Pick, task string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	h.running, h.stopped, h.cancel, h.turn = true, false, cancel, turn.NewID(h.now())
-	live := Live{Turn: h.turn, Steering: h.steering, LeadStop: h.stopLead, Answers: h.answers}
+	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers}
 	go func() {
 		out := h.emitter()
 		live.Emit = out.emit
@@ -221,27 +221,10 @@ func (h *Host) OpenFresh() (string, error) {
 	return id, h.hold(id)
 }
 
-func (h *Host) Steer(text string) {
-	select {
-	case h.steering <- text:
-	default:
-	}
-}
-
 func (h *Host) Remembered(note string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.inbox.Remembered(note)
-}
-
-func (h *Host) DropSteering() {
-	for {
-		select {
-		case <-h.steering:
-		default:
-			return
-		}
-	}
 }
 
 func (h *Host) Stop() {
