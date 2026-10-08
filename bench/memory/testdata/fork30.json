@@ -1,0 +1,379 @@
+{
+  "name": "fork30",
+  "closers": [
+    "Write the team a detailed note of about 1500 words on what we just read: what it shows, the evidence you rely on, and what to do next. Answer here, do not write a file.",
+    "Write the team a note of about 600 words on this, with what to do next. Answer here, do not write a file."
+  ],
+  "chains": [
+    {
+      "id": "c01-export",
+      "sessions": [
+        {
+          "files": {
+            "scratch/export-0412.log": "2026-04-12T03:30:01Z INFO  export start batch=nightly tenants=48\n2026-04-12T03:30:05Z INFO  tenant-birch-02 rows=18233 ok\n2026-04-12T03:30:41Z INFO  tenant-flint-05 rows=7710 ok\n2026-04-12T03:31:47Z WARN  tenant-slate-09 slow page=14 code=EXP-1003\n2026-04-12T03:36:12Z INFO  tenant-slate-09 rows=99410 ok\n2026-04-12T03:39:55Z INFO  tenant-moss-11 rows=4120 ok\n2026-04-12T03:42:19Z ERROR tenant-ochre-17 write failed code=EXP-5521 detail=\"bucket quota exceeded\"\n2026-04-12T03:42:20Z INFO  retry 1/6 tenant-ochre-17 backoff=30s\n2026-04-12T03:44:51Z ERROR tenant-ochre-17 write failed code=EXP-5521 detail=\"bucket quota exceeded\"\n2026-04-12T03:44:52Z INFO  retry 2/6 tenant-ochre-17 backoff=60s\n2026-04-12T03:47:10Z WARN  tenant-reed-21 slow page=3 code=EXP-1003\n2026-04-12T03:58:40Z ERROR tenant-ochre-17 gave up after 6 retries code=EXP-5521\n2026-04-12T04:01:02Z INFO  export end ok=47 failed=1 duration=31m01s\n"
+          },
+          "says": [
+            "Read scratch/export-0412.log yourself, no sub-agents, and tell me in a few lines what went wrong with last night's export. Do not change any file.",
+            "Which tenant failed, with which code, and when did its first error line appear? Quote that line."
+          ]
+        },
+        {
+          "files": {
+            "scratch/lint-report.txt": "src/api/handlers.ts:12:5  no-unused-vars  'req' is defined but never used\nsrc/api/handlers.ts:48:9  eqeqeq  expected '===' and saw '=='\nsrc/api/handlers.ts:77:3  no-console  unexpected console statement\nsrc/api/handlers.ts:102:14  eqeqeq  expected '!==' and saw '!='\nsrc/jobs/sync.ts:9:1  import/order  wrong import order\nsrc/jobs/sync.ts:31:7  no-unused-vars  'tmp' is assigned a value but never used\nsrc/ui/table.tsx:5:1  import/order  wrong import order\nsrc/ui/table.tsx:88:11  react/no-array-index-key  do not use array index in keys\nsrc/ui/table.tsx:140:2  no-console  unexpected console statement\n9 problems (0 errors, 9 warnings)\n"
+          },
+          "says": [
+            "Different topic. Read scratch/lint-report.txt yourself, no sub-agents, and group the warnings by rule with a count for each. Do not change any file.",
+            "Which file collects the most warnings, and what would you fix first there?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/deps.txt": "left-pad-ng 0.9.2\nfast-csv 4.3.6\ntiny-router 0.4.0\nzod 3.23.8\nquick-lru 7.0.0\nmini-signal 0.12.1\ndate-fns 3.6.0\n"
+          },
+          "says": [
+            "Now read scratch/deps.txt yourself, no sub-agents, and list the packages still pinned below 1.0. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the very first thing we looked at in this conversation, the nightly export log.",
+      "questions": [
+        {"ask": "Which error code did the failing tenant hit?", "key": ["EXP-5521"]},
+        {"ask": "Which tenant was it?", "key": ["ochre-17"]},
+        {"ask": "At what time UTC, hours and minutes, did its first error line appear?", "key": ["03:42", "3:42"]}
+      ]
+    },
+    {
+      "id": "c02-loadtest",
+      "sessions": [
+        {
+          "files": {
+            "scratch/loadtest-summary.txt": "run: lt-0921  target: staging  duration: 20m  ramp: 50 users/min\n\nendpoint            p50     p95     p99     errors\nGET  /catalog       112ms   288ms   501ms   0.0%\nGET  /search        143ms   402ms   877ms   0.1%\nPOST /cart/items    167ms   455ms   932ms   0.2%\nPOST /checkout      390ms   1840ms  3120ms  2.7%\nGET  /orders/{id}   98ms    251ms   470ms   0.0%\n\nerror onset: errors on /checkout climbed past 1% at 730 concurrent users\nfirst 5xx: 502 returned by ledger-bridge at 14:07:33\nsaturation: db pool (size 40) fully busy from 12m10s\n"
+          },
+          "says": [
+            "Read scratch/loadtest-summary.txt yourself, no sub-agents, and tell me whether staging held up. A few lines. Do not change any file.",
+            "Where exactly did it start to break, and which service failed first? Quote the numbers you are relying on."
+          ]
+        },
+        {
+          "files": {
+            "scratch/ci-times.txt": "job              median   slowest\nlint             1m12s    2m40s\nunit             4m05s    7m31s\nbuild-web        6m48s    11m02s\nbuild-worker     3m19s    5m55s\ne2e-chrome       14m26s   22m18s\npublish-preview  2m01s    3m47s\n"
+          },
+          "says": [
+            "Other thing. Read scratch/ci-times.txt yourself, no sub-agents, and tell me which job dominates the pipeline. Do not change any file.",
+            "If we split that job in two, roughly what would the median pipeline save?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/todo.md": "- move feature flags to the config service\n- delete the legacy invoice exporter\n- add retries to the webhook sender\n- rename the cart module to basket\n- write the on-call guide for the queue\n"
+          },
+          "says": [
+            "Read scratch/todo.md yourself, no sub-agents, and order the items from least to most effort, one line each. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Going back to the load test summary from the start of this conversation.",
+      "questions": [
+        {"ask": "What was the p95 latency of the checkout endpoint, in milliseconds?", "key": ["1840", "1,840", "1.84"]},
+        {"ask": "At how many concurrent users did checkout errors climb past one percent?", "key": ["730"]},
+        {"ask": "Which service returned the first 5xx?", "key": ["ledger-bridge"]}
+      ]
+    },
+    {
+      "id": "c03-migration",
+      "sessions": [
+        {
+          "files": {
+            "scratch/migration-notes.md": "# Orders database migration sync, notes\n\nattendees: platform lead, data lead, on-call engineer\n\n- target: move orders from the pg 13 cluster amber to the pg 16 cluster cobalt\n- cutover agreed for 2026-11-19 at 06:00 UTC, a Thursday\n- schema change freeze starts a week before\n- rollback window: 52 minutes after cutover; past that we only roll forward\n- dual-write flag: orders_dualwrite_v2, on in staging since last sprint\n- runbook owner: data lead\n- open: replica lag alert threshold, proposed at 8 seconds\n- next sync: after the dry run on staging\n"
+          },
+          "says": [
+            "Read scratch/migration-notes.md yourself, no sub-agents, and summarise the plan in a few lines. Do not change any file.",
+            "What are the hard constraints in it, the dates, windows and switches we cannot get wrong?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/oncall-handoff.txt": "handoff, week 40\n- queue consumer restarted twice on Tuesday, cause unknown, watching\n- disk on build agent 3 at 87 percent, cleanup scheduled\n- certificate for the status page renews on its own next month\n- one noisy alert silenced until Friday: search latency warning\n"
+          },
+          "says": [
+            "Switching. Read scratch/oncall-handoff.txt yourself, no sub-agents, and tell me what needs action this week. Do not change any file.",
+            "Which of those would you hand to a new engineer?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/readme-draft.md": "# basket service\n\nThe basket service keeps a person's basket between visits.\n\n## run it\n\n    make dev\n\n## test it\n\n    make test\n\n## deploy\n\nMerges to main deploy to staging; a tag deploys to production.\n"
+          },
+          "says": [
+            "Read scratch/readme-draft.md yourself, no sub-agents, and tell me what a newcomer would still be missing. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the orders database migration notes we read first.",
+      "questions": [
+        {"ask": "On which date was the cutover agreed?", "key": ["2026-11-19", "19 November", "November 19", "Nov 19", "19 Nov"]},
+        {"ask": "How long is the rollback window, in minutes?", "key": ["52"]},
+        {"ask": "What is the exact name of the dual-write flag?", "key": ["orders_dualwrite_v2"]}
+      ]
+    },
+    {
+      "id": "c04-crash",
+      "sessions": [
+        {
+          "files": {
+            "scratch/crash-7781.txt": "panic: runtime error: invalid memory address or nil pointer dereference\n[signal 0xc0000005 code=0x0 addr=0x18 pc=0x7ff6b1a2c3d4]\n\ngoroutine 214 [running]:\nshop/internal/invoice.(*Renderer).taxLine(0xc000512a80, {0xc0004b6000, 0x3})\n\tC:/work/shop/internal/invoice/render.go:188 +0x54\nshop/internal/invoice.(*Renderer).Render(0xc000512a80, 0xc0001f4000)\n\tC:/work/shop/internal/invoice/render.go:121 +0x2c1\nshop/internal/invoice.Batch.func1()\n\tC:/work/shop/internal/invoice/batch.go:64 +0x9a\ncreated by shop/internal/invoice.Batch in goroutine 1\n\tC:/work/shop/internal/invoice/batch.go:58 +0x1d0\n\nsupport note: only invoices billed to region nordics-b with a credit note attached\nthe field at offset 0x18 of Renderer is rates, a TaxTable pointer\n"
+          },
+          "says": [
+            "Read scratch/crash-7781.txt yourself, no sub-agents, and explain the crash in a few lines. Do not change any file.",
+            "Where exactly does it blow up, and what condition do customers hit it under?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/release-notes-draft.md": "## 3.8.0\n\n- invoices can be downloaded as a zip of PDFs\n- the search box remembers the last three queries\n- faster basket page on slow connections\n- fixed: a currency symbol shown twice on receipts\n"
+          },
+          "says": [
+            "New topic. Read scratch/release-notes-draft.md yourself, no sub-agents, and rewrite the four bullets so a customer understands them. Do not change any file.",
+            "Which one would you lead with in the announcement, and why?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/meeting-agenda.txt": "planning, Monday\n1. carry-over from last sprint\n2. on-call load\n3. what to cut if the migration slips\n4. hiring loop for the platform team\n"
+          },
+          "says": [
+            "Read scratch/meeting-agenda.txt yourself, no sub-agents, and suggest a time box for each item in a 45 minute meeting. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Return to the invoice crash we looked at first in this conversation.",
+      "questions": [
+        {"ask": "In which function did the nil dereference happen?", "key": ["taxLine"]},
+        {"ask": "At which line of render.go?", "key": ["188"]},
+        {"ask": "For which billing region did support say it happens?", "key": ["nordics-b"]}
+      ]
+    },
+    {
+      "id": "c05-cost",
+      "sessions": [
+        {
+          "files": {
+            "scratch/cost-september.csv": "service,region,usd\nsearch-index,eu-west-3,1203.55\nobject-store,us-east-2,880.10\nrender-farm,ap-south-2,4417.92\nqueue,eu-west-3,96.40\nmetrics,us-east-2,612.08\nedge-cache,eu-central-1,1950.33\nmail-relay,us-east-2,44.71\nbackup-vault,eu-west-3,733.19\n"
+          },
+          "says": [
+            "Read scratch/cost-september.csv yourself, no sub-agents, and tell me where the money went last month, in a few lines. Do not change any file.",
+            "What is the single largest line, with its amount and region?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/alerts.yaml": "- name: api-5xx\n  threshold: 2 percent for 5m\n  page: yes\n- name: queue-depth\n  threshold: 10000 for 15m\n  page: no\n- name: disk-full\n  threshold: 90 percent\n  page: yes\n- name: cert-expiry\n  threshold: 14 days\n  page: no\n"
+          },
+          "says": [
+            "Other subject. Read scratch/alerts.yaml yourself, no sub-agents, and tell me which alerts page a person. Do not change any file.",
+            "Which of the non-paging ones would you promote to paging?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/standup.txt": "yesterday: finished the basket rename, reviewed two pull requests\ntoday: start on webhook retries\nblocked: waiting on access to the staging queue\n"
+          },
+          "says": [
+            "Read scratch/standup.txt yourself, no sub-agents, and turn it into one sentence for the team channel. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the September cost report we read at the start.",
+      "questions": [
+        {"ask": "Which service was the most expensive line?", "key": ["render-farm"]},
+        {"ask": "What was its amount in dollars?", "key": ["4417.92", "4,417.92", "4417", "4,417"]},
+        {"ask": "In which region did it run?", "key": ["ap-south-2"]}
+      ]
+    },
+    {
+      "id": "c06-flaky",
+      "sessions": [
+        {
+          "files": {
+            "scratch/flaky-30d.txt": "flaky tests, last 30 days, main branch\n\ntest                                 runs  fails  rate\nTestCartMergeKeepsNewest             412   61     14.8%\nTestSessionRefreshAfterSleep         398   12     3.0%\nTestWebhookOrdering                  405   9      2.2%\nTestSearchPaginationStable           410   4      1.0%\nTestInvoiceRoundingHalfEven          401   2      0.5%\n\nrepro: the worst one fails every time with go test -run TestCartMergeKeepsNewest -seed 90417\nsuspect: map iteration order in merge()\n"
+          },
+          "says": [
+            "Read scratch/flaky-30d.txt yourself, no sub-agents, and tell me which flaky test to fix first and why. Do not change any file.",
+            "How do we reproduce it on demand?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/pr-template.md": "## what\n\n## why\n\n## how to test\n\n## screenshots\n"
+          },
+          "says": [
+            "Something else. Read scratch/pr-template.md yourself, no sub-agents, and suggest two sections it is missing. Do not change any file.",
+            "Write the one line of guidance you would put under how to test."
+          ]
+        },
+        {
+          "files": {
+            "scratch/ports.txt": "web 3000\nworker metrics 9102\nadmin 4100\nmock payments 7700\n"
+          },
+          "says": [
+            "Read scratch/ports.txt yourself, no sub-agents, and tell me whether any of these clash with common defaults. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the flaky test report we started this conversation with.",
+      "questions": [
+        {"ask": "What is the exact name of the flakiest test?", "key": ["TestCartMergeKeepsNewest"]},
+        {"ask": "What was its failure rate?", "key": ["14.8"]},
+        {"ask": "Which seed reproduces it every time?", "key": ["90417"]}
+      ]
+    },
+    {
+      "id": "c07-vendor",
+      "sessions": [
+        {
+          "files": {
+            "scratch/vendor-changelog.md": "# Parcelly API changelog\n\n## 2026-08-30\n- DEPRECATED: POST /v2/labels/batch. It stops answering on 2027-01-31.\n- Use POST /v3/shipments:bulkCreate instead; it takes up to 500 shipments a call.\n- v3 rate limit: 120 requests per minute per key.\n\n## 2026-07-12\n- New field on tracking events: carrier_hint.\n- GET /v2/rates now returns rates in the account currency.\n\n## 2026-05-03\n- Sandbox keys now start with pk_sbx_.\n"
+          },
+          "says": [
+            "Read scratch/vendor-changelog.md yourself, no sub-agents, and tell me what in it forces work on our side. Do not change any file.",
+            "By when do we have to act, and what do we move to?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/feature-flags.txt": "checkout_new_summary   on   100%\nsearch_typo_tolerance  on   25%\nbasket_share_link      off  0%\ninvoice_zip_download   on   100%\n"
+          },
+          "says": [
+            "Different thing. Read scratch/feature-flags.txt yourself, no sub-agents, and tell me which flags look ready to remove. Do not change any file.",
+            "Which one is still mid rollout?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/glossary.md": "basket: what a person intends to buy, kept between visits\norder: a paid basket\nshipment: one parcel of an order\n"
+          },
+          "says": [
+            "Read scratch/glossary.md yourself, no sub-agents, and add the two terms you think a newcomer will ask about first. Answer here, do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the Parcelly changelog we read first.",
+      "questions": [
+        {"ask": "Which endpoint was deprecated?", "key": ["/v2/labels/batch", "v2/labels/batch"]},
+        {"ask": "On which date does it stop answering?", "key": ["2027-01-31", "31 January 2027", "January 31, 2027", "Jan 31, 2027"]},
+        {"ask": "Which endpoint replaces it?", "key": ["shipments:bulkCreate", "bulkCreate"]}
+      ]
+    },
+    {
+      "id": "c08-scan",
+      "sessions": [
+        {
+          "files": {
+            "scratch/scan-results.txt": "dependency scan, worker image\n\npackage       installed  fixed in  advisory         severity\nyaml-lite     2.4.1      2.4.3     CVE-2026-31877   high\nhttp-tiny     1.9.0      1.9.2     CVE-2026-20214   medium\nglob-lite     5.0.4      5.0.5     CVE-2026-18803   low\nzip-stream    0.7.7      none      CVE-2026-27650   low\n\n1 high, 1 medium, 2 low\n"
+          },
+          "says": [
+            "Read scratch/scan-results.txt yourself, no sub-agents, and tell me what we must patch before the release. Do not change any file.",
+            "What exactly do we bump, from what to what?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/backlog-ideas.txt": "- dark mode for the admin\n- export orders to a spreadsheet\n- show delivery estimates on the basket page\n- keyboard shortcuts in the order list\n"
+          },
+          "says": [
+            "Unrelated. Read scratch/backlog-ideas.txt yourself, no sub-agents, and rank the ideas by value to a shop owner. Do not change any file.",
+            "Which one is cheapest to build?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/makefile-snippet.txt": "dev:\n\tgo run ./cmd/shop\ntest:\n\tgo test ./...\nlint:\n\tgolangci-lint run\n"
+          },
+          "says": [
+            "Read scratch/makefile-snippet.txt yourself, no sub-agents, and tell me which target is missing for a release. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the dependency scan we read at the very start.",
+      "questions": [
+        {"ask": "What was the advisory id of the high severity finding?", "key": ["CVE-2026-31877"]},
+        {"ask": "Which package did it affect?", "key": ["yaml-lite"]},
+        {"ask": "Which version fixes it?", "key": ["2.4.3"]}
+      ]
+    },
+    {
+      "id": "c09-release",
+      "sessions": [
+        {
+          "files": {
+            "scratch/release-checklist.md": "# release 4.12.0\n\ncodename: quiet-heron\ncandidate build: 20261002.7\n\n- [x] changelog written\n- [x] migrations rehearsed on staging\n- [x] windows installer signed\n- [ ] mac installer notarized, blocked, see REL-338\n- [ ] status page notice drafted\n- [x] support briefed\n"
+          },
+          "says": [
+            "Read scratch/release-checklist.md yourself, no sub-agents, and tell me if we can ship today. Do not change any file.",
+            "What exactly is blocking, and which build are we shipping?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/survey-answers.txt": "q: what slows you down most?\n- waiting for CI\n- flaky tests\n- unclear tickets\n- waiting for CI\n- reviews take days\n- waiting for CI\n"
+          },
+          "says": [
+            "Other topic. Read scratch/survey-answers.txt yourself, no sub-agents, and tell me the top complaint with its count. Do not change any file.",
+            "What is one thing we could try next week about it?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/env-example.txt": "DATABASE_URL=\nQUEUE_URL=\nSMTP_HOST=\nFEATURE_FLAGS_URL=\n"
+          },
+          "says": [
+            "Read scratch/env-example.txt yourself, no sub-agents, and tell me which of these a local run can leave empty. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the release checklist from the start of this conversation.",
+      "questions": [
+        {"ask": "What was the release codename?", "key": ["quiet-heron"]},
+        {"ask": "What was the candidate build number?", "key": ["20261002.7"]},
+        {"ask": "Which ticket tracks the blocked item?", "key": ["REL-338"]}
+      ]
+    },
+    {
+      "id": "c10-compression",
+      "sessions": [
+        {
+          "files": {
+            "scratch/zbench.txt": "dataset: logs-mixed-3g\n\nlevel  ratio  compress MB/s  decompress MB/s\n1      2.91   612            1480\n3      3.37   344            1502\n6      3.74   121            1497\n9      3.81   38             1490\n19     4.02   3              1420\n\nchosen: level 6, the best ratio still above 100 MB/s compress\n"
+          },
+          "says": [
+            "Read scratch/zbench.txt yourself, no sub-agents, and tell me whether the chosen level makes sense. Do not change any file.",
+            "What do we give up against the next level up?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/review-comments.txt": "- name the error, do not just return it\n- this loop allocates on every pass\n- the test only covers the happy path\n- prefer a switch over the map here\n"
+          },
+          "says": [
+            "Different subject. Read scratch/review-comments.txt yourself, no sub-agents, and sort them into must fix and nice to have. Do not change any file.",
+            "Which one would you push back on?"
+          ]
+        },
+        {
+          "files": {
+            "scratch/holidays.txt": "office closed: the first Monday of the month\nfreeze: the last week of the year\n"
+          },
+          "says": [
+            "Read scratch/holidays.txt yourself, no sub-agents, and tell me how this affects a release in late December. Do not change any file."
+          ]
+        }
+      ],
+      "lead": "Back to the compression benchmark we looked at first.",
+      "questions": [
+        {"ask": "Which dataset was it run on?", "key": ["logs-mixed-3g"]},
+        {"ask": "What compression ratio did the chosen level reach?", "key": ["3.74"]},
+        {"ask": "What was the decompression speed at the chosen level, in MB/s?", "key": ["1497"]}
+      ]
+    }
+  ]
+}
