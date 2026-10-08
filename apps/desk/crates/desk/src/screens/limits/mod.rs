@@ -378,13 +378,15 @@ impl Limits {
 }
 
 fn clock(stamp: &str, read_at: &str) -> String {
-    let (Some(day), Some(time)) = (stamp.get(..10), stamp.get(11..16)) else {
+    let local = |at: &str| {
+        chrono::DateTime::parse_from_rfc3339(at).map(|at| at.with_timezone(&chrono::Local))
+    };
+    let Ok(at) = local(stamp) else {
         return stamp.to_owned();
     };
-    match (read_at.get(..10) == Some(day), stamp.get(5..10)) {
-        (false, Some(date)) => format!("{date} {time} UTC"),
-        _ => format!("{time} UTC"),
-    }
+    let today = local(read_at).is_ok_and(|read| read.date_naive() == at.date_naive());
+    at.format(if today { "%H:%M" } else { "%m-%d %H:%M" })
+        .to_string()
 }
 
 impl Render for Limits {
