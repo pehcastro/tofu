@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -32,7 +33,12 @@ type ServeConfig struct {
 	Sessions func(open string) (SessionList, error)
 	Wires    func() []string
 	Sources  map[string]string
+	Ledger   func(LedgerParams) (LedgerReport, error)
+	Run      func(ctx context.Context, command string) (output string, stopped bool)
+	Compact  func() (Compaction, error)
 }
+
+var errCommandRunning = errors.New("a shell.run command is still running: wait for it, or turn.stop stops it")
 
 type server struct {
 	ServeConfig
@@ -43,11 +49,11 @@ type server struct {
 	ready   bool
 	pending map[string]ApprovalRequest
 	shells  map[string]*watchedShell
+	command context.CancelFunc
 }
 
 func Serve(cfg ServeConfig) error {
-	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, shells: map[string]*watchedShell{},
-		items: items{session: cfg.Host.ID(), tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}}
+	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID())}
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
 	quit := make(chan struct{})
@@ -89,7 +95,7 @@ func (s *server) receive(line []byte) {
 	case in.Method == "" && in.ID != nil:
 		s.answered(in.ID, in.Result)
 	case in.ID == nil:
-	case in.Method == "login.start":
+	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "shell.run", "session.list", "session.history"}, in.Method):
 		go func() {
 			result, err := s.call(in.Method, in.Params)
 			s.respond(in.ID, result, err)
@@ -163,6 +169,21 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.steer)
 	case "turn.stop":
 		return handle(raw, s.stop)
+	case "turn.unsteer":
+		return handle(raw, func(p UnsteerParams) (any, error) { return UnsteerResult{Removed: s.Host.Unsteer(p.Text)}, nil })
+	case "shell.run":
+		return handle(raw, s.shellRun)
+	case "session.compact":
+		return handle(raw, s.compact)
+	case "session.history":
+		return handle(raw, s.history)
+	case queryPrefix + "ledger":
+		return handle(raw, func(p LedgerParams) (any, error) {
+			if s.Ledger == nil {
+				return nil, &Refusal{Code: CodeRefused, Message: "this tofu reads no ledger"}
+			}
+			return s.Ledger(p)
+		})
 	case "undo":
 		return handle(raw, s.undo)
 	case "shell.read":
@@ -223,13 +244,62 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 	if err != nil {
 		return nil, busy(err)
 	}
+	read := newItems(carry.Session)
+	lines := read.all(chat)
+	if p.Replay != nil {
+		lines = lines[len(lines)-min(max(*p.Replay, 0), len(lines)):]
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.items.session = carry.Session
-	for _, event := range chat {
-		s.translated(event)
+	s.items = read
+	for _, line := range lines {
+		s.box.push(line)
 	}
 	return SessionOpenResult{Session: carry.Session}, nil
+}
+
+func (s *server) history(p SessionHistoryParams) (any, error) {
+	if p.Limit < 1 {
+		return nil, &Refusal{Code: CodeBadParams, Message: "limit is the number of lines a page holds, at least 1"}
+	}
+	carry, err := s.Carry(p.Session)
+	if err != nil {
+		return nil, err
+	}
+	read := newItems(carry.Session)
+	lines := read.all(resumedChat(carry, s.Host.dir))
+	end := len(lines)
+	if p.Before != nil {
+		end = min(max(*p.Before, 0), end)
+	}
+	page := SessionHistory{Session: carry.Session, First: max(end-p.Limit, 0), Total: len(lines), Lines: []HistoryLine{}}
+	for _, line := range lines[page.First:end] {
+		page.Lines = append(page.Lines, HistoryLine{Method: line.msg.Method, Params: line.msg.Params})
+	}
+	return page, nil
+}
+
+func (s *server) compact(NoParams) (any, error) {
+	if s.Compact == nil {
+		return nil, &Refusal{Code: CodeRefused, Message: "this tofu compacts no sessions"}
+	}
+	if _, running := s.Host.Turn(); running {
+		return nil, errTurnRunning
+	}
+	compacted, err := s.Compact()
+	if err != nil || compacted.Into == "" {
+		return compacted, err
+	}
+	labelled := Event{Kind: EventSession, ID: compacted.Into, Root: compacted.Into}
+	if store, err := session.OpenIn(s.Host.dir); err == nil {
+		labelled = labelledAs(store, labelled)
+	}
+	s.mu.Lock()
+	s.items.session = compacted.Into
+	s.box.push(sessionUpdated(s.items.identity("", compacted.Into), labelled))
+	s.mu.Unlock()
+	go s.listed()
+	return compacted, nil
 }
 
 func (s *server) rename(p SessionRenameParams) (any, error) {
@@ -274,6 +344,12 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	if _, running := s.Host.Turn(); running {
 		return nil, errTurnRunning
 	}
+	s.mu.Lock()
+	commanding := s.command != nil
+	s.mu.Unlock()
+	if commanding {
+		return nil, errCommandRunning
+	}
 	_, picked := s.Host.Settings()
 	pick, err := s.chosen(picked, p.ModelPick)
 	if err != nil {
@@ -309,10 +385,45 @@ func (s *server) steer(p TurnSteerParams) (any, error) {
 func (s *server) stop(p TurnParams) (any, error) {
 	turn, running := s.Host.Turn()
 	stopping := running && (p.Turn == "" || p.Turn == turn)
-	if stopping {
+	switch {
+	case stopping && p.Lead:
+		s.Host.StopLead()
+	case stopping:
 		s.Host.Stop()
 	}
-	return Ack{OK: stopping}, nil
+	return Ack{OK: stopping || !running && s.stopCommand()}, nil
+}
+
+func (s *server) stopCommand() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.command != nil {
+		s.command()
+	}
+	return s.command != nil
+}
+
+func (s *server) shellRun(p ShellRunParams) (any, error) {
+	if s.Run == nil {
+		return nil, &Refusal{Code: CodeRefused, Message: "this tofu runs no commands"}
+	}
+	if _, running := s.Host.Turn(); running {
+		return nil, errTurnRunning
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.mu.Lock()
+	if s.command != nil {
+		s.mu.Unlock()
+		return nil, errCommandRunning
+	}
+	s.command = cancel
+	s.mu.Unlock()
+	output, stopped := s.Run(ctx, p.Command)
+	s.mu.Lock()
+	s.command = nil
+	s.mu.Unlock()
+	return ShellRunResult{Output: s.Host.Ran(p.Command, output, stopped), Stopped: stopped}, nil
 }
 
 func (s *server) undo(p UndoParams) (any, error) {
@@ -536,6 +647,7 @@ func (s *server) scanShells(first bool) {
 }
 
 func (s *server) windDown() {
+	s.stopCommand()
 	if _, running := s.Host.Turn(); !running {
 		return
 	}

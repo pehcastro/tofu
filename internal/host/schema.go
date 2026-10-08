@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"maps"
+	"path"
 	"reflect"
 	"slices"
 	"strings"
@@ -88,13 +89,17 @@ func (defs schemaDefs) of(t reflect.Type) any {
 	case reflect.Slice:
 		return map[string]any{"type": []string{"array", "null"}, "items": defs.of(t.Elem())}
 	case reflect.Struct:
-		if _, done := defs[t.Name()]; !done {
-			defs[t.Name()] = map[string]any{}
+		name := t.Name()
+		if t.PkgPath() != reflect.TypeFor[Identity]().PkgPath() {
+			name = path.Base(t.PkgPath()) + "." + name
+		}
+		if _, done := defs[name]; !done {
+			defs[name] = map[string]any{}
 			properties, required := map[string]any{}, []string{}
 			defs.fields(t, properties, &required)
-			defs[t.Name()] = closed(properties, required)
+			defs[name] = closed(properties, required)
 		}
-		return map[string]any{"$ref": "#/$defs/" + t.Name()}
+		return map[string]any{"$ref": "#/$defs/" + name}
 	}
 	panic("host: no schema for " + t.String())
 }

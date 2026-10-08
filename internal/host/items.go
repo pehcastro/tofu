@@ -38,6 +38,18 @@ type items struct {
 	agents  map[string]SubAgentRow
 }
 
+func newItems(session string) items {
+	return items{session: session, tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}
+}
+
+func (s *items) all(chat []Event) []outgoing {
+	var lines []outgoing
+	for _, event := range chat {
+		lines = append(lines, s.translate(event, time.Now())...)
+	}
+	return lines
+}
+
 func (s *items) identity(agent, item string) Identity {
 	return Identity{Session: s.session, Turn: s.turn, Agent: agent, Item: item}
 }

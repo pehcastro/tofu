@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/sys"
 )
@@ -33,23 +34,12 @@ type whyReport struct {
 
 type whyListing struct {
 	ledger.Row
-	Chain      *ledger.Row    `json:"chain,omitempty"`
-	BlockedBy  string         `json:"blocked_by,omitempty"`
-	Precedents []whyPrecedent `json:"precedents"`
+	Chain      *ledger.Row            `json:"chain,omitempty"`
+	BlockedBy  string                 `json:"blocked_by,omitempty"`
+	Precedents []host.LedgerPrecedent `json:"precedents"`
 	state      json.RawMessage
 	stateErr   error
 	statePath  string
-}
-
-type whyPrecedent struct {
-	ID              string          `json:"row_id"`
-	Verdict         ledger.Verdict  `json:"verdict"`
-	At              time.Time       `json:"at"`
-	Distance        float64         `json:"distance"`
-	SameFingerprint bool            `json:"same_fingerprint"`
-	Comparable      bool            `json:"comparable"`
-	Why             string          `json:"why"`
-	Outcome         *ledger.Outcome `json:"outcome,omitempty"`
 }
 
 func (l whyListing) decision() ledger.Row {
@@ -65,28 +55,20 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 	if err != nil {
 		return o.usage(err)
 	}
-	dir, err := sys.LogDir()
+	found, err := whyFind(opts)
+	switch {
+	case err != nil, len(found.rows) > 0, found.call != nil:
+	case opts.point != "":
+		err = errors.New("the ledger has no rows at " + opts.point)
+	default:
+		err = errors.New("the ledger has no rows")
+	}
 	if err != nil {
 		return o.fail(err)
 	}
-	reader := ledger.NewReader(dir)
-	report := whyReport{Rows: []whyListing{}}
-	rows, err := whyRows(reader, opts)
-	if err != nil {
-		found, lookedUp, lookupErr := recordedCallByHash(opts.id)
-		if lookupErr != nil || !lookedUp {
-			return o.fail(err)
-		}
-		report.Call, rows = &found, nil
-		if opts.id = found.Call.GateDecisionID; opts.id != "" {
-			if rows, err = whyRows(reader, opts); err != nil {
-				return o.fail(err)
-			}
-		}
-	}
 	if opts.state {
-		for _, row := range rows {
-			body, err := reader.State(row)
+		for _, row := range found.rows {
+			body, err := found.reader.State(row)
 			if err == nil && len(body) == 0 {
 				err = fmt.Errorf("row %s carries no state body", row.ID)
 			}
@@ -97,29 +79,67 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 		}
 		return exitOK
 	}
-	decisions := make([]ledger.Row, len(rows))
-	for i, row := range rows {
-		listing, err := whyListingOf(reader, dir, row)
-		if err != nil {
-			return o.fail(err)
-		}
-		report.Rows, decisions[i] = append(report.Rows, listing), listing.decision()
-	}
-	shortlists, err := reader.Precedents(decisions)
+	report, err := found.report()
 	if err != nil {
 		return o.fail(err)
-	}
-	for i, found := range shortlists {
-		for _, precedent := range found {
-			report.Rows[i].Precedents = append(report.Rows[i].Precedents, whyPrecedent{ID: precedent.Row.ID, Verdict: precedent.Row.Verdict, At: precedent.Row.At,
-				Distance: precedent.Distance, SameFingerprint: precedent.SameFingerprint, Comparable: precedent.Comparable, Why: precedentWhy(precedent), Outcome: precedent.Row.Outcome})
-		}
 	}
 	return o.done(true, report, func(page cli.Page) []string { return whyPage(page, report, now()) })
 }
 
+type whyFound struct {
+	dir    string
+	reader *ledger.Reader
+	call   *recordedCall
+	rows   []ledger.Row
+}
+
+func whyFind(opts whyOpts) (whyFound, error) {
+	dir, err := sys.LogDir()
+	if err != nil {
+		return whyFound{}, err
+	}
+	found := whyFound{dir: dir, reader: ledger.NewReader(dir)}
+	found.rows, err = whyRows(found.reader, opts)
+	if err == nil {
+		return found, nil
+	}
+	called, lookedUp, lookupErr := recordedCallByHash(opts.id)
+	if lookupErr != nil || !lookedUp {
+		return found, err
+	}
+	found.call, found.rows = &called, nil
+	if opts.id = called.Call.GateDecisionID; opts.id == "" {
+		return found, nil
+	}
+	found.rows, err = whyRows(found.reader, opts)
+	return found, err
+}
+
+func (f whyFound) report() (whyReport, error) {
+	report := whyReport{Call: f.call, Rows: []whyListing{}}
+	decisions := make([]ledger.Row, len(f.rows))
+	for i, row := range f.rows {
+		listing, err := whyListingOf(f.reader, f.dir, row)
+		if err != nil {
+			return report, err
+		}
+		report.Rows, decisions[i] = append(report.Rows, listing), listing.decision()
+	}
+	shortlists, err := f.reader.Precedents(decisions)
+	if err != nil {
+		return report, err
+	}
+	for i, found := range shortlists {
+		for _, precedent := range found {
+			report.Rows[i].Precedents = append(report.Rows[i].Precedents, host.LedgerPrecedent{ID: precedent.Row.ID, Verdict: precedent.Row.Verdict, At: precedent.Row.At,
+				Distance: precedent.Distance, SameFingerprint: precedent.SameFingerprint, Comparable: precedent.Comparable, Why: precedentWhy(precedent), Outcome: precedent.Row.Outcome})
+		}
+	}
+	return report, nil
+}
+
 func whyListingOf(reader *ledger.Reader, dir string, row ledger.Row) (whyListing, error) {
-	listing := whyListing{Row: row, Precedents: []whyPrecedent{}}
+	listing := whyListing{Row: row, Precedents: []host.LedgerPrecedent{}}
 	if row.ReplayOf != "" {
 		original, ok, err := reader.ByID(row.ReplayOf)
 		if err != nil {
@@ -219,12 +239,6 @@ func whyRows(reader *ledger.Reader, opts whyOpts) ([]ledger.Row, error) {
 		return nil
 	}); err != nil {
 		return nil, err
-	}
-	if len(window) == 0 && opts.point != "" {
-		return nil, errors.New("the ledger has no rows at " + opts.point)
-	}
-	if len(window) == 0 {
-		return nil, errors.New("the ledger has no rows")
 	}
 	return window, nil
 }

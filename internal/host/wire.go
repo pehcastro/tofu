@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
+	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
+	"tofu/internal/turn"
 )
 
 const (
@@ -447,6 +449,32 @@ type SessionOpenParams struct {
 	Project string     `json:"project,omitempty"`
 	Session string     `json:"session,omitempty"`
 	Asking  AskingMode `json:"asking,omitempty"`
+	Replay  *int       `json:"replay,omitempty"`
+}
+
+type SessionHistoryParams struct {
+	Session string `json:"session"`
+	Before  *int   `json:"before,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+type SessionHistory struct {
+	Session string        `json:"session"`
+	First   int           `json:"first"`
+	Total   int           `json:"total"`
+	Lines   []HistoryLine `json:"lines"`
+}
+
+type HistoryLine struct {
+	Method string `json:"method"`
+	Params any    `json:"params"`
+}
+
+type Compaction struct {
+	Into         string `json:"into,omitempty"`
+	Results      int    `json:"results"`
+	TokensBefore int    `json:"tokensBefore"`
+	TokensAfter  int    `json:"tokensAfter"`
 }
 
 type SessionRenameParams struct {
@@ -587,6 +615,24 @@ type TurnSteerParams struct {
 type TurnParams struct {
 	Session string `json:"session"`
 	Turn    string `json:"turn"`
+	Lead    bool   `json:"lead,omitempty"`
+}
+
+type UnsteerParams struct {
+	Text string `json:"text"`
+}
+
+type UnsteerResult struct {
+	Removed bool `json:"removed"`
+}
+
+type ShellRunParams struct {
+	Command string `json:"command"`
+}
+
+type ShellRunResult struct {
+	Output  string `json:"output"`
+	Stopped bool   `json:"stopped"`
 }
 
 type TurnResult struct {
@@ -608,6 +654,42 @@ type ShellReadResult struct {
 	Offset int    `json:"offset"`
 	Text   string `json:"text"`
 	Next   int    `json:"next"`
+}
+
+type LedgerParams struct {
+	ID    string `json:"id,omitempty"`
+	Last  int    `json:"last,omitempty"`
+	Point string `json:"point,omitempty"`
+}
+
+type LedgerReport struct {
+	Call *LedgerCall `json:"call,omitempty"`
+	Rows []LedgerRow `json:"rows"`
+}
+
+type LedgerCall struct {
+	Session string           `json:"session"`
+	Step    int              `json:"step"`
+	Attempt int              `json:"attempt"`
+	Call    turn.ToolCallRow `json:"call"`
+}
+
+type LedgerRow struct {
+	ledger.Row
+	Chain      *ledger.Row       `json:"chain,omitempty"`
+	BlockedBy  string            `json:"blocked_by,omitempty"`
+	Precedents []LedgerPrecedent `json:"precedents"`
+}
+
+type LedgerPrecedent struct {
+	ID              string          `json:"row_id"`
+	Verdict         ledger.Verdict  `json:"verdict"`
+	At              time.Time       `json:"at"`
+	Distance        float64         `json:"distance"`
+	SameFingerprint bool            `json:"same_fingerprint"`
+	Comparable      bool            `json:"comparable"`
+	Why             string          `json:"why"`
+	Outcome         *ledger.Outcome `json:"outcome,omitempty"`
 }
 
 type LabelParams struct {
@@ -702,6 +784,10 @@ func requests() []method {
 		{name: "turn.send", params: TurnSendParams{}, result: TurnResult{}},
 		{name: "turn.steer", params: TurnSteerParams{}, result: TurnResult{}},
 		{name: "turn.stop", params: TurnParams{}, result: Ack{}},
+		{name: "turn.unsteer", params: UnsteerParams{}, result: UnsteerResult{}},
+		{name: "session.compact", params: NoParams{}, result: Compaction{}},
+		{name: "session.history", params: SessionHistoryParams{}, result: SessionHistory{}},
+		{name: "shell.run", params: ShellRunParams{}, result: ShellRunResult{}},
 		{name: "undo", params: UndoParams{}, result: verb},
 		{name: "shell.read", params: ShellParams{}, result: ShellReadResult{}},
 		{name: "shell.kill", params: ShellParams{}, result: Ack{}},
@@ -710,6 +796,7 @@ func requests() []method {
 		{name: "login.start", params: LoginParams{}, result: verb},
 		{name: "cron.command", params: CronCommandParams{}, result: CronCommandResult{}},
 		{name: queryPrefix + "cron", params: NoParams{}, result: CronState{}},
+		{name: queryPrefix + "ledger", params: LedgerParams{}, result: LedgerReport{}},
 	}
 	for _, query := range queries() {
 		methods = append(methods, method{name: queryPrefix + query.name, params: NoParams{}, result: verb})
@@ -718,7 +805,7 @@ func requests() []method {
 }
 
 func capabilities() []string {
-	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images"}
+	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "run", "compact", "history", "ledger"}
 }
 
 const queryPrefix = "query."
@@ -735,7 +822,6 @@ func queries() []query {
 		{name: "rules", verb: []string{"rules", "list"}},
 		{name: "agents", verb: []string{"agents"}},
 		{name: "models", verb: []string{"models"}},
-		{name: "ledger", verb: []string{"why"}},
 		{name: "settings", verb: []string{"settings"}},
 		{name: "library", verb: []string{"library"}},
 	}

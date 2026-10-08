@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -116,7 +117,10 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 	}
 	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled,
-		Sessions: serveSessions, Wires: wires, Sources: wireSources()})
+		Sessions: serveSessions, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
+		Run: func(ctx context.Context, command string) (string, bool) {
+			return shellCommand(ctx, dir, launch.registry, command)
+		}})
 	engine.warm.Close()
 	live.Close()
 	for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
@@ -164,6 +168,39 @@ func serveSessions(open string) (host.SessionList, error) {
 		}
 	}
 	return list, nil
+}
+
+func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
+	var args []string
+	if p.ID != "" {
+		args = append(args, p.ID)
+	}
+	if p.ID == "" || p.Last != 0 {
+		args = append(args, "--last", strconv.Itoa(max(p.Last, 1)))
+	}
+	if p.Point != "" {
+		args = append(args, "--point", p.Point)
+	}
+	opts, err := parseWhyArgs(args)
+	if err != nil {
+		return host.LedgerReport{}, &host.Refusal{Code: host.CodeBadParams, Message: err.Error()}
+	}
+	found, err := whyFind(opts)
+	if err != nil {
+		return host.LedgerReport{}, err
+	}
+	report, err := found.report()
+	if err != nil {
+		return host.LedgerReport{}, err
+	}
+	typed := host.LedgerReport{Rows: make([]host.LedgerRow, len(report.Rows))}
+	if call := report.Call; call != nil {
+		typed.Call = &host.LedgerCall{Session: call.Session, Step: call.Step, Attempt: call.Attempt, Call: call.Call}
+	}
+	for index, row := range report.Rows {
+		typed.Rows[index] = host.LedgerRow{Row: row.Row, Chain: row.Chain, BlockedBy: row.BlockedBy, Precedents: row.Precedents}
+	}
+	return typed, nil
 }
 
 func wireSources() map[string]string {

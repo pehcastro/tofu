@@ -22,14 +22,27 @@ three lines of context.
 ## Where it lives
 
 - sessions: `session.list`, `session.open`, `session.state`, `session.set`,
-  `session.rename`. Turns: `turn.send`, `turn.steer`, `turn.stop`, `undo`.
-  Shells: `shell.read`, `shell.kill`. Others: `initialize`, `label`,
-  `settings.set`, `login.start`, `cron.command`. Reads: `query.usage`,
-  `query.context`, `query.rules`, `query.agents`, `query.models`,
-  `query.ledger`, `query.settings`, `query.library`, `query.cron`
+  `session.rename`, `session.compact`, `session.history`. Turns: `turn.send`,
+  `turn.steer`, `turn.unsteer`, `turn.stop`, `undo`. Shells: `shell.run`,
+  `shell.read`, `shell.kill`. Others: `initialize`, `label`, `settings.set`,
+  `login.start`, `cron.command`. Reads, which answer out of order as
+  `session.list`, `session.history` and `shell.run` do, so none holds
+  `turn.stop`: `query.usage`, `query.context`, `query.rules`, `query.agents`,
+  `query.models`, `query.ledger`, `query.settings`, `query.library`, `query.cron`
+- `query.ledger`: takes `id`, or `last` and `point`; answers `rows`, each a
+  ledger row with its `precedents` as `tofu why --json` prints it, or `[]`
+- `turn.stop` with `lead: true` stops the lead alone. `turn.unsteer` takes back
+  a queued steer by its `text` and answers `removed`
+- `shell.run`: runs `command` as `!` does and answers `output` and `stopped`;
+  the next turn reads it. Never mid-turn, one at a time, and `turn.stop` stops it
+- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter` and
+  `into` when anything shrank, which `session.updated` then names
+- `session.history`: takes `session`, `limit` and `before`; answers `lines`,
+  each `{method, params}` as `session.open` sends it, from `first` of `total`.
+  `session.open` takes `replay`, how many of the newest it sends, and on a
+  session another tofu holds errs `session.busy`, naming the process
 - `initialize`: answers `capabilities`, one name a family of methods (`list`,
-  `state`, `set`, `images`, `cron` and so on), so a client tells an older tofu
-  from a newer one without a version table
+  `ledger`, `history` and so on), so a client tells an older tofu from a newer
 - `session.list`: takes `search` and `limit`, both optional; one row a
   session with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
   `model`, `costUsd`, `open` for the one open here, `running` while a turn
@@ -43,8 +56,6 @@ three lines of context.
 - `session.rename`: takes `session` and `name` and names the whole family, as
   `tofu session rename` does; `session.updated` follows. A name with no letter
   or digit, or a session not here, is refused
-- `session.open` on a session another tofu holds: the error `session.busy`,
-  carrying the process that holds it
 - cron: `cron.command` takes the line you would type, such as `/loop 10m check
   the build`. `query.cron` and `cron.updated` carry `live`, `goals` and each
   job's `id`, `schedule`, `prompt`, `paused`, `next` and `ended`
@@ -53,15 +64,14 @@ three lines of context.
   `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop
   hook"}`: you, a cron fire, a sub-agent's report, a line tofu added. Older
   sessions, and a cron fire that joined a running turn, read as `person`
-- `lastAt`, the last time anything was recorded, on every `session.list` row,
-  `session.listed` and `session.updated`, which follows every turn
+- `lastAt`, the last record, is on `session.list`, `session.listed` and
+  `session.updated`, which follows every turn
 - `quota.updated`: when a session opens, after every turn and every five
   minutes, with each window's `percent`; `windows: []` means none answered
 - `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
   so history after a seq is a read of the log; a tool call's notice names the
   item of its `tool.started`
-- a slow reader: past 128 queued lines tofu drops what it cannot hold and
-  sends `resync`, and never waits
+- a slow reader: past 128 queued lines tofu drops, sends `resync`, never waits
 - `tofu serve --schema` prints the JSON Schema of every line written, and of
   every line read under `$defs.clientMessage`
 
