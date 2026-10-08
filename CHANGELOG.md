@@ -10,6 +10,26 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.7 - 2026-10-07
+
+A long conversation keeps its name, its work and its cache.
+
+### Changed
+
+- **A conversation keeps one name across forks**, `/compact` and account moves, shown as `name#tag.N` with the number rising. `tofu session <name>` shows the whole family with its age and active time, `tofu session find <name> --tool bash` searches every generation, and names from older sessions still resolve. Hooks see the family id as `session_id`.
+
+- **When a conversation crosses its budget, tofu shrinks results the model has already read before it forks.** A fork carries the working state the model wrote and points at every call it read; the `lookup` tool brings any of them back.
+
+- **Messages typed while the lead works wait in one queue** above the composer and reach the lead as one message at its next step; none is dropped, and ctrl+x takes one back before the lead reads it.
+
+- **A sub-agent sent back or messaged again reuses its cached conversation** instead of writing it to the cache a second time.
+
+### Added
+
+- **`read` shows the model a png, jpeg, gif or webp as a picture**, shrunk to 1568 px when larger, for the lead and sub-agents.
+
+- **`tofu serve` tells a client its cron jobs** (`query.cron`, `cron.updated`, `cron.command`) and sends `quota.updated` as soon as a session opens and every 5 minutes.
+
 ## 0.5.6-fix3 - 2026-10-07
 
 ### Added

@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.5.6-fix3"
+const Version = "0.5.7"
 
 const RecipeFailuresAside = 2
 

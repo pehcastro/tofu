@@ -45,14 +45,17 @@ per language.
 - **Setup**: keys live in the credential store, new models arrive with
   `tofu models reload`, `tofu docs` answers how-to questions, and tofu reads
   its own `.tofu` setup, not another harness's.
-- **Memory and learning**: `remember ...` keeps what you say for every later
-  session, and `tofu learn` reads your sessions for the correction you keep
-  repeating and proposes a fix.
+- **Memory and learning**: `/remember` or the lead keeps a short rule for
+  every later session, and `tofu learn` reads your sessions for the
+  correction you keep repeating and proposes a fix.
 - **Sub-agents under control**: the lead can read, diagnose, stop, kill,
   release and back up any sub-agent, and a sub-agent's row says what it is
   doing.
-- **Context**: your own words survive every fork, `tofu --continue` opens in
-  under a second, and every message carries an id you can quote.
+- **Context**: a conversation keeps one name across forks, a fork carries
+  the work in progress, `tofu --continue` opens in under a second, and every
+  message carries an id you can quote.
+- **Pictures and updates**: `read` shows the model an image file, and tofu
+  updates itself, telling an open session when a newer tofu is installed.
 
 ## 0.4
 
