@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -86,6 +87,7 @@ func shellsList(o verbOutput, registry *shell.Registry) int {
 	if err != nil {
 		return o.fail(err)
 	}
+	shells = slices.DeleteFunc(shells, shell.Shell.OneShot)
 	now := time.Now()
 	readings := make([]shellReading, len(shells))
 	for i, one := range shells {

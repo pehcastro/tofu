@@ -385,6 +385,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		Within: konst.BackgroundYieldMillis * time.Millisecond,
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
 		Port:   shell.NamedPort(string(t.root), args.Command, cmd.Env),
+		Kept:   shell.KeptBackground,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
@@ -393,13 +394,13 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	if ran.State == shell.Running {
 		return Result{
 			Content: fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. this call returned after %d ms because %s. its output so far:\n%s",
-				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready, got.Output),
+				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready.Words(), got.Output),
 			Command: "background " + ran.Name + ": " + args.Command,
 			Outcome: ResultSucceeded,
 		}, nil
 	}
 	return exitedResult(args.Command, got.Output, *ran.ExitCode, fmt.Sprintf(
-		"bash: this ended inside the %d ms a background start waits, so nothing was kept on the shells screen: a command that ends belongs in bash without background\n",
+		"bash: this ended inside the %d ms a background start waits, so nothing was kept on the shells screen and there is no shell name to wait on: a command that ends belongs in bash without background\n",
 		konst.BackgroundYieldMillis)), nil
 }
 
@@ -411,7 +412,11 @@ func deadlineResult(command, output string, deadline time.Duration) Result {
 }
 
 func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (Result, error) {
-	got, err := registry.YieldReady(ctx, t.command(context.Background(), command), command, shellOwnerFrom(ctx), shell.Wait{Within: min(deadline, t.softLimit)})
+	wait := shell.Wait{Within: min(deadline, t.softLimit)}
+	if deadline > t.softLimit {
+		wait.Kept = shell.KeptMoved
+	}
+	got, err := registry.YieldReady(ctx, t.command(context.Background(), command), command, shellOwnerFrom(ctx), wait)
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
@@ -492,8 +497,13 @@ const (
 	killPattern     = commandPosition + `(?:\S*[/\\])?(?:kill|pkill|taskkill)(?:\.exe)?(?:\s|$)`
 )
 
-func subAgentRefusal(command string) error {
-	for _, match := range regexp.MustCompile(sleepPattern).FindAllStringSubmatch(command, -1) {
+func subAgentRefusal(args bashArgs) error {
+	command := args.Command
+	var waits [][]string
+	if !args.Background {
+		waits = regexp.MustCompile(sleepPattern).FindAllStringSubmatch(command, -1)
+	}
+	for _, match := range waits {
 		slept, err := time.ParseDuration(match[1] + cmp.Or(match[2], "s"))
 		if err == nil && slept > konst.SubAgentSleepSeconds*time.Second {
 			return fmt.Errorf("bash: sub_agent_boundaries: %q sleeps %s, and a sub-agent never waits on another's files, so no sleep over %d s runs here. "+
@@ -543,7 +553,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 		}
 	}
 	if subAgent {
-		if err := subAgentRefusal(args.Command); err != nil {
+		if err := subAgentRefusal(args); err != nil {
 			return Result{}, err
 		}
 	}

@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -45,5 +46,21 @@ func TestAFinishedShellOutlivesTheNextLaunchAndItsNameIsNeverTakenAgain(t *testi
 	_ = logFile.Close()
 	if name != "bash-4" {
 		t.Fatalf("the next shell is named %s, a name an earlier shell of this project already had", name)
+	}
+}
+
+func TestAOneShotsNameIsNeverGivenToTheNextCommand(t *testing.T) {
+	registry := OpenAt(filepath.Join(t.TempDir(), "shells"))
+	once, _, err := registry.Yield(context.Background(), shellCommand(t, t.TempDir(), "echo once"), "echo once", "", 5*time.Second)
+	if err != nil || once.State != Exited {
+		t.Fatalf("the one-shot came back %+v (%v)", once, err)
+	}
+	kept, _, err := registry.Yield(context.Background(), shellCommand(t, t.TempDir(), "sleep 30"), "sleep 30", "", 300*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = registry.Kill(kept.Name) })
+	if kept.Name == once.Name {
+		t.Fatalf("the kept command is named %s, the name the one-shot before it had", kept.Name)
 	}
 }

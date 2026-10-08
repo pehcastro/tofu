@@ -27,14 +27,15 @@ const (
 )
 
 const (
-	logSuffix     = ".log"
-	stateSuffix   = ".json"
-	stagingSuffix = ".writing"
-	claimedPrefix = "bash-"
-	DefaultTail   = 200
-	dirMode       = 0o755
-	fileMode      = 0o644
-	killWait      = 2 * time.Second
+	logSuffix          = ".log"
+	stateSuffix        = ".json"
+	stagingSuffix      = ".writing"
+	claimedPrefix      = "bash-"
+	highestClaimedFile = "highest-claimed"
+	DefaultTail        = 200
+	dirMode            = 0o755
+	fileMode           = 0o644
+	killWait           = 2 * time.Second
 )
 
 type Shell struct {
@@ -50,7 +51,17 @@ type Shell struct {
 	ExitCode *int       `json:"exit_code,omitempty"`
 	Terminal bool       `json:"terminal,omitempty"`
 	Deadline int64      `json:"deadline_ms,omitempty"`
+	Kept     Kept       `json:"kept,omitempty"`
+	Port     int        `json:"port,omitempty"`
+	Ready    Readiness  `json:"ready,omitempty"`
 }
+
+type Kept string
+
+const (
+	KeptBackground Kept = "background"
+	KeptMoved      Kept = "moved"
+)
 
 type live struct {
 	tree     tree
@@ -79,6 +90,10 @@ func OpenAt(dir string) *Registry {
 
 func (s Shell) LeftOver() bool {
 	return s.State == Running && (s.TofuPID <= 0 || !processAlive(s.TofuPID))
+}
+
+func (s Shell) OneShot() bool {
+	return s.Kept == "" && s.State == Running && !s.LeftOver()
 }
 
 func (r *Registry) Own() []Shell {
@@ -118,7 +133,9 @@ func (r *Registry) claim() (string, *os.File, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	highest := 0
+	everClaimed := filepath.Join(r.dir, highestClaimedFile)
+	recorded, _ := os.ReadFile(everClaimed)
+	highest, _ := strconv.Atoi(string(recorded))
 	for _, file := range files {
 		rest, claimed := strings.CutPrefix(file.Name(), claimedPrefix)
 		digits, _, _ := strings.Cut(rest, ".")
@@ -131,6 +148,9 @@ func (r *Registry) claim() (string, *os.File, error) {
 		logFile, err := os.OpenFile(r.logPath(name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, fileMode)
 		if errors.Is(err, os.ErrExist) {
 			continue
+		}
+		if err == nil {
+			_ = os.WriteFile(everClaimed, []byte(strconv.Itoa(number)), fileMode)
 		}
 		return name, logFile, err
 	}
@@ -185,7 +205,8 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal}
+	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal,
+		Kept: KeptBackground, Port: NamedPort(root, command, cmd.Env)}
 	return entry, r.keep(entry, &live{tree: spawned, finished: make(chan struct{})}, waited, logFile)
 }
 

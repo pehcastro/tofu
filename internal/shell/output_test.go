@@ -298,7 +298,7 @@ func TestOutputAForegroundCommandIsListedWhileItRuns(t *testing.T) {
 	if got := <-done; got.Ready != ReadyExited || !strings.Contains(got.Output, "fg 3") {
 		t.Fatalf("the command came back %+v", got)
 	}
-	if left, _ := os.ReadDir(dir); len(left) != 0 {
-		t.Fatalf("a command that ended inside the wait left %d files in the registry", len(left))
+	if left, _ := os.ReadDir(dir); len(left) != 1 || left[0].Name() != highestClaimedFile {
+		t.Fatalf("a command that ended inside the wait left %v in the registry, want only the highest name ever claimed", left)
 	}
 }

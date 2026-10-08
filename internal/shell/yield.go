@@ -18,16 +18,33 @@ type Readiness string
 
 const (
 	ReadyExited  Readiness = "exited"
-	ReadyPort    Readiness = "its port opened"
-	ReadyLine    Readiness = "it printed a ready line"
-	ReadyWaited  Readiness = "the wait ran out"
-	ReadyStopped Readiness = "the turn stopped"
+	ReadyPort    Readiness = "port"
+	ReadyLine    Readiness = "line"
+	ReadyWaited  Readiness = "waited"
+	ReadyStopped Readiness = "stopped"
 )
+
+func (r Readiness) Words() string {
+	switch r {
+	case ReadyExited:
+		return "it exited"
+	case ReadyPort:
+		return "its port opened"
+	case ReadyLine:
+		return "it printed a ready line"
+	case ReadyWaited:
+		return "the wait ran out"
+	case ReadyStopped:
+		return "the turn stopped"
+	}
+	panic("shell: unknown readiness " + string(r))
+}
 
 type Wait struct {
 	Within time.Duration
 	Poll   time.Duration
 	Port   int
+	Kept   Kept
 }
 
 type Yielded struct {
@@ -55,7 +72,7 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		_ = os.Remove(r.logPath(name))
 		return Yielded{}, err
 	}
-	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal}}
+	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal, Port: wait.Port}}
 	process := &live{tree: spawned, finished: make(chan struct{})}
 	if err := r.list(got.Shell, process); err != nil {
 		_ = killTree(cmd.Process.Pid)
@@ -102,7 +119,10 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		return exited(waitErr)
 	default:
 	}
-	got.Took = time.Since(got.Shell.Started)
+	got.Took, got.Shell.Ready = time.Since(got.Shell.Started), got.Ready
+	if got.Ready != ReadyStopped || wait.Kept == KeptBackground {
+		got.Shell.Kept = wait.Kept
+	}
 	if err := r.keep(got.Shell, process, waited, logFile); err != nil {
 		return got, err
 	}
