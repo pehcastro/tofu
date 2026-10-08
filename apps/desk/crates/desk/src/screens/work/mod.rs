@@ -470,7 +470,7 @@ impl Work {
             .chain(
                 openable
                     .iter()
-                    .map(|name| MenuItem::action(*name).icon(Icon::Sidebar)),
+                    .map(|name| MenuItem::action(*name).icon(Glyph::Window)),
             )
             .collect()
     }
@@ -478,7 +478,7 @@ impl Work {
     fn tab_menu(workspace: Option<&Workspace>) -> Vec<MenuItem> {
         let (pinned, locked) = workspace.map_or((false, false), |at| (at.pinned, at.locked));
         [
-            Some(MenuItem::action("Rename").icon(Glyph::File)),
+            Some(MenuItem::action("Rename").icon(Glyph::Pencil)),
             Some(MenuItem::action(if pinned { "Unpin" } else { "Pin" }).icon(Glyph::Pin)),
             Some(MenuItem::action(if locked { "Unlock" } else { "Lock" }).icon(Glyph::Lock)),
             Some(MenuItem::action("Reset layout").icon(Icon::Restore)),
