@@ -34,6 +34,7 @@ import (
 	library "tofu/internal/llm/models"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
+	"tofu/internal/status"
 	isubagent "tofu/internal/subagent"
 	"tofu/internal/sys"
 )
@@ -274,6 +275,7 @@ type App struct {
 	drawn          string
 	hits           []frame.Hit
 	listening      atomic.Bool
+	statusWatch    statusWatch
 }
 
 type resolvedModel struct {
@@ -424,7 +426,7 @@ func Run(options Options) error {
 	}
 	program := tea.NewProgram(New(options), programOptions...)
 	_, err := program.Run()
-	_, _ = io.WriteString(os.Stdout, exitReset)
+	_, _ = io.WriteString(os.Stdout, exitReset+status.Encode(status.Record{State: status.Clear}))
 	return err
 }
 
@@ -495,6 +497,7 @@ func (a *App) resize(width, height int) {
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	a.followStatus(msg)
 	cmd := a.update(msg)
 	if a.options.Host != nil {
 		a.options.Host.Choose(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort})
@@ -506,7 +509,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	a.flushFeed()
 	a.syncFeed()
-	return a, tea.Batch(cmd, a.startPulse())
+	return a, tea.Batch(cmd, a.startPulse(), a.reportStatus())
 }
 
 func (a *App) update(msg tea.Msg) tea.Cmd {

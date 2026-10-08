@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/paste"
 	isession "tofu/internal/session"
 	"tofu/internal/sys"
 )
@@ -176,7 +177,14 @@ func pastedLong(t *testing.T, tasks chan string, long string) *App {
 
 func pasteInto(app *App) {
 	_, cmd := app.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
-	app.Update(cmd())
+	for pending := []tea.Cmd{cmd}; len(pending) > 0; pending = pending[1:] {
+		switch msg := pending[0]().(type) {
+		case tea.BatchMsg:
+			pending = append(pending, msg...)
+		case paste.Outcome:
+			app.Update(msg)
+		}
+	}
 }
 
 func TestARecalledEntryKeepsItsTextChipAndSendsTheTextNotTheToken(t *testing.T) {

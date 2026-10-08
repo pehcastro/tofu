@@ -82,6 +82,7 @@ func (a *App) View() tea.View {
 	view := tea.NewView(content)
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion
+	view.ReportFocus = true
 	view.BackgroundColor = look.Canvas(a.theme())
 	view.Cursor = caret
 	return view
