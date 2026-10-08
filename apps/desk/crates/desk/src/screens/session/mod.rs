@@ -1,21 +1,6 @@
 mod fixture;
 
-#[cfg(not(any(
-    feature = "screen-usage",
-    feature = "screen-limits",
-    feature = "screen-context"
-)))]
-#[path = "../usage/frame.rs"]
-pub mod frame;
-#[cfg(all(
-    feature = "screen-context",
-    not(any(feature = "screen-usage", feature = "screen-limits"))
-))]
-use crate::screens::context::frame;
-#[cfg(all(feature = "screen-limits", not(feature = "screen-usage")))]
-use crate::screens::limits::frame;
-#[cfg(feature = "screen-usage")]
-use crate::screens::usage::frame;
+use super::frame;
 
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, dots, inner_card, outer_card};

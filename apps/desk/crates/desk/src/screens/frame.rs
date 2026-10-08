@@ -1,13 +1,10 @@
 use std::borrow::Cow;
 
-use desk_core::control::TELL_BADGE;
 use desk_ui::components::card::{caption, outer_card};
 use desk_ui::components::chip::mono;
-use desk_ui::components::overlay::toast;
 use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{HEADER, HEADER_PAD_LEFT, HEADER_PAD_RIGHT, SHELL_PAD, T3};
-use desk_ui::metrics::TOAST_BOTTOM;
 use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
     AnyElement, App, ClickEvent, Context, Div, FontWeight, HighlightStyle, Rgba, SharedString,
@@ -15,12 +12,12 @@ use gpui::{
 };
 
 const FONTS: [&[u8]; 6] = [
-    include_bytes!("../../../../../assets/fonts/Geist-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/Geist-SemiBold.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Regular.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-Medium.ttf"),
-    include_bytes!("../../../../../assets/fonts/GeistMono-SemiBold.ttf"),
+    include_bytes!("../../../../assets/fonts/Geist-Regular.ttf"),
+    include_bytes!("../../../../assets/fonts/Geist-Medium.ttf"),
+    include_bytes!("../../../../assets/fonts/Geist-SemiBold.ttf"),
+    include_bytes!("../../../../assets/fonts/GeistMono-Regular.ttf"),
+    include_bytes!("../../../../assets/fonts/GeistMono-Medium.ttf"),
+    include_bytes!("../../../../assets/fonts/GeistMono-SemiBold.ttf"),
 ];
 
 const GAP: f32 = 10.0;
@@ -68,6 +65,7 @@ pub const SHELL_PILLS: Pills = Pills {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mark {
+    #[cfg(feature = "screen-session")]
     Plain,
     Strong,
     Warn,
@@ -87,6 +85,7 @@ pub fn rich(parts: &[(&str, Mark)], theme: &Theme) -> StyledText {
             ..HighlightStyle::default()
         };
         match mark {
+            #[cfg(feature = "screen-session")]
             Mark::Plain => {}
             Mark::Strong => looks.push((
                 range,
@@ -127,15 +126,6 @@ pub fn note(text: impl Into<SharedString>, theme: &Theme) -> Div {
         .text_size(px(12.0))
         .text_color(ink(theme, T3))
         .child(text.into())
-}
-
-pub fn figure(text: &'static str, width: f32, theme: &Theme) -> Div {
-    div()
-        .min_w(px(width))
-        .flex()
-        .justify_end()
-        .font_family(mono(theme))
-        .child(text)
 }
 
 pub fn panel(title: impl Into<SharedString>, trailing: Option<AnyElement>, theme: &Theme) -> Div {
@@ -199,6 +189,7 @@ pub fn pills<V: 'static, T: Copy + PartialEq + 'static>(
         }))
 }
 
+#[cfg(any(feature = "screen-usage", feature = "screen-session"))]
 pub fn told<V: 'static>(
     text: Option<&'static str>,
     theme: &Theme,
@@ -210,12 +201,12 @@ pub fn told<V: 'static>(
             .absolute()
             .left_0()
             .right_0()
-            .bottom(px(TOAST_BOTTOM))
+            .bottom(px(desk_ui::metrics::TOAST_BOTTOM))
             .flex()
             .justify_center()
-            .child(toast(
+            .child(desk_ui::components::overlay::toast(
                 SharedString::from(text),
-                TELL_BADGE,
+                desk_core::control::TELL_BADGE,
                 theme,
                 cx.listener(move |view, _: &ClickEvent, _, cx| {
                     dismiss(view);

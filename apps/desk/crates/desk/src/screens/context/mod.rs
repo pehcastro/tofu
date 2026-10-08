@@ -1,10 +1,4 @@
-#[cfg(not(any(feature = "screen-usage", feature = "screen-limits")))]
-#[path = "../usage/frame.rs"]
-pub mod frame;
-#[cfg(all(feature = "screen-limits", not(feature = "screen-usage")))]
-use crate::screens::limits::frame;
-#[cfg(feature = "screen-usage")]
-use crate::screens::usage::frame;
+use super::frame;
 
 use crate::modules::chat::Chat;
 use desk_core::model::Store;

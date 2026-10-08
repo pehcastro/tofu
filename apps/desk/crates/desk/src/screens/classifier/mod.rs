@@ -1,8 +1,4 @@
-#[cfg(not(feature = "screen-usage"))]
-#[path = "../usage/frame.rs"]
-pub mod frame;
-#[cfg(feature = "screen-usage")]
-use crate::screens::usage::frame;
+use super::frame;
 
 mod ledger;
 mod sandbox;

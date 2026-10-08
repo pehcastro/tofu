@@ -11,6 +11,15 @@ mod screens {
     pub mod classifier;
     #[cfg(feature = "screen-context")]
     pub mod context;
+    #[cfg(any(
+        feature = "screen-usage",
+        feature = "screen-limits",
+        feature = "screen-classifier",
+        feature = "screen-library",
+        feature = "screen-context",
+        feature = "screen-session"
+    ))]
+    pub mod frame;
     #[cfg(feature = "screen-intro")]
     pub mod intro;
     #[cfg(feature = "screen-library")]

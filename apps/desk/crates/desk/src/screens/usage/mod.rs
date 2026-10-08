@@ -1,5 +1,5 @@
 mod fixture;
-pub mod frame;
+use super::frame;
 
 use desk_ui::components::card::{dots, inner_card};
 use desk_ui::components::chip::{Tone, mono};
@@ -18,9 +18,18 @@ use fixture::{
     SPENDERS, Scope, Source, Swatch,
 };
 use frame::{
-    BODY_TEXT, HEADER_PILLS, LINE, SHELL_PILLS, ellipsis, figure, fraction, load_fonts, note,
-    panel, panes, pills, title, told, window,
+    BODY_TEXT, HEADER_PILLS, LINE, SHELL_PILLS, ellipsis, fraction, load_fonts, note, panel, panes,
+    pills, title, told, window,
 };
+
+fn figure(text: &'static str, width: f32, theme: &Theme) -> Div {
+    div()
+        .min_w(px(width))
+        .flex()
+        .justify_end()
+        .font_family(mono(theme))
+        .child(text)
+}
 
 const ACTIVITY_LEAST: f32 = 340.0;
 const SOURCES_LEAST: f32 = 320.0;
