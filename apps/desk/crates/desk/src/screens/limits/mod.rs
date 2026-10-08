@@ -22,7 +22,7 @@ use fixture::{
     ACCOUNTS, AWAY, AXIS, Account, BOARD, HOURS, Lane, NOW, OPEN_USAGE, PROJECTED_UNTIL,
     SWITCHING_ORDER, Segment, Tone,
 };
-use frame::{LINE, Mark, note, panel, rich, title, told, window};
+use frame::{LINE, Mark, ellipsis, fraction, note, panel, panes, rich, title, told, window};
 
 const ROW_ON: f32 = 0.06;
 const METER_ON: f32 = 0.8;
@@ -50,7 +50,12 @@ const LEGEND_SERVE: f32 = 0.2;
 const LEGEND_SPENT: f32 = 0.35;
 const LEGEND_IDLE: f32 = 0.05;
 const LEGEND_IDLE_RING: f32 = 0.1;
-const GRID: [f32; 2] = [200.0, 92.0];
+const GRID: [f32; 3] = [150.0, 96.0, 92.0];
+const WINDOWS_LEAST: f32 = 300.0;
+const SPENDERS_LEAST: f32 = 260.0;
+const SAY_LEAST: f32 = 220.0;
+const LANE_LABEL: f32 = 160.0;
+const LANE_SHARE: f32 = 0.28;
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     match board {
@@ -90,6 +95,7 @@ impl Limits {
         div()
             .flex()
             .flex_none()
+            .flex_wrap()
             .items_center()
             .gap(px(10.0))
             .px(px(4.0))
@@ -121,6 +127,7 @@ impl Limits {
         .child(
             inner_card(theme)
                 .flex_row()
+                .flex_wrap()
                 .items_center()
                 .gap(px(24.0))
                 .px(px(18.0))
@@ -141,9 +148,7 @@ impl Limits {
                         .child(note("until about 23:30", theme)),
                 )
                 .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
+                    fraction(div(), 1.0, SAY_LEAST)
                         .text_size(px(13.5))
                         .line_height(px(21.0))
                         .child(rich(
@@ -179,11 +184,15 @@ impl Limits {
             .pt(px(8.0))
             .px(px(10.0))
             .pb(px(6.0))
-            .child(caption("account", theme).w(px(GRID[0])))
-            .child(caption("5 hours", theme).flex_1())
-            .child(caption("7 days", theme).flex_1())
-            .child(caption("7 days, per model", theme).flex_1())
-            .child(div().w(px(GRID[1])));
+            .child(fraction(caption("account", theme), 1.5, GRID[0]))
+            .child(fraction(caption("5 hours", theme), 1.0, GRID[1]))
+            .child(fraction(caption("7 days", theme), 1.0, GRID[1]))
+            .child(fraction(
+                ellipsis(caption("7 days, per model", theme)),
+                1.0,
+                GRID[1],
+            ))
+            .child(div().min_w(px(GRID[2])));
         let rows = ACCOUNTS.iter().enumerate().map(|(at, account)| {
             let aside = self.aside.get(at).copied().unwrap_or(false);
             let (state, fill, text) = if aside {
@@ -204,8 +213,7 @@ impl Limits {
                     cx.notify();
                 }))
                 .child(
-                    div()
-                        .w(px(GRID[0]))
+                    fraction(div(), 1.5, GRID[0])
                         .flex()
                         .flex_col()
                         .items_start()
@@ -213,6 +221,7 @@ impl Limits {
                         .child(
                             div()
                                 .flex()
+                                .flex_wrap()
                                 .items_baseline()
                                 .gap(px(4.0))
                                 .text_size(px(13.5))
@@ -240,9 +249,7 @@ impl Limits {
                         ),
                 )
                 .children(account.windows.iter().map(|window| {
-                    div()
-                        .flex_1()
-                        .min_w_0()
+                    fraction(div(), 1.0, GRID[1])
                         .flex()
                         .flex_col()
                         .gap(px(4.0))
@@ -304,7 +311,7 @@ impl Limits {
                         ButtonKind::Plain,
                         theme,
                     )
-                    .w(px(GRID[1]))
+                    .min_w(px(GRID[2]))
                     .h(px(26.0))
                     .text_size(px(12.0))
                     .on_click(cx.listener(
@@ -323,8 +330,7 @@ impl Limits {
             Some(note("click an account for who spends it", theme).into_any_element()),
             theme,
         )
-        .flex_1()
-        .min_w_0()
+        .map(|panel| fraction(panel, 3.0, WINDOWS_LEAST))
         .child(
             inner_card(theme)
                 .py(px(4.0))
@@ -335,6 +341,7 @@ impl Limits {
                 .child(
                     div()
                         .flex()
+                        .flex_wrap()
                         .items_center()
                         .gap(px(12.0))
                         .p(px(10.0))
@@ -370,65 +377,62 @@ impl Limits {
 
     fn spenders(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let account = ACCOUNTS.get(self.picked).unwrap_or(&ACCOUNTS[0]);
-        panel("Who spends it", None, theme)
-            .w(px(300.0))
-            .flex_none()
-            .child(
-                inner_card(theme)
-                    .px(px(14.0))
-                    .py(px(12.0))
-                    .gap(px(10.0))
-                    .text_size(px(13.0))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .line_height(px(18.0))
-                            .child(format!("{} · {}", account.source, account.name))
-                            .child(note(account.pace, theme)),
-                    )
-                    .children(account.spend.iter().map(|(who, share)| {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .flex()
-                                    .text_size(px(12.5))
-                                    .child(div().flex_1().child(*who))
-                                    .child(
-                                        div()
-                                            .font_family(mono(theme))
-                                            .text_color(ink(theme, T2))
-                                            .child(format!("{share}%")),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .mt(px(5.0))
-                                    .h(px(5.0))
-                                    .rounded(px(3.0))
-                                    .overflow_hidden()
-                                    .bg(ink(theme, 0.08))
-                                    .child(
-                                        div()
-                                            .h(px(5.0))
-                                            .rounded(px(3.0))
-                                            .w(relative(f32::from(*share) / 100.0))
-                                            .bg(theme.color(ColorToken::SwitchOn)),
-                                    ),
-                            )
-                    }))
-                    .child(div().flex_1())
-                    .child(
-                        button("usage", "Open Usage", None, ButtonKind::Plain, theme).on_click(
-                            cx.listener(|limits, _: &ClickEvent, _, cx| {
-                                limits.told = Some(OPEN_USAGE);
-                                cx.notify();
-                            }),
-                        ),
+        fraction(panel("Who spends it", None, theme), 1.0, SPENDERS_LEAST).child(
+            inner_card(theme)
+                .px(px(14.0))
+                .py(px(12.0))
+                .gap(px(10.0))
+                .text_size(px(13.0))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .line_height(px(18.0))
+                        .child(format!("{} · {}", account.source, account.name))
+                        .child(note(account.pace, theme)),
+                )
+                .children(account.spend.iter().map(|(who, share)| {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .flex()
+                                .text_size(px(12.5))
+                                .child(div().flex_1().child(*who))
+                                .child(
+                                    div()
+                                        .font_family(mono(theme))
+                                        .text_color(ink(theme, T2))
+                                        .child(format!("{share}%")),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .mt(px(5.0))
+                                .h(px(5.0))
+                                .rounded(px(3.0))
+                                .overflow_hidden()
+                                .bg(ink(theme, 0.08))
+                                .child(
+                                    div()
+                                        .h(px(5.0))
+                                        .rounded(px(3.0))
+                                        .w(relative(f32::from(*share) / 100.0))
+                                        .bg(theme.color(ColorToken::SwitchOn)),
+                                ),
+                        )
+                }))
+                .child(div().flex_1())
+                .child(
+                    button("usage", "Open Usage", None, ButtonKind::Plain, theme).on_click(
+                        cx.listener(|limits, _: &ClickEvent, _, cx| {
+                            limits.told = Some(OPEN_USAGE);
+                            cx.notify();
+                        }),
                     ),
-            )
+                ),
+        )
     }
 
     fn timeline(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
@@ -456,10 +460,7 @@ impl Limits {
                 .gap(px(10.0))
                 .h(px(30.0))
                 .child(
-                    div()
-                        .id(("lane", at))
-                        .w(px(160.0))
-                        .flex_none()
+                    lane_label(div().id(("lane", at)))
                         .text_size(px(12.5))
                         .text_color(if at == self.picked {
                             theme.color(ColorToken::TextStrong)
@@ -479,7 +480,7 @@ impl Limits {
             .flex()
             .gap(px(10.0))
             .h(px(16.0))
-            .child(div().w(px(160.0)).flex_none())
+            .child(lane_label(div()))
             .child(
                 div()
                     .flex_1()
@@ -518,7 +519,15 @@ impl Limits {
 }
 
 fn grid() -> Div {
-    div().flex().gap(px(14.0))
+    div().flex().flex_wrap().gap(px(14.0))
+}
+
+fn lane_label<E: Styled>(label: E) -> E {
+    label
+        .flex_none()
+        .flex_basis(relative(LANE_SHARE))
+        .max_w(px(LANE_LABEL))
+        .truncate()
 }
 
 fn tone(tone: Tone, theme: &Theme) -> Rgba {
@@ -698,11 +707,8 @@ impl Render for Limits {
             .child(self.header(&theme, cx))
             .child(self.runway(&theme, cx))
             .child(
-                div()
+                panes()
                     .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .gap(px(8.0))
                     .child(self.windows(&theme, cx))
                     .child(self.spenders(&theme, cx)),
             )

@@ -34,7 +34,7 @@ use fixture::{
     BRANCH_NOTE, COMPACT, FORK_HERE, FORKS, HEAD, LANES, MENTION, NAME, OPEN_WORK, OVERVIEW,
     Outcome, PICK_NOTE, RENAME, RIBBON_NOTE, SEGMENTS, STARTED, STATS, STEP, Segment, TURNS, UNDO,
 };
-use frame::{note, panel, title, told, window};
+use frame::{ellipsis, fraction, note, panel, panes, title, told, window};
 
 const CARD_SHADE: f32 = 0.22;
 const RIBBON_ON: f32 = 0.22;
@@ -44,6 +44,14 @@ const DOT_OFF: f32 = 0.45;
 const LABEL_OFF: f32 = 0.55;
 const RULE: f32 = 0.35;
 const WARN_FILL: f32 = 0.07;
+const RIBBONS: (f32, f32) = (1100.0, 300.0);
+const LABEL_SPAN: f32 = 180.0;
+const MARK_SPAN: f32 = 90.0;
+const STATS_LEAST: f32 = 120.0;
+const TURNS_LEAST: f32 = 380.0;
+const DETAIL_LEAST: f32 = 320.0;
+const COLUMN_LEAST: f32 = 240.0;
+const FACT_LEAST: f32 = 180.0;
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let forks = match board {
@@ -101,6 +109,7 @@ impl Session {
         let header = div()
             .flex()
             .flex_none()
+            .flex_wrap()
             .items_center()
             .gap(px(10.0))
             .px(px(4.0))
@@ -128,10 +137,8 @@ impl Session {
                     },
                 )),
             );
-        let stats = div()
-            .flex()
+        let stats = panes()
             .flex_none()
-            .gap(px(10.0))
             .children(STATS.iter().map(|(label, value)| {
                 let tail = match *label {
                     "Files changed" => Some(
@@ -152,9 +159,7 @@ impl Session {
                     ),
                     _ => None,
                 };
-                outer_card(theme)
-                    .flex_1()
-                    .min_w_0()
+                fraction(outer_card(theme), 1.0, STATS_LEAST)
                     .flex_col()
                     .px(px(3.0))
                     .pb(px(3.0))
@@ -181,8 +186,7 @@ impl Session {
                     )
             }));
         let turns = panel("Turns", Some(note("newest first · click one", theme).into_any_element()), theme)
-            .flex_1()
-            .min_w_0()
+            .map(|panel| fraction(panel, 3.0, TURNS_LEAST))
             .child(
                 inner_card(theme)
                     .p(px(8.0))
@@ -200,15 +204,16 @@ impl Session {
                                 session.turn = at;
                                 cx.notify();
                             }))
-                            .child(div().w(px(44.0)).font_family(mono(theme)).text_size(px(12.0)).text_color(ink(theme, T3)).child(turn.at))
-                            .child(div().flex_1().child(turn.title))
-                            .child(div().text_size(px(12.5)).text_color(ink(theme, T3)).child(turn.meta))
-                            .child(div().w(px(84.0)).flex().justify_end().text_size(px(12.5)).text_color(color).child(word))
+                            .child(div().min_w(px(44.0)).font_family(mono(theme)).text_size(px(12.0)).text_color(ink(theme, T3)).child(turn.at))
+                            .child(ellipsis(div().flex_1()).child(turn.title))
+                            .child(ellipsis(div()).text_size(px(12.5)).text_color(ink(theme, T3)).child(turn.meta))
+                            .child(div().min_w(px(84.0)).flex().justify_end().whitespace_nowrap().text_size(px(12.5)).text_color(color).child(word))
                     }))
                     .child(div().flex_1())
                     .child(
                         div()
                             .flex()
+                            .flex_wrap()
                             .gap(px(8.0))
                             .p(px(6.0))
                             .child(fact("Cron", &[("every 30m", true), (" rerun the browser check, until 18:00", false)], theme))
@@ -222,8 +227,7 @@ impl Session {
             Some(note(turn.when, theme).into_any_element()),
             theme,
         )
-        .w(px(440.0))
-        .flex_none()
+        .map(|panel| fraction(panel, 2.0, DETAIL_LEAST))
         .child(
             inner_card(theme)
                 .px(px(16.0))
@@ -247,7 +251,11 @@ impl Session {
                                 .border_color(theme.color(ColorToken::Trace)),
                         )
                         .child(agent.name)
-                        .child(div().flex_1().text_color(ink(theme, T3)).child(agent.meta))
+                        .child(
+                            ellipsis(div().flex_1())
+                                .text_color(ink(theme, T3))
+                                .child(agent.meta),
+                        )
                         .child(
                             div()
                                 .font_family(mono(theme))
@@ -293,31 +301,22 @@ impl Session {
             .pb(px(8.0))
             .child(header)
             .child(stats)
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .gap(px(10.0))
-                    .child(turns)
-                    .child(detail),
-            )
+            .child(panes().flex_1().child(turns).child(detail))
     }
 
     fn ribbons(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let height = |context: u16| 4.0 + f32::from(context) / 250.0 * 46.0;
         let mut area = div()
-            .h(px(300.0))
+            .h(px(RIBBONS.1))
             .flex_none()
             .relative()
+            .overflow_hidden()
             .border_b_1()
             .border_color(Rgba::new(0.0, 0.0, 0.0, RULE))
             .child(dots(theme))
             .child(
-                div()
-                    .absolute()
-                    .left(px(24.0))
-                    .top(px(14.0))
+                ellipsis(placed(24.0, 14.0))
+                    .right_0()
                     .text_size(px(12.0))
                     .text_color(ink(theme, T3))
                     .child(RIBBON_NOTE),
@@ -329,11 +328,8 @@ impl Session {
             for (at, pair) in segment.context.windows(2).enumerate() {
                 let tall = (height(pair[0]) + height(pair[1])) / 2.0;
                 area = area.child(
-                    div()
-                        .absolute()
-                        .left(px(x(at)))
-                        .top(px(lane - tall / 2.0))
-                        .w(px(STEP))
+                    placed(x(at), lane - tall / 2.0)
+                        .w(relative(STEP / RIBBONS.0))
                         .h(px(tall))
                         .bg(ink(theme, if on { RIBBON_ON } else { RIBBON_OFF })),
                 );
@@ -342,11 +338,10 @@ impl Session {
                 let picked = on && at == self.step;
                 let size = if picked { 9.0 } else { 5.0 };
                 area = area.child(
-                    div()
+                    placed(x(at), lane)
                         .id(("dot", index * 100 + at))
-                        .absolute()
-                        .left(px(x(at) - 8.0))
-                        .top(px(lane - 8.0))
+                        .ml(px(-8.0))
+                        .mt(px(-8.0))
                         .size(px(16.0))
                         .flex()
                         .items_center()
@@ -370,46 +365,47 @@ impl Session {
             } else {
                 lane + 22.0
             };
-            area =
-                area.child(
-                    div()
-                        .absolute()
-                        .left(px(middle - 90.0))
-                        .top(px(top))
-                        .w(px(180.0))
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .line_height(px(16.0))
-                        .text_size(px(12.5))
-                        .text_color(if on {
-                            theme.color(ColorToken::TextStrong)
-                        } else {
-                            ink(theme, LABEL_OFF)
-                        })
-                        .child(segment.name)
-                        .child(div().text_size(px(11.5)).text_color(ink(theme, T3)).child(
-                            format!("{} · {} turns", segment.kind, segment.context.len()),
-                        )),
-                );
+            area = area.child(
+                placed(middle - LABEL_SPAN / 2.0, top)
+                    .w(relative(LABEL_SPAN / RIBBONS.0))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .line_height(px(16.0))
+                    .text_size(px(12.5))
+                    .text_color(if on {
+                        theme.color(ColorToken::TextStrong)
+                    } else {
+                        ink(theme, LABEL_OFF)
+                    })
+                    .child(div().max_w_full().truncate().child(segment.name))
+                    .child(
+                        div()
+                            .max_w_full()
+                            .truncate()
+                            .text_size(px(11.5))
+                            .text_color(ink(theme, T3))
+                            .child(format!(
+                                "{} · {} turns",
+                                segment.kind,
+                                segment.context.len()
+                            )),
+                    ),
+            );
         }
         area.child(mark(300.0, 128.0, "auto fork", "238k → 31k", theme))
             .child(mark(460.0, 128.0, "/compact", "181k → 12k", theme))
             .child(
-                div()
-                    .absolute()
-                    .left(px(234.0))
-                    .top(px(166.0))
+                placed(234.0, 166.0)
+                    .whitespace_nowrap()
                     .text_size(px(11.5))
                     .line_height(px(15.0))
                     .text_color(ink(theme, T3))
                     .child("fork at turn 6"),
             )
             .child(
-                div()
-                    .absolute()
-                    .left(px(1010.0))
-                    .top(px(96.0))
+                placed(1010.0, 96.0)
+                    .whitespace_nowrap()
                     .text_size(px(11.5))
                     .text_color(theme.color(ColorToken::StatusLive))
                     .child("running"),
@@ -421,9 +417,7 @@ impl Session {
         let step = self.step.min(segment.turns.len().saturating_sub(1));
         let context = segment.context.get(step).copied().unwrap_or(0);
         let column = || {
-            div()
-                .flex_1()
-                .min_w_0()
+            fraction(div(), 1.0, COLUMN_LEAST)
                 .flex()
                 .flex_col()
                 .gap(px(10.0))
@@ -468,6 +462,7 @@ impl Session {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap(px(6.0))
                     .child(
                         button("open", "Open session", None, ButtonKind::Plain, theme).on_click(
@@ -515,6 +510,7 @@ impl Session {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap(px(6.0))
                     .child(
                         button(
@@ -533,9 +529,7 @@ impl Session {
                     )
                     .child(self.tell("mention", "Mention in chat", MENTION, theme, cx)),
             );
-        let branch = div()
-            .w(px(360.0))
-            .flex_none()
+        let branch = fraction(div(), 1.0, COLUMN_LEAST)
             .flex()
             .flex_col()
             .gap(px(10.0))
@@ -591,8 +585,8 @@ impl Session {
             inner_card(theme).child(self.ribbons(theme, cx)).child(
                 div()
                     .flex_1()
-                    .min_h_0()
                     .flex()
+                    .flex_wrap()
                     .child(about)
                     .child(turn)
                     .child(branch),
@@ -603,9 +597,7 @@ impl Session {
 }
 
 fn fact(title: &'static str, parts: &[(&'static str, bool)], theme: &Theme) -> Div {
-    div()
-        .flex_1()
-        .min_w_0()
+    fraction(div(), 1.0, FACT_LEAST)
         .rounded(px(10.0))
         .bg(Rgba::new(0.0, 0.0, 0.0, CARD_SHADE))
         .px(px(12.0))
@@ -637,28 +629,40 @@ fn fact_row(label: &'static str, value: &'static str, theme: &Theme) -> Div {
         .gap(px(14.0))
         .child(
             div()
-                .w(px(120.0))
+                .min_w(px(120.0))
                 .flex_none()
                 .text_color(ink(theme, T3))
                 .child(label),
         )
-        .child(value)
+        .child(div().min_w_0().child(value))
+}
+
+fn placed(x: f32, y: f32) -> Div {
+    div()
+        .absolute()
+        .left(relative(x / RIBBONS.0))
+        .top(relative(y / RIBBONS.1))
 }
 
 fn mark(left: f32, top: f32, name: &'static str, change: &'static str, theme: &Theme) -> Div {
-    div()
-        .absolute()
-        .left(px(left))
-        .top(px(top))
-        .w(px(90.0))
+    placed(left, top)
+        .w(relative(MARK_SPAN / RIBBONS.0))
         .flex()
         .flex_col()
         .items_center()
         .text_size(px(11.5))
         .line_height(px(15.0))
-        .child(div().text_color(ink(theme, T2)).child(name))
         .child(
             div()
+                .max_w_full()
+                .truncate()
+                .text_color(ink(theme, T2))
+                .child(name),
+        )
+        .child(
+            div()
+                .max_w_full()
+                .truncate()
                 .font_family(mono(theme))
                 .text_color(ink(theme, T3))
                 .child(change),

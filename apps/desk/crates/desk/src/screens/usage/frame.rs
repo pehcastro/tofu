@@ -4,14 +4,15 @@ use desk_core::control::TELL_BADGE;
 use desk_ui::components::card::{caption, outer_card};
 use desk_ui::components::chip::mono;
 use desk_ui::components::overlay::toast;
-use desk_ui::components::paint::{ink, ring, tint};
+use desk_ui::components::paint::{ink, ring};
+use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{HEADER, HEADER_PAD_LEFT, HEADER_PAD_RIGHT, SHELL_PAD, T3};
 use desk_ui::metrics::TOAST_BOTTOM;
 use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
     AnyElement, App, Bounds, Canvas, ClickEvent, Context, Div, FontWeight, HighlightStyle,
-    PathBuilder, Pixels, Rgba, SharedString, StyledText, canvas, div, linear_color_stop,
-    linear_gradient, point, prelude::*, px, relative, rgb_to_hsla,
+    PathBuilder, Pixels, Rgba, SharedString, StyledText, canvas, div, point, prelude::*, px,
+    relative, rgb_to_hsla,
 };
 
 const FONTS: [&[u8]; 6] = [
@@ -23,14 +24,7 @@ const FONTS: [&[u8]; 6] = [
     include_bytes!("../../../../../assets/fonts/GeistMono-SemiBold.ttf"),
 ];
 
-const BODY_LEFT: f32 = 268.0;
-const BODY_TOP: f32 = 60.0;
-const BODY_WIDTH: f32 = 1144.0;
-const BODY_HEIGHT: f32 = 792.0;
-const BACKDROP_ANGLE: f32 = 143.0;
-const BACKDROP_LIGHT: f32 = 0.045;
-const BACKDROP_FADE: [f32; 2] = [0.46, 0.52];
-const BACKDROP_SHADE: f32 = 0.2;
+const GAP: f32 = 10.0;
 const SHELL_RING: f32 = 0.06;
 pub const BODY_TEXT: f32 = 0.9;
 const FONT_BASE: f32 = 14.0;
@@ -190,7 +184,7 @@ pub fn note(text: impl Into<SharedString>, theme: &Theme) -> Div {
 
 pub fn figure(text: &'static str, width: f32, theme: &Theme) -> Div {
     div()
-        .w(px(width))
+        .min_w(px(width))
         .flex()
         .justify_end()
         .font_family(mono(theme))
@@ -287,27 +281,26 @@ pub fn told<V: 'static>(
 pub fn window(theme: &Theme, body: Div) -> Div {
     div()
         .size_full()
+        .min_w_0()
         .relative()
+        .flex()
+        .flex_col()
         .bg(theme.color(ColorToken::SurfaceWindow))
         .font_family(theme.word(WordToken::ShapeFont))
         .text_size(px(FONT_BASE))
         .line_height(px(LINE))
         .text_color(ink(theme, BODY_TEXT))
-        .child(
-            body.absolute()
-                .left(px(BODY_LEFT))
-                .top(px(BODY_TOP))
-                .w(px(BODY_WIDTH))
-                .h(px(BODY_HEIGHT))
-                .flex()
-                .flex_col()
-                .bg(linear_gradient(
-                    BACKDROP_ANGLE,
-                    linear_color_stop(ink(theme, BACKDROP_LIGHT), BACKDROP_FADE[0]),
-                    linear_color_stop(
-                        tint(theme.color(ColorToken::CardsInnerShadow), BACKDROP_SHADE),
-                        BACKDROP_FADE[1],
-                    ),
-                )),
-        )
+        .child(ScrollArea::new("screen").child(body.min_h_full().flex().flex_col()))
+}
+
+pub fn panes() -> Div {
+    div().flex().flex_wrap().gap(px(GAP))
+}
+
+pub fn fraction<E: Styled>(item: E, grow: f32, least: f32) -> E {
+    item.flex_grow(grow).flex_basis(px(least)).min_w(px(least))
+}
+
+pub fn ellipsis<E: Styled>(item: E) -> E {
+    item.flex_shrink_1().min_w_0().truncate()
 }

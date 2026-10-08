@@ -1,0 +1,54 @@
+# path:key  reason. key is a const name, or the offset call the check printed.
+crates/desk/src/screens/accounts/mod.rs:POP_WIDTH  popover width, fits the 470 px area at the minimum window with the sidebar open
+crates/desk/src/screens/accounts/mod.rs:top(px(POP_TOP))  popover anchored under its trigger, not a board coordinate
+crates/desk/src/screens/classifier/sandbox.rs:top(px(d.top))  dot height inside a fixed-height plot, x is already a fraction
+crates/desk/src/screens/context/mod.rs:CHART  viewbox of a vector chart that is scaled to its bounds
+crates/desk/src/screens/session/mod.rs:RIBBONS  drawing space of the fork ribbons, every position is a fraction of it
+crates/desk/src/screens/settings/intro.rs:LEFT_WIDTH  max width of the background pane
+crates/desk/src/screens/library/agents.rs:left(px(3.0*scale))  glyph drawn inside a 16 px icon
+crates/desk/src/screens/library/agents.rs:left(px(8.0*scale-0.5))  glyph drawn inside a 16 px icon
+crates/desk/src/screens/library/agents.rs:top(px(2.5*scale))  glyph drawn inside a 16 px icon
+crates/desk/src/screens/library/agents.rs:top(px(5.0*scale))  glyph drawn inside a 16 px icon
+crates/desk/src/screens/limits/mod.rs:top(px(-3.0))  tick overhangs its 24 px track by 3 px
+crates/desk/src/screens/intro/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/intro/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/intro/chrome.rs:top(px(6.0))  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/intro/chrome.rs:top(px(top))  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/intro/mod.rs:COMPOSER_WIDTH  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/onboarding/setup.rs:BLURRED_HEIGHT  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/onboarding/setup.rs:SHELL_WIDTH  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/agents.rs:top(px(11.0))  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/agents.rs:top(px(7.0))  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/chat.rs:BUBBLE_MAX  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/chrome.rs:TAB_TEXT  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/mod.rs:BOARD_WIDTH  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/paint.rs:left(px(x))  whole-window mock-up, refit is its own ticket
+crates/desk/src/screens/platforms/paint.rs:top(px(y))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/chrome.rs:BOARD  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/chrome.rs:left(px(left))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/chrome.rs:top(px(6.0))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/chrome.rs:top(px(POP_TOP))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/chrome.rs:top(px(top))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/page.rs:top(px(60.0))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/browser/page.rs:top(px(cursor_top))  whole-window mock-up, refit is its own ticket
+crates/desk/src/modules/chat/mod.rs:CONTENT_WIDTH  max width of the transcript column
+crates/desk/src/modules/file_edits/mod.rs:TILE_WIDTH  preferred tile width handed to the tiling layout
+crates/desk/src/modules/shells/mod.rs:TILE_WIDTH  preferred tile width handed to the tiling layout
+crates/desk/src/modules/subagents/mod.rs:TILE_WIDTH  preferred tile width handed to the tiling layout
+crates/desk/src/modules/data_studio/side.rs:left(px(96.0))  popover anchored beside its trigger, outside DESK-194 owns
+crates/desk/src/modules/data_studio/side.rs:top(px(36.0))  popover anchored beside its trigger, outside DESK-194 owns
+crates/desk/src/modules/editor/boards.rs:left(px(150.0))  context menu anchored at its row, not a board coordinate
+crates/desk/src/modules/editor/boards.rs:top(px(126.0))  context menu anchored at its row, not a board coordinate
+crates/desk/src/modules/editor/boards.rs:top(px(40.0))  popover anchored under its trigger
+crates/desk/src/modules/editor/boards.rs:top(px(74.0))  popover anchored under its trigger
+crates/desk/src/modules/editor/boards.rs:left(px(246.0))  header buttons inside the fixed 290 px tree head
+crates/desk/src/modules/editor/boards.rs:top(px(6.0))  header buttons inside the fixed 290 px tree head
+crates/desk/src/modules/editor/parts.rs:left(px(17.0))  tree indent guide
+crates/desk/src/modules/git/history.rs:top(px(40.0))  popover anchored under its trigger
+crates/desk/src/modules/git/changes.rs:SIDE  board width, refit pending: modules/git is outside DESK-194 owns
+crates/desk/src/modules/git/history.rs:SIDE  board width, refit pending: modules/git is outside DESK-194 owns
+crates/desk/src/modules/git/kit.rs:FADE_LEFT  board backdrop, delete pending: modules/git is outside DESK-194 owns
+crates/desk/src/modules/git/kit.rs:SHADE_LEFT  board backdrop, delete pending: modules/git is outside DESK-194 owns
+crates/desk/src/modules/git/kit.rs:SHADE_RIGHT_LEFT  board backdrop, delete pending: modules/git is outside DESK-194 owns
+crates/desk/src/modules/git/kit.rs:left(px(left))  board backdrop, delete pending: modules/git is outside DESK-194 owns
+crates/desk/src/modules/git/kit.rs:top(px(top))  board backdrop, delete pending: modules/git is outside DESK-194 owns

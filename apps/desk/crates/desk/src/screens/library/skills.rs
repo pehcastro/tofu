@@ -7,13 +7,14 @@ use super::fixture::{
     Dot, EVAL_JUST_RAN, EVAL_NEVER, EVAL_RAN, EVAL_WHEN, Eval, Found, SKILLS, STEPS, Skill,
 };
 use super::kit::{
-    BASE, GAP, ROW_ON, T2, T3, WELL, button, cap, faint, figure, metric, mono, pill, shade, shell,
-    shell_head,
+    BASE, GAP, ROW_ON, T2, T3, WELL, button, cap, ellipsis, faint, figure, fraction, metric, mono,
+    panes, pill, shade, shell, shell_head,
 };
 use super::{Library, Look, group, segment};
 
 const SUMMARY: &str = "5 found · 3 offered to the model · read again at every task";
-const LIST_WIDTH: f32 = 534.3;
+const LIST_LEAST: f32 = 340.0;
+const DETAIL_LEAST: f32 = 360.0;
 const DOT: f32 = 8.0;
 const LINE: f32 = 20.0;
 const PLACE_LINE: f32 = 16.0;
@@ -69,8 +70,6 @@ impl Library {
     pub(super) fn skills(&self, top: Div, theme: &Theme, cx: &mut Context<Self>) -> (Div, Div) {
         let top = top.child(faint(SUMMARY, 12.5, T3, theme));
         let list = shell(theme)
-            .w(px(LIST_WIDTH))
-            .flex_none()
             .child(
                 shell_head(theme)
                     .child(cap("Skills", 10.0, theme).flex_1())
@@ -84,13 +83,9 @@ impl Library {
                         .map(|(index, skill)| self.skill_row(index, skill, theme, cx)),
                 ),
             );
-        let content = div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .gap(px(GAP))
-            .child(list)
-            .child(self.skill_detail(theme, cx).flex_1());
+        let content = panes()
+            .child(fraction(list, 1.0, LIST_LEAST))
+            .child(fraction(self.skill_detail(theme, cx), 1.0, DETAIL_LEAST));
         (top, content)
     }
 
@@ -133,7 +128,7 @@ impl Library {
                     .child(div().text_size(px(13.5)).child(skill.name))
                     .child(faint(skill.desc.unwrap_or(NO_DESCRIPTION), 12.0, T3, theme))
                     .child(
-                        faint(skill.place, 11.0, T3, theme)
+                        ellipsis(faint(skill.place, 11.0, T3, theme))
                             .font_family(mono(theme))
                             .line_height(px(PLACE_LINE)),
                     ),
@@ -260,6 +255,7 @@ impl Library {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap_1p5()
                     .child(
                         button(
@@ -308,10 +304,10 @@ fn source(name: &'static str, desc: &'static str, theme: &Theme) -> Div {
     let line = |parts: Vec<(String, Option<Rgba>)>| {
         div()
             .flex()
-            .h(px(20.0))
+            .min_h(px(20.0))
             .children(parts.into_iter().map(|(text, color)| {
                 div()
-                    .whitespace_nowrap()
+                    .min_w_0()
                     .when_some(color, |part, color| part.text_color(color))
                     .child(text)
             }))

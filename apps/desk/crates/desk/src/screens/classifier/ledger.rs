@@ -5,13 +5,16 @@ use gpui::{ClickEvent, Context, Div, Stateful, div, prelude::*, px, relative, rg
 
 use super::fixture::{LEDGER, LEDGER_FIRST_ID, POINTS, Point, TELL_CHANGE_MODEL, Verdict};
 use super::kit::{
-    BASE, GAP, Spark, T2, T3, WELL, button, cap, faint, figure, headline, mono, pill, shade, shell,
-    shell_head, spark,
+    BASE, GAP, Spark, T2, T3, WELL, button, cap, ellipsis, faint, figure, fraction, headline, mono,
+    panes, pill, shade, shell, shell_head, spark,
 };
 use super::{Classifier, Page, mode_colors, verdict_colors};
 
-const COLUMNS: [f32; 4] = [52.0, 70.0, 90.0, 80.0];
-const WHY_WIDTH: f32 = 420.0;
+const COLUMNS: [f32; 4] = [44.0, 64.0, 56.0, 56.0];
+const SUBJECT_COLUMN: f32 = 120.0;
+const TABLE_LEAST: f32 = 380.0;
+const WHY_LEAST: f32 = 340.0;
+const CARD_LEAST: f32 = 180.0;
 const ROW_ON: f32 = 0.07;
 const CARD_RING: f32 = 0.25;
 const MODEL_RING: f32 = 0.07;
@@ -26,9 +29,10 @@ impl Classifier {
         let model = div()
             .id("change-model")
             .flex()
+            .flex_wrap()
             .items_center()
             .gap(px(GAP))
-            .h(px(32.0))
+            .min_h(px(32.0))
             .pl(px(12.0))
             .pr(px(6.0))
             .rounded(px(9.0))
@@ -53,7 +57,7 @@ impl Classifier {
                     .bg(ink(theme, 0.06)),
             );
         let top = headline("Classifier")
-            .h(px(32.0))
+            .min_h(px(32.0))
             .child(faint(
                 "decides at fixed points in the loop · this project, 7 days",
                 13.0,
@@ -70,19 +74,14 @@ impl Classifier {
                     },
                 )),
             );
-        let cards = div().flex().flex_none().gap(px(GAP)).children(
-            POINTS
-                .iter()
-                .enumerate()
-                .map(|(index, point)| self.point_card(index, point, theme, cx)),
+        let cards = div().flex().flex_none().flex_wrap().gap(px(GAP)).children(
+            POINTS.iter().enumerate().map(|(index, point)| {
+                fraction(self.point_card(index, point, theme, cx), 1.0, CARD_LEAST)
+            }),
         );
-        let main = div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .gap(px(GAP))
-            .child(self.table(theme, cx).flex_1())
-            .child(self.why(theme, cx).w(px(WHY_WIDTH)).flex_none());
+        let main = panes()
+            .child(fraction(self.table(theme, cx), 3.0, TABLE_LEAST))
+            .child(fraction(self.why(theme, cx), 2.0, WHY_LEAST));
         div().child(top).child(cards).child(main)
     }
 
@@ -143,7 +142,7 @@ impl Classifier {
                             .child(figure(point.count, 22.0, 24.2).flex_1())
                             .child(spark(line)),
                     )
-                    .child(faint(point.sub, 11.5, T3, theme).whitespace_nowrap()),
+                    .child(ellipsis(faint(point.sub, 11.5, T3, theme))),
             )
     }
 
@@ -153,11 +152,11 @@ impl Classifier {
             .flex()
             .py(px(6.0))
             .px(px(10.0))
-            .child(cap("at", 10.0, theme).w(px(at)))
-            .child(cap("verdict", 10.0, theme).w(px(verdict)))
-            .child(cap("subject", 10.0, theme).flex_1())
-            .child(cap("value", 10.0, theme).w(px(value)))
-            .child(cap("label", 10.0, theme).w(px(label)));
+            .child(fraction(cap("at", 10.0, theme), 1.0, at))
+            .child(fraction(cap("verdict", 10.0, theme), 1.0, verdict))
+            .child(fraction(cap("subject", 10.0, theme), 4.0, SUBJECT_COLUMN))
+            .child(fraction(cap("value", 10.0, theme), 1.0, value))
+            .child(fraction(cap("label", 10.0, theme), 1.0, label));
         let rows = LEDGER.iter().enumerate().map(|(index, entry)| {
             let tag = self
                 .labels
@@ -179,13 +178,9 @@ impl Classifier {
                     this.row = index;
                     cx.notify();
                 }))
+                .child(fraction(faint(entry.at, 12.5, T3, theme), 1.0, at).font_family(mono(theme)))
                 .child(
-                    faint(entry.at, 12.5, T3, theme)
-                        .font_family(mono(theme))
-                        .w(px(at)),
-                )
-                .child(
-                    div().w(px(verdict)).flex().child(
+                    fraction(div(), 1.0, verdict).flex().child(
                         pill(
                             entry.verdict.name(),
                             verdict_colors(entry.verdict),
@@ -196,27 +191,29 @@ impl Classifier {
                     ),
                 )
                 .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
+                    fraction(div(), 4.0, SUBJECT_COLUMN)
+                        .truncate()
                         .font_family(mono(theme))
                         .child(entry.subject),
                 )
                 .child(
-                    faint(entry.value, 12.0, T2, theme)
-                        .font_family(mono(theme))
-                        .w(px(value)),
+                    fraction(faint(entry.value, 12.0, T2, theme), 1.0, value)
+                        .truncate()
+                        .font_family(mono(theme)),
                 )
-                .child(faint(tag, 12.0, T3, theme).w(px(label)))
+                .child(fraction(faint(tag, 12.0, T3, theme), 1.0, label).truncate())
         });
         let point = POINTS.get(self.point).map_or("", |point| point.name);
         shell(theme)
             .child(
                 shell_head(theme)
                     .child(cap(format!("Ledger · {point}"), 10.0, theme).flex_1())
-                    .child(faint("every verdict, with its reason", 12.0, T3, theme)),
+                    .child(ellipsis(faint(
+                        "every verdict, with its reason",
+                        12.0,
+                        T3,
+                        theme,
+                    ))),
             )
             .child(inner_card(theme).p(px(6.0)).child(header).children(rows))
     }
@@ -305,15 +302,20 @@ impl Classifier {
                     .child(div().flex_1())
                     .child(cap("Was it right?", 10.0, theme))
                     .child(
-                        div().flex().gap(px(6.0)).children(labels).child(
-                            faint(
-                                "writes a label; thresholds tune against labels",
-                                11.5,
-                                T3,
-                                theme,
-                            )
-                            .self_center(),
-                        ),
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap(px(6.0))
+                            .children(labels)
+                            .child(
+                                faint(
+                                    "writes a label; thresholds tune against labels",
+                                    11.5,
+                                    T3,
+                                    theme,
+                                )
+                                .self_center(),
+                            ),
                     ),
             )
     }

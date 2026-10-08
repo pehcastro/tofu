@@ -5,6 +5,7 @@ use desk_ui::components::card::{Header, caption, inner_card, shell};
 use desk_ui::components::form::switch;
 use desk_ui::components::list::separator;
 use desk_ui::components::paint::{halo, ink, ring, tint};
+use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{T2, T3};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
@@ -24,6 +25,9 @@ const TITLE: f32 = 19.0;
 const DESC: f32 = 13.0;
 const SMALL: f32 = 12.0;
 const LEFT_WIDTH: f32 = 420.0;
+const LEFT_LEAST: f32 = 300.0;
+const PREVIEW_LEAST: f32 = 320.0;
+const PREVIEW_TALL: f32 = 360.0;
 const THUMB_WIDTH: f32 = 92.0;
 const THUMB_HEIGHT: f32 = 56.0;
 const THUMB_RADIUS: f32 = 9.0;
@@ -151,7 +155,7 @@ impl Intro {
                     .gap_2()
                     .child(caption("Image", theme))
                     .child(
-                        div().flex().gap_2().children(thumbs).child(
+                        div().flex().flex_wrap().gap_2().children(thumbs).child(
                             div()
                                 .id("add-image")
                                 .flex_none()
@@ -335,6 +339,7 @@ fn switch_row(
         .child(
             div()
                 .flex_1()
+                .min_w_0()
                 .flex()
                 .flex_col()
                 .line_height(px(ROW_LINE))
@@ -457,6 +462,7 @@ impl Render for Intro {
         let title = div()
             .flex()
             .flex_none()
+            .flex_wrap()
             .items_center()
             .gap_2p5()
             .px_1()
@@ -485,8 +491,7 @@ impl Render for Intro {
                 .on_click(Self::tell(OPEN_INTRO_TELL, cx)),
             );
         let body = div()
-            .flex_1()
-            .min_h_0()
+            .min_h_full()
             .flex()
             .flex_col()
             .gap_2()
@@ -497,21 +502,32 @@ impl Render for Intro {
             .child(
                 div()
                     .flex_1()
-                    .min_h_0()
                     .flex()
+                    .flex_wrap()
                     .gap_2()
                     .child(
                         titled("Background", "this device".into(), &theme)
-                            .w(px(LEFT_WIDTH))
-                            .flex_none()
+                            .flex_grow(1.0)
+                            .flex_basis(px(LEFT_LEAST))
+                            .min_w(px(LEFT_LEAST))
+                            .max_w(px(LEFT_WIDTH))
                             .child(self.background(&theme, cx)),
                     )
                     .child(
                         titled("Preview", format!("{name} \u{b7} live").into(), &theme)
-                            .flex_1()
+                            .flex_grow(2.0)
+                            .flex_basis(px(PREVIEW_LEAST))
+                            .min_w(px(PREVIEW_LEAST))
+                            .min_h(px(PREVIEW_TALL))
                             .child(inner_card(&theme).p_3().child(self.preview(&theme))),
                     ),
             );
+        let body = div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(ScrollArea::new("intro-settings").child(body));
         root(
             &theme,
             body,

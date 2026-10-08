@@ -6,17 +6,20 @@ use desk_ui::components::chip::{chip, mono};
 use desk_ui::components::form::{input, segmented, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::paint::tint;
+use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::settings::{
     SettingRow, Source, key_binding, page_title, setting_group, setting_group_clickable,
 };
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
-use gpui::{ClickEvent, Context, Div, Render, SharedString, Window, div, prelude::*, px};
+use gpui::{ClickEvent, Context, Div, Render, SharedString, Window, div, prelude::*, px, relative};
 
 use super::board::root;
 use super::fixture::{Control, KEYS_GROUP, NAV, PageId, Scope, Setting};
 
 const NAV_WIDTH: f32 = 247.0;
+const NAV_LEAST: f32 = 150.0;
+const NAV_SHARE: f32 = 0.3;
 const NAV_TEXT: f32 = 13.5;
 const NAV_RULE: f32 = 0.35;
 const CONTENT_PAD_X: f32 = 28.0;
@@ -64,7 +67,9 @@ impl Rows {
             at += 1;
         }
         div()
-            .w(px(NAV_WIDTH))
+            .w(relative(NAV_SHARE))
+            .min_w(px(NAV_LEAST))
+            .max_w(px(NAV_WIDTH))
             .flex_none()
             .flex()
             .flex_col()
@@ -191,11 +196,7 @@ impl Render for Rows {
             let count: usize = groups.iter().map(|(_, rows)| rows.len()).sum();
             eprintln!("desk: settings page {} shows {count} rows", page.title);
         }
-        let content = div()
-            .id("settings-content")
-            .flex_1()
-            .min_w_0()
-            .overflow_y_scroll()
+        let page_body = div()
             .px(px(CONTENT_PAD_X))
             .py(px(CONTENT_PAD_Y))
             .flex()
@@ -219,6 +220,12 @@ impl Render for Rows {
                     setting_group(label, rows, &theme)
                 }
             }));
+        let content = div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .child(ScrollArea::new("settings-content").child(page_body));
         let body = shell(
             Header::Title(None, "Settings".into(), Some(scope.into_any_element())),
             &theme,

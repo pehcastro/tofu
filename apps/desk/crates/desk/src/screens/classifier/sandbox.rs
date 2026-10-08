@@ -7,10 +7,12 @@ use super::fixture::{
     CHANGED_COMMANDS, SHIPPED_AGREE, SHIPPED_ASK, SHIPPED_DENY, TELL_APPLY, Verdict, decisions,
 };
 use super::kit::{
-    BASE, GAP, T2, T3, button, cap, faint, figure, headline, mono, primary, shell, shell_head,
+    BASE, T2, T3, button, cap, ellipsis, faint, figure, fraction, headline, mono, panes, primary,
+    shell, shell_head,
 };
 use super::{ALLOW, ASK, Classifier, DENY, DENY_TEXT};
 
+const PANEL_LEAST: f32 = 260.0;
 const TOP_RISK: f32 = 3.0;
 const PLOT: f32 = 120.0;
 const AXIS: f32 = 22.0;
@@ -56,7 +58,7 @@ impl Classifier {
                 .to_string()
         };
         let top = headline("Threshold sandbox")
-            .h(px(28.0))
+            .min_h(px(28.0))
             .child(faint(
                 "tool_gate · replays the last 88 decisions, no model call",
                 13.0,
@@ -127,12 +129,12 @@ impl Classifier {
             .child(
                 shell_head(theme)
                     .child(cap("Every decision by risk", 10.0, theme).flex_1())
-                    .child(faint(
+                    .child(ellipsis(faint(
                         "dot color is your label · grey is unlabelled",
                         12.0,
                         T3,
                         theme,
-                    )),
+                    ))),
             )
             .child(
                 inner_card(theme)
@@ -173,7 +175,7 @@ impl Classifier {
                             .child(step(-1, "−"))
                             .child(
                                 div()
-                                    .w(px(40.0))
+                                    .min_w(px(40.0))
                                     .flex()
                                     .justify_center()
                                     .font_family(mono(theme))
@@ -266,8 +268,7 @@ impl Classifier {
                                     .py_1p5()
                                     .px_2()
                                     .child(
-                                        div()
-                                            .flex_1()
+                                        ellipsis(div().flex_1())
                                             .font_family(mono(theme))
                                             .text_size(px(12.0))
                                             .line_height(px(17.0))
@@ -289,14 +290,10 @@ impl Classifier {
                             }),
                     ),
             );
-        let panels = div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .gap(px(GAP))
-            .child(thresholds)
-            .child(result)
-            .child(changes);
+        let panels = panes()
+            .child(fraction(thresholds, 1.0, PANEL_LEAST))
+            .child(fraction(result, 1.0, PANEL_LEAST))
+            .child(fraction(changes, 1.0, PANEL_LEAST));
         div().child(top).child(risk).child(panels)
     }
 }

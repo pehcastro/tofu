@@ -3,24 +3,14 @@ use std::borrow::Cow;
 use desk_core::control::TELL_BADGE;
 use desk_ui::components::overlay::toast;
 use desk_ui::components::paint::{ink, ring, tint};
+use desk_ui::components::scroll::ScrollArea;
 use desk_ui::theme::{ColorToken, NumberToken, Theme, WordToken};
 use gpui::{
     App, Bounds, ClickEvent, Div, ElementId, FontWeight, PathBuilder, Pixels, Rgba, SharedString,
-    Stateful, Window, canvas, div, fill, linear_color_stop, linear_gradient, point, prelude::*, px,
-    relative, rgb, size,
+    Stateful, Window, canvas, div, fill, point, prelude::*, px, relative, rgb, size,
 };
 
 const UNDERLAY: u32 = 0x232329;
-const EDGE: u32 = 0x111015;
-const FADE: u32 = 0x0f0e13;
-const FADE_LEFT: f32 = 1200.0;
-const FADE_HEIGHT: f32 = 108.0;
-const SHADE: u32 = 0x15171b;
-const SHADE_FLOOR: u32 = 0x101015;
-const SHADE_LEFT: f32 = 700.0;
-const SHADE_RIGHT_LEFT: f32 = 1000.0;
-const SHADE_TOP: f32 = 270.0;
-const SHADE_RAMP: f32 = 150.0;
 
 pub const BASE: f32 = 0.9;
 pub const T2: f32 = 0.6;
@@ -29,7 +19,7 @@ pub const ROW_ON: f32 = 0.07;
 pub const WELL: f32 = 0.25;
 pub const GAP: f32 = 10.0;
 
-const FRAME: [f32; 4] = [274.0, 66.0, 34.0, 56.0];
+const FRAME_PAD: f32 = 20.0;
 const BODY_TEXT: f32 = 14.0;
 const BODY_LINE: f32 = 23.0;
 const TITLE: f32 = 19.0;
@@ -77,83 +67,26 @@ pub fn frame(
     told: Option<SharedString>,
     on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let [left, top, right, bottom] = FRAME;
     div()
         .size_full()
+        .min_w_0()
         .relative()
         .flex()
         .flex_col()
-        .pl(px(left))
-        .pt(px(top))
-        .pr(px(right))
-        .pb(px(bottom))
         .bg(rgb(UNDERLAY))
         .font_family(theme.word(WordToken::ShapeFont))
         .text_size(px(BODY_TEXT))
         .line_height(px(BODY_LINE))
         .text_color(ink(theme, BASE))
         .child(
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .right_0()
-                .w(px(right))
-                .bg(rgb(EDGE)),
+            ScrollArea::new("screen").child(
+                body.min_h_full()
+                    .p(px(FRAME_PAD))
+                    .flex()
+                    .flex_col()
+                    .gap(px(GAP)),
+            ),
         )
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .h(px(FADE_HEIGHT))
-                .left(px(FADE_LEFT))
-                .right(px(right))
-                .bg(linear_gradient(
-                    90.0,
-                    linear_color_stop(rgb(UNDERLAY), 0.0),
-                    linear_color_stop(rgb(FADE), 1.0),
-                )),
-        )
-        .child(
-            div()
-                .absolute()
-                .top(px(FADE_HEIGHT))
-                .h(px(SHADE_TOP - FADE_HEIGHT))
-                .left(px(SHADE_RIGHT_LEFT))
-                .right(px(right))
-                .bg(linear_gradient(
-                    90.0,
-                    linear_color_stop(rgb(UNDERLAY), 0.0),
-                    linear_color_stop(rgb(SHADE_FLOOR), 1.0),
-                )),
-        )
-        .child(
-            div()
-                .absolute()
-                .top(px(SHADE_TOP))
-                .h(px(SHADE_RAMP))
-                .left(px(SHADE_LEFT))
-                .right(px(right))
-                .bg(linear_gradient(
-                    180.0,
-                    linear_color_stop(rgb(UNDERLAY), 0.0),
-                    linear_color_stop(rgb(SHADE), 1.0),
-                )),
-        )
-        .child(
-            div()
-                .absolute()
-                .top(px(SHADE_TOP + SHADE_RAMP))
-                .bottom_0()
-                .left(px(SHADE_LEFT))
-                .right(px(right))
-                .bg(linear_gradient(
-                    180.0,
-                    linear_color_stop(rgb(SHADE), 0.0),
-                    linear_color_stop(rgb(SHADE_FLOOR), 1.0),
-                )),
-        )
-        .child(body.flex_1().min_h_0().flex().flex_col().gap(px(GAP)))
         .children(told.map(|message| {
             div()
                 .absolute()
@@ -166,10 +99,23 @@ pub fn frame(
         }))
 }
 
+pub fn panes() -> Div {
+    div().flex_1().min_h_0().flex().flex_wrap().gap(px(GAP))
+}
+
+pub fn fraction<E: Styled>(item: E, grow: f32, least: f32) -> E {
+    item.flex_grow(grow).flex_basis(px(least)).min_w(px(least))
+}
+
+pub fn ellipsis<E: Styled>(item: E) -> E {
+    item.flex_shrink_1().min_w_0().truncate()
+}
+
 pub fn headline(title: &'static str) -> Div {
     div()
         .flex()
         .flex_none()
+        .flex_wrap()
         .items_center()
         .gap(px(GAP))
         .px_1()

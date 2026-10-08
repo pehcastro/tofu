@@ -5,11 +5,13 @@ use gpui::{ClickEvent, Context, Div, FontWeight, Stateful, div, prelude::*, px, 
 
 use super::fixture::{AGENTS, Agent, TELL_DISABLE, TELL_NEW_AGENT, TELL_OPEN_FILE, Tier};
 use super::kit::{
-    BASE, GAP, T2, T3, WELL, button, cap, faint, figure, metric, mono, shade, shell, shell_head,
+    BASE, GAP, T2, T3, WELL, button, cap, ellipsis, faint, figure, fraction, metric, mono, panes,
+    shade, shell, shell_head,
 };
 use super::{Library, group, segment};
 
-const DETAIL_WIDTH: f32 = 480.0;
+const LIST_LEAST: f32 = 380.0;
+const DETAIL_LEAST: f32 = 360.0;
 const KEY_COLUMN: f32 = 100.0;
 const CARD_ON: f32 = 0.08;
 const CARD_OFF: f32 = 0.035;
@@ -43,20 +45,20 @@ impl Library {
             )
         });
         let list = shell(theme)
-            .flex_1()
             .child(
                 shell_head(theme)
                     .child(cap("Agents", 10.0, theme).flex_1())
-                    .child(faint("the lead picks one when it spawns", 12.0, T3, theme)),
+                    .child(ellipsis(faint(
+                        "the lead picks one when it spawns",
+                        12.0,
+                        T3,
+                        theme,
+                    ))),
             )
             .child(inner_card(theme).p_2().gap_2().children(cards));
-        let content = div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .gap(px(GAP))
-            .child(list)
-            .child(self.agent_detail(theme, cx).w(px(DETAIL_WIDTH)).flex_none());
+        let content = panes()
+            .child(fraction(list, 3.0, LIST_LEAST))
+            .child(fraction(self.agent_detail(theme, cx), 2.0, DETAIL_LEAST));
         (top, content)
     }
 
@@ -113,6 +115,7 @@ impl Library {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap_1p5()
                     .child(chip(self.tier_of(index, agent).name().into()))
                     .child(chip(format!("gate: {}", agent.gate))),
@@ -128,11 +131,10 @@ impl Library {
         let head = shell_head(theme)
             .child(div().text_color(ink(theme, HEAD_LIGHT)).child(agent.name))
             .child(
-                faint(agent.path, 11.5, T3, theme)
+                ellipsis(faint(agent.path, 11.5, T3, theme))
                     .font_family(mono(theme))
                     .flex_1()
-                    .flex()
-                    .justify_end(),
+                    .text_right(),
             );
         let tiers = group(0.05, 7.0, theme)
             .text_size(px(12.0))
@@ -148,29 +150,29 @@ impl Library {
                         cx.notify();
                     }))
             }));
-        let facts = div()
-            .flex()
-            .flex_col()
-            .gap(px(9.0))
-            .child(fact("model", tiers, theme))
-            .child(fact(
-                "runs on",
-                div()
-                    .font_family(mono(theme))
-                    .text_size(px(12.5))
-                    .child(tier.runs_on()),
-                theme,
-            ))
-            .child(fact("tools", div().child(agent.tools), theme))
-            .child(fact(
-                "gate",
-                div()
-                    .flex()
-                    .child(agent.gate)
-                    .child(faint(" · up to 3 tries after the last edit", 13.0, T3, theme).ml_1()),
-                theme,
-            ))
-            .child(fact("references", div().child(agent.refs), theme));
+        let facts =
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(9.0))
+                .child(fact("model", tiers, theme))
+                .child(fact(
+                    "runs on",
+                    div()
+                        .font_family(mono(theme))
+                        .text_size(px(12.5))
+                        .child(tier.runs_on()),
+                    theme,
+                ))
+                .child(fact("tools", div().child(agent.tools), theme))
+                .child(fact(
+                    "gate",
+                    div().flex().flex_wrap().child(agent.gate).child(
+                        faint(" · up to 3 tries after the last edit", 13.0, T3, theme).ml_1(),
+                    ),
+                    theme,
+                ))
+                .child(fact("references", div().child(agent.refs), theme));
         let stats = div()
             .flex()
             .gap(px(GAP))
@@ -190,6 +192,7 @@ impl Library {
             .child(metric("steps, median", figure(agent.steps, 20.0, 26.0), theme).flex_1());
         let actions = div()
             .flex()
+            .flex_wrap()
             .gap_1p5()
             .child(
                 button("open-file", "Open the file", 28.0, theme)
@@ -221,8 +224,8 @@ fn fact(key: &'static str, value: Div, theme: &Theme) -> Div {
         .flex()
         .items_center()
         .gap_3()
-        .child(faint(key, 13.0, T3, theme).w(px(KEY_COLUMN)))
-        .child(value)
+        .child(faint(key, 13.0, T3, theme).min_w(px(KEY_COLUMN)))
+        .child(value.min_w_0())
 }
 
 fn robot(theme: &Theme) -> Div {

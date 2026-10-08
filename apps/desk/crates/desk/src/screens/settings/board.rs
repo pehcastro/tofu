@@ -7,20 +7,13 @@ use desk_ui::components::paint::{ink, tint};
 use desk_ui::metrics::TOAST_BOTTOM;
 use desk_ui::theme::{Theme, WordToken};
 use gpui::{
-    App, ClickEvent, Div, SharedString, Window, div, hsla, linear_color_stop, linear_gradient,
+    App, ClickEvent, Div, SharedString, Window, div, linear_color_stop, linear_gradient,
     prelude::*, px, rgb,
 };
 
-const BOARD_FRAME: [f32; 4] = [268.0, 60.0, 28.0, 48.0];
+const FRAME_PAD: f32 = 20.0;
 const UNDERLAY_TOP: (u32, f32) = (0x29292f, 0.18);
 const UNDERLAY_BOTTOM: (u32, f32) = (0x1b1c20, 0.9);
-const STRIP_TOP: f32 = 844.0;
-const STRIP_LEFT: (u32, f32) = (0x1f2023, 0.25);
-const STRIP_RIGHT: (u32, f32) = (0x111215, 0.58);
-const VIGNETTE_WIDTH: f32 = 210.0;
-const VIGNETTE_DEPTH: f32 = 0.62;
-const TOP_SHADE_HEIGHT: f32 = 200.0;
-const TOP_SHADE_DEPTH: f32 = 0.2;
 const BODY_TRACKING: f32 = -0.12;
 const INNER_TINT: u32 = 0xe6e0ff;
 const INNER_FILL: (f32, f32) = (0.07, 0.05);
@@ -51,16 +44,13 @@ pub fn root(
     told: Option<SharedString>,
     on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let [left, top, right, bottom] = BOARD_FRAME;
     div()
         .size_full()
+        .min_w_0()
         .relative()
         .flex()
         .flex_col()
-        .pl(px(left))
-        .pt(px(top))
-        .pr(px(right))
-        .pb(px(bottom))
+        .p(px(FRAME_PAD))
         .bg(linear_gradient(
             180.0,
             linear_color_stop(rgb(UNDERLAY_TOP.0), UNDERLAY_TOP.1),
@@ -71,46 +61,7 @@ pub fn root(
         .line_height(px(BODY_LINE))
         .letter_spacing(px(BODY_TRACKING))
         .text_color(ink(theme, BODY_INK))
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .bottom_0()
-                .right_0()
-                .w(px(VIGNETTE_WIDTH))
-                .bg(linear_gradient(
-                    90.0,
-                    linear_color_stop(hsla(0.0, 0.0, 0.0, 0.0), 0.0),
-                    linear_color_stop(hsla(0.0, 0.0, 0.0, VIGNETTE_DEPTH), 1.0),
-                )),
-        )
-        .child(
-            div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .right_0()
-                .h(px(TOP_SHADE_HEIGHT))
-                .bg(linear_gradient(
-                    180.0,
-                    linear_color_stop(hsla(0.0, 0.0, 0.0, TOP_SHADE_DEPTH), 0.0),
-                    linear_color_stop(hsla(0.0, 0.0, 0.0, 0.0), 1.0),
-                )),
-        )
         .child(body)
-        .child(
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .top(px(STRIP_TOP))
-                .bottom_0()
-                .bg(linear_gradient(
-                    90.0,
-                    linear_color_stop(rgb(STRIP_LEFT.0), STRIP_LEFT.1),
-                    linear_color_stop(rgb(STRIP_RIGHT.0), STRIP_RIGHT.1),
-                )),
-        )
         .children(told.map(|message| {
             div()
                 .absolute()

@@ -22,7 +22,7 @@ use gpui::{
 };
 
 use fixture::{BOARD, CAPACITY, CATEGORIES, FORK_AT, FORK_NOW, LEGEND, Part, Swatch, items, size};
-use frame::{Ink, Shape, note, panel, shapes, title, told, window};
+use frame::{Ink, Shape, ellipsis, fraction, note, panel, panes, shapes, title, told, window};
 
 const STRONG_SWATCH: f32 = 0.55;
 const FAINT_SWATCH: f32 = 0.28;
@@ -34,6 +34,9 @@ const COLUMNS: usize = 25;
 const AREA: f32 = 0.06;
 const LINE_INK: f32 = 0.85;
 const CHART: (f32, f32) = (700.0, 150.0);
+const CHART_LEAST: f32 = 120.0;
+const WINDOW_LEAST: f32 = 340.0;
+const PARTS_LEAST: f32 = 300.0;
 const GROWTH: [(f32, f32); 15] = [
     (0.0, 140.0),
     (60.0, 130.0),
@@ -94,6 +97,7 @@ impl ContextScreen {
         div()
             .flex()
             .flex_none()
+            .flex_wrap()
             .items_center()
             .gap(px(10.0))
             .px(px(4.0))
@@ -174,6 +178,7 @@ impl ContextScreen {
                 .child(
                     div()
                         .flex()
+                        .flex_wrap()
                         .items_baseline()
                         .gap(px(10.0))
                         .child(
@@ -248,9 +253,7 @@ impl ContextScreen {
             Some(note("click a part", theme).into_any_element()),
             theme,
         )
-        .flex_1()
-        .flex_basis(relative(0.0))
-        .min_w_0()
+        .map(|panel| fraction(panel, 1.0, PARTS_LEAST))
         .child(
             inner_card(theme)
                 .p(px(8.0))
@@ -270,11 +273,11 @@ impl ContextScreen {
                                 .rounded(px(2.0))
                                 .bg(swatch(category.swatch, theme)),
                         )
-                        .child(div().flex_1().child(category.name))
+                        .child(ellipsis(div().flex_1()).child(category.name))
                         .child(note(count, theme))
                         .child(
                             div()
-                                .w(px(44.0))
+                                .min_w(px(44.0))
                                 .flex()
                                 .justify_end()
                                 .font_family(mono(theme))
@@ -307,11 +310,13 @@ impl ContextScreen {
                                 .child(
                                     div()
                                         .flex_1()
+                                        .min_w_0()
                                         .flex()
                                         .flex_col()
                                         .line_height(px(18.0))
                                         .child(
                                             div()
+                                                .truncate()
                                                 .font_family(mono(theme))
                                                 .text_size(px(12.5))
                                                 .child(item.name),
@@ -320,7 +325,7 @@ impl ContextScreen {
                                 )
                                 .child(
                                     div()
-                                        .w(px(40.0))
+                                        .min_w(px(40.0))
                                         .flex()
                                         .justify_end()
                                         .font_family(mono(theme))
@@ -328,7 +333,7 @@ impl ContextScreen {
                                 )
                                 .child(
                                     div()
-                                        .w(px(96.0))
+                                        .min_w(px(96.0))
                                         .flex()
                                         .justify_end()
                                         .text_size(px(11.5))
@@ -403,7 +408,7 @@ fn chart(theme: &Theme) -> impl IntoElement {
             },
         });
     }
-    div().flex_1().min_h_0().relative().child(
+    div().flex_1().min_h(px(CHART_LEAST)).relative().child(
         div()
             .absolute()
             .inset_0()
@@ -428,6 +433,7 @@ fn growth(theme: &Theme) -> Div {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .gap(px(16.0))
                     .text_size(px(11.5))
                     .text_color(ink(theme, T3))
@@ -459,16 +465,10 @@ impl Render for ContextScreen {
             .pb(px(8.0))
             .child(self.header(&theme, cx))
             .child(
-                div()
+                panes()
                     .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .gap(px(10.0))
                     .child(
-                        div()
-                            .flex_grow(1.375)
-                            .flex_basis(relative(0.0))
-                            .min_w_0()
+                        fraction(div(), 1.375, WINDOW_LEAST)
                             .flex()
                             .flex_col()
                             .gap(px(10.0))

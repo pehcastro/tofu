@@ -18,9 +18,13 @@ use fixture::{
     SPENDERS, Scope, Source, Swatch,
 };
 use frame::{
-    BODY_TEXT, HEADER_PILLS, LINE, SHELL_PILLS, figure, load_fonts, note, panel, pills, title,
-    told, window,
+    BODY_TEXT, HEADER_PILLS, LINE, SHELL_PILLS, ellipsis, figure, fraction, load_fonts, note,
+    panel, panes, pills, title, told, window,
 };
+
+const ACTIVITY_LEAST: f32 = 340.0;
+const SOURCES_LEAST: f32 = 320.0;
+const SIDE_LEAST: f32 = 260.0;
 
 const CELL: f32 = 9.0;
 const CELL_RADIUS: f32 = 2.5;
@@ -64,6 +68,7 @@ impl Usage {
         div()
             .flex()
             .flex_none()
+            .flex_wrap()
             .items_center()
             .gap(px(10.0))
             .px(px(4.0))
@@ -137,8 +142,7 @@ impl Usage {
             ),
             theme,
         )
-        .flex_grow(1.6)
-        .flex_basis(relative(0.0))
+        .map(|panel| fraction(panel, 1.6, ACTIVITY_LEAST))
         .child(
             inner_card(theme)
                 .px(px(18.0))
@@ -199,8 +203,7 @@ impl Usage {
             Some(note("click to filter", theme).into_any_element()),
             theme,
         )
-        .flex_grow(1.6)
-        .flex_basis(relative(0.0))
+        .map(|panel| fraction(panel, 1.6, SOURCES_LEAST))
         .child(
             inner_card(theme)
                 .p(px(8.0))
@@ -222,7 +225,7 @@ impl Usage {
                                 .rounded(px(2.0))
                                 .bg(swatch(source.swatch, theme)),
                         )
-                        .child(div().flex_1().child(source.name))
+                        .child(ellipsis(div().flex_1()).child(source.name))
                         .child(note(source.paid, theme))
                         .child(figure(source.tokens, 56.0, theme))
                 }))
@@ -245,8 +248,7 @@ impl Usage {
             Some(note("all sessions", theme).into_any_element()),
             theme,
         )
-        .flex_grow(1.0)
-        .flex_basis(relative(0.0))
+        .map(|panel| fraction(panel, 1.0, SIDE_LEAST))
         .child(
             inner_card(theme)
                 .px(px(8.0))
@@ -273,7 +275,11 @@ impl Usage {
                             cx.notify();
                         }))
                         .child(div().text_size(px(8.0)).text_color(dot).child("●"))
-                        .child(div().flex_1().text_color(name).child(session.name))
+                        .child(
+                            ellipsis(div().flex_1())
+                                .text_color(name)
+                                .child(session.name),
+                        )
                         .child(
                             div()
                                 .when(session.outcome == Outcome::LoopGuard, |turns| {
@@ -294,8 +300,7 @@ fn where_it_went(theme: &Theme) -> Div {
         Some(note("by who spent it", theme).into_any_element()),
         theme,
     )
-    .flex_grow(1.0)
-    .flex_basis(relative(0.0))
+    .map(|panel| fraction(panel, 1.0, SIDE_LEAST))
     .child(
         inner_card(theme)
             .px(px(16.0))
@@ -390,22 +395,14 @@ impl Render for Usage {
                     .flex_col()
                     .gap(px(10.0))
                     .child(
-                        div()
-                            .flex()
-                            .gap(px(10.0))
+                        panes()
                             .flex_grow(1.25)
-                            .flex_basis(relative(0.0))
-                            .min_h_0()
                             .child(self.activity(&theme, cx))
                             .child(where_it_went(&theme)),
                     )
                     .child(
-                        div()
-                            .flex()
-                            .gap(px(10.0))
+                        panes()
                             .flex_grow(1.0)
-                            .flex_basis(relative(0.0))
-                            .min_h_0()
                             .child(self.sources(&theme, cx))
                             .child(self.sessions(&theme, cx)),
                     ),

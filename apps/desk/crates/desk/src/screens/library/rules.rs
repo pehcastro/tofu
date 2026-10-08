@@ -8,16 +8,18 @@ use super::fixture::{
     TELL_SAVE_OVERRIDE, TELL_WHICH_RULES,
 };
 use super::kit::{
-    BASE, GAP, ROW_ON, Spark, T2, T3, WELL, button, cap, faint, mono, pill, primary, shade, shell,
-    shell_head, spark,
+    BASE, GAP, ROW_ON, Spark, T2, T3, WELL, button, cap, ellipsis, faint, fraction, mono, panes,
+    pill, primary, shade, shell, shell_head, spark,
 };
 use super::{Filter, Library, group, segment};
 
 const SUMMARY: &str = "142 rules · 3 overridden · 1 stale";
-const DETAIL_WIDTH: f32 = 470.0;
-const MODE_COLUMN: f32 = 92.0;
-const LAYER_COLUMN: f32 = 90.0;
-const FIRED_COLUMN: f32 = 110.0;
+const LIST_LEAST: f32 = 400.0;
+const DETAIL_LEAST: f32 = 340.0;
+const RULE_COLUMN: f32 = 120.0;
+const MODE_COLUMN: f32 = 76.0;
+const LAYER_COLUMN: f32 = 64.0;
+const FIRED_COLUMN: f32 = 92.0;
 const KEY_COLUMN: f32 = 90.0;
 const ROW_LINE: f32 = 18.0;
 const DETAIL_LINE: f32 = 21.0;
@@ -47,13 +49,9 @@ impl Library {
             button("new-rule", "+ New rule", 28.0, theme)
                 .on_click(cx.listener(Self::tell(TELL_NEW_RULE))),
         );
-        let content = div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .gap(px(GAP))
-            .child(self.rule_list(theme, cx).flex_1())
-            .child(self.rule_detail(theme, cx).w(px(DETAIL_WIDTH)).flex_none());
+        let content = panes()
+            .child(fraction(self.rule_list(theme, cx), 3.0, LIST_LEAST))
+            .child(fraction(self.rule_detail(theme, cx), 2.0, DETAIL_LEAST));
         (top, content)
     }
 
@@ -77,23 +75,23 @@ impl Library {
                 })),
             )
             .child(div().flex_1())
-            .child(faint(
+            .child(ellipsis(faint(
                 "layers: built in · global · this project",
                 12.0,
                 T3,
                 theme,
-            ));
+            )));
         let columns = div()
             .flex()
             .pt(px(6.0))
             .pb(px(7.0))
             .px(px(10.0))
-            .child(cap("Rule", 11.5, theme).flex_1())
-            .child(cap("Mode", 11.5, theme).w(px(MODE_COLUMN)))
-            .child(cap("Layer", 11.5, theme).w(px(LAYER_COLUMN)))
+            .child(fraction(cap("Rule", 11.5, theme), 3.0, RULE_COLUMN))
+            .child(fraction(cap("Mode", 11.5, theme), 1.0, MODE_COLUMN))
+            .child(fraction(cap("Layer", 11.5, theme), 1.0, LAYER_COLUMN))
             .child(
-                cap("Fired, 7 days", 11.5, theme)
-                    .w(px(FIRED_COLUMN))
+                fraction(cap("Fired, 7 days", 11.5, theme), 1.0, FIRED_COLUMN)
+                    .whitespace_nowrap()
                     .flex()
                     .justify_end(),
             );
@@ -131,29 +129,27 @@ impl Library {
                 cx.notify();
             }))
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
+                fraction(div(), 3.0, RULE_COLUMN)
                     .line_height(px(ROW_LINE))
                     .child(
                         div()
                             .font_family(mono(theme))
                             .text_size(px(12.5))
+                            .truncate()
                             .child(rule.id),
                     )
                     .child(faint(rule.text, 12.0, T3, theme).truncate()),
             )
             .child(
-                div().w(px(MODE_COLUMN)).flex().child(
+                fraction(div(), 1.0, MODE_COLUMN).flex().child(
                     pill(mode.name(), mode.look().colors(theme), 11.5, 8.0)
                         .py(px(1.0))
                         .line_height(px(15.0)),
                 ),
             )
-            .child(faint(rule.layer, 12.5, T2, theme).w(px(LAYER_COLUMN)))
+            .child(fraction(faint(rule.layer, 12.5, T2, theme), 1.0, LAYER_COLUMN).truncate())
             .child(
-                div()
-                    .w(px(FIRED_COLUMN))
+                fraction(div(), 1.0, FIRED_COLUMN)
                     .flex()
                     .items_center()
                     .justify_end()
@@ -172,7 +168,7 @@ impl Library {
                     .child(
                         faint(rule.fires.to_string(), 12.0, T2, theme)
                             .font_family(mono(theme))
-                            .w(px(20.0))
+                            .min_w(px(20.0))
                             .flex()
                             .justify_end(),
                     ),
@@ -193,7 +189,7 @@ impl Library {
                     .child(rule.id),
             )
             .child(div().flex_1())
-            .child(faint(rule.file, 12.0, T3, theme));
+            .child(ellipsis(faint(rule.file, 12.0, T3, theme)));
         let modes = group(0.05, 7.0, theme).children(Mode::ALL.map(|choice| {
             segment(choice.name(), choice.name(), choice == mode, theme)
                 .py(px(2.0))
@@ -267,13 +263,21 @@ impl Library {
                     .child(
                         faint(at, 12.5, T3, theme)
                             .font_family(mono(theme))
-                            .w(px(44.0)),
+                            .min_w(px(44.0)),
                     )
-                    .child(div().flex_1().font_family(mono(theme)).child(file))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .font_family(mono(theme))
+                            .child(file),
+                    )
                     .child(faint(found, 12.5, T2, theme))
             }));
         let actions = div()
             .flex()
+            .flex_wrap()
             .gap_1p5()
             .child(
                 button("edit-rule", "Edit in this project", 28.0, theme)
@@ -312,6 +316,6 @@ fn fact(key: &'static str, value: Div, theme: &Theme) -> Div {
         .flex()
         .items_center()
         .gap_3()
-        .child(faint(key, 12.5, T3, theme).w(px(KEY_COLUMN)))
-        .child(value)
+        .child(faint(key, 12.5, T3, theme).min_w(px(KEY_COLUMN)))
+        .child(value.min_w_0())
 }
