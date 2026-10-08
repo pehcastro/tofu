@@ -31,46 +31,52 @@ struct Raised {
 }
 
 pub struct Bell {
-    since: String,
+    since: i64,
     seen: BTreeSet<String>,
     raised: Vec<Raised>,
     unread: bool,
 }
 
-const SECONDS_PER_DAY: u64 = 86_400;
-const STAMP_LENGTH: usize = 19;
+const SECONDS_PER_DAY: i64 = 86_400;
+const SECONDS_PER_HOUR: i64 = 3_600;
 
-fn utc_stamp(now: SystemTime) -> String {
-    let seconds = now
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs());
-    let (days, clock) = (seconds / SECONDS_PER_DAY, seconds % SECONDS_PER_DAY);
-    let shifted = i64::try_from(days).unwrap_or(0) + 719_468;
-    let era = shifted.div_euclid(146_097);
-    let day_of_era = shifted.rem_euclid(146_097);
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_index = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
-    let month = if month_index < 10 {
-        month_index + 3
-    } else {
-        month_index - 9
+fn unix_seconds(stamp: &str) -> Option<i64> {
+    let number = |text: &str, range: std::ops::Range<usize>| text.get(range)?.parse::<i64>().ok();
+    let hours_minutes = |text: &str, at: usize| {
+        Some(number(text, at..at + 2)? * SECONDS_PER_HOUR + number(text, at + 3..at + 5)? * 60)
     };
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}",
-        clock / 3600,
-        clock / 60 % 60,
-        clock % 60
-    )
+    let (year, month, day) = (
+        number(stamp, 0..4)?,
+        number(stamp, 5..7)?,
+        number(stamp, 8..10)?,
+    );
+    let clock = hours_minutes(stamp, 11)? + number(stamp, 17..19)?;
+    let zone = stamp
+        .get(19..)?
+        .trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
+    let east = match zone.get(..1)? {
+        "Z" => 0,
+        "+" => hours_minutes(zone, 1)?,
+        "-" => -hours_minutes(zone, 1)?,
+        _ => return None,
+    };
+    let shifted_year = year - i64::from(month <= 2);
+    let era = shifted_year.div_euclid(400);
+    let year_of_era = shifted_year - era * 400;
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    let days = era * 146_097 + day_of_era - 719_468;
+    Some(days * SECONDS_PER_DAY + clock - east)
 }
 
 impl Default for Bell {
     fn default() -> Self {
         Bell {
-            since: utc_stamp(SystemTime::now()),
+            since: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |since| {
+                    i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
+                }),
             seen: BTreeSet::new(),
             raised: Vec::new(),
             unread: false,
@@ -81,8 +87,8 @@ impl Default for Bell {
 impl Bell {
     fn live(&self, stamp: Option<&str>) -> bool {
         stamp
-            .and_then(|stamp| stamp.get(..STAMP_LENGTH))
-            .is_some_and(|stamp| stamp >= self.since.as_str())
+            .and_then(unix_seconds)
+            .is_some_and(|at| at >= self.since)
     }
 
     pub fn gather(&mut self, id: &str, session: &Session) {
