@@ -286,10 +286,15 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let mut assets = Icon::registry();
+    if let Err(duplicates) = assets.extend(desk_ui::components::glyph::Glyph::entries()) {
+        eprintln!("the desk has two assets under one path: {duplicates:?}");
+        return ExitCode::FAILURE;
+    }
     let failed = Rc::new(Cell::new(false));
     let failure = Rc::clone(&failed);
     gpui_platform::application()
-        .with_assets(Icon::registry())
+        .with_assets(assets)
         .run(move |cx: &mut App| {
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
