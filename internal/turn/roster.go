@@ -183,7 +183,7 @@ func (t *SpawnTool) backup(to string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	kept := subAgentBackup{ID: to, Agent: held.agent.Agent, Model: held.agent.Model, Mission: held.agent.Mission, Brief: held.agent.Brief, Owns: held.agent.Owns,
+	kept := subAgentBackup{ID: to, Agent: held.agent.Agent, Model: held.agent.Model, Mission: held.agent.Mission, Brief: held.agent.Brief, Owns: held.boundary.Owns(),
 		Depth: held.trace.depth, Taken: t.clock(), Files: map[string]string{}}
 	for _, message := range history {
 		kept.History = append(kept.History, messageRowOf(message))
@@ -441,7 +441,7 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 
 func restoredHeld(agent subagent.SubAgent, depth int, reload func() ([]llm.Message, error)) *heldSubAgent {
 	return &heldSubAgent{agent: agent, restored: true, reload: reload, inbox: NewInbox(),
-		boundary: &subagent.Boundary{Ticket: agent.ID, Owns: agent.Owns},
+		boundary: subagent.NewBoundary(agent.ID, "", agent.Owns),
 		trace:    spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: agent.Owns, depth: depth}}
 }
 
@@ -508,14 +508,20 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	if err != nil {
 		return err
 	}
-	system, environment, err := t.SubAgents.prompt(t.base, definition, held.agent.Brief, held.agent.Owns)
+	owns := held.boundary.Owns()
+	system, environment, err := t.SubAgents.prompt(t.base, definition, held.agent.Brief, owns)
 	if err != nil {
 		return err
 	}
 	if _, err := held.conversation(); err != nil {
 		return fmt.Errorf("%s's conversation did not read back: %w", held.agent.ID, err)
 	}
-	held.definition, held.system, held.environment, held.restored = definition, system, environment, false
+	scratch, err := t.scratch(held.agent.ID)
+	if err != nil {
+		return fmt.Errorf("%s's scratch folder was not made: %w", held.agent.ID, err)
+	}
+	held.definition, held.system, held.environment, held.restored = definition, system, environment+scratchWords(scratch), false
+	held.boundary = subagent.NewBoundary(held.agent.ID, scratch, owns)
 	return nil
 }
 

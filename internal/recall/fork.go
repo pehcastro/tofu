@@ -160,7 +160,7 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 		}
 	}
 	if said, at := lastWord(c); at < c.heldFrom() {
-		text.WriteString(carryLastWord + said)
+		text.WriteString(carryLastWord + cutWords(said, konst.CarryLastWordBytes))
 	} else {
 		text.WriteString(carryHeldTail)
 	}
@@ -189,14 +189,7 @@ func saidSoFar(c Conversation) []string {
 	var kept []string
 	room := konst.CarrySaidBytes
 	for _, words := range slices.Backward(said) {
-		cut := words
-		if len(cut) > konst.CarrySaidMessageBytes {
-			end := konst.CarrySaidMessageBytes - len(saidCutMark)
-			for !utf8.RuneStart(cut[end]) {
-				end--
-			}
-			cut = cut[:end] + saidCutMark
-		}
+		cut := cutWords(words, konst.CarrySaidMessageBytes)
 		if slices.Contains(kept, cut) {
 			continue
 		}
@@ -210,6 +203,17 @@ func saidSoFar(c Conversation) []string {
 }
 
 const saidCutMark = " ..."
+
+func cutWords(words string, limit int) string {
+	if len(words) <= limit {
+		return words
+	}
+	end := limit - len(saidCutMark)
+	for !utf8.RuneStart(words[end]) {
+		end--
+	}
+	return words[:end] + saidCutMark
+}
 
 func oneLine(text string, limit int) string {
 	var line strings.Builder

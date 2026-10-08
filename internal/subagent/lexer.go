@@ -470,11 +470,39 @@ func (b *Boundary) Shell(command string) error {
 }
 
 func inTempDirectory(written string) bool {
-	target := path.Clean(normalizePath(written))
-	for _, root := range []string{"/tmp", path.Clean(normalizePath(os.TempDir()))} {
-		if target == root || strings.HasPrefix(target, root+"/") {
-			return true
+	return under("/tmp", written) || under(os.TempDir(), written)
+}
+
+func under(root, written string) bool {
+	root, target := path.Clean(normalizePath(root)), path.Clean(normalizePath(written))
+	return target == root || strings.HasPrefix(target, root+"/")
+}
+
+func (b *Boundary) Scratched(written string) bool {
+	return b.Scratch != "" && under(b.Scratch, written)
+}
+
+func (b *Boundary) KeepsToScratch(command string) bool {
+	touched := 0
+	for _, step := range shellCommands(command) {
+		tool, args := step.named()
+		changed := step.targets()
+		switch {
+		case len(step.words)+len(step.writes) == 0:
+			continue
+		case slices.Contains([]string{"rm", "rmdir", "mkdir", "touch", "unlink"}, tool):
+			changed = append(changed, operands(args)...)
+		case tool == "mv":
+			changed = append(changed, step.relinks()...)
+		case !slices.Contains([]string{"", "cp", "tee", "echo", "printf", "cat", "ls"}, tool):
+			return false
 		}
+		for _, word := range changed {
+			if word.expands || !b.Scratched(word.text) {
+				return false
+			}
+		}
+		touched += len(changed)
 	}
-	return false
+	return touched > 0
 }

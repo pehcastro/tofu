@@ -52,7 +52,7 @@ const (
 
 func gateExempt(tool string) bool {
 	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName ||
-		tool == RuleOverrideToolName || tool == RememberToolName || tool == LookupToolName
+		tool == RuleOverrideToolName || tool == RememberToolName || tool == LookupToolName || tool == messageTool{}.Name()
 }
 
 type Caps struct {
@@ -316,9 +316,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	messages = append(messages, config.History...)
 	concluding, taken := "", ""
 	for _, tool := range config.Tools.tools {
-		if spawner, spawning := tool.(*SpawnTool); spawning {
+		if spawner, spawning := tool.(*SpawnTool); spawning && !spawner.ChecksWork {
 			concluding = spawner.cleanReport(config.Task)
-			if concluding == "" && !spawner.ChecksWork {
+			if concluding == "" {
 				taken = spawner.reportTaken(config.Task)
 			}
 		}
@@ -361,8 +361,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		sent = max(sent, len(messages))
 	}
+	sentTokens := func(messages []llm.Message) int {
+		return budget.Tokens(artifacts.preview, historyOf(messages))
+	}
 	ask := func(ctx context.Context, why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
+		if tokens := sentTokens(request.Messages); tokens > budget.Ceiling() {
+			err := fmt.Errorf("this request is about %d tokens, past the %d token ceiling after the trim and the fork, so it was not sent", tokens, budget.Ceiling())
+			recorded.exchange(id, why, config.Wire, request, started, nil, llm.Decision{}, err)
+			return llm.Decision{}, requestTiming{}, id, err
+		}
 		tapped, tap := llm.Tapped(ctx)
 		decision, timing, err := askCountingAttempts(tapped, model, request)
 		recorded.exchange(id, why, config.Wire, request, started, tap.Attempts(), decision, err)
@@ -392,7 +400,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return compaction, err
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) string {
-		request := llm.Request{Messages: append(slices.Clone(beforeFork), inserted(sourceForkState, forkStateAsk(), time.Time{})), Tools: tools}
+		asked := beforeFork
+		if sentTokens(asked) > budget.Ceiling() {
+			asked = begun
+		}
+		request := llm.Request{Messages: append(slices.Clone(asked), inserted(sourceForkState, forkStateAsk(), time.Time{})), Tools: tools}
 		if len(tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
@@ -496,6 +508,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if promptRefused != "" {
 		return fail(errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused))
 	}
+	schemas, err := json.Marshal(currentTools().Definitions())
+	if err != nil {
+		return fail(err)
+	}
+	budget = budget.Sending(artifacts.preview, string(schemas))
+	if least := sentTokens(append(slices.Clone(messages[:afterSystem]), messages[len(messages)-1])); least > budget.Ceiling() {
+		return fail(&recall.CeilingTooLow{CeilingTokens: budget.Ceiling(), PromptTokens: sentTokens(messages[:afterSystem]), LeastTokens: least})
+	}
 	guard := newLoopGuard(config.Caps)
 	forks, recordedGrants, stopContinuations, handbacks := 0, 0, 0, 0
 	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
@@ -594,12 +614,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return fail(err)
 		}
 		budget = budget.Sending(artifacts.preview, string(schemas))
-		if step == 1 && len(config.History) > 0 {
-			if _, err := trim(step, "before step 1"); err != nil {
+		before := "before step " + strconv.Itoa(step)
+		due := step == 1 && len(config.History) > 0 || sentTokens(messages) > budget.Ceiling()
+		if due {
+			if _, err := trim(step, before); err != nil {
 				return fail(err)
 			}
 		}
-		if step == 1 && !config.NoFork && len(config.History) > 0 {
+		if due && !config.NoFork {
 			beforeFork := slices.Clone(messages)
 			fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, "", forks+1, config.Caps.MaxForks)
 			if err != nil {
@@ -609,7 +631,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				forks++
 				fork.Into = origin + "-f" + strconv.Itoa(forks+1)
 				missing := stateCarried(fork, step, beforeFork, begun, definitions)
-				forkInto(fork, "before step 1", beforeFork, begun, nil)
+				forkInto(fork, before, beforeFork, begun, nil)
 				if missing != "" {
 					row.Warnings = append(row.Warnings, missing)
 				}
@@ -730,7 +752,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					if pre.Args != nil {
 						call.Arguments = pre.Args
 					}
-					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments}
+					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments, Call: call.ID}
 					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre)}
 					if gated.refusal = hookRefusal(ctx, config, request, pre); gated.refusal != "" {
 						wave = append(wave, gated)

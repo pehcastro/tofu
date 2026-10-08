@@ -74,6 +74,13 @@ type SubAgent struct {
 	Calling      []string
 	CallsDropped int
 	Released     bool
+	Regranted    []OwnsChange
+}
+
+type OwnsChange struct {
+	At    time.Time
+	Did   string
+	Paths []string
 }
 
 func (s SubAgent) Holds() bool {
@@ -123,6 +130,22 @@ func (r *Roster) Hold(agent SubAgent) error {
 	}
 	agent.State, agent.Active, agent.Round = Working, agent.Started, 1
 	r.agents = append(r.agents, agent)
+	return nil
+}
+
+func (r *Roster) Regrant(id string, owns []string, change OwnsChange) error {
+	r.held.Lock()
+	defer r.held.Unlock()
+	at := r.index(id)
+	if at < 0 {
+		return fmt.Errorf("subagent: %s is not on the roster, so its owns cannot change", id)
+	}
+	agent := &r.agents[at]
+	added := slices.DeleteFunc(slices.Clone(owns), func(glob string) bool { return slices.Contains(agent.Owns, glob) })
+	if err := r.collides(SubAgent{ID: id, Owns: added}); err != nil {
+		return err
+	}
+	agent.Owns, agent.Regranted = slices.Clone(owns), append(slices.Clip(agent.Regranted), change)
 	return nil
 }
 

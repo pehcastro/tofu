@@ -19,7 +19,10 @@ runs commands and reports, and every write or edit it tries is refused.
 In a session the model steers its sub-agents with two tools. `subagents`
 lists them with the paths each holds, and with a name it reads one's
 report and conversation or diagnoses what it is doing now. `message`
-sends one more work, and its `do` stops, kills, releases or backs one up.
+sends one more work, and its `do` stops, kills, releases or backs one up,
+or with `owns` grants, revokes or replaces the paths it holds. None of
+these asks the gate. Each sub-agent also has a scratch folder under
+`.tofu/scratch/` where it writes and deletes with no ask.
 A sub-agent from before a restart holds no paths until a message resumes
 it, so a new one can start on them.
 

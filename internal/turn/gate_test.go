@@ -2,6 +2,7 @@ package turn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
@@ -93,6 +95,54 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 	}
 	if written, err := os.ReadFile(filepath.Join(root, "mine", "note.txt")); err != nil || string(written) != "a note" {
 		t.Errorf("the lead allowed the write and the file holds %q: %v", written, err)
+	}
+}
+
+func TestASubAgentsAskCarriesItsArgumentsCutToTheCapAndNamesTheCall(t *testing.T) {
+	root := t.TempDir()
+	write, err := NewWriteTool(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	big := strings.Repeat("0123456789", 9000)
+	args, err := json.Marshal(map[string]string{"path": "mine/big.txt", "content": big})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := &leadAndSubAgent{
+		lead: []llm.Decision{
+			spawnCall("call-spawn", "write the big file under mine/", "mine/**"),
+			called("message", map[string]any{"to": "sub-1", "answer": "allow"}),
+			claimDecision("allowed sub-1's write"),
+			claimDecision("sub-1 wrote it"),
+		},
+		subAgent: []llm.Decision{
+			toolCallDecision(llm.ToolCall{ID: "call-big", Name: "write", Arguments: args}),
+			claimDecision("wrote mine/big.txt"),
+		},
+	}
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" },
+		Gate: asksForSubAgents{}, GateMode: GateEnforce}
+	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	lead := base
+	lead.Task, lead.Tools, lead.Inbox = "hand the big file to a sub-agent", NewRegistry(write, spawn), spawn.Inbox
+	startLead(t.Context(), lead, nil).wait(t)
+
+	if len(model.leadSaw) < 2 {
+		t.Fatalf("the lead was asked %d times, want a second turn for the ask", len(model.leadSaw))
+	}
+	asked := model.leadSaw[1]
+	if len(asked) > konst.GateAskArgsBytes+1024 {
+		t.Errorf("the ask the lead saw is %d bytes for a %d byte call", len(asked), len(args))
+	}
+	for _, want := range []string{"mine/big.txt", "lookup", "call-big"} {
+		if !strings.Contains(asked, want) {
+			t.Errorf("the ask lacks %q:\n%s", want, asked)
+		}
+	}
+	if written, err := os.ReadFile(filepath.Join(root, "mine", "big.txt")); err != nil || len(written) != len(big) {
+		t.Errorf("the allowed write left %d bytes, want %d: %v", len(written), len(big), err)
 	}
 }
 

@@ -89,16 +89,24 @@ next step. When idle, a new message or report starts a turn.
   - `release`: one that is not running frees its paths with no run
   - `backup`: its conversation and the files it wrote are kept under a
     name, and `message` with `from` resumes it from there
+  - `grant`, `revoke`, `replace` with `owns`: add paths, take paths back,
+    or set them outright, running or not. A path another sub-agent holds is
+    refused, as at spawn. A grant resumes one that ended, so the write it was
+    refused runs again.
+
+  None of these asks the gate: they act only on the lead's own sub-agents.
 - **A sub-agent to the lead**: `ask` sends one question with a default. With
   no reply in 30 seconds, the default stands, and the report says so.
 - **A sub-agent's call the gate asks about**: it goes to the lead, never to
   you, with the call, jev's verdict and its risk. The lead answers with
   `message` and `answer` allow or deny, and the sub-agent waits up to 5
-  minutes. With no answer the call is refused. A PreToolUse hook's ask goes
+  minutes. With no answer the call is refused. The call's arguments are cut
+  to 4 KB, and `lookup` with the call id shown returns it whole. A call that
+  stays inside the sub-agent's scratch folder runs without asking the lead. A PreToolUse hook's ask goes
   to the lead the same way. A sub-agent's own sub-agent
   asks the sub-agent that started it.
 - **Progress**: `subagents` lists each sub-agent's state, its last tool
-  call and the paths it holds. With a name, `show read` gives its report,
+  call, the paths it holds and every grant or revoke of them. With a name, `show read` gives its report,
   files and conversation without resuming it, so far when it still runs,
   and `show diagnose` gives its open calls, the last 10 lines of each of its
   shells, its last request and its failures. `do backup` on a running one
@@ -116,6 +124,11 @@ A sub-agent that only runs a command, reads or researches is spawned with
 no `owns`. It starts at once, and every `write` or `edit` it tries is
 refused with the reason, so it reports what it found instead of inventing a
 file to hold. A sub-agent it spawns holds no paths either.
+
+Every sub-agent also gets a scratch folder, `.tofu/scratch/<name>-<n>/` in
+the project, for its logs, captures and probes. It writes and deletes there
+with no paths held and no ask. The folder carries a `.gitignore`, so git never
+sees it.
 
 ## What you see
 
@@ -146,5 +159,5 @@ To run the lead alone: `tofu settings set turnMaySpawn false`.
 | `subAgentDepth` (2) | How deep sub-agents may spawn their own |
 | `subAgentCheckSeconds` (1800) | Seconds between checks on a running sub-agent; 0 sends none |
 | `subAgentWatchSeconds` (600) | Seconds a sub-agent's call runs before its row says what it is doing, and with nothing moving, before it reads stalled |
-| `verifySubAgents` (false) | Off: the lead takes a finished sub-agent's report as the result, unless the report says something failed. On: the lead reads what the sub-agent changed and runs the build or tests again. `tofu rules restore verify_sub_agents` also turns it on |
+| `verifySubAgents` (true) | On: before it calls a sub-agent's work done, the lead reads what the sub-agent changed, runs the build or tests again or opens what it made, and says what it saw. Off: the lead takes a finished report as the result, unless the report says something failed. `tofu rules off verify_sub_agents` also turns it off |
 | `turnMaySpawn` (`true`) | Whether the lead may spawn at all |

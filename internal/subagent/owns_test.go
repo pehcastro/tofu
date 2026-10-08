@@ -16,7 +16,7 @@ const (
 )
 
 func qaBoundary() *Boundary {
-	return &Boundary{Ticket: "qa-1", Owns: []string{"QA-REPORT.md"}}
+	return NewBoundary("qa-1", "", []string{"QA-REPORT.md"})
 }
 
 func TestTheThirtyCommandsQAWasRefusedIn4fda9f9dWriteNothing(t *testing.T) {
@@ -133,7 +133,7 @@ func TestASubAgentChangesOwnedSourceWithEditNotTheShell(t *testing.T) {
 		{"echo x > package-lock.json", ""},
 		{"echo x > other/x.rs", notOwned},
 	} {
-		boundary := &Boundary{Ticket: "rust-dev-1", Owns: []string{"src/", "Cargo.lock", "package-lock.json"}}
+		boundary := NewBoundary("rust-dev-1", "", []string{"src/", "Cargo.lock", "package-lock.json"})
 		err := boundary.Shell(driven.cmd)
 		t.Logf("%q -> %v", driven.cmd, err)
 		if !refusedAsWanted(err, driven.refusal) {
@@ -190,9 +190,9 @@ func TestAnOwnedDirectoryWithoutASlashOwnsWhatIsInsideIt(t *testing.T) {
 }
 
 func TestBoundaryWriteStillRefusesAFileItDoesNotOwn(t *testing.T) {
-	boundary := &Boundary{Ticket: "TOFU-690-driven", Owns: []string{"internal/subagent/command.go"}}
+	boundary := NewBoundary("TOFU-690-driven", "", []string{"internal/subagent/command.go"})
 	err := boundary.Write("internal/subagent/owns.go")
-	t.Logf("owns=%v write=%q -> %v", boundary.Owns, "internal/subagent/owns.go", err)
+	t.Logf("owns=%v write=%q -> %v", boundary.Owns(), "internal/subagent/owns.go", err)
 	var denied DeniedError
 	if !errors.As(err, &denied) {
 		t.Fatalf("write of an unowned file: want DeniedError, got %v", err)

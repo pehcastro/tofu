@@ -448,38 +448,46 @@ func TestTheContextCeilingFlagWinsOverTheEnvironmentVariable(t *testing.T) {
 	t.Logf("flag: %s\nvariable: %s", budget.Record(), variableAlone.Record())
 }
 
-func TestARunAtATwentyThousandCeilingCompactsAndTheRecordSaysWhatItDropped(t *testing.T) {
+func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTheDrops(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	opts, err := parseRunArgs([]string{"--dir", dir, "--context-ceiling", "20000", "--no-subagents", "read the big file over and over"})
-	if err != nil {
-		t.Fatalf("parseRunArgs: %v", err)
-	}
 	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(strings.Repeat("x", 20000)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	built, err := buildTestRunTools(dir, opts.toolSet)
-	if err != nil {
-		t.Fatalf("buildTestRunTools: %v", err)
+	run := func(ceiling int) (turn.Row, *queuedModel, recall.Budget, error) {
+		opts, err := parseRunArgs([]string{"--dir", dir, "--context-ceiling", strconv.Itoa(ceiling), "--no-subagents", "read the big file over and over"})
+		if err != nil {
+			t.Fatalf("parseRunArgs: %v", err)
+		}
+		built, err := buildTestRunTools(dir, opts.toolSet)
+		if err != nil {
+			t.Fatalf("buildTestRunTools: %v", err)
+		}
+		var decisions []llm.Decision
+		for i := range 8 {
+			decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+				{ID: "call-" + string(rune('a'+i)), Name: "bash", Arguments: json.RawMessage(`{"command":"head -c 6000 big.txt; echo ` + strconv.Itoa(i) + `"}`)},
+			}})
+		}
+		model := &queuedModel{decisions: append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"})}
+		budget, err := contextBudget(opts, chosenFor(t))
+		if err != nil {
+			t.Fatalf("contextBudget: %v", err)
+		}
+		config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, budget: budget})
+		config.NoFork = true
+		row, err := turn.Run(context.Background(), config)
+		return row, model, budget, err
 	}
-	var decisions []llm.Decision
-	for i := range 8 {
-		decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-			{ID: "call-" + string(rune('a'+i)), Name: "bash",
-				Arguments: json.RawMessage(`{"command":"echo ` + strconv.Itoa(i) + " " + strings.Repeat("y", 6000) + `"}`)},
-		}})
+	_, model, _, err := run(10000)
+	var low *recall.CeilingTooLow
+	if !errors.As(err, &low) || len(model.decisions) != 9 || low.PromptTokens <= 0 || low.LeastTokens <= low.PromptTokens {
+		t.Fatalf("a 10000 token ceiling under the system prompt and tools ended with %v after %d requests, want a refusal before the first naming the prompt and the least ceiling", err, 9-len(model.decisions))
 	}
-	decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"})
-
-	budget, err := contextBudget(opts, chosenFor(t))
+	t.Logf("%v", err)
+	row, _, budget, err := run(low.LeastTokens + 8000)
 	if err != nil {
-		t.Fatalf("contextBudget: %v", err)
-	}
-	config, _ := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget})
-	config.NoFork = true
-	row, err := turn.Run(context.Background(), config)
-	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("turn.Run at %d tokens: %v", low.LeastTokens+8000, err)
 	}
 	dropped := 0
 	for _, step := range row.Steps {

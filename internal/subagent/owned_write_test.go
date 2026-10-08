@@ -17,7 +17,7 @@ func TestAWriteToolCallOnTmpCreatesNothingInTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	boundary := &subagent.Boundary{Ticket: "ts-dev-1", Owns: []string{"apps/web/src/routes/components/$slug.tsx"}}
+	boundary := subagent.NewBoundary("ts-dev-1", "", []string{"apps/web/src/routes/components/$slug.tsx"})
 	raw, _ := json.Marshal(map[string]string{"path": "/tmp/tofu-959.txt", "content": "x"})
 	refused := boundary.Write("/tmp/tofu-959.txt")
 	if refused == nil {

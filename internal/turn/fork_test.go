@@ -409,6 +409,59 @@ func TestTheCarrysLastWordIsWhatTheModelSaidNeverTheArgumentsOfItsCalls(t *testi
 	}
 }
 
+func TestNoRequestOfAResumedConversationGoesPastTheCeiling(t *testing.T) {
+	const ceiling = 12000
+	said := func(bytes int) string {
+		return strings.Repeat("the parser is renamed and every caller follows it. ", bytes/50)
+	}
+	brief := llm.Message{Role: llm.RoleUser, Content: "rename the parser", Origin: llm.Origin{Source: sourceBrief}}
+	words, reads := []llm.Message{brief}, []llm.Message{brief}
+	for i := range 6 {
+		id := "read-" + strconv.Itoa(i)
+		words = append(words, llm.Message{Role: llm.RoleAssistant, Content: said(8000)}, llm.Message{Role: llm.RoleUser, Content: "go on"})
+		reads = append(reads, llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"p.go"}`)}}},
+			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: said(8000)})
+	}
+	preview, err := recall.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview = preview.OnWire("anthropic")
+	for _, c := range []struct {
+		name    string
+		history []llm.Message
+		task    string
+		refused bool
+	}{
+		{"its own words, which no trim frees", words, "go on with the rename", false},
+		{"one answer longer than the ceiling", []llm.Message{brief, {Role: llm.RoleAssistant, Content: said(60000)}}, "go on with the rename", false},
+		{"reads the trim frees", reads, "go on with the rename", false},
+		{"a task longer than the ceiling", []llm.Message{brief, {Role: llm.RoleAssistant, Content: "renamed"}}, said(40000), true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			model := &scriptedLead{state: "goal: rename the parser", steps: func(int) llm.Decision { return messageDecision() }}
+			config, _ := forkingConfig(t, model, nil, strconv.Itoa(ceiling))
+			config.History, config.Task, config.SpawnedFrom = c.history, c.task, "lead"
+			_, err := Run(context.Background(), config)
+			if c.refused != (err != nil) || c.refused && !strings.Contains(err.Error(), "ceiling") {
+				t.Errorf("the turn ended with %v, want a refusal naming the ceiling %v", err, c.refused)
+			}
+			if !c.refused && len(model.asked) == 0 {
+				t.Fatal("no request was sent")
+			}
+			for n, request := range model.asked {
+				schemas, err := json.Marshal(request.Tools)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if sent := HistoryTokens(preview, request.Messages) + preview.Tokens(string(schemas)); sent > ceiling {
+					t.Errorf("request %d of %d went out at about %d tokens, %d messages, past the %d ceiling", n+1, len(model.asked), sent, len(request.Messages), ceiling)
+				}
+			}
+		})
+	}
+}
+
 func TestLookupStopsOnACarriedFromLoopAndSaysWhatItLookedFor(t *testing.T) {
 	store := session.NewStore(t.TempDir())
 	a, b := session.NewEventID(), session.NewEventID()

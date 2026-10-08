@@ -26,6 +26,7 @@ import (
 	"tofu/internal/settings"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	shipped "tofu/library"
 )
 
@@ -690,8 +691,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
-	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, system: system, environment: environment + t.briefFiles(ctx, args, site.conversation),
-		boundary: &subagent.Boundary{Ticket: subAgentID, Owns: args.Owns}, inbox: NewInbox(),
+	scratch, err := t.scratch(subAgentID)
+	if err != nil {
+		t.roster.Release(subAgentID)
+		return Result{}, fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err)
+	}
+	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system,
+		environment: environment + scratchWords(scratch) + t.briefFiles(ctx, args, site.conversation),
+		boundary:    subagent.NewBoundary(subAgentID, scratch, args.Owns), inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Inbox.keep(held, cancel)
@@ -706,6 +713,30 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	t.Inbox.hold(held, site.log)
 	go t.background(runCtx, cancel, held, opened, site, task, warm)
 	return Result{Content: narrowed + held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
+}
+
+func (t *SpawnTool) scratch(id string) (string, error) {
+	if t.Project == "" {
+		return "", nil
+	}
+	root := filepath.Join(t.Project, ".tofu", "scratch")
+	if err := sys.WriteFile(filepath.Join(root, ".gitignore"), []byte("*\n"), 0o644); err != nil {
+		return "", err
+	}
+	made, err := os.MkdirTemp(root, id+"-")
+	if err != nil {
+		return "", err
+	}
+	inside, err := filepath.Rel(t.Project, made)
+	return filepath.ToSlash(inside), err
+}
+
+func scratchWords(scratch string) string {
+	if scratch == "" {
+		return ""
+	}
+	return "\n\nyour scratch folder is " + scratch + ": logs, captures, probes and notes go there, never in the project. " +
+		"write, edit and bash write and delete inside it with no owns and with no ask; spell it as this relative path, with no variable."
 }
 
 func (t *SpawnTool) proseStore() *recall.Store {
@@ -733,7 +764,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	}
 	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
 	check := &checkIn{id: held.agent.ID, started: t.clock(), missed: func(run Row) []string {
-		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns, []Row{run})
+		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns(), []Row{run})
 	}}
 	defer t.watch(held, check)()
 	var taskOrigin llm.Origin
@@ -778,7 +809,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox,
-			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns) == 0, base: t.base, roster: t.roster, tree: t.tree})
+			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
 	subAgent.Tools = NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...)
@@ -813,6 +844,7 @@ type heldSubAgent struct {
 	agent       subagent.SubAgent
 	definition  subagent.Definition
 	effort      llm.Effort
+	askedEffort llm.Effort
 	system      string
 	environment string
 	boundary    *subagent.Boundary
@@ -928,6 +960,9 @@ func (h *heldSubAgent) runningWords() string {
 	if len(h.agent.Owns) > 0 {
 		said += ", holding " + strings.Join(h.agent.Owns, ", ")
 	}
+	if h.boundary.Scratch != "" {
+		said += ", with its scratch folder " + h.boundary.Scratch
+	}
 	return said + ". its report comes to you as a message naming it when it ends, and message reaches it at its next step while it runs."
 }
 
@@ -1032,12 +1067,13 @@ type messageTool struct {
 }
 
 type messageArgs struct {
-	To     string `json:"to"`
-	Text   string `json:"text"`
-	Stop   bool   `json:"stop,omitempty"`
-	Answer string `json:"answer,omitempty"`
-	Do     string `json:"do,omitempty"`
-	From   string `json:"from,omitempty"`
+	To     string   `json:"to"`
+	Text   string   `json:"text"`
+	Stop   bool     `json:"stop,omitempty"`
+	Answer string   `json:"answer,omitempty"`
+	Do     string   `json:"do,omitempty"`
+	From   string   `json:"from,omitempty"`
+	Owns   []string `json:"owns,omitempty"`
 }
 
 const (
@@ -1045,6 +1081,9 @@ const (
 	doKill    = "kill"
 	doRelease = "release"
 	doBackup  = "backup"
+	doGrant   = "grant"
+	doRevoke  = "revoke"
+	doReplace = "replace"
 )
 
 func (messageTool) Name() string { return "message" }
@@ -1062,13 +1101,17 @@ func (messageTool) Definition() llm.Tool {
 			"kill: it ends now, every shell it or its own sub-agents started is killed, and its paths are freed. " +
 			"release: one that is not running frees its paths with no run. " +
 			"backup: a copy of its conversation and of the files it wrote is kept, under a name the result gives. " +
+			"grant, revoke and replace change the paths it holds, running or not, to owns added, owns taken away, or owns alone; a path another sub-agent holds is refused, as at spawn. " +
+			"a grant tells it and resumes one that ended, so a write it was refused runs again; any text goes with it. a revoke tells it at its next step. " +
+			"stopping, killing or releasing your own sub-agents, and changing what they hold, needs no one's leave. " +
 			"from, a backup's name, with text, resumes it from that backup's conversation instead of its latest. " +
 			"subagents with a name reads or diagnoses one without any of this",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{"to": text, "text": text, "from": text,
 				"answer": map[string]any{"type": "string", "enum": []string{"allow", "deny"}},
-				"do":     map[string]any{"type": "string", "enum": []string{doStop, doKill, doRelease, doBackup}}},
+				"do":     map[string]any{"type": "string", "enum": []string{doStop, doKill, doRelease, doBackup, doGrant, doRevoke, doReplace}},
+				"owns":   map[string]any{"type": "array", "items": text}},
 			"required": []string{"to"},
 		},
 	}
@@ -1096,8 +1139,10 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		return t.kill(ctx, args.To)
 	case doBackup:
 		return t.backup(args.To)
+	case doGrant, doRevoke, doReplace:
+		return t.regrant(ctx, args)
 	default:
-		return Result{}, fmt.Errorf("message refused: do is %s, %s, %s or %s, not %q", doStop, doKill, doRelease, doBackup, args.Do)
+		return Result{}, fmt.Errorf("message refused: do is %s, %s, %s, %s, %s, %s or %s, not %q", doStop, doKill, doRelease, doBackup, doGrant, doRevoke, doReplace, args.Do)
 	}
 	if args.Answer != "" {
 		if args.Answer != "allow" && args.Answer != "deny" {
@@ -1119,25 +1164,29 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	if strings.TrimSpace(args.Text) == "" {
 		return Result{}, errors.New("message: text is required unless do or answer is given")
 	}
+	return t.send(ctx, args.To, args.Text, args.From)
+}
+
+func (t *SpawnTool) send(ctx context.Context, to, text, from string) (Result, error) {
 	var backup []llm.Message
-	if args.From != "" {
+	if from != "" {
 		var err error
-		if backup, err = t.restoreBackup(args.To, args.From); err != nil {
+		if backup, err = t.restoreBackup(to, from); err != nil {
 			return Result{}, fmt.Errorf("message refused: %w", err)
 		}
 	}
 	runCtx, cancel := context.WithCancel(ctx)
-	held, posted, err := t.Inbox.resume(args.To, args.Text, t.limits().Running, cancel)
+	held, posted, err := t.Inbox.resume(to, text, t.limits().Running, cancel)
 	if held == nil || err != nil || posted {
 		cancel()
 	}
 	switch {
 	case held == nil:
-		return Result{}, t.unknown(args.To)
+		return Result{}, t.unknown(to)
 	case err != nil:
 		return Result{}, fmt.Errorf("message %w", err)
 	case posted:
-		return Result{Content: args.To + " is running and reads this at its next step. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
+		return Result{Content: to + " is running and reads this at its next step. its report comes to you as a message when it ends.", Command: "message " + to, SubAgent: to}, nil
 	}
 	if backup != nil {
 		held.kept.Lock()
@@ -1147,7 +1196,7 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	err = t.recompose(held)
 	var opened SubAgentModel
 	if err == nil {
-		opened, err = t.open(held.definition, held.effort)
+		opened, err = t.open(held.definition, held.askedEffort)
 	}
 	if err == nil {
 		t.tree.mu.Lock()
@@ -1164,8 +1213,56 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.Inbox.hold(held, site.log)
-	go t.background(runCtx, cancel, held, opened, site, args.Text, nil)
-	return Result{Content: args.To + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + args.To, SubAgent: args.To}, nil
+	go t.background(runCtx, cancel, held, opened, site, text, nil)
+	return Result{Content: to + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + to, SubAgent: to}, nil
+}
+
+func (t *SpawnTool) regrant(ctx context.Context, args messageArgs) (Result, error) {
+	held, _ := t.Inbox.find(args.To)
+	if held == nil {
+		return Result{}, t.unknown(args.To)
+	}
+	if len(args.Owns) == 0 {
+		return Result{}, fmt.Errorf("message refused: do %s names its paths in owns, and owns is empty", args.Do)
+	}
+	before, did := held.boundary.Owns(), "replaced the paths you hold with "
+	after := slices.Clone(args.Owns)
+	switch args.Do {
+	case doGrant:
+		did = "granted you "
+		after = slices.Concat(before, slices.DeleteFunc(after, func(glob string) bool { return slices.Contains(before, glob) }))
+	case doRevoke:
+		did = "took back "
+		for _, glob := range args.Owns {
+			if !slices.Contains(before, glob) {
+				return Result{}, fmt.Errorf("message refused: %s does not hold %q; it holds %s", args.To, glob, cmp.Or(strings.Join(before, ", "), "nothing"))
+			}
+		}
+		after = slices.DeleteFunc(slices.Clone(before), func(glob string) bool { return slices.Contains(args.Owns, glob) })
+	}
+	t.tree.mu.Lock()
+	err := t.roster.Regrant(args.To, after, subagent.OwnsChange{At: t.clock(), Did: args.Do, Paths: args.Owns})
+	t.tree.mu.Unlock()
+	var collision subagent.CollisionError
+	if errors.As(err, &collision) {
+		return Result{}, fmt.Errorf("message refused: %s already holds %q, which overlaps %q. release or kill %s first, or send this work to it", collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder)
+	}
+	if err != nil {
+		return Result{}, fmt.Errorf("message refused: %w", err)
+	}
+	held.boundary.Regrant(after)
+	notice := "the orchestrator " + did + strings.Join(args.Owns, ", ") + ": you now hold " + cmp.Or(strings.Join(after, ", "), "no paths") + "."
+	if args.Do == doRevoke {
+		held.inbox.post(notice + " a write there is refused from now on.")
+		return Result{Content: args.To + " now holds " + cmp.Or(strings.Join(after, " "), "no paths") + ". it reads this at its next step, or when it next runs.", Command: args.Do + " " + args.To, SubAgent: args.To}, nil
+	}
+	sent, err := t.send(ctx, args.To, strings.TrimSpace(notice+" the write that was refused may run now.\n\n"+args.Text), "")
+	if err != nil {
+		return Result{}, err
+	}
+	sent.Content = args.To + " now holds " + strings.Join(after, " ") + ". " + sent.Content
+	sent.Command = args.Do + " " + args.To
+	return sent, nil
 }
 
 type subAgentsTool struct {
@@ -1183,7 +1280,7 @@ func (subAgentsTool) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "subagents",
 		Description: "lists every sub-agent of this session and what it is doing now, and returns at once without waiting for any of them: " +
-			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, the last tool it called, and the paths it holds, or released when it holds none. " +
+			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, the last tool it called, the paths it holds, or released when it holds none, and every grant, revoke and replace of them. " +
 			"use it rather than guessing whether a sub-agent still runs or who holds a path. " +
 			"name with show read gives that sub-agent's report, the files it changed and its conversation, without resuming it. " +
 			"name with show diagnose gives what it is doing now: its open calls and how long each has run, its shells and their last lines, its last request, and its failed requests and calls since the last that worked",
@@ -1243,6 +1340,11 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 			line += ", released"
 		case agent.Holds() && len(agent.Owns) > 0:
 			line += ", holding " + strings.Join(agent.Owns, " ")
+		case len(agent.Owns) > 0:
+			line += ", owns " + strings.Join(agent.Owns, " ") + ", held again when it resumes"
+		}
+		for _, change := range agent.Regranted {
+			line += ", " + change.Did + " " + strings.Join(change.Paths, " ") + " at " + change.At.Format(time.TimeOnly)
 		}
 		lines = append(lines, line+": "+agent.Mission)
 	}
@@ -1381,7 +1483,7 @@ func (t *SpawnTool) runRounds(outerCtx, subAgentCtx context.Context, held *heldS
 	var sentBack []string
 	recipes := projectRecipes(t.Project)
 	for state == subagent.Finished {
-		missed := gateMissed(t.Project, recipes, held.definition, held.boundary.Owns, claims)
+		missed := gateMissed(t.Project, recipes, held.definition, held.boundary.Owns(), claims)
 		if len(missed) == 0 && t.Review == nil {
 			break
 		}
@@ -1467,6 +1569,8 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 		for _, call := range sinceEdit {
 			switch {
 			case !gateRan(check, call, recipes), call.Error == typecheckUnanswered:
+			case checkerMissing(printedBy(rounds, call.Call)):
+				said = check + " could not run: its checker is not installed"
 			case call.ExitCode != nil && *call.ExitCode != 0:
 				said = fmt.Sprintf("%s exited %d", check, *call.ExitCode)
 			case call.Tool == "typecheck" && call.Error != "" && !typecheckNamesOwnFile(project, owns, call, rounds):
@@ -1484,16 +1588,24 @@ func gateMissed(project string, recipes map[string]string, definition subagent.D
 	return missed
 }
 
-func typecheckNamesOwnFile(project string, owns []string, call ToolCallRow, rounds []Row) bool {
+func printedBy(rounds []Row, call string) string {
 	printed := ""
 	for _, round := range rounds {
 		for _, message := range round.Conversation {
-			if message.Role == llm.RoleTool && message.ToolCallID == call.Call {
+			if message.Role == llm.RoleTool && message.ToolCallID == call {
 				printed = message.Content
 			}
 		}
 	}
-	_, listed, hasList := strings.Cut(printed, ":\n")
+	return printed
+}
+
+func checkerMissing(printed string) bool {
+	return slices.ContainsFunc([]string{"No module named", "command not found", "is not recognized"}, func(said string) bool { return strings.Contains(printed, said) })
+}
+
+func typecheckNamesOwnFile(project string, owns []string, call ToolCallRow, rounds []Row) bool {
+	_, listed, hasList := strings.Cut(printedBy(rounds, call.Call), ":\n")
 	scope := call.Command
 	if !filepath.IsAbs(scope) {
 		scope = filepath.Join(project, scope)
@@ -1638,7 +1750,7 @@ func (t ownedTool) Name() string { return t.tool.Name() }
 
 func (t ownedTool) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and only inside the paths your first message says you hold"
+	definition.Description += ", and only inside the paths your first message says you hold, or your scratch folder"
 	return definition
 }
 
@@ -1649,7 +1761,7 @@ func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
-	if len(t.boundary.Owns) == 0 {
+	if len(t.boundary.Owns()) == 0 && !t.boundary.Scratched(args.Path) {
 		return Result{}, ReadOnlyError{Tool: t.Name()}
 	}
 	if err := t.boundary.Write(args.Path); err != nil {
@@ -1678,7 +1790,7 @@ func (t ownedShell) Name() string { return t.tool.Name() }
 
 func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and every file the command writes, through a redirect, tee, cp or mv, has to be inside the paths your first message says you hold. " +
+	definition.Description += ", and every file the command writes, through a redirect, tee, cp or mv, has to be inside the paths your first message says you hold, or your scratch folder. " +
 		"A command writing outside them is refused before it runs, and that work goes back to the orchestrator. A source file changes with edit or write, never through the shell. Reading anything is fine."
 	return definition
 }

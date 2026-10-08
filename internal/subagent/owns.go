@@ -41,7 +41,7 @@ type DeniedError struct {
 }
 
 func (e DeniedError) Error() string {
-	return fmt.Sprintf("%q is outside the paths this agent holds (%s): report it, do not edit it", e.Path, strings.Join(e.Owns, ", "))
+	return fmt.Sprintf("%q is outside the paths this agent holds (%s): name it in your report, which asks the orchestrator to grant it, and do not edit it another way", e.Path, strings.Join(e.Owns, ", "))
 }
 
 var globCharset = regexp.MustCompile(`^[A-Za-z0-9_./*$@+()-]+$`)

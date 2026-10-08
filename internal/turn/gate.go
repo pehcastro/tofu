@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 )
@@ -18,6 +19,7 @@ type GateRequest struct {
 	Task   string
 	Tool   string
 	Args   json.RawMessage
+	Call   string
 }
 
 type GateDecision struct {
@@ -57,13 +59,14 @@ const (
 	PersonAllowedOnce
 	PersonAlwaysHere
 	PersonNotAsked
+	PersonNotAskedOwnScratch
 )
 
 func (a PersonAnswer) allows() bool {
 	switch a {
 	case PersonDenied:
 		return false
-	case PersonAllowedOnce, PersonAlwaysHere, PersonNotAsked:
+	case PersonAllowedOnce, PersonAlwaysHere, PersonNotAsked, PersonNotAskedOwnScratch:
 		return true
 	}
 	panic("turn: unknown person answer")
@@ -77,8 +80,8 @@ func (a PersonAnswer) Outcome() ledger.Outcome {
 		return ledger.Outcome{Kind: OutcomeKindGateAnswer, Detail: "deny"}
 	case PersonAllowedOnce, PersonAlwaysHere:
 		return ledger.Outcome{Kind: OutcomeKindGateAnswer, Detail: "allow"}
-	case PersonNotAsked:
-		panic("turn: a call gatePrompt auto ran unasked has no answer of the person's to record")
+	case PersonNotAsked, PersonNotAskedOwnScratch:
+		panic("turn: a call that ran unasked has no answer of the person's to record")
 	}
 	panic("turn: unknown person answer")
 }
@@ -98,8 +101,9 @@ func (p Person) RunsWhatJevAsks() Person {
 }
 
 const (
-	allowedInAutoMode  = "gatePrompt auto"
-	allowedByThePerson = "the person"
+	allowedInAutoMode   = "gatePrompt auto"
+	allowedByThePerson  = "the person"
+	allowedByOwnScratch = "the sub-agent's own scratch"
 )
 
 const (
@@ -136,8 +140,11 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 		case answer.allows():
 			if decision.Reason != nil {
 				decision.Reason.AllowedBy = who
-				if answer == PersonNotAsked {
+				switch answer {
+				case PersonNotAsked:
 					decision.Reason.AllowedBy = allowedInAutoMode
+				case PersonNotAskedOwnScratch:
+					decision.Reason.AllowedBy = allowedByOwnScratch
 				}
 			}
 			return ""
@@ -162,12 +169,17 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 		if decision.PersonOnly || decision.HookAsk == "" && decision.Verdict != ledger.VerdictAsk {
 			return PersonDenied, errors.New("only the person answers this " + request.Tool + " question, and a sub-agent never asks the person")
 		}
+		if keepsToScratch(held.boundary, request) {
+			site.notice(id, id+"'s "+request.Tool+" call keeps to its own scratch folder, so it runs without asking the orchestrator")
+			return PersonNotAskedOwnScratch, nil
+		}
 		because := "the gate's verdict is ask" + standing(decision.Reason)
 		if decision.HookAsk != "" {
 			because = "a PreToolUse hook asks first: " + decision.HookAsk
 		}
+		shown := cutOnRuneBoundary(string(request.Args), konst.GateAskArgsBytes, "\n...(%s of this call cut here: lookup with call "+request.Call+" returns it whole)...\n")
 		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s for you: call message with to %s and answer allow or deny. with no answer the call is refused.",
-			id, request.Tool, request.Args, because, orchestratorAnswerWait, id)
+			id, request.Tool, shown, because, orchestratorAnswerWait, id)
 		t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
 		defer t.roster.Reached(id, subagent.Working, "")
 		site.notice(id, asked)
@@ -192,6 +204,20 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 		site.notice(id, "the orchestrator answered "+said+" to "+id+"'s "+request.Tool+" call after "+t.clock().Sub(started).Round(time.Millisecond).String())
 		return verdict, nil
 	}
+}
+
+func keepsToScratch(boundary *subagent.Boundary, request GateRequest) bool {
+	var args struct{ Path, Command string }
+	if json.Unmarshal(request.Args, &args) != nil {
+		return false
+	}
+	switch request.Tool {
+	case "write", "edit":
+		return boundary.Scratched(args.Path)
+	case bashToolName:
+		return boundary.KeepsToScratch(args.Command)
+	}
+	return false
 }
 
 func (s spawnSite) notice(agent, text string) {

@@ -27,6 +27,31 @@ func TestTheProjectsOwnTypecheckAndTestScriptsCountThroughBash(t *testing.T) {
 		called("typecheck", map[string]any{}), called("test", map[string]any{}), claimDecision("done")).rows, 2, "typecheck exited 2", "test did not run")
 }
 
+func TestAGateCheckerThatIsNotInstalledIsNotAPass(t *testing.T) {
+	exit := 0
+	round := func(printed string) []Row {
+		return []Row{{
+			Steps: []StepRow{{ToolCalls: []ToolCallRow{
+				{Tool: "edit", Args: json.RawMessage(`{"path":"src/x.py"}`)},
+				{Call: "ruff", Tool: "bash", Command: "uv run ruff check src | tail -5", ExitCode: &exit},
+				{Call: "pytest", Tool: "bash", Command: "uv run pytest", ExitCode: &exit},
+			}}},
+			Conversation: []llm.Message{{Role: llm.RoleTool, ToolCallID: "ruff", Content: printed}, {Role: llm.RoleTool, ToolCallID: "pytest", Content: "3 passed"}},
+		}}
+	}
+	const missing = "ruff check could not run: its checker is not installed"
+	for printed, want := range map[string]string{
+		"error: Failed to spawn: `ruff`\n  Caused by: No module named ruff": missing,
+		"bash: ruff: command not found":                                     missing,
+		"'ruff' is not recognized as an internal or external command":       missing,
+		"All checks passed!": "",
+	} {
+		if missed := strings.Join(gateMissed("", nil, pyDev, nil, round(printed)), "; "); missed != want {
+			t.Errorf("%q: the gate said %q, want %q", printed, missed, want)
+		}
+	}
+}
+
 func typecheckRound(content string) []Row {
 	call := ToolCallRow{Call: "tc", Tool: "typecheck", Command: "web/src", Args: json.RawMessage(`{"path":"web/src"}`), Error: "typecheck: tsc, errors in src: 1, in other files: 0"}
 	return []Row{{

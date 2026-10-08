@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"strconv"
@@ -79,8 +80,23 @@ func (b Budget) Tokens(cfg Config, c Conversation) int {
 	return max(estimated, b.reported+estimated-b.reportedAt)
 }
 
+func (b Budget) Ceiling() int {
+	return cmp.Or(b.CeilingTokens, konst.ContextCeilingTokens)
+}
+
 func (b Budget) Crossed(cfg Config, c Conversation) bool {
 	return b.Tokens(cfg, c) > b.Bands.Target()
+}
+
+type CeilingTooLow struct {
+	CeilingTokens int
+	PromptTokens  int
+	LeastTokens   int
+}
+
+func (c *CeilingTooLow) Error() string {
+	return fmt.Sprintf("a %d token context ceiling is below the first request: the system prompt and tools are about %d tokens and the task brings it to %d, so the ceiling has to be at least %d",
+		c.CeilingTokens, c.PromptTokens, c.LeastTokens, c.LeastTokens)
 }
 
 type OverWindow struct {

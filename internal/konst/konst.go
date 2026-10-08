@@ -2,6 +2,8 @@ package konst
 
 const Version = "0.5.7-fix2"
 
+const GateAskArgsBytes = 4096
+
 const RecipeFailuresAside = 2
 
 const RecipesPerTask = 2
@@ -36,6 +38,7 @@ const (
 
 	CarrySaidBytes        = 24000
 	CarrySaidMessageBytes = 4000
+	CarryLastWordBytes    = 16000
 
 	ForkTailTokens      = 20000
 	ForkTailRoomPercent = 50
