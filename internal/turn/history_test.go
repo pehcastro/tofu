@@ -277,7 +277,7 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 }
 
 func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing.T) {
-	budget := recall.Budget{}.At(6300, "a small budget to fork under")
+	budget := recall.Budget{}.At(6300+konst.ImageTokens*100/konst.ContextForkPercentOfUsable, "a small budget to fork under, with room for the task's picture")
 	small, large := strings.Repeat("a line of the parser\n", 10), strings.Repeat("a line of the parser\n", 300)
 	head := []llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "fix the parser", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}
 	history := func(steps ...[]llm.Message) []llm.Message {

@@ -3,7 +3,6 @@ package recall
 import (
 	"cmp"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 const (
 	factMark      = "fact: "
 	factSourceEnd = " :: "
+	factCall      = ", call "
 	factArtifact  = ", artifact "
 	factSignpost  = ", it came back: "
 	factBytes     = " bytes"
@@ -23,8 +23,11 @@ func factHead(tool, source string, bytes int) string {
 	return factMark + source + factSourceEnd + tool + ", " + strconv.Itoa(bytes) + factBytes
 }
 
-func factLine(tool, source string, bytes int, handle, signpost string) string {
+func factLine(tool, source string, bytes int, call, handle, signpost string) string {
 	line := factHead(tool, source, bytes)
+	if call != "" {
+		line += factCall + call
+	}
 	if handle != "" {
 		line += factArtifact + handle
 	}
@@ -71,7 +74,7 @@ func sourceOf(entry Entry, fetched map[string]string) string {
 	if json.Unmarshal([]byte(args), &parsed) != nil {
 		return whole
 	}
-	return cmp.Or(parsed.Path, fetched[parsed.Handle], parsed.Handle, parsed.Pattern, parsed.Command, stableURL(parsed.URL), shownPage(entry), whole)
+	return cmp.Or(parsed.Path, fetched[parsed.Handle], parsed.Handle, parsed.Pattern, oneLine(parsed.Command, konst.CarrySignpostBytes), stableURL(parsed.URL), shownPage(entry), whole)
 }
 
 func shownPage(entry Entry) string {
@@ -147,8 +150,8 @@ func signpostOf(text, source string, limit int) string {
 }
 
 func worthKeeping(entry Entry) bool {
-	return entry.Tool != "" && entry.SupersedeKey != "" &&
-		strings.TrimSpace(entry.Text) != "" && !AlreadyDropped(entry.Text)
+	return entry.Tool != "" && entry.SupersedeKey != "" && !slices.Contains(strings.Fields(konst.CarryNotLookups), entry.Tool) &&
+		strings.TrimSpace(entry.Text) != "" && (entry.Call != "" || !AlreadyDropped(entry.Text))
 }
 
 func knownFacts(c Conversation) []string {
@@ -200,26 +203,22 @@ func Distil(store *Store, c Conversation, signpostBytes int) ([]string, []Carrie
 		if !worthKeeping(entry) || newest[sources[i]] != i {
 			continue
 		}
-		source, signpost := sources[i], signpostOf(entry.Text, sources[i], signpostBytes)
+		source, signpost := sources[i], ""
+		if !AlreadyDropped(entry.Text) {
+			signpost = signpostOf(entry.Text, source, signpostBytes)
+		}
 		handle := entry.Handle
 		standing, known := at[source]
 		if known && headOf(sheet[standing]) == factHead(entry.Tool, source, len(entry.Text)) {
 			handle = cmp.Or(handle, factHandle(sheet[standing]))
 		} else {
-			if handle == "" {
-				put, err := store.put([]byte(entry.Text))
-				if err != nil {
-					return nil, nil, fmt.Errorf("recall: the %s result from step %d could not be kept as a fact: %w", entry.Tool, entry.Step, err)
-				}
-				handle = put
-			}
 			if known {
 				sheet[standing] = ""
 			}
-			sheet = append(sheet, factLine(entry.Tool, source, len(entry.Text), handle, signpost))
+			sheet = append(sheet, factLine(entry.Tool, source, len(entry.Text), entry.Call, handle, signpost))
 			at[source] = len(sheet) - 1
 		}
-		kept = append(kept, CarriedResult{Tool: entry.Tool, Key: source, Bytes: len(entry.Text), Handle: handle, Signpost: signpost})
+		kept = append(kept, CarriedResult{Tool: entry.Tool, Key: source, Bytes: len(entry.Text), Call: entry.Call, Handle: handle, Signpost: signpost})
 	}
 	sheet = slices.DeleteFunc(sheet, func(line string) bool { return line == "" })
 	if len(sheet) > konst.FactSheetLines {

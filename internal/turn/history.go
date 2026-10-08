@@ -54,16 +54,16 @@ func historyOf(messages []llm.Message) recall.Conversation {
 		if message.Role == llm.RoleAssistant {
 			step++
 		}
-		entry := recall.Entry{Step: step, Text: message.Content}
+		entry := recall.Entry{Step: step, Text: message.Content, Images: len(message.Images)}
 		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && slices.Contains([]string{sourceTask, sourceTyped, sourceSteer}, message.Origin.Source) {
 			entry.Said = task
 		}
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
-			entry.Text += "\n" + call.Name + " " + string(call.Arguments)
+			entry.Calls += "\n" + call.Name + " " + string(call.Arguments)
 		}
 		if call, answered := calls[message.ToolCallID]; answered {
-			entry.Tool, entry.SupersedeKey, entry.Handle = call.Name, call.Name+" "+string(call.Arguments), shrunkHandle(message.Content)
+			entry.Tool, entry.Call, entry.SupersedeKey, entry.Handle = call.Name, call.ID, call.Name+" "+string(call.Arguments), shrunkHandle(message.Content)
 		}
 		conversation.Entries = append(conversation.Entries, entry)
 	}
@@ -177,6 +177,7 @@ type shrinkCause string
 const (
 	causeOverflow shrinkCause = "the context window overflowed"
 	causeCompact  shrinkCause = "/compact ran"
+	causeBudget   shrinkCause = "the conversation crossed its context budget"
 )
 
 func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, windowTokens int) (overflowShrink, error) {
@@ -247,6 +248,15 @@ func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int,
 		lastStep--
 	}
 	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
+	for i, message := range messages[:max(lastStep, 0)] {
+		if estimate <= target {
+			break
+		}
+		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+			estimate -= dropPicture(&messages[i]) - artifacts.preview.Tokens("\n"+pictureDropped)
+			shrink.results++
+		}
+	}
 	names := make(map[string]string)
 	for i, message := range messages[:max(lastStep, 0)] {
 		for _, call := range message.ToolCalls {
@@ -283,8 +293,32 @@ func shrunkNote(artifacts Artifacts, tool, result string, cause shrinkCause) (st
 		": it was shrunk when " + string(cause) + ". call artifact_fetch with that handle, an offset and a length to read any range of it.", nil
 }
 
+const pictureDropped = "the picture read here was seen when this result came back and was dropped later to save room; read the file again to see it"
+
+func dropPicture(message *llm.Message) int {
+	freed := len(message.Images) * konst.ImageTokens
+	message.Images, message.Content = nil, message.Content+"\n"+pictureDropped
+	return freed
+}
+
+func keepNewestPictures(messages []llm.Message) {
+	kept := 0
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != llm.RoleTool || len(messages[i].Images) == 0 {
+			continue
+		}
+		if kept++; kept > konst.ImageResultsKept {
+			dropPicture(&messages[i])
+		}
+	}
+}
+
 func HistoryTokens(preview recall.Config, messages []llm.Message) int {
-	return len(messages)*konst.MessageFramingTokens + messagesBytes(messages)*1000/preview.BytesPerThousandTokens
+	pictures := 0
+	for _, message := range messages {
+		pictures += len(message.Images)
+	}
+	return len(messages)*konst.MessageFramingTokens + messagesBytes(messages)*1000/preview.BytesPerThousandTokens + pictures*konst.ImageTokens
 }
 
 func messagesBytes(messages []llm.Message) int {
@@ -379,49 +413,80 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 		kind = ForkContinuation
 	}
 	started := time.Now()
-	counted := "this is fork " + strconv.Itoa(number)
+	counted := forkCounted + strconv.Itoa(max(number, forkNumberIn(messages)+1))
 	if most > 0 {
 		counted += " of at most " + strconv.Itoa(most) + ", and the turn stops at the cap"
 	}
-	var opening []llm.Message
+	isTask := func(message llm.Message) bool {
+		return message.Role == llm.RoleUser && message.Origin.Source != sourceForkCarry && task != "" && strings.Contains(message.Content, task)
+	}
+	var system []llm.Message
 	var shown []llm.Image
 	for _, message := range messages {
 		switch {
 		case message.Role == llm.RoleSystem:
-			opening = append(opening, message)
-		case message.Role == llm.RoleUser && task != "" && strings.Contains(message.Content, task):
+			system = append(system, message)
+		case isTask(message):
 			shown = message.Images
 		}
 	}
-	opening = append(opening, llm.Message{Role: llm.RoleUser, Content: task, Images: shown, Origin: llm.Origin{Source: sourceForkTask, TakenAt: started}})
-	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, error) {
+	opening := llm.Message{Role: llm.RoleUser, Content: task, Images: shown, Origin: llm.Origin{Source: sourceForkTask, TakenAt: started}}
+	carried := func(tail []llm.Message) ([]llm.Message, recall.Carry, int, error) {
+		if at := slices.IndexFunc(tail, isTask); at >= 0 {
+			tail = tail[at:]
+		}
+		tail = slices.Clone(tail)
+		for i := range tail {
+			tail[i].Thinking = llm.Thinking{}
+		}
 		ended.HeldWhole = len(tail)
 		carry, err := recall.DistilledCarry(artifacts.store, artifacts.preview, ended)
 		carry.Text = counted + ".\n" + carry.Text
-		return slices.Concat(opening, []llm.Message{{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: sourceForkCarry, TakenAt: started}}}, tail), carry, err
+		said := llm.Message{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: sourceForkCarry, TakenAt: started}}
+		if len(tail) > 0 && isTask(tail[0]) {
+			return slices.Concat(system, tail[:1], []llm.Message{said}, tail[1:]), carry, len(tail), err
+		}
+		return slices.Concat(system, []llm.Message{opening, said}, tail), carry, len(tail), err
 	}
-	begun, carry, err := carried(nil)
+	begun, carry, held, err := carried(nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	room := (budget.Bands.Target() - budget.Tokens(artifacts.preview, historyOf(begun))) * konst.ForkTailRoomPercent / 100
 	if tail := messages[tailStart(artifacts.preview, messages, room):]; len(tail) > 0 {
-		kept, keptCarry, err := carried(tail)
+		kept, keptCarry, keptTail, err := carried(tail)
 		if err != nil {
 			return nil, nil, err
 		}
 		if !budget.Crossed(artifacts.preview, historyOf(kept)) {
-			begun, carry = kept, keptCarry
+			begun, carry, held = kept, keptCarry, keptTail
 		}
+	}
+	before, after := budget.Tokens(artifacts.preview, ended), budget.Tokens(artifacts.preview, historyOf(begun))
+	if forced == "" && after >= before {
+		return nil, messages, nil
 	}
 	return &Fork{
 		Kind:          kind,
-		TokensBefore:  budget.Tokens(artifacts.preview, ended),
-		TokensAfter:   budget.Tokens(artifacts.preview, historyOf(begun)),
+		TokensBefore:  before,
+		TokensAfter:   after,
 		BlockedMicros: time.Since(started).Microseconds(),
-		TailMessages:  len(begun) - len(opening) - 1,
+		TailMessages:  held,
 		Carry:         carry,
 	}, begun, nil
+}
+
+const forkCounted = "this is fork "
+
+func forkNumberIn(messages []llm.Message) int {
+	newest := 0
+	for _, message := range messages {
+		number := 0
+		if _, err := fmt.Sscanf(message.Content, forkCounted+"%d", &number); err == nil && message.Role == llm.RoleUser {
+			newest = max(newest, number)
+		}
+	}
+	return newest
 }
 
 func tailStart(preview recall.Config, messages []llm.Message, room int) int {
@@ -445,26 +510,14 @@ func tailStart(preview recall.Config, messages []llm.Message, room int) int {
 	return start
 }
 
-func compactHistory(artifacts Artifacts, budget recall.Budget, step int, messages []llm.Message) (*Compaction, error) {
-	before := historyOf(messages)
-	tokensBefore := recall.Measure(artifacts.preview, budget.Bands, before).Total()
-	after, drops, err := recall.Compact(artifacts.store, artifacts.preview, budget.Bands, before)
-	if err != nil {
-		return nil, err
+func trimRead(artifacts Artifacts, budget recall.Budget, step int, messages []llm.Message) (*Compaction, overflowShrink, error) {
+	tokens := budget.Tokens(artifacts.preview, historyOf(messages))
+	if tokens <= budget.Bands.Target() {
+		return nil, overflowShrink{}, nil
 	}
-	if len(drops) == 0 {
-		return nil, nil
+	shrink, err := shrinkTo(artifacts, messages, tokens, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100, causeBudget)
+	if err != nil || shrink.results == 0 {
+		return nil, shrink, err
 	}
-	offset := len(messages) - len(after.Entries)
-	for i, entry := range after.Entries {
-		if entry.Handle != "" {
-			messages[offset+i].Content = entry.Text
-		}
-	}
-	return &Compaction{
-		Step:         step,
-		TokensBefore: tokensBefore,
-		TokensAfter:  recall.Measure(artifacts.preview, budget.Bands, after).Total(),
-		Drops:        drops,
-	}, nil
+	return &Compaction{Step: step, TokensBefore: tokens, TokensAfter: budget.Tokens(artifacts.preview, historyOf(messages))}, shrink, nil
 }

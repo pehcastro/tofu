@@ -124,7 +124,7 @@ func TestACarryBesideAHeldTailRepeatsNothingTheTailHoldsAndKeepsWhatItDropped(t 
 func TestAPageReadTwiceUnderAFreshRefFsidAndItsArtifactFetchKeyAsOnePage(t *testing.T) {
 	page := "https://www.airbnb.com/s/Atibaia/homes?adults=4&place_id=ChIJ&ref_fsid="
 	observe := func(step int, fsid string) recall.Entry {
-		return recall.Entry{Step: step, Tool: "browser_observe", SupersedeKey: `browser_observe {"tab":1}`,
+		return recall.Entry{Step: step, Tool: "browser_observe", SupersedeKey: `browser_observe {"tab":1}`, Handle: "held-" + fsid,
 			Text: web.Untrusted("Chrome tab 1", "tab 1 "+page+fsid+" \"Atibaia\"\n- heading \"Houses in Atibaia\"")}
 	}
 	store := recall.NewStore(t.TempDir())

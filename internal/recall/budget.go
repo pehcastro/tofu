@@ -41,10 +41,17 @@ func (b Bands) Target() int {
 type Entry struct {
 	Step         int
 	Tool         string
+	Call         string
 	SupersedeKey string
 	Text         string
 	Handle       string
 	Said         string
+	Images       int
+	Calls        string
+}
+
+func (e Entry) tokens(cfg Config) int {
+	return cfg.MessageTokens(e.Text) + cfg.Tokens(e.Calls) + e.Images*konst.ImageTokens
 }
 
 type Conversation struct {
@@ -104,10 +111,10 @@ func Measure(cfg Config, bands Bands, c Conversation) Occupancy {
 	recent := recentFrom(cfg, bands, c.Entries)
 	for i, entry := range c.Entries {
 		if i < recent {
-			occupancy.WorkingSet += cfg.MessageTokens(entry.Text)
+			occupancy.WorkingSet += entry.tokens(cfg)
 			continue
 		}
-		occupancy.Recent += cfg.MessageTokens(entry.Text)
+		occupancy.Recent += entry.tokens(cfg)
 	}
 	return occupancy
 }
@@ -119,7 +126,7 @@ func recentFrom(cfg Config, bands Bands, entries []Entry) int {
 	newestStep := entries[len(entries)-1].Step
 	tokens := 0
 	for i := len(entries) - 1; i >= 0; i-- {
-		tokens += cfg.MessageTokens(entries[i].Text)
+		tokens += entries[i].tokens(cfg)
 		if tokens > bands.Recent && entries[i].Step != newestStep {
 			return i + 1
 		}

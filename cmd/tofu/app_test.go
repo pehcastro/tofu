@@ -804,11 +804,22 @@ func TestADrivenTurnNamesTheSessionAndItsIDInTheHeader(t *testing.T) {
 	}
 }
 
+func overBudgetNoteThenStop() *queuedModel {
+	bulk, err := json.Marshal(map[string]string{"path": "note.txt", "content": strings.Repeat("x", recall.ShippedBands().Target()*3)})
+	if err != nil {
+		panic(err)
+	}
+	return &queuedModel{decisions: []llm.Decision{
+		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "write", Arguments: bulk}}},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "goal: write the note. done: written. next: say so"},
+		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"},
+	}}
+}
+
 func TestAForkLeavesALineOnTheScreenAPersonCanRead(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
-	overBudget := strings.Repeat("x", recall.ShippedBands().Target()*3)
-	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, overBudget, driver.emit)
+	stubbedTurn(dir, overBudgetNoteThenStop())(t.Context(), onTheSubscription, "write the note", driver.emit)
 
 	screen := driver.view()
 	if !strings.Contains(screen, "forked into ") {
@@ -848,8 +859,7 @@ func forkingStep(t *testing.T, store *sessionstore.Store) (string, turn.StepRow)
 func TestTheBarShowsTheRequestAsSentAndTheForkDecidedOnWhatCameBackAfterIt(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
-	overBudget := strings.Repeat("x", recall.ShippedBands().Target()*3)
-	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, overBudget, driver.emit)
+	stubbedTurn(dir, overBudgetNoteThenStop())(t.Context(), onTheSubscription, "write the note", driver.emit)
 
 	store, err := sessionstore.Open()
 	if err != nil {

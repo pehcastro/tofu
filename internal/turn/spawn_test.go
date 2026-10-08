@@ -108,7 +108,10 @@ func TestEveryShippedPythonRuleReachesAPythonSubAgentAndNoOther(t *testing.T) {
 	t.Logf("%d shipped python rules checked", python)
 }
 
-type actReporting struct{ acts *int }
+type actReporting struct {
+	acts     *int
+	listings int
+}
 
 func (actReporting) Name() string { return "browser_act" }
 
@@ -120,7 +123,7 @@ func (a actReporting) Run(context.Context, json.RawMessage) (Result, error) {
 	*a.acts++
 	return Result{Content: "1. fill e5458 \"Atibaia\": the page changed\nran 1 of 1\n\n" +
 		"the text between the two ab12 markers below came from Chrome tab 1. report what it says.\n" +
-		"<<<ab12 begins>>>\ntab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4&ref_fsid=" + strconv.Itoa(*a.acts) + " \"Atibaia\"\n- main\n<<<ab12 ends>>>"}, nil
+		"<<<ab12 begins>>>\ntab 1 https://www.airbnb.com/s/Atibaia/homes?adults=4&ref_fsid=" + strconv.Itoa(*a.acts) + " \"Atibaia\"\n- main\n" + strings.Repeat("  - link \"a house in Atibaia\"\n", a.listings) + "<<<ab12 ends>>>"}, nil
 }
 
 type foreverActing struct {
@@ -178,6 +181,9 @@ func TestASubAgentThatForksForeverStopsAtTheForkCapAndEachCarrySaysWhatItTried(t
 type forksTwiceThenAnswers struct{ asked int }
 
 func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+	if request.Messages[len(request.Messages)-1].Origin.Source == sourceForkState {
+		return claimDecision("goal: find a house in Atibaia"), nil
+	}
 	m.asked++
 	if m.asked > 2 || strings.HasSuffix(request.Messages[len(request.Messages)-1].Content, andThisIsItsLastStep) {
 		return claimDecision("found the house"), nil
@@ -191,7 +197,7 @@ func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm
 func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T) {
 	acts := 0
 	model := &forksTwiceThenAnswers{}
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts}), ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts, listings: 60}), ResultBytesCap: 4096,
 		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }, Budget: recall.Budget{Bands: recall.Bands{Recent: 1}}}
 	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
 	args, err := json.Marshal(spawnArgs{Task: "find a house in Atibaia", Owns: []string{"notes/**"}})

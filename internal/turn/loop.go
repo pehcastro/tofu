@@ -52,7 +52,7 @@ const (
 
 func gateExempt(tool string) bool {
 	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName ||
-		tool == RuleOverrideToolName || tool == RememberToolName
+		tool == RuleOverrideToolName || tool == RememberToolName || tool == LookupToolName
 }
 
 type Caps struct {
@@ -218,6 +218,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if source == nil {
 		source = func() Registry { return config.Tools }
 	}
+	var recorded *record
 	withLoopTools := func(tools []Tool) []Tool {
 		added := slices.Clone(tools)
 		for _, tool := range tools {
@@ -227,6 +228,9 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		if handles {
 			added = append(added, artifacts.FetchTool())
+		}
+		if config.Sessions != nil {
+			added = append(added, lookupTool{sessions: config.Sessions, current: func() string { return recorded.session() }})
 		}
 		if config.SpawnedFrom != "" && strings.Contains(config.System, referencesOnDemand) {
 			added = append(added, referenceTool{held: config.References})
@@ -269,7 +273,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools}
 
-	recorded, err := openRecord(config, row)
+	recorded, err = openRecord(config, row)
 	if err != nil {
 		return Row{}, err
 	}
@@ -357,7 +361,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		sent = max(sent, len(messages))
 	}
-	ask := func(why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
+	ask := func(ctx context.Context, why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
 		tapped, tap := llm.Tapped(ctx)
 		decision, timing, err := askCountingAttempts(tapped, model, request)
@@ -374,6 +378,43 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if said := fire(hook.Input{Event: hook.SessionStart, Source: sessionSourceCompact}).Context; said != "" {
 			messages = append(messages, inserted(sourceSessionStartHook, said, time.Time{}))
 		}
+	}
+	trim := func(step int, when string) (*Compaction, error) {
+		if config.NoCompaction || !budget.Automatic {
+			return nil, nil
+		}
+		before := slices.Clone(messages)
+		compaction, shrink, err := trimRead(artifacts, budget, step, messages)
+		if compaction != nil {
+			recorded.listChange("compaction", when+": the conversation crossed its budget, so tofu "+shrink.String(), before, messages)
+			compacted()
+		}
+		return compaction, err
+	}
+	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) string {
+		request := llm.Request{Messages: append(slices.Clone(beforeFork), inserted(sourceForkState, forkStateAsk(), time.Time{})), Tools: tools}
+		if len(tools) > 0 {
+			request.ToolChoice = llm.ToolChoiceNone
+		}
+		decision, timing, id, err := ask(context.WithValue(ctx, quietAskKey{}, true), "the working state the fork carries", request)
+		row.TotalCostUSD += decision.Usage.Cost
+		if err == nil {
+			spent := stepFrom(id, step, timing, decision)
+			spent.AssistantText = ""
+			recorded.step(spent)
+		}
+		state, missing := "", ""
+		switch {
+		case err != nil:
+			missing = "the fork carries no working state, because asking for it failed: " + err.Error()
+		case decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "":
+			missing = "the fork carries no working state, because the model answered with none"
+		default:
+			state = runeSafeHead(strings.TrimSpace(decision.Content), konst.ForkStateBytes)
+		}
+		carryState(fork, begun, state, row.Session)
+		fork.TokensAfter = budget.Tokens(artifacts.preview, historyOf(begun))
+		return missing
 	}
 	keep := func(step StepRow) {
 		flush()
@@ -429,7 +470,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if len(request.Tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
-		decision, timing, id, err := ask("the last word: "+lead, request)
+		decision, timing, id, err := ask(ctx, "the last word: "+lead, request)
 		row.TotalCostUSD += decision.Usage.Cost
 		if err != nil {
 			row.Warnings = append(row.Warnings, lead+", and the last answer was not obtained: "+err.Error())
@@ -553,6 +594,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return fail(err)
 		}
 		budget = budget.Sending(artifacts.preview, string(schemas))
+		if step == 1 && len(config.History) > 0 {
+			if _, err := trim(step, "before step 1"); err != nil {
+				return fail(err)
+			}
+		}
 		if step == 1 && !config.NoFork && len(config.History) > 0 {
 			beforeFork := slices.Clone(messages)
 			fork, begun, err := forkHistory(artifacts, budget, config.FirstUserMessage(), messages, "", forks+1, config.Caps.MaxForks)
@@ -562,11 +608,16 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			if fork != nil {
 				forks++
 				fork.Into = origin + "-f" + strconv.Itoa(forks+1)
+				missing := stateCarried(fork, step, beforeFork, begun, definitions)
 				forkInto(fork, "before step 1", beforeFork, begun, nil)
+				if missing != "" {
+					row.Warnings = append(row.Warnings, missing)
+				}
 			}
 		}
+		keepNewestPictures(messages)
 		asSent := recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-		decision, timing, requestID, err := ask("step "+strconv.Itoa(step), llm.Request{Messages: messages, Tools: definitions})
+		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), llm.Request{Messages: messages, Tools: definitions})
 		if overflowed(err) {
 			before := slices.Clone(messages)
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
@@ -584,7 +635,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					config.Notify(told)
 				}
 				asSent = recall.Measure(artifacts.preview, budget.Bands, historyOf(messages))
-				decision, timing, requestID, err = ask("step "+strconv.Itoa(step)+", asked again after the overflow shrink", llm.Request{Messages: messages, Tools: definitions})
+				decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again after the overflow shrink", llm.Request{Messages: messages, Tools: definitions})
 				if overflowed(err) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
 				}
@@ -753,7 +804,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				}
 				for i := range answers {
 					if memoHits[i] {
-						answers[i].Content = pointAtCopy(answers[i], messages, answers[:i])
+						answers[i].Content, answers[i].Images = pointAtCopy(answers[i], messages, answers[:i]), nil
 						rows[i].RenderedBytes = len(answers[i].Content)
 					}
 				}
@@ -804,6 +855,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				keep(stepRow)
 				return finish(OutcomeStopped), nil
 			}
+			if stepRow.Compaction, err = trim(step, "after step "+strconv.Itoa(step)); err != nil {
+				keep(stepRow)
+				return fail(err)
+			}
 			if !config.NoFork {
 				var moved *Account
 				forced := ForkKind("")
@@ -834,23 +889,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				if fork != nil {
 					forks++
 					fork.Step, fork.Into = step, origin+"-f"+strconv.Itoa(forks+1)
+					missing := stateCarried(fork, step, beforeFork, begun, definitions)
 					stepRow.Fork = fork
 					keep(stepRow)
 					forkInto(fork, "after step "+strconv.Itoa(step), beforeFork, begun, moved)
+					if missing != "" {
+						row.Warnings = append(row.Warnings, missing)
+					}
 					continue
-				}
-			}
-			if !config.NoCompaction && budget.Automatic {
-				beforeCompaction := slices.Clone(messages)
-				compaction, err := compactHistory(artifacts, budget, step, messages)
-				if err != nil {
-					keep(stepRow)
-					return fail(err)
-				}
-				stepRow.Compaction = compaction
-				if compaction != nil {
-					recorded.listChange("compaction", "after step "+strconv.Itoa(step), beforeCompaction, messages)
-					compacted()
 				}
 			}
 			keep(stepRow)
@@ -1123,6 +1169,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		ToolOutcome:     outcome,
 		ToolResultBytes: row.ResultBytes,
 		ToolExitCode:    row.ExitCode,
+		Images:          result.Images,
 	}, result.Repeat
 }
 

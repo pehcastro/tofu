@@ -12,7 +12,8 @@ import (
 
 func TestASubAgentWritingAfterTheLeadForksKeepsEveryEventInTheSessionLog(t *testing.T) {
 	model := newCrew(map[string][]llm.Decision{
-		leadKey:    {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
+		leadKey: {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("goal: add the users route"), claimDecision("sub-1 is on it"),
+			claimDecision("goal: add the users route, sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 1)
@@ -20,6 +21,7 @@ func TestASubAgentWritingAfterTheLeadForksKeepsEveryEventInTheSessionLog(t *test
 	store, first := session.NewStore(t.TempDir()), session.NewEventID()
 	lead := crewLead(t, model)
 	lead.Sessions, lead.Session, lead.Budget = store, first, recall.Budget{Bands: recall.Bands{Recent: 1}}
+	lead.Tools = NewRegistry(sizedRead{bytes: map[string]int{"notes.txt": 20000}}, lead.Tools.byName["spawn"])
 	led := startLead(context.Background(), lead, nil)
 	waitFor(t, "the lead's first turn to fork and end", func() bool { return len(led.turns()) == 1 })
 	if forked := led.turns()[0]; forked.Session == first {

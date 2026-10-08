@@ -1,12 +1,12 @@
 ---
 title: Context
-description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry handles instead of text.
+description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry the working state and point back at every call.
 order: 5
 updated: 2026-10-07
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
-that in eight layers, each in the code of the loop, not in the model's
+that in ten layers, each in the code of the loop, not in the model's
 judgment:
 
 | Layer | What it does |
@@ -17,8 +17,10 @@ judgment:
 | **Middle elision** | What the model reads of a large result is its two ends, with a marker saying how many bytes were left out and where they are |
 | **Memo of repeated calls** | A read, glob, search or fetch repeated in a turn, with nothing written since, is answered from memory |
 | **Browser pages** | Past 4 whole page snapshots in a conversation, older ones shrink to a 600 byte summary and a handle, keeping 2 whole |
-| **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task, every message you typed, word for word, and a carry of what was read, as handles |
-| **Recall** | `artifact_fetch` reads any range of any handle, so nothing that left the conversation is lost |
+| **Trim before fork** | When the conversation crosses the target, results the model has already read are shrunk to a handle, pictures first and then oldest first, down to 80% of the target, and the fork comes only if that is not enough |
+| **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task once, the working state the model wrote at the fork, every message you typed, word for word, and a list of what was read, each naming the call that holds it |
+| **Recall** | `lookup` returns any call the carry names, with its result, from any session of the line; `artifact_fetch` reads any range of any handle |
+| **Pictures** | A picture a tool read counts as 1,600 tokens, only the newest 20 are sent, and a shrink drops pictures, oldest first, before any text |
 
 **A full window** is recovered in the turn. When the model says a request is
 over its window, tofu shrinks the oldest tool results to their handles and
@@ -52,12 +54,23 @@ the result bytes the model read by 88.4%.
 repeat answers with `cached:` and the earlier result. Any write, edit or shell
 call clears the memo, so a cached answer is never stale.
 
-**Forks instead of summaries.** A summary written by the model loses what it
-didn't think mattered. A fork keeps the old session whole on disk and hands
-the new one a list of what was read, each with its handle, and the last thing
-said. A fork shrank one session from 66,162 tokens to 17,865 and another from
-57,326 to 7,811, and neither fetched again anything it had dropped. The fork's
-first request read 9,457 and 6,105 tokens from the cache and wrote none.
+**Forks carry the working state, and point back for the rest.** At a fork
+the model writes, on your own subscription, where the work stands: the goal,
+what was decided, what is done and half done, what comes next and what is
+still open. The carry holds that, and a list of what was read, each line
+naming the call that holds it; `lookup` brings back exactly that call and its
+result, from this session or any earlier one of the line, so a file or a
+script is pointed at rather than copied. The task is sent once, and the
+carried steps go without their thinking, so the next turn reads its cache.
+On a driven chain of 30 reads at a 60,000 token ceiling, the share of the
+first 20 reads after a fork that repeated one from just before it went from
+12.0% to 8.7%.
+
+**A trim comes before a fork.** A fork starts a new session and rewrites the
+whole cache, so when the conversation crosses its target tofu first shrinks
+results the model has already read, and forks only when that does not bring
+it under. A result that has just come back is never cut before the model
+reads it.
 
 **Your words are carried, not summarised.** Every fork's carry lists what
 you typed in this line of sessions, oldest first, each message word for
@@ -77,7 +90,8 @@ its first request, so the whole history is never sent first.
   model's window, and the fork comes at 80% of it, 80,000 here, the same as a
   window that size.
 - **Read back a stored result**: the model calls `artifact_fetch` with the
-  handle, an offset and a length. You don't need to.
+  handle, an offset and a length, or `lookup` with a call id from a fork's
+  carry. You don't need to.
 - **Free room before the next turn**: type `/compact` in the app. Every old
   tool result in the history is shrunk to its handle, with no model call,
   and the chat says how many and the tokens before and after. The shrunk

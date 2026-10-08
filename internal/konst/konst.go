@@ -39,6 +39,15 @@ const (
 
 	ForkTailTokens      = 20000
 	ForkTailRoomPercent = 50
+	ForkStateBytes      = 12000
+	ForkStateWords      = 1200
+
+	ContextTrimPercentOfTarget = 80
+
+	ImageTokens      = 1600
+	ImageResultsKept = 20
+
+	CarryNotLookups = "write edit message spawn plan remember rule_override ask settings lookup"
 
 	CarryVolatileQueryKeys = "ref_fsid source_impression_id federated_search_session_id"
 	CarryVolatileQueryPart = "session"

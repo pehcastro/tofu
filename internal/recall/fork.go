@@ -15,12 +15,14 @@ type CarriedResult struct {
 	Tool     string `json:"tool"`
 	Key      string `json:"key"`
 	Bytes    int    `json:"bytes"`
+	Call     string `json:"call,omitempty"`
 	Handle   string `json:"handle"`
 	Signpost string `json:"signpost,omitempty"`
 }
 
 type Carry struct {
 	Text    string          `json:"text"`
+	State   string          `json:"state,omitempty"`
 	Facts   []string        `json:"facts,omitempty"`
 	Said    []string        `json:"said,omitempty"`
 	Results []CarriedResult `json:"results"`
@@ -34,7 +36,7 @@ func Crossed(cfg Config, bands Bands, c Conversation) bool {
 
 const carryPreamble = "this session continues one that reached its context budget and ended. " +
 	"the session that ended is on disk whole and nothing in it was rewritten. " +
-	"every result it read is held whole in an artifact, and artifact_fetch reads any range of one by its handle.\n" +
+	"each line below names the call that holds what it read whole, and lookup returns that call and its result again.\n" +
 	"what this line of sessions has already looked at, oldest first:\n"
 
 const carryLastWord = "the last thing it said or did:\n"
@@ -231,8 +233,21 @@ func oneLine(text string, limit int) string {
 
 func lastWord(c Conversation) (string, int) {
 	for i := len(c.Entries) - 1; i >= 0; i-- {
-		if c.Entries[i].Tool == "" && strings.TrimSpace(c.Entries[i].Text) != "" {
-			return c.Entries[i].Text, i
+		entry := c.Entries[i]
+		if entry.Tool != "" {
+			continue
+		}
+		if strings.TrimSpace(entry.Text) != "" {
+			return entry.Text, i
+		}
+		var called []string
+		for _, call := range strings.Split(strings.TrimSpace(entry.Calls), "\n") {
+			if name, _, _ := strings.Cut(call, " "); name != "" {
+				called = append(called, name)
+			}
+		}
+		if len(called) > 0 {
+			return "it called " + strings.Join(called, ", ") + "\n", i
 		}
 	}
 	return "", -1
