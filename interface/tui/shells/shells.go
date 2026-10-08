@@ -71,6 +71,7 @@ type Entry struct {
 	Dir      string
 	Owner    string
 	Log      string
+	OneShot  bool
 }
 
 type cache struct {

@@ -55,10 +55,12 @@ answers. This page is what serve sends without being asked.
 - `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
   so history after a seq is a read of the log; a tool call's notice names the
   item of its `tool.started`
-- `decision`: every gate, with `at`, when it was judged, `call`, the item
-  of the `tool.started` it judged, and
-  `tofu/requestApproval`, a request, when a gate asks you;
-  `approval.resolved` says which answer won and who sent it
+- `decision`: every gate, with `at`, when it was judged, `call`, the item of
+  the `tool.started` it judged, and `tofu/requestApproval`, a request, when a
+  gate asks you; `approval.resolved` says which answer won and who sent it
+- `shell.started`: only a kept shell, never a one-shot, with `kept`
+  (`background` or `moved`), `dir`, `port`, `ready` and `leftOver`; every one
+  ends in `shell.exited` with `endedAt`, and `exitCode` when tofu saw it
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never
   waits; `session.state` answers it
 - `tofu serve --schema` prints the JSON Schema of every line written, and of

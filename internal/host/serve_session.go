@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"tofu/internal/llm"
+	"tofu/internal/shell"
 	"tofu/internal/sys"
 )
 
@@ -90,8 +91,9 @@ func (s *server) shellsNow() []ShellNow {
 	}
 	found, _ := s.Shells.List()
 	mask := sys.LoadKeyRedactor().Redact
-	for _, one := range found {
-		now = append(now, ShellNow{Shell: one.Name, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended})
+	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
+		now = append(now, ShellNow{Shell: one.Name, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
+			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver()})
 	}
 	return now
 }

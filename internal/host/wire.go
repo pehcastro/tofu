@@ -277,10 +277,27 @@ type AgentEnded struct {
 
 type ShellStarted struct {
 	Identity
-	Shell     string    `json:"shell"`
-	Command   string    `json:"command"`
-	PID       int       `json:"pid"`
-	StartedAt time.Time `json:"startedAt"`
+	Shell     string     `json:"shell"`
+	Command   string     `json:"command"`
+	PID       int        `json:"pid"`
+	StartedAt time.Time  `json:"startedAt"`
+	Kept      ShellKept  `json:"kept,omitempty"`
+	Dir       string     `json:"dir"`
+	Port      int        `json:"port,omitempty"`
+	Ready     ShellReady `json:"ready,omitempty"`
+	LeftOver  bool       `json:"leftOver,omitempty"`
+}
+
+type ShellKept string
+
+func (ShellKept) enum() []string {
+	return []string{string(shell.KeptBackground), string(shell.KeptMoved)}
+}
+
+type ShellReady string
+
+func (ShellReady) enum() []string {
+	return []string{string(shell.ReadyPort), string(shell.ReadyLine), string(shell.ReadyWaited), string(shell.ReadyStopped)}
 }
 
 type ShellOutput struct {
@@ -605,6 +622,11 @@ type ShellNow struct {
 	StartedAt time.Time  `json:"startedAt"`
 	ExitCode  *int       `json:"exitCode,omitempty"`
 	EndedAt   *time.Time `json:"endedAt,omitempty"`
+	Kept      ShellKept  `json:"kept,omitempty"`
+	Dir       string     `json:"dir"`
+	Port      int        `json:"port,omitempty"`
+	Ready     ShellReady `json:"ready,omitempty"`
+	LeftOver  bool       `json:"leftOver,omitempty"`
 }
 
 type ShellState string

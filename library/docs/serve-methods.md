@@ -33,8 +33,9 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
 - `session.state`: `running` and its `turn`, `asking`, the `pick` of wire,
-  model and effort, waiting approvals, sub-agents, shells, the context window
-  and the cron jobs; it is the answer to `resync`
+  model and effort, waiting approvals, sub-agents, the kept shells with the
+  fields `shell.started` carries, the context window and the cron jobs; it is
+  the answer to `resync`
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
   turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family

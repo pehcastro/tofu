@@ -587,6 +587,7 @@ func (s *server) pollQuota(quit <-chan struct{}) {
 
 type watchedShell struct {
 	state     shell.State
+	owner     string
 	announced bool
 	sent      int
 	cursor    shell.Cursor
@@ -625,14 +626,17 @@ func (s *server) watchShells(quit <-chan struct{}) {
 
 func (s *server) scanShells(first bool) {
 	found, err := s.Shells.List()
-	if err != nil || len(found) == 0 {
+	if err != nil {
 		return
 	}
 	mask := sys.LoadKeyRedactor().Redact
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, one := range found {
+	listed := map[string]bool{}
+	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
+		listed[one.Name] = true
 		watched := s.watched(one.Name)
+		watched.owner = one.Owner
 		if watched.announced && watched.state != shell.Running || !watched.announced && first && one.State != shell.Running {
 			watched.announced, watched.state = true, one.State
 			continue
@@ -640,7 +644,8 @@ func (s *server) scanShells(first bool) {
 		id := s.items.identity(one.Owner, one.Name)
 		_ = s.follow(one.Name, watched, mask)
 		if !watched.announced {
-			s.box.push(kept("shell.started", &ShellStarted{Identity: id, Shell: one.Name, Command: mask(one.Command), PID: one.PID, StartedAt: one.Started}))
+			s.box.push(kept("shell.started", &ShellStarted{Identity: id, Shell: one.Name, Command: mask(one.Command), PID: one.PID, StartedAt: one.Started,
+				Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver()}))
 			if first {
 				watched.sent = len(watched.stream)
 			}
@@ -653,6 +658,14 @@ func (s *server) scanShells(first bool) {
 			s.box.push(kept("shell.exited", &ShellExited{Identity: id, Shell: one.Name, ExitCode: one.ExitCode, Killed: one.State == shell.Killed, EndedAt: one.Ended}))
 		}
 		watched.announced, watched.state = true, one.State
+	}
+	for name, watched := range s.shells {
+		if listed[name] || !watched.announced || watched.state != shell.Running {
+			continue
+		}
+		ended := time.Now()
+		s.box.push(kept("shell.exited", &ShellExited{Identity: s.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
+		watched.state = shell.Exited
 	}
 }
 

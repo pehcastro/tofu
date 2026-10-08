@@ -700,5 +700,5 @@ func (a *App) shellActivity() []session.Activity {
 func (a *App) showShells(entries []shells.Entry) {
 	a.printed(entries)
 	a.shells.SetKillConfirm(a.flag(isettings.KillConfirm))
-	a.shells.Set(entries)
+	a.shells.Set(slices.DeleteFunc(slices.Clone(entries), func(entry shells.Entry) bool { return entry.OneShot }))
 }

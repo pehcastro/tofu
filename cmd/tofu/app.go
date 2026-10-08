@@ -479,7 +479,7 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 		}
 		entries := make([]shells.Entry, 0, len(found))
 		for _, one := range found {
-			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: ownerName(one.Owner)}
+			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: ownerName(one.Owner), OneShot: one.OneShot()}
 			switch one.State {
 			case shell.Running:
 				entry.State = shells.Running
