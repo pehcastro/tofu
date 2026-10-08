@@ -84,6 +84,18 @@ under notices with its id, scope and words, and
 `tofu run --show-prompt --dir . "<task>"` prints the block at the end of
 the system message, each line with its `[memory#id]`.
 
+    tofu memory tree log.jsonl --budget 8192
+
+builds a summary tree over a log of items, one json line each with `kind`
+and `text`, and prints its view: recent items whole, older ones as
+one-line summaries of at most 512 bytes. The `memoryModel` setting names
+the subscription model that writes them, `claude-sub/claude-haiku-4-5-20251001`
+by default, never the OpenRouter key. The tree and the view are saved
+beside the log, so a second run makes no model call.
+`tofu memory zoom log.jsonl <id> <n>` opens the line `id+n` into its two
+halves, down to the item itself at `n` 1, and
+`tofu memory recall log.jsonl <regex>` searches the items.
+
 ## Undo it
 
     tofu memory remove m3

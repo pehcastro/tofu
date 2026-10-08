@@ -1,68 +1,69 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     48 declared
+Settings · 2 set                                                     49 declared
 
 Appearance
-  ● theme                   Nord                project
-    density                 comfortable         default
-    animations              subtle              default
-    statusBar               compact             default
-    colorMode               auto                default
+  ● theme                   Nord                                  project
+    density                 comfortable                           default
+    animations              subtle                                default
+    statusBar               compact                               default
+    colorMode               auto                                  default
 
 Interaction
-    composer                standard            default
-    gatePrompt              auto                default
-  ● readBeforeEdit          false               global
-    autoUpdate              true                default
+    composer                standard                              default
+    gatePrompt              auto                                  default
+  ● readBeforeEdit          false                                 global
+    autoUpdate              true                                  default
 
 Context
-    chatShowsTools          false               default
-    agentFeeds              full                default
-    showThinking            true                default
-    thinkingSummary         summarized          default
-    images                  auto                default
-    projectInstructionsCap  32768               default
-    instructionSources      agents-first        default
-    skills                  on                  default
-    memory                  true                default
-    autoMemory              false               default
-    learn                   false               default
+    chatShowsTools          false                                 default
+    agentFeeds              full                                  default
+    showThinking            true                                  default
+    thinkingSummary         summarized                            default
+    images                  auto                                  default
+    projectInstructionsCap  32768                                 default
+    instructionSources      agents-first                          default
+    skills                  on                                    default
+    memory                  true                                  default
+    autoMemory              false                                 default
+    memoryModel             claude-sub/claude-haiku-4-5-20251001  default
+    learn                   false                                 default
 
 Files
-    diffContext             3                   default
-    hyperlinks              auto                default
-    groupByAgent            true                default
+    diffContext             3                                     default
+    hyperlinks              auto                                  default
+    groupByAgent            true                                  default
 
 Shell
-    persistentRegistry      false               default
-    logTail                 500                 default
-    killConfirm             true                default
-    shell                   empty               default
-    foldHidesShell          false               default
+    persistentRegistry      false                                 default
+    logTail                 500                                   default
+    killConfirm             true                                  default
+    shell                   empty                                 default
+    foldHidesShell          false                                 default
 
 Turn
-    decisionCap             0                   default
-    turnMaySpawn            true                default
-    oneTurnPerProject       true                default
-    subAgentsPerTurn        10                  default
-    subAgentDepth           2                   default
-    subAgentCache           1h                  default
-    subAgentCheckSeconds    1800                default
-    subAgentWatchSeconds    600                 default
-    verifySubAgents         true                default
-    agentSources            tofu,agents,claude  default
-    modelTier.genius        empty               default
-    modelTier.smart         empty               default
-    modelTier.worker        empty               default
-    modelTier.dumb          empty               default
+    decisionCap             0                                     default
+    turnMaySpawn            true                                  default
+    oneTurnPerProject       true                                  default
+    subAgentsPerTurn        10                                    default
+    subAgentDepth           2                                     default
+    subAgentCache           1h                                    default
+    subAgentCheckSeconds    1800                                  default
+    subAgentWatchSeconds    600                                   default
+    verifySubAgents         true                                  default
+    agentSources            tofu,agents,claude                    default
+    modelTier.genius        empty                                 default
+    modelTier.smart         empty                                 default
+    modelTier.worker        empty                                 default
+    modelTier.dumb          empty                                 default
 
 Browser
-    browser                 drive               default
-    browserDriver           subagent            default
-    browserSteps            30                  default
-    browserModel            empty               default
-    browserEffort           empty               default
-    browserCursor           true                default
+    browser                 drive                                 default
+    browserDriver           subagent                              default
+    browserSteps            30                                    default
+    browserModel            empty                                 default
+    browserEffort           empty                                 default
+    browserCursor           true                                  default
 
 stored in
   global    ~/.tofu/settings.json

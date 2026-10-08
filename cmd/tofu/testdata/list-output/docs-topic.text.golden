@@ -167,6 +167,10 @@ Context
       true or false
       on keeps a rule the lead offers at once and prints the undo, instead of
       asking first; answering always on its card turns it on
+    memoryModel             claude-sub/claude-haiku-4-5-20251001
+      any text
+      the subscription model that writes memory summaries, one line of at most
+      512 bytes each, as source/model; never the OpenRouter key
     learn                   false
       true or false
       on lets tofu learn send a window around each message you typed to Jev for
@@ -185,7 +189,8 @@ Files
       Author filters in edit feeds
 
 Shell
-    persistentRegistry      false               on the next start
+    persistentRegistry      false                                 on the next
+      start
       true or false
       a running shell outlives tofu and the next launch lists it; off stops
       every shell on exit, even when tofu is killed

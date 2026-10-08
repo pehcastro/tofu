@@ -389,6 +389,13 @@ const (
 )
 
 const (
+	MemtreeLineBytes         = 512
+	MemtreeCompactionsAtOnce = 8
+	MemtreeViewBytes         = 32 << 10
+	MemtreeContextBytes      = 32 << 10
+)
+
+const (
 	HostEventBuffer   = 256
 	HostSteeringQueue = 64
 )

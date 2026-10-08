@@ -164,6 +164,14 @@ exit 0
         "description": "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on"
       },
       {
+        "key": "memoryModel",
+        "category": "Context",
+        "default": "claude-sub/claude-haiku-4-5-20251001",
+        "takes": "any text",
+        "restart": false,
+        "description": "the subscription model that writes memory summaries, one line of at most 512 bytes each, as source/model; never the OpenRouter key"
+      },
+      {
         "key": "learn",
         "category": "Context",
         "default": "false",

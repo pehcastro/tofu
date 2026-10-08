@@ -76,6 +76,11 @@ func memoryVerb(args []string, out, errOut io.Writer) int {
 		verb, args = args[0], args[1:]
 	}
 	o := verbOutput{verb: "memory " + verb, usageLine: memoryUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	switch verb {
+	case "tree", "zoom", "recall":
+		o.usageLine = memoryTreeUsage
+		return memoryTreeVerb(o, verb, args)
+	}
 	opts, err := parseMemoryArgs(args)
 	if err != nil {
 		return o.usage(err)
