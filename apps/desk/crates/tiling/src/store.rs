@@ -11,6 +11,7 @@ const HEADER_V1: &str = "tofu-desk-layout 1";
 const HEADER_V2: &str = "tofu-desk-layout 2";
 const HEADER_V3: &str = "tofu-desk-layout 3";
 const WORKSPACE: &str = "workspace";
+const ICON: &str = "icon";
 const EMPTY: &str = "(empty)";
 const NO_FOCUS: &str = "-";
 const PLUGIN_PREFIX: &str = "plugin:";
@@ -140,6 +141,9 @@ impl Store {
                 workspace.next_id(),
                 workspace.name.replace(['\n', '\r'], " "),
             ));
+            if let Some(icon) = &workspace.icon {
+                text.push_str(&format!("{ICON} {icon}\n"));
+            }
             match workspace.tree() {
                 Some(tree) => write(tree, &mut text),
                 None => text.push_str(EMPTY),
@@ -210,10 +214,20 @@ fn parse(text: &str) -> Result<Vec<Workspace>, String> {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let body = lines
+                let mut body = lines
                     .next()
                     .ok_or("a workspace line has no layout after it")?;
-                workspaces.push(workspace(line, body, version)?);
+                let icon = match body.strip_prefix(ICON).map(str::trim) {
+                    Some(icon) if !icon.is_empty() && !icon.contains(' ') => {
+                        body = lines.next().ok_or("an icon line has no layout after it")?;
+                        Some(icon.to_owned())
+                    }
+                    Some(_) => return Err(format!("an icon line names no single icon: {body}")),
+                    None => None,
+                };
+                let mut workspace = workspace(line, body, version)?;
+                workspace.icon = icon;
+                workspaces.push(workspace);
             }
             Ok(workspaces)
         }

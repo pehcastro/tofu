@@ -17,7 +17,8 @@ use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
 use gpui::{
     AnyElement, AnyView, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, Render, SharedString, Subscription, Window, div, prelude::*, px,
+    IntoElement, KeyDownEvent, Pixels, Point, Render, SharedString, Subscription, Window, div,
+    prelude::*, px,
 };
 
 use crate::modules::chat::cassette::{Replay, Step};
@@ -155,6 +156,7 @@ fn build(
             nudge: None,
             plus,
             pointed: 0,
+            menu_at: None,
             focus,
             mounted,
             replay,
@@ -168,6 +170,7 @@ pub struct Work {
     nudge: Option<f32>,
     plus: Entity<MenuButton>,
     pointed: usize,
+    menu_at: Option<Point<Pixels>>,
     focus: FocusHandle,
     mounted: Mounted,
     replay: Option<Replay>,
@@ -532,6 +535,17 @@ impl Work {
         let (pinned, locked) = workspace.map_or((false, false), |at| (at.pinned, at.locked));
         [
             Some(MenuItem::action("Rename").icon(Glyph::Pencil)),
+            Some(MenuItem::Submenu {
+                label: "Icon".into(),
+                icon: Some(Glyph::Sparkle.into()),
+                items: std::iter::once(MenuItem::action("None"))
+                    .chain(
+                        Glyph::WORKSPACE
+                            .iter()
+                            .map(|(name, icon)| MenuItem::action(*name).icon(*icon)),
+                    )
+                    .collect(),
+            }),
             Some(MenuItem::action(if pinned { "Unpin" } else { "Pin" }).icon(Glyph::Pin)),
             Some(MenuItem::action(if locked { "Unlock" } else { "Lock" }).icon(Glyph::Lock)),
             Some(MenuItem::action("Reset layout").icon(Icon::Restore)),
@@ -569,17 +583,26 @@ impl Work {
             .workspaces()
             .get(index)
             .is_some_and(|at| at.pinned);
-        match if pinned && pick >= 4 { pick + 1 } else { pick } {
+        let icons = 3..3 + Glyph::WORKSPACE.len();
+        let rest = icons.end;
+        match pick + usize::from(pinned && pick >= rest + 3) {
             0 => self.board.rename(index),
-            1 => self.board.toggle_pin(index),
-            2 => self.board.toggle_lock(index),
-            3 => {
+            2 => self.board.set_icon(index, None),
+            at if icons.contains(&at) => {
+                let named = Glyph::WORKSPACE.get(at - icons.start);
+                self.board
+                    .set_icon(index, named.map(|(name, _)| (*name).to_owned()));
+            }
+            at if at == rest => self.board.toggle_pin(index),
+            at if at == rest + 1 => self.board.toggle_lock(index),
+            at if at == rest + 2 => {
+                eprintln!("desk: work: reset layout of workspace {index}");
                 self.board.switch(index);
                 self.board.apply(true, |workspace, _| Ok(workspace.reset()));
             }
-            4 => self.board.close_workspace(index),
+            at if at == rest + 3 => self.board.close_workspace(index),
             at => {
-                if let Some(module) = at.checked_sub(7).and_then(|row| OPENABLE.get(row)) {
+                if let Some(module) = at.checked_sub(rest + 6).and_then(|row| OPENABLE.get(row)) {
                     self.board.switch(index);
                     self.board.spawn(module.clone());
                 }
@@ -601,7 +624,7 @@ impl Work {
         let on = Rc::new(on);
         let this = cx.weak_entity();
         let (pointer, plus, tab, picker) = (this.clone(), this.clone(), this.clone(), on.clone());
-        let tabbed = this;
+        let (tabbed, opener) = (this.clone(), this);
         let opened: Vec<&'static str> = openable.to_vec();
         let strip = header_tabs(
             "work-workspaces",
@@ -641,9 +664,22 @@ impl Work {
                     }
                 })
                 .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+        })
+        .on_menu(move |at, position, window, cx| {
+            if at < count {
+                opener
+                    .update(cx, |work, cx| {
+                        work.pointed = at;
+                        work.menu_at = Some(position);
+                        cx.notify();
+                    })
+                    .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+                window.refresh();
+            }
         });
         let tab_menu = context_menu(Self::tab_menu(self.board.workspaces().get(self.pointed)))
             .id("work-tab-menu")
+            .open_at(self.menu_at.take())
             .on_pick(move |pick, window, cx| {
                 tab.update(cx, |work, cx| {
                     work.picked_tab(*pick, work.pointed);

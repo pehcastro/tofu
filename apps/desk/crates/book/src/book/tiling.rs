@@ -82,10 +82,13 @@ pub(super) struct TilingPage {
 
 impl TilingPage {
     pub(super) fn new(_: &mut Context<Book>) -> Self {
-        let workspaces = PRESETS
+        let mut workspaces: Vec<Workspace> = PRESETS
             .iter()
             .map(|(name, preset)| Workspace::new(*name, *preset))
             .collect();
+        if let Some(first) = workspaces.first_mut() {
+            first.icon = Some("rocket".to_owned());
+        }
         TilingPage {
             board: TilingBoard::new(
                 workspaces,

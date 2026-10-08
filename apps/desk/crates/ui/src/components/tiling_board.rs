@@ -19,6 +19,7 @@ use crate::components::button::{ButtonKind, button};
 use crate::components::card::{Header, header_action, inner_card, shell};
 use crate::components::chip::kbd;
 use crate::components::empty::{EmptyAction, EmptyHint, empty_state};
+use crate::components::glyph::Glyph;
 use crate::components::overlay::{MenuButton, MenuItem, menu_surface};
 use crate::components::paint::{ink, tint};
 use crate::components::size::{
@@ -312,6 +313,13 @@ impl<V: 'static> TilingBoard<V> {
     pub fn rename(&mut self, index: usize) {
         self.switch(index);
         self.renaming = self.current().map(|workspace| workspace.name.clone());
+    }
+
+    pub fn set_icon(&mut self, index: usize, icon: Option<String>) {
+        if let Some(workspace) = self.workspaces.get_mut(index) {
+            workspace.icon = icon;
+        }
+        self.settle();
     }
 
     pub fn toggle_pin(&mut self, index: usize) {
@@ -782,7 +790,7 @@ impl<V: 'static> TilingBoard<V> {
                 let zoomed = workspace.zoomed().map(|_| " · zoomed");
                 Tab {
                     label: format!("{name}{}", zoomed.unwrap_or_default()).into(),
-                    icon: None,
+                    icon: workspace.icon.as_deref().and_then(Glyph::workspace),
                     count: None,
                     mark: match (workspace.locked, workspace.pinned) {
                         (true, _) => TabMark::Locked,

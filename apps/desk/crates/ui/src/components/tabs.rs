@@ -150,6 +150,24 @@ struct Look {
 }
 
 #[derive(Clone, Copy)]
+struct Slide {
+    from: Pixels,
+    to: Pixels,
+    started: Instant,
+    span: Duration,
+}
+
+impl Slide {
+    fn at(&self, now: Instant) -> Option<Pixels> {
+        let elapsed = now.saturating_duration_since(self.started);
+        (elapsed < self.span).then(|| {
+            let eased = EASE_OUT(elapsed.as_secs_f32() / self.span.as_secs_f32());
+            self.from + (self.to - self.from) * eased
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Closing {
     ix: usize,
     width: Pixels,
@@ -220,6 +238,7 @@ struct Motion {
     strip_focus: FocusHandle,
     scroll: ScrollHandle,
     revealed: Option<(usize, Option<Pixels>)>,
+    slide: Option<Slide>,
 }
 
 fn unlearned_width(tab: &Tab, font: f32, window: &Window) -> Pixels {
@@ -275,17 +294,79 @@ impl Motion {
             fixed: px(0.0),
             scroll: ScrollHandle::new(),
             revealed: None,
+            slide: None,
         }
     }
 
-    fn reveal(&mut self, chosen: Option<usize>, room: Option<Pixels>) {
+    fn floor(&self, more: Option<usize>) -> Pixels {
+        more.and_then(|at| self.scroll.bounds_for_item(at + 1))
+            .map_or(-self.scroll.max_offset().x, |item| {
+                (self.scroll.bounds().left() - item.left()).min(px(0.0))
+            })
+    }
+
+    fn scroll_for(&self, item: Bounds<Pixels>, more: Option<usize>) -> Pixels {
+        let view = self.scroll.bounds();
+        let x = self.scroll.offset().x;
+        let to = if item.left() + x < view.left() {
+            view.left() - item.left()
+        } else if item.right() + x > view.right() {
+            view.right() - item.right()
+        } else {
+            x
+        };
+        to.min(px(0.0)).max(self.floor(more))
+    }
+
+    fn reveal(
+        &mut self,
+        (chosen, more): (Option<usize>, Option<usize>),
+        room: Option<Pixels>,
+        span: Option<Duration>,
+        now: Instant,
+    ) {
         let wanted = chosen.map(|at| (at, room));
-        if self.revealed != wanted {
-            self.revealed = wanted;
-            if let Some(at) = chosen {
-                self.scroll.scroll_to_item(at + 1);
-            }
+        if self.revealed == wanted {
+            return;
         }
+        self.revealed = wanted;
+        let Some(at) = chosen else {
+            return;
+        };
+        let Some(item) = self.scroll.bounds_for_item(at + 1) else {
+            return self.scroll.scroll_to_item(at + 1);
+        };
+        let (from, to) = (self.scroll.offset().x, self.scroll_for(item, more));
+        self.slide = match span {
+            Some(span) if from != to => Some(Slide {
+                from,
+                to,
+                started: now,
+                span,
+            }),
+            _ => {
+                self.scroll.set_offset(point(to, self.scroll.offset().y));
+                None
+            }
+        };
+    }
+
+    fn slid(&mut self, more: Option<usize>, now: Instant) -> bool {
+        let offset = self.scroll.offset();
+        let sliding = self.slide.and_then(|slide| slide.at(now));
+        let x = match (self.slide, sliding) {
+            (_, Some(x)) => x,
+            (Some(slide), None) => slide.to,
+            (None, None) => offset.x,
+        };
+        if sliding.is_none() {
+            self.slide = None;
+        }
+        let x = x.max(self.floor(more));
+        if x != offset.x {
+            self.scroll.set_offset(point(x, offset.y));
+        }
+        sliding.is_some()
     }
 
     fn learn(&mut self, items: &[Bounds<Pixels>], slots: &[Slot], flow: usize, gap: f32) {
@@ -671,7 +752,7 @@ fn tab_frame(
     tab: &Tab,
     pick: Pick,
     theme: &Theme,
-    (on, shut, press): (&OnTab, &Shut, Option<&Press>),
+    (on, shut, press, menu): (&OnTab, &Shut, Option<&Press>, Option<&Press>),
 ) -> Stateful<Div> {
     let Pick {
         ix,
@@ -695,7 +776,7 @@ fn tab_frame(
         .child(link(tab, font, theme, text))
         .child(mark(tab, ix, look, theme, shut))
         .when_some(fold, |content, fold| content.w(fold.width).flex_none());
-    let press = press.cloned();
+    let (press, menu) = (press.cloned(), menu.cloned());
     div()
         .id((id.clone(), ix))
         .flex()
@@ -705,6 +786,12 @@ fn tab_frame(
         .when_some(press, |tab, press| {
             tab.on_mouse_down(MouseButton::Left, move |event, window, cx| {
                 press(ix, event.position, window, cx)
+            })
+        })
+        .when_some(menu, |tab, menu| {
+            tab.on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                cx.stop_propagation();
+                menu(ix, event.position, window, cx)
             })
         })
         .cursor_pointer()
@@ -910,6 +997,7 @@ pub struct TabStrip {
     theme: Theme,
     on: OnTab,
     press: Option<Press>,
+    menu: Option<Press>,
     pointed: Option<Pointed>,
     focus: Option<FocusHandle>,
     new_button: Option<AnyElement>,
@@ -969,6 +1057,7 @@ impl TabStrip {
             theme: theme.clone(),
             on,
             press: None,
+            menu: None,
             pointed: None,
             focus: None,
             new_button: None,
@@ -990,6 +1079,14 @@ impl TabStrip {
         press: impl Fn(usize, Point<Pixels>, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.press = Some(Rc::new(press));
+        self
+    }
+
+    pub fn on_menu(
+        mut self,
+        menu: impl Fn(usize, Point<Pixels>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.menu = Some(Rc::new(menu));
         self
     }
 
@@ -1049,6 +1146,7 @@ impl RenderOnce for TabStrip {
             theme,
             on,
             press,
+            menu,
             pointed,
             focus,
             new_button,
@@ -1106,15 +1204,20 @@ impl RenderOnce for TabStrip {
         let slots = Rc::new(slots);
         let chosen = slots.iter().position(|slot| slot.holds(active));
         let room = width.get(cx);
-        let scroll = state.update(cx, |motion, _| {
-            motion.reveal(chosen, room);
-            motion.scroll.clone()
-        });
+        let more = slots.iter().position(|slot| matches!(slot, Slot::More));
         let spans = (
             ms(&theme, NumberToken::MotionBase),
             ms(&theme, NumberToken::MotionFast),
         );
         let now = Instant::now();
+        let (scroll, sliding) = state.update(cx, |motion, _| {
+            let span = ms(&theme, NumberToken::MotionTile);
+            motion.reveal((chosen, more), room, (!reduced).then_some(span), now);
+            (motion.scroll.clone(), motion.slid(more, now))
+        });
+        if sliding {
+            window.request_animation_frame();
+        }
         let Frame {
             looks,
             closing,
@@ -1181,7 +1284,7 @@ impl RenderOnce for TabStrip {
                             tab,
                             pick(ix, FONT_TAB, ink(&theme, DIM_TEXT)),
                             &theme,
-                            (&on, &shut, press.as_ref()),
+                            (&on, &shut, press.as_ref(), menu.as_ref()),
                         )
                         .h_full()
                         .rounded_t(px(RADIUS_TAB))
@@ -1212,7 +1315,7 @@ impl RenderOnce for TabStrip {
                         tab,
                         pick(ix, FONT_BODY, ink(&theme, SHELL_TEXT)),
                         &theme,
-                        (&on, &shut, press.as_ref()),
+                        (&on, &shut, press.as_ref(), menu.as_ref()),
                     )
                     .h(px(if screen { NEW_TAB } else { TAB }))
                     .rounded(px(header_radius(screen)))

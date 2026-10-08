@@ -20,10 +20,21 @@ pub enum Glyph {
     Pencil,
     Window,
     Cron,
+    Talk,
+    Code,
+    Bug,
+    Rocket,
+    Beaker,
+    Book,
+    Globe,
+    Database,
+    Star,
+    Sparkle,
+    Folder,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 14] = [
+    const ALL: [Glyph; 25] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -38,7 +49,40 @@ impl Glyph {
         Glyph::Pencil,
         Glyph::Window,
         Glyph::Cron,
+        Glyph::Talk,
+        Glyph::Code,
+        Glyph::Bug,
+        Glyph::Rocket,
+        Glyph::Beaker,
+        Glyph::Book,
+        Glyph::Globe,
+        Glyph::Database,
+        Glyph::Star,
+        Glyph::Sparkle,
+        Glyph::Folder,
     ];
+
+    pub const WORKSPACE: [(&'static str, Glyph); 12] = [
+        ("chat", Glyph::Talk),
+        ("code", Glyph::Code),
+        ("terminal", Glyph::Terminal),
+        ("bug", Glyph::Bug),
+        ("rocket", Glyph::Rocket),
+        ("beaker", Glyph::Beaker),
+        ("book", Glyph::Book),
+        ("globe", Glyph::Globe),
+        ("database", Glyph::Database),
+        ("star", Glyph::Star),
+        ("sparkle", Glyph::Sparkle),
+        ("folder", Glyph::Folder),
+    ];
+
+    pub fn workspace(name: &str) -> Option<Glyph> {
+        Glyph::WORKSPACE
+            .iter()
+            .find(|(known, _)| *known == name)
+            .map(|(_, glyph)| *glyph)
+    }
 
     pub fn path(self) -> &'static str {
         match self {
@@ -56,6 +100,17 @@ impl Glyph {
             Glyph::Pencil => "glyphs/pencil.svg",
             Glyph::Window => "glyphs/window.svg",
             Glyph::Cron => "glyphs/cron.svg",
+            Glyph::Talk => "glyphs/talk.svg",
+            Glyph::Code => "glyphs/code.svg",
+            Glyph::Bug => "glyphs/bug.svg",
+            Glyph::Rocket => "glyphs/rocket.svg",
+            Glyph::Beaker => "glyphs/beaker.svg",
+            Glyph::Book => "glyphs/book.svg",
+            Glyph::Globe => "glyphs/globe.svg",
+            Glyph::Database => "glyphs/database.svg",
+            Glyph::Star => "glyphs/star.svg",
+            Glyph::Sparkle => "glyphs/sparkle.svg",
+            Glyph::Folder => "glyphs/folder.svg",
         }
     }
 
@@ -75,6 +130,17 @@ impl Glyph {
             Glyph::Pencil => include_str!("../../assets/icons/pencil.svg"),
             Glyph::Window => include_str!("../../assets/icons/window.svg"),
             Glyph::Cron => include_str!("../../assets/icons/clock-repeat.svg"),
+            Glyph::Talk => include_str!("../../assets/icons/chat.svg"),
+            Glyph::Code => include_str!("../../assets/icons/code.svg"),
+            Glyph::Bug => include_str!("../../assets/icons/bug.svg"),
+            Glyph::Rocket => include_str!("../../assets/icons/rocket.svg"),
+            Glyph::Beaker => include_str!("../../assets/icons/beaker.svg"),
+            Glyph::Book => include_str!("../../assets/icons/book.svg"),
+            Glyph::Globe => include_str!("../../assets/icons/globe.svg"),
+            Glyph::Database => include_str!("../../assets/icons/database.svg"),
+            Glyph::Star => include_str!("../../assets/icons/star.svg"),
+            Glyph::Sparkle => include_str!("../../assets/icons/sparkle.svg"),
+            Glyph::Folder => include_str!("../../assets/icons/folder.svg"),
         }
     }
 

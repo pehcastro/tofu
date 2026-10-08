@@ -34,6 +34,7 @@ pub const CONNECTED_ROOM: usize = 4;
 const STATIC_ROW_WIDTH: f32 = 360.0;
 const SHORT_FIT_WIDTH: f32 = 360.0;
 const SHORT_FOLD_WIDTH: f32 = 200.0;
+const CROWDED_WIDTH: f32 = 300.0;
 
 #[derive(Clone)]
 pub struct Strip {
@@ -117,6 +118,18 @@ impl Strip {
             picked: 1,
             made: 0,
         }
+    }
+
+    fn crowded() -> Self {
+        let mut strip = Strip::workspaces(true);
+        strip.tabs.extend(["Usage", "Library"].map(|name| Tab {
+            label: name.into(),
+            icon: None,
+            count: None,
+            mark: TabMark::Close,
+        }));
+        strip.screens = 3;
+        strip
     }
 
     fn short() -> Self {
@@ -284,6 +297,7 @@ pub struct TabPage {
     files: Strip,
     fit: Strip,
     fold: Strip,
+    crowded: Strip,
 }
 
 impl TabPage {
@@ -296,6 +310,7 @@ impl TabPage {
             files: Strip::files(),
             fit: Strip::short(),
             fold: Strip::short(),
+            crowded: Strip::crowded(),
         }
     }
 }
@@ -447,6 +462,9 @@ impl ListsState {
         let fold = page.fold.header("short-fold", theme, cx, |book| {
             Some(&mut book.lists.tabs.fold)
         });
+        let crowded = page.crowded.header("crowded-tabs", theme, cx, |book| {
+            Some(&mut book.lists.tabs.crowded)
+        });
         let tile = |strip: TabStrip, shown: &Strip, about: &'static str| {
             shell(Header::Tabs(strip.into_any_element(), None), theme)
                 .min_h(px(TILE_HEIGHT / 2.0))
@@ -522,6 +540,13 @@ impl ListsState {
                     "The same three without room: they fold",
                     theme,
                     div().w(px(SHORT_FOLD_WIDTH)).child(workspace(fold, &page.fold)),
+                ))
+                .child(block(
+                    "Three screens without room: the strip eases to the chosen tab, N more stays",
+                    theme,
+                    div()
+                        .w(px(CROWDED_WIDTH))
+                        .child(workspace(crowded, &page.crowded)),
                 )),
             )
             .child(
