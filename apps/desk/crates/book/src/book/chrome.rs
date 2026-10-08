@@ -1,6 +1,8 @@
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuItem, menu};
-use desk_ui::components::sidebar::SIDEBAR_COLUMN;
+use desk_ui::components::sidebar::{
+    Project, SIDEBAR_COLUMN, Session, SessionAt, SessionState, Sidebar, SidebarPick,
+};
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
@@ -16,6 +18,7 @@ use super::kit::named;
 const BOARD_WIDTH: f32 = 1400.0;
 const WORKSPACES: [&str; 3] = ["work", "editor", "data"];
 const POP_ROOM: f32 = 250.0;
+const SESSIONS_HEIGHT: f32 = 300.0;
 
 fn board_title(open: Option<TitlePop>) -> Title {
     let notice = |text: &str, code: Option<&str>, detail: &str, needs_you| Notice {
@@ -57,6 +60,33 @@ fn board_title(open: Option<TitlePop>) -> Title {
         keys: WindowKeys::Shown,
         open,
         tabs_x: SIDEBAR_COLUMN,
+    }
+}
+
+fn each_state() -> Project {
+    let ages = ["for 12m", "8m ago", "2m ago", "4h ago", "1d ago"];
+    let names = [
+        "clear-sable-eagle",
+        "bold-teal-otter",
+        "quiet-amber-heron",
+        "fond-sandy-mink",
+        "tidy-ochre-wren",
+    ];
+    let mut sessions = SessionState::ALL
+        .into_iter()
+        .zip(names.into_iter().zip(ages))
+        .map(|(state, (name, age))| Session {
+            name: name.into(),
+            state,
+            age: age.into(),
+        });
+    Project {
+        name: "notes-app".into(),
+        branch: "main".into(),
+        changed: 3,
+        active: sessions.by_ref().take(3).collect(),
+        shown: Some(SessionAt::Active(0)),
+        inactive: sessions.collect(),
     }
 }
 
@@ -199,6 +229,20 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         .flex()
         .flex_col()
         .gap_4()
+        .child(named(
+            "Sidebar sessions, each state, right click a row for its menu",
+            theme,
+            div()
+                .w(px(SIDEBAR_COLUMN))
+                .h(px(SESSIONS_HEIGHT))
+                .child(Sidebar::new(
+                    "chrome-sidebar-states",
+                    Some(each_state()),
+                    cx.listener(|book, pick: &SidebarPick, _, cx| {
+                        book.tell(format!("Sidebar: {pick:?}"), cx)
+                    }),
+                )),
+        ))
         .child(named(
             "Title bar, IWIN-1",
             theme,

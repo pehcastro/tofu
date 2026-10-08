@@ -11,8 +11,8 @@ use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
     ApprovalAnswer, ApprovalDecision, ApprovalRequest, InitializeResult, NoParams, Notification,
-    PROTOCOL, Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, ShellParams,
-    TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request,
+    PROTOCOL, Request, RequestId, SessionOpenParams, SessionOpenParamsAsking, SessionRenameParams,
+    ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request,
 };
 use desk_core::sessions::{SessionRow, session_rows};
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
@@ -312,6 +312,15 @@ impl Chat {
         cx.notify();
     }
 
+    pub fn problem(&self) -> Option<&SharedString> {
+        self.problem.as_ref()
+    }
+
+    pub fn rename(&mut self, session: String, name: String, cx: &mut Context<Self>) {
+        let params = SessionRenameParams { session, name };
+        self.call::<request::SessionRename>(&params, cx, |_, _, _| {});
+    }
+
     fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
         if !self.aimed {
             cx.propagate();
@@ -466,7 +475,16 @@ impl Chat {
         }
         let (session, entry) = match event {
             Event::Notification(Notification::TurnStarted(started)) => {
+                if let Link::Ready(_) = self.link {
+                    self.relist(cx);
+                }
                 (&started.session, Entry::Task(started.turn.clone()))
+            }
+            Event::Notification(Notification::SessionUpdated(_)) => {
+                if let Link::Ready(_) = self.link {
+                    self.relist(cx);
+                }
+                return;
             }
             Event::Notification(Notification::ToolStarted(started)) => {
                 (&started.session, Entry::Tool(started.item.clone()))

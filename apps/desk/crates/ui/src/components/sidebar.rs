@@ -8,13 +8,16 @@ use gpui::{
 };
 
 use crate::component::{control, icon};
+use crate::components::avatar::spinner;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, bare_row};
+use crate::components::overlay::{MenuIcon, MenuItem, context_menu};
 use crate::components::paint::{glyph, ink};
 use crate::components::size::{
-    FONT_CAP, FONT_CHAT, FONT_SMALL, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO, RADIUS_BADGE,
-    RADIUS_LIST, RADIUS_ROW, ROW_GAP, ROW_PAD_X, T1, T2, T3,
+    FONT_CAP, FONT_CAP2, FONT_CHAT, FONT_SMALL, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO,
+    RADIUS_BADGE, RADIUS_LIST, RADIUS_ROW, ROW_GAP, ROW_PAD_X, SPINNER, T1, T2, T3,
 };
+use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{ICON_SMALL, SIDEBAR_WIDTH};
@@ -35,10 +38,51 @@ const SESSION_DOT: f32 = 4.0;
 const INACTIVE_GAP: f32 = 6.0;
 const INACTIVE_INDENT: f32 = 8.0;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionState {
+    Running,
+    Idle,
+    Waiting,
+    Stopped,
+    Failed,
+}
+
+impl SessionState {
+    pub const ALL: [SessionState; 5] = [
+        SessionState::Running,
+        SessionState::Idle,
+        SessionState::Waiting,
+        SessionState::Stopped,
+        SessionState::Failed,
+    ];
+
+    pub fn word(self) -> &'static str {
+        match self {
+            SessionState::Running => "running",
+            SessionState::Idle => "idle",
+            SessionState::Waiting => "waiting for approval",
+            SessionState::Stopped => "stopped",
+            SessionState::Failed => "failed",
+        }
+    }
+}
+
+impl From<&str> for SessionState {
+    fn from(word: &str) -> Self {
+        match word.to_lowercase().as_str() {
+            "running" => SessionState::Running,
+            "idle" => SessionState::Idle,
+            "waiting" | "waiting for approval" => SessionState::Waiting,
+            "failed" | "error" | "loop_guard" => SessionState::Failed,
+            _ => SessionState::Stopped,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Session {
     pub name: SharedString,
-    pub state: SharedString,
+    pub state: SessionState,
     pub age: SharedString,
 }
 
@@ -47,8 +91,8 @@ pub struct Project {
     pub name: SharedString,
     pub branch: SharedString,
     pub changed: usize,
-    pub running: Vec<Session>,
-    pub shown: Option<usize>,
+    pub active: Vec<Session>,
+    pub shown: Option<SessionAt>,
     pub inactive: Vec<Session>,
 }
 
@@ -56,10 +100,43 @@ pub struct Project {
 pub enum SidebarPick {
     Project,
     NewSession,
-    Running(usize),
-    Inactive(usize),
+    Open(SessionAt),
+    Rename(SessionAt),
+    CopyId(SessionAt),
     Docs,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionAt {
+    Active(usize),
+    Inactive(usize),
+}
+
+impl SessionAt {
+    fn key(self, part: &'static str) -> ElementId {
+        let (list, ix) = match self {
+            SessionAt::Active(ix) => ("active", ix),
+            SessionAt::Inactive(ix) => ("inactive", ix),
+        };
+        ElementId::NamedChild(Arc::new((list, ix).into()), part.into())
+    }
+}
+
+type MenuRow = (&'static str, MenuIcon, fn(SessionAt) -> SidebarPick);
+
+const MENU: [MenuRow; 3] = [
+    ("Open", MenuIcon::Icon(Icon::Arrow), SidebarPick::Open),
+    (
+        "Rename",
+        MenuIcon::Glyph(Glyph::Pencil),
+        SidebarPick::Rename,
+    ),
+    (
+        "Copy session id",
+        MenuIcon::Glyph(Glyph::File),
+        SidebarPick::CopyId,
+    ),
+];
 
 type OnPick = Rc<dyn Fn(&SidebarPick, &mut Window, &mut App)>;
 
@@ -67,6 +144,7 @@ type OnPick = Rc<dyn Fn(&SidebarPick, &mut Window, &mut App)>;
 pub struct Sidebar {
     id: ElementId,
     project: Option<Project>,
+    editing: Option<(SessionAt, AnyElement)>,
     on_pick: OnPick,
 }
 
@@ -79,8 +157,14 @@ impl Sidebar {
         Self {
             id: id.into(),
             project,
+            editing: None,
             on_pick: Rc::new(on_pick),
         }
+    }
+
+    pub fn editing(mut self, at: SessionAt, field: AnyElement) -> Self {
+        self.editing = Some((at, field));
+        self
     }
 
     fn picked(
@@ -89,6 +173,97 @@ impl Sidebar {
     ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static + use<> {
         let on_pick = self.on_pick.clone();
         move |_, window, cx| on_pick(&pick, window, cx)
+    }
+
+    fn session(
+        &mut self,
+        at: SessionAt,
+        session: &Session,
+        selected: bool,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Stateful<Div> {
+        let tip: SharedString = match session.age.is_empty() {
+            true => session.state.word().into(),
+            false => format!("{} {}", session.state.word(), session.age).into(),
+        };
+        let mark = tooltip(
+            at.key("tip"),
+            div()
+                .id(at.key("state"))
+                .flex_none()
+                .size(px(SPINNER))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(state_mark(at, session.state, cx.reduce_motion(), theme)),
+            Edge::Frame,
+            tip,
+            theme,
+            window,
+            cx,
+        );
+        let alpha = match (at, selected) {
+            (_, true) => T1,
+            (SessionAt::Active(_), false) => T2,
+            (SessionAt::Inactive(_), false) => T3,
+        };
+        let session_row = row(at.key("row"), selected, alpha, theme)
+            .when(matches!(at, SessionAt::Inactive(_)), |row| {
+                row.child(div().flex_none().w(px(INACTIVE_INDENT)))
+            })
+            .child(mark)
+            .child(match self.editing.take_if(|(editing, _)| *editing == at) {
+                Some((_, field)) => div().flex_1().min_w_0().overflow_hidden().child(field),
+                None => div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(session.name.clone()),
+            })
+            .when(!session.age.is_empty(), |row| {
+                row.child(
+                    div()
+                        .flex_none()
+                        .text_size(px(FONT_CAP2))
+                        .text_color(ink(theme, T3))
+                        .child(session.age.clone()),
+                )
+            })
+            .on_click(self.picked(SidebarPick::Open(at)));
+        let on_pick = self.on_pick.clone();
+        let items = MENU
+            .iter()
+            .map(|&(label, glyph, _)| MenuItem::action(label).icon(glyph))
+            .collect();
+        div().id(at.key("item")).w_full().child(
+            context_menu(items)
+                .id(at.key("menu"))
+                .on_pick(move |ix, window, cx| match MENU.get(*ix) {
+                    Some(&(_, _, pick)) => on_pick(&pick(at), window, cx),
+                    None => eprintln!("desk_ui: sidebar menu row {ix} is not in the menu"),
+                })
+                .child(session_row),
+        )
+    }
+}
+
+fn state_mark(at: SessionAt, state: SessionState, reduced: bool, theme: &Theme) -> AnyElement {
+    match state {
+        SessionState::Running if !reduced => spinner(at.key("spin"), theme).into_any_element(),
+        SessionState::Running | SessionState::Idle => div()
+            .size(px(SESSION_DOT))
+            .rounded_full()
+            .bg(theme.color(ColorToken::StatusLive))
+            .into_any_element(),
+        SessionState::Waiting => {
+            glyph(Glyph::Lock, SPINNER, theme.color(ColorToken::StatusWarn)).into_any_element()
+        }
+        SessionState::Stopped => icon(Icon::Maximize, SPINNER, ink(theme, T3)).into_any_element(),
+        SessionState::Failed => {
+            icon(Icon::Close, SPINNER, theme.color(ColorToken::StatusDanger)).into_any_element()
+        }
     }
 }
 
@@ -163,24 +338,6 @@ fn row(id: impl Into<ElementId>, selected: bool, alpha: f32, theme: &Theme) -> S
         .text_color(ink(theme, alpha))
 }
 
-fn session_row(row: Stateful<Div>, lead: Div, session: &Session, theme: &Theme) -> Stateful<Div> {
-    row.child(lead.flex_none())
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .child(session.name.clone()),
-        )
-        .child(word(
-            match session.age.is_empty() {
-                true => session.state.clone(),
-                false => format!("{} · {}", session.state, session.age).into(),
-            },
-            theme,
-        ))
-}
-
 fn word(text: SharedString, theme: &Theme) -> Div {
     div()
         .flex_none()
@@ -190,7 +347,7 @@ fn word(text: SharedString, theme: &Theme) -> Div {
 }
 
 impl RenderOnce for Sidebar {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let open = window.use_keyed_state(
             ElementId::NamedChild(Arc::new(self.id.clone()), "inactive".into()),
@@ -208,7 +365,8 @@ impl RenderOnce for Sidebar {
         let docs = row("docs", false, T2, &theme)
             .child("Docs")
             .on_click(self.picked(SidebarPick::Docs));
-        let (head, rows) = match &self.project {
+        let project = self.project.take();
+        let (head, rows) = match &project {
             None => (
                 picker(
                     "open-project",
@@ -246,7 +404,7 @@ impl RenderOnce for Sidebar {
                     .text_size(px(FONT_CAP))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(ink(&theme, T3))
-                    .child(div().flex_1().child("Running"))
+                    .child(div().flex_1().child("Active"))
                     .child(
                         control("new-session", "New session", &theme)
                             .size(px(NEW_SESSION))
@@ -254,21 +412,16 @@ impl RenderOnce for Sidebar {
                             .child(icon(Icon::Plus, ICON_SMALL, ink(&theme, T3)))
                             .on_click(self.picked(SidebarPick::NewSession)),
                     );
-                let running = project.running.iter().enumerate().map(|(ix, session)| {
-                    let shown = project.shown == Some(ix);
-                    let dot = div()
-                        .size(px(SESSION_DOT))
-                        .rounded_full()
-                        .bg(theme.color(ColorToken::StatusLive));
-                    let alpha = if shown { T1 } else { T2 };
-                    session_row(
-                        row(("running", ix), shown, alpha, &theme),
-                        dot,
-                        session,
-                        &theme,
-                    )
-                    .on_click(self.picked(SidebarPick::Running(ix)))
-                });
+                let active: Vec<Stateful<Div>> = project
+                    .active
+                    .iter()
+                    .enumerate()
+                    .map(|(ix, session)| {
+                        let at = SessionAt::Active(ix);
+                        let shown = project.shown == Some(at);
+                        self.session(at, session, shown, &theme, window, cx)
+                    })
+                    .collect();
                 let toggle = open.clone();
                 let header = row("inactive", false, T3, &theme)
                     .mt(px(INACTIVE_GAP))
@@ -281,24 +434,21 @@ impl RenderOnce for Sidebar {
                             cx.notify();
                         })
                     });
-                let inactive = project
+                let inactive: Vec<Stateful<Div>> = project
                     .inactive
                     .iter()
                     .enumerate()
                     .filter(|_| inactive_open)
                     .map(|(ix, session)| {
-                        session_row(
-                            row(("inactive", ix), false, T3, &theme),
-                            div().w(px(INACTIVE_INDENT)),
-                            session,
-                            &theme,
-                        )
-                        .on_click(self.picked(SidebarPick::Inactive(ix)))
-                    });
+                        let at = SessionAt::Inactive(ix);
+                        let shown = project.shown == Some(at);
+                        self.session(at, session, shown, &theme, window, cx)
+                    })
+                    .collect();
                 (
                     head,
                     rows.inert(caption)
-                        .items(running)
+                        .items(active)
                         .item(header)
                         .items(inactive),
                 )

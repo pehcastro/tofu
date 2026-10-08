@@ -639,7 +639,7 @@ fn menu_row(id: impl Into<ElementId>, theme: &Theme) -> Stateful<Div> {
 
 pub fn toast(
     message: SharedString,
-    badge: &'static str,
+    badge: impl Into<Option<&'static str>>,
     theme: &Theme,
     on_dismiss: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
@@ -648,13 +648,14 @@ pub fn toast(
         .items_center()
         .gap_2p5()
         .w(px(TOAST_WIDTH))
+        .min_w_0()
         .py_2()
         .pl_3p5()
         .pr_2p5()
         .rounded(px(RADIUS_POP))
         .child(icon(Icon::Arrow, ICON_SMALL, ink(theme, CAPTION_TEXT)))
-        .child(div().flex_1().child(message))
-        .child(kbd(badge, theme))
+        .child(div().flex_1().min_w_0().child(message))
+        .children(badge.into().map(|badge| kbd(badge, theme)))
         .child(
             control("toast-dismiss", "Dismiss", theme)
                 .size(px(TOAST_DISMISS))

@@ -1,4 +1,6 @@
-use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Session, Sidebar, SidebarPick};
+use desk_ui::components::sidebar::{
+    Project, SIDEBAR_COLUMN, Session, SessionAt, Sidebar, SidebarPick,
+};
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, Window, div, prelude::*, px};
 
@@ -37,15 +39,15 @@ pub(super) fn sidebar_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         name: "notes-app".into(),
         branch: "main".into(),
         changed: 3,
-        running: sessions(&RUNNING),
-        shown: Some(0),
+        active: sessions(&RUNNING),
+        shown: Some(SessionAt::Active(0)),
         inactive: sessions(&INACTIVE),
     };
     let fresh = Project {
         name: "hono-starter".into(),
         branch: "".into(),
         changed: 0,
-        running: Vec::new(),
+        active: Vec::new(),
         shown: None,
         inactive: Vec::new(),
     };

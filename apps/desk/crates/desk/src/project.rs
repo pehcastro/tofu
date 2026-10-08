@@ -1,17 +1,19 @@
+use std::cmp::Reverse;
 use std::env;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use desk_core::git::{Git, GitBinary, State};
 use desk_core::sessions::SessionRow;
 use desk_tiling::Store as Layouts;
-use desk_ui::components::sidebar::{Project, Session};
+use desk_ui::components::sidebar::{Project, Session, SessionAt, SessionState};
 
 const RECENTS: &str = "recents.json";
 const MOST_RECENT: usize = 8;
-const RUNNING: &str = "Running";
+const FAILED: &str = "error";
+const LOOP_GUARD: &str = "loop_guard";
 
 #[derive(Clone)]
 pub struct Head {
@@ -102,39 +104,92 @@ pub fn head(folder: PathBuf) -> Head {
     })
 }
 
-pub fn sidebar(head: &Head, rows: &[SessionRow], open: Option<&str>) -> Project {
+pub const ACTIVE_FOR: Duration = Duration::from_secs(3600);
+
+pub struct Opened<'a> {
+    pub active: &'a [String],
+    pub open: Option<&'a str>,
+    pub waiting: bool,
+    pub working: bool,
+}
+
+pub fn sidebar(head: &Head, rows: &[SessionRow], opened: &Opened) -> Project {
     let now = SystemTime::now();
-    let session = |row: &SessionRow, state: &str| Session {
-        name: row.title().to_owned().into(),
-        state: state.to_owned().into(),
-        age: row.age(now).unwrap_or_default().into(),
-    };
-    let running: Vec<Session> = match open {
-        None => Vec::new(),
-        Some(id) => vec![rows.iter().find(|row| row.id == id).map_or_else(
-            || Session {
-                name: id.to_owned().into(),
-                state: RUNNING.into(),
-                age: "".into(),
+    let active = opened.active.iter().map(|id| {
+        let row = rows.iter().find(|row| row.id == *id);
+        let shown = opened.open == Some(id.as_str());
+        Session {
+            name: row.map_or(id.as_str(), SessionRow::title).to_owned().into(),
+            state: match (shown && opened.waiting, shown && opened.working) {
+                (true, _) => SessionState::Waiting,
+                (false, true) => SessionState::Running,
+                (false, false) => SessionState::Idle,
             },
-            |row| session(row, RUNNING),
-        )],
-    };
+            age: row.and_then(|row| row.age(now)).unwrap_or_default().into(),
+        }
+    });
+    let shown = opened.open.and_then(|open| {
+        opened
+            .active
+            .iter()
+            .position(|id| id == open)
+            .map(SessionAt::Active)
+            .or_else(|| {
+                inactive(rows, opened.active)
+                    .position(|row| row.id == open)
+                    .map(SessionAt::Inactive)
+            })
+    });
     Project {
         name: name(&head.folder).into(),
         branch: head.branch.clone().into(),
         changed: head.changed,
-        shown: (!running.is_empty()).then_some(0),
-        running,
-        inactive: inactive(rows, open)
-            .map(|row| session(row, row.state()))
+        shown,
+        active: active.collect(),
+        inactive: inactive(rows, opened.active)
+            .map(|row| Session {
+                name: row.title().to_owned().into(),
+                state: match row.outcome.as_str() {
+                    FAILED | LOOP_GUARD => SessionState::Failed,
+                    _ => SessionState::Stopped,
+                },
+                age: row.age(now).unwrap_or_default().into(),
+            })
             .collect(),
     }
 }
 
+pub fn keep_active(active: &mut Vec<String>, rows: &[SessionRow], busy: Option<&str>) -> bool {
+    let now = SystemTime::now();
+    let idle = |id: &str| {
+        if busy == Some(id) {
+            return Some(Duration::ZERO);
+        }
+        rows.iter()
+            .find(|row| row.id == id)
+            .and_then(|row| row.since(now))
+    };
+    let recent = |id: &str| idle(id).is_some_and(|since| since < ACTIVE_FOR);
+    let before = active.clone();
+    active.retain(|id| recent(id));
+    let mut fresh: Vec<&str> = rows
+        .iter()
+        .map(|row| row.id.as_str())
+        .chain(busy)
+        .filter(|id| recent(id) && !active.iter().any(|known| known == id))
+        .collect();
+    fresh.sort_by_key(|id| Reverse(idle(id)));
+    for id in fresh {
+        if !active.iter().any(|known| known == id) {
+            active.push(id.to_owned());
+        }
+    }
+    *active != before
+}
+
 pub fn inactive<'a>(
     rows: &'a [SessionRow],
-    open: Option<&'a str>,
+    active: &'a [String],
 ) -> impl Iterator<Item = &'a SessionRow> {
-    rows.iter().filter(move |row| Some(row.id.as_str()) != open)
+    rows.iter().filter(move |row| !active.contains(&row.id))
 }

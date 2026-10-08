@@ -1,6 +1,6 @@
 use crate::modules::chat::Find;
 #[cfg(feature = "screen-work")]
-use crate::modules::chat::{Listed, Touched};
+use crate::modules::chat::{Chat, Listed, Touched};
 #[cfg(feature = "screen-work")]
 use crate::project::{self, Head};
 #[cfg(feature = "screen-work")]
@@ -13,11 +13,15 @@ use desk_core::limits::TOAST_LIFETIME;
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Key, SHORTCUTS};
 use desk_ui::components::card::{inner_card, outer_card};
+#[cfg(feature = "screen-work")]
+use desk_ui::components::form::TextInput;
 use desk_ui::components::overlay::toast;
 use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
+#[cfg(feature = "screen-work")]
+use desk_ui::components::sidebar::SessionAt;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
 use desk_ui::components::status_bar::Status;
 #[cfg(feature = "screen-work")]
@@ -32,12 +36,14 @@ use desk_ui::metrics::{
 };
 use desk_ui::theme::{ColorToken, Theme};
 #[cfg(feature = "screen-work")]
-use gpui::Focusable;
+use gpui::EntityInputHandler;
 use gpui::{
     AnyElement, AnyView, App, ClickEvent, Context, Entity, FocusHandle, IntoElement, KeyDownEvent,
     Pixels, Render, SharedString, Size, Task, TitlebarOptions, Window, WindowBounds, WindowOptions,
     div, prelude::*, px, size,
 };
+#[cfg(feature = "screen-work")]
+use gpui::{ClipboardItem, Focusable};
 #[cfg(feature = "screen-work")]
 use std::path::PathBuf;
 
@@ -103,12 +109,23 @@ struct Projects {
     menu: Option<Entity<Palette>>,
     switching: Option<PathBuf>,
     confirming: bool,
+    active: Vec<String>,
+    renaming: Option<Renaming>,
+    refused: Option<Option<SharedString>>,
     _watch: Vec<gpui::Subscription>,
     _head: Option<Task<()>>,
 }
 
+#[cfg(feature = "screen-work")]
+struct Renaming {
+    id: String,
+    at: SessionAt,
+    input: Entity<TextInput>,
+}
+
 struct Toast {
-    control: Control,
+    text: SharedString,
+    badge: Option<&'static str>,
     _expiry: Task<gpui::Result<()>>,
 }
 
@@ -461,6 +478,10 @@ impl Desk {
     }
 
     pub fn tell(&mut self, control: Control, cx: &mut Context<Self>) {
+        self.toast(control.tell().into(), Some(TELL_BADGE), cx);
+    }
+
+    fn toast(&mut self, text: SharedString, badge: Option<&'static str>, cx: &mut Context<Self>) {
         let expiry = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(TOAST_LIFETIME).await;
             this.update(cx, |desk, cx| {
@@ -469,7 +490,8 @@ impl Desk {
             })
         });
         self.toast = Some(Toast {
-            control,
+            text,
+            badge,
             _expiry: expiry,
         });
         cx.notify();
@@ -480,10 +502,28 @@ impl Desk {
         match pick {
             SidebarPick::Project => self.tell(Control::OpenProject, cx),
             SidebarPick::NewSession
-            | SidebarPick::Running(_)
-            | SidebarPick::Inactive(_)
+            | SidebarPick::Open(_)
+            | SidebarPick::CopyId(_)
             | SidebarPick::Docs => eprintln!("desk: sidebar: {pick:?} needs the work screen"),
         }
+    }
+
+    fn sidebar(&self, cx: &mut Context<Self>) -> Sidebar {
+        let sidebar = Sidebar::new(
+            "sidebar",
+            self.sidebar_project(cx),
+            cx.listener(|desk, pick: &SidebarPick, window, cx| {
+                desk.pick_from_sidebar(pick, window, cx)
+            }),
+        );
+        #[cfg(feature = "screen-work")]
+        if let Some(renaming) = &self.projects.renaming {
+            let field = div()
+                .on_key_down(cx.listener(Self::rename_key))
+                .child(renaming.input.clone());
+            return sidebar.editing(renaming.at, field.into_any_element());
+        }
+        sidebar
     }
 
     #[cfg(not(feature = "screen-work"))]
@@ -517,9 +557,15 @@ impl Desk {
         eprintln!("desk: project {}", folder.display());
         let chat = work.read(cx).chat().clone();
         let store = chat.read(cx).store().clone();
+        self.projects.active.clear();
+        self.projects.renaming = None;
         self.projects._watch = vec![
-            cx.subscribe(&chat, |_, _, _: &Listed, cx| cx.notify()),
+            cx.subscribe(&chat, |desk, _, _: &Listed, cx| {
+                desk.track_running(cx);
+                cx.notify();
+            }),
             cx.subscribe(&chat, |desk, _, _: &Touched, cx| desk.reread_head(cx)),
+            cx.observe(&chat, |desk, _, cx| desk.track_running(cx)),
             cx.observe(&store, |_, _, cx| cx.notify()),
         ];
         match project::remember(&folder) {
@@ -553,10 +599,52 @@ impl Desk {
         cx.notify();
     }
 
+    fn track_running(&mut self, cx: &mut Context<Self>) {
+        let Some(work) = self.work().cloned() else {
+            return;
+        };
+        let chat = work.read(cx).chat().read(cx);
+        let busy = chat.open_id().filter(|_| chat.busy(cx));
+        let problem = chat.problem().cloned();
+        let moved = project::keep_active(&mut self.projects.active, chat.rows(), busy);
+        if moved {
+            eprintln!("desk: active {}", self.projects.active.join(" "));
+            cx.notify();
+        }
+        if let Some(before) = self.projects.refused.take() {
+            match problem {
+                Some(text) if Some(&text) != before.as_ref() => {
+                    eprintln!("desk: sidebar: rename refused: {text}");
+                    self.toast(text, None, cx);
+                }
+                _ => self.projects.refused = Some(before),
+            }
+        }
+    }
+
     fn sidebar_project(&self, cx: &App) -> Option<Project> {
         let head = self.projects.head.as_ref()?;
         let chat = self.work()?.read(cx).chat().read(cx);
-        Some(project::sidebar(head, chat.rows(), chat.open_id()))
+        let open = chat.open_id();
+        let waiting = open
+            .and_then(|id| chat.store().read(cx).sessions.get(id))
+            .is_some_and(|session| !session.approvals.is_empty());
+        let opened = project::Opened {
+            active: &self.projects.active,
+            open,
+            waiting,
+            working: chat.busy(cx),
+        };
+        Some(project::sidebar(head, chat.rows(), &opened))
+    }
+
+    fn session_id(&self, at: SessionAt, chat: &Chat) -> Option<String> {
+        match at {
+            SessionAt::Active(ix) => self.projects.active.get(ix).cloned(),
+            SessionAt::Inactive(ix) => project::inactive(chat.rows(), &self.projects.active)
+                .nth(ix)
+                .map(|row| row.id.clone()),
+        }
     }
 
     fn status(&self, cx: &App) -> Status {
@@ -622,20 +710,68 @@ impl Desk {
         match pick {
             SidebarPick::Project => self.open_projects(window, cx),
             SidebarPick::NewSession => chat.update(cx, |chat, cx| chat.open_session(None, cx)),
-            SidebarPick::Running(_) => {
-                eprintln!("desk: sidebar: the running session already shows")
-            }
-            SidebarPick::Inactive(at) => chat.update(cx, |chat, cx| {
-                let id = project::inactive(chat.rows(), chat.open_id())
-                    .nth(*at)
-                    .map(|row| row.id.clone());
-                match id {
-                    Some(id) => chat.open_session(Some(id), cx),
-                    None => eprintln!("desk: sidebar: session row {at} is gone"),
+            SidebarPick::Open(at) | SidebarPick::CopyId(at) => {
+                let id = self.session_id(*at, chat.read(cx));
+                match (pick, id) {
+                    (_, None) => eprintln!("desk: sidebar: session row {at:?} is gone"),
+                    (SidebarPick::CopyId(_), Some(id)) => {
+                        eprintln!("desk: sidebar: copied session id {id}");
+                        cx.write_to_clipboard(ClipboardItem::new_string(id));
+                    }
+                    (_, Some(id)) if chat.read(cx).open_id() == Some(id.as_str()) => {
+                        eprintln!("desk: sidebar: session {id} already shows")
+                    }
+                    (_, Some(id)) => {
+                        eprintln!("desk: sidebar: open {id}");
+                        chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
+                    }
                 }
-            }),
+            }
+            SidebarPick::Rename(at) => {
+                let Some(id) = self.session_id(*at, chat.read(cx)) else {
+                    return eprintln!("desk: sidebar: session row {at:?} is gone");
+                };
+                let name = chat
+                    .read(cx)
+                    .rows()
+                    .iter()
+                    .find(|row| row.id == id)
+                    .map_or(id.clone(), |row| row.title().to_owned());
+                let input = TextInput::new("Session name".into(), window, cx);
+                input.update(cx, |input, cx| {
+                    input.replace_text_in_range(None, &name, window, cx)
+                });
+                window.focus(&input.focus_handle(cx), cx);
+                eprintln!("desk: sidebar: rename {id} from {name}");
+                self.projects.renaming = Some(Renaming { id, at: *at, input });
+                cx.notify();
+            }
             SidebarPick::Docs => eprintln!("desk: sidebar: Docs has no source yet"),
         }
+    }
+
+    fn rename_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let enter = match event.keystroke.key.as_str() {
+            "enter" => true,
+            "escape" => false,
+            _ => return,
+        };
+        cx.stop_propagation();
+        let Some(renaming) = self.projects.renaming.take() else {
+            return;
+        };
+        window.focus(&self.focus, cx);
+        cx.notify();
+        let name = renaming.input.read(cx).text().trim().to_owned();
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return;
+        };
+        if !enter || name.is_empty() {
+            return eprintln!("desk: sidebar: rename {} cancelled", renaming.id);
+        }
+        eprintln!("desk: sidebar: rename {} to {name}", renaming.id);
+        self.projects.refused = Some(chat.read(cx).problem().cloned());
+        chat.update(cx, |chat, cx| chat.rename(renaming.id, name, cx));
     }
 
     fn open_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -799,8 +935,8 @@ impl Render for Desk {
                 .flex()
                 .justify_center()
                 .child(toast(
-                    shown.control.tell().into(),
-                    TELL_BADGE,
+                    shown.text.clone(),
+                    shown.badge,
                     &theme,
                     cx.listener(|desk, _: &ClickEvent, _, cx| {
                         desk.toast = None;
@@ -844,15 +980,7 @@ impl Render for Desk {
                     .min_h_0()
                     .flex()
                     .pr(px(GUTTER))
-                    .when(self.sidebar_open, |body| {
-                        body.child(Sidebar::new(
-                            "sidebar",
-                            self.sidebar_project(cx),
-                            cx.listener(|desk, pick: &SidebarPick, window, cx| {
-                                desk.pick_from_sidebar(pick, window, cx)
-                            }),
-                        ))
-                    })
+                    .when(self.sidebar_open, |body| body.child(self.sidebar(cx)))
                     .when(!self.sidebar_open, |body| body.pl(px(GUTTER)))
                     .child(
                         div()
