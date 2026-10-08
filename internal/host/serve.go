@@ -55,6 +55,7 @@ type server struct {
 	pending map[string]ApprovalRequest
 	shells  map[string]*watchedShell
 	command context.CancelFunc
+	usage   usageHeld
 }
 
 func Serve(cfg ServeConfig) error {
@@ -154,6 +155,9 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		result, err := handle(raw, s.open)
 		if err == nil {
 			go s.quota()
+		}
+		if err == nil && s.Verb != nil {
+			go s.refreshUsage()
 		}
 		return result, err
 	case "session.rename":

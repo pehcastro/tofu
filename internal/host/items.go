@@ -61,6 +61,7 @@ func (s *items) mint(kind string) string {
 
 func (s *items) translate(event Event, now time.Time) []outgoing {
 	var out []outgoing
+	s.turn = cmp.Or(event.Turn, s.turn)
 	if s.message != "" && event.Kind != EventStreamReset && endsTheLeadReply(event) {
 		out = append(out, notify("message.completed", &Text{Identity: s.identity("", s.message), Text: s.written}))
 		s.message, s.written = "", ""
@@ -74,9 +75,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))
 	case EventDone:
 		s.status = event.Status
-		return append(out, s.agentChanges(event.SubAgents)...)
+		return append(out, s.agentChanges(event.SubAgents, now)...)
 	case EventSubAgent:
-		return append(out, s.agentChanges(event.SubAgents)...)
+		return append(out, s.agentChanges(event.SubAgents, now)...)
 	case EventTextDelta:
 		if s.message == "" {
 			s.message = s.mint("message")
@@ -110,7 +111,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		}
 		_ = json.Unmarshal(event.Args, &args)
 		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path, at: now}
-		return append(out, notify("tool.started", &ToolStarted{Identity: id, Tool: event.Tool, Args: wholeJSON(event.Args), StartedAt: now}))
+		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Args: wholeJSON(event.Args), StartedAt: now}))
 	case EventToolResult:
 		return append(out, s.toolCompleted(id, event, now)...)
 	case EventDecision:
@@ -122,7 +123,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		if event.Decision.OverridesRule != "" {
 			point = pointRuleOverride
 		}
-		return append(out, kept("decision", &DecisionMade{Identity: id, Judgement: judgementOf(*event.Decision), Point: point, Tool: event.Decision.Tool, OverridesRule: event.Decision.OverridesRule}))
+		return append(out, kept("decision", &DecisionMade{Identity: id, Judgement: judgementOf(*event.Decision), Point: point, Tool: event.Decision.Tool, OverridesRule: event.Decision.OverridesRule, Call: event.Decision.Call, At: now}))
 	case EventNote:
 		return append(out, notify("note", s.said(id, event, SaidNote)))
 	case EventGateOff:
@@ -202,16 +203,16 @@ func wholeJSON(raw json.RawMessage) json.RawMessage {
 func (s *items) toolCompleted(id Identity, event Event, now time.Time) []outgoing {
 	opened, known := s.tools[event.ID]
 	delete(s.tools, event.ID)
-	completed := &ToolCompleted{Identity: id, Tool: opened.tool, Failed: event.Failed, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail}
+	completed := &ToolCompleted{Identity: id, Instance: event.Agent, Tool: opened.tool, Failed: event.Failed, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail}
 	if known {
 		completed.DurationMs = now.Sub(opened.at).Milliseconds()
 	}
 	out := []outgoing{notify("tool.completed", completed)}
 	switch {
 	case event.Created != "":
-		return append(out, notify("file.edit", &FileEdit{Identity: id, Path: opened.path, Op: EditCreate, Hunks: []Hunk{createdHunk(event.Created)}}))
+		return append(out, notify("file.edit", &FileEdit{Identity: id, Instance: event.Agent, Path: opened.path, Op: EditCreate, Hunks: []Hunk{createdHunk(event.Created)}}))
 	case event.Diff != "":
-		return append(out, notify("file.edit", &FileEdit{Identity: id, Path: opened.path, Op: EditModify, Hunks: hunksOf(event.Diff)}))
+		return append(out, notify("file.edit", &FileEdit{Identity: id, Instance: event.Agent, Path: opened.path, Op: EditModify, Hunks: hunksOf(event.Diff)}))
 	}
 	return out
 }
@@ -276,7 +277,7 @@ func stepState(state PlanState) StepState {
 	panic("host: unknown plan state " + strconv.Itoa(int(state)))
 }
 
-func (s *items) agentChanges(rows []SubAgentRow) []outgoing {
+func (s *items) agentChanges(rows []SubAgentRow, now time.Time) []outgoing {
 	var out []outgoing
 	for _, row := range rows {
 		was, known := s.agents[row.Name]
@@ -289,7 +290,12 @@ func (s *items) agentChanges(rows []SubAgentRow) []outgoing {
 			out = append(out, merged("agent.updated", row.Name, changed))
 		}
 		if ended(row.State) && (!known || !ended(was.State)) {
-			out = append(out, kept("agent.ended", &AgentEnded{Identity: id, Instance: row.Name, State: state, Report: row.Report}))
+			endedAt := row.Ended
+			if endedAt.IsZero() {
+				endedAt = now
+			}
+			id.Turn = cmp.Or(row.Turn, id.Turn)
+			out = append(out, kept("agent.ended", &AgentEnded{Identity: id, Instance: row.Name, State: state, Report: row.Report, EndedAt: endedAt, DurationMs: endedAt.Sub(row.Started).Milliseconds()}))
 		}
 	}
 	return out

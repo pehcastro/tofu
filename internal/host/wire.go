@@ -198,6 +198,7 @@ type TurnCompleted struct {
 
 type ToolStarted struct {
 	Identity
+	Instance  string          `json:"instance,omitempty"`
 	Tool      string          `json:"tool"`
 	Args      json.RawMessage `json:"args"`
 	StartedAt time.Time       `json:"startedAt"`
@@ -205,6 +206,7 @@ type ToolStarted struct {
 
 type ToolCompleted struct {
 	Identity
+	Instance   string `json:"instance,omitempty"`
 	Tool       string `json:"tool"`
 	Failed     bool   `json:"failed"`
 	ExitCode   *int   `json:"exitCode,omitempty"`
@@ -216,9 +218,10 @@ type ToolCompleted struct {
 
 type FileEdit struct {
 	Identity
-	Path  string `json:"path"`
-	Op    EditOp `json:"op"`
-	Hunks []Hunk `json:"hunks"`
+	Instance string `json:"instance,omitempty"`
+	Path     string `json:"path"`
+	Op       EditOp `json:"op"`
+	Hunks    []Hunk `json:"hunks"`
 }
 
 type Hunk struct {
@@ -265,9 +268,11 @@ func (a *AgentUpdated) absorb(older any) {
 
 type AgentEnded struct {
 	Identity
-	Instance string     `json:"instance"`
-	State    AgentState `json:"state"`
-	Report   string     `json:"report"`
+	Instance   string     `json:"instance"`
+	State      AgentState `json:"state"`
+	Report     string     `json:"report"`
+	EndedAt    time.Time  `json:"endedAt"`
+	DurationMs int64      `json:"durationMs"`
 }
 
 type ShellStarted struct {
@@ -309,9 +314,11 @@ type Judgement struct {
 type DecisionMade struct {
 	Identity
 	Judgement
-	Point         string `json:"point"`
-	Tool          string `json:"tool"`
-	OverridesRule string `json:"overridesRule,omitempty"`
+	Point         string    `json:"point"`
+	Tool          string    `json:"tool"`
+	OverridesRule string    `json:"overridesRule,omitempty"`
+	Call          string    `json:"call,omitempty"`
+	At            time.Time `json:"at"`
 }
 
 type Said struct {
@@ -525,6 +532,7 @@ type SessionRow struct {
 	CostUSD     float64        `json:"costUsd,omitempty"`
 	EndedAt     *time.Time     `json:"endedAt,omitempty"`
 	EndReason   string         `json:"endReason,omitempty"`
+	Outcome     string         `json:"outcome,omitempty"`
 	Expired     bool           `json:"expired"`
 	Open        bool           `json:"open"`
 	Running     bool           `json:"running"`
@@ -840,7 +848,7 @@ func requests() []method {
 		{name: "setup.check", params: NoParams{}, result: Setup{}},
 		{name: "login.key", params: LoginKeyParams{}, result: LoginNote{}},
 		{name: "login.logout", params: LogoutParams{}, result: LoginNote{}},
-		{name: queryPrefix + "usage", params: NoParams{}, result: UsageReport{}},
+		{name: queryPrefix + "usage", params: NoParams{}, result: UsageAnswer{}},
 		{name: queryPrefix + "doctor", params: NoParams{}, result: DoctorReport{}},
 		{name: queryPrefix + "context", params: SessionParams{}, result: ContextReport{}},
 		{name: "session.info", params: SessionParams{}, result: SessionInfo{}},

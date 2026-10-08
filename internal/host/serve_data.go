@@ -7,8 +7,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/learn"
 	"tofu/internal/memory"
 	roster "tofu/internal/subagent"
@@ -132,7 +134,7 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 			return LoginNote{Note: note}, err
 		})
 	case queryPrefix + "usage":
-		return typedVerb[UsageReport](s, raw, "usage")
+		return handle(raw, func(NoParams) (any, error) { return s.usageNow() })
 	case queryPrefix + "doctor":
 		return typedVerb[DoctorReport](s, raw, "doctor")
 	case queryPrefix + "context":
@@ -172,6 +174,42 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 	}
 	return nil, &Refusal{Code: CodeNoMethod, Message: "tofu.host/1 has no method " + strconv.Quote(method)}
 }
+
+type usageHeld struct {
+	mu      sync.Mutex
+	last    UsageAnswer
+	reading bool
+}
+
+func (s *server) usageNow() (UsageAnswer, error) {
+	s.usage.mu.Lock()
+	last := s.usage.last
+	stale := !last.ReadAt.IsZero() && !s.usage.reading && time.Since(last.ReadAt) >= konst.ServeQuotaPollMinutes*time.Minute
+	s.usage.reading = s.usage.reading || stale
+	s.usage.mu.Unlock()
+	if last.ReadAt.IsZero() {
+		return s.readUsage()
+	}
+	if stale {
+		go s.refreshUsage()
+	}
+	last.AgeMs = time.Since(last.ReadAt).Milliseconds()
+	return last, nil
+}
+
+func (s *server) readUsage() (UsageAnswer, error) {
+	report, err := verbAs[UsageReport](s, "usage")
+	read := UsageAnswer{UsageReport: report, ReadAt: time.Now()}
+	s.usage.mu.Lock()
+	defer s.usage.mu.Unlock()
+	s.usage.reading = false
+	if err == nil {
+		s.usage.last = read
+	}
+	return read, err
+}
+
+func (s *server) refreshUsage() { _, _ = s.readUsage() }
 
 func (s *server) docs(p DocsParams) (any, error) {
 	if p.Topic == "" {

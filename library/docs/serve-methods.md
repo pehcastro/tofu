@@ -26,7 +26,8 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   tells an older tofu from a newer
 - `session.list`: takes `search` and `limit`; answers `head` and `sessions`,
   a row each with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
-  `model`, `costUsd`, `open` for the one open here, `running` while a turn
+  `model`, `costUsd`, `outcome` as the session recorded it, `open` for the
+  one open here, `running` while a turn
   runs, and `heldBy` when another tofu holds it
 - `session.open`: takes `session` (none starts a fresh one), `asking` and
   `replay`, how many of the newest lines it sends; answers `session` and
@@ -62,7 +63,10 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
 - reads, `query.` and: `models` (the models, `wires` signed in and `stale`),
   `settings`, `rules`, `agents`, `library`, `memory`, `hooks`, `changelog`
   (every version, and `seen`, the newest you read), `update` (it never
-  installs), `usage`, `doctor`, `accounts` (`subscriptions` with their
+  installs), `usage` (each provider row names its `account`, the id
+  `quota.updated` uses, and its `name`; the last reading, at once, with `read_at` and
+  `age_ms`; the first is read when a session opens, and one past five
+  minutes is read again behind the answer), `doctor`, `accounts` (`subscriptions` with their
   `accounts`, and `keys`), `cron`, `docs` (takes `topic`; answers `topics` and
   `entries`, or `page`), `context` (takes `session`) and `ledger` (takes `id`,
   or `last` and `point`; answers `rows`, each with its `precedents`)
@@ -91,7 +95,7 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `provider` and `number`; both answer `note`. `login.start` takes `role` and
   `provider`. `settings.set` takes `key`, `value` and `scope`
 - `cron.command` takes the line you would type, such as `/loop 10m check the
-  build`, and answers `note`. `label` takes `row` and `outcome`
+  build`, or `/cron delete all`, and answers `note`. `label` takes `row` and `outcome`
 
 ## Change it
 

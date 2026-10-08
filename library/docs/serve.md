@@ -39,7 +39,15 @@ answers. This page is what serve sends without being asked.
   hook"}`: you, a cron fire, a sub-agent's report, a line tofu added. Older
   sessions, and a cron fire that joined a running turn, read as `person`
 - `cron.updated` and `query.cron` carry `live`, `goals` and each job's `id`,
-  `schedule`, `prompt`, `paused`, `next` and `ended`
+  `schedule`, `prompt`, `paused`, `next` and `ended`. A fire that starts a
+  turn is told by that turn's `origin` alone, with no `note`; a fire that
+  joins a running turn still sends one
+- `tool.started`, `tool.completed` and `file.edit` made by a sub-agent carry
+  its `agent` and `instance`, the name its `agent.started` carried, live and
+  on a replay; a replay carries each event's real `turn` and the item it had
+  live
+- `agent.ended`: `endedAt` and `durationMs` from the run the session
+  recorded, and the `turn` that spawned it, the same on a replay as live
 - `turn.steered`: the lead read a message sent mid-turn; until it comes, the
   message is still queued
 - `quota.updated`: when a session opens, after every turn and every five
@@ -47,8 +55,10 @@ answers. This page is what serve sends without being asked.
 - `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
   so history after a seq is a read of the log; a tool call's notice names the
   item of its `tool.started`
-- `decision`: every gate, and `tofu/requestApproval`, a request, when a gate
-  asks you; `approval.resolved` says which answer won and who sent it
+- `decision`: every gate, with `at`, when it was judged, `call`, the item
+  of the `tool.started` it judged, and
+  `tofu/requestApproval`, a request, when a gate asks you;
+  `approval.resolved` says which answer won and who sent it
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never
   waits; `session.state` answers it
 - `tofu serve --schema` prints the JSON Schema of every line written, and of

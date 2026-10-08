@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	jevwire "tofu/internal/judge/jev/wire/openrouter"
@@ -191,7 +192,7 @@ func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.G
 		decision.Verdict, decision.PersonOnly = ledger.VerdictAsk, true
 	}
 	if g.watch != nil {
-		g.watch(ctx, request.Tool, decision, err)
+		g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
 	}
 	return decision, err
 }

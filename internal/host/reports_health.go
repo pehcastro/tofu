@@ -26,8 +26,16 @@ type UsageReport struct {
 	Missing    []DoctorBlocker    `json:"missing,omitempty"`
 }
 
+type UsageAnswer struct {
+	UsageReport
+	ReadAt time.Time `json:"read_at"`
+	AgeMs  int64     `json:"age_ms"`
+}
+
 type CredentialReport struct {
 	Provider string         `json:"provider"`
+	Account  string         `json:"account,omitempty"`
+	Name     string         `json:"name,omitempty"`
 	Plan     string         `json:"plan,omitempty"`
 	State    string         `json:"state"`
 	Windows  []WindowReport `json:"windows,omitempty"`

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"tofu/internal/host"
@@ -21,6 +22,7 @@ const (
 
 type pollResult struct {
 	row       int64
+	name      string
 	report    quota.Report
 	err       error
 	unusable  string
@@ -44,6 +46,8 @@ func credentialReports(results []pollResult, now time.Time) []credentialReport {
 	for _, result := range results {
 		reports = append(reports, credentialReport{
 			Provider: string(result.report.Provider),
+			Account:  quotaAccount(result.row),
+			Name:     result.name,
 			Plan:     result.report.Plan,
 			State:    credentialState(result, now),
 			Windows:  windowsOf(result.report),
@@ -51,6 +55,8 @@ func credentialReports(results []pollResult, now time.Time) []credentialReport {
 	}
 	return reports
 }
+
+func quotaAccount(row int64) string { return "#" + strconv.FormatInt(row, 10) }
 
 func windowsOf(report quota.Report) []windowReport {
 	windows := make([]windowReport, 0, len(report.Windows))
@@ -160,13 +166,13 @@ func pollRowsOn(
 	results := make([]pollResult, 0, len(rows))
 	versions, _ := subFingerprint(".")
 	for _, row := range rows {
-		provider := quota.Provider(row.Credential.Provider)
+		provider, name := quota.Provider(row.Credential.Provider), accountName(row.Credential.Identity, false)
 		if urls == nil && sys.CredentialsHiddenFromTests() {
-			results = append(results, pollResult{row: row.ID, report: quota.Report{Provider: provider}, unusable: noVendorInATest})
+			results = append(results, pollResult{row: row.ID, name: name, report: quota.Report{Provider: provider}, unusable: noVendorInATest})
 			continue
 		}
 		if cause := row.Unusable(now()); cause != "" {
-			results = append(results, pollResult{row: row.ID, report: quota.Report{Provider: provider}, unusable: cause})
+			results = append(results, pollResult{row: row.ID, name: name, report: quota.Report{Provider: provider}, unusable: cause})
 			continue
 		}
 		spec, err := cred.Lookup(string(row.Credential.Provider))
@@ -180,7 +186,7 @@ func pollRowsOn(
 			Credential:    cred.NewAccountManager(store, spec, row.ID),
 			ClientVersion: clientVersion(versions, row.Credential.Provider),
 		})
-		results = append(results, pollResult{row: row.ID, report: report, err: err})
+		results = append(results, pollResult{row: row.ID, name: name, report: report, err: err})
 	}
 	return results, nil
 }

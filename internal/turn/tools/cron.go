@@ -46,7 +46,7 @@ func (c Cron) Definition() llm.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"action":     map[string]any{"type": "string", "enum": []string{"create", "update", "list", "history", "pause", "resume", "delete"}},
-				"id":         text("the job, such as c1; every action but create and list names one"),
+				"id":         text("the job, such as c1; every action but create and list names one, and delete takes all for every job"),
 				"schedule":   text("a 5-field cron line, @hourly, @daily, every 10m, or once at 15:04"),
 				"prompt":     text("what the job posts when it fires"),
 				"expires_in": text("how long from now the job lives, such as 48h or 3d"),
@@ -88,11 +88,18 @@ func (c Cron) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 		if args.Reason == "" {
 			return turn.Result{}, fmt.Errorf("cron: %w", cron.ErrNoReason)
 		}
-		if err := c.Book.Delete(args.ID); err != nil {
+		deleted := []string{args.ID}
+		if args.ID == cron.AllJobs {
+			deleted, err = c.Book.DeleteAll()
+		} else {
+			err = c.Book.Delete(args.ID)
+		}
+		if err != nil {
 			return turn.Result{}, fmt.Errorf("cron: %w", err)
 		}
-		c.Told("the orchestrator deleted cron " + args.ID + ": " + args.Reason)
-		return turn.Result{Content: "deleted " + args.ID, Command: args.Action}, nil
+		said := cron.DeletedLine(deleted)
+		c.Told("the orchestrator " + said + ": " + args.Reason)
+		return turn.Result{Content: said, Command: args.Action}, nil
 	case "create":
 		job, err = c.Book.Create(cron.Spec{Schedule: args.Schedule, Prompt: args.Prompt, Expires: expires}, cron.Agent, args.Reason, now)
 	case "update":

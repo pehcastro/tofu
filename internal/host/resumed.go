@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -32,6 +33,9 @@ type resumedLead struct {
 	origins map[string]string
 	rows    []SubAgentRow
 	said    []recordedMessage
+	runs    map[string]session.AgentRun
+	worked  map[string][]session.Event
+	turn    string
 }
 
 type recordedMessage struct {
@@ -57,19 +61,24 @@ func resumedChat(carry Carry, dir string) []Event {
 	}
 	var chat []Event
 	mask := sys.LoadKeyRedactor().Redact
-	lead := &resumedLead{
-		watch:   &watcher{emit: func(event Event) { chat = append(chat, redacted(event, mask)) }, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}},
-		calls:   map[string]*recordedCall{},
-		origins: map[string]string{},
-	}
+	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}}
+	lead.watch = &watcher{emit: func(event Event) {
+		event.Turn = lead.turn
+		chat = append(chat, redacted(event, mask))
+	}, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
 	if store, err := carry.reading(dir); err == nil {
 		lead.read(store, carry.Session)
+		lead.runs = recordedRuns(store, carry.Session)
 		store.ForgetRead()
 		labelled = labelledAs(store, labelled)
 	}
 	lead.watch.emit(labelled)
 	for _, message := range carry.Messages {
+		said := lead.recorded(message)
+		if said != nil && message.Role == llm.RoleUser && startsATurn(lead.origins[message.Content]) {
+			lead.turn, lead.watch.turnID = said.Turn, cmp.Or(said.Turn, carry.Session)
+		}
 		switch message.Role {
 		case llm.RoleUser:
 			task := carry.taskIn(message.Content)
@@ -85,14 +94,14 @@ func resumedChat(carry Carry, dir string) []Event {
 			for _, call := range message.ToolCalls {
 				lead.watch.called(call, "")
 				if recorded := lead.calls[call.ID]; recorded != nil && recorded.spawn.Name != "" && !lead.drawn(recorded.spawn.Name) {
-					lead.show(recorded.spawn)
+					lead.spawned(recorded.spawn)
 				}
 			}
 		case llm.RoleTool:
 			lead.watch.result(message, "")
 		case llm.RoleSystem, llm.RoleUnknown:
 		}
-		if said := lead.recorded(message); said != nil {
+		if said != nil {
 			lead.watch.emit(Event{Kind: EventPersisted, ID: said.ID, Logged: said})
 		}
 	}
@@ -125,6 +134,9 @@ func (l *resumedLead) note(event session.Event) {
 		return
 	}
 	if event.Agent != "" {
+		if event.Kind == session.EventToolCall || event.Kind == session.EventToolResult {
+			l.worked[event.Agent] = append(l.worked[event.Agent], event)
+		}
 		return
 	}
 	if event.Kind == session.EventMessage {
@@ -148,18 +160,56 @@ func (l *resumedLead) note(event session.Event) {
 	}
 	switch event.Kind {
 	case session.EventToolCall:
-		var call session.CallBody
-		_ = json.Unmarshal(event.Body, &call)
-		recorded.call = llm.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args}
+		recorded.call = callOf(event)
 	case session.EventToolResult:
-		var result session.ResultBody
-		_ = json.Unmarshal(event.Body, &result)
-		recorded.result = llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: result.Content, ToolResultBytes: result.ResultBytes}
+		recorded.result = resultOf(event)
 	case session.EventSpawn:
 		var body session.SpawnBody
 		_ = json.Unmarshal(event.Body, &body)
 		recorded.spawn = SubAgentRow{Started: event.At, Name: body.Agent, Agent: body.Definition, Model: body.Model, Owns: body.Owns, Doing: body.Mission, State: roster.Working}
 	}
+}
+
+func callOf(event session.Event) llm.ToolCall {
+	var call session.CallBody
+	_ = json.Unmarshal(event.Body, &call)
+	return llm.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args}
+}
+
+func resultOf(event session.Event) llm.Message {
+	var result session.ResultBody
+	_ = json.Unmarshal(event.Body, &result)
+	return llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: result.Content, ToolResultBytes: result.ResultBytes}
+}
+
+func startsATurn(source string) bool {
+	return source == "" || source == taskSource || strings.HasPrefix(source, cronSource)
+}
+
+func (l *resumedLead) spawned(row SubAgentRow) {
+	l.show(row)
+	for _, event := range l.worked[row.Name] {
+		if event.Kind == session.EventToolCall {
+			l.watch.called(callOf(event), event.Agent)
+		} else {
+			l.watch.result(resultOf(event), event.Agent)
+		}
+	}
+}
+
+func recordedRuns(store *session.Store, id string) map[string]session.AgentRun {
+	lineage, _ := store.Ancestors(id)
+	slices.Reverse(lineage)
+	if header, err := store.Header(id); err == nil {
+		lineage = append(lineage, header)
+	}
+	runs := map[string]session.AgentRun{}
+	for _, from := range lineage {
+		for _, run := range from.Agents {
+			runs[run.Agent] = run
+		}
+	}
+	return runs
 }
 
 func (l *resumedLead) reportsIn(task string) (string, bool) {
@@ -171,6 +221,7 @@ func (l *resumedLead) reportsIn(task string) (string, bool) {
 		}
 		at := slices.IndexFunc(l.rows, func(row SubAgentRow) bool { return row.Name == report.agent })
 		l.rows[at].State, l.rows[at].Report, report.drawn = report.state, report.text, true
+		l.rows[at].endedAs(l.runs[report.agent])
 		l.show()
 		task, drew = strings.Replace(task, report.text, "", 1), true
 	}
@@ -234,7 +285,7 @@ func (l *resumedLead) linked(agent string) bool {
 		if recorded.spawn.Name == agent && recorded.call.ID != "" {
 			l.watch.called(recorded.call, "")
 			l.watch.result(recorded.result, "")
-			l.show(recorded.spawn)
+			l.spawned(recorded.spawn)
 			return true
 		}
 	}

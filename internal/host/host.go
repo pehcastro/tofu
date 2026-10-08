@@ -107,6 +107,7 @@ type Host struct {
 	reads  *turn.ReadLedger
 	inbox  *turn.Inbox
 	roster *roster.Roster
+	spent  *tokenTally
 	shown  map[string]bool
 	asks   *asks
 }
@@ -345,7 +346,7 @@ func (h *Host) carry(resumed Carry) error {
 	if h.engine != nil {
 		h.engine.Renew()
 	}
-	h.reads, h.inbox, h.roster = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}
+	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
 	h.ran, h.carried, h.prefix = nil, resumed.Messages, &turn.Prefix{}
 	for _, message := range resumed.Messages {
 		if message.ToolCallID != "" {

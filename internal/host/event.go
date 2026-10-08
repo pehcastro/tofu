@@ -76,6 +76,7 @@ type Event struct {
 	Origin    Origin
 	LastAt    time.Time
 	Step      int
+	Turn      string
 }
 
 type Status string
@@ -153,6 +154,7 @@ type Reason struct {
 
 type Decision struct {
 	Tool          string
+	Call          string
 	Verdict       Verdict
 	Answers       []GateAnswer
 	Reason        Reason
@@ -200,6 +202,8 @@ type SubAgentRow struct {
 	State   roster.State
 	Calls   []Call
 	Report  string
+	Ended   time.Time
+	Turn    string
 }
 
 func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[string]int, calls func(roster.SubAgent) []Call) []SubAgentRow {
@@ -230,6 +234,12 @@ func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[
 		}
 	}
 	return rows
+}
+
+func (r *SubAgentRow) endedAs(run session.AgentRun) {
+	if run.EndedAt != nil {
+		r.Started, r.Ended, r.Turn = run.StartedAt, *run.EndedAt, run.SpawnTurn
+	}
 }
 
 type Pick struct {

@@ -44,8 +44,8 @@ func (h *Host) armCron() {
 
 func (h *Host) fire(fires []cron.Fire) {
 	for _, fired := range fires {
-		h.note(fired.Line)
 		if fired.Prompt == "" {
+			h.note(fired.Line)
 			continue
 		}
 		origin := Origin{Kind: OriginCron, Job: fired.ID}
@@ -65,6 +65,7 @@ func (h *Host) fire(fires []cron.Fire) {
 		}
 		h.unread = append(h.unread, fired)
 		h.mu.Unlock()
+		h.note(fired.Line)
 		h.Steer(fired.Prompt)
 	}
 }
@@ -88,9 +89,6 @@ func (h *Host) ended(out *emitter) {
 		if note := h.cron.Finished(id, answer); note != "" {
 			h.note(note)
 		}
-	}
-	for index := range unread {
-		unread[index].Line = unread[index].ID + " fired during a turn that ended before reading it, so it starts its own"
 	}
 	h.fire(unread)
 	if !stopped {

@@ -28,10 +28,11 @@ const (
 	cronWord   = "/cron"
 	loopWord   = "/loop"
 	goalWord   = "/goal"
-	cronUsage  = `/cron "<schedule>" <prompt> [--until "<cmd>"] [--expires 48h], /cron list, /cron history <id>, /cron pause|resume|delete <id>, /cron edit <id> [--schedule "<schedule>"] [--prompt "<text>"] [--expires 48h] [--until "<cmd>"] --reason "<why>"`
+	cronUsage  = `/cron "<schedule>" <prompt> [--until "<cmd>"] [--expires 48h], /cron list, /cron history <id>, /cron pause|resume|delete <id>, /cron delete all, /cron edit <id> [--schedule "<schedule>"] [--prompt "<text>"] [--expires 48h] [--until "<cmd>"] --reason "<why>"`
 	loopUsage  = "/loop <interval> <prompt>, such as /loop 10m check the build"
 	goalUsage  = `/goal <prompt> --until "<cmd>", such as /goal make the test pass --until "go test ./..."`
 	timeLayout = "Jan 2 15:04:05"
+	AllJobs    = "all"
 )
 
 func IsCommand(line string) bool {
@@ -139,8 +140,11 @@ func (b *Book) Command(line string, now time.Time) (Reply, error) {
 	case verb == "history":
 		_, err := b.Job(id)
 		return Reply{View: ViewHistory, Job: id}, err
+	case verb == "delete" && id == AllJobs:
+		deleted, err := b.DeleteAll()
+		return Reply{Note: DeletedLine(deleted)}, err
 	case verb == "delete":
-		return Reply{Note: "deleted cron " + id}, b.Delete(id)
+		return Reply{Note: DeletedLine([]string{id})}, b.Delete(id)
 	case verb == "pause":
 		return b.updateReply(id, Change{Paused: &paused}, parsed.flags["reason"], "paused by the person", now)
 	case verb == "resume":
@@ -153,6 +157,24 @@ func (b *Book) Command(line string, now time.Time) (Reply, error) {
 	}
 	spec.Schedule, spec.Prompt = args[0], strings.Join(args[1:], " ")
 	return b.createReply(spec, "made by /cron", now)
+}
+
+func (b *Book) DeleteAll() ([]string, error) {
+	var deleted []string
+	for _, job := range b.Jobs() {
+		if err := b.Delete(job.ID); err != nil {
+			return deleted, err
+		}
+		deleted = append(deleted, job.ID)
+	}
+	return deleted, nil
+}
+
+func DeletedLine(ids []string) string {
+	if len(ids) == 0 {
+		return "no cron job was there to delete"
+	}
+	return "deleted cron " + strings.Join(ids, ", ")
 }
 
 func (b *Book) createReply(spec Spec, reason string, now time.Time) (Reply, error) {

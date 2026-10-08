@@ -90,7 +90,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		return attached
 	}
 	images := imagesOf(task)
-	watch := &watcher{held: h.roster, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
+	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	person := awaitPerson(emit, h.asks)
 	var prepared Prepared
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
@@ -100,6 +100,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		Now:      h.now,
 		Person:   person,
 		Gate: func(ctx context.Context, tool string, gated turn.GateDecision, err error) {
+			asker := turn.SubAgentAsking(ctx)
 			decided := Decision{Tool: tool, Verdict: Ask}
 			switch {
 			case err != nil:
@@ -110,7 +111,10 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 			default:
 				return
 			}
-			emit(Event{Kind: EventDecision, ID: gated.ID, Decision: &decided, Agent: turn.SubAgentAsking(ctx), Promote: watch.spawning(tool)})
+			if call, judging := ctx.Value(judgingCallKey{}).(string); judging {
+				decided.Call = watch.eventID(asker, call)
+			}
+			emit(Event{Kind: EventDecision, ID: gated.ID, Decision: &decided, Agent: asker, Promote: watch.spawning(tool)})
 		},
 		Roster: h.roster,
 		Inbox:  h.inbox,
@@ -135,6 +139,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		emit(gateOffEvent(prepared.GateOff))
 	}
 	watch.spawner, watch.maxSteps, watch.decisions = prepared.Spawner, prepared.MaxSteps, prepared.Decisions
+	watch.ran = func(agent string) session.AgentRun { return recordedRuns(sessions, h.ID())[agent] }
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
 	config.History, config.Prefix = h.carried, h.prefix
@@ -241,6 +246,12 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	if err != nil {
 		fail(err)
 	}
+}
+
+type judgingCallKey struct{}
+
+func JudgingCall(ctx context.Context, call string) context.Context {
+	return context.WithValue(ctx, judgingCallKey{}, call)
 }
 
 func (h *Host) holdTurn(id string) (func() error, error) {

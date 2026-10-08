@@ -162,7 +162,7 @@ func serveSessions(open string) (host.SessionList, error) {
 	for index, row := range report.Sessions {
 		list.Sessions[index] = host.SessionRow{ID: row.ID, Name: row.Name, Handle: row.Handle, Family: row.Family, Generation: row.Generation, Generations: row.Generations,
 			At: row.At, LastAt: row.LastAt, Task: row.Task, Turns: row.Turns, SubAgents: row.Agents, Wire: row.Wire, Model: row.Model, CostUSD: row.CostUSD,
-			EndedAt: row.EndedAt, EndReason: string(row.EndReason), Expired: row.Expired, Open: row.ID == open || opened.Family != "" && row.Family == opened.Family}
+			EndedAt: row.EndedAt, EndReason: string(row.EndReason), Outcome: row.Outcome, Expired: row.Expired, Open: row.ID == open || opened.Family != "" && row.Family == opened.Family}
 		var held sessionstore.BusyError
 		if errors.As(store.Busy(row.ID), &held) {
 			list.Sessions[index].HeldBy = &host.SessionHolder{PID: held.PID, Since: held.Since}

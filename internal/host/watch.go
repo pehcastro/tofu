@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -61,12 +62,37 @@ type watcher struct {
 	cacheRead int
 	marks     sync.Mutex
 	shows     sync.Mutex
-	spent     map[string]int
+	spent     *tokenTally
 	asked     map[string][]Call
 	calls     map[string][]Call
 	spawns    []string
 	thoughts  atomic.Int64
 	stop      *leadStop
+	ran       func(agent string) session.AgentRun
+	ends      map[string]session.AgentRun
+}
+
+type tokenTally struct {
+	mu sync.Mutex
+	by map[string]int
+}
+
+func (t *tokenTally) add(agent string, tokens int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.by == nil {
+		t.by = map[string]int{}
+	}
+	t.by[agent] += tokens
+}
+
+func (t *tokenTally) counts() map[string]int {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return maps.Clone(t.by)
 }
 
 type watchedSubAgent struct {
@@ -295,9 +321,12 @@ func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.Tool
 	}
 	a.shows.Lock()
 	if a.asked == nil {
-		a.spent, a.asked = map[string]int{}, map[string][]Call{}
+		a.asked = map[string][]Call{}
 	}
-	a.spent[subAgent] += tokens
+	if a.spent == nil {
+		a.spent = &tokenTally{}
+	}
+	a.spent.add(subAgent, tokens)
 	for _, call := range calls {
 		intent, _ := callIntent(call)
 		a.asked[subAgent] = append(a.asked[subAgent], Call{ID: a.eventID(subAgent, call.ID), At: a.now(), Tool: call.Name, Text: intent})
@@ -348,7 +377,27 @@ func (a *watcher) subAgents() []SubAgentRow {
 	}
 	a.shows.Lock()
 	defer a.shows.Unlock()
-	return SubAgentRows(agents, a.now(), a.maxSteps, a.spent, func(agent roster.SubAgent) []Call { return a.calls[agent.ID] })
+	rows := SubAgentRows(agents, a.now(), a.maxSteps, a.spent.counts(), func(agent roster.SubAgent) []Call { return a.calls[agent.ID] })
+	if a.ran == nil {
+		return rows
+	}
+	if a.ends == nil {
+		a.ends = map[string]session.AgentRun{}
+	}
+	for index := range rows {
+		row := &rows[index]
+		if !ended(row.State) {
+			delete(a.ends, row.Name)
+			continue
+		}
+		run, read := a.ends[row.Name]
+		if !read {
+			run = a.ran(row.Name)
+			a.ends[row.Name] = run
+		}
+		row.endedAs(run)
+	}
+	return rows
 }
 
 func (a *watcher) verdictOf(id, report string) (string, bool) {
