@@ -6,7 +6,7 @@ use desk_ui::components::sidebar::{
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
-    Account, Notice, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
+    Github, GithubUser, Notice, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
 };
 use desk_ui::icon::Icon;
 use desk_ui::theme::Theme;
@@ -64,12 +64,11 @@ fn board_title(open: Option<TitlePop>) -> Title {
             ),
         ],
         unread: true,
-        letter: Some("p".into()),
-        account: Some(Account {
-            name: "pehcastro".into(),
-            found: "5h window at 34%".into(),
+        github: Github::SignedIn(GithubUser {
+            login: "pehcastro".into(),
+            name: Some("Luiz".into()),
+            picture: None,
         }),
-        version: Some("0.5.1".into()),
         keys: WindowKeys::Shown,
         open,
         tabs_x: SIDEBAR_COLUMN,
@@ -109,9 +108,7 @@ fn empty_title(open: Option<TitlePop>) -> Title {
         palette_keys: "Ctrl K".into(),
         notices: Vec::new(),
         unread: false,
-        letter: None,
-        account: None,
-        version: None,
+        github: Github::SignedOut,
         keys: WindowKeys::Shown,
         open,
         tabs_x: SIDEBAR_COLUMN,
@@ -265,6 +262,16 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         .flex()
         .flex_col()
         .gap_4()
+        .child(named(
+            "Status bar, quota open",
+            theme,
+            frame(
+                StatusBar::new("chrome-status-quota", board.clone(), picked_status(cx))
+                    .version(Some("0.5.1".into()))
+                    .quota_open(true),
+            )
+            .pt(px(POP_ROOM)),
+        ))
         .child(named(
             "Sidebar sessions, each state, right click a row for its menu",
             theme,

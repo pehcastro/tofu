@@ -20,8 +20,17 @@ pub fn status_bar(problems: &[ThemeError], status: Status, cx: &mut Context<Desk
     StatusBar::new(
         "status-bar",
         status,
-        cx.listener(|_, pick: &StatusPick, _, _| {
-            eprintln!("desk: status {pick:?} opens a screen still on fixtures, so it stays inert")
+        cx.listener(|desk, pick: &StatusPick, window, cx| match pick {
+            StatusPick::AllProviders => desk.open_usage(window, cx),
+            StatusPick::Branch
+            | StatusPick::Session
+            | StatusPick::Context
+            | StatusPick::Classifier
+            | StatusPick::Cron => {
+                eprintln!(
+                    "desk: status {pick:?} opens a screen still on fixtures, so it stays inert"
+                )
+            }
         }),
     )
 }

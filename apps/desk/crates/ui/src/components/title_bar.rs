@@ -2,12 +2,12 @@ use std::rc::Rc;
 
 use desk_core::control::Control;
 use gpui::{
-    AnyElement, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, SharedString,
-    Window, WindowControlArea, div, prelude::*, px,
+    AnyElement, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, ImageSource,
+    SharedString, Window, WindowControlArea, div, prelude::*, px,
 };
 
 use crate::component::{control, icon, icon_button};
-use crate::components::avatar::{PersonSize, person_avatar};
+use crate::components::avatar::{Face, NameTip, PersonSize, person_avatar};
 use crate::components::card::caption;
 use crate::components::chip::mono;
 use crate::components::empty::empty_state;
@@ -39,7 +39,9 @@ const POP_CAPTION_GROUP_TOP: f32 = 10.0;
 const POP_CAPTION_BOTTOM: f32 = 6.0;
 const ACCOUNT_HEAD_BOTTOM: f32 = 10.0;
 const NO_NOTICES: &str = "No notices";
-const NO_ACCOUNT: &str = "no account";
+const ASKING: &str = "Asking gh who is signed in";
+const SIGNED_OUT: &str = "Not signed in to GitHub";
+const SIGN_IN: &str = "gh auth login";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TitlePick {
@@ -73,9 +75,38 @@ pub struct Notice {
 }
 
 #[derive(Clone)]
-pub struct Account {
-    pub name: SharedString,
-    pub found: SharedString,
+pub struct GithubUser {
+    pub login: SharedString,
+    pub name: Option<SharedString>,
+    pub picture: Option<ImageSource>,
+}
+
+#[derive(Clone)]
+pub enum Github {
+    Asking,
+    SignedOut,
+    SignedIn(GithubUser),
+}
+
+impl Github {
+    fn face(&self) -> Option<Face> {
+        let Github::SignedIn(user) = self else {
+            return None;
+        };
+        let first = user.login.chars().find(|c| c.is_alphanumeric())?;
+        Some(Face {
+            letter: first.to_lowercase().collect::<String>().into(),
+            picture: user.picture.clone(),
+        })
+    }
+
+    fn tip(&self) -> Option<SharedString> {
+        match self {
+            Github::Asking => None,
+            Github::SignedOut => Some(SIGNED_OUT.into()),
+            Github::SignedIn(user) => Some(user.login.clone()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -84,9 +115,7 @@ pub struct Title {
     pub palette_keys: SharedString,
     pub notices: Vec<Notice>,
     pub unread: bool,
-    pub letter: Option<SharedString>,
-    pub account: Option<Account>,
-    pub version: Option<SharedString>,
+    pub github: Github,
     pub keys: WindowKeys,
     pub open: Option<TitlePop>,
     pub tabs_x: f32,
@@ -261,40 +290,29 @@ fn notices(title: &Title, rows: &PopRow, theme: &Theme) -> Vec<AnyElement> {
     out
 }
 
-fn account_menu(title: &Title, theme: &Theme) -> Div {
-    let t3 = ink(theme, T3);
-    let small = |text: SharedString| div().text_size(px(FONT_SMALL)).text_color(t3).child(text);
-    let (name, found) = match &title.account {
-        Some(account) => (account.name.clone(), Some(account.found.clone())),
-        None => (NO_ACCOUNT.into(), None),
+fn person_menu(github: &Github, theme: &Theme) -> Div {
+    let small = div().text_size(px(FONT_SMALL)).text_color(ink(theme, T3));
+    let (name, below) = match github {
+        Github::Asking => (ASKING.into(), None),
+        Github::SignedOut => (
+            SIGNED_OUT.into(),
+            Some(small.font_family(mono(theme)).child(SIGN_IN)),
+        ),
+        Github::SignedIn(user) => (
+            user.name.clone().unwrap_or_else(|| user.login.clone()),
+            Some(small.child(user.login.clone())),
+        ),
     };
     div()
         .flex()
-        .flex_col()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(POP_CAPTION_X))
-                .pt(px(POP_CAPTION_TOP))
-                .px(px(POP_CAPTION_X))
-                .pb(px(ACCOUNT_HEAD_BOTTOM))
-                .line_height(px(ACCOUNT_LINE))
-                .child(person_avatar(None, PersonSize::Menu, theme))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(name)
-                        .children(found.map(small)),
-                ),
-        )
-        .children(title.version.clone().map(|version| {
-            div()
-                .px(px(POP_CAPTION_X))
-                .pb(px(POP_CAPTION_BOTTOM))
-                .child(caption(format!("{PRODUCT_NAME} {version}"), theme))
-        }))
+        .items_center()
+        .gap(px(POP_CAPTION_X))
+        .pt(px(POP_CAPTION_TOP))
+        .px(px(POP_CAPTION_X))
+        .pb(px(ACCOUNT_HEAD_BOTTOM))
+        .line_height(px(ACCOUNT_LINE))
+        .child(person_avatar(github.face(), PersonSize::Menu, theme))
+        .child(div().flex().flex_col().child(name).children(below))
 }
 
 #[derive(Clone, Copy)]
@@ -474,10 +492,13 @@ impl RenderOnce for TitleBar {
             .size(px(CONTROL))
             .rounded_full()
             .child(person_avatar(
-                title.letter.clone(),
+                title.github.face(),
                 PersonSize::Title,
                 &theme,
             ))
+            .when_some(title.github.tip(), |account, tip| {
+                account.tooltip(move |_, cx| cx.new(|_| NameTip(tip.clone())).into())
+            })
             .on_click(toggle(TitlePop::Account));
         div()
             .id(self.id.clone())
@@ -543,7 +564,7 @@ impl RenderOnce for TitleBar {
                     .open(shown == Some(TitlePop::Account))
                     .placement(under)
                     .width(ACCOUNT_POP_WIDTH)
-                    .child(rows.body(&focus).child(account_menu(title, &theme))),
+                    .child(rows.body(&focus).child(person_menu(&title.github, &theme))),
             )
             .when(!cfg!(target_os = "macos"), |bar| {
                 bar.child(captions(title.keys, window.is_maximized(), &theme))

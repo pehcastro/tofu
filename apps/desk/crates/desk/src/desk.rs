@@ -20,7 +20,7 @@ use crate::screens::usage::UsageScreen;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
-use crate::title_bar::{Bell, title_bar};
+use crate::title_bar::{Bell, ask_github, github, title_bar};
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
@@ -49,6 +49,7 @@ use desk_ui::components::status_bar::{Branch, ContextUse, Quota, cron_trigger};
 use desk_ui::components::tabs::{Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
+use desk_ui::components::title_bar::Github;
 #[cfg(feature = "screen-work")]
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -81,6 +82,7 @@ const TILE_BOTTOM: f32 = 8.0;
 const WINDOW_RADIUS: f32 = 8.0;
 const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
+const USAGE_SCREEN: &str = "usage";
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
 const OPEN_SETTINGS_ID: &str = "settings.open";
@@ -163,6 +165,7 @@ pub struct Desk {
     palette: Entity<Palette>,
     focus: FocusHandle,
     bell: Bell,
+    github: Github,
     #[cfg(feature = "screen-work")]
     projects: Projects,
     #[cfg(feature = "screen-work")]
@@ -320,6 +323,7 @@ impl Desk {
             palette,
             focus: cx.focus_handle(),
             bell: Bell::default(),
+            github: Github::Asking,
             #[cfg(feature = "screen-work")]
             projects: Projects::default(),
             #[cfg(feature = "screen-work")]
@@ -339,7 +343,22 @@ impl Desk {
                 Err(error) => eprintln!("desk: {error}"),
             }
         }
+        cx.spawn(async move |this, cx| {
+            let answer = cx.background_executor().spawn(async { ask_github() }).await;
+            let told = this.update(cx, |desk, cx| {
+                desk.github = github(answer);
+                cx.notify();
+            });
+            if let Err(error) = told {
+                eprintln!("desk: gh answered after the desk closed: {error}");
+            }
+        })
+        .detach();
         desk
+    }
+
+    pub fn open_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show(USAGE_SCREEN, window, cx);
     }
 
     pub fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1314,6 +1333,7 @@ impl Render for Desk {
         let sheet = self.switch_sheet(cx);
         let status = self.status(cx);
         let cron_menu = self.cron_menu(status.cron, cx);
+        let version = self.tofu_version(cx);
         #[cfg(feature = "screen-work")]
         let menu = self.projects.menu.clone();
         #[cfg(not(feature = "screen-work"))]
@@ -1337,9 +1357,8 @@ impl Render for Desk {
             .child(title_bar(
                 self.sidebar_open,
                 self.tiles_x(),
-                status.quota.as_ref(),
+                self.github.clone(),
                 &self.bell,
-                self.tofu_version(cx),
                 tabs,
                 cx,
             ))
@@ -1361,7 +1380,11 @@ impl Render for Desk {
                             .child(content),
                     ),
             )
-            .child(status_bar(&problems, status, cx).cron_menu(cron_menu))
+            .child(
+                status_bar(&problems, status, cx)
+                    .cron_menu(cron_menu)
+                    .version(version),
+            )
             .child(self.palette.clone())
             .children(menu)
             .children(sheet)

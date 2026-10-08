@@ -1,7 +1,7 @@
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
-    App, Context, Div, ElementId, FontWeight, Motion, Rgba, SharedString, Window, div,
-    linear_color_stop, linear_gradient, prelude::*, px,
+    App, Context, Div, ElementId, FontWeight, ImageSource, Motion, ObjectFit, Rgba, SharedString,
+    StyledImage, Window, div, img, linear_color_stop, linear_gradient, prelude::*, px,
 };
 
 use crate::components::glyph::Glyph;
@@ -10,7 +10,7 @@ use crate::components::size::{
     AVATAR_FEED, AVATAR_LARGE, AVATAR_LIST, AVATAR_ROW, AVATAR_TINT_FEED, AVATAR_TINT_LIST,
     CAPTION_TEXT, CHECK, CHIP_FILL, DONE_MARK, DONE_OFFSET, FONT_AVATAR_FEED, FONT_AVATAR_LARGE,
     FONT_AVATAR_LIST, FONT_AVATAR_ROW, FONT_SMALL, MARK_RING, RADIUS_CHIP_SMALL, RING_OUTSET,
-    RING_TRACK, SPINNER, SPINNER_TRACK, T1, WAIT_MARK, WAIT_OFFSET,
+    RING_TRACK, SPINNER, SPINNER_TRACK, T1, T3, WAIT_MARK, WAIT_OFFSET,
 };
 use crate::live::ActiveTheme;
 use crate::metrics::{ACCOUNT_GRADIENT_ANGLE, AVATAR};
@@ -24,6 +24,11 @@ const TIP_SHADOW_Y: f32 = 4.0;
 const TIP_SHADOW_BLUR: f32 = 12.0;
 const PERSON_MENU: f32 = 32.0;
 const FONT_PERSON_MENU: f32 = 14.0;
+const NOBODY_TOP: f32 = 0.2;
+const NOBODY_GAP: f32 = 0.06;
+const NOBODY_HEAD: f32 = 0.32;
+const NOBODY_BODY_WIDTH: f32 = 0.56;
+const NOBODY_BODY_HEIGHT: f32 = 0.26;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Person {
@@ -140,7 +145,7 @@ impl RenderOnce for AvatarStack {
     }
 }
 
-struct NameTip(SharedString);
+pub(crate) struct NameTip(pub(crate) SharedString);
 
 impl Render for NameTip {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -359,15 +364,38 @@ impl PersonSize {
     }
 }
 
-pub fn person_avatar(letter: Option<SharedString>, size: PersonSize, theme: &Theme) -> Div {
+#[derive(Clone)]
+pub struct Face {
+    pub letter: SharedString,
+    pub picture: Option<ImageSource>,
+}
+
+pub fn person_avatar(face: Option<Face>, size: PersonSize, theme: &Theme) -> Div {
     let (side, font) = size.metrics();
-    div()
+    let disc = div()
+        .relative()
         .flex_none()
         .size(px(side))
         .flex()
         .items_center()
-        .justify_center()
-        .rounded_full()
+        .rounded_full();
+    let Some(face) = face else {
+        let shape = ink(theme, T3);
+        return disc
+            .flex_col()
+            .pt(px(side * NOBODY_TOP))
+            .gap(px(side * NOBODY_GAP))
+            .bg(ink(theme, CHIP_FILL))
+            .child(div().size(px(side * NOBODY_HEAD)).rounded_full().bg(shape))
+            .child(
+                div()
+                    .w(px(side * NOBODY_BODY_WIDTH))
+                    .h(px(side * NOBODY_BODY_HEIGHT))
+                    .rounded_t_full()
+                    .bg(shape),
+            );
+    };
+    disc.justify_center()
         .bg(linear_gradient(
             ACCOUNT_GRADIENT_ANGLE,
             linear_color_stop(theme.color(ColorToken::AccountFrom), 0.0),
@@ -377,7 +405,16 @@ pub fn person_avatar(letter: Option<SharedString>, size: PersonSize, theme: &The
         .line_height(px(side))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(ink(theme, T1))
-        .children(letter)
+        .child(face.letter)
+        .children(face.picture.map(|picture| {
+            img(picture)
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .rounded_full()
+                .object_fit(ObjectFit::Cover)
+        }))
 }
 
 pub fn spinner(id: impl Into<ElementId>, theme: &Theme) -> impl IntoElement {
