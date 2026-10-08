@@ -46,9 +46,11 @@ use desk_ui::components::status_bar::Status;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::status_bar::{Branch, ContextUse, Quota, cron_trigger};
 #[cfg(feature = "screen-work")]
-use desk_ui::components::tabs::{Tab, TabMark};
+use desk_ui::components::tabs::{Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
+#[cfg(feature = "screen-work")]
+use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 #[cfg(feature = "screen-work")]
 use desk_ui::metrics::STATUS_BAR_HEIGHT;
@@ -165,6 +167,8 @@ pub struct Desk {
     projects: Projects,
     #[cfg(feature = "screen-work")]
     tabbed: Vec<&'static str>,
+    #[cfg(feature = "screen-work")]
+    expanded_in: Vec<(&'static str, SharedString)>,
     #[cfg(feature = "screen-work")]
     closed_screens: Vec<ClosedScreen>,
     #[cfg(feature = "screen-work")]
@@ -321,6 +325,8 @@ impl Desk {
             #[cfg(feature = "screen-work")]
             tabbed: Vec::new(),
             #[cfg(feature = "screen-work")]
+            expanded_in: Vec::new(),
+            #[cfg(feature = "screen-work")]
             closed_screens: Vec::new(),
             #[cfg(feature = "screen-work")]
             cron: cron_button(cx),
@@ -467,6 +473,17 @@ impl Desk {
                 icon: None,
                 count: None,
                 mark: TabMark::Close,
+                flag: self
+                    .expanded_in
+                    .iter()
+                    .find(|(expanded, _)| expanded == name)
+                    .map(|(_, workspace)| TabFlag {
+                        icon: Icon::Expand,
+                        tip: format!(
+                            "Expanded view of {name} in {workspace}. Closing this tab will not close the tile there."
+                        )
+                        .into(),
+                    }),
             })
             .collect();
         let openable: Vec<&'static str> = self
@@ -519,6 +536,7 @@ impl Desk {
                 name: name.into(),
                 body: Body::View(expanded.view.clone()),
             });
+            self.expanded_in.push((name, expanded.workspace.clone()));
         }
         self.show(name, window, cx);
     }
@@ -541,6 +559,7 @@ impl Desk {
             });
         }
         self.tabbed.retain(|tabbed| *tabbed != name);
+        self.expanded_in.retain(|(expanded, _)| *expanded != name);
         eprintln!("desk: screen {name} closed");
         cx.notify();
     }
@@ -770,6 +789,7 @@ impl Desk {
         self.parked
             .retain(|parked| !work::EXPANDABLE.contains(&&*parked.name));
         self.tabbed.retain(|name| !work::EXPANDABLE.contains(name));
+        self.expanded_in.clear();
         self.closed_screens.clear();
         self.projects._watch = vec![
             cx.subscribe_in(

@@ -134,6 +134,7 @@ fn workspaces(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
             icon: None,
             count: None,
             mark: TabMark::Close,
+            flag: None,
         })
         .collect();
     header_tabs(
@@ -154,6 +155,7 @@ fn with_screen(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
         icon: None,
         count: None,
         mark: TabMark::Close,
+        flag: None,
     };
     let tabs: Vec<Tab> = WORKSPACES.iter().map(|name| tab(name)).collect();
     header_tabs(
@@ -174,6 +176,7 @@ fn narrow(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
         icon: None,
         count: None,
         mark: TabMark::Close,
+        flag: None,
     };
     header_tabs(
         "chrome-workspaces-narrow",

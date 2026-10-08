@@ -498,6 +498,7 @@ impl Editor {
                 } else {
                     TabMark::Close
                 },
+                flag: None,
             })
             .into_iter()
             .collect();

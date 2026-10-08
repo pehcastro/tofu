@@ -45,7 +45,7 @@ pub type Body<V> = Box<dyn Fn(&Stack, Rect, &Theme, &mut Context<V>) -> AnyEleme
 pub type Title = Box<dyn Fn(&Module, TabMark, &App) -> Tab>;
 pub type Subtitle = Box<dyn Fn(&Module, &App) -> Option<AnyElement>>;
 pub type Settled = Box<dyn Fn(&[Workspace], usize, Rect)>;
-pub type Expand<V> = Box<dyn Fn(&Module, &mut Window, &mut Context<V>)>;
+pub type Expand<V> = Box<dyn Fn(&Module, &str, &mut Window, &mut Context<V>)>;
 
 pub struct Host<V: 'static> {
     pub board: Lens<V>,
@@ -199,6 +199,13 @@ impl<V: 'static> TilingBoard<V> {
 
     pub fn active(&self) -> usize {
         self.active
+    }
+
+    pub fn active_name(&self) -> String {
+        self.workspaces
+            .get(self.active)
+            .map(|workspace| workspace.name.clone())
+            .unwrap_or_default()
     }
 
     pub fn holding(&self) -> bool {
@@ -797,6 +804,7 @@ impl<V: 'static> TilingBoard<V> {
                         (false, true) => TabMark::Pinned,
                         (false, false) => TabMark::Close,
                     },
+                    flag: None,
                 }
             })
             .collect()
@@ -933,7 +941,11 @@ impl<V: 'static> TilingBoard<V> {
             (window, &mut **cx),
             move |window, cx| {
                 if let (Some(view), Some(module)) = (expanding.upgrade(), module.as_ref()) {
-                    view.update(cx, |view, cx| (lens(view).host.expand)(module, window, cx));
+                    view.update(cx, |view, cx| {
+                        let board = lens(view);
+                        let workspace = board.active_name();
+                        (board.host.expand)(module, &workspace, window, cx)
+                    });
                 }
             },
         );

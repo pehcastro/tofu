@@ -100,12 +100,13 @@ impl TilingPage {
                         icon: Some(glyph_of(module)),
                         count: None,
                         mark,
+                        flag: None,
                     }),
                     subtitle: Box::new(|_, _| None),
                     spawnable: spawnable(),
                     spawns: EMPTY_SPAWNS.to_vec(),
                     settled: Box::new(|_, _, _| {}),
-                    expand: Box::new(|module, _, _| {
+                    expand: Box::new(|module, _, _, _| {
                         eprintln!("book: tiling: expand {}", module.name())
                     }),
                     origin: (0.0, FIRST_TOP),

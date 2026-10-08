@@ -116,10 +116,11 @@ fn build(
             cx.observe(&mounted.store, |_, _, cx| cx.notify()),
             cx.subscribe(
                 &mounted.subagents,
-                |_, module, ExpandAgent(agent): &ExpandAgent, cx| {
+                |work: &mut Work, module, ExpandAgent(agent): &ExpandAgent, cx| {
                     let view = module.update(cx, |module, cx| module.screen(Some(*agent), cx));
                     cx.emit(Expanded {
                         name: SUB_AGENTS,
+                        workspace: work.board.active_name().into(),
                         view: view.into(),
                     });
                 },
@@ -144,6 +145,7 @@ fn build(
                     icon: glyph(module),
                     count: count(&titles, module, cx),
                     mark,
+                    flag: None,
                 }),
                 subtitle: Box::new(move |module, cx| {
                     (*module == Module::Chat)
@@ -154,7 +156,9 @@ fn build(
                 spawnable: OPENABLE.to_vec(),
                 spawns: OPENABLE.to_vec(),
                 settled: settled(layouts),
-                expand: Box::new(move |module, _, cx| expand(&expandable, module, cx)),
+                expand: Box::new(move |module, workspace, _, cx| {
+                    expand(&expandable, module, workspace, cx)
+                }),
                 origin: (0.0, 0.0),
                 below: 0.0,
             },
@@ -267,6 +271,7 @@ fn body(mounted: &Mounted, module: &Module, theme: &Theme) -> AnyElement {
 
 pub struct Expanded {
     pub name: &'static str,
+    pub workspace: SharedString,
     pub view: AnyView,
 }
 
@@ -276,7 +281,7 @@ const SUB_AGENTS: &str = "Sub-agents";
 
 pub const EXPANDABLE: [&str; 4] = ["Chat", SUB_AGENTS, "File edits", "Shells"];
 
-fn expand(mounted: &Mounted, module: &Module, cx: &mut Context<Work>) {
+fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<Work>) {
     let view: AnyView = match module {
         Module::Chat => mounted.chat.clone().into(),
         Module::SubAgents => mounted
@@ -297,7 +302,11 @@ fn expand(mounted: &Mounted, module: &Module, cx: &mut Context<Work>) {
         }
     };
     match EXPANDABLE.into_iter().find(|name| *name == module.name()) {
-        Some(name) => cx.emit(Expanded { name, view }),
+        Some(name) => cx.emit(Expanded {
+            name,
+            workspace: workspace.to_owned().into(),
+            view,
+        }),
         None => eprintln!("desk: work: {} has no tab name", module.name()),
     }
 }
@@ -493,7 +502,7 @@ impl Work {
         let key = stroke.key.as_str();
         if key == "enter" && held.control && held.shift && !held.alt {
             match self.board.aimed_module() {
-                Some(module) => expand(&self.mounted, &module, cx),
+                Some(module) => expand(&self.mounted, &module, &self.board.active_name(), cx),
                 None => eprintln!("desk: work: no tile is focused, so nothing expands"),
             }
             return;

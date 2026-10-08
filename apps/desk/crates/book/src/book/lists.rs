@@ -14,7 +14,8 @@ use desk_ui::components::list::{
 use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::scroll::{ScrollArea, list_scrollbar};
 use desk_ui::components::size::{CAPTION_TEXT, FONT_CHAT, T1};
-use desk_ui::components::tabs::{Tab, TabEvent, TabMark, TabStrip};
+use desk_ui::components::tabs::{Tab, TabEvent, TabFlag, TabMark, TabStrip};
+use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::ICON_SMALL;
 use desk_ui::theme::Theme;
@@ -35,6 +36,8 @@ const STATIC_ROW_WIDTH: f32 = 360.0;
 const SHORT_FIT_WIDTH: f32 = 360.0;
 const SHORT_FOLD_WIDTH: f32 = 200.0;
 const CROWDED_WIDTH: f32 = 300.0;
+const EXPANDED_TIP: &str =
+    "Expanded view of Sub-agents in editor. Closing this tab will not close the tile there.";
 
 #[derive(Clone)]
 pub struct Strip {
@@ -59,6 +62,7 @@ impl Strip {
             icon: Some(icon),
             count,
             mark: TabMark::Close,
+            flag: None,
         });
         Strip {
             tabs: tabs.to_vec(),
@@ -75,6 +79,7 @@ impl Strip {
                 icon: Some(Glyph::File),
                 count: None,
                 mark,
+                flag: None,
             });
         Strip {
             tabs: tabs.to_vec(),
@@ -102,19 +107,34 @@ impl Strip {
             icon: None,
             count: None,
             mark,
+            flag: None,
         })
         .to_vec();
-        if screen {
+        let screens = if screen {
+            tabs.push(Tab {
+                label: "Sub-agents".into(),
+                icon: None,
+                count: None,
+                mark: TabMark::Close,
+                flag: Some(TabFlag {
+                    icon: Icon::Expand,
+                    tip: EXPANDED_TIP.into(),
+                }),
+            });
             tabs.push(Tab {
                 label: "Settings".into(),
                 icon: None,
                 count: None,
                 mark: TabMark::Close,
+                flag: None,
             });
-        }
+            2
+        } else {
+            0
+        };
         Strip {
             tabs,
-            screens: usize::from(screen),
+            screens,
             picked: 1,
             made: 0,
         }
@@ -127,8 +147,9 @@ impl Strip {
             icon: None,
             count: None,
             mark: TabMark::Close,
+            flag: None,
         }));
-        strip.screens = 3;
+        strip.screens += 2;
         strip
     }
 
@@ -138,6 +159,7 @@ impl Strip {
             icon: None,
             count: None,
             mark: TabMark::Close,
+            flag: None,
         });
         Strip {
             tabs: tabs.to_vec(),
@@ -222,6 +244,7 @@ impl Strip {
                         icon: None,
                         count: None,
                         mark: TabMark::Close,
+                        flag: None,
                     },
                 );
                 self.picked = workspaces;

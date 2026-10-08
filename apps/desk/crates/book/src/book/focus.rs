@@ -129,6 +129,7 @@ impl FocusPage {
                 icon: None,
                 count: None,
                 mark: TabMark::Pinned,
+                flag: None,
             })
             .collect();
         let tabs_focus = self.handle(Control::Tabs).clone();

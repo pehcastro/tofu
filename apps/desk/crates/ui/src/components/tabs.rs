@@ -21,6 +21,7 @@ use crate::components::size::{
     RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON, SCREEN_RING, SHELL_TEXT, T1, TAB,
     TAB_GAP, TAB_IN_HEADER, TAB_MAX_WIDTH, TAB_PAD_LEFT, TAB_PAD_LINK, TAB_PAD_TAIL, TAB_SEPARATOR,
 };
+use crate::components::tooltip::{Edge, tooltip};
 use crate::components::width::Width;
 use crate::icon::Icon;
 use crate::metrics::{HAIRLINE, ICON, ICON_SMALL, ICON_TINY};
@@ -47,6 +48,13 @@ pub struct Tab {
     pub icon: Option<Glyph>,
     pub count: Option<u32>,
     pub mark: TabMark,
+    pub flag: Option<TabFlag>,
+}
+
+#[derive(Clone)]
+pub struct TabFlag {
+    pub icon: Icon,
+    pub tip: SharedString,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -742,6 +750,11 @@ fn link(tab: &Tab, font: f32, theme: &Theme, color: Rgba) -> Div {
         .pr(px(TAB_PAD_LINK))
         .text_size(px(font))
         .font_weight(gpui::FontWeight::MEDIUM)
+        .children(
+            tab.flag
+                .as_ref()
+                .map(|flag| icon(flag.icon, ICON_SMALL, color)),
+        )
         .children(tab.icon.map(|lead| glyph(lead, ICON_SMALL, color)))
         .child(div().min_w_0().truncate().child(tab.label.clone()))
         .children(tab.count.map(|count| badge(count.to_string(), theme)))
@@ -805,6 +818,27 @@ fn tab_frame(
         })
         .on_click(move |_, window, cx| select(&TabEvent::Select(ix), window, cx))
         .child(content)
+}
+
+fn flagged(
+    item: Stateful<Div>,
+    (id, ix, tab): (&SharedString, usize, &Tab),
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Stateful<Div> {
+    match &tab.flag {
+        Some(flag) => tooltip(
+            (SharedString::from(format!("{id}-flag")), ix),
+            item,
+            Edge::Frame,
+            flag.tip.clone(),
+            theme,
+            window,
+            cx,
+        ),
+        None => item,
+    }
 }
 
 fn more_tab(id: &SharedString, hidden: usize, theme: &Theme) -> Stateful<Div> {
@@ -1275,41 +1309,39 @@ impl RenderOnce for TabStrip {
                         cx,
                     )
                 });
-                let children = visible
-                    .iter()
-                    .filter_map(|ix| Some((*ix, tabs.get(*ix)?)))
-                    .map(|(ix, tab)| {
-                        tab_frame(
-                            &id,
-                            tab,
-                            pick(ix, FONT_TAB, ink(&theme, DIM_TEXT)),
-                            &theme,
-                            (&on, &shut, press.as_ref(), menu.as_ref()),
-                        )
-                        .h_full()
-                        .rounded_t(px(RADIUS_TAB))
-                        .when(ringed && ix == active, |tab| {
-                            tab.shadow(vec![ring(focus_ring)])
-                        })
-                    })
-                    .map(|item| pressed(item, backdrop).into_any_element())
-                    .chain(more)
-                    .chain(new_button.map(|button| {
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .pl(px(NEW_BUTTON_GAP))
-                            .child(button)
-                            .into_any_element()
-                    }))
-                    .collect::<Vec<_>>();
+                let mut children = Vec::new();
+                for (ix, tab) in visible.iter().filter_map(|ix| Some((*ix, tabs.get(*ix)?))) {
+                    let item = tab_frame(
+                        &id,
+                        tab,
+                        pick(ix, FONT_TAB, ink(&theme, DIM_TEXT)),
+                        &theme,
+                        (&on, &shut, press.as_ref(), menu.as_ref()),
+                    )
+                    .h_full()
+                    .rounded_t(px(RADIUS_TAB))
+                    .when(ringed && ix == active, |tab| {
+                        tab.shadow(vec![ring(focus_ring)])
+                    });
+                    let item = flagged(pressed(item, backdrop), (&id, ix, tab), &theme, window, cx);
+                    children.push(item.into_any_element());
+                }
+                children.extend(more.into_iter().chain(new_button.map(|button| {
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .pl(px(NEW_BUTTON_GAP))
+                        .child(button)
+                        .into_any_element()
+                })));
                 let frame = div().flex().items_stretch().h(px(TAB_IN_HEADER)).min_w_0();
                 (frame, children, theme.color(ColorToken::TabsFill), top)
             }
             Shape::Header { screens } => {
                 let screen = active >= tabs.len();
-                let header = |ix: usize, tab: &Tab, screen: bool| {
+                let header = |at: (usize, &Tab, bool), window: &mut Window, cx: &mut App| {
+                    let (ix, tab, screen) = at;
                     let item = tab_frame(
                         &id,
                         tab,
@@ -1325,7 +1357,8 @@ impl RenderOnce for TabStrip {
                     .when(ringed && ix == active, |tab| {
                         tab.shadow(vec![ring(focus_ring)])
                     });
-                    pressed(item, backdrop).occlude().into_any_element()
+                    let item = pressed(item, backdrop).occlude();
+                    flagged(item, (&id, ix, tab), &theme, window, cx).into_any_element()
                 };
                 let more = (hidden > 0).then(|| {
                     overflow(
@@ -1337,32 +1370,30 @@ impl RenderOnce for TabStrip {
                         cx,
                     )
                 });
-                let children =
-                    visible
-                        .iter()
-                        .filter_map(|ix| Some((*ix, tabs.get(*ix)?)))
-                        .map(|(ix, tab)| header(ix, tab, false))
-                        .chain(more)
-                        .chain([
-                            div()
-                                .flex()
-                                .flex_none()
-                                .occlude()
-                                .child(new_button.unwrap_or_else(|| {
-                                    new_tab(&id, &theme, &on).into_any_element()
-                                }))
-                                .into_any_element(),
-                            separator(&theme)
-                                .when(screens.is_empty(), |line| line.invisible())
-                                .into_any_element(),
-                        ])
-                        .chain(
-                            screens
-                                .iter()
-                                .enumerate()
-                                .map(|(ix, tab)| header(tabs.len() + ix, tab, true)),
-                        )
-                        .collect::<Vec<AnyElement>>();
+                let mut children: Vec<AnyElement> = visible
+                    .iter()
+                    .filter_map(|ix| Some((*ix, tabs.get(*ix)?)))
+                    .map(|(ix, tab)| header((ix, tab, false), window, cx))
+                    .collect();
+                let new_button =
+                    new_button.unwrap_or_else(|| new_tab(&id, &theme, &on).into_any_element());
+                children.extend(more);
+                children.push(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .occlude()
+                        .child(new_button)
+                        .into_any_element(),
+                );
+                children.push(
+                    separator(&theme)
+                        .when(screens.is_empty(), |line| line.invisible())
+                        .into_any_element(),
+                );
+                for (ix, tab) in screens.iter().enumerate() {
+                    children.push(header((tabs.len() + ix, tab, true), window, cx));
+                }
                 let frame = div().flex().items_center().gap(px(HEADER_GAP)).min_w_0();
                 let corners = Corners::all(px(header_radius(screen)));
                 (frame, children, header_fill(screen, &theme), corners)

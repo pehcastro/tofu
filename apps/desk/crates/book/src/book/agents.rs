@@ -267,7 +267,7 @@ fn line(seed: &Seed, events: &[AgentEvent]) -> AgentLine {
     let kind = seed.agent.kind;
     let (started, worked) = (f32::from(seed.started), f32::from(seed.worked));
     let (now, time) = match seed.agent.status {
-        AgentStatus::Working => (doing_now(kind).to_owned(), format!("for {}m", seed.started)),
+        AgentStatus::Working => (doing_now(kind).to_owned(), format!("{}m", seed.started)),
         AgentStatus::Asking => (
             format!("asked: {}", question(kind).unwrap_or_default()),
             ago((started - worked).max(ASK_FLOOR)).to_string(),
@@ -278,7 +278,7 @@ fn line(seed: &Seed, events: &[AgentEvent]) -> AgentLine {
         ),
         AgentStatus::Finished => (
             format!("worked for {}m", seed.worked),
-            format!("worked {}m", seed.worked),
+            format!("{}m", seed.worked),
         ),
     };
     AgentLine {
@@ -662,6 +662,7 @@ impl AgentsPage {
             icon: Some(icon),
             count,
             mark: TabMark::Close,
+            flag: None,
         };
         let tabs = [
             tab(
