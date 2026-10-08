@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use desk_ui::components::agents::{
     AgentBoard, AgentEvent, AgentLine, AgentScreen, AgentStep, AgentTile, DiffLine, DiffSign, ago,
-    summary,
 };
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
 use desk_ui::components::card::{Header, inner_card, shell};
@@ -597,6 +596,7 @@ pub(super) struct AgentsPage {
     narrow: Entity<AgentTile>,
     wide: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
+    picked: Entity<AgentScreen>,
     swapped: bool,
     pending: bool,
 }
@@ -606,10 +606,16 @@ impl AgentsPage {
         let board = Rc::new(board(false));
         let book = cx.weak_entity();
         let screen = cx.new(|_| AgentScreen::new(board.clone(), mention(book.clone())));
-        let shown = screen.clone();
+        let first = board.lines.first().map(|line| line.agent);
+        let picked = cx.new(|cx| {
+            let mut picked = AgentScreen::new(board.clone(), mention(book.clone()));
+            picked.show(first, cx);
+            picked
+        });
+        let shown = picked.clone();
         let told = book.clone();
         let expand = move |agent: &Agent, _: &mut Window, cx: &mut App| {
-            shown.update(cx, |screen, cx| screen.show(*agent, cx));
+            shown.update(cx, |screen, cx| screen.show(Some(*agent), cx));
             if let Some(book) = told.upgrade() {
                 book.update(cx, |book, cx| {
                     book.tell(
@@ -631,6 +637,7 @@ impl AgentsPage {
             narrow,
             wide,
             screen,
+            picked,
             swapped: false,
             pending: false,
         }
@@ -644,8 +651,9 @@ impl AgentsPage {
             .update(cx, |tile, cx| tile.set_board(self.board.clone(), cx));
         self.wide
             .update(cx, |tile, cx| tile.set_board(self.board.clone(), cx));
-        self.screen
-            .update(cx, |screen, cx| screen.set_board(self.board.clone(), cx));
+        for screen in [&self.screen, &self.picked] {
+            screen.update(cx, |screen, cx| screen.set_board(self.board.clone(), cx));
+        }
     }
 
     fn tabs(&self, theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
@@ -718,17 +726,14 @@ impl AgentsPage {
         .w_full()
         .h(px(NARROW_HEIGHT))
         .child(inner_card(theme).child(self.wide.clone()));
-        let screen = shell(
-            Header::Title(
-                Some(Glyph::Agents),
-                "Sub-agents".into(),
-                Some(summary(&self.board, theme).into_any_element()),
-            ),
-            theme,
-        )
-        .w_full()
-        .h(px(SCREEN_HEIGHT))
-        .child(inner_card(theme).child(self.screen.clone()));
+        let screen = |caption: &'static str, screen: &Entity<AgentScreen>| {
+            column(
+                caption,
+                div().h(px(SCREEN_HEIGHT)).flex().child(screen.clone()),
+            )
+            .flex_1()
+            .flex_basis(px(0.0))
+        };
         div()
             .flex()
             .flex_col()
@@ -745,10 +750,19 @@ impl AgentsPage {
                 "Wide, DESK-216: the same tile across the page. A row keeps the narrow row's height and two lines; width adds LINES from 560 px, FILES from 640 px and TOOLS from 760 px. Under 48 px for doing, TIME shrinks to its text and the agent name keeps the rest.",
                 wide,
             ))
-            .child(column(
-                "Screen, IWY-7: the expanded tab. A row on the left shows that agent on the right in place; All activity goes back.",
-                screen,
-            ))
+            .child(
+                div()
+                    .flex()
+                    .gap_4()
+                    .child(screen(
+                        "Screen, IWY-7: the Sub-agents screen tab on All activity, the header counting each state. A row on the left shows that agent on the right in place.",
+                        &self.screen,
+                    ))
+                    .child(screen(
+                        "Screen, S-WORK-5: the same screen with one agent picked, as the drawer's Expand opens it: its task and owns on top, then only its events; All activity goes back.",
+                        &self.picked,
+                    )),
+            )
     }
 
     pub(super) fn key(&mut self, key: &str) -> bool {

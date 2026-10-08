@@ -8,8 +8,8 @@ use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile};
 use desk_ui::components::avatar::{Agent, AgentStatus};
 use desk_ui::components::glyph::Glyph;
 use gpui::{
-    AnyView, App, AppContext, Context, Entity, IntoElement, KeyDownEvent, Render, Subscription,
-    Window, div, prelude::*,
+    AnyView, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, Subscription,
+    Window,
 };
 
 const BOARD: &str = "36-agents";
@@ -21,9 +21,12 @@ pub struct Subagents {
     board: Rc<AgentBoard>,
     tile: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
-    expanded: Option<Agent>,
     _watch: Subscription,
 }
+
+pub struct ExpandAgent(pub Agent);
+
+impl EventEmitter<ExpandAgent> for Subagents {}
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     if board.is_some_and(|board| board != BOARD) {
@@ -59,8 +62,8 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
         let board = Rc::new(empty());
         let this = cx.weak_entity();
         let expand = move |agent: &Agent, _: &mut Window, cx: &mut App| {
-            this.update(cx, |module, cx| module.expand(Some(*agent), cx))
-                .ok();
+            this.update(cx, |_, cx| cx.emit(ExpandAgent(*agent)))
+                .unwrap_or_else(|_| eprintln!("desk: sub-agents: the module is gone"));
         };
         let tile = cx.new(|cx| AgentTile::new(board.clone(), mention, expand, cx));
         let screen = cx.new(|_| AgentScreen::new(board.clone(), mention));
@@ -77,7 +80,6 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
             board,
             tile,
             screen,
-            expanded: None,
         }
     })
 }
@@ -106,6 +108,15 @@ impl Subagents {
         self.board.live()
     }
 
+    pub fn screen(&self, agent: Option<Agent>, cx: &mut Context<Self>) -> Entity<AgentScreen> {
+        self.screen.update(cx, |screen, cx| screen.show(agent, cx));
+        eprintln!(
+            "desk: sub-agents screen on {}",
+            agent.map_or_else(|| "All activity".into(), |agent| agent.name())
+        );
+        self.screen.clone()
+    }
+
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         self.board = Rc::new(session(self.store.read(cx)).map_or_else(empty, board::board));
         let board = self.board.clone();
@@ -113,21 +124,6 @@ impl Subagents {
             .update(cx, |tile, cx| tile.set_board(board.clone(), cx));
         self.screen
             .update(cx, |screen, cx| screen.set_board(board, cx));
-        self.expand(self.expanded, cx);
-    }
-
-    fn expand(&mut self, agent: Option<Agent>, cx: &mut Context<Self>) {
-        self.expanded = agent.and_then(|agent| {
-            self.board
-                .lines
-                .iter()
-                .map(|line| line.agent)
-                .find(|now| now.kind == agent.kind && now.instance == agent.instance)
-        });
-        if let Some(agent) = self.expanded {
-            self.screen.update(cx, |screen, cx| screen.show(agent, cx));
-        }
-        cx.notify();
     }
 
     pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
@@ -155,18 +151,7 @@ impl Subagents {
 }
 
 impl Render for Subagents {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let shown: AnyView = match self.expanded {
-            None => self.tile.clone().into(),
-            Some(_) => self.screen.clone().into(),
-        };
-        div()
-            .size_full()
-            .on_key_down(cx.listener(|module, event: &KeyDownEvent, _, cx| {
-                if event.keystroke.key == "escape" && module.expanded.is_some() {
-                    module.expand(None, cx);
-                }
-            }))
-            .child(shown)
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        self.tile.clone()
     }
 }

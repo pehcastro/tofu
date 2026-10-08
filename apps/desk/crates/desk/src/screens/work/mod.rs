@@ -26,7 +26,7 @@ use crate::modules::chat::{self, Chat};
 use crate::modules::file_edits::{self, FileEdits};
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
-use crate::modules::subagents::{self, Subagents};
+use crate::modules::subagents::{self, ExpandAgent, Subagents};
 use crate::project;
 
 const BOARD: &str = "36-agents";
@@ -112,7 +112,19 @@ fn build(
     Ok(cx.new(|cx| {
         let focus = cx.focus_handle();
         focus.focus(window, cx);
-        let observed = cx.observe(&mounted.store, |_, _, cx| cx.notify());
+        let watched = [
+            cx.observe(&mounted.store, |_, _, cx| cx.notify()),
+            cx.subscribe(
+                &mounted.subagents,
+                |_, module, ExpandAgent(agent): &ExpandAgent, cx| {
+                    let view = module.update(cx, |module, cx| module.screen(Some(*agent), cx));
+                    cx.emit(Expanded {
+                        name: SUB_AGENTS,
+                        view: view.into(),
+                    });
+                },
+            ),
+        ];
         let bodies = mounted.clone();
         let titles = mounted.clone();
         let sessions = mounted.store.clone();
@@ -160,7 +172,7 @@ fn build(
             focus,
             mounted,
             replay,
-            _observed: observed,
+            _watched: watched,
         }
     }))
 }
@@ -174,7 +186,7 @@ pub struct Work {
     focus: FocusHandle,
     mounted: Mounted,
     replay: Option<Replay>,
-    _observed: Subscription,
+    _watched: [Subscription; 2],
 }
 
 fn glyph(module: &Module) -> Option<Glyph> {
@@ -260,12 +272,17 @@ pub struct Expanded {
 
 impl EventEmitter<Expanded> for Work {}
 
-pub const EXPANDABLE: [&str; 4] = ["Chat", "Sub-agents", "File edits", "Shells"];
+const SUB_AGENTS: &str = "Sub-agents";
+
+pub const EXPANDABLE: [&str; 4] = ["Chat", SUB_AGENTS, "File edits", "Shells"];
 
 fn expand(mounted: &Mounted, module: &Module, cx: &mut Context<Work>) {
     let view: AnyView = match module {
         Module::Chat => mounted.chat.clone().into(),
-        Module::SubAgents => mounted.subagents.clone().into(),
+        Module::SubAgents => mounted
+            .subagents
+            .update(cx, |module, cx| module.screen(None, cx))
+            .into(),
         Module::FileEdits => mounted.file_edits.clone().into(),
         Module::Shells => mounted.shells.clone().into(),
         Module::Editor

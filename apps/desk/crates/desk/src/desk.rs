@@ -28,6 +28,7 @@ use desk_core::protocol::CronJob;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
+use desk_ui::components::agents::AgentScreen;
 use desk_ui::components::card::{inner_card, outer_card};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
@@ -512,7 +513,8 @@ impl Desk {
     fn expand(&mut self, expanded: &work::Expanded, window: &mut Window, cx: &mut Context<Self>) {
         let name = expanded.name;
         if !self.tabbed.contains(&name) {
-            self.tabbed.insert(0, name);
+            self.closed_screens.retain(|closed| closed.name != name);
+            self.tabbed.push(name);
             self.parked.push(Shown {
                 name: name.into(),
                 body: Body::View(expanded.view.clone()),
@@ -601,10 +603,18 @@ impl Desk {
                     .child(work.clone())
                     .into_any_element()
             }
-            Body::View(view) => outer_card(theme)
-                .flex_1()
-                .child(inner_card(theme).child(view.clone()))
-                .into_any_element(),
+            Body::View(view) => match view.clone().downcast::<AgentScreen>() {
+                Ok(framed) => div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .child(framed)
+                    .into_any_element(),
+                Err(view) => outer_card(theme)
+                    .flex_1()
+                    .child(inner_card(theme).child(view))
+                    .into_any_element(),
+            },
         };
         (tabs, body)
     }

@@ -10,8 +10,9 @@ use gpui::{
 use crate::component::icon;
 use crate::components::avatar::{Agent, AgentStatus, AvatarSize, avatar};
 use crate::components::button::{ButtonKind, button};
-use crate::components::card::caption;
+use crate::components::card::{Header, caption, inner_card, shell};
 use crate::components::chip::{Tone, mono, tabular, trace};
+use crate::components::empty::empty_state;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverVariant, RowGlide};
 use crate::components::paint::{glyph, ink, ring, solid, tint};
@@ -122,6 +123,8 @@ const REPORT_HEAD_GAP: f32 = 7.0;
 const REPORT_HEAD_AFTER: f32 = 3.0;
 
 const LIST_WIDTH: f32 = 340.0;
+const LIST_LEAST: f32 = 132.0;
+const FEED_LEAST: f32 = 320.0;
 const LIST_PAD_X: f32 = 6.0;
 const LIST_PAD_Y: f32 = 8.0;
 const ALL_ROW: f32 = 32.0;
@@ -328,7 +331,7 @@ fn bucket(minutes: f32) -> &'static str {
     }
 }
 
-pub fn summary(board: &AgentBoard, theme: &Theme) -> Div {
+fn summary(board: &AgentBoard, theme: &Theme) -> Div {
     let words = [
         (AgentStatus::Working, "working"),
         (AgentStatus::Asking, "asking"),
@@ -567,12 +570,9 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                                 .child(format!("\u{a0}· {hits}")),
                         ),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(TAG_GAP))
-                        .children(files.iter().map(|file| {
+                .when(!files.is_empty(), |body| {
+                    body.child(div().flex().flex_wrap().gap(px(TAG_GAP)).children(
+                        files.iter().map(|file| {
                             div()
                                 .px(px(TAG_PAD_X))
                                 .py(px(TAG_PAD_Y))
@@ -582,8 +582,9 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                                 .text_size(px(FONT_WHO))
                                 .text_color(t2)
                                 .child(file.clone())
-                        })),
-                ),
+                        }),
+                    ))
+                }),
             AgentStep::Web { query, results } => {
                 let link = theme.color(ColorToken::StatusAccent);
                 div()
@@ -591,34 +592,36 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                     .text_size(px(FONT_BODY))
                     .line_height(px(LINE_BODY))
                     .child(div().text_color(t2).child(format!("\"{query}\"")))
-                    .child(
-                        div()
-                            .mt(px(RESULTS_TOP))
-                            .flex()
-                            .flex_col()
-                            .gap(px(RESULT_GAP))
-                            .children(results.iter().map(|result| {
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(RESULT_ITEMS_GAP))
-                                    .text_size(px(FONT_TAB))
-                                    .child(
-                                        div()
-                                            .flex_none()
-                                            .size(px(RESULT_DOT))
-                                            .rounded_full()
-                                            .bg(tint(link, RESULT_DOT_FADE)),
-                                    )
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_color(link)
-                                            .child(result.clone()),
-                                    )
-                            })),
-                    )
+                    .when(!results.is_empty(), |body| {
+                        body.child(
+                            div()
+                                .mt(px(RESULTS_TOP))
+                                .flex()
+                                .flex_col()
+                                .gap(px(RESULT_GAP))
+                                .children(results.iter().map(|result| {
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(RESULT_ITEMS_GAP))
+                                        .text_size(px(FONT_TAB))
+                                        .child(
+                                            div()
+                                                .flex_none()
+                                                .size(px(RESULT_DOT))
+                                                .rounded_full()
+                                                .bg(tint(link, RESULT_DOT_FADE)),
+                                        )
+                                        .child(
+                                            div()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_color(link)
+                                                .child(result.clone()),
+                                        )
+                                })),
+                        )
+                    })
             }
             AgentStep::Fetch { url, title, size } => code_box(theme)
                 .flex()
@@ -631,7 +634,9 @@ fn step_body(step: &AgentStep, theme: &Theme) -> Option<Div> {
                         .flex_1()
                         .min_w_0()
                         .line_height(px(LINE_WHO))
-                        .child(div().text_size(px(FONT_BODY)).child(title.clone()))
+                        .when(!title.is_empty(), |text| {
+                            text.child(div().text_size(px(FONT_BODY)).child(title.clone()))
+                        })
                         .child(mono_text(url.clone(), FONT_WHO, theme).text_color(t3)),
                 )
                 .child(
@@ -866,15 +871,17 @@ fn event_row(ix: usize, event: &AgentEvent, mention: &AgentAction, theme: &Theme
                                             .child(agent.name()),
                                     )
                                     .child(div().text_color(ink(theme, T2)).child(task))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_baseline()
-                                            .text_size(px(FONT_SMALL))
-                                            .text_color(t3)
-                                            .child("·\u{a0}owns\u{a0}")
-                                            .child(mono_text(owns, FONT_WHO, theme)),
-                                    ),
+                                    .when(!owns.is_empty(), |words| {
+                                        words.child(
+                                            div()
+                                                .flex()
+                                                .items_baseline()
+                                                .text_size(px(FONT_SMALL))
+                                                .text_color(t3)
+                                                .child("·\u{a0}owns\u{a0}")
+                                                .child(mono_text(owns, FONT_WHO, theme)),
+                                        )
+                                    }),
                             ),
                     )
                 })
@@ -1339,11 +1346,20 @@ impl AgentScreen {
         cx.notify();
     }
 
-    pub fn show(&mut self, agent: Agent, cx: &mut Context<Self>) {
-        let at = self.board.lines.iter().position(|line| line.agent == agent);
-        if let Some(at) = at {
-            self.pick(Some(at), cx);
+    pub fn show(&mut self, agent: Option<Agent>, cx: &mut Context<Self>) {
+        let picked = agent.and_then(|agent| self.board.find(agent));
+        let group = picked
+            .and_then(|ix| self.board.lines.get(ix))
+            .and_then(|line| {
+                AgentStatus::ALL
+                    .iter()
+                    .position(|status| *status == line.agent.status)
+            })
+            .and_then(|at| self.open_groups.get_mut(at));
+        if let Some(open) = group {
+            *open = true;
         }
+        self.pick(picked, cx);
     }
 
     fn pick(&mut self, picked: Option<usize>, cx: &mut Context<Self>) {
@@ -1424,8 +1440,9 @@ impl AgentScreen {
             }
         }
         div()
-            .w(px(LIST_WIDTH))
-            .flex_none()
+            .flex_basis(px(LIST_WIDTH))
+            .flex_shrink_1()
+            .min_w(px(LIST_LEAST))
             .h_full()
             .flex()
             .flex_col()
@@ -1457,6 +1474,8 @@ impl AgentScreen {
                 )
                 .child(
                     div()
+                        .min_w_0()
+                        .truncate()
                         .text_size(px(FONT_TAB))
                         .text_color(t3)
                         .child("every sub-agent, newest first"),
@@ -1506,8 +1525,14 @@ impl AgentScreen {
                                     .items_baseline()
                                     .min_w_0()
                                     .text_color(t3)
-                                    .child(format!("{} · owns\u{a0}", line.time))
-                                    .child(mono_text(line.owns.clone(), FONT_SMALL, theme)),
+                                    .child(line.time.clone())
+                                    .when(!line.owns.is_empty(), |time| {
+                                        time.child("\u{a0}· owns\u{a0}").child(mono_text(
+                                            line.owns.clone(),
+                                            FONT_SMALL,
+                                            theme,
+                                        ))
+                                    }),
                             ),
                     )
                     .child(
@@ -1614,9 +1639,30 @@ impl Render for AgentScreen {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let key = self.picked.unwrap_or(usize::MAX);
+        let summed = (!self.board.lines.is_empty()).then(|| summary(&self.board, &theme));
+        let card = shell(
+            Header::Title(
+                Some(Glyph::Agents),
+                "Sub-agents".into(),
+                summed.map(IntoElement::into_any_element),
+            ),
+            &theme,
+        )
+        .size_full();
+        if self.board.lines.is_empty() {
+            return card.child(inner_card(&theme).child(empty_state(
+                "agents-empty",
+                "No sub-agents",
+                Some("Agents the lead starts appear here.".into()),
+                &[],
+                &[],
+                &theme,
+                |_, _, _| {},
+            )));
+        }
         let pane = div()
             .flex_1()
-            .min_w_0()
+            .min_w(px(FEED_LEAST))
             .h_full()
             .flex()
             .flex_col()
@@ -1634,19 +1680,23 @@ impl Render for AgentScreen {
                 Animation::new(TOGGLE_MS).with_easing(EASE_OUT),
                 |pane, shown| pane.opacity(shown),
             );
-        div()
-            .size_full()
-            .min_h_0()
-            .flex()
-            .text_color(ink(&theme, T1))
-            .child(self.list(&theme, window, cx))
-            .child(
+        card.child(
+            inner_card(&theme).child(
                 div()
-                    .flex_none()
-                    .w(px(HAIRLINE))
-                    .h_full()
-                    .bg(tint(theme.color(ColorToken::Shadow), DIVIDER_SHADE)),
-            )
-            .child(pane)
+                    .size_full()
+                    .min_h_0()
+                    .flex()
+                    .text_color(ink(&theme, T1))
+                    .child(self.list(&theme, window, cx))
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(HAIRLINE))
+                            .h_full()
+                            .bg(tint(theme.color(ColorToken::Shadow), DIVIDER_SHADE)),
+                    )
+                    .child(pane),
+            ),
+        )
     }
 }
