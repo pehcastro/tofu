@@ -27,7 +27,7 @@ exit 0
     "models": 21,
     "subscriptions": 2,
     "roles": 0,
-    "questions": 15,
+    "questions": 14,
     "doc_pages": 22,
     "doc_entries": 90,
     "proxy": "rtk",

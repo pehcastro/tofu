@@ -5,7 +5,7 @@
   CATEGORIES              Thinking                                                          ● on    
     Appearance    05      thinking shows in each agent's sub-agents feed; t there toggles it        
     Models & rol… 02                                                                                
-    Interaction   05      Thinking summary                                        summarized  ▾     
+    Interaction   06      Thinking summary                                        summarized  ▾     
   › Context       11      summarized asks Claude for a summary of its thinking; omitted asks fo…    
     Files         03                                                                                
     Shell         05      Images                                                        auto  ▾     
@@ -35,7 +35,7 @@
   CATEGORIES              Thinking                                                          ● on    
     Appearance    05      thinking shows in each agent's sub-agents feed; t there toggles it        
     Models & rol… 02                                                                                
-    Interaction   05     Instruction files                              esc       summarized  ▾     
+    Interaction   06     Instruction files                              esc       summarized  ▾     
   › Context       11     a folder with both AGENTS.md and CLAUDE.md sends    g; omitted asks fo…    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more                auto  ▾     
@@ -65,7 +65,7 @@
   CATEGORIES              Thinking                                                          ● on    
     Appearance    05      thinking shows in each agent's sub-agents feed; t there toggles it        
     Models & rol… 02                                                                                
-    Interaction   05     Instruction files                              esc       summarized  ▾     
+    Interaction   06     Instruction files                              esc       summarized  ▾     
   › Context       11     a folder with both AGENTS.md and CLAUDE.md sends    g; omitted asks fo…    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more                auto  ▾     

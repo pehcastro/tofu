@@ -28,7 +28,10 @@ func (s searchPage) Run(context.Context, json.RawMessage) (turn.Result, error) {
 
 type actsPastTheFactSheet struct{ asked int }
 
-func (m *actsPastTheFactSheet) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *actsPastTheFactSheet) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+	if turn.AskedQuietly(ctx) {
+		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "goal: a house in Atibaia"}, nil
+	}
 	m.asked++
 	if m.asked > konst.FactSheetLines+2 {
 		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}, nil

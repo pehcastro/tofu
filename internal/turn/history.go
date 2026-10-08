@@ -166,6 +166,7 @@ type overflowShrink struct {
 	results     int
 	bytesBefore int
 	bytesAfter  int
+	drops       []recall.Drop
 }
 
 func (s overflowShrink) String() string {
@@ -258,7 +259,11 @@ func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int,
 		}
 	}
 	names := make(map[string]string)
+	step := 0
 	for i, message := range messages[:max(lastStep, 0)] {
+		if message.Role == llm.RoleAssistant {
+			step++
+		}
 		for _, call := range message.ToolCalls {
 			names[call.ID] = call.Name
 		}
@@ -269,11 +274,14 @@ func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int,
 			recall.AlreadyDropped(message.Content) || shrunkHandle(message.Content) != "" {
 			continue
 		}
-		note, err := shrunkNote(artifacts, names[message.ToolCallID], message.Content, cause)
+		tool := names[message.ToolCallID]
+		note, handle, err := shrunkNote(artifacts, tool, message.Content, cause)
 		if err != nil {
 			return overflowShrink{}, err
 		}
-		estimate -= artifacts.preview.MessageTokens(message.Content) - artifacts.preview.MessageTokens(note)
+		freed := artifacts.preview.MessageTokens(message.Content) - artifacts.preview.MessageTokens(note)
+		estimate -= freed
+		shrink.drops = append(shrink.drops, recall.Drop{Step: step, Tool: tool, Handle: handle, Bytes: len(message.Content), TokensFreed: freed, Reason: recall.DroppedAged})
 		messages[i].Content = note
 		shrink.results++
 	}
@@ -281,16 +289,16 @@ func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int,
 	return shrink, nil
 }
 
-func shrunkNote(artifacts Artifacts, tool, result string, cause shrinkCause) (string, error) {
+func shrunkNote(artifacts Artifacts, tool, result string, cause shrinkCause) (note, handle string, err error) {
 	if !artifacts.handles {
-		return "the " + tool + " result that stood here was dropped when " + string(cause) + ", and nothing holds it: run the call again if it is still needed.", nil
+		return "the " + tool + " result that stood here was dropped when " + string(cause) + ", and nothing holds it: run the call again if it is still needed.", "", nil
 	}
-	handle, err := heldHandle(artifacts.store, result)
+	handle, err = heldHandle(artifacts.store, result)
 	if err != nil {
-		return "", fmt.Errorf("the %s result to shrink after %s could not be held whole: %w", tool, cause, err)
+		return "", "", fmt.Errorf("the %s result to shrink after %s could not be held whole: %w", tool, cause, err)
 	}
 	return "the " + tool + " result that stood here is held whole in artifact " + handle +
-		": it was shrunk when " + string(cause) + ". call artifact_fetch with that handle, an offset and a length to read any range of it.", nil
+		": it was shrunk when " + string(cause) + ". call artifact_fetch with that handle, an offset and a length to read any range of it.", handle, nil
 }
 
 const pictureDropped = "the picture read here was seen when this result came back and was dropped later to save room; read the file again to see it"
@@ -519,5 +527,5 @@ func trimRead(artifacts Artifacts, budget recall.Budget, step int, messages []ll
 	if err != nil || shrink.results == 0 {
 		return nil, shrink, err
 	}
-	return &Compaction{Step: step, TokensBefore: tokens, TokensAfter: budget.Tokens(artifacts.preview, historyOf(messages))}, shrink, nil
+	return &Compaction{Step: step, TokensBefore: tokens, TokensAfter: budget.Tokens(artifacts.preview, historyOf(messages)), Drops: shrink.drops}, shrink, nil
 }
