@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 )
@@ -23,18 +24,10 @@ const (
 	settingsSetUsage = "tofu settings set [--scope global|project] <key> <value> [--json]"
 )
 
-type settingValue struct {
-	Key      string `json:"key"`
-	Category string `json:"category"`
-	Value    any    `json:"value"`
-	Source   string `json:"source"`
-}
-
-type settingsReport struct {
-	Global   string         `json:"global_file"`
-	Project  string         `json:"project_file"`
-	Settings []settingValue `json:"settings"`
-}
+type (
+	settingValue   = host.SettingValue
+	settingsReport = host.SettingsReport
+)
 
 func settingsPaths(dir string) (global, project string) {
 	home, _ := sys.HomeConfigDir()

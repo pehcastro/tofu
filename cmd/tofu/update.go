@@ -27,6 +27,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
@@ -56,15 +57,7 @@ type latestRelease struct {
 	} `json:"assets"`
 }
 
-type updateReport struct {
-	Current   string `json:"current"`
-	Latest    string `json:"latest"`
-	Available bool   `json:"available"`
-	Release   bool   `json:"release"`
-	Source    string `json:"source"`
-	Installed string `json:"installed,omitempty"`
-	Aside     string `json:"aside,omitempty"`
-}
+type updateReport = host.UpdateReport
 
 func updateVerb(args []string, out, errOut io.Writer) int {
 	build := frame.Release(sys.Version(), sys.BuildRevision())

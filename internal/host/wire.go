@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/learn"
 	"tofu/internal/llm"
+	"tofu/internal/memory"
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn"
@@ -115,15 +117,17 @@ func (VerdictName) enum() []string { return []string{Allow.String(), Ask.String(
 type ApprovalDecision string
 
 const (
-	AllowOnce    ApprovalDecision = "allow_once"
-	AllowAlways  ApprovalDecision = "allow_always"
-	RejectOnce   ApprovalDecision = "reject_once"
-	RejectAlways ApprovalDecision = "reject_always"
-	Cancelled    ApprovalDecision = "cancelled"
+	AllowOnce       ApprovalDecision = "allow_once"
+	AllowAlways     ApprovalDecision = "allow_always"
+	RejectOnce      ApprovalDecision = "reject_once"
+	RejectAlways    ApprovalDecision = "reject_always"
+	Cancelled       ApprovalDecision = "cancelled"
+	RememberProject ApprovalDecision = "remember_project"
+	RememberGlobal  ApprovalDecision = "remember_global"
 )
 
 func (ApprovalDecision) enum() []string {
-	return []string{string(AllowOnce), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled)}
+	return []string{string(AllowOnce), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal)}
 }
 
 type AskingMode string
@@ -715,12 +719,12 @@ type Ack struct {
 }
 
 type VerbResult struct {
-	Tofu     string    `json:"tofu"`
-	Verb     string    `json:"verb"`
-	OK       bool      `json:"ok"`
-	At       string    `json:"at"`
-	Data     any       `json:"data"`
-	Problems []Problem `json:"problems"`
+	Tofu     string          `json:"tofu"`
+	Verb     string          `json:"verb"`
+	OK       bool            `json:"ok"`
+	At       string          `json:"at"`
+	Data     json.RawMessage `json:"data"`
+	Problems []Problem       `json:"problems"`
 }
 
 type Problem struct {
@@ -797,32 +801,49 @@ func requests() []method {
 		{name: "cron.command", params: CronCommandParams{}, result: CronCommandResult{}},
 		{name: queryPrefix + "cron", params: NoParams{}, result: CronState{}},
 		{name: queryPrefix + "ledger", params: LedgerParams{}, result: LedgerReport{}},
+		{name: queryPrefix + "models", params: NoParams{}, result: ModelsQuery{}},
+		{name: queryPrefix + "settings", params: NoParams{}, result: SettingsReport{}},
+		{name: queryPrefix + "rules", params: NoParams{}, result: RuleListReport{}},
+		{name: queryPrefix + "agents", params: NoParams{}, result: roster.Found{}},
+		{name: queryPrefix + "library", params: NoParams{}, result: LibraryReport{}},
+		{name: queryPrefix + "memory", params: NoParams{}, result: MemoryReport{}},
+		{name: queryPrefix + "hooks", params: NoParams{}, result: HooksReport{}},
+		{name: queryPrefix + "changelog", params: NoParams{}, result: ChangelogReport{}},
+		{name: queryPrefix + "update", params: NoParams{}, result: UpdateReport{}},
+		{name: queryPrefix + "docs", params: DocsParams{}, result: DocsAnswer{}},
+		{name: "memory.add", params: MemoryAddParams{}, result: memory.Entry{}},
+		{name: "memory.edit", params: MemoryEditParams{}, result: memory.Entry{}},
+		{name: "memory.remove", params: MemoryRemoveParams{}, result: memory.Entry{}},
+		{name: "reload", params: NoParams{}, result: ReloadDiff{}},
+		{name: "models.reload", params: NoParams{}, result: ModelReload{}},
+		{name: "hooks.trust", params: NoParams{}, result: HooksTrusted{}},
+		{name: "learn.scan", params: NoParams{}, result: learn.Run{}},
+		{name: "learn.show", params: LearnParams{}, result: learn.Finding{}},
+		{name: "learn.reject", params: LearnParams{}, result: learn.Finding{}},
+		{name: "setup.check", params: NoParams{}, result: Setup{}},
+		{name: "login.key", params: LoginKeyParams{}, result: LoginNote{}},
+		{name: "login.logout", params: LogoutParams{}, result: LoginNote{}},
+		{name: queryPrefix + "usage", params: NoParams{}, result: UsageReport{}},
+		{name: queryPrefix + "doctor", params: NoParams{}, result: DoctorReport{}},
+		{name: queryPrefix + "context", params: SessionParams{}, result: ContextReport{}},
+		{name: "session.info", params: SessionParams{}, result: SessionInfo{}},
+		{name: "session.find", params: SessionFindParams{}, result: SessionFind{}},
+		{name: "session.trace", params: SessionParams{}, result: SessionTrace{}},
+		{name: queryPrefix + "accounts", params: NoParams{}, result: Accounts{}},
+		{name: "learn.apply", params: LearnApplyParams{}, result: WriteReceipt{}},
 	}
-	for _, query := range queries() {
-		methods = append(methods, method{name: queryPrefix + query.name, params: NoParams{}, result: verb})
+	for _, write := range []string{"rules.add", "rules.off", "rules.remove", "rules.restore"} {
+		methods = append(methods, method{name: write, params: RuleWriteParams{}, result: WriteReceipt{}})
+	}
+	for _, write := range []string{"agents.add", "agents.set", "agents.remove"} {
+		methods = append(methods, method{name: write, params: AgentWriteParams{}, result: WriteReceipt{}})
 	}
 	return methods
 }
 
 func capabilities() []string {
-	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "run", "compact", "history", "ledger"}
+	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "run", "compact", "history", "ledger",
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes"}
 }
 
 const queryPrefix = "query."
-
-type query struct {
-	name string
-	verb []string
-}
-
-func queries() []query {
-	return []query{
-		{name: "usage", verb: []string{"usage"}},
-		{name: "context", verb: []string{"context"}},
-		{name: "rules", verb: []string{"rules", "list"}},
-		{name: "agents", verb: []string{"agents"}},
-		{name: "models", verb: []string{"models"}},
-		{name: "settings", verb: []string{"settings"}},
-		{name: "library", verb: []string{"library"}},
-	}
-}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/rule"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
@@ -38,29 +39,11 @@ type rulesFlags struct {
 	rest         []string
 }
 
-type ruleListing struct {
-	ID       string           `json:"id"`
-	Kind     string           `json:"kind"`
-	Origin   string           `json:"origin"`
-	Mode     string           `json:"mode,omitempty"`
-	File     string           `json:"file,omitempty"`
-	Switch   string           `json:"switch,omitempty"`
-	Override *overrideListing `json:"override,omitempty"`
-}
-
-type overrideListing struct {
-	RuleID  string `json:"rule_id"`
-	Version int    `json:"version,omitempty"`
-	Current int    `json:"current,omitempty"`
-	Layer   string `json:"layer"`
-	Change  string `json:"change"`
-	Text    string `json:"text,omitempty"`
-	Reason  string `json:"reason,omitempty"`
-	By      string `json:"by,omitempty"`
-	At      string `json:"at,omitempty"`
-	Stale   bool   `json:"stale"`
-	File    string `json:"file"`
-}
+type (
+	ruleListing     = host.RuleListing
+	overrideListing = host.OverrideListing
+	ruleListReport  = host.RuleListReport
+)
 
 type overridesReport struct {
 	Origin    string            `json:"origin"`
@@ -173,11 +156,6 @@ type ruleCheckReport struct {
 	Origin  string            `json:"origin"`
 	Fires   []ruleFireListing `json:"fires"`
 	Blocked int               `json:"blocked"`
-}
-
-type ruleListReport struct {
-	Origin string        `json:"origin"`
-	Rules  []ruleListing `json:"rules"`
 }
 
 func rulesVerb(args []string, out, errOut io.Writer) int {
@@ -296,10 +274,10 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: switchOn})
 	}
 	report := ruleListReport{Origin: stack.origin, Rules: listing}
-	return o.done(true, report, report.lines)
+	return o.done(true, report, func(page cli.Page) []string { return ruleListLines(page, report) })
 }
 
-func (report ruleListReport) lines(page cli.Page) []string {
+func ruleListLines(page cli.Page, report ruleListReport) []string {
 	var origins []string
 	checks := map[string]int{}
 	running := 0
@@ -332,7 +310,7 @@ func (report ruleListReport) lines(page cli.Page) []string {
 			}
 			row := cli.Row{Mark: listingMark(rule.Mode(r.Mode)), Cells: []string{r.ID, r.Kind, r.Mode}, Detail: cmp.Or(r.Switch, page.Path(r.File))}
 			if r.Override != nil {
-				row.Detail = r.Override.why()
+				row.Detail = overrideWhy(*r.Override)
 			}
 			rows = append(rows, row)
 		}
@@ -342,18 +320,18 @@ func (report ruleListReport) lines(page cli.Page) []string {
 	return lines
 }
 
-func (o overrideListing) why() string {
+func overrideWhy(o overrideListing) string {
 	return "overridden in " + o.Layer + ": " + cmp.Or(o.Reason, "no reason given")
 }
 
-func (o overrideListing) ref() string {
+func overrideRef(o overrideListing) string {
 	if o.Version == 0 {
 		return o.RuleID
 	}
 	return o.RuleID + "@" + strconv.Itoa(o.Version)
 }
 
-func (o overrideListing) staleWhy() string {
+func overrideStaleWhy(o overrideListing) string {
 	if o.Current == 0 {
 		return "stale: no rule " + o.RuleID + " runs below it"
 	}
@@ -385,10 +363,10 @@ func (report overridesReport) lines(page cli.Page) []string {
 	rows := make([]cli.Row, len(report.Overrides))
 	stale := 0
 	for i, o := range report.Overrides {
-		rows[i] = cli.Row{Mark: cli.Changed, Cells: []string{o.ref(), o.Layer, o.Change, cmp.Or(o.Reason, "no reason given")}, Detail: strings.TrimSpace("by " + cmp.Or(o.By, "person") + " " + o.At + " " + page.Path(o.File))}
+		rows[i] = cli.Row{Mark: cli.Changed, Cells: []string{overrideRef(o), o.Layer, o.Change, cmp.Or(o.Reason, "no reason given")}, Detail: strings.TrimSpace("by " + cmp.Or(o.By, "person") + " " + o.At + " " + page.Path(o.File))}
 		if o.Stale {
 			stale++
-			rows[i].Mark, rows[i].Detail = cli.Warn, o.staleWhy()
+			rows[i].Mark, rows[i].Detail = cli.Warn, overrideStaleWhy(o)
 		}
 	}
 	switch {

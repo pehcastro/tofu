@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/keymap"
 	"tofu/internal/llm/models"
 	settingspkg "tofu/internal/settings"
@@ -35,21 +36,9 @@ type reloadPart struct {
 	Items  map[string]string `json:"items"`
 }
 
-type partDiff struct {
-	Name    string   `json:"name"`
-	Detail  string   `json:"detail,omitempty"`
-	Count   int      `json:"count"`
-	Added   []string `json:"added,omitempty"`
-	Removed []string `json:"removed,omitempty"`
-	Changed []string `json:"changed,omitempty"`
-}
+type partDiff = host.PartDiff
 
-type reloadDiff struct {
-	Project    string     `json:"project"`
-	First      bool       `json:"first"`
-	Unreadable string     `json:"last_unreadable,omitempty"`
-	Parts      []partDiff `json:"parts"`
-}
+type reloadDiff host.ReloadDiff
 
 func digest(parts ...string) string {
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
@@ -231,7 +220,7 @@ type partSide struct {
 	names []string
 }
 
-func (p partDiff) sides() []partSide {
+func partSides(p partDiff) []partSide {
 	return []partSide{{cli.Added, "+", p.Added}, {cli.Removed, "-", p.Removed}, {cli.Changed, "~", p.Changed}}
 }
 
@@ -254,7 +243,7 @@ func (d reloadDiff) lines(page cli.Page) []string {
 	counts := map[cli.Mark]int{}
 	for _, part := range d.Parts {
 		var rows []cli.Row
-		for _, side := range part.sides() {
+		for _, side := range partSides(part) {
 			counts[side.mark] += len(side.names)
 			for _, name := range side.names {
 				rows = append(rows, cli.Row{Mark: side.mark, Cells: []string{name}})
@@ -278,7 +267,7 @@ func (d reloadDiff) note() string {
 	var parts []string
 	for _, part := range d.Parts {
 		said := ""
-		for _, side := range part.sides() {
+		for _, side := range partSides(part) {
 			if len(side.names) > 0 {
 				said += " " + side.sign + strconv.Itoa(len(side.names))
 			}

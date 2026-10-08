@@ -4,13 +4,13 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"slices"
 	"strconv"
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/llm/quota"
 	"tofu/internal/widget"
 )
@@ -21,50 +21,13 @@ const (
 	usageNoWindowReported = "no window is reporting use"
 )
 
-type usageState int
+type usageReport = host.UsageReport
 
 const (
-	usageServing usageState = iota
-	usageAttention
-	usageNone
+	usageServing   = host.UsageServing
+	usageAttention = host.UsageAttention
+	usageNone      = host.UsageNone
 )
-
-func (s usageState) String() string {
-	switch s {
-	case usageServing:
-		return usageServingState
-	case usageAttention:
-		return "needs attention"
-	case usageNone:
-		return "none"
-	}
-	panic("tofu usage: unknown state")
-}
-
-//nolint:unparam
-func (s usageState) MarshalJSON() ([]byte, error) { return []byte(strconv.Quote(s.String())), nil }
-
-func (s *usageState) UnmarshalJSON(data []byte) error {
-	text, err := strconv.Unquote(string(data))
-	if err != nil {
-		return err
-	}
-	for _, candidate := range []usageState{usageServing, usageAttention, usageNone} {
-		if candidate.String() == text {
-			*s = candidate
-			return nil
-		}
-	}
-	return fmt.Errorf("tofu usage: unknown state %q", text)
-}
-
-type usageReport struct {
-	State      usageState         `json:"state"`
-	Fullest    string             `json:"fullest_window,omitempty"`
-	Providers  []credentialReport `json:"providers"`
-	SpendLimit string             `json:"spend_limit"`
-	Missing    []doctorBlocker    `json:"missing,omitempty"`
-}
 
 func usageVerb(args []string, out, errOut io.Writer) int {
 	o := verbOutput{verb: "usage", usageLine: usageFlags, asJSON: jsonAsked(args), out: out, errOut: errOut}
@@ -113,7 +76,7 @@ func readUsage(now time.Time) (usageReport, error) {
 }
 
 func usagePage(page cli.Page, report usageReport, now time.Time) []string {
-	verdict := cli.Verdict{Mark: cli.Done, Text: report.State.String()}
+	verdict := cli.Verdict{Mark: cli.Done, Text: string(report.State)}
 	switch report.State {
 	case usageServing:
 	case usageAttention:
@@ -131,11 +94,11 @@ func usagePage(page cli.Page, report usageReport, now time.Time) []string {
 		cardVerdict := cli.Verdict{Mark: cli.Active, Text: usageServingState}
 		var facts []cli.Fact
 		if provider.State != usageServingState {
-			cardVerdict = cli.Verdict{Mark: cli.Warn, Text: usageAttention.String()}
+			cardVerdict = cli.Verdict{Mark: cli.Warn, Text: string(usageAttention)}
 			facts = append(facts, cli.Fact{Label: "state", Text: provider.State})
 		}
 		for _, window := range provider.Windows {
-			text := page.Label(window.percent())
+			text := page.Label(windowPercent(window))
 			if window.Reported {
 				text = page.Bar(window.Used)
 				if left := window.ResetsAt.Sub(now); left > 0 {

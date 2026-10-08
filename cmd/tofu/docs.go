@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/widget"
 	"tofu/library/docs"
@@ -24,37 +25,17 @@ const (
 	docsUsage     = `tofu docs [topic | "a few words"] [--json]`
 )
 
-type docsEntry struct {
-	Ask   string `json:"ask"`
-	Do    string `json:"do"`
-	Check string `json:"check"`
-	Topic string `json:"topic"`
-}
+type (
+	docsEntry  = host.DocsEntry
+	docsPage   = host.DocsPage
+	settingDoc = host.SettingDoc
+)
 
-type docsPage struct {
-	Topic   string `json:"topic"`
-	Title   string `json:"title"`
-	Summary string `json:"summary"`
-	Body    string `json:"markdown,omitempty"`
-}
-
-type docsCorpus struct {
-	Pages   []docsPage  `json:"topics"`
-	Entries []docsEntry `json:"entries"`
-}
+type docsCorpus host.DocsCorpus
 
 type docsMatch struct {
 	Text string `json:"text"`
 	Do   string `json:"do"`
-}
-
-type settingDoc struct {
-	Key         string `json:"key"`
-	Category    string `json:"category"`
-	Default     string `json:"default"`
-	Takes       string `json:"takes"`
-	Restart     bool   `json:"restart"`
-	Description string `json:"description"`
 }
 
 func (c docsCorpus) topics() []string {
@@ -90,10 +71,7 @@ func docsVerb(args []string, out, errOut io.Writer) int {
 		slices.SortStableFunc(closest, func(a, b string) int { return cmp.Compare(editDistance(query, a), editDistance(query, b)) })
 		return o.fail(problemError{What: fmt.Sprintf("no topic %q", query), Hint: "tofu docs " + closest[0]})
 	}
-	topic := struct {
-		docsPage
-		Settings []settingDoc `json:"settings,omitempty"`
-	}{docsPage: corpus.Pages[at]}
+	topic := host.DocsTopic{DocsPage: corpus.Pages[at]}
 	if topic.Topic == "settings" {
 		topic.Settings = settingDocs()
 	}
@@ -339,7 +317,7 @@ func editDistance(a, b string) int {
 func settingDocs() []settingDoc {
 	var table []settingDoc
 	for _, spec := range settingspkg.Default() {
-		table = append(table, settingDoc{spec.Key, spec.Category, settingDefault(spec), settingTakes(spec), spec.Restart, spec.Description})
+		table = append(table, settingDoc{Key: spec.Key, Category: spec.Category, Default: settingDefault(spec), Takes: settingTakes(spec), Restart: spec.Restart, Description: spec.Description})
 	}
 	return table
 }

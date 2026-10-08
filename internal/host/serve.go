@@ -19,6 +19,7 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
+	"tofu/internal/turn"
 )
 
 type ServeConfig struct {
@@ -36,6 +37,10 @@ type ServeConfig struct {
 	Ledger   func(LedgerParams) (LedgerReport, error)
 	Run      func(ctx context.Context, command string) (output string, stopped bool)
 	Compact  func() (Compaction, error)
+	Stale    func() bool
+	Setup    func() []Requirement
+	SaveKey  func(provider, key string) (note string, err error)
+	Logout   func(LogoutParams) (note string, err error)
 }
 
 var errCommandRunning = errors.New("a shell.run command is still running: wait for it, or turn.stop stops it")
@@ -95,7 +100,7 @@ func (s *server) receive(line []byte) {
 	case in.Method == "" && in.ID != nil:
 		s.answered(in.ID, in.Result)
 	case in.ID == nil:
-	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "shell.run", "session.list", "session.history"}, in.Method):
+	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "shell.run", "session.list", "session.history", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
 		go func() {
 			result, err := s.call(in.Method, in.Params)
 			s.respond(in.ID, result, err)
@@ -135,9 +140,6 @@ func handle[P any](raw json.RawMessage, run func(P) (any, error)) (any, error) {
 func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	if method != "initialize" && !s.ready {
 		return nil, &Refusal{Code: CodeInvalid, Message: "initialize first"}
-	}
-	verb := func(args ...string) func(NoParams) (any, error) {
-		return func(NoParams) (any, error) { return s.Verb(args) }
 	}
 	switch method {
 	case "initialize":
@@ -199,11 +201,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "login.start":
 		return handle(raw, func(p LoginParams) (any, error) { return s.Verb([]string{"login", p.Role, p.Provider}) })
 	}
-	name, asked := strings.CutPrefix(method, queryPrefix)
-	if at := slices.IndexFunc(queries(), func(one query) bool { return one.name == name }); asked && at >= 0 {
-		return handle(raw, verb(queries()[at].verb...))
-	}
-	return nil, &Refusal{Code: CodeNoMethod, Message: "tofu.host/1 has no method " + strconv.Quote(method)}
+	return s.data(method, raw)
 }
 
 func (s *server) initialize(p InitializeParams) (any, error) {
@@ -466,13 +464,13 @@ func (s *server) answered(id, result json.RawMessage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	asked, pending := s.pending[approval]
-	if !pending {
+	if !pending || (answer.Decision == RememberProject || answer.Decision == RememberGlobal) && asked.Tool != turn.RememberToolName {
 		return
 	}
 	switch answer.Decision {
-	case AllowOnce:
+	case AllowOnce, RememberProject:
 		s.Host.AnswerAsk(approval, AllowedOnce)
-	case AllowAlways:
+	case AllowAlways, RememberGlobal:
 		s.Host.AnswerAsk(approval, AlwaysHere)
 	case RejectOnce:
 		s.Host.AnswerAsk(approval, Denied)

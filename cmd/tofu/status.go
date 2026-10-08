@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
@@ -24,75 +25,52 @@ const (
 	noAccountYet   = "no account captured yet"
 )
 
-type accountState string
-
-const (
-	stateInUse         accountState = "in_use"
-	stateStandby       accountState = "standby"
-	stateSetAside      accountState = "set_aside"
-	stateRefreshFailed accountState = "refresh_failed"
-	stateExpired       accountState = "expired"
-	stateRefused       accountState = "refused"
-	stateSpent         accountState = "spent"
-	stateRateLimited   accountState = "rate_limited"
-	stateUnread        accountState = "unread"
-	stateUnchecked     accountState = "unchecked"
+type (
+	accountState       = host.AccountState
+	statusData         = host.Accounts
+	subscriptionStatus = host.SubscriptionStatus
+	accountStatus      = host.AccountStatus
+	windowStatus       = host.WindowStatus
+	keyStatus          = host.KeyStatus
 )
 
-type statusData struct {
-	Subscriptions []subscriptionStatus `json:"subscriptions"`
-	Keys          []keyStatus          `json:"keys"`
+const (
+	stateInUse         = host.AccountInUse
+	stateStandby       = host.AccountStandby
+	stateSetAside      = host.AccountSetAside
+	stateRefreshFailed = host.AccountRefreshFailed
+	stateExpired       = host.AccountExpired
+	stateRefused       = host.AccountRefused
+	stateSpent         = host.AccountSpent
+	stateRateLimited   = host.AccountRateLimited
+	stateUnread        = host.AccountUnread
+	stateUnchecked     = host.AccountUnchecked
+)
+
+type keyFacts struct{ provider, variable, name, use, hint string }
+
+func keyTable() []keyFacts {
+	return []keyFacts{
+		{metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models", loginHint(metaName)},
+		{openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "judges tool calls with jev-latest", loginHint(openRouterName)},
+		{typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), "used only without OpenRouter", ""},
+		{braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool", loginHint(braveName)},
+	}
 }
 
-type subscriptionStatus struct {
-	Role     role            `json:"role"`
-	Source   string          `json:"source"`
-	Accounts []accountStatus `json:"accounts"`
-}
-
-type accountStatus struct {
-	ID        int64          `json:"id"`
-	Account   string         `json:"account"`
-	State     accountState   `json:"state"`
-	Login     string         `json:"login"`
-	ReloginBy time.Time      `json:"relogin_by,omitzero"`
-	Plan      string         `json:"plan,omitempty"`
-	Windows   []windowStatus `json:"windows,omitempty"`
-}
-
-type windowStatus struct {
-	ID       string    `json:"id"`
-	Used     float64   `json:"used"`
-	ResetsAt time.Time `json:"resets_at,omitzero"`
-	Only     []string  `json:"only,omitempty"`
-}
-
-type keyStatus struct {
-	Role     role   `json:"role"`
-	Provider string `json:"provider"`
-	Variable string `json:"variable"`
-	Key      string `json:"key,omitempty"`
-	name     string
-	use      string
-	hint     string
+func keyFactsOf(provider string) keyFacts {
+	table := keyTable()
+	return table[slices.IndexFunc(table, func(fact keyFacts) bool { return fact.provider == provider })]
 }
 
 func keyStatuses(resolve func(variable string) string) []keyStatus {
-	keys := []keyStatus{
-		{Provider: metaName, Variable: sys.MetaMuseKeyName, name: models.Meta.Display(),
-			use: "serves the meta models", hint: loginHint(metaName)},
-		{Provider: openRouterName, Variable: sys.OpenRouterKeyName, name: models.OpenRouter.Display(),
-			use: "judges tool calls with jev-latest", hint: loginHint(openRouterName)},
-		{Provider: typeSafeName, Variable: sys.TypeSafeKeyName, name: models.TypeSafe.Display(),
-			use: "used only without OpenRouter"},
-		{Provider: braveName, Variable: sys.BraveSearchKeyName, name: braveDisplay,
-			use: "backs the web search tool", hint: loginHint(braveName)},
-	}
-	for i := range keys {
-		keys[i].Role = roleOf(keys[i].Provider)
-		if value := resolve(keys[i].Variable); value != "" {
-			keys[i].Key = widget.Mask(value)
+	var keys []keyStatus
+	for _, fact := range keyTable() {
+		key := keyStatus{Role: roleOf(fact.provider), Provider: fact.provider, Variable: fact.variable}
+		if value := resolve(fact.variable); value != "" {
+			key.Key = widget.Mask(value)
 		}
+		keys = append(keys, key)
 	}
 	return keys
 }

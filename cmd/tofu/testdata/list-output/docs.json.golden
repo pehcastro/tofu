@@ -83,6 +83,11 @@ exit 0
         "summary": "add your own rules for every project or for one, switch a rule off, and see which rules run"
       },
       {
+        "topic": "serve-methods",
+        "title": "Every method tofu serve answers",
+        "summary": "the requests of tofu.host/1, what each takes and what it answers, for a frontend wiring tofu serve"
+      },
+      {
         "topic": "serve",
         "title": "Serving a project to another program",
         "summary": "tofu serve --stdio speaks tofu.host/1, JSON-RPC over standard input and output, for the desk app or any script"

@@ -57,6 +57,10 @@ exit 0
         "do": "tofu docs models"
       },
       {
+        "text": "Every method tofu serve answers",
+        "do": "tofu docs serve-methods"
+      },
+      {
         "text": "Serving a project to another program",
         "do": "tofu docs serve"
       },

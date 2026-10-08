@@ -14,7 +14,6 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/trace"
-	"tofu/internal/hook"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
@@ -32,48 +31,10 @@ const (
 	sessionDate        = "2 Jan 15:04"
 )
 
-type sessionSkip struct {
-	Session string `json:"session"`
-	Reason  string `json:"reason"`
-}
+type sessionSkip = host.SessionSkip
 
 type sessionRow struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name,omitempty"`
-	Handle           string    `json:"handle"`
-	Family           string    `json:"family,omitempty"`
-	Generation       int       `json:"generation,omitempty"`
-	Generations      int       `json:"generations,omitempty"`
-	At               time.Time `json:"at"`
-	LastAt           time.Time `json:"lastAt,omitzero"`
-	Task             string    `json:"task,omitempty"`
-	Turns            int       `json:"turns"`
-	Agents           int       `json:"sub_agents"`
-	Steps            int       `json:"steps"`
-	Carried          int       `json:"carried_messages"`
-	Outcome          string    `json:"outcome,omitempty"`
-	Error            string    `json:"error,omitempty"`
-	Wire             string    `json:"wire,omitempty"`
-	Model            string    `json:"model,omitempty"`
-	Parent           string    `json:"parent,omitempty"`
-	Root             string    `json:"root,omitempty"`
-	ForkedInto       string    `json:"forked_into,omitempty"`
-	ForkIntoKind     string    `json:"fork_into_kind,omitempty"`
-	ForkKind         string    `json:"fork_kind,omitempty"`
-	ContextCeiling   int       `json:"context_ceiling,omitempty"`
-	ContextTarget    int       `json:"context_target,omitempty"`
-	AutoCompaction   string    `json:"auto_compaction,omitempty"`
-	ForkTokensBefore int       `json:"fork_tokens_before,omitempty"`
-	ForkTokensAfter  int       `json:"fork_tokens_after,omitempty"`
-	CostUSD          float64   `json:"cost_usd,omitempty"`
-	Head             bool      `json:"head,omitempty"`
-
-	Reads      int               `json:"reads"`
-	Unrecorded int               `json:"unrecorded_reads,omitempty"`
-	EndedAt    *time.Time        `json:"ended_at,omitempty"`
-	EndReason  session.EndReason `json:"end_reason,omitempty"`
-	Expired    bool              `json:"expired,omitempty"`
-
+	host.SessionInfo
 	lastAt time.Time
 	tasks  []string
 }
@@ -374,7 +335,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 			tasks = append(tasks, outcome.Task)
 		}
 	}
-	row := sessionRow{
+	row := sessionRow{SessionInfo: host.SessionInfo{
 		ID:               header.ID,
 		At:               header.At,
 		LastAt:           host.LastAt(store, header.ID),
@@ -400,9 +361,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		CostUSD:          header.CostUSD,
 		EndedAt:          header.EndedAt,
 		EndReason:        header.EndReason,
-		lastAt:           header.LastAt(),
-		tasks:            tasks,
-	}
+	}, lastAt: header.LastAt(), tasks: tasks}
 	if header.Name != nil {
 		row.Name = *header.Name
 	}
@@ -621,86 +580,14 @@ func sessionShortID(id string) string { return strings.TrimPrefix(id, session.ID
 
 func sessionHandle(id, name string) string { return cmp.Or(name, sessionShortID(id)) }
 
-type traceRequest struct {
-	Request string        `json:"request"`
-	Agent   string        `json:"agent,omitempty"`
-	Turn    string        `json:"turn"`
-	Model   string        `json:"model,omitempty"`
-	Usage   session.Usage `json:"usage"`
-	CostUSD float64       `json:"cost_usd"`
-
-	Why               string `json:"why,omitempty"`
-	Messages          int    `json:"messages,omitempty"`
-	New               int    `json:"new_messages,omitempty"`
-	Attempts          int    `json:"attempts,omitempty"`
-	Status            int    `json:"status,omitempty"`
-	ProviderRequestID string `json:"provider_request_id,omitempty"`
-	DurationMS        int64  `json:"duration_ms,omitempty"`
-	Error             string `json:"error,omitempty"`
-	RecordedIn        string `json:"recorded_in,omitempty"`
-}
-
-type traceCall struct {
-	Call    string `json:"call"`
-	Agent   string `json:"agent,omitempty"`
-	Turn    string `json:"turn"`
-	Request string `json:"request,omitempty"`
-	Tool    string `json:"tool"`
-	Result  string `json:"result,omitempty"`
-	Outcome string `json:"outcome,omitempty"`
-	Bytes   int    `json:"result_bytes"`
-	Reason  string `json:"reason,omitempty"`
-
-	Args       json.RawMessage `json:"args,omitempty"`
-	DurationMS int64           `json:"duration_ms,omitempty"`
-	Refused    bool            `json:"refused,omitempty"`
-	Gate       string          `json:"gate,omitempty"`
-	Hooks      []turn.HookRun  `json:"hooks,omitempty"`
-	RecordedIn string          `json:"recorded_in,omitempty"`
-}
-
-type traceHook struct {
-	Agent string `json:"agent,omitempty"`
-	Turn  string `json:"turn"`
-	Call  string `json:"call,omitempty"`
-	Tool  string `json:"tool,omitempty"`
-	hook.Run
-}
-
-type traceMessage struct {
-	ID   string    `json:"id"`
-	Turn string    `json:"turn"`
-	Role string    `json:"role"`
-	At   time.Time `json:"at"`
-	Text string    `json:"text"`
-}
-
-type traceFailure struct {
-	Agent string `json:"agent,omitempty"`
-	Turn  string `json:"turn"`
-	Error string `json:"error"`
-}
-
-type sessionTraceReport struct {
-	Session  string             `json:"session"`
-	Name     string             `json:"name,omitempty"`
-	Handle   string             `json:"handle"`
-	Error    string             `json:"error,omitempty"`
-	Events   int                `json:"events"`
-	Agents   []session.AgentRun `json:"agents"`
-	Requests []traceRequest     `json:"requests"`
-	Calls    []traceCall        `json:"calls"`
-	Hooks    []traceHook        `json:"hooks,omitempty"`
-	Failures []traceFailure     `json:"failures,omitempty"`
-	Messages []traceMessage     `json:"messages,omitempty"`
-
-	Sizes    *session.Sizes         `json:"sizes,omitempty"`
-	Inserted []session.TracedInsert `json:"inserted,omitempty"`
-	Changes  []session.TracedChange `json:"list_changes,omitempty"`
-	Notices  []session.TracedNotice `json:"notices,omitempty"`
-	Outlived []traceOutlived        `json:"outlived,omitempty"`
-	Cache    traceCache             `json:"cache"`
-}
+type (
+	traceRequest       = host.TraceRequest
+	traceCall          = host.TraceCall
+	traceHook          = host.TraceHook
+	traceMessage       = host.TraceMessage
+	traceFailure       = host.TraceFailure
+	sessionTraceReport = host.SessionTrace
+)
 
 type traceResult struct {
 	session.ResultBody

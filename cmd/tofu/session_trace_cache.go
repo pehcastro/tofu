@@ -6,25 +6,16 @@ import (
 	"strconv"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/session"
 	"tofu/internal/widget"
 )
 
-type traceCacheBreak struct {
-	Agent   string `json:"agent,omitempty"`
-	Request string `json:"request"`
-	After   string `json:"after"`
-	Gap     string `json:"gap"`
-	Read    int    `json:"cache_read_tokens"`
-	Cached  int    `json:"after_cached_tokens"`
-	Differs string `json:"first_difference"`
-}
-
-type traceCache struct {
-	Lifetimes map[string]string `json:"lifetimes,omitempty"`
-	Breaks    []traceCacheBreak `json:"breaks,omitempty"`
-}
+type (
+	traceCacheBreak = host.TraceCacheBreak
+	traceCache      = host.TraceCache
+)
 
 type cacheUse struct {
 	Read        int `json:"cache_read_tokens"`

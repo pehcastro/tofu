@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
@@ -103,13 +104,7 @@ func parseSemver(text string) (semver, bool) {
 	return semver{major: major, minor: minor, patch: patch, prerelease: prerelease}, true
 }
 
-type changelogVersion struct {
-	Version string `json:"version"`
-	Heading string `json:"heading"`
-	Body    string `json:"body"`
-
-	number semver
-}
+type changelogVersion = host.ChangelogVersion
 
 func parseChangelog(markdown string) []changelogVersion {
 	var versions []changelogVersion
@@ -135,11 +130,9 @@ func parseChangelog(markdown string) []changelogVersion {
 		if match == nil {
 			continue
 		}
-		number, _ := parseSemver(match[1])
 		current = changelogVersion{
 			Version: match[1],
 			Heading: strings.TrimSpace(strings.TrimPrefix(line, changelogHeadingMark)),
-			number:  number,
 		}
 		open = true
 	}
@@ -154,7 +147,7 @@ func changelogSince(versions []changelogVersion, seen string) []changelogVersion
 		if !known && version.Version == konst.Version {
 			shown = append(shown, version)
 		}
-		if known && version.number.after(last) {
+		if number, _ := parseSemver(version.Version); known && number.after(last) {
 			shown = append(shown, version)
 		}
 	}
@@ -260,9 +253,7 @@ func changelogVerb(args []string, markdown string, out, errOut io.Writer) int {
 	}
 	versions := parseChangelog(markdown)
 	if o.asJSON {
-		return o.done(true, struct {
-			Versions []changelogVersion `json:"versions"`
-		}{versions}, nil)
+		return o.done(true, host.ChangelogReport{Versions: versions, Seen: changelogSeen()}, nil)
 	}
 	if all {
 		return o.done(true, nil, func(page cli.Page) []string { return changelogLines(page, true, "", versions) })

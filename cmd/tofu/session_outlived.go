@@ -5,15 +5,11 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/session"
 )
 
-type traceOutlived struct {
-	Agent      string `json:"agent"`
-	Calls      int    `json:"calls"`
-	RecordedIn string `json:"recorded_in"`
-	LeadIn     string `json:"lead_in"`
-}
+type traceOutlived = host.TraceOutlived
 
 func callsAfterTheLeadLeft(store *session.Store, header session.Header, events []session.Event) []traceOutlived {
 	if header.ForkedInto == "" || header.EndedAt == nil {

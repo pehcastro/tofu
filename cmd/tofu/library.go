@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/judge/question"
 	"tofu/internal/llm/models"
 	"tofu/internal/rule"
@@ -22,35 +23,11 @@ import (
 
 const libraryUsage = "tofu library [resolve <name>] [--dir <path>] [--json]"
 
-type libraryLayer struct {
-	Name   string `json:"name"`
-	Origin string `json:"origin"`
-}
-
-type libraryDomain struct {
-	Name       string `json:"name"`
-	Rules      int    `json:"rules"`
-	Thresholds int    `json:"thresholds"`
-	Skills     int    `json:"skills"`
-	Agents     int    `json:"agents"`
-	References int    `json:"references"`
-	Refused    int    `json:"refused"`
-}
-
-type libraryReport struct {
-	Layers        []libraryLayer  `json:"layers"`
-	Models        int             `json:"models"`
-	Subscriptions int             `json:"subscriptions"`
-	Roles         int             `json:"roles"`
-	Questions     int             `json:"questions"`
-	DocPages      int             `json:"doc_pages"`
-	DocEntries    int             `json:"doc_entries"`
-	Proxy         string          `json:"proxy"`
-	ProxyFrom     string          `json:"proxy_from"`
-	DomainsFrom   string          `json:"domains_from"`
-	DomainsDir    string          `json:"domains_dir"`
-	Domains       []libraryDomain `json:"domains"`
-}
+type (
+	libraryLayer  = host.LibraryLayer
+	libraryDomain = host.LibraryDomain
+	libraryReport = host.LibraryReport
+)
 
 type resolvedField struct {
 	Path  string `json:"path"`

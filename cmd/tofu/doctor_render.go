@@ -17,7 +17,7 @@ const (
 )
 
 func doctorPage(page cli.Page, report doctorReport) []string {
-	verdict := cli.Verdict{Mark: cli.Done, Text: report.Verdict.String()}
+	verdict := cli.Verdict{Mark: cli.Done, Text: string(report.Verdict)}
 	if report.Verdict == doctorNotReady {
 		verdict.Mark = cli.Fail
 	}
@@ -59,7 +59,7 @@ func accessRows(report doctorReport) []cli.Row {
 		}
 		var windows []string
 		for _, window := range credential.Windows {
-			windows = append(windows, window.ID+" "+window.percent())
+			windows = append(windows, window.ID+" "+windowPercent(window))
 		}
 		rows = append(rows, cli.Row{Mark: cli.Done, Cells: []string{credential.Provider, strings.Join(windows, factSeparator)}})
 	}
@@ -125,7 +125,7 @@ func overrideRows(report doctorReport) []cli.Row {
 	var stale []cli.Row
 	for _, o := range report.Overrides {
 		if o.Stale {
-			stale = append(stale, cli.Row{Mark: cli.Warn, Cells: []string{o.ref(), o.Layer + factSeparator + o.staleWhy()}})
+			stale = append(stale, cli.Row{Mark: cli.Warn, Cells: []string{overrideRef(o), o.Layer + factSeparator + overrideStaleWhy(o)}})
 		}
 	}
 	summary := cli.Row{Mark: cli.Changed, Cells: []string{"overrides", plural(len(report.Overrides), "rule") + " changed by you"}, Hint: "tofu rules overrides"}

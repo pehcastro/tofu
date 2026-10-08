@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/memory"
 	"tofu/internal/widget"
@@ -96,9 +97,7 @@ func memoryVerb(args []string, out, errOut io.Writer) int {
 
 func memoryList(o verbOutput, shelves memory.Memory) int {
 	both := []memory.Shelf{shelves.Global, shelves.Project}
-	return o.done(true, struct {
-		Scopes []memoryScopeReport `json:"scopes"`
-	}{[]memoryScopeReport{scopeReport(both[0]), scopeReport(both[1])}}, func(page cli.Page) []string {
+	return o.done(true, host.MemoryReport{Scopes: []host.MemoryShelf{scopeReport(both[0]), scopeReport(both[1])}}, func(page cli.Page) []string {
 		count := strconv.Itoa(len(both[0].Entries)+len(both[1].Entries)) + " entries"
 		if count == "1 entries" {
 			count = "1 entry"
@@ -123,14 +122,8 @@ func memoryList(o verbOutput, shelves memory.Memory) int {
 	})
 }
 
-type memoryScopeReport struct {
-	memory.Shelf
-	Bytes int `json:"bytes"`
-	Limit int `json:"limit"`
-}
-
-func scopeReport(shelf memory.Shelf) memoryScopeReport {
-	return memoryScopeReport{Shelf: shelf, Bytes: shelf.Bytes(), Limit: konst.MemoryScopeBytes}
+func scopeReport(shelf memory.Shelf) host.MemoryShelf {
+	return host.MemoryShelf{Shelf: shelf, Bytes: shelf.Bytes(), Limit: konst.MemoryScopeBytes}
 }
 
 func memoryAdd(o verbOutput, opts memoryOpts, shelves memory.Memory) int {

@@ -11,7 +11,7 @@ import (
 
 const reloginDay = "2 Jan"
 
-func (s accountState) look() (cli.Verdict, string) {
+func stateLook(s accountState) (cli.Verdict, string) {
 	switch s {
 	case stateInUse:
 		return cli.Verdict{Mark: cli.Active, Text: "in use"}, ""
@@ -83,9 +83,10 @@ func keyRows(page cli.Page, keys []keyStatus, of role) []string {
 		if key.Role != of {
 			continue
 		}
-		row := cli.Row{Mark: cli.Done, Cells: []string{key.name, key.Key}, Detail: key.use}
+		facts := keyFactsOf(key.Provider)
+		row := cli.Row{Mark: cli.Done, Cells: []string{facts.name, key.Key}, Detail: facts.use}
 		if key.Key == "" {
-			row.Mark, row.Cells[1], row.Hint = cli.Idle, "not set", key.hint
+			row.Mark, row.Cells[1], row.Hint = cli.Idle, "not set", facts.hint
 		}
 		rows = append(rows, row)
 	}
@@ -93,7 +94,7 @@ func keyRows(page cli.Page, keys []keyStatus, of role) []string {
 }
 
 func accountCard(page cli.Page, source string, account accountStatus, now time.Time) ([]string, bool) {
-	verdict, reason := account.State.look()
+	verdict, reason := stateLook(account.State)
 	id := strconv.FormatInt(account.ID, 10)
 	login, hint := account.Login, ""
 	switch {

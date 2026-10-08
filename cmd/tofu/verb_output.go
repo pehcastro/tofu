@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 )
 
 const (
@@ -91,15 +92,19 @@ func (o verbOutput) done(ok bool, data any, lines func(cli.Page) []string) int {
 	return code
 }
 
-type changeKind string
-
-const (
-	changeAdded   changeKind = "added"
-	changeChanged changeKind = "changed"
-	changeRemoved changeKind = "removed"
+type (
+	changeKind   = host.ChangeKind
+	fileChange   = host.FileChange
+	writeReceipt = host.WriteReceipt
 )
 
-func (c changeKind) mark() cli.Mark {
+const (
+	changeAdded   = host.ChangeAdded
+	changeChanged = host.ChangeChanged
+	changeRemoved = host.ChangeRemoved
+)
+
+func changeMark(c changeKind) cli.Mark {
 	switch c {
 	case changeAdded:
 		return cli.Added
@@ -111,17 +116,6 @@ func (c changeKind) mark() cli.Mark {
 	panic("tofu: unknown change " + string(c))
 }
 
-type fileChange struct {
-	Change changeKind `json:"change"`
-	What   string     `json:"what"`
-	File   string     `json:"file"`
-}
-
-type writeReceipt struct {
-	Changes []fileChange `json:"changes"`
-	Undo    string       `json:"undo"`
-}
-
 func (o verbOutput) receipt(r writeReceipt) int {
 	if o.asJSON {
 		return o.done(true, r, nil)
@@ -129,7 +123,7 @@ func (o verbOutput) receipt(r writeReceipt) int {
 	page := cli.Detect(o.out, os.Environ())
 	var lines []string
 	for _, c := range r.Changes {
-		lines = append(lines, page.Receipt(c.Change.mark(), c.What, c.File))
+		lines = append(lines, page.Receipt(changeMark(c.Change), c.What, c.File))
 	}
 	if err := page.Print(o.out, append(lines, cli.Indent(page.Hint("undo: "+r.Undo))...)); err != nil {
 		return exitVerdict

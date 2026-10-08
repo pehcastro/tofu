@@ -88,6 +88,8 @@ func (defs schemaDefs) of(t reflect.Type) any {
 		return map[string]any{}
 	case reflect.Slice:
 		return map[string]any{"type": []string{"array", "null"}, "items": defs.of(t.Elem())}
+	case reflect.Map:
+		return map[string]any{"type": []string{"object", "null"}, "additionalProperties": defs.of(t.Elem())}
 	case reflect.Struct:
 		name := t.Name()
 		if t.PkgPath() != reflect.TypeFor[Identity]().PkgPath() {
@@ -112,6 +114,9 @@ func (defs schemaDefs) fields(t reflect.Type, properties map[string]any, require
 			continue
 		}
 		name, options, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if !field.IsExported() || name == "-" {
+			continue
+		}
 		properties[name] = defs.of(field.Type)
 		if options != "omitempty" && options != "omitzero" {
 			*required = append(*required, name)

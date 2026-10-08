@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -83,35 +84,10 @@ func refreshRegistry(ctx context.Context, client *transport.Client) (models.Regi
 	return registry, registry.Store(path)
 }
 
-type modelReport struct {
-	Slug          string   `json:"slug"`
-	Provider      string   `json:"provider"`
-	ID            string   `json:"id"`
-	Subscription  string   `json:"subscription"`
-	Use           string   `json:"use"`
-	Kind          string   `json:"kind"`
-	Pays          string   `json:"pays"`
-	Windows       []string `json:"windows"`
-	ContextTokens int      `json:"context_tokens,omitempty"`
-	WindowFrom    string   `json:"window_from,omitempty"`
-	Roles         []string `json:"roles,omitempty"`
-	Reason        string   `json:"reason,omitempty"`
-	Notice        string   `json:"notice,omitempty"`
-	Layer         string   `json:"layer"`
-	From          string   `json:"from,omitempty"`
-	File          string   `json:"file"`
-}
-
-type modelsReport struct {
-	Subscriptions []string      `json:"subscriptions"`
-	Defaults      []string      `json:"defaults"`
-	Usable        int           `json:"usable"`
-	Table         string        `json:"table"`
-	Windowed      int           `json:"windowed"`
-	Published     int           `json:"published_windows"`
-	Unbound       []string      `json:"unbound_roles,omitempty"`
-	Models        []modelReport `json:"models"`
-}
+type (
+	modelReport  = host.ModelReport
+	modelsReport = host.ModelsReport
+)
 
 func modelLibrary(dir string) (models.Library, error) {
 	layers, err := models.Layers(shipped.Files(), dir)
@@ -147,7 +123,9 @@ func modelsVerb(args []string, out, errOut io.Writer) int {
 	}
 	if reload {
 		report, err := reloadSignedIn(context.Background())
-		return showReload(out, errOut, asJSON, report, err)
+		code := showReload(out, errOut, asJSON, report, err)
+		stampReload(code)
+		return code
 	}
 	library, err := modelLibrary("")
 	if err != nil {
@@ -315,42 +293,15 @@ func windowShort(tokens int) string {
 	return widget.Count(tokens)
 }
 
-type modelReload struct {
-	ContextWindows int            `json:"context_windows"`
-	Table          string         `json:"table"`
-	TableError     string         `json:"table_error,omitempty"`
-	Unshadowed     []string       `json:"removed_from_catalog,omitempty"`
-	Sources        []reloadSource `json:"sources"`
-	Unresolved     []string       `json:"unresolved_tiers,omitempty"`
-	Versions       versionCheck   `json:"versions"`
-}
+type modelReload host.ModelReload
 
-type versionCheck struct {
-	Raised  []settingspkg.RaisedVersion `json:"raised,omitempty"`
-	Skipped string                      `json:"skipped,omitempty"`
-	Error   string                      `json:"error,omitempty"`
-}
+type (
+	versionCheck = host.VersionCheck
+	reloadSource = host.ReloadSource
+	modelChange  = host.ModelChange
+)
 
-type reloadSource struct {
-	Source  string        `json:"source"`
-	State   string        `json:"state"`
-	Served  int           `json:"served"`
-	Changes []modelChange `json:"changes"`
-	Failure string        `json:"failure,omitempty"`
-	Error   string        `json:"error,omitempty"`
-	Hint    string        `json:"hint,omitempty"`
-}
-
-type modelChange struct {
-	Model  string `json:"model"`
-	Slug   string `json:"slug"`
-	Change string `json:"change"`
-	Use    string `json:"use"`
-	Reason string `json:"reason,omitempty"`
-	File   string `json:"file"`
-}
-
-func (c modelChange) mark() cli.Mark {
+func modelChangeMark(c modelChange) cli.Mark {
 	switch c.Change {
 	case modelAdded:
 		return cli.Added
@@ -362,7 +313,7 @@ func (c modelChange) mark() cli.Mark {
 	panic("tofu: unknown model change " + c.Change)
 }
 
-func (s reloadSource) failed(what string, err error) reloadSource {
+func failedSource(s reloadSource, what string, err error) reloadSource {
 	s.State, s.Failure, s.Error = sourceFailed, what, err.Error()
 	var refused *transport.Error
 	if errors.As(err, &refused) && refused.Status != 0 {
@@ -402,13 +353,13 @@ func reloadSignedIn(ctx context.Context) (modelReload, error) {
 		source := reloadSource{Source: string(provider), State: sourceNotSignedIn, Hint: loginHint(string(provider))}
 		credential, err := cred.Lookup(string(provider))
 		if err != nil {
-			settled = append(settled, source.failed("sign-in unreadable", err))
+			settled = append(settled, failedSource(source, "sign-in unreadable", err))
 			continue
 		}
 		row, present, err := store.Row(provider)
 		switch {
 		case err != nil:
-			settled = append(settled, source.failed("sign-in unreadable", err))
+			settled = append(settled, failedSource(source, "sign-in unreadable", err))
 		case !present:
 			settled = append(settled, source)
 		default:
@@ -499,11 +450,11 @@ func (r reloadRun) account(ctx context.Context, account models.Account) reloadSo
 	source := reloadSource{Source: string(account.Subscription), State: sourceReloaded}
 	served, err := models.Discover(ctx, r.client, account)
 	if err != nil {
-		return source.failed("model list failed", err)
+		return failedSource(source, "model list failed", err)
 	}
 	plan := models.Plan(r.library.Reconcile(served, r.registry), r.registry, r.library, r.found)
 	if err := plan.Write(r.catalog); err != nil {
-		return source.failed("catalog write failed", err)
+		return failedSource(source, "catalog write failed", err)
 	}
 	source.Served = len(served.IDs)
 	for _, model := range plan {
@@ -564,7 +515,7 @@ func reloadLines(page cli.Page, report modelReload) []string {
 	counts := map[cli.Mark]int{cli.Fail: len(report.Unresolved)}
 	for _, source := range report.Sources {
 		for _, change := range source.Changes {
-			counts[change.mark()]++
+			counts[modelChangeMark(change)]++
 		}
 		if source.Failure != "" {
 			counts[cli.Fail]++
@@ -606,7 +557,7 @@ func reloadLines(page cli.Page, report modelReload) []string {
 		case sourceReloaded:
 			rows := make([]cli.Row, len(source.Changes))
 			for i, change := range source.Changes {
-				rows[i] = cli.Row{Mark: change.mark(), Cells: []string{change.Model}, Detail: change.Use}
+				rows[i] = cli.Row{Mark: modelChangeMark(change), Cells: []string{change.Model}, Detail: change.Use}
 			}
 			lines = append(lines, page.Section(source.Source, cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(source.Served) + " served"}))
 			lines = append(lines, cli.Indent(page.Rows(rows)...)...)

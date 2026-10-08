@@ -10,6 +10,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/hook"
+	"tofu/internal/host"
 	"tofu/internal/shell"
 )
 
@@ -39,10 +40,7 @@ func hooksVerb(args []string, out, errOut io.Writer) int {
 func hooksList(o verbOutput, engine *hook.Engine) int {
 	hooks, problems := engine.Hooks(), engine.Problems()
 	project, _ := filepath.Abs(".")
-	return o.done(true, struct {
-		Hooks    []hook.Hook `json:"hooks"`
-		Problems []string    `json:"problems"`
-	}{append([]hook.Hook{}, hooks...), append([]string{}, problems...)}, func(page cli.Page) []string {
+	return o.done(true, host.HooksReport{Hooks: append([]hook.Hook{}, hooks...), Problems: append([]string{}, problems...)}, func(page cli.Page) []string {
 		if len(hooks) == 0 && len(problems) == 0 {
 			return page.Title("Hooks", nil, cli.Verdict{Mark: cli.Idle, Text: "none in this project or your home"})
 		}
@@ -101,9 +99,7 @@ func hooksTrust(o verbOutput, engine *hook.Engine) int {
 	if err := engine.Answer(untrusted, hook.AnswerAlways); err != nil {
 		return o.fail(err)
 	}
-	return o.done(true, struct {
-		Trusted []hook.Hook `json:"trusted"`
-	}{append([]hook.Hook{}, untrusted...)}, func(page cli.Page) []string {
+	return o.done(true, host.HooksTrusted{Trusted: append([]hook.Hook{}, untrusted...)}, func(page cli.Page) []string {
 		if len(untrusted) == 0 {
 			return []string{page.Glyph(cli.Idle) + " every project hook here is already trusted, skipped or refused"}
 		}

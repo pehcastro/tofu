@@ -120,7 +120,8 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		Sessions: serveSessions, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
-		}})
+		},
+		Stale: func() bool { return catalogStale(time.Now()) }, Setup: serveSetup, SaveKey: serveKey, Logout: serveLogout})
 	engine.warm.Close()
 	live.Close()
 	for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
@@ -201,6 +202,39 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 		typed.Rows[index] = host.LedgerRow{Row: row.Row, Chain: row.Chain, BlockedBy: row.BlockedBy, Precedents: row.Precedents}
 	}
 	return typed, nil
+}
+
+func serveSetup() []host.Requirement {
+	var steps []host.Requirement
+	for _, needed := range appRequirements() {
+		step := host.Requirement{Step: needed.Step, What: needed.What, Fix: needed.Fix, Done: needed.Done}
+		for _, choice := range needed.Choices {
+			step.Choices = append(step.Choices, host.RequirementChoice{Label: choice.Label, Key: choice.Key})
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
+
+func serveKey(provider, key string) (string, error) {
+	for _, stored := range keyStatuses(func(string) string { return "" }) {
+		if stored.Provider == provider {
+			return storeKeyFor(context.Background(), stored.Variable, key)
+		}
+	}
+	return "", &host.Refusal{Code: host.CodeBadParams, Message: "tofu stores no key for " + strconv.Quote(provider)}
+}
+
+func serveLogout(p host.LogoutParams) (string, error) {
+	args := []string{p.Role, p.Provider}
+	if p.Number != 0 {
+		args = append(args, strconv.Itoa(p.Number))
+	}
+	receipt, refusal := logout(args)
+	if refusal != nil {
+		return "", &host.Refusal{Code: host.CodeRefused, Message: strings.TrimSpace(refusal.problem.What + ": " + refusal.problem.Hint)}
+	}
+	return receipt.text, nil
 }
 
 func wireSources() map[string]string {

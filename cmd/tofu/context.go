@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -20,48 +21,13 @@ const (
 	contextNoneReadable  = "no session here reads"
 )
 
-type contextBandReport struct {
-	Tokens  int `json:"tokens"`
-	Cap     int `json:"cap"`
-	Percent int `json:"fill_percent"`
-}
-
-type contextOccupancyReport struct {
-	Step         int               `json:"step"`
-	Identity     contextBandReport `json:"identity"`
-	Facts        contextBandReport `json:"facts"`
-	WorkingSet   contextBandReport `json:"working_set"`
-	Recent       contextBandReport `json:"recent"`
-	Total        int               `json:"total"`
-	Mark         int               `json:"mark"`
-	CapsRecorded bool              `json:"caps_recorded"`
-}
-
-type contextForkCounts struct {
-	TokensBefore int `json:"tokens_before"`
-	TokensAfter  int `json:"tokens_after"`
-}
-
-type contextForkReport struct {
-	Into   string             `json:"into"`
-	Kind   string             `json:"kind,omitempty"`
-	Counts *contextForkCounts `json:"counts,omitempty"`
-}
-
-type contextReport struct {
-	Session                string                  `json:"session,omitempty"`
-	Name                   string                  `json:"name,omitempty"`
-	Task                   string                  `json:"task,omitempty"`
-	Steps                  int                     `json:"steps,omitempty"`
-	Occupancy              *contextOccupancyReport `json:"occupancy,omitempty"`
-	Unmeasured             string                  `json:"unmeasured,omitempty"`
-	Fork                   *contextForkReport      `json:"fork,omitempty"`
-	Skipped                []sessionSkip           `json:"skipped,omitempty"`
-	Ceiling                int                     `json:"ceiling,omitempty"`
-	BytesPerThousandTokens int                     `json:"bytes_per_thousand_tokens,omitempty"`
-
-	measured *recall.Occupancy
-}
+type (
+	contextBandReport      = host.ContextBand
+	contextOccupancyReport = host.ContextOccupancy
+	contextForkCounts      = host.ContextForkCounts
+	contextForkReport      = host.ContextFork
+	contextReport          = host.ContextReport
+)
 
 func contextVerb(args []string, out, errOut io.Writer) int {
 	handles, asJSON, err := verbArgs(args)
@@ -147,7 +113,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands) (context
 				WorkingSet: step.Occupancy.WorkingSet,
 				Recent:     step.Occupancy.Recent,
 			}
-			report.measured, report.Unmeasured = &measured, ""
+			report.Unmeasured = ""
 			report.Occupancy = &contextOccupancyReport{
 				Step:         step.Index,
 				Identity:     contextBand(measured.Identity, caps.Identity),
@@ -215,7 +181,7 @@ func contextLines(page cli.Page, r contextReport) []string {
 			{"facts", o.Facts},
 			{"working set", o.WorkingSet},
 			{"recent", o.Recent},
-			{"total", contextBand(o.Total, r.measured.Bands.Target())},
+			{"total", contextBand(o.Total, o.Identity.Cap+o.Facts.Cap+o.WorkingSet.Cap+o.Recent.Cap)},
 			{"ceiling", contextBand(o.Total, r.Ceiling)},
 		} {
 			facts = append(facts, cli.Fact{Label: band.name, Text: page.Bar(float64(band.band.Percent)/100) + cli.Gap +

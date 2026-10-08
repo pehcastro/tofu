@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/session"
 	"tofu/internal/widget"
 )
@@ -49,11 +50,7 @@ type sessionFamilyReport struct {
 	SubAgents    []familySubAgent   `json:"sub_agents,omitempty"`
 }
 
-type sessionFindReport struct {
-	Handle string        `json:"handle"`
-	Query  session.Query `json:"query"`
-	Hits   []session.Hit `json:"hits"`
-}
+type sessionFindReport = host.SessionFind
 
 func sessionReport[R any](o verbOutput, build func(*session.Store) (R, error), lines func(cli.Page, R) []string) int {
 	store, err := session.Open()

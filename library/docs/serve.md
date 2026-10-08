@@ -19,59 +19,36 @@ sub-agent produced it. Events carry data, not sentences: a turn ends with
 bytes, lines and duration as numbers, and a file edit carries its hunks with
 three lines of context.
 
+`tofu docs serve-methods` lists every request, what it takes and what it
+answers. This page is what serve sends without being asked.
+
 ## Where it lives
 
-- sessions: `session.list`, `session.open`, `session.state`, `session.set`,
-  `session.rename`, `session.compact`, `session.history`. Turns: `turn.send`,
-  `turn.steer`, `turn.unsteer`, `turn.stop`, `undo`. Shells: `shell.run`,
-  `shell.read`, `shell.kill`. Others: `initialize`, `label`, `settings.set`,
-  `login.start`, `cron.command`. Reads, which answer out of order as
-  `session.list`, `session.history` and `shell.run` do, so none holds
-  `turn.stop`: `query.usage`, `query.context`, `query.rules`, `query.agents`,
-  `query.models`, `query.ledger`, `query.settings`, `query.library`, `query.cron`
-- `query.ledger`: takes `id`, or `last` and `point`; answers `rows`, each a
-  ledger row with its `precedents` as `tofu why --json` prints it, or `[]`
-- `turn.stop` with `lead: true` stops the lead alone. `turn.unsteer` takes back
-  a queued steer by its `text` and answers `removed`
-- `shell.run`: runs `command` as `!` does and answers `output` and `stopped`;
-  the next turn reads it. Never mid-turn, one at a time, and `turn.stop` stops it
-- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter` and
-  `into` when anything shrank, which `session.updated` then names
-- `session.history`: takes `session`, `limit` and `before`; answers `lines`,
-  each `{method, params}` as `session.open` sends it, from `first` of `total`.
-  `session.open` takes `replay`, how many of the newest it sends, and on a
-  session another tofu holds errs `session.busy`, naming the process
-- `initialize`: answers `capabilities`, one name a family of methods (`list`,
-  `ledger`, `history` and so on), so a client tells an older tofu from a newer
-- `session.list`: takes `search` and `limit`, both optional; one row a
-  session with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
-  `model`, `costUsd`, `open` for the one open here, `running` while a turn
-  runs in it, and `heldBy` when another tofu holds it. `session.listed`
-  sends the open row again when a turn starts or ends, after a fork and after
-  a rename, so a sidebar never asks
-- `session.state`: everything a client that missed lines or opened mid-turn
-  needs: `running` and its `turn`, `asking` (absent while `gatePrompt`
-  decides), the `pick` of wire, model and effort, waiting approvals,
-  sub-agents, shells, the context window and the cron jobs. It answers `resync`
-- `session.rename`: takes `session` and `name` and names the whole family, as
-  `tofu session rename` does; `session.updated` follows. A name with no letter
-  or digit, or a session not here, is refused
-- cron: `cron.command` takes the line you would type, such as `/loop 10m check
-  the build`. `query.cron` and `cron.updated` carry `live`, `goals` and each
-  job's `id`, `schedule`, `prompt`, `paused`, `next` and `ended`
+- `initialize` first; anything else before it errs. Its `capabilities` name
+  each family of methods, so a client tells an older tofu from a newer
+- `session.open` replays the chat as events; `session.history` pages it
+- `session.listed`: the open row of `session.list` again when a turn starts or
+  ends, after a fork and after a rename, so a sidebar never asks.
+  `session.updated` follows every turn, a rename and a compaction, with
+  `lastAt`, the last record
+- `session.settings`: `asking` and the `pick` of wire, model and effort, sent
+  to every client when `session.set` changes them
 - `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`,
   `{"kind":"cron","job":"c1","schedule":"every 30m"}`,
   `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop
   hook"}`: you, a cron fire, a sub-agent's report, a line tofu added. Older
   sessions, and a cron fire that joined a running turn, read as `person`
-- `lastAt`, the last record, is on `session.list`, `session.listed` and
-  `session.updated`, which follows every turn
+- `cron.updated` and `query.cron` carry `live`, `goals` and each job's `id`,
+  `schedule`, `prompt`, `paused`, `next` and `ended`
 - `quota.updated`: when a session opens, after every turn and every five
   minutes, with each window's `percent`; `windows: []` means none answered
 - `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
   so history after a seq is a read of the log; a tool call's notice names the
   item of its `tool.started`
-- a slow reader: past 128 queued lines tofu drops, sends `resync`, never waits
+- `decision`: every gate, and `tofu/requestApproval`, a request, when a gate
+  asks you; `approval.resolved` says which answer won and who sent it
+- a slow reader: past 128 queued lines tofu drops, sends `resync`, never
+  waits; `session.state` answers it
 - `tofu serve --schema` prints the JSON Schema of every line written, and of
   every line read under `$defs.clientMessage`
 
@@ -85,13 +62,14 @@ session alone:
 - `ask`: a gate jev would ask about sends `tofu/requestApproval` as a
   request, and the turn waits. Answer with `allow_once`, `allow_always`,
   `reject_once`, `reject_always`, or `cancelled`, which stops the turn. The
-  first answer wins, and `approval.resolved` says which it was
+  first answer wins. A `remember` ask also takes `remember_project` or
+  `remember_global`, where to keep the memory
 
 `session.set` also takes `wire`, `model` and `effort`, and holds them for
-every later turn and cron fire; `session.settings` tells every client. A
-`wire` is the source that pays, as the picker spells it: `claude-sub`,
-`codex-sub`, `openrouter` or `meta`. One nobody here is signed in on is
-refused, and a new `wire` with no `model` takes that wire's default.
+every later turn and cron fire. A `wire` is the source that pays, as the
+picker spells it: `claude-sub`, `codex-sub`, `openrouter` or `meta`. One
+nobody here is signed in on is refused, and a new `wire` with no `model`
+takes that wire's default.
 
 `turn.send` takes the same three, and `images`, a list of `{"path": ...}`.
 Each is copied into the session and `[Image #N]` is added to the text. A png,

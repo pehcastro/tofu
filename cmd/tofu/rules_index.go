@@ -100,7 +100,7 @@ func (report ruleIndexReport) lines(page cli.Page) []string {
 	for i, r := range report.Rules {
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{r.RuleID}, Detail: r.Why}
 		if r.Override != nil {
-			rows[i].Detail = r.Override.why() + factSeparator + r.Why
+			rows[i].Detail = overrideWhy(*r.Override) + factSeparator + r.Why
 		}
 		if r.Mode == string(rule.ModeOff) {
 			rows[i].Mark = cli.Removed

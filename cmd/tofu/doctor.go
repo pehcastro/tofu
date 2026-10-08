@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/interface/tui/frame"
 	"tofu/internal/browser"
+	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/method"
@@ -32,116 +32,21 @@ const (
 	doctorUnreadable  = "unreadable: "
 )
 
-type doctorVerdict int
-
-const (
-	doctorReady doctorVerdict = iota
-	doctorNotReady
+type (
+	doctorBlocker    = host.DoctorBlocker
+	doctorGate       = host.DoctorGate
+	doctorLibrary    = host.DoctorLibrary
+	doctorThresholds = host.DoctorThresholds
+	doctorRule       = host.DoctorRule
+	doctorWire       = host.DoctorWire
+	doctorProxy      = host.DoctorProxy
+	doctorReport     = host.DoctorReport
 )
 
-func (v doctorVerdict) String() string {
-	switch v {
-	case doctorReady:
-		return "ready"
-	case doctorNotReady:
-		return "not ready"
-	}
-	panic("tofu doctor: unknown verdict")
-}
-
-//nolint:unparam
-func (v doctorVerdict) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.Quote(v.String())), nil
-}
-
-func (v *doctorVerdict) UnmarshalJSON(data []byte) error {
-	text, err := strconv.Unquote(string(data))
-	if err != nil {
-		return err
-	}
-	for _, candidate := range []doctorVerdict{doctorReady, doctorNotReady} {
-		if candidate.String() == text {
-			*v = candidate
-			return nil
-		}
-	}
-	return fmt.Errorf("tofu doctor: unknown verdict %q", text)
-}
-
-type doctorBlocker struct {
-	Label   string `json:"label"`
-	What    string `json:"what"`
-	Command string `json:"command"`
-}
-
-type doctorGate struct {
-	Variable string `json:"variable"`
-	Source   string `json:"source"`
-	Path     string `json:"path,omitempty"`
-}
-
-type doctorLibrary struct {
-	Dir         string `json:"dir"`
-	Points      int    `json:"points"`
-	FromProject int    `json:"from_project"`
-	Unreadable  string `json:"unreadable,omitempty"`
-}
-
-type doctorThresholds struct {
-	RiskAskAt            float64 `json:"risk_ask_at"`
-	RiskDenyAt           float64 `json:"risk_deny_at"`
-	UserRequestedRelaxAt float64 `json:"user_requested_relax_at"`
-	ApprovalRelaxAt      float64 `json:"approval_relax_at"`
-	FromUntrustedBlockAt float64 `json:"from_untrusted_block_at"`
-}
-
-type doctorRule struct {
-	Point          string           `json:"point"`
-	Schema         string           `json:"schema,omitempty"`
-	Mode           string           `json:"mode"`
-	Declared       string           `json:"declared,omitempty"`
-	Fallback       string           `json:"fallback,omitempty"`
-	Origin         string           `json:"origin,omitempty"`
-	File           string           `json:"file,omitempty"`
-	ThresholdsFrom string           `json:"thresholds_from,omitempty"`
-	Thresholds     doctorThresholds `json:"thresholds"`
-	Unusable       string           `json:"unusable,omitempty"`
-}
-
-type doctorWire struct {
-	Name  string `json:"name"`
-	Spend string `json:"spend"`
-}
-
-type doctorProxy struct {
-	Use        string `json:"use"`
-	From       string `json:"from"`
-	Version    string `json:"version,omitempty"`
-	Install    string `json:"install,omitempty"`
-	Unreadable string `json:"unreadable,omitempty"`
-}
-
-type doctorReport struct {
-	Version     string               `json:"version"`
-	Verdict     doctorVerdict        `json:"verdict"`
-	Blockers    []doctorBlocker      `json:"blockers,omitempty"`
-	Credentials []credentialReport   `json:"credentials"`
-	Store       string               `json:"credential_store"`
-	Gate        doctorGate           `json:"gate"`
-	Library     doctorLibrary        `json:"library"`
-	Rules       []doctorRule         `json:"rules"`
-	Overrides   []overrideListing    `json:"overrides,omitempty"`
-	Unreadable  string               `json:"overrides_unreadable,omitempty"`
-	Calibration string               `json:"calibration"`
-	Ledger      string               `json:"ledger"`
-	SpendLimit  string               `json:"spend_limit"`
-	Wires       []doctorWire         `json:"wires"`
-	Proxy       doctorProxy          `json:"proxy"`
-	Browser     []browser.NativeHost `json:"browser"`
-	Root        string               `json:"root"`
-	Go          string               `json:"go"`
-	OS          string               `json:"os"`
-}
+const (
+	doctorReady    = host.DoctorReady
+	doctorNotReady = host.DoctorNotReady
+)
 
 func doctor(args []string, out, errOut io.Writer) int {
 	asJSON, imports := jsonAsked(args), false
@@ -206,6 +111,7 @@ func doctorState(now time.Time) doctorReport {
 	home, _ := os.UserHomeDir()
 	report := doctorReport{
 		Version:     frame.Release(sys.Version(), sys.BuildRevision()),
+		Verdict:     doctorReady,
 		Blockers:    doctorBlockers(),
 		Credentials: doctorCredentials(now),
 		Store:       cred.DoctorState(now),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"tofu/internal/host"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
 	"tofu/internal/sys"
@@ -26,25 +27,16 @@ type pollResult struct {
 	recordErr error
 }
 
-type windowReport struct {
-	ID       string    `json:"id"`
-	Used     float64   `json:"used_fraction"`
-	Reported bool      `json:"used_reported"`
-	ResetsAt time.Time `json:"resets_at,omitzero"`
-}
+type (
+	windowReport     = host.WindowReport
+	credentialReport = host.CredentialReport
+)
 
-func (w windowReport) percent() string {
+func windowPercent(w windowReport) string {
 	if !w.Reported {
 		return "use not reported"
 	}
 	return widget.Percent(w.Used)
-}
-
-type credentialReport struct {
-	Provider string         `json:"provider"`
-	Plan     string         `json:"plan,omitempty"`
-	State    string         `json:"state"`
-	Windows  []windowReport `json:"windows,omitempty"`
 }
 
 func credentialReports(results []pollResult, now time.Time) []credentialReport {

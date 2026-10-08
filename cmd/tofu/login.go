@@ -19,6 +19,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/interface/tui/keyfield"
+	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -47,12 +48,12 @@ const (
 	changeEnabled    = "enabled"
 )
 
-type role string
+type role = host.AccountRole
 
 const (
-	roleLLM        role = "llm"
-	roleClassifier role = "classifier"
-	roleSearch     role = "search"
+	roleLLM        = host.RoleLLM
+	roleClassifier = host.RoleClassifier
+	roleSearch     = host.RoleSearch
 )
 
 func roleOf(provider string) role {
@@ -256,9 +257,9 @@ func removeKey(provider string) (loginReceipt, *loginRefusal) {
 		tail = stillResolved
 	}
 	if !removed {
-		return loginReceipt{}, failure("no "+before.name+" key is stored"+tail, "tofu login --status")
+		return loginReceipt{}, failure("no "+keyFactsOf(provider).name+" key is stored"+tail, "tofu login --status")
 	}
-	return loginReceipt{text: before.name + " key " + before.Key + " removed" + tail, data: after}, nil
+	return loginReceipt{text: keyFactsOf(provider).name + " key " + before.Key + " removed" + tail, data: after}, nil
 }
 
 func removeAccount(provider cred.Provider, number []string) (loginReceipt, *loginRefusal) {
@@ -418,7 +419,7 @@ func signIn(spec cred.Spec, paste bool, in io.Reader, prompts io.Writer, now tim
 
 func loginKey(name string, in io.Reader, prompts io.Writer) (loginReceipt, *loginRefusal) {
 	stored := keyStatusOf(name, func(string) string { return "" })
-	key, err := promptKey(in, prompts, stored.name, stored.Variable)
+	key, err := promptKey(in, prompts, keyFactsOf(name).name, stored.Variable)
 	if errors.As(err, &keyfield.Cancelled{}) {
 		return loginReceipt{}, usageRefusal(err.Error(), loginHint(name))
 	}
@@ -441,7 +442,7 @@ func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, 
 		err = reachesJev(ctx, models.Provider(stored.Provider), key)
 	}
 	if err != nil {
-		return loginReceipt{}, refusedBy(stored.name, stored.Provider, err)
+		return loginReceipt{}, refusedBy(keyFactsOf(stored.Provider).name, stored.Provider, err)
 	}
 	if err := sys.SaveKey(stored.Variable, key); err != nil {
 		return loginReceipt{}, failure(err.Error(), loginHint(stored.Provider))
@@ -449,7 +450,7 @@ func storeKey(ctx context.Context, stored keyStatus, key string) (loginReceipt, 
 	if classifier, err := boundClassifier(); err == nil && stored.Role == roleClassifier && string(classifier.Provider) != stored.Provider {
 		done += ", but " + classifier.Provider.Display() + " stays the classifier while its key is stored"
 	}
-	return loginReceipt{text: stored.name + " key " + stored.Key + done, data: stored}, nil
+	return loginReceipt{text: keyFactsOf(stored.Provider).name + " key " + stored.Key + done, data: stored}, nil
 }
 
 func storeKeyFor(ctx context.Context, variable, key string) (string, error) {
