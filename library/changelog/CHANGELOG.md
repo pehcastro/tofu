@@ -10,6 +10,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.7-fix1 - 2026-10-08
+
+### Added
+
+- **`tofu serve` takes `session.rename {session, name}`**, which renames every generation of the session as `tofu session rename` does and answers with `session.updated` carrying the new name and handle.
+
 ## 0.5.7 - 2026-10-07
 
 A long conversation keeps its name, its work and its cache.
