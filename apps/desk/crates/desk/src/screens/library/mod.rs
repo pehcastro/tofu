@@ -5,7 +5,8 @@ mod rules;
 
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
-use desk_core::query::{Agents, Answer, QueryError, Read, RuleKind, Rules};
+use desk_core::protocol::{RuleListReport, subagent};
+use desk_core::query::{Answer, QueryError, Read};
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::empty::{EmptyAction, empty_state};
@@ -52,11 +53,11 @@ enum Tab {
 pub struct Library {
     source: Option<Source>,
     tab: Tab,
-    agents: Answer<Agents>,
-    rules: Answer<Rules>,
+    agents: Answer<subagent::Found>,
+    rules: Answer<RuleListReport>,
     agent: Option<String>,
     rule: Option<String>,
-    kind: Option<RuleKind>,
+    kind: Option<&'static str>,
 }
 
 struct Source {

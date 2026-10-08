@@ -1,6 +1,6 @@
 use std::iter;
 
-use desk_core::query::{Override, RuleKind, RuleListing, RuleMode, Rules};
+use desk_core::protocol::{OverrideListing, RuleListReport, RuleListing};
 use desk_ui::components::card::{caption, inner_card};
 use desk_ui::components::chip::{badge, mono};
 use desk_ui::components::empty::empty_state;
@@ -17,17 +17,17 @@ const ID_LEAST: f32 = 200.0;
 const KIND_COLUMN: f32 = 84.0;
 const MODE_COLUMN: f32 = 76.0;
 const ORIGIN_COLUMN: f32 = 76.0;
-const KINDS: [RuleKind; 4] = [
-    RuleKind::Human,
-    RuleKind::Structural,
-    RuleKind::Decision,
-    RuleKind::Measured,
+const KINDS: [(&str, &str); 4] = [
+    ("human", "Human"),
+    ("structural", "Structural"),
+    ("decision", "Decision"),
+    ("measured", "Measured"),
 ];
 
 impl Library {
     pub(super) fn rules_tab(
         &self,
-        rules: &Rules,
+        rules: &RuleListReport,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -43,18 +43,18 @@ impl Library {
             )
             .into_any_element();
         }
-        let overridden: Vec<&Override> = rules
+        let overridden: Vec<&OverrideListing> = rules
             .rules
             .iter()
-            .filter_map(|rule| rule.overridden.as_ref())
+            .filter_map(|rule| rule.r#override.as_ref())
             .collect();
         let stale = overridden.iter().filter(|over| over.stale).count();
-        let kinds: Vec<(Option<RuleKind>, &'static str)> = iter::once((None, "All"))
+        let kinds: Vec<(Option<&'static str>, &'static str)> = iter::once((None, "All"))
             .chain(
                 KINDS
                     .into_iter()
-                    .filter(|kind| rules.rules.iter().any(|rule| rule.kind == *kind))
-                    .map(|kind| (Some(kind), kind_name(kind))),
+                    .filter(|(kind, _)| rules.rules.iter().any(|rule| rule.kind == *kind))
+                    .map(|(kind, name)| (Some(kind), name)),
             )
             .collect();
         let filter = div()
@@ -114,15 +114,17 @@ impl Library {
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
-        let more = rule.file.is_some() || rule.switch.is_some() || rule.overridden.is_some();
+        let more = rule.file.is_some() || rule.switch.is_some() || rule.r#override.is_some();
         let open = more && self.rule.as_deref() == Some(rule.id.as_str());
         let id = rule.id.clone();
         let cells = line(
             div().font_family(mono(theme)).child(rule.id.clone()),
-            div().text_color(ink(theme, T2)).child(kind_name(rule.kind)),
+            div()
+                .text_color(ink(theme, T2))
+                .child(kind_name(&rule.kind).to_owned()),
             div()
                 .flex()
-                .children(rule.mode.map(|mode| badge(mode_name(mode), theme))),
+                .children(rule.mode.clone().map(|mode| badge(mode, theme))),
             div().text_color(ink(theme, T2)).child(rule.origin.clone()),
         );
         let face = row(("rule", at), open, false, theme).child(cells);
@@ -169,7 +171,7 @@ fn rule_detail(rule: &RuleListing, theme: &Theme) -> Div {
         .text_size(px(12.5))
         .children(rule.file.as_deref().map(|path| fact("file", file(path), theme)))
         .children(rule.switch.clone().map(|switch| fact("switch", switch, theme)))
-        .children(rule.overridden.as_ref().map(|over| {
+        .children(rule.r#override.as_ref().map(|over| {
             div()
                 .flex()
                 .flex_col()
@@ -198,19 +200,9 @@ fn rule_detail(rule: &RuleListing, theme: &Theme) -> Div {
         }))
 }
 
-fn kind_name(kind: RuleKind) -> &'static str {
-    match kind {
-        RuleKind::Human => "Human",
-        RuleKind::Structural => "Structural",
-        RuleKind::Decision => "Decision",
-        RuleKind::Measured => "Measured",
-    }
-}
-
-fn mode_name(mode: RuleMode) -> &'static str {
-    match mode {
-        RuleMode::Shadow => "shadow",
-        RuleMode::Enforced => "enforced",
-        RuleMode::Off => "off",
-    }
+fn kind_name(kind: &str) -> &str {
+    KINDS
+        .iter()
+        .find(|(wire, _)| *wire == kind)
+        .map_or(kind, |(_, name)| name)
 }

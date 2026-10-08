@@ -1,5 +1,85 @@
 {
   "$defs": {
+    "AccountStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "login": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "string"
+        },
+        "relogin_by": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "in_use",
+            "standby",
+            "set_aside",
+            "refresh_failed",
+            "expired",
+            "refused",
+            "spent",
+            "rate_limited",
+            "unread",
+            "unchecked"
+          ],
+          "type": "string"
+        },
+        "windows": {
+          "items": {
+            "$ref": "#/$defs/WindowStatus"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "account",
+        "state",
+        "login"
+      ],
+      "type": "object"
+    },
+    "Accounts": {
+      "additionalProperties": false,
+      "properties": {
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/KeyStatus"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "subscriptions": {
+          "items": {
+            "$ref": "#/$defs/SubscriptionStatus"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "subscriptions",
+        "keys"
+      ],
+      "type": "object"
+    },
     "Ack": {
       "additionalProperties": false,
       "properties": {
@@ -57,6 +137,66 @@
         "instance",
         "state",
         "report"
+      ],
+      "type": "object"
+    },
+    "AgentNow": {
+      "additionalProperties": false,
+      "properties": {
+        "instance": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "working",
+            "waiting_answer",
+            "in_review",
+            "reopened",
+            "parked",
+            "errored",
+            "finished"
+          ],
+          "type": "string"
+        },
+        "steps": {
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "instance",
+        "kind",
+        "task",
+        "owns",
+        "model",
+        "state",
+        "steps",
+        "tokens",
+        "startedAt"
       ],
       "type": "object"
     },
@@ -193,6 +333,30 @@
       ],
       "type": "object"
     },
+    "AgentWriteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "global": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ApprovalAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -202,7 +366,9 @@
             "allow_always",
             "reject_once",
             "reject_always",
-            "cancelled"
+            "cancelled",
+            "remember_project",
+            "remember_global"
           ],
           "type": "string"
         }
@@ -274,7 +440,9 @@
             "allow_always",
             "reject_once",
             "reject_always",
-            "cancelled"
+            "cancelled",
+            "remember_project",
+            "remember_global"
           ],
           "type": "string"
         },
@@ -300,6 +468,219 @@
         "decision",
         "by"
       ],
+      "type": "object"
+    },
+    "AttachedImage": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "ChangelogReport": {
+      "additionalProperties": false,
+      "properties": {
+        "seen": {
+          "type": "string"
+        },
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/ChangelogVersion"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "versions"
+      ],
+      "type": "object"
+    },
+    "ChangelogVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "heading": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "heading",
+        "body"
+      ],
+      "type": "object"
+    },
+    "Compaction": {
+      "additionalProperties": false,
+      "properties": {
+        "into": {
+          "type": "string"
+        },
+        "results": {
+          "type": "integer"
+        },
+        "tokensAfter": {
+          "type": "integer"
+        },
+        "tokensBefore": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "results",
+        "tokensBefore",
+        "tokensAfter"
+      ],
+      "type": "object"
+    },
+    "ContextBand": {
+      "additionalProperties": false,
+      "properties": {
+        "cap": {
+          "type": "integer"
+        },
+        "fill_percent": {
+          "type": "integer"
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tokens",
+        "cap",
+        "fill_percent"
+      ],
+      "type": "object"
+    },
+    "ContextFork": {
+      "additionalProperties": false,
+      "properties": {
+        "counts": {
+          "$ref": "#/$defs/ContextForkCounts"
+        },
+        "into": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "into"
+      ],
+      "type": "object"
+    },
+    "ContextForkCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "tokens_after": {
+          "type": "integer"
+        },
+        "tokens_before": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tokens_before",
+        "tokens_after"
+      ],
+      "type": "object"
+    },
+    "ContextOccupancy": {
+      "additionalProperties": false,
+      "properties": {
+        "caps_recorded": {
+          "type": "boolean"
+        },
+        "facts": {
+          "$ref": "#/$defs/ContextBand"
+        },
+        "identity": {
+          "$ref": "#/$defs/ContextBand"
+        },
+        "mark": {
+          "type": "integer"
+        },
+        "recent": {
+          "$ref": "#/$defs/ContextBand"
+        },
+        "step": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "working_set": {
+          "$ref": "#/$defs/ContextBand"
+        }
+      },
+      "required": [
+        "step",
+        "identity",
+        "facts",
+        "working_set",
+        "recent",
+        "total",
+        "mark",
+        "caps_recorded"
+      ],
+      "type": "object"
+    },
+    "ContextReport": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes_per_thousand_tokens": {
+          "type": "integer"
+        },
+        "ceiling": {
+          "type": "integer"
+        },
+        "fork": {
+          "$ref": "#/$defs/ContextFork"
+        },
+        "name": {
+          "type": "string"
+        },
+        "occupancy": {
+          "$ref": "#/$defs/ContextOccupancy"
+        },
+        "session": {
+          "type": "string"
+        },
+        "skipped": {
+          "items": {
+            "$ref": "#/$defs/SessionSkip"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "steps": {
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "unmeasured": {
+          "type": "string"
+        }
+      },
+      "required": [],
       "type": "object"
     },
     "ContextUpdated": {
@@ -334,6 +715,50 @@
         "seq",
         "used",
         "budget"
+      ],
+      "type": "object"
+    },
+    "ContextUse": {
+      "additionalProperties": false,
+      "properties": {
+        "budget": {
+          "type": "integer"
+        },
+        "used": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "used",
+        "budget"
+      ],
+      "type": "object"
+    },
+    "CredentialReport": {
+      "additionalProperties": false,
+      "properties": {
+        "plan": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "windows": {
+          "items": {
+            "$ref": "#/$defs/WindowReport"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "state"
       ],
       "type": "object"
     },
@@ -530,6 +955,444 @@
       ],
       "type": "object"
     },
+    "DocsAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/DocsEntry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "page": {
+          "$ref": "#/$defs/DocsTopic"
+        },
+        "topics": {
+          "items": {
+            "$ref": "#/$defs/DocsPage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "topics",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "DocsEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "ask": {
+          "type": "string"
+        },
+        "check": {
+          "type": "string"
+        },
+        "do": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ask",
+        "do",
+        "check",
+        "topic"
+      ],
+      "type": "object"
+    },
+    "DocsPage": {
+      "additionalProperties": false,
+      "properties": {
+        "markdown": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "title",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "DocsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "DocsTopic": {
+      "additionalProperties": false,
+      "properties": {
+        "markdown": {
+          "type": "string"
+        },
+        "settings": {
+          "items": {
+            "$ref": "#/$defs/SettingDoc"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "title",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "DoctorBlocker": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "what": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "what",
+        "command"
+      ],
+      "type": "object"
+    },
+    "DoctorGate": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "variable": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "variable",
+        "source"
+      ],
+      "type": "object"
+    },
+    "DoctorLibrary": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "type": "string"
+        },
+        "from_project": {
+          "type": "integer"
+        },
+        "points": {
+          "type": "integer"
+        },
+        "unreadable": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dir",
+        "points",
+        "from_project"
+      ],
+      "type": "object"
+    },
+    "DoctorProxy": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "install": {
+          "type": "string"
+        },
+        "unreadable": {
+          "type": "string"
+        },
+        "use": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "use",
+        "from"
+      ],
+      "type": "object"
+    },
+    "DoctorReport": {
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "items": {
+            "$ref": "#/$defs/DoctorBlocker"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "browser": {
+          "items": {
+            "$ref": "#/$defs/browser.NativeHost"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "credential_store": {
+          "type": "string"
+        },
+        "credentials": {
+          "items": {
+            "$ref": "#/$defs/CredentialReport"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "gate": {
+          "$ref": "#/$defs/DoctorGate"
+        },
+        "go": {
+          "type": "string"
+        },
+        "ledger": {
+          "type": "string"
+        },
+        "library": {
+          "$ref": "#/$defs/DoctorLibrary"
+        },
+        "os": {
+          "type": "string"
+        },
+        "overrides": {
+          "items": {
+            "$ref": "#/$defs/OverrideListing"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "overrides_unreadable": {
+          "type": "string"
+        },
+        "proxy": {
+          "$ref": "#/$defs/DoctorProxy"
+        },
+        "root": {
+          "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/DoctorRule"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "spend_limit": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "ready",
+            "not ready"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "wires": {
+          "items": {
+            "$ref": "#/$defs/DoctorWire"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "verdict",
+        "credentials",
+        "credential_store",
+        "gate",
+        "library",
+        "rules",
+        "calibration",
+        "ledger",
+        "spend_limit",
+        "wires",
+        "proxy",
+        "browser",
+        "root",
+        "go",
+        "os"
+      ],
+      "type": "object"
+    },
+    "DoctorRule": {
+      "additionalProperties": false,
+      "properties": {
+        "declared": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "point": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/DoctorThresholds"
+        },
+        "thresholds_from": {
+          "type": "string"
+        },
+        "unusable": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "point",
+        "mode",
+        "thresholds"
+      ],
+      "type": "object"
+    },
+    "DoctorThresholds": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_relax_at": {
+          "type": "number"
+        },
+        "from_untrusted_block_at": {
+          "type": "number"
+        },
+        "risk_ask_at": {
+          "type": "number"
+        },
+        "risk_deny_at": {
+          "type": "number"
+        },
+        "user_requested_relax_at": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "risk_ask_at",
+        "risk_deny_at",
+        "user_requested_relax_at",
+        "approval_relax_at",
+        "from_untrusted_block_at"
+      ],
+      "type": "object"
+    },
+    "DoctorWire": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "spend": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "spend"
+      ],
+      "type": "object"
+    },
+    "FileChange": {
+      "additionalProperties": false,
+      "properties": {
+        "change": {
+          "enum": [
+            "added",
+            "changed",
+            "removed"
+          ],
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "what": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "change",
+        "what",
+        "file"
+      ],
+      "type": "object"
+    },
     "FileEdit": {
       "additionalProperties": false,
       "properties": {
@@ -599,6 +1462,66 @@
         "question",
         "value",
         "max"
+      ],
+      "type": "object"
+    },
+    "HistoryLine": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "params": {}
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    "HooksReport": {
+      "additionalProperties": false,
+      "properties": {
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/hook.Hook"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "problems": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "hooks",
+        "problems"
+      ],
+      "type": "object"
+    },
+    "HooksTrusted": {
+      "additionalProperties": false,
+      "properties": {
+        "trusted": {
+          "items": {
+            "$ref": "#/$defs/hook.Hook"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "trusted"
       ],
       "type": "object"
     },
@@ -756,6 +1679,34 @@
       ],
       "type": "object"
     },
+    "KeyStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "llm",
+            "classifier",
+            "search"
+          ],
+          "type": "string"
+        },
+        "variable": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "provider",
+        "variable"
+      ],
+      "type": "object"
+    },
     "LabelParams": {
       "additionalProperties": false,
       "properties": {
@@ -771,9 +1722,425 @@
       ],
       "type": "object"
     },
+    "LearnApplyParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "project": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "LearnParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "LedgerCall": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "type": "integer"
+        },
+        "call": {
+          "$ref": "#/$defs/turn.ToolCallRow"
+        },
+        "session": {
+          "type": "string"
+        },
+        "step": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "step",
+        "attempt",
+        "call"
+      ],
+      "type": "object"
+    },
+    "LedgerParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "last": {
+          "type": "integer"
+        },
+        "point": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "LedgerPrecedent": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "comparable": {
+          "type": "boolean"
+        },
+        "distance": {
+          "type": "number"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ledger.Outcome"
+        },
+        "row_id": {
+          "type": "string"
+        },
+        "same_fingerprint": {
+          "type": "boolean"
+        },
+        "verdict": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "row_id",
+        "verdict",
+        "at",
+        "distance",
+        "same_fingerprint",
+        "comparable",
+        "why"
+      ],
+      "type": "object"
+    },
+    "LedgerReport": {
+      "additionalProperties": false,
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/LedgerCall"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/LedgerRow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "type": "object"
+    },
+    "LedgerRow": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/ledger.Answer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "bench": {
+          "type": "string"
+        },
+        "blocked_by": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        },
+        "chain": {
+          "$ref": "#/$defs/ledger.Row"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "latency_ms": {
+          "type": "integer"
+        },
+        "model": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ledger.Outcome"
+        },
+        "point": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "string"
+        },
+        "policy_version": {
+          "type": "integer"
+        },
+        "precedents": {
+          "items": {
+            "$ref": "#/$defs/LedgerPrecedent"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "questions": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ledger.Reason"
+        },
+        "replay_of": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "integer"
+        },
+        "state": {},
+        "state_builder": {
+          "type": "string"
+        },
+        "state_elision": {
+          "$ref": "#/$defs/ledger.StateElision"
+        },
+        "state_hash": {
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "schema",
+        "at",
+        "point",
+        "questions",
+        "version",
+        "build",
+        "model",
+        "state_hash",
+        "answers",
+        "verdict",
+        "latency_ms",
+        "cost",
+        "request_id",
+        "precedents"
+      ],
+      "type": "object"
+    },
+    "LibraryDomain": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "references": {
+          "type": "integer"
+        },
+        "refused": {
+          "type": "integer"
+        },
+        "rules": {
+          "type": "integer"
+        },
+        "skills": {
+          "type": "integer"
+        },
+        "thresholds": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "rules",
+        "thresholds",
+        "skills",
+        "agents",
+        "references",
+        "refused"
+      ],
+      "type": "object"
+    },
+    "LibraryLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "LibraryReport": {
+      "additionalProperties": false,
+      "properties": {
+        "doc_entries": {
+          "type": "integer"
+        },
+        "doc_pages": {
+          "type": "integer"
+        },
+        "domains": {
+          "items": {
+            "$ref": "#/$defs/LibraryDomain"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "domains_dir": {
+          "type": "string"
+        },
+        "domains_from": {
+          "type": "string"
+        },
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/LibraryLayer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "models": {
+          "type": "integer"
+        },
+        "proxy": {
+          "type": "string"
+        },
+        "proxy_from": {
+          "type": "string"
+        },
+        "questions": {
+          "type": "integer"
+        },
+        "roles": {
+          "type": "integer"
+        },
+        "subscriptions": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "layers",
+        "models",
+        "subscriptions",
+        "roles",
+        "questions",
+        "doc_pages",
+        "doc_entries",
+        "proxy",
+        "proxy_from",
+        "domains_from",
+        "domains_dir",
+        "domains"
+      ],
+      "type": "object"
+    },
+    "LoginKeyParams": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "key"
+      ],
+      "type": "object"
+    },
+    "LoginNote": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "type": "object"
+    },
     "LoginParams": {
       "additionalProperties": false,
       "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "provider"
+      ],
+      "type": "object"
+    },
+    "LogoutParams": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
         "provider": {
           "type": "string"
         },
@@ -814,6 +2181,366 @@
       ],
       "type": "object"
     },
+    "MemoryAddParams": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "MemoryEditParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "id",
+        "text"
+      ],
+      "type": "object"
+    },
+    "MemoryRemoveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "id"
+      ],
+      "type": "object"
+    },
+    "MemoryReport": {
+      "additionalProperties": false,
+      "properties": {
+        "scopes": {
+          "items": {
+            "$ref": "#/$defs/MemoryShelf"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "scopes"
+      ],
+      "type": "object"
+    },
+    "MemoryShelf": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "integer"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/memory.Entry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "dir",
+        "entries",
+        "bytes",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "ModelChange": {
+      "additionalProperties": false,
+      "properties": {
+        "change": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "use": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "slug",
+        "change",
+        "use",
+        "file"
+      ],
+      "type": "object"
+    },
+    "ModelPick": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "ModelReload": {
+      "additionalProperties": false,
+      "properties": {
+        "context_windows": {
+          "type": "integer"
+        },
+        "removed_from_catalog": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ReloadSource"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "table": {
+          "type": "string"
+        },
+        "table_error": {
+          "type": "string"
+        },
+        "unresolved_tiers": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "versions": {
+          "$ref": "#/$defs/VersionCheck"
+        }
+      },
+      "required": [
+        "context_windows",
+        "table",
+        "sources",
+        "versions"
+      ],
+      "type": "object"
+    },
+    "ModelReport": {
+      "additionalProperties": false,
+      "properties": {
+        "context_tokens": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "notice": {
+          "type": "string"
+        },
+        "pays": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "slug": {
+          "type": "string"
+        },
+        "subscription": {
+          "type": "string"
+        },
+        "use": {
+          "type": "string"
+        },
+        "window_from": {
+          "type": "string"
+        },
+        "windows": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "slug",
+        "provider",
+        "id",
+        "subscription",
+        "use",
+        "kind",
+        "pays",
+        "windows",
+        "layer",
+        "file"
+      ],
+      "type": "object"
+    },
+    "ModelsQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "defaults": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ModelReport"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "published_windows": {
+          "type": "integer"
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "subscriptions": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "table": {
+          "type": "string"
+        },
+        "unbound_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "usable": {
+          "type": "integer"
+        },
+        "windowed": {
+          "type": "integer"
+        },
+        "wires": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "subscriptions",
+        "defaults",
+        "usable",
+        "table",
+        "windowed",
+        "published_windows",
+        "models",
+        "wires",
+        "stale"
+      ],
+      "type": "object"
+    },
     "NoParams": {
       "additionalProperties": false,
       "properties": {},
@@ -847,6 +2574,98 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "OverrideListing": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "change": {
+          "type": "string"
+        },
+        "current": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rule_id",
+        "layer",
+        "change",
+        "stale",
+        "file"
+      ],
+      "type": "object"
+    },
+    "PartDiff": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "count": {
+          "type": "integer"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "removed": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "count"
       ],
       "type": "object"
     },
@@ -1094,6 +2913,120 @@
       ],
       "type": "object"
     },
+    "ReloadDiff": {
+      "additionalProperties": false,
+      "properties": {
+        "first": {
+          "type": "boolean"
+        },
+        "last_unreadable": {
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/PartDiff"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "first",
+        "parts"
+      ],
+      "type": "object"
+    },
+    "ReloadSource": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/ModelChange"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "failure": {
+          "type": "string"
+        },
+        "hint": {
+          "type": "string"
+        },
+        "served": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "state",
+        "served",
+        "changes"
+      ],
+      "type": "object"
+    },
+    "Requirement": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/RequirementChoice"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "done": {
+          "type": "string"
+        },
+        "fix": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        },
+        "what": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "what"
+      ],
+      "type": "object"
+    },
+    "RequirementChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
     "Resync": {
       "additionalProperties": false,
       "properties": {
@@ -1122,6 +3055,108 @@
         "item",
         "seq",
         "dropped"
+      ],
+      "type": "object"
+    },
+    "RuleListReport": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleListing"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "origin",
+        "rules"
+      ],
+      "type": "object"
+    },
+    "RuleListing": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "override": {
+          "$ref": "#/$defs/OverrideListing"
+        },
+        "switch": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "RuleWriteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "concern": {
+          "type": "string"
+        },
+        "global": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "replace": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "RunningTurn": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "task",
+        "startedAt"
       ],
       "type": "object"
     },
@@ -1162,6 +3197,75 @@
         "seq",
         "kind",
         "text"
+      ],
+      "type": "object"
+    },
+    "SendNowParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "SessionFind": {
+      "additionalProperties": false,
+      "properties": {
+        "handle": {
+          "type": "string"
+        },
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/session.Hit"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "query": {
+          "$ref": "#/$defs/session.Query"
+        }
+      },
+      "required": [
+        "handle",
+        "query",
+        "hits"
+      ],
+      "type": "object"
+    },
+    "SessionFindParams": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "until": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
       ],
       "type": "object"
     },
@@ -1212,6 +3316,324 @@
       ],
       "type": "object"
     },
+    "SessionHistory": {
+      "additionalProperties": false,
+      "properties": {
+        "first": {
+          "type": "integer"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/HistoryLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "first",
+        "total",
+        "lines"
+      ],
+      "type": "object"
+    },
+    "SessionHistoryParams": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "type": "integer"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "type": "object"
+    },
+    "SessionHolder": {
+      "additionalProperties": false,
+      "properties": {
+        "pid": {
+          "type": "integer"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pid",
+        "since"
+      ],
+      "type": "object"
+    },
+    "SessionInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "auto_compaction": {
+          "type": "string"
+        },
+        "carried_messages": {
+          "type": "integer"
+        },
+        "context_ceiling": {
+          "type": "integer"
+        },
+        "context_target": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "end_reason": {
+          "type": "string"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "expired": {
+          "type": "boolean"
+        },
+        "family": {
+          "type": "string"
+        },
+        "fork_into_kind": {
+          "type": "string"
+        },
+        "fork_kind": {
+          "type": "string"
+        },
+        "fork_tokens_after": {
+          "type": "integer"
+        },
+        "fork_tokens_before": {
+          "type": "integer"
+        },
+        "forked_into": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer"
+        },
+        "generations": {
+          "type": "integer"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "head": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lastAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "parent": {
+          "type": "string"
+        },
+        "reads": {
+          "type": "integer"
+        },
+        "root": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "integer"
+        },
+        "sub_agents": {
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "unrecorded_reads": {
+          "type": "integer"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "handle",
+        "at",
+        "turns",
+        "sub_agents",
+        "steps",
+        "carried_messages",
+        "reads"
+      ],
+      "type": "object"
+    },
+    "SessionList": {
+      "additionalProperties": false,
+      "properties": {
+        "head": {
+          "type": "string"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/SessionRow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "type": "object"
+    },
+    "SessionListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "type": "integer"
+        },
+        "search": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "SessionListed": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "costUsd": {
+          "type": "number"
+        },
+        "endReason": {
+          "type": "string"
+        },
+        "endedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expired": {
+          "type": "boolean"
+        },
+        "family": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer"
+        },
+        "generations": {
+          "type": "integer"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "heldBy": {
+          "$ref": "#/$defs/SessionHolder"
+        },
+        "id": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "lastAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "subAgents": {
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "id",
+        "handle",
+        "at",
+        "turns",
+        "subAgents",
+        "expired",
+        "open",
+        "running"
+      ],
+      "type": "object"
+    },
     "SessionOpenParams": {
       "additionalProperties": false,
       "properties": {
@@ -1224,6 +3646,9 @@
         },
         "project": {
           "type": "string"
+        },
+        "replay": {
+          "type": "integer"
         },
         "session": {
           "type": "string"
@@ -1248,6 +3673,16 @@
       ],
       "type": "object"
     },
+    "SessionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
     "SessionRenameParams": {
       "additionalProperties": false,
       "properties": {
@@ -1261,6 +3696,355 @@
       "required": [
         "session",
         "name"
+      ],
+      "type": "object"
+    },
+    "SessionRow": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "costUsd": {
+          "type": "number"
+        },
+        "endReason": {
+          "type": "string"
+        },
+        "endedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expired": {
+          "type": "boolean"
+        },
+        "family": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer"
+        },
+        "generations": {
+          "type": "integer"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "heldBy": {
+          "$ref": "#/$defs/SessionHolder"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lastAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "subAgents": {
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "handle",
+        "at",
+        "turns",
+        "subAgents",
+        "expired",
+        "open",
+        "running"
+      ],
+      "type": "object"
+    },
+    "SessionSetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "asking": {
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "effort": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "SessionSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "asking": {
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "pick": {
+          "$ref": "#/$defs/ModelPick"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "pick"
+      ],
+      "type": "object"
+    },
+    "SessionSkip": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "SessionState": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentNow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "approvals": {
+          "items": {
+            "$ref": "#/$defs/ApprovalRequest"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "asking": {
+          "enum": [
+            "ask",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "context": {
+          "$ref": "#/$defs/ContextUse"
+        },
+        "cron": {
+          "$ref": "#/$defs/CronState"
+        },
+        "pick": {
+          "$ref": "#/$defs/ModelPick"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shells": {
+          "items": {
+            "$ref": "#/$defs/ShellNow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "turn": {
+          "$ref": "#/$defs/RunningTurn"
+        }
+      },
+      "required": [
+        "session",
+        "running",
+        "pick",
+        "approvals",
+        "agents",
+        "shells",
+        "cron"
+      ],
+      "type": "object"
+    },
+    "SessionTrace": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/session.AgentRun"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "cache": {
+          "$ref": "#/$defs/TraceCache"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/TraceCall"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "events": {
+          "type": "integer"
+        },
+        "failures": {
+          "items": {
+            "$ref": "#/$defs/TraceFailure"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "handle": {
+          "type": "string"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/TraceHook"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "inserted": {
+          "items": {
+            "$ref": "#/$defs/session.TracedInsert"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "list_changes": {
+          "items": {
+            "$ref": "#/$defs/session.TracedChange"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/TraceMessage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notices": {
+          "items": {
+            "$ref": "#/$defs/session.TracedNotice"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "outlived": {
+          "items": {
+            "$ref": "#/$defs/TraceOutlived"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "requests": {
+          "items": {
+            "$ref": "#/$defs/TraceRequest"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "sizes": {
+          "$ref": "#/$defs/session.Sizes"
+        }
+      },
+      "required": [
+        "session",
+        "handle",
+        "events",
+        "agents",
+        "requests",
+        "calls",
+        "cache"
       ],
       "type": "object"
     },
@@ -1316,6 +4100,86 @@
       ],
       "type": "object"
     },
+    "SettingDoc": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "restart": {
+          "type": "boolean"
+        },
+        "takes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "category",
+        "default",
+        "takes",
+        "restart",
+        "description"
+      ],
+      "type": "object"
+    },
+    "SettingValue": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "key",
+        "category",
+        "value",
+        "source"
+      ],
+      "type": "object"
+    },
+    "SettingsReport": {
+      "additionalProperties": false,
+      "properties": {
+        "global_file": {
+          "type": "string"
+        },
+        "project_file": {
+          "type": "string"
+        },
+        "settings": {
+          "items": {
+            "$ref": "#/$defs/SettingValue"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "global_file",
+        "project_file",
+        "settings"
+      ],
+      "type": "object"
+    },
     "SettingsSetParams": {
       "additionalProperties": false,
       "properties": {
@@ -1332,6 +4196,24 @@
       "required": [
         "key",
         "value"
+      ],
+      "type": "object"
+    },
+    "Setup": {
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "steps"
       ],
       "type": "object"
     },
@@ -1374,6 +4256,47 @@
         "seq",
         "shell",
         "killed"
+      ],
+      "type": "object"
+    },
+    "ShellNow": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "endedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "running",
+            "exited",
+            "killed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "command",
+        "pid",
+        "state",
+        "startedAt"
       ],
       "type": "object"
     },
@@ -1455,6 +4378,34 @@
       ],
       "type": "object"
     },
+    "ShellRunParams": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "ShellRunResult": {
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "type": "string"
+        },
+        "stopped": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "output",
+        "stopped"
+      ],
+      "type": "object"
+    },
     "ShellStarted": {
       "additionalProperties": false,
       "properties": {
@@ -1496,6 +4447,93 @@
         "command",
         "pid",
         "startedAt"
+      ],
+      "type": "object"
+    },
+    "SteerResult": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn",
+        "id"
+      ],
+      "type": "object"
+    },
+    "Steered": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "readAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "step": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "text",
+        "step",
+        "readAt"
+      ],
+      "type": "object"
+    },
+    "SubscriptionStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "accounts": {
+          "items": {
+            "$ref": "#/$defs/AccountStatus"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "role": {
+          "enum": [
+            "llm",
+            "classifier",
+            "search"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "source",
+        "accounts"
       ],
       "type": "object"
     },
@@ -1622,6 +4660,313 @@
       ],
       "type": "object"
     },
+    "TraceCache": {
+      "additionalProperties": false,
+      "properties": {
+        "breaks": {
+          "items": {
+            "$ref": "#/$defs/TraceCacheBreak"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "lifetimes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "TraceCacheBreak": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": "string"
+        },
+        "after_cached_tokens": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "cache_read_tokens": {
+          "type": "integer"
+        },
+        "first_difference": {
+          "type": "string"
+        },
+        "gap": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request",
+        "after",
+        "gap",
+        "cache_read_tokens",
+        "after_cached_tokens",
+        "first_difference"
+      ],
+      "type": "object"
+    },
+    "TraceCall": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "args": {},
+        "call": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "gate": {
+          "type": "string"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/turn.HookRun"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "recorded_in": {
+          "type": "string"
+        },
+        "refused": {
+          "type": "boolean"
+        },
+        "request": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "result_bytes": {
+          "type": "integer"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "call",
+        "turn",
+        "tool",
+        "result_bytes"
+      ],
+      "type": "object"
+    },
+    "TraceFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn",
+        "error"
+      ],
+      "type": "object"
+    },
+    "TraceHook": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "event": {
+          "type": "string"
+        },
+        "exit": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        },
+        "gate": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn",
+        "event",
+        "command",
+        "file",
+        "level",
+        "exit",
+        "duration_ms"
+      ],
+      "type": "object"
+    },
+    "TraceMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "turn",
+        "role",
+        "at",
+        "text"
+      ],
+      "type": "object"
+    },
+    "TraceOutlived": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "calls": {
+          "type": "integer"
+        },
+        "lead_in": {
+          "type": "string"
+        },
+        "recorded_in": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "calls",
+        "recorded_in",
+        "lead_in"
+      ],
+      "type": "object"
+    },
+    "TraceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "attempts": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "integer"
+        },
+        "model": {
+          "type": "string"
+        },
+        "new_messages": {
+          "type": "integer"
+        },
+        "provider_request_id": {
+          "type": "string"
+        },
+        "recorded_in": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/session.Usage"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request",
+        "turn",
+        "usage",
+        "cost_usd"
+      ],
+      "type": "object"
+    },
     "TurnCompleted": {
       "additionalProperties": false,
       "properties": {
@@ -1670,6 +5015,9 @@
     "TurnParams": {
       "additionalProperties": false,
       "properties": {
+        "lead": {
+          "type": "boolean"
+        },
         "session": {
           "type": "string"
         },
@@ -1701,6 +5049,15 @@
         "effort": {
           "type": "string"
         },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/AttachedImage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "mentions": {
           "items": {
             "type": "string"
@@ -1717,6 +5074,9 @@
           "type": "string"
         },
         "text": {
+          "type": "string"
+        },
+        "wire": {
           "type": "string"
         }
       },
@@ -1799,6 +5159,107 @@
       "required": [
         "session",
         "turns"
+      ],
+      "type": "object"
+    },
+    "UnsteerParams": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "UnsteerResult": {
+      "additionalProperties": false,
+      "properties": {
+        "removed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed"
+      ],
+      "type": "object"
+    },
+    "UpdateReport": {
+      "additionalProperties": false,
+      "properties": {
+        "aside": {
+          "type": "string"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "current": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "string"
+        },
+        "latest": {
+          "type": "string"
+        },
+        "release": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "current",
+        "latest",
+        "available",
+        "release",
+        "source"
+      ],
+      "type": "object"
+    },
+    "UsageReport": {
+      "additionalProperties": false,
+      "properties": {
+        "fullest_window": {
+          "type": "string"
+        },
+        "missing": {
+          "items": {
+            "$ref": "#/$defs/DoctorBlocker"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "providers": {
+          "items": {
+            "$ref": "#/$defs/CredentialReport"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "spend_limit": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "serving",
+            "needs attention",
+            "none"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "providers",
+        "spend_limit"
       ],
       "type": "object"
     },
@@ -1920,6 +5381,123 @@
       ],
       "type": "object"
     },
+    "VersionCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "raised": {
+          "items": {
+            "$ref": "#/$defs/settings.RaisedVersion"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "skipped": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "WindowReport": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "resets_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "used_fraction": {
+          "type": "number"
+        },
+        "used_reported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "used_fraction",
+        "used_reported"
+      ],
+      "type": "object"
+    },
+    "WindowStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "only": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resets_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "used": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "used"
+      ],
+      "type": "object"
+    },
+    "WriteReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/FileChange"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "undo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changes",
+        "undo"
+      ],
+      "type": "object"
+    },
+    "browser.NativeHost": {
+      "additionalProperties": false,
+      "properties": {
+        "browser": {
+          "type": "string"
+        },
+        "manifest": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "browser",
+        "manifest",
+        "state"
+      ],
+      "type": "object"
+    },
     "clientMessage": {
       "oneOf": [
         {
@@ -1965,7 +5543,7 @@
               "const": "session.list"
             },
             "params": {
-              "$ref": "#/$defs/NoParams"
+              "$ref": "#/$defs/SessionListParams"
             }
           },
           "required": [
@@ -1993,6 +5571,60 @@
             },
             "params": {
               "$ref": "#/$defs/SessionOpenParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.state"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.set"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionSetParams"
             }
           },
           "required": [
@@ -2097,10 +5729,145 @@
               "const": "2.0"
             },
             "method": {
+              "const": "turn.sendNow"
+            },
+            "params": {
+              "$ref": "#/$defs/SendNowParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "turn.stop"
             },
             "params": {
               "$ref": "#/$defs/TurnParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "turn.unsteer"
+            },
+            "params": {
+              "$ref": "#/$defs/UnsteerParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.compact"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.history"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionHistoryParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.run"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellRunParams"
             }
           },
           "required": [
@@ -2340,7 +6107,34 @@
               "const": "2.0"
             },
             "method": {
-              "const": "query.usage"
+              "const": "query.ledger"
+            },
+            "params": {
+              "$ref": "#/$defs/LedgerParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.models"
             },
             "params": {
               "$ref": "#/$defs/NoParams"
@@ -2367,7 +6161,7 @@
               "const": "2.0"
             },
             "method": {
-              "const": "query.context"
+              "const": "query.settings"
             },
             "params": {
               "$ref": "#/$defs/NoParams"
@@ -2448,91 +6242,874 @@
               "const": "2.0"
             },
             "method": {
-              "const": "query.models"
-            },
-            "params": {
-              "$ref": "#/$defs/NoParams"
-            }
-          },
-          "required": [
-            "id",
-            "jsonrpc",
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": [
-                "string",
-                "integer"
-              ]
-            },
-            "jsonrpc": {
-              "const": "2.0"
-            },
-            "method": {
-              "const": "query.ledger"
-            },
-            "params": {
-              "$ref": "#/$defs/NoParams"
-            }
-          },
-          "required": [
-            "id",
-            "jsonrpc",
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": [
-                "string",
-                "integer"
-              ]
-            },
-            "jsonrpc": {
-              "const": "2.0"
-            },
-            "method": {
-              "const": "query.settings"
-            },
-            "params": {
-              "$ref": "#/$defs/NoParams"
-            }
-          },
-          "required": [
-            "id",
-            "jsonrpc",
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": [
-                "string",
-                "integer"
-              ]
-            },
-            "jsonrpc": {
-              "const": "2.0"
-            },
-            "method": {
               "const": "query.library"
             },
             "params": {
               "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.memory"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.hooks"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.changelog"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.update"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.docs"
+            },
+            "params": {
+              "$ref": "#/$defs/DocsParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "memory.add"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryAddParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "memory.edit"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryEditParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "memory.remove"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryRemoveParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "reload"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "models.reload"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "hooks.trust"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "learn.scan"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "learn.show"
+            },
+            "params": {
+              "$ref": "#/$defs/LearnParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "learn.reject"
+            },
+            "params": {
+              "$ref": "#/$defs/LearnParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "setup.check"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "login.key"
+            },
+            "params": {
+              "$ref": "#/$defs/LoginKeyParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "login.logout"
+            },
+            "params": {
+              "$ref": "#/$defs/LogoutParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.usage"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.doctor"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.context"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.info"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.find"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionFindParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.trace"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.accounts"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "learn.apply"
+            },
+            "params": {
+              "$ref": "#/$defs/LearnApplyParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rules.add"
+            },
+            "params": {
+              "$ref": "#/$defs/RuleWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rules.off"
+            },
+            "params": {
+              "$ref": "#/$defs/RuleWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rules.remove"
+            },
+            "params": {
+              "$ref": "#/$defs/RuleWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "rules.restore"
+            },
+            "params": {
+              "$ref": "#/$defs/RuleWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "agents.add"
+            },
+            "params": {
+              "$ref": "#/$defs/AgentWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "agents.set"
+            },
+            "params": {
+              "$ref": "#/$defs/AgentWriteParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "agents.remove"
+            },
+            "params": {
+              "$ref": "#/$defs/AgentWriteParams"
             }
           },
           "required": [
@@ -2568,6 +7145,1521 @@
           "type": "object"
         }
       ]
+    },
+    "hook.Hook": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "last": {
+          "$ref": "#/$defs/hook.Result"
+        },
+        "level": {
+          "type": "string"
+        },
+        "matcher": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "skipped": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer"
+        },
+        "trust": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "event",
+        "matcher",
+        "command",
+        "file",
+        "level",
+        "hash",
+        "trust"
+      ],
+      "type": "object"
+    },
+    "hook.Result": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "exit": {
+          "type": "integer"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "exit",
+        "duration_ms"
+      ],
+      "type": "object"
+    },
+    "learn.Check": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "request": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "at",
+        "request",
+        "present"
+      ],
+      "type": "object"
+    },
+    "learn.Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/learn.Check"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "class": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "fixed_in": {
+          "type": "string"
+        },
+        "fixed_the_day_last_seen": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "key": {
+          "type": "string"
+        },
+        "last_seen_on": {
+          "type": "string"
+        },
+        "mechanism": {
+          "type": "string"
+        },
+        "quotes": {
+          "items": {
+            "$ref": "#/$defs/learn.Quote"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "repeats": {
+          "type": "integer"
+        },
+        "retire": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "sessions": {
+          "type": "integer"
+        },
+        "setting": {
+          "type": "string"
+        },
+        "times": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "written_by": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "class",
+        "title",
+        "reason",
+        "confidence",
+        "times",
+        "sessions",
+        "repeats",
+        "calls",
+        "quotes"
+      ],
+      "type": "object"
+    },
+    "learn.Label": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "build": {
+          "type": "string"
+        },
+        "chosen": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "cost": {
+          "type": "number"
+        },
+        "failure": {
+          "type": "string"
+        },
+        "row": {
+          "type": "string"
+        },
+        "said": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "said",
+        "cost"
+      ],
+      "type": "object"
+    },
+    "learn.Quote": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "calls": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "at",
+        "text",
+        "calls"
+      ],
+      "type": "object"
+    },
+    "learn.Read": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "forks": {
+          "type": "integer"
+        },
+        "from": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "repeated": {
+          "type": "integer"
+        },
+        "reports": {
+          "type": "integer"
+        },
+        "sessions": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "to": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "typed": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sessions",
+        "typed",
+        "repeated",
+        "calls",
+        "reports",
+        "forks",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "learn.Run": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "decided": {
+          "items": {
+            "$ref": "#/$defs/learn.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/learn.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "fixed": {
+          "items": {
+            "$ref": "#/$defs/learn.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "grouped_by": {
+          "type": "string"
+        },
+        "held": {
+          "items": {
+            "$ref": "#/$defs/learn.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/learn.Label"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mode": {
+          "type": "string"
+        },
+        "project": {
+          "items": {
+            "$ref": "#/$defs/learn.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "read": {
+          "$ref": "#/$defs/learn.Read"
+        },
+        "said": {
+          "items": {
+            "$ref": "#/$defs/learn.Said"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "sent": {
+          "$ref": "#/$defs/learn.Sent"
+        },
+        "summary": {
+          "$ref": "#/$defs/learn.Summary"
+        },
+        "watching": {
+          "items": {
+            "$ref": "#/$defs/learn.Finding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "at",
+        "scope",
+        "mode",
+        "read",
+        "summary",
+        "findings",
+        "sent",
+        "said"
+      ],
+      "type": "object"
+    },
+    "learn.Said": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": "string"
+        },
+        "answered": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "before": {
+          "type": "string"
+        },
+        "calls": {
+          "type": "integer"
+        },
+        "place": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "at",
+        "text",
+        "before",
+        "after",
+        "calls",
+        "place"
+      ],
+      "type": "object"
+    },
+    "learn.Sent": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "integer"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "group_bytes": {
+          "type": "integer"
+        },
+        "group_tokens": {
+          "type": "integer"
+        },
+        "local": {
+          "type": "boolean"
+        },
+        "local_kept_because": {
+          "type": "string"
+        },
+        "model_fields_dropped": {
+          "type": "integer"
+        },
+        "model_fields_refused": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "windows": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "windows",
+        "bytes",
+        "cost",
+        "failed",
+        "local"
+      ],
+      "type": "object"
+    },
+    "learn.Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "do": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "repeats": {
+          "type": "integer"
+        },
+        "wrong": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "wrong",
+        "repeats",
+        "calls",
+        "do"
+      ],
+      "type": "object"
+    },
+    "ledger.Answer": {
+      "additionalProperties": false,
+      "properties": {
+        "choice": {
+          "type": "string"
+        },
+        "dist": {
+          "items": {
+            "$ref": "#/$defs/ledger.Slice"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "legend": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "noul": {
+          "type": "number"
+        },
+        "question": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "wording": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "question",
+        "wording",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ledger.Outcome": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ledger.Reason": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_by": {
+          "type": "string"
+        },
+        "ambiguous": {
+          "type": "string"
+        },
+        "blocked": {
+          "type": "boolean"
+        },
+        "comparison": {
+          "type": "string"
+        },
+        "dead_band": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "mode_reason": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "relaxed_by": {
+          "type": "string"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "question",
+        "comparison",
+        "threshold",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ledger.Row": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/ledger.Answer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "bench": {
+          "type": "string"
+        },
+        "build": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "latency_ms": {
+          "type": "integer"
+        },
+        "model": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ledger.Outcome"
+        },
+        "point": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "string"
+        },
+        "policy_version": {
+          "type": "integer"
+        },
+        "questions": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/ledger.Reason"
+        },
+        "replay_of": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "integer"
+        },
+        "state": {},
+        "state_builder": {
+          "type": "string"
+        },
+        "state_elision": {
+          "$ref": "#/$defs/ledger.StateElision"
+        },
+        "state_hash": {
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "schema",
+        "at",
+        "point",
+        "questions",
+        "version",
+        "build",
+        "model",
+        "state_hash",
+        "answers",
+        "verdict",
+        "latency_ms",
+        "cost",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "ledger.Slice": {
+      "additionalProperties": false,
+      "properties": {
+        "option": {
+          "type": "string"
+        },
+        "p": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "option",
+        "p"
+      ],
+      "type": "object"
+    },
+    "ledger.StateElision": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "integer"
+        },
+        "file": {
+          "type": "string"
+        },
+        "head": {
+          "type": "string"
+        },
+        "tail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "head",
+        "tail",
+        "file"
+      ],
+      "type": "object"
+    },
+    "memory.Entry": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope",
+        "kind",
+        "text",
+        "at",
+        "by",
+        "file"
+      ],
+      "type": "object"
+    },
+    "session.AgentRun": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "parent_agent": {
+          "type": "string"
+        },
+        "spawn_call": {
+          "type": "string"
+        },
+        "spawn_turn": {
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/session.Usage"
+        }
+      },
+      "required": [
+        "agent",
+        "spawn_turn",
+        "depth",
+        "status",
+        "started_at",
+        "usage",
+        "cost_usd"
+      ],
+      "type": "object"
+    },
+    "session.Hit": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "args": {},
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer"
+        },
+        "ran": {
+          "$ref": "#/$defs/session.Ran"
+        },
+        "role": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation",
+        "session",
+        "event",
+        "at"
+      ],
+      "type": "object"
+    },
+    "session.Query": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "until": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "session.Ran": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "session.Sizes": {
+      "additionalProperties": false,
+      "properties": {
+        "blobs_bytes": {
+          "type": "integer"
+        },
+        "events_bytes": {
+          "type": "integer"
+        },
+        "requests_bytes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "events_bytes",
+        "requests_bytes",
+        "blobs_bytes"
+      ],
+      "type": "object"
+    },
+    "session.TracedChange": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "before": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "before",
+        "after"
+      ],
+      "type": "object"
+    },
+    "session.TracedInsert": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "first_sent_in": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "posted_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "taken_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin",
+        "role",
+        "text"
+      ],
+      "type": "object"
+    },
+    "session.TracedNotice": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "text"
+      ],
+      "type": "object"
+    },
+    "session.Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read_tokens": {
+          "type": "integer"
+        },
+        "cache_write_tokens": {
+          "type": "integer"
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens"
+      ],
+      "type": "object"
+    },
+    "settings.RaisedVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "subagent.Broken": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "subagent.Definition": {
+      "additionalProperties": false,
+      "properties": {
+        "assigned_in": {
+          "type": "string"
+        },
+        "cut_references": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "effort": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "gate": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ignored": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ignored_tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "references": {
+          "items": {
+            "$ref": "#/$defs/subagent.Reference"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "refused": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "runs": {
+          "type": "string"
+        },
+        "shadowed": {
+          "items": {
+            "$ref": "#/$defs/subagent.Definition"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "written_model": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "origin",
+        "path",
+        "runs",
+        "instructions"
+      ],
+      "type": "object"
+    },
+    "subagent.Found": {
+      "additionalProperties": false,
+      "properties": {
+        "broken": {
+          "items": {
+            "$ref": "#/$defs/subagent.Broken"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "definitions": {
+          "items": {
+            "$ref": "#/$defs/subagent.Definition"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "definitions"
+      ],
+      "type": "object"
+    },
+    "subagent.Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path"
+      ],
+      "type": "object"
+    },
+    "turn.HookRun": {
+      "additionalProperties": false,
+      "properties": {
+        "ask": {
+          "type": "string"
+        },
+        "block": {
+          "type": "string"
+        },
+        "context": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "ran": {
+          "type": "integer"
+        },
+        "rewrote_args": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "event",
+        "ran"
+      ],
+      "type": "object"
+    },
+    "turn.ProxyRow": {
+      "additionalProperties": false,
+      "properties": {
+        "asked": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "proxy": {
+          "type": "string"
+        },
+        "proxy_bytes": {
+          "type": "integer"
+        },
+        "ran": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "proxy",
+        "asked"
+      ],
+      "type": "object"
+    },
+    "turn.ToolCallRow": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {},
+        "author": {
+          "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "gate_decision_id": {
+          "type": "string"
+        },
+        "gate_error": {
+          "type": "string"
+        },
+        "gate_reason": {
+          "$ref": "#/$defs/ledger.Reason"
+        },
+        "gate_verdict": {
+          "type": "string"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/turn.HookRun"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "parallel_batch": {
+          "type": "integer"
+        },
+        "parent": {
+          "type": "string"
+        },
+        "proxy": {
+          "$ref": "#/$defs/turn.ProxyRow"
+        },
+        "refused": {
+          "type": "boolean"
+        },
+        "rendered_bytes": {
+          "type": "integer"
+        },
+        "result_bytes": {
+          "type": "integer"
+        },
+        "result_handle": {
+          "type": "string"
+        },
+        "result_handle_error": {
+          "type": "string"
+        },
+        "result_hash": {
+          "type": "string"
+        },
+        "sift_saved_bytes": {
+          "type": "integer"
+        },
+        "sub_agent_id": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "result_bytes",
+        "rendered_bytes",
+        "duration_ms"
+      ],
+      "type": "object"
     }
   },
   "$id": "tofu.host/1",
@@ -2623,7 +8715,7 @@
           "const": "turn.steered"
         },
         "params": {
-          "$ref": "#/$defs/Text"
+          "$ref": "#/$defs/Steered"
         }
       },
       "required": [
@@ -3140,6 +9232,46 @@
           "const": "2.0"
         },
         "method": {
+          "const": "session.listed"
+        },
+        "params": {
+          "$ref": "#/$defs/SessionListed"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "session.settings"
+        },
+        "params": {
+          "$ref": "#/$defs/SessionSettings"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "approval.resolved"
         },
         "params": {
@@ -3239,16 +9371,37 @@
               "$ref": "#/$defs/InitializeResult"
             },
             {
-              "$ref": "#/$defs/VerbResult"
+              "$ref": "#/$defs/SessionList"
             },
             {
               "$ref": "#/$defs/SessionOpenResult"
+            },
+            {
+              "$ref": "#/$defs/SessionState"
             },
             {
               "$ref": "#/$defs/Ack"
             },
             {
               "$ref": "#/$defs/TurnResult"
+            },
+            {
+              "$ref": "#/$defs/SteerResult"
+            },
+            {
+              "$ref": "#/$defs/UnsteerResult"
+            },
+            {
+              "$ref": "#/$defs/Compaction"
+            },
+            {
+              "$ref": "#/$defs/SessionHistory"
+            },
+            {
+              "$ref": "#/$defs/ShellRunResult"
+            },
+            {
+              "$ref": "#/$defs/VerbResult"
             },
             {
               "$ref": "#/$defs/ShellReadResult"
@@ -3258,6 +9411,87 @@
             },
             {
               "$ref": "#/$defs/CronState"
+            },
+            {
+              "$ref": "#/$defs/LedgerReport"
+            },
+            {
+              "$ref": "#/$defs/ModelsQuery"
+            },
+            {
+              "$ref": "#/$defs/SettingsReport"
+            },
+            {
+              "$ref": "#/$defs/RuleListReport"
+            },
+            {
+              "$ref": "#/$defs/subagent.Found"
+            },
+            {
+              "$ref": "#/$defs/LibraryReport"
+            },
+            {
+              "$ref": "#/$defs/MemoryReport"
+            },
+            {
+              "$ref": "#/$defs/HooksReport"
+            },
+            {
+              "$ref": "#/$defs/ChangelogReport"
+            },
+            {
+              "$ref": "#/$defs/UpdateReport"
+            },
+            {
+              "$ref": "#/$defs/DocsAnswer"
+            },
+            {
+              "$ref": "#/$defs/memory.Entry"
+            },
+            {
+              "$ref": "#/$defs/ReloadDiff"
+            },
+            {
+              "$ref": "#/$defs/ModelReload"
+            },
+            {
+              "$ref": "#/$defs/HooksTrusted"
+            },
+            {
+              "$ref": "#/$defs/learn.Run"
+            },
+            {
+              "$ref": "#/$defs/learn.Finding"
+            },
+            {
+              "$ref": "#/$defs/Setup"
+            },
+            {
+              "$ref": "#/$defs/LoginNote"
+            },
+            {
+              "$ref": "#/$defs/UsageReport"
+            },
+            {
+              "$ref": "#/$defs/DoctorReport"
+            },
+            {
+              "$ref": "#/$defs/ContextReport"
+            },
+            {
+              "$ref": "#/$defs/SessionInfo"
+            },
+            {
+              "$ref": "#/$defs/SessionFind"
+            },
+            {
+              "$ref": "#/$defs/SessionTrace"
+            },
+            {
+              "$ref": "#/$defs/Accounts"
+            },
+            {
+              "$ref": "#/$defs/WriteReceipt"
             }
           ]
         }
@@ -3356,6 +9590,12 @@
     "session.forked": {
       "$ref": "#/$defs/SessionForked"
     },
+    "session.listed": {
+      "$ref": "#/$defs/SessionListed"
+    },
+    "session.settings": {
+      "$ref": "#/$defs/SessionSettings"
+    },
     "session.updated": {
       "$ref": "#/$defs/SessionUpdated"
     },
@@ -3384,19 +9624,51 @@
       "$ref": "#/$defs/TurnStarted"
     },
     "turn.steered": {
-      "$ref": "#/$defs/Text"
+      "$ref": "#/$defs/Steered"
     },
     "usage.updated": {
       "$ref": "#/$defs/UsageUpdated"
     }
   },
   "x-requests": {
+    "agents.add": {
+      "params": {
+        "$ref": "#/$defs/AgentWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "agents.remove": {
+      "params": {
+        "$ref": "#/$defs/AgentWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "agents.set": {
+      "params": {
+        "$ref": "#/$defs/AgentWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
     "cron.command": {
       "params": {
         "$ref": "#/$defs/CronCommandParams"
       },
       "result": {
         "$ref": "#/$defs/CronCommandResult"
+      }
+    },
+    "hooks.trust": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/HooksTrusted"
       }
     },
     "initialize": {
@@ -3415,6 +9687,54 @@
         "$ref": "#/$defs/VerbResult"
       }
     },
+    "learn.apply": {
+      "params": {
+        "$ref": "#/$defs/LearnApplyParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "learn.reject": {
+      "params": {
+        "$ref": "#/$defs/LearnParams"
+      },
+      "result": {
+        "$ref": "#/$defs/learn.Finding"
+      }
+    },
+    "learn.scan": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/learn.Run"
+      }
+    },
+    "learn.show": {
+      "params": {
+        "$ref": "#/$defs/LearnParams"
+      },
+      "result": {
+        "$ref": "#/$defs/learn.Finding"
+      }
+    },
+    "login.key": {
+      "params": {
+        "$ref": "#/$defs/LoginKeyParams"
+      },
+      "result": {
+        "$ref": "#/$defs/LoginNote"
+      }
+    },
+    "login.logout": {
+      "params": {
+        "$ref": "#/$defs/LogoutParams"
+      },
+      "result": {
+        "$ref": "#/$defs/LoginNote"
+      }
+    },
     "login.start": {
       "params": {
         "$ref": "#/$defs/LoginParams"
@@ -3423,20 +9743,68 @@
         "$ref": "#/$defs/VerbResult"
       }
     },
+    "memory.add": {
+      "params": {
+        "$ref": "#/$defs/MemoryAddParams"
+      },
+      "result": {
+        "$ref": "#/$defs/memory.Entry"
+      }
+    },
+    "memory.edit": {
+      "params": {
+        "$ref": "#/$defs/MemoryEditParams"
+      },
+      "result": {
+        "$ref": "#/$defs/memory.Entry"
+      }
+    },
+    "memory.remove": {
+      "params": {
+        "$ref": "#/$defs/MemoryRemoveParams"
+      },
+      "result": {
+        "$ref": "#/$defs/memory.Entry"
+      }
+    },
+    "models.reload": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ModelReload"
+      }
+    },
+    "query.accounts": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Accounts"
+      }
+    },
     "query.agents": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/subagent.Found"
       }
     },
-    "query.context": {
+    "query.changelog": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/ChangelogReport"
+      }
+    },
+    "query.context": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ContextReport"
       }
     },
     "query.cron": {
@@ -3447,12 +9815,36 @@
         "$ref": "#/$defs/CronState"
       }
     },
-    "query.ledger": {
+    "query.docs": {
+      "params": {
+        "$ref": "#/$defs/DocsParams"
+      },
+      "result": {
+        "$ref": "#/$defs/DocsAnswer"
+      }
+    },
+    "query.doctor": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/DoctorReport"
+      }
+    },
+    "query.hooks": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/HooksReport"
+      }
+    },
+    "query.ledger": {
+      "params": {
+        "$ref": "#/$defs/LedgerParams"
+      },
+      "result": {
+        "$ref": "#/$defs/LedgerReport"
       }
     },
     "query.library": {
@@ -3460,7 +9852,15 @@
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/LibraryReport"
+      }
+    },
+    "query.memory": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/MemoryReport"
       }
     },
     "query.models": {
@@ -3468,7 +9868,7 @@
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/ModelsQuery"
       }
     },
     "query.rules": {
@@ -3476,7 +9876,7 @@
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/RuleListReport"
       }
     },
     "query.settings": {
@@ -3484,7 +9884,15 @@
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/SettingsReport"
+      }
+    },
+    "query.update": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/UpdateReport"
       }
     },
     "query.usage": {
@@ -3492,15 +9900,87 @@
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/UsageReport"
       }
     },
-    "session.list": {
+    "reload": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/ReloadDiff"
+      }
+    },
+    "rules.add": {
+      "params": {
+        "$ref": "#/$defs/RuleWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "rules.off": {
+      "params": {
+        "$ref": "#/$defs/RuleWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "rules.remove": {
+      "params": {
+        "$ref": "#/$defs/RuleWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "rules.restore": {
+      "params": {
+        "$ref": "#/$defs/RuleWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "session.compact": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Compaction"
+      }
+    },
+    "session.find": {
+      "params": {
+        "$ref": "#/$defs/SessionFindParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionFind"
+      }
+    },
+    "session.history": {
+      "params": {
+        "$ref": "#/$defs/SessionHistoryParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionHistory"
+      }
+    },
+    "session.info": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionInfo"
+      }
+    },
+    "session.list": {
+      "params": {
+        "$ref": "#/$defs/SessionListParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionList"
       }
     },
     "session.open": {
@@ -3519,12 +9999,44 @@
         "$ref": "#/$defs/Ack"
       }
     },
+    "session.set": {
+      "params": {
+        "$ref": "#/$defs/SessionSetParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
+    "session.state": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionState"
+      }
+    },
+    "session.trace": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionTrace"
+      }
+    },
     "settings.set": {
       "params": {
         "$ref": "#/$defs/SettingsSetParams"
       },
       "result": {
         "$ref": "#/$defs/VerbResult"
+      }
+    },
+    "setup.check": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Setup"
       }
     },
     "shell.kill": {
@@ -3543,6 +10055,14 @@
         "$ref": "#/$defs/ShellReadResult"
       }
     },
+    "shell.run": {
+      "params": {
+        "$ref": "#/$defs/ShellRunParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ShellRunResult"
+      }
+    },
     "turn.send": {
       "params": {
         "$ref": "#/$defs/TurnSendParams"
@@ -3551,12 +10071,20 @@
         "$ref": "#/$defs/TurnResult"
       }
     },
+    "turn.sendNow": {
+      "params": {
+        "$ref": "#/$defs/SendNowParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "turn.steer": {
       "params": {
         "$ref": "#/$defs/TurnSteerParams"
       },
       "result": {
-        "$ref": "#/$defs/TurnResult"
+        "$ref": "#/$defs/SteerResult"
       }
     },
     "turn.stop": {
@@ -3565,6 +10093,14 @@
       },
       "result": {
         "$ref": "#/$defs/Ack"
+      }
+    },
+    "turn.unsteer": {
+      "params": {
+        "$ref": "#/$defs/UnsteerParams"
+      },
+      "result": {
+        "$ref": "#/$defs/UnsteerResult"
       }
     },
     "undo": {

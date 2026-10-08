@@ -1,4 +1,4 @@
-use desk_core::query::{Agents, Definition, Runs};
+use desk_core::protocol::subagent::{Definition, Found};
 use desk_ui::components::card::inner_card;
 use desk_ui::components::chip::{chip, mono};
 use desk_ui::components::empty::empty_state;
@@ -21,7 +21,7 @@ const NO_AGENTS: &str = "tofu agents found no definition in the library or in th
 impl Library {
     pub(super) fn agents_tab(
         &self,
-        agents: &Agents,
+        agents: &Found,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -207,11 +207,10 @@ fn agent_detail(agent: &Definition, theme: &Theme) -> Div {
 }
 
 fn model_said(agent: &Definition) -> String {
-    match (agent.runs, &agent.model) {
-        (Runs::Model, Some(model)) => model.clone(),
-        (Runs::Model, None) => "its own model, not named".to_owned(),
-        (Runs::Inherit, _) => "the lead's model".to_owned(),
-        (Runs::Disabled, _) => "disabled".to_owned(),
-        (Runs::Refused, _) => "refused".to_owned(),
+    match (agent.runs.as_str(), &agent.model) {
+        ("model", Some(model)) => model.clone(),
+        ("model", None) => "its own model, not named".to_owned(),
+        ("inherit", _) => "the lead's model".to_owned(),
+        (runs, _) => runs.to_owned(),
     }
 }

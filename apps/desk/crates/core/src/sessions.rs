@@ -1,79 +1,17 @@
-use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde::Deserialize;
-
-use crate::protocol::VerbResult;
+pub use crate::protocol::SessionRow;
 
 const MINUTE: u64 = 60;
 const HOUR: u64 = 60 * MINUTE;
 const DAY: u64 = 24 * HOUR;
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-pub struct SessionRow {
-    pub id: String,
-    #[serde(default)]
-    pub name: String,
-    pub at: String,
-    #[serde(default)]
-    pub outcome: String,
-    #[serde(default)]
-    pub ended_at: Option<String>,
-    #[serde(default)]
-    pub end_reason: String,
-    #[serde(default)]
-    pub expired: bool,
-    #[serde(default, rename = "lastAt")]
-    pub last_at: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Listing {
-    sessions: Option<Vec<SessionRow>>,
-}
-
-#[derive(Debug)]
-pub enum SessionListError {
-    NotOk(String),
-    Shape(serde_json::Error),
-}
-
-impl fmt::Display for SessionListError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SessionListError::NotOk(problems) => write!(f, "session list failed: {problems}"),
-            SessionListError::Shape(error) => write!(f, "session list is unreadable: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for SessionListError {}
-
-pub fn session_rows(listed: VerbResult) -> Result<Vec<SessionRow>, SessionListError> {
-    if !listed.ok {
-        let problems: Vec<String> = listed.problems.into_iter().map(|p| p.what).collect();
-        return Err(SessionListError::NotOk(problems.join("; ")));
-    }
-    let listing: Listing = serde_json::from_value(listed.data).map_err(SessionListError::Shape)?;
-    Ok(listing.sessions.unwrap_or_default())
-}
-
 impl SessionRow {
     pub fn title(&self) -> &str {
-        if self.name.is_empty() {
-            &self.id
-        } else {
-            &self.name
-        }
-    }
-
-    pub fn state(&self) -> &str {
-        match (self.outcome.as_str(), self.end_reason.as_str()) {
-            ("", "") if self.ended_at.is_some() => "ended",
-            ("", "") => "idle",
-            ("", reason) => reason,
-            (outcome, _) => outcome,
-        }
+        self.name
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .unwrap_or(&self.id)
     }
 
     pub fn since(&self, now: SystemTime) -> Option<Duration> {

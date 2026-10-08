@@ -2,7 +2,8 @@ use super::frame;
 
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
-use desk_core::query::{Answer, ContextReport, Occupancy};
+use desk_core::protocol::{ContextOccupancy, ContextReport};
+use desk_core::query::Answer;
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::inner_card;
@@ -183,7 +184,7 @@ impl ContextScreen {
         let name = report.name.as_deref().unwrap_or("an unnamed session");
         Some(match &self.open {
             Some(open) => format!(
-                "this tofu answers query.context with no session, so it reported {name}, the newest session on disk, and the open session is {open}"
+                "query.context reported {name}, read before {open} opened, and is being read again"
             ),
             None => format!(
                 "no session is open, so query.context reported {name}, the newest session on disk"
@@ -191,7 +192,7 @@ impl ContextScreen {
         })
     }
 
-    fn total(&self, report: &ContextReport, occupancy: &Occupancy) -> Total {
+    fn total(&self, report: &ContextReport, occupancy: &ContextOccupancy) -> Total {
         match self.live {
             Some((used, of)) if self.elsewhere(report).is_none() => Total {
                 used,
@@ -200,7 +201,7 @@ impl ContextScreen {
             },
             _ => Total {
                 used: occupancy.total,
-                of: report.ceiling,
+                of: report.ceiling.unwrap_or_default(),
                 source: "total and ceiling from query.context",
             },
         }
@@ -285,7 +286,12 @@ impl ContextScreen {
             .into_any_element()
     }
 
-    fn window_panel(&self, report: &ContextReport, occupancy: &Occupancy, theme: &Theme) -> Div {
+    fn window_panel(
+        &self,
+        report: &ContextReport,
+        occupancy: &ContextOccupancy,
+        theme: &Theme,
+    ) -> Div {
         let total = self.total(report, occupancy);
         let since = (total.used - occupancy.total).max(0);
         let danger = theme.color(ColorToken::StatusDanger);
@@ -356,7 +362,7 @@ impl ContextScreen {
                         format!(
                             "{}, mark from query.context occupancy, {} bytes per thousand tokens",
                             total.source,
-                            grouped(report.bytes_per_thousand_tokens)
+                            grouped(report.bytes_per_thousand_tokens.unwrap_or_default())
                         ),
                         theme,
                     )),
@@ -364,11 +370,12 @@ impl ContextScreen {
     }
 }
 
-fn bands_panel(report: &ContextReport, occupancy: &Occupancy, theme: &Theme) -> Div {
+fn bands_panel(report: &ContextReport, occupancy: &ContextOccupancy, theme: &Theme) -> Div {
     let mut notes = vec![note(
         format!(
             "query.context occupancy, step {} of {}",
-            occupancy.step, report.steps
+            occupancy.step,
+            report.steps.unwrap_or_default()
         ),
         theme,
     )];

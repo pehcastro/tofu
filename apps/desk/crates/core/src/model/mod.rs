@@ -4,8 +4,11 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::bridge::Event;
-use crate::protocol::{CronState, Notification, QuotaWindow, ServerRequest};
-use crate::query::{Agents, Answer, ContextReport, Rules, Usage};
+use crate::protocol::{
+    ContextReport, CronState, Notification, QuotaWindow, RuleListReport, ServerRequest,
+    UsageReport, subagent,
+};
+use crate::query::Answer;
 
 pub use session::{Agent, Message, Role, Session, Shell, Tool, Turn};
 
@@ -37,9 +40,9 @@ impl std::error::Error for ModelError {}
 #[derive(Debug, Default)]
 pub struct Store {
     pub sessions: BTreeMap<String, Session>,
-    pub usage: Answer<Usage>,
-    pub agents: Answer<Agents>,
-    pub rules: Answer<Rules>,
+    pub usage: Answer<UsageReport>,
+    pub agents: Answer<subagent::Found>,
+    pub rules: Answer<RuleListReport>,
     pub context: Answer<ContextReport>,
     pub quota: Vec<QuotaWindow>,
 }
@@ -60,6 +63,7 @@ impl Store {
                 self.session(&fork.to).forked_from = Some(fork.from.clone());
                 Ok(())
             }
+            Event::Notification(Notification::SessionListed(_)) => Ok(()),
             Event::Notification(Notification::Unknown { method, .. }) => {
                 Err(ModelError::UnknownEvent(method.clone()))
             }
@@ -108,9 +112,10 @@ fn session_of(notification: &Notification) -> Result<&str, ModelError> {
         N::Failure(e) | N::Note(e) => &e.session,
         N::FileEdit(e) => &e.session,
         N::ItemPersisted(e) => &e.session,
-        N::MessageCompleted(e) | N::MessageDelta(e) | N::ThinkingDelta(e) | N::TurnSteered(e) => {
-            &e.session
-        }
+        N::MessageCompleted(e) | N::MessageDelta(e) | N::ThinkingDelta(e) => &e.session,
+        N::TurnSteered(e) => &e.session,
+        N::SessionListed(e) => &e.session,
+        N::SessionSettings(e) => &e.session,
         N::MessageUser(e) => &e.session,
         N::MessageReset(e) | N::MessageStarted(e) => &e.session,
         N::PlanUpdated(e) => &e.session,

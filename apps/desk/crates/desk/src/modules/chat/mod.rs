@@ -10,13 +10,13 @@ use std::{env, iter, slice, thread};
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
-    ApprovalAnswer, ApprovalDecision, ApprovalRequest, CronCommandParams, InitializeResult,
-    NoParams, Notification, PROTOCOL, Request, RequestId, SessionOpenParams,
-    SessionOpenParamsAsking, SessionRenameParams, ShellParams, TurnCompleted, TurnParams,
-    TurnSendParams, TurnSteerParams, VerbResult, request,
+    ApprovalAnswer, ApprovalDecision, ApprovalRequest, ContextReport, CredentialReport,
+    CronCommandParams, InitializeResult, NoParams, Notification, PROTOCOL, Request, RequestId,
+    SessionAsking, SessionListParams, SessionOpenParams, SessionParams, SessionRenameParams,
+    ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
 };
-use desk_core::query::{self, Answer, ContextReport, Definition, Provider, QueryError, Read};
-use desk_core::sessions::{SessionRow, session_rows};
+use desk_core::query::{Answer, QueryError, Read};
+use desk_core::sessions::SessionRow;
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
 use desk_ui::components::composer::{Composer, picker};
@@ -87,7 +87,7 @@ pub struct Chat {
     transcript: Transcript,
     area: Entity<TextArea>,
     approval: Option<Approval>,
-    asking: SessionOpenParamsAsking,
+    asking: SessionAsking,
     project: String,
     tofu: String,
     problem: Option<SharedString>,
@@ -229,7 +229,7 @@ impl Chat {
             transcript: Transcript::new(0).content_width(px(CONTENT_WIDTH)),
             area,
             approval: None,
-            asking: SessionOpenParamsAsking::Auto,
+            asking: SessionAsking::Auto,
             project: String::new(),
             tofu: String::new(),
             problem: None,
@@ -284,15 +284,10 @@ impl Chat {
     }
 
     fn relist(&mut self, cx: &mut Context<Self>) {
-        self.call::<request::SessionList>(&NoParams {}, cx, |chat, listed, cx| match session_rows(
-            listed,
-        ) {
-            Ok(rows) => {
-                eprintln!("desk: session list {} rows", rows.len());
-                chat.rows = rows;
-                cx.emit(Listed);
-            }
-            Err(error) => chat.fail(error.to_string(), cx),
+        self.call::<request::SessionList>(&SessionListParams::default(), cx, |chat, listed, cx| {
+            eprintln!("desk: session list {} rows", listed.sessions.len());
+            chat.rows = listed.sessions;
+            cx.emit(Listed);
         });
     }
 
@@ -320,6 +315,7 @@ impl Chat {
             chat.opening = Opening::Open(opened.session);
             chat.refresh(cx);
             chat.relist(cx);
+            chat.reread_context(cx);
         });
         cx.notify();
     }
@@ -743,27 +739,25 @@ impl Chat {
         if !matches!(self.link, Link::Ready(_)) {
             return;
         }
-        self.ask::<request::QueryContext, _>(
-            |store| &mut store.context,
-            query::context,
-            context_said,
-            cx,
-        );
-        self.ask::<request::QueryUsage, _>(
+        let open = SessionParams {
+            session: self.open_id().map(str::to_owned),
+        };
+        self.ask::<request::QueryContext>(&open, |store| &mut store.context, context_said, cx);
+        self.ask::<request::QueryUsage>(
+            &NoParams {},
             |store| &mut store.usage,
-            query::usage,
             |usage| windows_said(&usage.providers),
             cx,
         );
-        self.ask::<request::QueryAgents, _>(
+        self.ask::<request::QueryAgents>(
+            &NoParams {},
             |store| &mut store.agents,
-            query::agents,
             |agents| agents_said(&agents.definitions),
             cx,
         );
-        self.ask::<request::QueryRules, _>(
+        self.ask::<request::QueryRules>(
+            &NoParams {},
             |store| &mut store.rules,
-            query::rules,
             |rules| {
                 let ids: Vec<&str> = rules.rules.iter().map(|rule| rule.id.as_str()).collect();
                 format!(
@@ -777,14 +771,14 @@ impl Chat {
         );
     }
 
-    fn ask<R, T: 'static>(
+    fn ask<R: Request>(
         &mut self,
-        slot: fn(&mut Store) -> &mut Answer<T>,
-        decode: fn(VerbResult) -> Result<Read<T>, QueryError>,
-        said: fn(&T) -> String,
+        params: &R::Params,
+        slot: fn(&mut Store) -> &mut Answer<R::Result>,
+        said: fn(&R::Result) -> String,
         cx: &mut Context<Self>,
     ) where
-        R: Request<Params = NoParams, Result = VerbResult>,
+        R::Result: 'static,
     {
         let (asked, stale) = self.store.update(cx, |store, cx| {
             let answer = slot(store);
@@ -799,13 +793,11 @@ impl Chat {
             return;
         }
         eprintln!("desk: {} asked, stale {stale}", R::METHOD);
-        self.request::<R>(&NoParams {}, cx, move |chat, reply, cx| {
-            let answer = reply
-                .map_err(|reason| QueryError::Unanswered {
-                    method: R::METHOD,
-                    reason,
-                })
-                .and_then(decode);
+        self.request::<R>(params, cx, move |chat, reply, cx| {
+            let answer = reply.map(Read::now).map_err(|reason| QueryError {
+                method: R::METHOD,
+                reason,
+            });
             match &answer {
                 Ok(read) => eprintln!(
                     "desk: {} read at {}: {}",
@@ -878,7 +870,15 @@ impl Chat {
         let Some((session, turn)) = self.running(cx) else {
             return;
         };
-        self.call::<request::TurnStop>(&TurnParams { session, turn }, cx, |_, _, _| {});
+        self.call::<request::TurnStop>(
+            &TurnParams {
+                session,
+                turn,
+                lead: None,
+            },
+            cx,
+            |_, _, _| {},
+        );
     }
 
     fn flip(&mut self, cx: &mut Context<Self>) {
@@ -889,10 +889,8 @@ impl Chat {
             );
         }
         self.asking = match self.asking {
-            SessionOpenParamsAsking::Auto => SessionOpenParamsAsking::Ask,
-            SessionOpenParamsAsking::Ask | SessionOpenParamsAsking::Unknown(_) => {
-                SessionOpenParamsAsking::Auto
-            }
+            SessionAsking::Auto => SessionAsking::Ask,
+            SessionAsking::Ask | SessionAsking::Unknown(_) => SessionAsking::Auto,
         };
         eprintln!("desk: asking {}", String::from(self.asking.clone()));
         cx.notify();
@@ -948,7 +946,7 @@ impl Chat {
     }
 }
 
-pub fn windows_said(providers: &[Provider]) -> String {
+pub fn windows_said(providers: &[CredentialReport]) -> String {
     let said: Vec<String> = providers
         .iter()
         .map(|provider| {
@@ -984,11 +982,11 @@ fn context_said(report: &ContextReport) -> String {
         "session {} {}: {bands} ceiling {}",
         report.name.as_deref().unwrap_or("unnamed"),
         report.session.as_deref().unwrap_or("none"),
-        report.ceiling
+        report.ceiling.unwrap_or_default()
     )
 }
 
-fn agents_said(definitions: &[Definition]) -> String {
+fn agents_said(definitions: &[subagent::Definition]) -> String {
     let names: Vec<&str> = definitions
         .iter()
         .map(|definition| definition.name.as_str())

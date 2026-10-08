@@ -12,8 +12,6 @@ use desk_ui::components::sidebar::{Project, Session, SessionAt, SessionState};
 
 const RECENTS: &str = "recents.json";
 const MOST_RECENT: usize = 8;
-const FAILED: &str = "error";
-const LOOP_GUARD: &str = "loop_guard";
 
 #[derive(Clone)]
 pub struct Head {
@@ -149,10 +147,7 @@ pub fn sidebar(head: &Head, rows: &[SessionRow], opened: &Opened) -> Project {
         inactive: inactive(rows, opened.active)
             .map(|row| Session {
                 name: row.title().to_owned().into(),
-                state: match row.outcome.as_str() {
-                    FAILED | LOOP_GUARD => SessionState::Failed,
-                    _ => SessionState::Stopped,
-                },
+                state: SessionState::Stopped,
                 age: row.age(now).unwrap_or_default().into(),
             })
             .collect(),

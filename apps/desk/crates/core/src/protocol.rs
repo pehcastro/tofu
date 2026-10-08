@@ -16,8 +16,8 @@ pub enum RequestId {
     Text(String),
 }
 
-fn null_as_empty<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+fn null_as_empty<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(
     deserializer: D,
-) -> Result<Vec<T>, D::Error> {
-    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+) -> Result<T, D::Error> {
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }

@@ -350,7 +350,7 @@ impl Session {
                 });
             }
             N::Resync(e) => self.dropped = self.dropped.saturating_add(e.dropped),
-            N::ItemPersisted(_) => {}
+            N::ItemPersisted(_) | N::SessionListed(_) | N::SessionSettings(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }

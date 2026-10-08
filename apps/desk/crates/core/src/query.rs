@@ -1,47 +1,21 @@
 use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::Deserialize;
-use serde::de::DeserializeOwned;
+use crate::protocol::{
+    ContextBand, ContextOccupancy, CredentialReport, QuotaWindow, UsageReport, WindowReport,
+};
 
-use crate::protocol::{QuotaWindow, VerbResult};
+const SECONDS_PER_DAY: u64 = 86_400;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QueryError {
-    Unanswered {
-        method: &'static str,
-        reason: String,
-    },
-    WrongVerb {
-        asked: &'static str,
-        answered: String,
-    },
-    Refused {
-        verb: &'static str,
-        problems: Vec<String>,
-    },
-    Shape {
-        verb: &'static str,
-        reason: String,
-    },
+pub struct QueryError {
+    pub method: &'static str,
+    pub reason: String,
 }
 
 impl fmt::Display for QueryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unanswered { method, reason } => write!(f, "{method} got no answer: {reason}"),
-            Self::WrongVerb { asked, answered } => {
-                write!(f, "asked tofu {asked} and it answered {answered}")
-            }
-            Self::Refused { verb, problems } => {
-                write!(f, "tofu {verb} refused: {}", problems.join("; "))
-            }
-            Self::Shape { verb, reason } => {
-                write!(
-                    f,
-                    "tofu {verb} answered a shape the desk does not know: {reason}"
-                )
-            }
-        }
+        write!(f, "{} got no answer: {}", self.method, self.reason)
     }
 }
 
@@ -51,6 +25,15 @@ impl std::error::Error for QueryError {}
 pub struct Read<T> {
     pub value: T,
     pub at: String,
+}
+
+impl<T> Read<T> {
+    pub fn now(value: T) -> Self {
+        Read {
+            value,
+            at: stamp(SystemTime::now()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -111,214 +94,10 @@ impl<T> Answer<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-pub enum UsageState {
-    #[serde(rename = "serving")]
-    Serving,
-    #[serde(rename = "needs attention")]
-    NeedsAttention,
-    #[serde(rename = "none")]
-    Nothing,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Usage {
-    pub state: UsageState,
-    pub fullest_window: Option<String>,
-    pub providers: Vec<Provider>,
-    pub spend_limit: String,
-    #[serde(default)]
-    pub missing: Vec<Missing>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Provider {
-    pub provider: String,
-    pub plan: Option<String>,
-    pub state: String,
-    #[serde(default)]
-    pub windows: Vec<Window>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Window {
-    pub id: String,
-    pub used_fraction: f64,
-    pub used_reported: bool,
-    pub resets_at: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Missing {
-    pub label: String,
-    pub what: String,
-    pub command: String,
-}
-
 pub const SERVING: &str = "serving";
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Agents {
-    pub definitions: Vec<Definition>,
-    #[serde(default)]
-    pub broken: Vec<Broken>,
-    #[serde(default)]
-    pub notices: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Definition {
-    pub name: String,
-    pub description: String,
-    pub origin: String,
-    pub path: String,
-    pub runs: Runs,
-    pub model: Option<String>,
-    pub written_model: Option<String>,
-    pub assigned_in: Option<String>,
-    pub effort: Option<String>,
-    pub language: Option<String>,
-    pub domain: Option<String>,
-    #[serde(default)]
-    pub tools: Vec<String>,
-    #[serde(default)]
-    pub gate: Vec<String>,
-    #[serde(default)]
-    pub skills: Vec<String>,
-    pub instructions: String,
-    #[serde(default)]
-    pub refused: Vec<String>,
-    #[serde(default)]
-    pub ignored: Vec<String>,
-    #[serde(default)]
-    pub ignored_tools: Vec<String>,
-    #[serde(default)]
-    pub shadowed: Vec<Definition>,
-    pub from: Option<String>,
-    #[serde(default)]
-    pub notices: Vec<String>,
-    #[serde(default)]
-    pub references: Vec<Reference>,
-    #[serde(default)]
-    pub cut_references: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Runs {
-    Model,
-    Inherit,
-    Disabled,
-    Refused,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Reference {
-    pub name: String,
-    pub path: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Broken {
-    pub path: String,
-    pub reason: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Rules {
-    pub origin: String,
-    pub rules: Vec<RuleListing>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RuleListing {
-    pub id: String,
-    pub kind: RuleKind,
-    pub origin: String,
-    pub mode: Option<RuleMode>,
-    pub file: Option<String>,
-    pub switch: Option<String>,
-    #[serde(rename = "override")]
-    pub overridden: Option<Override>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RuleKind {
-    Structural,
-    Decision,
-    Human,
-    Measured,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RuleMode {
-    Shadow,
-    Enforced,
-    Off,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Override {
-    pub rule_id: String,
-    pub version: Option<i64>,
-    pub current: Option<i64>,
-    pub layer: String,
-    pub change: String,
-    pub text: Option<String>,
-    pub reason: Option<String>,
-    pub by: Option<String>,
-    pub at: Option<String>,
-    pub stale: bool,
-    pub file: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ContextReport {
-    pub session: Option<String>,
-    pub name: Option<String>,
-    pub task: Option<String>,
-    #[serde(default)]
-    pub steps: i64,
-    pub occupancy: Option<Occupancy>,
-    pub unmeasured: Option<String>,
-    pub fork: Option<ContextFork>,
-    #[serde(default)]
-    pub skipped: Vec<Skipped>,
-    #[serde(default)]
-    pub ceiling: i64,
-    #[serde(default)]
-    pub bytes_per_thousand_tokens: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Occupancy {
-    pub step: i64,
-    pub identity: Band,
-    pub facts: Band,
-    pub working_set: Band,
-    pub recent: Band,
-    pub total: i64,
-    pub mark: i64,
-    pub caps_recorded: bool,
-}
-
-impl Occupancy {
-    pub fn bands(&self) -> [(&'static str, &Band); 4] {
+impl ContextOccupancy {
+    pub fn bands(&self) -> [(&'static str, &ContextBand); 4] {
         [
             ("identity", &self.identity),
             ("facts", &self.facts),
@@ -328,87 +107,8 @@ impl Occupancy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Band {
-    pub tokens: i64,
-    pub cap: i64,
-    pub fill_percent: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ContextFork {
-    pub into: String,
-    pub kind: Option<String>,
-    pub counts: Option<ForkCounts>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ForkCounts {
-    pub tokens_before: i64,
-    pub tokens_after: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Skipped {
-    pub session: String,
-    pub reason: String,
-}
-
-pub fn context(result: VerbResult) -> Result<Read<ContextReport>, QueryError> {
-    enveloped(result, "context")
-}
-
-pub fn usage(result: VerbResult) -> Result<Read<Usage>, QueryError> {
-    enveloped(result, "usage")
-}
-
-pub fn agents(result: VerbResult) -> Result<Read<Agents>, QueryError> {
-    enveloped(result, "agents")
-}
-
-pub fn rules(result: VerbResult) -> Result<Read<Rules>, QueryError> {
-    enveloped(result, "rules list")
-}
-
-fn enveloped<T: DeserializeOwned>(
-    result: VerbResult,
-    verb: &'static str,
-) -> Result<Read<T>, QueryError> {
-    if result.verb != verb {
-        return Err(QueryError::WrongVerb {
-            asked: verb,
-            answered: result.verb,
-        });
-    }
-    if !result.ok {
-        return Err(QueryError::Refused {
-            verb,
-            problems: result
-                .problems
-                .into_iter()
-                .map(|problem| match problem.hint {
-                    Some(hint) => format!("{} ({hint})", problem.what),
-                    None => problem.what,
-                })
-                .collect(),
-        });
-    }
-    let value = serde_json::from_value(result.data).map_err(|error| QueryError::Shape {
-        verb,
-        reason: error.to_string(),
-    })?;
-    Ok(Read {
-        value,
-        at: result.at,
-    })
-}
-
-impl Usage {
-    pub fn live(&self, quota: &[QuotaWindow]) -> Vec<Provider> {
+impl UsageReport {
+    pub fn live(&self, quota: &[QuotaWindow]) -> Vec<CredentialReport> {
         let mut accounts: Vec<(&str, &str)> = Vec::new();
         for window in quota {
             let provider = window.window.split(' ').next().unwrap_or_default();
@@ -435,7 +135,7 @@ impl Usage {
                     .iter()
                     .filter(|live| live.account == account)
                     .filter_map(|live| {
-                        Some(Window {
+                        Some(WindowReport {
                             id: live.window.strip_prefix(&prefix)?.to_owned(),
                             used_fraction: live.percent / 100.0,
                             used_reported: live.reported,
@@ -447,4 +147,30 @@ impl Usage {
             })
             .collect()
     }
+}
+
+fn stamp(time: SystemTime) -> String {
+    let seconds = time
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs());
+    let clock = seconds % SECONDS_PER_DAY;
+    let shifted = seconds / SECONDS_PER_DAY + 719_468;
+    let era = shifted / 146_097;
+    let of_era = shifted % 146_097;
+    let year_of_era = (of_era - of_era / 1460 + of_era / 36_524 - of_era / 146_096) / 365;
+    let of_year = of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * of_year + 2) / 153;
+    let day = of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
+    let year = year_of_era + era * 400 + u64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        clock / 3600,
+        clock / 60 % 60,
+        clock % 60
+    )
 }

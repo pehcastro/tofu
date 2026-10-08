@@ -2,8 +2,10 @@ use super::frame;
 
 use crate::modules::chat::{Chat, windows_said};
 use desk_core::model::Store;
-use desk_core::protocol::QuotaWindow;
-use desk_core::query::{Answer, Provider, SERVING, Usage, UsageState, Window as Quota};
+use desk_core::protocol::{
+    CredentialReport, QuotaWindow, UsageReport, UsageReportState, WindowReport,
+};
+use desk_core::query::{Answer, SERVING};
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, inner_card};
@@ -58,7 +60,7 @@ struct Source {
 
 #[derive(Default, PartialEq)]
 struct Seen {
-    usage: Answer<Usage>,
+    usage: Answer<UsageReport>,
     quota: Vec<QuotaWindow>,
 }
 
@@ -114,7 +116,7 @@ impl Limits {
         cx.notify();
     }
 
-    fn providers(&self) -> Vec<Provider> {
+    fn providers(&self) -> Vec<CredentialReport> {
         match &self.seen.usage.read {
             None => Vec::new(),
             Some(read) if self.seen.usage.stale => read.value.live(&self.seen.quota),
@@ -137,7 +139,7 @@ impl Limits {
     fn meter(
         &mut self,
         key: (usize, String),
-        quota: &Quota,
+        quota: &WindowReport,
         read_at: &str,
         cx: &mut Context<Self>,
     ) -> Entity<DotMeter> {
@@ -167,7 +169,13 @@ impl Limits {
         view
     }
 
-    fn header(&self, read_at: &str, usage: &Usage, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    fn header(
+        &self,
+        read_at: &str,
+        usage: &UsageReport,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let read = if self.seen.usage.stale {
             format!(
                 "read {}, percentages since then from quota.updated",
@@ -176,10 +184,11 @@ impl Limits {
         } else {
             format!("read {}", clock(read_at, read_at))
         };
-        let state = match usage.state {
-            UsageState::Serving => "serving",
-            UsageState::NeedsAttention => "needs attention",
-            UsageState::Nothing => "nothing signed in",
+        let state = match &usage.state {
+            UsageReportState::Serving => "serving",
+            UsageReportState::NeedsAttention => "needs attention",
+            UsageReportState::None => "nothing signed in",
+            UsageReportState::Unknown(raw) => raw,
         };
         div()
             .flex()
@@ -214,7 +223,7 @@ impl Limits {
     fn account(
         &mut self,
         at: usize,
-        provider: &Provider,
+        provider: &CredentialReport,
         read_at: &str,
         theme: &Theme,
         cx: &mut Context<Self>,

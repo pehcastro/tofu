@@ -9,13 +9,17 @@ type Fallible<T> = Result<T, Box<dyn Error>>;
 type Enums = BTreeMap<(String, Vec<String>), String>;
 
 const SCHEMA: &str = "schema/tofu.host.json";
-const KEYWORDS: [&str; 12] = [
-    "as", "fn", "for", "if", "in", "match", "mod", "move", "ref", "self", "type", "use",
+const KEYWORDS: [&str; 49] = [
+    "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "do", "dyn",
+    "else", "enum", "extern", "false", "final", "fn", "for", "gen", "if", "impl", "in", "let",
+    "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref", "return",
+    "self", "static", "struct", "trait", "true", "try", "type", "typeof", "unsafe", "unsized",
+    "use", "virtual", "where", "while", "yield",
 ];
 
 struct FieldType {
     rust: String,
-    array: bool,
+    emptied_by: Option<&'static str>,
     defaultable: bool,
 }
 
@@ -45,8 +49,19 @@ fn generate(schema: &Value) -> Fallible<String> {
     let mut out = String::new();
     let id = schema["$id"].as_str().ok_or("the schema has no $id")?;
     writeln!(out, "pub const PROTOCOL: &str = {id:?};")?;
+    let mut packages: BTreeMap<Option<&str>, String> = BTreeMap::new();
     for (name, def) in &structs {
-        write_struct(&mut out, name, def, &enums)?;
+        let (package, local) = match name.split_once('.') {
+            Some((package, local)) => (Some(package), local),
+            None => (None, name.as_str()),
+        };
+        write_struct(packages.entry(package).or_default(), local, def, &enums)?;
+    }
+    for (package, code) in &packages {
+        match package {
+            Some(package) => writeln!(out, "pub mod {package} {{\nuse super::*;\n{code}}}")?,
+            None => out.push_str(code),
+        }
     }
     for ((_, values), name) in &enums {
         write_enum(&mut out, name, values)?;
@@ -85,15 +100,16 @@ fn properties(def: &Map<String, Value>) -> Fallible<&Map<String, Value>> {
         .ok_or("a definition has no properties")?)
 }
 
-fn reference(value: &Value) -> Fallible<&str> {
+fn reference(value: &Value) -> Fallible<String> {
     Ok(value["$ref"]
         .as_str()
         .and_then(|path| path.strip_prefix("#/$defs/"))
-        .ok_or(format!("{value} is not a reference to a definition"))?)
+        .ok_or(format!("{value} is not a reference to a definition"))?
+        .replacen('.', "::", 1))
 }
 
 fn enumerations(structs: &[(&String, &Map<String, Value>)]) -> Fallible<Enums> {
-    let mut owners: BTreeMap<(String, Vec<String>), Vec<&str>> = BTreeMap::new();
+    let mut owners: BTreeMap<(String, Vec<String>), Vec<String>> = BTreeMap::new();
     for (name, def) in structs {
         for (field, property) in properties(def)? {
             if let Some(values) = property.get("enum") {
@@ -101,7 +117,7 @@ fn enumerations(structs: &[(&String, &Map<String, Value>)]) -> Fallible<Enums> {
                 owners
                     .entry((field.clone(), values))
                     .or_default()
-                    .push(name);
+                    .push(pascal(name));
             }
         }
     }
@@ -116,7 +132,7 @@ fn enumerations(structs: &[(&String, &Map<String, Value>)]) -> Fallible<Enums> {
     Ok(enums)
 }
 
-fn common_words(structs: &[&str]) -> String {
+fn common_words(structs: &[String]) -> String {
     let split: Vec<Vec<String>> = structs.iter().map(|name| words(name)).collect();
     let first = split.first().cloned().unwrap_or_default();
     first
@@ -152,19 +168,19 @@ fn write_struct(
         let shape = field_type(field, property, enums)?;
         let needed = required.contains(field);
         let rename = format!("rename = {field:?}");
-        let (attributes, rust) = match (needed, shape.array) {
-            (true, true) => (
+        let (attributes, rust) = match (needed, shape.emptied_by) {
+            (true, Some(_)) => (
                 format!("{rename}, deserialize_with = \"null_as_empty\""),
                 shape.rust,
             ),
-            (true, false) => (rename, shape.rust),
-            (false, true) => (
+            (true, None) => (rename, shape.rust),
+            (false, Some(is_empty)) => (
                 format!(
-                    "{rename}, default, deserialize_with = \"null_as_empty\", skip_serializing_if = \"Vec::is_empty\""
+                    "{rename}, default, deserialize_with = \"null_as_empty\", skip_serializing_if = {is_empty:?}"
                 ),
                 shape.rust,
             ),
-            (false, false) => (
+            (false, None) => (
                 format!("{rename}, default, skip_serializing_if = \"Option::is_none\""),
                 format!("Option<{}>", shape.rust),
             ),
@@ -188,12 +204,12 @@ fn write_struct(
 fn field_type(field: &str, property: &Value, enums: &Enums) -> Fallible<FieldType> {
     let scalar = |rust: &str| FieldType {
         rust: rust.to_owned(),
-        array: false,
+        emptied_by: None,
         defaultable: true,
     };
     let named = |rust: String| FieldType {
         rust,
-        array: false,
+        emptied_by: None,
         defaultable: false,
     };
     if let Some(values) = property.get("enum") {
@@ -209,7 +225,7 @@ fn field_type(field: &str, property: &Value, enums: &Enums) -> Fallible<FieldTyp
         ));
     }
     if property.get("$ref").is_some() {
-        return Ok(named(reference(property)?.to_owned()));
+        return Ok(named(reference(property)?));
     }
     let kinds: Vec<&str> = match property.get("type") {
         None if property.as_object().is_some_and(Map::is_empty) => {
@@ -232,7 +248,15 @@ fn field_type(field: &str, property: &Value, enums: &Enums) -> Fallible<FieldTyp
             let item = field_type(field, &property["items"], enums)?;
             Ok(FieldType {
                 rust: format!("Vec<{}>", item.rust),
-                array: true,
+                emptied_by: Some("Vec::is_empty"),
+                defaultable: true,
+            })
+        }
+        ["object"] | ["object", "null"] => {
+            let value = field_type(field, &property["additionalProperties"], enums)?;
+            Ok(FieldType {
+                rust: format!("std::collections::BTreeMap<String, {}>", value.rust),
+                emptied_by: Some("std::collections::BTreeMap::is_empty"),
                 defaultable: true,
             })
         }
