@@ -285,6 +285,83 @@ pub struct Override {
     pub file: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContextReport {
+    pub session: Option<String>,
+    pub name: Option<String>,
+    pub task: Option<String>,
+    #[serde(default)]
+    pub steps: i64,
+    pub occupancy: Option<Occupancy>,
+    pub unmeasured: Option<String>,
+    pub fork: Option<ContextFork>,
+    #[serde(default)]
+    pub skipped: Vec<Skipped>,
+    #[serde(default)]
+    pub ceiling: i64,
+    #[serde(default)]
+    pub bytes_per_thousand_tokens: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Occupancy {
+    pub step: i64,
+    pub identity: Band,
+    pub facts: Band,
+    pub working_set: Band,
+    pub recent: Band,
+    pub total: i64,
+    pub mark: i64,
+    pub caps_recorded: bool,
+}
+
+impl Occupancy {
+    pub fn bands(&self) -> [(&'static str, &Band); 4] {
+        [
+            ("identity", &self.identity),
+            ("facts", &self.facts),
+            ("working_set", &self.working_set),
+            ("recent", &self.recent),
+        ]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Band {
+    pub tokens: i64,
+    pub cap: i64,
+    pub fill_percent: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContextFork {
+    pub into: String,
+    pub kind: Option<String>,
+    pub counts: Option<ForkCounts>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ForkCounts {
+    pub tokens_before: i64,
+    pub tokens_after: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Skipped {
+    pub session: String,
+    pub reason: String,
+}
+
+pub fn context(result: VerbResult) -> Result<Read<ContextReport>, QueryError> {
+    enveloped(result, "context")
+}
+
 pub fn usage(result: VerbResult) -> Result<Read<Usage>, QueryError> {
     enveloped(result, "usage")
 }

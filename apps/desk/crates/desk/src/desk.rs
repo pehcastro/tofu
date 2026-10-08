@@ -5,6 +5,8 @@ use crate::modules::chat::{Chat, Listed, Touched};
 use crate::project::{self, Head};
 #[cfg(all(feature = "screen-work", feature = "screen-classifier"))]
 use crate::screens::classifier::Classifier;
+#[cfg(all(feature = "screen-work", feature = "screen-context"))]
+use crate::screens::context::ContextScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-library"))]
 use crate::screens::library::Library;
 #[cfg(all(feature = "screen-work", feature = "screen-limits"))]
@@ -76,7 +78,7 @@ const OPEN_FOLDER_ID: &str = "project.open";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
-const LIVE_SCREENS: [&str; 4] = ["theme", "limits", "classifier", "library"];
+const LIVE_SCREENS: [&str; 5] = ["theme", "limits", "classifier", "library", "context"];
 #[cfg(feature = "screen-work")]
 const CRON_PROMPT_CHARS: usize = 32;
 
@@ -329,7 +331,8 @@ impl Desk {
             any(
                 feature = "screen-limits",
                 feature = "screen-classifier",
-                feature = "screen-library"
+                feature = "screen-library",
+                feature = "screen-context"
             )
         ))]
         self.feed_screens(cx);
@@ -664,7 +667,8 @@ impl Desk {
         #[cfg(any(
             feature = "screen-limits",
             feature = "screen-classifier",
-            feature = "screen-library"
+            feature = "screen-library",
+            feature = "screen-context"
         ))]
         self.feed_screens(cx);
         cx.notify();
@@ -673,7 +677,8 @@ impl Desk {
     #[cfg(any(
         feature = "screen-limits",
         feature = "screen-classifier",
-        feature = "screen-library"
+        feature = "screen-library",
+        feature = "screen-context"
     ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
@@ -696,8 +701,12 @@ impl Desk {
                 classifier.update(cx, |classifier, cx| classifier.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-library")]
-            if let Ok(library) = view.downcast::<Library>() {
+            if let Ok(library) = view.clone().downcast::<Library>() {
                 library.update(cx, |library, cx| library.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-context")]
+            if let Ok(context) = view.downcast::<ContextScreen>() {
+                context.update(cx, |context, cx| context.read_from(&chat, cx));
             }
         }
     }

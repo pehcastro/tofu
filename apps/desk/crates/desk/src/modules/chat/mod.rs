@@ -15,7 +15,7 @@ use desk_core::protocol::{
     SessionOpenParamsAsking, SessionRenameParams, ShellParams, TurnCompleted, TurnParams,
     TurnSendParams, TurnSteerParams, VerbResult, request,
 };
-use desk_core::query::{self, Answer, Definition, Provider, QueryError, Read};
+use desk_core::query::{self, Answer, ContextReport, Definition, Provider, QueryError, Read};
 use desk_core::sessions::{SessionRow, session_rows};
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
@@ -514,6 +514,9 @@ impl Chat {
             Event::Notification(Notification::TurnCompleted(completed)) => {
                 self.said(completed, cx);
                 cx.emit(Touched);
+                if self.open_id() == Some(completed.session.as_str()) {
+                    self.reread_context(cx);
+                }
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
@@ -726,10 +729,26 @@ impl Chat {
         self.ask_due(cx);
     }
 
+    pub fn want_context(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.context.want());
+        self.ask_due(cx);
+    }
+
+    pub fn reread_context(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| store.context.again());
+        self.ask_due(cx);
+    }
+
     fn ask_due(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.link, Link::Ready(_)) {
             return;
         }
+        self.ask::<request::QueryContext, _>(
+            |store| &mut store.context,
+            query::context,
+            context_said,
+            cx,
+        );
         self.ask::<request::QueryUsage, _>(
             |store| &mut store.usage,
             query::usage,
@@ -942,6 +961,31 @@ pub fn windows_said(providers: &[Provider]) -> String {
         })
         .collect();
     said.join("; ")
+}
+
+fn context_said(report: &ContextReport) -> String {
+    let bands = report.occupancy.as_ref().map_or_else(
+        || "no occupancy".to_owned(),
+        |occupancy| {
+            let bands: Vec<String> = occupancy
+                .bands()
+                .iter()
+                .map(|(name, band)| format!("{name} {}/{}", band.tokens, band.cap))
+                .collect();
+            format!(
+                "total {} mark {} [{}]",
+                occupancy.total,
+                occupancy.mark,
+                bands.join(", ")
+            )
+        },
+    );
+    format!(
+        "session {} {}: {bands} ceiling {}",
+        report.name.as_deref().unwrap_or("unnamed"),
+        report.session.as_deref().unwrap_or("none"),
+        report.ceiling
+    )
 }
 
 fn agents_said(definitions: &[Definition]) -> String {

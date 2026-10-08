@@ -10,9 +10,8 @@ use desk_ui::components::size::{HEADER, HEADER_PAD_LEFT, HEADER_PAD_RIGHT, SHELL
 use desk_ui::metrics::TOAST_BOTTOM;
 use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
-    AnyElement, App, Bounds, Canvas, ClickEvent, Context, Div, FontWeight, HighlightStyle,
-    PathBuilder, Pixels, Rgba, SharedString, StyledText, canvas, div, point, prelude::*, px,
-    relative, rgb_to_hsla,
+    AnyElement, App, ClickEvent, Context, Div, FontWeight, HighlightStyle, Rgba, SharedString,
+    StyledText, div, prelude::*, px, relative, rgb_to_hsla,
 };
 
 const FONTS: [&[u8]; 6] = [
@@ -104,59 +103,6 @@ pub fn rich(parts: &[(&str, Mark)], theme: &Theme) -> StyledText {
     StyledText::new(text)
         .with_highlights(looks)
         .with_font_family_overrides(monos)
-}
-
-pub struct Ink {
-    pub fill: Option<Rgba>,
-    pub stroke: Option<(Rgba, f32)>,
-    pub dash: Option<[f32; 2]>,
-}
-
-pub struct Shape {
-    pub points: Vec<(f32, f32)>,
-    pub closed: bool,
-    pub ink: Ink,
-}
-
-pub fn shapes(view: (f32, f32), shapes: Vec<Shape>) -> Canvas<()> {
-    canvas(
-        |_, _, _| (),
-        move |bounds: Bounds<Pixels>, (), window, _| {
-            let sx = f32::from(bounds.size.width) / view.0;
-            let sy = f32::from(bounds.size.height) / view.1;
-            let at = |(x, y): (f32, f32)| bounds.origin + point(px(x * sx), px(y * sy));
-            for shape in &shapes {
-                let trace = |mut path: PathBuilder| {
-                    for (index, spot) in shape.points.iter().enumerate() {
-                        if index == 0 {
-                            path.move_to(at(*spot));
-                        } else {
-                            path.line_to(at(*spot));
-                        }
-                    }
-                    if shape.closed {
-                        path.close();
-                    }
-                    path.build()
-                };
-                if let Some(fill) = shape.ink.fill
-                    && let Ok(path) = trace(PathBuilder::fill())
-                {
-                    window.paint_path(path, fill);
-                }
-                if let Some((color, width)) = shape.ink.stroke {
-                    let builder = PathBuilder::stroke(px(width));
-                    let builder = match shape.ink.dash {
-                        Some([on, off]) => builder.dash_array(&[px(on), px(off)]),
-                        None => builder,
-                    };
-                    if let Ok(path) = trace(builder) {
-                        window.paint_path(path, color);
-                    }
-                }
-            }
-        },
-    )
 }
 
 pub fn load_fonts(cx: &App) -> Result<(), String> {
