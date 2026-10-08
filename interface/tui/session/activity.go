@@ -155,8 +155,8 @@ func (m *Model) activityLine() string {
 
 func (m *Model) turnLines() []string {
 	var lines []string
-	if line := m.requestLine(); line != "" {
-		lines = append(lines, line)
+	if line := m.requestLine(); line != "" || m.Notice != "" {
+		lines = append(lines, m.withNotice(cmp.Or(line, margin)))
 	}
 	if m.AskedToStop() {
 		lines = append(lines, margin+look.Style(look.Amber).Render("this will stop "+subAgentCount(m.stopAsked)+stopAskTail))
@@ -165,6 +165,15 @@ func (m *Model) turnLines() []string {
 		lines = append(lines, m.activityLine())
 	}
 	return lines
+}
+
+func (m *Model) withNotice(line string) string {
+	room := m.width - widget.Cells(line) - widget.Cells(metaGap) - composerPadX
+	if m.Notice == "" || room < 1 {
+		return line
+	}
+	notice := widget.Fit(m.Notice, room)
+	return line + strings.Repeat(" ", m.width-composerPadX-widget.Cells(line)-widget.Cells(notice)) + notice
 }
 
 func (m *Model) settle() {

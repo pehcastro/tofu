@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/edits"
 	"tofu/interface/tui/feed"
@@ -15,6 +17,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
 	"tofu/interface/tui/shells"
+	"tofu/internal/konst"
 	isettings "tofu/internal/settings"
 	isubagent "tofu/internal/subagent"
 	"tofu/internal/widget"
@@ -32,6 +35,13 @@ const (
 	setupGap       = "   "
 	asciiEnv       = "TOFU_ASCII"
 	dumbTerm       = "dumb"
+)
+
+const (
+	upToDate          = "up to date · "
+	welcomeNoticeRows = 2
+	shimmerCells      = 4
+	shimmerStep       = 2
 )
 
 func tabNames() []string { return []string{"chat", "sub-agents", "file edits", "shells"} }
@@ -162,8 +172,9 @@ func (a *App) body() string {
 		a.view.ChatShowsTools = a.flag(isettings.ChatShowsTools)
 		a.view.FoldHidesShell = a.flag(isettings.FoldHidesShell)
 		a.view.Welcome = nil
+		a.view.Notice, _ = a.shimmer()
 		if a.intro.shown {
-			a.view.Welcome = a.welcome
+			a.view.Welcome, a.view.Notice = a.welcome, ""
 		}
 		return a.view.View()
 	case screenAgents:
@@ -179,14 +190,40 @@ func (a *App) body() string {
 }
 
 func (a *App) welcome(width, rows int) []string {
-	art := a.intro.identity.Fit(width, rows)
-	if a.top() != nil {
+	noticeRows := 0
+	if a.updateChecked {
+		noticeRows = welcomeNoticeRows
+	}
+	art := a.intro.identity.Fit(width, rows-noticeRows)
+	last := len(art) - 1
+	for last > 0 && strings.TrimSpace(ansi.Strip(art[last])) == "" {
+		last--
+	}
+	if a.top() == nil {
+		for index, row := range art {
+			art[index] = look.Unthemed(row)
+		}
+	}
+	if noticeRows == 0 {
 		return art
 	}
-	for index, row := range art {
-		art[index] = look.Unthemed(row)
-	}
+	art = append(art, slices.Repeat([]string{strings.Repeat(" ", width)}, noticeRows)...)
+	said := cmp.Or(string(a.updateSaid), upToDate+konst.Version)
+	art[last+noticeRows] = lipgloss.PlaceHorizontal(width, lipgloss.Center, look.Muted(widget.Fit(said, width)))
 	return art
+}
+
+func (a *App) shimmer() (string, bool) {
+	notice := []rune(string(a.updateSaid))
+	if len(notice) == 0 {
+		return "", false
+	}
+	glint := (a.pulse - a.updateAt) * shimmerStep
+	if glint >= len(notice)+shimmerCells || a.text(isettings.Animations) == animationsOff {
+		return look.Muted(string(notice)), false
+	}
+	from, to := max(glint-shimmerCells, 0), min(glint, len(notice))
+	return look.Muted(string(notice[:from])) + look.Style(look.Text).Render(string(notice[from:to])) + look.Muted(string(notice[to:])), true
 }
 
 func (a *App) preferEdits() {

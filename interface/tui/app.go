@@ -262,7 +262,9 @@ type App struct {
 	minted         int
 	happenedAtTurn int
 	keptAnswer     string
-	updateSaid     string
+	updateSaid     updateMsg
+	updateChecked  bool
+	updateAt       int
 	selection      pointer.Selection
 	frozen         string
 	drag           pointer.Drag
@@ -604,10 +606,10 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		}
 		return nil
 	case updateMsg:
-		if msg != "" && string(msg) != a.updateSaid {
-			a.updateSaid = string(msg)
-			a.view.Append(session.Entry{Kind: session.Note, Body: a.updateSaid})
+		if msg != a.updateSaid {
+			a.updateAt = a.pulse
 		}
+		a.updateSaid, a.updateChecked = msg, true
 		return a.watchUpdates(konst.UpdateWatchSeconds * time.Second)
 	}
 	if cmd, open := a.toFiles(msg); open {
@@ -622,7 +624,8 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 }
 
 func (a *App) startPulse() tea.Cmd {
-	moving := a.busy && !a.view.Awaiting() || a.status.Note != ""
+	_, shimmering := a.shimmer()
+	moving := a.busy && !a.view.Awaiting() || a.status.Note != "" || shimmering
 	if a.pulsing || !moving {
 		return nil
 	}
