@@ -54,6 +54,7 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<FileEdits> {
     cx.new(|cx: &mut Context<FileEdits>| FileEdits {
         _watch: cx.observe(&store, |module, _, cx| {
             module.rebuild(cx);
+            eprintln!("desk: tile file edits rebuilt {} files", module.files.len());
             cx.notify();
         }),
         store,

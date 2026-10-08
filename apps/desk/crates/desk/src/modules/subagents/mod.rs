@@ -67,6 +67,10 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
         Subagents {
             _watch: cx.observe(&store, |module, _, cx| {
                 module.rebuild(cx);
+                eprintln!(
+                    "desk: tile sub-agents rebuilt {} rows",
+                    module.board.lines.len()
+                );
                 cx.notify();
             }),
             store,

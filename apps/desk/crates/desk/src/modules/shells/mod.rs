@@ -57,6 +57,7 @@ pub fn mount(store: Entity<Store>, kill: Kill, cx: &mut App) -> Entity<Shells> {
     cx.new(|cx: &mut Context<Shells>| Shells {
         _watch: cx.observe(&store, |module, _, cx| {
             module.rebuild(cx);
+            eprintln!("desk: tile shells rebuilt {} shells", module.shells.len());
             cx.notify();
         }),
         store,
