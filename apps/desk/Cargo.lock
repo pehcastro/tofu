@@ -1465,6 +1465,7 @@ dependencies = [
 name = "desk_core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "flume",
  "ropey",
  "serde",

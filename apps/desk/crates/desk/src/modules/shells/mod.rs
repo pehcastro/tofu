@@ -121,7 +121,7 @@ impl Shells {
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let since = self.opened_at;
-        let session = self.store.read(cx).sessions.values().next();
+        let session = self.store.read(cx).open_session();
         self.shells = session.map_or_else(Vec::new, |session| {
             session
                 .shells

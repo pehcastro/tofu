@@ -93,7 +93,7 @@ fn mention(agent: &Agent, _: &mut Window, _: &mut App) {
 }
 
 fn session(store: &Store) -> Option<&Session> {
-    store.sessions.values().next()
+    store.open_session()
 }
 
 impl Subagents {

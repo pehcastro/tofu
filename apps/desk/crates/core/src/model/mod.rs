@@ -42,6 +42,7 @@ impl std::error::Error for ModelError {}
 pub struct Store {
     pub opened: SystemTime,
     pub sessions: BTreeMap<String, Session>,
+    pub open: Option<String>,
     pub usage: Answer<UsageReport>,
     pub agents: Answer<subagent::Found>,
     pub rules: Answer<RuleListReport>,
@@ -55,6 +56,7 @@ impl Default for Store {
         Self {
             opened: SystemTime::now(),
             sessions: BTreeMap::new(),
+            open: None,
             usage: Answer::default(),
             agents: Answer::default(),
             rules: Answer::default(),
@@ -66,6 +68,10 @@ impl Default for Store {
 }
 
 impl Store {
+    pub fn open_session(&self) -> Option<&Session> {
+        self.sessions.get(self.open.as_ref()?)
+    }
+
     pub fn apply_batch(&mut self, batch: &[Event]) -> Result<(), ModelError> {
         batch.iter().try_for_each(|event| self.apply(event))
     }

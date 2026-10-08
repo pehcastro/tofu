@@ -55,6 +55,7 @@ pub fn feed(store: &Entity<Store>, events: &[Event], cx: &mut App) {
                 eprintln!("desk: the store refused an event from the cassette: {error}");
             }
         }
+        store.open = store.sessions.keys().next().cloned();
         cx.notify();
     });
 }

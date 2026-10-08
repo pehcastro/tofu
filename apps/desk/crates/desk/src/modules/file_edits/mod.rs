@@ -153,9 +153,7 @@ impl FileEdits {
         self.files = self
             .store
             .read(cx)
-            .sessions
-            .values()
-            .next()
+            .open_session()
             .map_or_else(Vec::new, files);
     }
 
@@ -164,9 +162,7 @@ impl FileEdits {
         let stored: usize = self
             .store
             .read(cx)
-            .sessions
-            .values()
-            .next()
+            .open_session()
             .map_or(0, |s| s.files.values().map(Vec::len).sum());
         let shown: usize = self.files.iter().map(|file| file.edits.len()).sum();
         format!("{} files, {stored} edits, {shown} shown", self.files.len())

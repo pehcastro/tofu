@@ -273,6 +273,18 @@ impl Chat {
         &self.rows
     }
 
+    fn set_opening(&mut self, opening: Opening, cx: &mut Context<Self>) {
+        let open = match &opening {
+            Opening::Open(id) => Some(id.clone()),
+            Opening::Closed | Opening::Pending => None,
+        };
+        self.store.update(cx, |store, cx| {
+            store.open = open;
+            cx.notify();
+        });
+        self.opening = opening;
+    }
+
     pub fn open_id(&self) -> Option<&str> {
         match &self.opening {
             Opening::Open(id) => Some(id),
@@ -304,7 +316,7 @@ impl Chat {
         }
         self.restart(cx);
         self.problem = None;
-        self.opening = Opening::Pending;
+        self.set_opening(Opening::Pending, cx);
         let params = SessionOpenParams {
             asking: Some(self.asking.clone()),
             session,
@@ -313,7 +325,7 @@ impl Chat {
         self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
             eprintln!("desk: session {} opened", opened.session);
             chat.ask_cron(opened.session.clone(), cx);
-            chat.opening = Opening::Open(opened.session);
+            chat.set_opening(Opening::Open(opened.session), cx);
             chat.refresh(cx);
             chat.relist(cx);
             chat.reread_context(cx);
@@ -432,9 +444,9 @@ impl Chat {
         }
         self.store.update(cx, |_, cx| cx.notify());
         if let (Link::Recorded(_) | Link::Fed, Opening::Closed) = (&self.link, &self.opening)
-            && let Some(id) = self.store.read(cx).sessions.keys().next()
+            && let Some(id) = self.store.read(cx).sessions.keys().next().cloned()
         {
-            self.opening = Opening::Open(id.clone());
+            self.set_opening(Opening::Open(id), cx);
         }
         self.refresh(cx);
         self.ask_due(cx);
@@ -447,7 +459,7 @@ impl Chat {
         });
         self.orders.clear();
         self.slots.clear();
-        self.opening = Opening::Closed;
+        self.set_opening(Opening::Closed, cx);
         self.items = Rc::default();
         self.transcript.reset(0);
     }
@@ -507,6 +519,7 @@ impl Chat {
                 (&started.session, Entry::Tool(started.item.clone()))
             }
             Event::Notification(Notification::AgentStarted(started)) => {
+                eprintln!("desk: tofu sent AgentStarted({started:?})");
                 (&started.session, Entry::Agent(started.instance.clone()))
             }
             Event::Notification(Notification::TurnCompleted(completed)) => {
@@ -538,7 +551,9 @@ impl Chat {
                 notification @ (Notification::QuotaUpdated(_)
                 | Notification::ContextUpdated(_)
                 | Notification::Decision(_)
-                | Notification::CronUpdated(_)),
+                | Notification::CronUpdated(_)
+                | Notification::AgentEnded(_)
+                | Notification::UsageUpdated(_)),
             ) => return eprintln!("desk: tofu sent {notification:?}"),
             Event::Request { request, .. } => {
                 eprintln!("desk: tofu asks {request:?}");
@@ -859,7 +874,7 @@ impl Chat {
                 self.fail("the session is still opening".to_owned(), cx);
             }
             (Opening::Closed, None) => {
-                self.opening = Opening::Pending;
+                self.set_opening(Opening::Pending, cx);
                 let params = SessionOpenParams {
                     asking: Some(self.asking.clone()),
                     ..SessionOpenParams::default()
@@ -871,7 +886,7 @@ impl Chat {
                         String::from(chat.asking.clone())
                     );
                     chat.ask_cron(opened.session.clone(), cx);
-                    chat.opening = Opening::Open(opened.session);
+                    chat.set_opening(Opening::Open(opened.session), cx);
                     chat.relist(cx);
                     chat.send(&text, cx);
                 });

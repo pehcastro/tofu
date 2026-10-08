@@ -122,6 +122,13 @@ fn speaker(origin: &Origin) -> Result<Role, ModelError> {
     }
 }
 
+fn stamp<Zone: chrono::TimeZone>(at: &chrono::DateTime<Zone>) -> String
+where
+    Zone::Offset: std::fmt::Display,
+{
+    at.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true)
+}
+
 fn orphan(event: &'static str, id: &str) -> ModelError {
     ModelError::Orphan {
         event,
@@ -240,6 +247,14 @@ impl Session {
                     .ok_or_else(|| orphan("tool.completed", &e.item))?;
                 tool.output = Some(e.output.clone());
                 tool.failed = e.failed;
+                tool.ended_at = tool
+                    .started_at
+                    .as_deref()
+                    .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                    .and_then(|at| {
+                        at.checked_add_signed(chrono::TimeDelta::milliseconds(e.duration_ms))
+                    })
+                    .map(|at| stamp(&at));
             }
             N::AgentStarted(e) => {
                 self.agents.insert(
@@ -287,6 +302,7 @@ impl Session {
                     .ok_or_else(|| orphan("agent.ended", &e.instance))?;
                 agent.state = known(&e.state)?;
                 agent.report = Some(e.report.clone());
+                agent.ended_at = Some(stamp(&chrono::Local::now()));
             }
             N::FileEdit(e) => {
                 if let FileEditOp::Unknown(value) = &e.op {
