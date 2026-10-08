@@ -69,6 +69,7 @@ pub struct Notice {
     pub code: Option<SharedString>,
     pub detail: SharedString,
     pub needs_you: bool,
+    pub fresh: bool,
 }
 
 #[derive(Clone)]
@@ -235,15 +236,21 @@ fn notices(title: &Title, rows: &PopRow, theme: &Theme) -> Vec<AnyElement> {
         ];
     }
     let mut out = Vec::new();
-    for (needs_you, name, top) in [
-        (true, "Needs you", POP_CAPTION_TOP),
-        (false, "Earlier", POP_CAPTION_GROUP_TOP),
+    let group_of = |notice: &Notice| match (notice.needs_you, notice.fresh) {
+        (true, _) => "Needs you",
+        (false, true) => "New",
+        (false, false) => "Earlier",
+    };
+    for (name, top) in [
+        ("Needs you", POP_CAPTION_TOP),
+        ("New", POP_CAPTION_GROUP_TOP),
+        ("Earlier", POP_CAPTION_GROUP_TOP),
     ] {
         let group: Vec<AnyElement> = title
             .notices
             .iter()
             .enumerate()
-            .filter(|(_, notice)| notice.needs_you == needs_you)
+            .filter(|(_, notice)| group_of(notice) == name)
             .map(|(ix, notice)| notice_row(ix, notice, rows, theme).into_any_element())
             .collect();
         if !group.is_empty() {

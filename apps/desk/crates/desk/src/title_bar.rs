@@ -35,6 +35,8 @@ pub struct Bell {
     seen: BTreeSet<String>,
     raised: Vec<Raised>,
     unread: bool,
+    fresh_from: usize,
+    read_to: usize,
 }
 
 const SECONDS_PER_DAY: i64 = 86_400;
@@ -80,6 +82,8 @@ impl Default for Bell {
             seen: BTreeSet::new(),
             raised: Vec::new(),
             unread: false,
+            fresh_from: 0,
+            read_to: 0,
         }
     }
 }
@@ -156,6 +160,8 @@ impl Bell {
 
     pub fn read(&mut self) {
         self.unread = false;
+        self.fresh_from = self.read_to;
+        self.read_to = self.raised.len();
     }
 
     pub fn session(&self, ix: usize) -> Option<&str> {
@@ -166,8 +172,9 @@ impl Bell {
     fn notices(&self) -> Vec<Notice> {
         self.raised
             .iter()
+            .enumerate()
             .rev()
-            .map(|raised| Notice {
+            .map(|(ix, raised)| Notice {
                 glyph: match raised.raise {
                     Raise::Ask => Glyph::Lock,
                     Raise::Failed => Glyph::Trace,
@@ -178,6 +185,7 @@ impl Bell {
                 code: raised.code.clone().map(SharedString::from),
                 detail: ago(raised.at.elapsed().as_secs_f32() / SECONDS_PER_MINUTE),
                 needs_you: matches!(raised.raise, Raise::Ask),
+                fresh: ix >= self.fresh_from,
             })
             .collect()
     }

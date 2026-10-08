@@ -22,12 +22,13 @@ const POP_ROOM: f32 = 250.0;
 const SESSIONS_HEIGHT: f32 = 300.0;
 
 fn board_title(open: Option<TitlePop>) -> Title {
-    let notice = |glyph, text: &str, code: Option<&str>, detail: &str, needs_you| Notice {
+    let notice = |glyph, text: &str, code: Option<&str>, detail: &str, (needs_you, fresh)| Notice {
         glyph,
         text: text.to_owned().into(),
         code: code.map(|code| code.to_owned().into()),
         detail: detail.to_owned().into(),
         needs_you,
+        fresh,
     };
     Title {
         sidebar_open: true,
@@ -38,22 +39,28 @@ fn board_title(open: Option<TitlePop>) -> Title {
                 "shell wants to run",
                 Some("rm -rf build/"),
                 "2m ago",
-                true,
+                (true, true),
             ),
             notice(
                 Glyph::Agents,
                 "ts-dev finished",
                 Some("sort order is now by date"),
                 "12m ago",
-                false,
+                (false, true),
             ),
-            notice(Glyph::Cron, "Cron nightly fired", None, "1h ago", false),
+            notice(
+                Glyph::Cron,
+                "Cron nightly fired",
+                None,
+                "1h ago",
+                (false, false),
+            ),
             notice(
                 Glyph::Trace,
                 "A turn failed",
                 Some("fix the build"),
                 "2h ago",
-                false,
+                (false, false),
             ),
         ],
         unread: true,
