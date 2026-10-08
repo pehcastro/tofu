@@ -55,7 +55,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	switch event.Kind {
 	case EventTurnStarted:
 		s.turn, s.began, s.status = event.ID, now, StatusFailed
-		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, StartedAt: now}))
+		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: now}))
 	case EventTurnEnded:
 		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))
 	case EventDone:
@@ -75,7 +75,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, notify("message.started", &Marker{Identity: id}), notify("message.completed", &Text{Identity: id, Text: event.Text}))
 	case EventTask:
 		id.Item = s.mint("task")
-		return append(out, notify("message.user", &Text{Identity: id, Text: event.Text}))
+		return append(out, notify("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin}))
 	case EventStreamReset:
 		if event.Agent != "" || s.message == "" {
 			return out
@@ -162,7 +162,7 @@ func (s *items) said(id Identity, event Event, kind SaidKind) *Said {
 }
 
 func sessionUpdated(id Identity, event Event) outgoing {
-	updated := &SessionUpdated{Identity: id, Name: event.Text, Root: event.Root}
+	updated := &SessionUpdated{Identity: id, Name: event.Text, Root: event.Root, LastAt: event.LastAt}
 	if family := event.Identity; family != nil {
 		updated.Name, updated.Tag, updated.Generation, updated.Handle, updated.Started = family.Name, family.Tag, family.Generation, family.Handle(), family.Started
 	}

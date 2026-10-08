@@ -73,6 +73,8 @@ type Event struct {
 	Logged    *session.Event
 	Status    Status
 	Fork      *Fork
+	Origin    Origin
+	LastAt    time.Time
 }
 
 type Status string

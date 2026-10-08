@@ -43,6 +43,12 @@ type recordedMessage struct {
 const (
 	typedByThePerson   = "typed by the person"
 	steeredByThePerson = "steer"
+	cronSource         = "cron "
+	reportSource       = "sub-agent report"
+	gateAskSource      = "sub-agent gate ask"
+	taskSource         = "task"
+	forkTaskSource     = "fork task"
+	forkCarrySource    = "fork carry"
 )
 
 func resumedChat(carry Carry, dir string) []Event {
@@ -68,9 +74,9 @@ func resumedChat(carry Carry, dir string) []Event {
 		case llm.RoleUser:
 			task := carry.taskIn(message.Content)
 			if left, drew := lead.reportsIn(task); !drew {
-				lead.watch.emit(Event{Kind: EventTask, Text: task})
+				lead.watch.emit(Event{Kind: EventTask, Text: task, Origin: lead.originOf(message.Content)})
 			} else if left != "" && lead.typed(message.Content) {
-				lead.watch.emit(Event{Kind: EventTask, Text: left})
+				lead.watch.emit(Event{Kind: EventTask, Text: left, Origin: Origin{Kind: OriginPerson}})
 			}
 		case llm.RoleAssistant:
 			if text := strings.TrimSpace(message.Content); text != "" {
@@ -188,6 +194,32 @@ func (l *resumedLead) recorded(message llm.Message) *session.Event {
 func (l *resumedLead) typed(content string) bool {
 	origin := l.origins[content]
 	return origin == "" || strings.Contains(origin, typedByThePerson) || strings.Contains(origin, steeredByThePerson)
+}
+
+func (o Origin) recorded() string {
+	if o.Kind != OriginCron {
+		return ""
+	}
+	return cronSource + o.Job + " " + o.Schedule
+}
+
+func (l *resumedLead) originOf(content string) Origin {
+	source := l.origins[content]
+	if fired, isCron := strings.CutPrefix(source, cronSource); isCron {
+		job, schedule, _ := strings.Cut(fired, " ")
+		return Origin{Kind: OriginCron, Job: job, Schedule: schedule}
+	}
+	switch {
+	case l.typed(content) || slices.Contains([]string{taskSource, forkTaskSource, forkCarrySource}, source):
+		return Origin{Kind: OriginPerson}
+	case strings.Contains(source, reportSource) || strings.Contains(source, gateAskSource):
+		agent := Origin{Kind: OriginAgent}
+		if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(content, report.text) }); at >= 0 {
+			agent.Name = l.reports[at].agent
+		}
+		return agent
+	}
+	return Origin{Kind: OriginTofu, Source: source}
 }
 
 func (l *resumedLead) drawn(agent string) bool {

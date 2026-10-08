@@ -116,7 +116,7 @@ func sessionOutputProject(t *testing.T) string {
 }
 
 func TestSessionContextAndShellsMatchTheirTextAndJSONGoldens(t *testing.T) {
-	stamp := regexp.MustCompile(`"(at|started_at|ended_at|started|ended|last_output)": "[^"]*"`)
+	stamp := regexp.MustCompile(`"(at|started_at|ended_at|started|ended|last_output|lastAt)": "[^"]*"`)
 	homeValue := regexp.MustCompile(`HOME[^"]*`)
 	clock := regexp.MustCompile(`\b\d{2}:\d{2}:\d{2}\b`)
 	printed := map[string]string{}

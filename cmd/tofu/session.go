@@ -45,6 +45,7 @@ type sessionRow struct {
 	Generation       int       `json:"generation,omitempty"`
 	Generations      int       `json:"generations,omitempty"`
 	At               time.Time `json:"at"`
+	LastAt           time.Time `json:"lastAt,omitzero"`
 	Task             string    `json:"task,omitempty"`
 	Turns            int       `json:"turns"`
 	Agents           int       `json:"sub_agents"`
@@ -376,6 +377,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	row := sessionRow{
 		ID:               header.ID,
 		At:               header.At,
+		LastAt:           host.LastAt(store, header.ID),
 		Task:             header.Task,
 		Turns:            max(header.Turns, len(tasks)),
 		Agents:           len(header.Agents),

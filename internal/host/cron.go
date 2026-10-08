@@ -48,6 +48,10 @@ func (h *Host) fire(fires []cron.Fire) {
 		if fired.Prompt == "" {
 			continue
 		}
+		origin := Origin{Kind: OriginCron, Job: fired.ID}
+		if job, err := h.cron.Job(fired.ID); err == nil {
+			origin.Schedule = job.Spec().Schedule
+		}
 		h.mu.Lock()
 		if h.closed {
 			h.mu.Unlock()
@@ -55,7 +59,7 @@ func (h *Host) fire(fires []cron.Fire) {
 		}
 		h.fired = append(h.fired, fired.ID)
 		if !h.running {
-			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort, Fired: fired.ID}, fired.Prompt)
+			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort, Fired: fired.ID}, fired.Prompt, origin)
 			h.mu.Unlock()
 			continue
 		}

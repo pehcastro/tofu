@@ -44,6 +44,7 @@ type Live struct {
 	Steering <-chan string
 	LeadStop <-chan struct{}
 	Answers  <-chan Answer
+	Origin   Origin
 }
 
 type Carry struct {
@@ -184,18 +185,18 @@ func (h *Host) Send(pick Pick, task string) bool {
 		return false
 	}
 	h.pick = Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort}
-	h.begin(pick, task)
+	h.begin(pick, task, Origin{Kind: OriginPerson})
 	return true
 }
 
-func (h *Host) begin(pick Pick, task string) {
+func (h *Host) begin(pick Pick, task string, origin Origin) {
 	ctx, cancel := context.WithCancel(context.Background())
 	h.running, h.stopped, h.cancel, h.turn = true, false, cancel, turn.NewID(h.now())
-	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers}
+	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
 	go func() {
 		out := h.emitter()
 		live.Emit = out.emit
-		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task})
+		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin})
 		h.play(ctx, pick, task, live)
 		cancel()
 		h.ended(out)

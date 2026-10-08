@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -137,6 +138,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
 	config.History = h.carried
+	config.TaskOrigin.Source = live.Origin.recorded()
 	switch h.asking {
 	case AskingAsk:
 		config.Person = person
@@ -207,7 +209,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 			if keepErr := h.cron.Keep(cronFile(sessions, row.Session)); keepErr != nil && forked {
 				say("cron jobs were not written: " + keepErr.Error())
 			}
-			if labelled, named := h.label(sessions, h.ID()); named && forked {
+			if labelled, named := h.label(sessions, h.ID()); named {
 				emit(labelled)
 			}
 		}
@@ -267,8 +269,16 @@ func labelledAs(store *session.Store, labelled Event) Event {
 	if err != nil {
 		return labelled
 	}
-	labelled.Root, labelled.Text, labelled.Identity = identity.Family, identity.Handle(), &identity
+	labelled.Root, labelled.Text, labelled.Identity, labelled.LastAt = identity.Family, identity.Handle(), &identity, LastAt(store, labelled.ID)
 	return labelled
+}
+
+func LastAt(store *session.Store, id string) time.Time {
+	recorded, err := os.Stat(store.EventsPath(id))
+	if err != nil {
+		return time.Time{}
+	}
+	return recorded.ModTime()
 }
 
 func gateOffEvent(gateErr error) Event {

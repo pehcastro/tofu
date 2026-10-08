@@ -108,7 +108,7 @@ func (defs schemaDefs) fields(t reflect.Type, properties map[string]any, require
 		}
 		name, options, _ := strings.Cut(field.Tag.Get("json"), ",")
 		properties[name] = defs.of(field.Type)
-		if options != "omitempty" {
+		if options != "omitempty" && options != "omitzero" {
 			*required = append(*required, name)
 		}
 	}

@@ -32,6 +32,17 @@ three lines of context.
   `live`, `goals` and every job with its `id`, `schedule`, `prompt`, `paused`,
   `next` and `ended`, and `cron.updated` carries the same whenever a job is
   added, changed, fired or removed, by you or by the agent
+- who started it: `turn.started` and every `message.user`, live or in a
+  reopened session's history, carry `origin`. `{"kind":"person"}` is you,
+  `{"kind":"cron","job":"c1","schedule":"every 30m"}` a cron fire,
+  `{"kind":"agent","name":"research-1"}` a sub-agent's report, and
+  `{"kind":"tofu","source":"stop hook"}` a line tofu added itself. A session
+  written before this release reads every cron fire as `person`, and a cron
+  fire that arrives while a turn runs joins it as a steer, so a reopened
+  session reads that one as `person` too
+- activity: each `session.list` row and `session.updated` carry `lastAt`,
+  the last time anything was recorded in the session. `session.updated`
+  follows every turn with the new value
 - account quota: `quota.updated` arrives when a session opens, after every
   turn and every five minutes, with each account window's `percent`.
   `windows: []` means no account answered

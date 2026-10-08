@@ -140,9 +140,37 @@ type Text struct {
 	Text string `json:"text"`
 }
 
+type OriginKind string
+
+const (
+	OriginPerson OriginKind = "person"
+	OriginCron   OriginKind = "cron"
+	OriginAgent  OriginKind = "agent"
+	OriginTofu   OriginKind = "tofu"
+)
+
+func (OriginKind) enum() []string {
+	return []string{string(OriginPerson), string(OriginCron), string(OriginAgent), string(OriginTofu)}
+}
+
+type Origin struct {
+	Kind     OriginKind `json:"kind"`
+	Job      string     `json:"job,omitempty"`
+	Schedule string     `json:"schedule,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	Source   string     `json:"source,omitempty"`
+}
+
+type UserMessage struct {
+	Identity
+	Text   string `json:"text"`
+	Origin Origin `json:"origin"`
+}
+
 type TurnStarted struct {
 	Identity
 	Task      string    `json:"task"`
+	Origin    Origin    `json:"origin"`
 	StartedAt time.Time `json:"startedAt"`
 }
 
@@ -361,6 +389,7 @@ type SessionUpdated struct {
 	Generation int       `json:"generation,omitempty"`
 	Handle     string    `json:"handle,omitempty"`
 	Started    time.Time `json:"started,omitzero"`
+	LastAt     time.Time `json:"lastAt,omitzero"`
 }
 
 type ApprovalRequest struct {
@@ -511,7 +540,7 @@ func notifications() []method {
 		{name: "turn.started", params: TurnStarted{}},
 		{name: "turn.completed", params: TurnCompleted{}},
 		{name: "turn.steered", params: Text{}},
-		{name: "message.user", params: Text{}},
+		{name: "message.user", params: UserMessage{}},
 		{name: "message.started", params: Marker{}},
 		{name: "message.delta", params: Text{}},
 		{name: "message.completed", params: Text{}},

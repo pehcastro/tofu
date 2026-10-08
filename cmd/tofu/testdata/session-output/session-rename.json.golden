@@ -12,6 +12,7 @@ exit 0
     "family": "turn-two",
     "generation": 1,
     "at": "AT",
+    "lastAt": "AT",
     "task": "the older task",
     "turns": 0,
     "sub_agents": 0,
