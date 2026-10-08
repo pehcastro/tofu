@@ -302,7 +302,19 @@ impl Session {
                     .ok_or_else(|| orphan("agent.ended", &e.instance))?;
                 agent.state = known(&e.state)?;
                 agent.report = Some(e.report.clone());
-                agent.ended_at = Some(stamp(&chrono::Local::now()));
+                let last_seen = agent
+                    .started_at
+                    .iter()
+                    .chain(
+                        self.tools
+                            .values()
+                            .filter(|tool| tool.agent.as_deref() == Some(e.instance.as_str()))
+                            .flat_map(|tool| tool.started_at.iter().chain(&tool.ended_at)),
+                    )
+                    .filter_map(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                    .max();
+                agent.ended_at =
+                    Some(last_seen.map_or_else(|| stamp(&chrono::Local::now()), |at| stamp(&at)));
             }
             N::FileEdit(e) => {
                 if let FileEditOp::Unknown(value) = &e.op {
