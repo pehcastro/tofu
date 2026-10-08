@@ -177,15 +177,15 @@ pub fn window_options(title: SharedString, client: Size<Pixels>, cx: &App) -> Wi
         }));
     #[cfg(target_os = "windows")]
     {
-        options.windows_window_background = gpui::WindowsWindowBackground::Blurred;
+        options.windows_window_background = gpui::WindowsWindowBackground::Transparent;
     }
     #[cfg(target_os = "macos")]
     {
-        options.macos_window_background = gpui::MacosWindowBackground::Blurred;
+        options.macos_window_background = gpui::MacosWindowBackground::Transparent;
     }
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
-        options.linux_window_background = gpui::LinuxWindowBackground::Blurred;
+        options.linux_window_background = gpui::LinuxWindowBackground::Transparent;
     }
     options
 }
@@ -1020,7 +1020,8 @@ impl Desk {
 }
 
 impl Render for Desk {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let edge_to_edge = window.is_maximized() || window.is_fullscreen();
         let theme = ActiveTheme::theme(cx);
         let problems = ActiveTheme::problems(cx);
         let toast_layer = self.toast.as_ref().map(|shown| {
@@ -1060,7 +1061,7 @@ impl Render for Desk {
             })
             .flex()
             .flex_col()
-            .rounded(px(WINDOW_RADIUS))
+            .when(!edge_to_edge, |root| root.rounded(px(WINDOW_RADIUS)))
             .bg(theme.color(ColorToken::SurfaceWindow))
             .shadow(vec![ring(ink(&theme, WINDOW_RING))])
             .text_size(px(TEXT))

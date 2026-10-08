@@ -83,7 +83,7 @@ fn window_options(cx: &App) -> WindowOptions {
         }));
     #[cfg(target_os = "windows")]
     {
-        options.windows_window_background = gpui::WindowsWindowBackground::Blurred;
+        options.windows_window_background = gpui::WindowsWindowBackground::Transparent;
     }
     options
 }
