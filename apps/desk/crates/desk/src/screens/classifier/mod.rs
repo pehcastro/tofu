@@ -1,128 +1,173 @@
-mod fixture;
-#[cfg(feature = "screen-library")]
-use super::library::kit;
-#[cfg(not(feature = "screen-library"))]
-#[path = "../library/kit.rs"]
-#[expect(
-    dead_code,
-    reason = "the kit is shared with the library screen, which uses parts the classifier does not"
-)]
-mod kit;
+#[cfg(not(feature = "screen-usage"))]
+#[path = "../usage/frame.rs"]
+pub mod frame;
+#[cfg(feature = "screen-usage")]
+use crate::screens::usage::frame;
+
 mod ledger;
 mod sandbox;
 
-use desk_ui::components::paint::{ink, tint};
+use std::collections::BTreeMap;
+
+use crate::modules::chat::Chat;
+use desk_core::model::Store;
+use desk_core::protocol::DecisionMade;
+use desk_ui::components::empty::empty_state;
 use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Render, Rgba, SharedString, Window, prelude::*,
-    rgb,
+    AnyView, App, AppContext, Context, Entity, EntityId, Subscription, Window, div, prelude::*, px,
 };
 
-use fixture::{LEDGER, SHIPPED_ASK, SHIPPED_DENY, Verdict};
-use kit::frame;
+use frame::{load_fonts, note, title, window};
 
-const ALLOW: u32 = 0x86e0b3;
-const ASK: u32 = 0xe8c98a;
-const DENY: u32 = 0xf1737d;
-const DENY_TEXT: u32 = 0xee8a8f;
-const SHADOW_FILL: u32 = 0xb9a6ea;
-const SHADOW_TEXT: u32 = 0xcfc2f2;
+const NO_TOFU: &str = "The classifier screen shows the decisions tofu sends to the work screen, and no work screen is open here.";
+const NONE_YET: &str = "tofu sends a decision each time its classifier judges a tool call. None has arrived since the desk opened.";
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    kit::load_fonts(cx)?;
-    let page = match board {
-        None | Some("IJEV-1") => Page::Ledger,
-        Some("IJEV-2") => Page::Sandbox,
-        Some(other) => {
-            return Err(format!(
-                "the classifier screen draws IJEV-1 and IJEV-2, not {other}"
-            ));
-        }
-    };
-    Ok(cx.new(|_| Classifier::new(page)).into())
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Page {
-    Ledger,
-    Sandbox,
+    if let Some(board) = board {
+        return Err(format!(
+            "the classifier screen draws the decisions tofu sends, not the board {board}"
+        ));
+    }
+    load_fonts(cx)?;
+    Ok(cx
+        .new(|_| Classifier {
+            source: None,
+            known: 0,
+            seen: Vec::new(),
+            nudges: BTreeMap::new(),
+        })
+        .into())
 }
 
 pub struct Classifier {
-    page: Page,
-    point: usize,
-    row: usize,
-    labels: [Option<Verdict>; LEDGER.len()],
-    ask: i32,
-    deny: i32,
-    told: Option<SharedString>,
+    source: Option<Source>,
+    known: usize,
+    seen: Vec<Seen>,
+    nudges: BTreeMap<String, i32>,
+}
+
+struct Source {
+    id: EntityId,
+    _watch: Subscription,
+}
+
+#[derive(Clone, PartialEq)]
+struct Seen {
+    turn_at: Option<String>,
+    decision: DecisionMade,
 }
 
 impl Classifier {
-    fn new(page: Page) -> Self {
-        Classifier {
-            page,
-            point: 0,
-            row: 0,
-            labels: LEDGER.map(|entry| entry.label),
-            ask: SHIPPED_ASK,
-            deny: SHIPPED_DENY,
-            told: None,
+    pub fn read_from(&mut self, chat: &Entity<Chat>, cx: &mut Context<Self>) {
+        if self
+            .source
+            .as_ref()
+            .is_some_and(|source| source.id == chat.entity_id())
+        {
+            return;
         }
+        let store = chat.read(cx).store().clone();
+        let watch = cx.observe(&store, |classifier, store, cx| classifier.saw(&store, cx));
+        self.source = Some(Source {
+            id: chat.entity_id(),
+            _watch: watch,
+        });
+        self.saw(&store, cx);
+        cx.notify();
     }
 
-    fn tell(
-        message: &'static str,
-    ) -> impl Fn(&mut Self, &ClickEvent, &mut Window, &mut Context<Self>) {
-        move |this, _, _, cx| {
-            this.told = Some(message.into());
-            cx.notify();
+    fn saw(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        let store = store.read(cx);
+        let known = store.sessions.values().fold(0_usize, |all, session| {
+            all.saturating_add(session.decisions.len())
+        });
+        if known == self.known {
+            return;
         }
-    }
-}
-
-fn verdict_colors(verdict: Verdict) -> (Rgba, Rgba) {
-    let color = rgb(match verdict {
-        Verdict::Allow => ALLOW,
-        Verdict::Ask => ASK,
-        Verdict::Deny => DENY,
-    });
-    (
-        tint(
-            color,
-            if verdict == Verdict::Allow {
-                0.12
-            } else {
-                0.14
-            },
-        ),
-        color,
-    )
-}
-
-fn mode_colors(enforced: bool, theme: &desk_ui::theme::Theme) -> (Rgba, Rgba) {
-    if enforced {
-        (ink(theme, 0.12), rgb(0xffffff))
-    } else {
-        (tint(rgb(SHADOW_FILL), 0.14), rgb(SHADOW_TEXT))
+        self.known = known;
+        let mut seen: Vec<Seen> = store
+            .sessions
+            .values()
+            .flat_map(|session| {
+                session.decisions.iter().map(|decision| Seen {
+                    turn_at: session
+                        .turns
+                        .get(&decision.turn)
+                        .map(|turn| turn.started_at.clone()),
+                    decision: decision.clone(),
+                })
+            })
+            .collect();
+        seen.sort_by(|a, b| {
+            b.turn_at
+                .cmp(&a.turn_at)
+                .then(b.decision.seq.cmp(&a.decision.seq))
+        });
+        for row in seen.iter().filter(|row| !self.seen.contains(row)) {
+            eprintln!(
+                "desk: classifier row seq {} turn {} started {} {:?} {} {} on {}: {}",
+                row.decision.seq,
+                row.decision.turn,
+                row.turn_at.as_deref().unwrap_or("unknown"),
+                row.decision.verdict,
+                ledger::mode(row.decision.enforced),
+                row.decision.point,
+                row.decision.tool,
+                ledger::value_said(&row.decision)
+            );
+        }
+        self.seen = seen;
+        cx.notify();
     }
 }
 
 impl Render for Classifier {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let body = match self.page {
-            Page::Ledger => self.ledger(&theme, cx),
-            Page::Sandbox => self.sandbox(&theme, cx),
+        let body = match (&self.source, self.seen.is_empty()) {
+            (None, _) => empty_state(
+                "classifier-no-tofu",
+                "No tofu to ask",
+                Some(NO_TOFU.into()),
+                &[],
+                &[],
+                &theme,
+                |_, _, _| {},
+            )
+            .into_any_element(),
+            (Some(_), true) => empty_state(
+                "classifier-none",
+                "No decision yet",
+                Some(NONE_YET.into()),
+                &[],
+                &[],
+                &theme,
+                |_, _, _| {},
+            )
+            .into_any_element(),
+            (Some(_), false) => div()
+                .flex()
+                .flex_col()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(10.0))
+                        .px(px(4.0))
+                        .child(title("Classifier"))
+                        .child(note(
+                            "the decisions tofu sent for this project since the desk opened",
+                            &theme,
+                        )),
+                )
+                .child(self.points(&theme))
+                .child(self.ledger(&theme))
+                .child(self.sandbox(&theme, cx))
+                .into_any_element(),
         };
-        frame(
-            &theme,
-            body,
-            self.told.clone(),
-            cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.told = None;
-                cx.notify();
-            }),
-        )
+        window(&theme, div().flex_1().flex().flex_col().child(body))
     }
 }
