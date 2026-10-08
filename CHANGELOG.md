@@ -10,6 +10,30 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.8 - 2026-10-08
+
+The lead controls its sub-agents, a message sent mid-turn goes in without stopping the work, and the desk can drive all of it over `tofu serve`.
+
+### Added
+
+- **Esc while the lead works sends the queued messages into the running turn** instead of ending it: the work so far, the sub-agents and the shells stay, and the lead answers in one line before its next tool call. Alt+S sends only the picked queued message. Each message read mid-turn shows "read by the lead at step N". Esc with nothing queued, or a second Esc, stops the lead as before.
+- **A command piped into grep, sed, awk, cut, tr or uniq prints each line as it comes** on the shells screen, and a bash call killed at its timeout says `hit the deadline after N s` in its result, the shells screen and the session trace.
+- **`subAgentCache`** puts sub-agents on the five minute cache while the lead keeps one hour. A sub-agent's first request caches its brief, so its second request reads it instead of paying for it again, and `tofu session trace` shows each request's cache lifetime and a cache breaks section naming where a request stopped matching the one before it.
+- **`tofu serve` covers what the desk needs**: a typed `session.list` with running and last activity, `session.state`, `session.set`, images and a model on `turn.send`, `turn.sendNow` and the `turn.steered` read event, a lead-only stop, `turn.unsteer`, `shell.run`, `session.compact`, paged `session.history`, every `query.*` typed, memory add, edit and remove, reload, learn, rules and agents writes with an undo line, `session.info`, `session.trace`, `session.find`, and `login.key` and `login.logout`. `tofu docs serve-methods` lists every method.
+
+### Changed
+
+- **The lead grants, revokes and replaces a sub-agent's paths**, stops the sub-agents and windows it started without asking, and closes a window it opened by name when every process of that name runs in tofu's own shells. Grants survive a restart, each sub-agent gets its own scratch folder, and a long ask is capped.
+- **The lead checks a sub-agent's work before taking it**, by default. `tofu settings set verifySubAgents false` turns it off.
+- **A session keeps the system prompt and tools it started with** until it forks or is cleared, so its cache is not rewritten mid-conversation.
+
+### Fixed
+
+- **A request past the context ceiling is refused before it is sent**, instead of going out over the limit.
+- **Several sub-agents spawned at once no longer fail with "Access is denied"** on Windows.
+- **A shell tofu cannot list no longer leaves a child running** or its log locked.
+- **A resumed session no longer shows tofu's own notes as your messages.**
+
 ## 0.5.7-fix2 - 2026-10-08
 
 ### Added
