@@ -35,8 +35,9 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
 - `session.state`, the answer to `resync`: `running` and its `turn`, `asking`,
-  the `pick`, waiting approvals, `standing` answers (`target`, `decision`),
-  open `questions`, sub-agents, kept shells, the context and the cron jobs
+  the `pick`, waiting approvals, `standing` answers (`target`, `decision`;
+  kept beside the session, read back when it reopens, carried into its
+  compaction and never into another session), open `questions`, sub-agents, kept shells, the context and the cron jobs
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
   turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family

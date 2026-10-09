@@ -1,7 +1,8 @@
 package host
 
 import (
-	"maps"
+	"errors"
+	"io/fs"
 	"slices"
 	"sync"
 )
@@ -16,9 +17,42 @@ type asks struct {
 	mu       sync.Mutex
 	waiting  []waitingAsk
 	standing map[string]Answer
+	held     standingIn
+	session  func() standingIn
+	unkept   func(error)
+}
+
+func (a *asks) follow() {
+	if a.session == nil {
+		return
+	}
+	now := a.session()
+	a.mu.Lock()
+	if now.id == a.held.id {
+		a.mu.Unlock()
+		return
+	}
+	before := a.held
+	a.held = now
+	read, err := now.read()
+	var keepErr error
+	if errors.Is(err, fs.ErrNotExist) && before.forkedInto(now.id) {
+		keepErr = now.keep(a.standing)
+	} else {
+		a.standing = read
+	}
+	a.mu.Unlock()
+	a.report(keepErr)
+}
+
+func (a *asks) report(keepErr error) {
+	if keepErr != nil && a.unkept != nil {
+		a.unkept(keepErr)
+	}
 }
 
 func (a *asks) stood(place string) (Answer, bool) {
+	a.follow()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	answer, stands := a.standing[place]
@@ -26,17 +60,10 @@ func (a *asks) stood(place string) (Answer, bool) {
 }
 
 func (a *asks) standingNow() []StandingAnswer {
+	a.follow()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	now := []StandingAnswer{}
-	for _, place := range slices.Sorted(maps.Keys(a.standing)) {
-		decision := AllowAlways
-		if a.standing[place] == NeverHere {
-			decision = RejectAlways
-		}
-		now = append(now, StandingAnswer{Target: place, Decision: decision})
-	}
-	return now
+	return listed(a.standing)
 }
 
 func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
@@ -52,17 +79,22 @@ func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
 }
 
 func (a *asks) answer(id string, given Answer) (answered, stands bool) {
+	a.follow()
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	asked, waiting := a.take(id)
 	if !waiting {
+		a.mu.Unlock()
 		return false, false
 	}
 	stands = asked.place != "" && (given == AlwaysHere || given == NeverHere)
+	var keepErr error
 	if stands {
 		a.standing[asked.place] = given
+		keepErr = a.held.keep(a.standing)
 	}
 	asked.reply <- given
+	a.mu.Unlock()
+	a.report(keepErr)
 	return true, stands
 }
 
