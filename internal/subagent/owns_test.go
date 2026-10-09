@@ -125,8 +125,8 @@ func TestASubAgentChangesOwnedSourceWithEditNotTheShell(t *testing.T) {
 		{"perl -pe s/a/b/ src/x.ts", ""},
 		{"cargo fmt", ""},
 		{"gofmt -w src/x.go", ""},
-		{"echo x > /tmp/x.log", ""},
-		{"sed -i s/a/b/ /tmp/x.rs", ""},
+		{"echo x > /tmp/x.log", notOwned},
+		{"sed -i s/a/b/ /tmp/x.rs", notOwned},
 		{"echo x > src/notes.md", ""},
 		{"echo x > src/config.yaml", ""},
 		{"echo x > Cargo.lock", ""},
@@ -231,13 +231,13 @@ func TestARouteFileNamedWithAParameterIsOwnedLiterally(t *testing.T) {
 	}
 }
 
-func TestASubAgentWritesTheTempDirectoryWithoutOwningIt(t *testing.T) {
+func TestASubAgentNeverWritesTheSystemTempDirectory(t *testing.T) {
 	temp := os.TempDir()
 	for path, refusal := range map[string]string{
-		"/tmp/x.test.ts":                    "",
-		"/tmp":                              "",
-		temp:                                "",
-		filepath.Join(temp, "prev.log"):     "",
+		"/tmp/x.test.ts":                    notOwned,
+		"/tmp":                              notOwned,
+		temp:                                notOwned,
+		filepath.Join(temp, "prev.log"):     notOwned,
 		"/tmp/../etc/x":                     notOwned,
 		"/tmpx/a.ts":                        notOwned,
 		"tmp/a.ts":                          notOwned,

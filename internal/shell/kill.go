@@ -40,6 +40,21 @@ func (r *Registry) stop(name string, deadline time.Duration) error {
 	return nil
 }
 
+func (r *Registry) StopUnder(dir string) []string {
+	listed, _ := r.List()
+	folded := strings.ToLower(filepath.ToSlash(dir))
+	var stopped []string
+	for _, one := range listed {
+		rel, err := filepath.Rel(dir, one.Dir)
+		inside := err == nil && !strings.HasPrefix(rel, "..")
+		named := strings.Contains(strings.ToLower(filepath.ToSlash(one.Command)), folded)
+		if one.State == Running && (inside || named) && r.Kill(one.Name) == nil {
+			stopped = append(stopped, one.Name)
+		}
+	}
+	return stopped
+}
+
 func (r *Registry) Restart(name string) (Shell, error) {
 	entry, err := r.Read(name)
 	if err != nil {

@@ -442,6 +442,14 @@ const (
 )
 
 const (
+	ScratchCleanupDays       = 7
+	ScratchMaxGB             = 50
+	ScratchRemoveTries       = 5
+	ScratchRemoveRetryMillis = 200
+	ScratchReadBytes         = 64 << 10
+)
+
+const (
 	AskPersonWaitSeconds    = 120
 	AskPersonQuestionsMost  = 4
 	AskPersonOptionsLeast   = 2

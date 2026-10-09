@@ -86,7 +86,7 @@ func (t ownedShell) Definition() llm.Tool {
 		"(ls, cat, head, grep, rg, find without -exec or -delete, sed without w or e, git status, log, diff, show or blame) " +
 		"or runs the project's own checks (go vet and go test, cargo test, check and clippy, npm, pnpm, yarn or bun test or a test, check, lint, typecheck or vet script, " +
 		"make targets named the same way, pytest, mypy, ruff check, and rtk or uv run around any of these). " +
-		"A redirect, tee, cp, mv, rm, mkdir, touch or sed -i lands only inside the paths your first message says you hold, your scratch folder or the temp folder, and a source file changes with edit or write. " +
+		"A redirect, tee, cp, mv, rm, mkdir, touch or sed -i lands only inside the paths your first message says you hold or your scratch folder, which $TMPDIR names; the system temp folder is refused, and a source file changes with edit or write. " +
 		"An interpreter (python -c, node -e, bash -c, powershell -Command, eval), a variable set before a command, $(...) or backticks, a program named by its path, and anything not listed are refused before they run, with the reason: put that work in your report."
 	return definition
 }

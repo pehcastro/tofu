@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -147,12 +148,12 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	if _, err := held.conversation(); err != nil {
 		return fmt.Errorf("%s's conversation did not read back: %w", held.agent.ID, err)
 	}
-	scratch, err := t.scratch(held.agent.ID)
+	scratch, err := t.scratch(context.Background(), held.agent.ID)
 	if err != nil {
 		return fmt.Errorf("%s's scratch folder was not made: %w", held.agent.ID, err)
 	}
 	held.definition, held.system, held.environment, held.restored = definition, system, environment+scratchWords(scratch), false
-	held.boundary = subagent.NewBoundary(held.agent.ID, scratch, owns)
+	held.boundary, held.scratch = subagent.NewBoundary(held.agent.ID, scratch.Dir(), owns), scratch
 	return nil
 }
 

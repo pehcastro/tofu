@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -62,7 +64,7 @@ func (t GitHubPRDiff) Run(ctx context.Context, raw json.RawMessage) (turn.Result
 		words = append(words, pr)
 	}
 	cmd := exec.CommandContext(ctx, "gh", words...)
-	cmd.Dir = string(t.root)
+	cmd.Dir, cmd.Env = string(t.root), append(os.Environ(), sys.ScratchEnv(ctx)...)
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	runErr := cmd.Run()

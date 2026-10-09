@@ -12,6 +12,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 type heldSubAgent struct {
@@ -23,6 +24,7 @@ type heldSubAgent struct {
 	environment string
 	prefix      Prefix
 	boundary    *subagent.Boundary
+	scratch     sys.ScratchPlace
 	inbox       *Inbox
 	trace       spawnTrace
 	history     []llm.Message
@@ -144,8 +146,8 @@ func (h *heldSubAgent) runningWords() string {
 	if len(h.agent.Owns) > 0 {
 		said += ", holding " + strings.Join(h.agent.Owns, ", ")
 	}
-	if h.boundary.Scratch != "" {
-		said += ", with its scratch folder " + h.boundary.Scratch
+	if h.scratch.Root != "" {
+		said += ", with its scratch folder " + h.scratch.Dir()
 	}
 	return said + ". its report comes to you as a message naming it when it ends, and message reaches it at its next step while it runs."
 }

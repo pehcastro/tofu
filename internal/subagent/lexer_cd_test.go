@@ -31,7 +31,7 @@ func TestShellResolvesAWriteAgainstTheDirectoryALeadingCdEntered(t *testing.T) {
 		{"cd $DIR && sed -i s/a/b/ suppliers.json", refusedAs("suppliers.json")},
 		{"cd src/api && sed -i s/a/b/ ../other.json", refusedAs("src/api/../other.json")},
 		{"cd .. && sed -i s/a/b/ suppliers.json", escaping},
-		{"sed -i s/a/b/ /tmp/suppliers.json", ""},
+		{"sed -i s/a/b/ /tmp/suppliers.json", notOwned},
 	} {
 		boundary := NewBoundary("ts-dev-3", "", []string{"src/api/suppliers.json"})
 		err := boundary.Shell(driven.cmd)

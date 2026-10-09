@@ -21,8 +21,9 @@ lists them with the paths each holds, and with a name it reads one's
 report and conversation or diagnoses what it is doing now. `message`
 sends one more work, and its `do` stops, kills, releases or backs one up,
 or with `owns` grants, revokes or replaces the paths it holds. None of
-these asks the gate. Each sub-agent also has a scratch folder under
-`.tofu/scratch/` where it writes and deletes with no ask.
+these asks the gate. Each sub-agent also has a scratch folder outside the
+project, under `~/.tofu/projects/<project>/scratchpad/`, where it writes
+and deletes with no ask. See [Scratchpad](scratchpad).
 A sub-agent from before a restart holds no paths until a message resumes
 it, so a new one can start on them.
 

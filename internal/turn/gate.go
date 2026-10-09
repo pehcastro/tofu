@@ -195,6 +195,10 @@ func personOnlyRefusal(ctx context.Context, config Config, request GateRequest) 
 	return refused
 }
 
+func AsTheLead(ctx context.Context) context.Context {
+	return context.WithValue(ctx, subAgentKey{}, "")
+}
+
 func answerer(ctx context.Context) string {
 	if SubAgentAsking(ctx) != "" {
 		return "the orchestrator"

@@ -522,7 +522,11 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, budget reca
 	interrupted, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	context.AfterFunc(interrupted, stop)
-	runErr := turn.Lead(turn.WithShellRegistry(interrupted, registry), config, nil, nil, func(row turn.Row, _ error) {
+	leading, err := leadScratch(interrupted, config, errOut)
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	runErr := turn.Lead(turn.WithShellRegistry(leading, registry), config, nil, nil, func(row turn.Row, _ error) {
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head = cmp.Or(row.Session, head)
 	})
@@ -678,6 +682,9 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	if run.sessions != nil && opts.toolSet != toolSetThree {
 		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
+	}
+	if opts.toolSet != toolSetThree {
+		built = append(slices.Clone(built), tools.ScratchTools(run.leadAsks)...)
 	}
 	prompt, err := composeRun(opts, built, run)
 	if err != nil {

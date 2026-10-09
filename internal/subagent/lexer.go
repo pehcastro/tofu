@@ -6,7 +6,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 )
@@ -36,6 +35,7 @@ type shellLexer struct {
 	src      string
 	at       int
 	heredocs []heredoc
+	known    map[string]string
 }
 
 func (l *shellLexer) peek(offset int) byte {
@@ -143,6 +143,10 @@ func (l *shellLexer) word() shellWord {
 	expands, runs := false, false
 	expand := func() {
 		expansion := l.expansion()
+		if value, known := l.known[strings.Trim(expansion, "${}")]; known {
+			text.WriteString(value)
+			return
+		}
 		expands, runs = true, runs || substitutes(expansion)
 		text.WriteString(expansion)
 	}
@@ -239,8 +243,8 @@ type simpleCommand struct {
 	then   string
 }
 
-func shellCommands(command string) []simpleCommand {
-	lexer := shellLexer{src: command}
+func shellCommands(command string, known map[string]string) []simpleCommand {
+	lexer := shellLexer{src: command, known: known}
 	var commands []simpleCommand
 	var current simpleCommand
 	awaiting := tokenWord
@@ -360,7 +364,7 @@ type ShellStep struct {
 
 func ShellSteps(command string) []ShellStep {
 	var steps []ShellStep
-	for _, command := range shellCommands(command) {
+	for _, command := range shellCommands(command, nil) {
 		if len(command.words)+len(command.writes) == 0 {
 			continue
 		}
@@ -459,11 +463,11 @@ func writesOf(commands []simpleCommand, changed func(simpleCommand) []shellWord,
 func anyShellDevice() []string { return []string{"/dev/null", "nul", "/dev/stdout", "/dev/stderr"} }
 
 func ShellWrites(command string) ([]string, error) {
-	return writesOf(shellCommands(command), simpleCommand.targets, anyShellDevice())
+	return writesOf(shellCommands(command, nil), simpleCommand.targets, anyShellDevice())
 }
 
 func (b *Boundary) Shell(command string) error {
-	commands := shellCommands(command)
+	commands := shellCommands(command, b.temp())
 	for _, command := range commands {
 		if err := command.treeWide(); err != nil {
 			return err
@@ -477,13 +481,12 @@ func (b *Boundary) writes(commands []simpleCommand, changed func(simpleCommand) 
 	if err != nil {
 		return err
 	}
-	paths = slices.DeleteFunc(paths, inTempDirectory)
 	for _, written := range paths {
 		if err := b.Write(written); err != nil {
 			return err
 		}
 	}
-	for _, written := range paths {
+	for _, written := range slices.DeleteFunc(paths, b.Scratched) {
 		switch strings.ToLower(path.Ext(written)) {
 		case ".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".go", ".java", ".js", ".jsx", ".py", ".pyi", ".rb", ".rs", ".sh", ".bash", ".ps1", ".ts", ".tsx":
 			return ShellSourceWriteError{Path: written}
@@ -492,24 +495,8 @@ func (b *Boundary) writes(commands []simpleCommand, changed func(simpleCommand) 
 	return nil
 }
 
-func inTempDirectory(written string) bool {
-	tree, err := os.Getwd()
-	if err != nil || under(tree, written) {
-		return false
-	}
-	for _, root := range []string{"/tmp", os.TempDir()} {
-		if under(root, written) {
-			return !linkBelow(root, written)
-		}
-	}
-	return false
-}
-
 func linkBelow(root, written string) bool {
 	reached := root
-	if root == "/tmp" && runtime.GOOS == "windows" {
-		reached = os.TempDir()
-	}
 	below := strings.TrimPrefix(path.Clean(normalizePath(written)), path.Clean(normalizePath(root)))
 	for _, segment := range strings.FieldsFunc(below, func(r rune) bool { return r == '/' }) {
 		reached = filepath.Join(reached, segment)
@@ -530,12 +517,20 @@ func under(root, written string) bool {
 }
 
 func (b *Boundary) Scratched(written string) bool {
-	return b.Scratch != "" && under(b.Scratch, written)
+	return b.Scratch != "" && under(b.Scratch, written) && !linkBelow(b.Scratch, written)
+}
+
+func (b *Boundary) temp() map[string]string {
+	if b.Scratch == "" {
+		return nil
+	}
+	tmp := path.Join(normalizePath(b.Scratch), "tmp")
+	return map[string]string{"TMPDIR": tmp, "TMP": tmp, "TEMP": tmp}
 }
 
 func (b *Boundary) KeepsToScratch(command string) bool {
 	touched := 0
-	for _, step := range shellCommands(command) {
+	for _, step := range shellCommands(command, b.temp()) {
 		tool, _ := step.named()
 		switch {
 		case len(step.words)+len(step.writes) == 0:

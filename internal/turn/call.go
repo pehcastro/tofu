@@ -17,10 +17,15 @@ const (
 	RuleOverrideToolName = "rule_override"
 	RememberToolName     = "remember"
 	AskPersonToolName    = "ask_person"
+	ScratchPathToolName  = "scratch_path"
+	ScratchShareToolName = "scratch_share"
+	ScratchListToolName  = "scratch_list"
+	ScratchReadToolName  = "scratch_read"
 )
 
 func gateExempt(tool string) bool {
 	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName ||
+		tool == ScratchPathToolName || tool == ScratchListToolName || tool == ScratchReadToolName ||
 		tool == RuleOverrideToolName || tool == RememberToolName || tool == AskPersonToolName || tool == LookupToolName || tool == messageTool{}.Name()
 }
 

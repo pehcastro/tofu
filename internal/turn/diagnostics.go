@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/shell"
+	"tofu/internal/sys"
 )
 
 const (
@@ -65,7 +66,7 @@ func (t typechecker) prepared(ctx context.Context) error {
 		return nil
 	}
 	cmd := exec.CommandContext(ctx, t.prepare[0], t.prepare[1:]...)
-	cmd.Dir = t.dir
+	cmd.Dir, cmd.Env = t.dir, append(os.Environ(), sys.ScratchEnv(ctx)...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s failed before the check: %w\n%s", strings.Join(t.prepare, " "), err, output)
 	}
@@ -464,7 +465,7 @@ func coldTypecheck(ctx context.Context, checker typechecker, relative string) Re
 		return failure("typecheck skipped: " + err.Error())
 	}
 	cmd := exec.CommandContext(ctx, checker.argv[0], checker.argv[1:]...)
-	cmd.Dir, cmd.WaitDelay = checker.dir, konst.BashWaitDelayMillis*time.Millisecond
+	cmd.Dir, cmd.WaitDelay, cmd.Env = checker.dir, konst.BashWaitDelayMillis*time.Millisecond, append(os.Environ(), sys.ScratchEnv(ctx)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	started := time.Now()

@@ -203,7 +203,7 @@ func TestWithNoOwnsBashStillRunsReadsAndChecks(t *testing.T) {
 		{"jq . package.json", ""},
 		{"test -f README.md && echo yes", ""},
 		{"sleep 1", ""},
-		{"echo x > /tmp/x.txt", ""},
+		{"echo x > /tmp/x.txt", notOwned},
 		{"mkdir -p " + scratch + "/shots && rm " + scratch + "/run.log", ""},
 		{"go vet ./p", ""},
 		{"go test ./p/...", ""},
@@ -309,16 +309,15 @@ func TestADeviceNameIsADeviceOnlyWhereTheShellMakesItOne(t *testing.T) {
 	drive(t, boundary, PowerShell, []bashRow{{"echo x > NUL", windowsDevice}, {"echo x > $null", ""}})
 }
 
-func TestTheTempFolderIsExemptOnlyWhenNoLinkLeadsOutOfIt(t *testing.T) {
+func TestTheScratchIsExemptOnlyWhenNoLinkLeadsOutOfIt(t *testing.T) {
 	root := project(t)
-	temp := filepath.ToSlash(os.TempDir())
-	link := filepath.Join(os.TempDir(), "tofu1234-link-"+filepath.Base(root))
+	scratch := filepath.ToSlash(t.TempDir())
+	link := filepath.Join(scratch, "tofu1234-link")
 	if err := os.Symlink(root, link); err != nil {
 		t.Skipf("this host cannot make a symlink without privilege: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Remove(link) })
-	drive(t, NewBoundary("sub-1", "", nil), POSIX, []bashRow{
-		{"echo x > " + temp + "/tofu1234-plain.txt", ""},
+	drive(t, NewBoundary("sub-1", scratch, nil), POSIX, []bashRow{
+		{"echo x > " + scratch + "/tofu1234-plain.txt", ""},
 		{"echo x > " + filepath.ToSlash(link) + "/through.txt", notOwned},
 		{"cd " + filepath.ToSlash(link) + " && echo x > through.txt", notOwned},
 	})

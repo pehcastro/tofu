@@ -277,6 +277,9 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 		ProjectDir: g.cwd,
 		Context:    state.ToolGateContext{UserRecentMessages: []string{request.Task}},
 	}
+	if place, found := sys.ScratchOf(ctx); found {
+		call.ScratchDir = place.Dir()
+	}
 	built, builder, err := state.BuildToolGateV3(call)
 	if err != nil {
 		return ledger.Row{}, err

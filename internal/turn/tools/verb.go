@@ -17,6 +17,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/library/docs"
 )
@@ -262,7 +263,7 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (turn.Resu
 
 	cmd := exec.CommandContext(ctx, running, words...)
 	cmd.Dir = string(v.root)
-	cmd.Env = append(os.Environ(), verbDepthEnvar+"="+strconv.Itoa(depth+1))
+	cmd.Env = append(append(os.Environ(), sys.ScratchEnv(ctx)...), verbDepthEnvar+"="+strconv.Itoa(depth+1))
 	if body != "" {
 		cmd.Stdin = strings.NewReader(body)
 	}

@@ -14,6 +14,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/sys"
 )
 
 type ResultOutcome int
@@ -78,7 +79,7 @@ func NewRegistry(tools ...Tool) Registry {
 
 func readOnly(name string) bool {
 	switch name {
-	case "read", "glob", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff", "typecheck", "test", "subagents":
+	case "read", "glob", "search", "symbols", "project_report", "artifact_fetch", "fetch", "web_search", "github_pr_diff", "typecheck", "test", "subagents", ScratchPathToolName, ScratchListToolName, ScratchReadToolName:
 		return true
 	}
 	return false
@@ -130,7 +131,7 @@ func (r Root) Resolve(requested string) (string, error) {
 		return "", errors.New("path is required")
 	}
 	if filepath.IsAbs(requested) || strings.HasPrefix(filepath.ToSlash(requested), "/") {
-		return "", fmt.Errorf("path %q must be relative to the turn's working directory", requested)
+		return r.inScratch(requested)
 	}
 	cleaned := filepath.Clean(filepath.Join(string(r), requested))
 	rel, inside := within(string(r), cleaned)
@@ -147,6 +148,27 @@ func (r Root) Resolve(requested string) (string, error) {
 	}
 	if _, inside := within(realRoot, resolved); !inside {
 		return "", fmt.Errorf("path %q goes through the link %q to %q, outside the turn's working directory", requested, firstLink, resolved)
+	}
+	return cleaned, nil
+}
+
+func (r Root) inScratch(requested string) (string, error) {
+	scratch, err := sys.ScratchRootAt(string(r))
+	cleaned := filepath.Clean(requested)
+	if _, inside := within(scratch, cleaned); err != nil || !filepath.IsAbs(requested) || !inside {
+		return "", fmt.Errorf("path %q must be relative to the turn's working directory, or inside this project's scratchpad", requested)
+	}
+	top := filepath.VolumeName(scratch) + string(filepath.Separator)
+	realScratch, _, err := followLinks(top, scratch)
+	if err != nil {
+		return "", fmt.Errorf("the scratchpad %q: %w", scratch, err)
+	}
+	resolved, firstLink, err := followLinks(top, cleaned)
+	if err != nil {
+		return "", fmt.Errorf("path %q: %w", requested, err)
+	}
+	if _, inside := within(realScratch, resolved); !inside {
+		return "", fmt.Errorf("path %q goes through the link %q to %q, outside the scratchpad", requested, firstLink, resolved)
 	}
 	return cleaned, nil
 }

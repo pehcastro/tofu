@@ -408,14 +408,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 
-	scratch, err := t.scratch(subAgentID)
+	scratch, err := t.scratch(ctx, subAgentID)
 	if err != nil {
 		t.roster.Release(subAgentID)
 		return Result{}, fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err)
 	}
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system,
 		environment: environment + scratchWords(scratch) + t.briefFiles(ctx, args, site.conversation),
-		boundary:    subagent.NewBoundary(subAgentID, scratch, args.Owns), inbox: NewInbox(),
+		boundary:    subagent.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Inbox.keep(held, cancel)
@@ -464,6 +464,9 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		defer opened.Close()
 	}
 	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
+	if held.scratch.Root != "" {
+		ctx = sys.WithScratch(ctx, held.scratch)
+	}
 	if ttl := t.limits().CacheTTL; ttl != "" {
 		ctx = anthropic.WithCacheTTL(ctx, ttl)
 	}
@@ -502,7 +505,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	var owned []Tool
 	for _, tool := range t.base.Tools.tools {
 		switch {
-		case !offered(tool.Name()):
+		case !offered(tool.Name()) && !strings.HasPrefix(tool.Name(), "scratch_"):
 			continue
 		case tool.Name() == "write" || tool.Name() == "edit":
 			tool = ownedTool{tool: tool, boundary: held.boundary}

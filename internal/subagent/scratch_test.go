@@ -33,3 +33,36 @@ func TestOnlyACommandThatKeepsToItsScratchSkipsTheLead(t *testing.T) {
 		t.Error("a boundary with no scratch took a command as scratch only")
 	}
 }
+
+func TestTheAgentsTempVariablesAreItsOwnFolderAndNothingElse(t *testing.T) {
+	root := t.TempDir()
+	own, other := root+"/sessions/s/agents/sub-1", root+"/sessions/s/agents/sub-2"
+	boundary := NewBoundary("sub-1", own, []string{"src/**"})
+	for command, keeps := range map[string]bool{
+		"echo a > $TMPDIR/x.txt":                 true,
+		"echo a > ${TMPDIR}/x.txt":               true,
+		"echo a > \"$TMP/x.txt\"":                true,
+		"echo a > $TMPDIR/../../sub-2/tmp/x.txt": false,
+		"echo a > " + other + "/tmp/x.txt":       false,
+		"echo a > $HOME/x.txt":                   false,
+		"echo a > /tmp/x.txt":                    false,
+	} {
+		if got := boundary.KeepsToScratch(command); got != keeps {
+			t.Errorf("%q keeps to the scratch: %v, want %v", command, got, keeps)
+		}
+	}
+	for _, command := range []string{"echo a > /tmp/x.txt", "echo a > " + other + "/tmp/x.txt", "echo a > $TMPDIR/../../sub-2/tmp/x.txt"} {
+		if err := boundary.Shell(command); err == nil {
+			t.Errorf("%q wrote outside the agent's own folder and was not refused", command)
+		}
+		if err := boundary.Bash(command, POSIX); err == nil {
+			t.Errorf("%q wrote outside the agent's own folder through the read list and was not refused", command)
+		}
+	}
+	if err := boundary.Shell("echo a > $TMPDIR/x.txt"); err != nil {
+		t.Errorf("a write to the agent's own tmp was refused: %v", err)
+	}
+	if err := boundary.Write(other + "/tmp/x.txt"); err == nil {
+		t.Error("a write into another agent's folder was not refused")
+	}
+}

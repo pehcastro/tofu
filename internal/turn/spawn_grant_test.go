@@ -135,7 +135,7 @@ type scratchCrew struct {
 	command  func(scratch string, step int) llm.Decision
 }
 
-var scratchNamed = regexp.MustCompile(`scratch folder is ([^\s:,]+)`)
+var scratchNamed = regexp.MustCompile(`scratch folder is (\S+?),`)
 
 func (m *scratchCrew) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	m.mu.Lock()
@@ -173,7 +173,7 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	model := &scratchCrew{
 		lead: []llm.Decision{spawnCall("call-spawn", "probe and clean up"), claimDecision("sub-1 cleaned up")},
 		command: func(scratch string, step int) llm.Decision {
-			seen = scratch
+			seen, scratch = scratch, filepath.ToSlash(scratch)
 			switch step {
 			case 1:
 				return writeCall("log", scratch+"/run.log")
@@ -208,14 +208,14 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	if asked != 0 {
 		t.Errorf("the person was asked %d times", asked)
 	}
-	if _, err := os.Stat(filepath.Join(root, seen)); err != nil {
+	if _, err := os.Stat(seen); err != nil {
 		t.Errorf("the scratch folder %s is not there: %v", seen, err)
 	}
-	if _, err := os.Stat(filepath.Join(root, seen, "run.log")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(seen, "run.log")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("run.log is still in the scratch: %v", err)
 	}
-	if ignored, err := os.ReadFile(filepath.Join(root, ".tofu", "scratch", ".gitignore")); err != nil || strings.TrimSpace(string(ignored)) != "*" {
-		t.Errorf("the scratch root is not ignored by git: %q, %v", ignored, err)
+	if _, inside := within(root, seen); inside {
+		t.Errorf("the scratch folder %s is inside the project %s", seen, root)
 	}
 	ran := 0
 	for _, row := range spawn.SubAgentRows() {

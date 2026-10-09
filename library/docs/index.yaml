@@ -266,6 +266,14 @@
   do: tofu shells log <name>
   check: tofu shells list
   topic: shells
+- ask: see what agents left in the scratchpad
+  do: tofu scratch
+  check: tofu scratch open
+  topic: scratchpad
+- ask: clean the scratchpad
+  do: tofu scratch clean
+  check: tofu scratch clean --dry-run
+  topic: scratchpad
 - ask: why a long build moved to a background shell
   do: tofu docs shells
   check: tofu shells list

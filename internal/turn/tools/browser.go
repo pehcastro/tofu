@@ -1057,6 +1057,9 @@ func (t browserMotion) Run(ctx context.Context, raw json.RawMessage) (turn.Resul
 		return turn.Result{}, fmt.Errorf("browser_motion: arguments are not the expected shape: %w", err)
 	}
 	root := filepath.Join(t.session.home, sys.StateDirName, "motion")
+	if place, found := sys.ScratchOf(ctx); found {
+		root = filepath.Join(place.SessionDir(), "motion")
+	}
 	var said []string
 	var err error
 	switch args.Action {

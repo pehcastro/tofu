@@ -133,10 +133,11 @@ searches, inspects and runs the project's own checks, and a command that
 would write, delete or run other code is refused with the reason. See
 [Ownership](/docs/features/ownership).
 
-Every sub-agent also gets a scratch folder, `.tofu/scratch/<name>-<n>/` in
-the project, for its logs, captures and probes. It writes and deletes there
-with no paths held and no ask. The folder carries a `.gitignore`, so git never
-sees it.
+Every sub-agent also gets a scratch folder outside the project, under
+`~/.tofu/projects/<project>/scratchpad/sessions/<session>/agents/<name>/`, for
+its logs, captures and probes. It writes and deletes there with no paths held
+and no ask, and nothing it writes there reaches the repository. See
+[Scratchpad](/docs/features/scratchpad).
 
 ## What you see
 

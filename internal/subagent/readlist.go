@@ -45,7 +45,7 @@ func (b *Boundary) Bash(command string, grammar Grammar) error {
 		}
 		command = strings.ReplaceAll(command, `\`, "/")
 	}
-	commands := shellCommands(command)
+	commands := shellCommands(command, b.temp())
 	left := false
 	for _, step := range commands {
 		if err := step.treeWide(); err != nil {

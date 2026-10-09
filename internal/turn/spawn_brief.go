@@ -3,11 +3,7 @@ package turn
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -15,7 +11,9 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/rule"
+	"tofu/internal/session"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, string, error) {
@@ -44,41 +42,52 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 
 func holdingWords(owns []string) string {
 	if len(owns) == 0 {
-		return "you were spawned without owns, so you hold no paths: write and edit are refused, a bash command may write only under the temp directory, and what you find goes in your report"
+		return "you were spawned without owns, so you hold no paths: write, edit and bash write only inside your scratch folder, and what you find goes in your report"
 	}
 	return "the paths you hold, and the only ones write, edit and bash may change: " + strings.Join(owns, ", ")
 }
 
-func (t *SpawnTool) scratch(id string) (string, error) {
-	if t.Project == "" {
-		return "", nil
-	}
-	root := filepath.Join(t.Project, ".tofu", "scratch")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return "", err
-	}
-	ignore, err := os.OpenFile(filepath.Join(root, ".gitignore"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err == nil {
-		_, err = ignore.WriteString("*\n")
-		err = errors.Join(err, ignore.Close())
-	}
-	if err != nil && !errors.Is(err, fs.ErrExist) {
-		return "", err
-	}
-	made, err := os.MkdirTemp(root, id+"-")
+func WithLeadScratch(ctx context.Context, config Config) (context.Context, error) {
+	place, err := leadScratch(config.Project, config.Sessions, config.Session)
 	if err != nil {
-		return "", err
+		return ctx, err
 	}
-	inside, err := filepath.Rel(t.Project, made)
-	return filepath.ToSlash(inside), err
+	return sys.WithScratch(ctx, place), place.Make()
 }
 
-func scratchWords(scratch string) string {
-	if scratch == "" {
+func leadScratch(project string, sessions *session.Store, id string) (sys.ScratchPlace, error) {
+	name, tag := "", session.FamilyTag(id)
+	if sessions != nil && id != "" {
+		if identity, err := sessions.Identity(id); err == nil {
+			name, tag = identity.Name, identity.Tag
+		}
+	}
+	return sys.ScratchFor(project, id, name, tag)
+}
+
+func (t *SpawnTool) scratch(ctx context.Context, id string) (sys.ScratchPlace, error) {
+	lead, found := sys.ScratchOf(ctx)
+	if !found && t.Project == "" {
+		return sys.ScratchPlace{}, nil
+	}
+	if !found {
+		var err error
+		if lead, err = leadScratch(t.Project, t.base.Sessions, t.base.Session); err != nil {
+			return sys.ScratchPlace{}, err
+		}
+	}
+	place := lead.For(id)
+	return place, place.Make()
+}
+
+func scratchWords(place sys.ScratchPlace) string {
+	if place.Root == "" {
 		return ""
 	}
-	return "\n\nyour scratch folder is " + scratch + ": logs, captures, probes and notes go there, never in the project. " +
-		"write, edit and bash write and delete inside it with no owns and with no ask; spell it as this relative path, with no variable."
+	return "\n\nyour scratch folder is " + place.Dir() + ", outside the project: probes, logs, captures and notes go there, never in the project. " +
+		"TMPDIR names its tmp folder in every command you run, and build caches sit under " + place.Cache() + ". " +
+		"write, edit and bash write and delete inside your folder with no owns and with no ask; spell it as this absolute path or as $TMPDIR. " +
+		"read the shared notes in " + place.Shared() + ", and call scratch_path when you need a folder by kind."
 }
 
 var memoryCitation = regexp.MustCompile(`\[memory#([\w-]+)\]`)
