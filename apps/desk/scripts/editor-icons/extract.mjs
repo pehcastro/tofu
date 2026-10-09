@@ -23,6 +23,26 @@ const svg = (file) => {
 const iconPixels = 16;
 const errorPixels = 0.02;
 const number = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
+const spacedArcs = (d) =>
+  d.replace(/([Aa])([^MmZzLlHhVvCcSsQqTtAa]*)/g, (_, letter, body) => {
+    const token = /[\s,]*(-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)/iy;
+    const flag = /[\s,]*([01])/y;
+    const parts = [];
+    const rest = body.trimEnd();
+    let at = 0;
+    while (at < rest.length) {
+      for (const kind of "nnnffnn") {
+        const pattern = kind === "n" ? token : flag;
+        pattern.lastIndex = at;
+        const found = pattern.exec(rest);
+        if (!found) throw new Error(`arc does not parse: ${letter}${body}`);
+        parts.push(found[1]);
+        at = pattern.lastIndex;
+      }
+      while (at < rest.length && /[\s,]/.test(rest[at])) at += 1;
+    }
+    return `${letter}${parts.join(" ")} `;
+  });
 const short = (value, digits) => {
   const text = (+Number(value).toFixed(digits)).toString();
   return text.replace(/^(-?)0\./, "$1.").replace(/^-0$/, "0");
@@ -41,7 +61,7 @@ const minified = (body) => {
     .replace(/\s(?:xmlns:(?:sodipodi|inkscape|dc|cc|rdf|svg)|version|xml:space|data-name)="[^"]*"/g, "")
     .replace(/\sid="([^"]*)"/g, (all, id) => (used.has(id) ? all : ""))
     .replace(/rgb\(\s*([\d.]+)%\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/g, (_, r, g, b) => `#${hex(r)}${hex(g)}${hex(b)}`)
-    .replace(/\s(d|points|transform|x|y|x1|x2|y1|y2|cx|cy|r|rx|ry|stroke-width|offset)="([^"]*)"/g, (_, name, value) => ` ${name}="${numbers(value)}"`)
+    .replace(/\s(d|points|transform|x|y|x1|x2|y1|y2|cx|cy|r|rx|ry|stroke-width|offset)="([^"]*)"/g, (_, name, value) => ` ${name}="${numbers(name === "d" ? spacedArcs(value) : value)}"`)
     .replace(/\sd="([^"]*)"/g, (_, value) => ` d="${value.replace(/\s*([a-zA-Z])\s*/g, "$1").replace(/[\s,]+/g, " ").replace(/ -/g, "-").trim()}"`)
     .replace(/style="\s*([^"]*)"/g, (_, style) => {
       const kept = style.split(";").map((rule) => rule.trim()).filter((rule) => rule && !/^(fill-opacity|stroke-opacity|opacity):\s*1$/.test(rule) && rule !== "fill-rule:nonzero");
@@ -90,17 +110,20 @@ function normalized(name, license, theme, draw) {
     if (!drawn[id]) throw new Error(`${name} has no svg for its default ${id}`);
   }
   const first = new Map();
-  const canonical = Object.fromEntries(Object.entries(drawn).map(([id, body]) => [id, first.get(body) ?? (first.set(body, id), id)]));
-  for (const key of ["file", "folder", "folderOpen"].filter((key) => pack[key])) pack[key] = canonical[pack[key]];
+  const aliases = {};
+  for (const [id, body] of Object.entries(drawn)) {
+    if (first.has(body)) aliases[id] = first.get(body);
+    else first.set(body, id);
+  }
   for (const key of lookups) {
     const dropped = Object.entries(pack[key]).filter(([, id]) => !drawn[id]);
     for (const [entry] of dropped) delete pack[key][entry];
     if (dropped.length) console.log(`${name}: dropped ${key} ${dropped.map(([entry, id]) => `${entry}=${id}`).join(" ")}, the pack defines no such icon`);
-    for (const [entry, id] of Object.entries(pack[key])) pack[key][entry] = canonical[id];
   }
+  pack.aliases = aliases;
   pack.icons = Object.fromEntries([...first].map(([body, id]) => [id, body]));
-  const deduped = Object.keys(drawn).length - first.size;
-  if (deduped) console.log(`${name}: ${deduped} icons were byte-identical to another and now share its id`);
+  const deduped = Object.keys(aliases).length;
+  if (deduped) console.log(`${name}: ${deduped} icons keep their own id and draw from a byte-identical svg`);
   return pack;
 }
 
@@ -159,6 +182,10 @@ async function pierre(root) {
 function phosphor(root) {
   const manifest = path.join(root, "themes/ph-file-icon-theme.json");
   const theme = jsonc(manifest);
+  const product = jsonc(path.join(root, "themes/ph-product-icon-theme.json"));
+  theme.iconDefinitions._git_branch = product.iconDefinitions["git-branch"];
+  theme.fileExtensions = { ...theme.fileExtensions, go: "_file_code", mod: "_package", sum: "_package" };
+  theme.fileNames = { ...theme.fileNames, ".gitignore": "_git_branch", ".gitattributes": "_git_branch", license: "_file_text", "license.md": "_file_text", "license.txt": "_file_text" };
   const font = path.join(path.dirname(manifest), theme.fonts[0].src[0].path);
   const points = Object.fromEntries(
     Object.entries(theme.iconDefinitions).map(([id, definition]) => [id, definition.fontCharacter.replace(/^\\+/, "")]),
@@ -182,7 +209,7 @@ const sources = [
   ["catppuccin", "Catppuccin Mocha", "MIT, Catppuccin 2023", () => catppuccin(path.join(packs, "catpuccin"))],
   ["github", "GitHub", "MIT, Juwan Petty 2022", () => vscode(path.join(packs, "github/fileicons/github-icons-theme.json"))],
   ["jetbrains", "JetBrains", "MIT, fogio-org 2025", () => vscode(path.join(packs, "jetbrains/themes/dark-jetbrains-icon-theme.json"))],
-  ["makinda", "Makinda Stroke", "MIT, Makinda Jackson", () => vscode(path.join(packs, "makinda/themes/makinda-file-icon-theme.stroke.json"))],
+  ["makinda", "Makinda Duotone", "MIT, Makinda Jackson", () => vscode(path.join(packs, "makinda/themes/makinda-file-icon-theme.duotone.json"))],
   ["phosphor", "Phosphor", "MIT, Phosphor Icons 2024", () => phosphor(path.join(packs, "phosphor"))],
   ["pierre", "Pierre", "MIT, The Pierre Computer Company 2026", () => pierre(path.join(packs, "pierre"))],
   ["symbols", "Symbols", "MIT, Miguel Solorio 2020-22", () => vscode(path.join(packs, "symbols/src/symbol-icon-theme.json"))],

@@ -1,7 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use desk_core::git;
-use desk_ui::components::history::{Blame, BlameLine};
 use gpui::SharedString;
 
 const MINUTE: i64 = 60;
@@ -10,7 +9,6 @@ const DAY: i64 = 24 * HOUR;
 const WEEK: i64 = 7 * DAY;
 const MONTH: i64 = 30 * DAY;
 const YEAR: i64 = 365 * DAY;
-const SHORT_SHA: usize = 7;
 const YOU: &str = "you";
 const NOT_COMMITTED: &str = "not committed";
 
@@ -53,26 +51,4 @@ pub fn inline(blamed: &Blamed, row: usize) -> Option<Inline> {
             age(now().saturating_sub(line.time)).into(),
         ),
     })
-}
-
-pub fn gutter(blamed: &Blamed) -> Vec<BlameLine> {
-    blamed
-        .lines
-        .iter()
-        .zip(1..)
-        .map(|(line, number)| BlameLine {
-            number,
-            text: line.text.clone().into(),
-            blame: match &line.commit {
-                None => Blame::Person {
-                    name: YOU.into(),
-                    commit: NOT_COMMITTED.into(),
-                },
-                Some(commit) => Blame::Person {
-                    name: line.author.clone().into(),
-                    commit: commit.get(..SHORT_SHA).unwrap_or(commit).to_owned().into(),
-                },
-            },
-        })
-        .collect()
 }

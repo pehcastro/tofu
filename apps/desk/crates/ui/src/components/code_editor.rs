@@ -1,12 +1,13 @@
 use std::cell::Cell;
 use std::fmt::Display;
+use std::fs;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Instant;
 
 use desk_core::buffer::Buffer;
-use desk_core::syntax::{Kind, Language, Syntax};
+use desk_core::syntax::{Kind, Language, Span, Syntax};
 use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity, EntityInputHandler,
     FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
@@ -24,6 +25,49 @@ use crate::theme::ColorToken;
 
 const TAB: &str = "    ";
 const FAILURE_INSET: f32 = 12.0;
+pub const READ_ONLY_BYTES: u64 = 1024 * 1024;
+const REFUSED_BYTES: u64 = 64 * 1024 * 1024;
+const LONG_LINE_BYTES: usize = 64 * 1024;
+const DRAWN_LINE_BYTES: usize = 1024;
+const SNIFF_BYTES: usize = 8192;
+const CONTROL_SHARE: f32 = 0.3;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileKind {
+    Text,
+    Large(u64),
+    Binary(u64),
+}
+
+pub enum Highlight {
+    Plain,
+    Tree(Syntax),
+}
+
+impl Highlight {
+    pub fn spans(&self, rows: Range<usize>) -> Vec<Span> {
+        match self {
+            Highlight::Plain => Vec::new(),
+            Highlight::Tree(syntax) => syntax.spans(rows),
+        }
+    }
+}
+
+fn binary(head: &[u8]) -> bool {
+    let control = head
+        .iter()
+        .filter(|byte| byte.is_ascii_control() && !matches!(byte, b'\t' | b'\n' | b'\r' | 0x0c))
+        .count();
+    head.contains(&0) || !head.is_empty() && control as f32 / head.len() as f32 > CONTROL_SHARE
+}
+
+fn cut(text: &str, most: usize) -> &str {
+    let end = (0..=most.min(text.len()))
+        .rev()
+        .find(|at| text.is_char_boundary(*at))
+        .unwrap_or(0);
+    text.get(..end).unwrap_or_default()
+}
 
 pub fn syntax_token(kind: Kind) -> ColorToken {
     match kind {
@@ -41,16 +85,25 @@ pub fn syntax_token(kind: Kind) -> ColorToken {
 }
 
 pub fn code_lines(buffer: &Buffer, syntax: &Syntax, rows: Range<usize>) -> Vec<CodeLine> {
+    coloured_lines(buffer, syntax.spans(rows.clone()), rows)
+}
+
+fn coloured_lines(buffer: &Buffer, spans: Vec<Span>, rows: Range<usize>) -> Vec<CodeLine> {
     let rope = buffer.rope();
+    let mut long = Vec::new();
     let mut lines: Vec<CodeLine> = rows
         .clone()
-        .map(|row| CodeLine {
-            text: buffer.line(row).unwrap_or_default().into(),
-            ..CodeLine::default()
+        .map(|row| {
+            let full = buffer.line(row).unwrap_or_default();
+            long.push(full.len() > LONG_LINE_BYTES);
+            CodeLine {
+                text: cut(&full, DRAWN_LINE_BYTES).to_owned().into(),
+                ..CodeLine::default()
+            }
         })
         .collect();
     let last_row = rows.end.saturating_sub(1);
-    for span in syntax.spans(rows.clone()) {
+    for span in spans {
         let (Ok(start), Ok(end), Ok(first), Ok(last)) = (
             rope.try_char_to_byte(span.chars.start),
             rope.try_char_to_byte(span.chars.end),
@@ -60,8 +113,9 @@ pub fn code_lines(buffer: &Buffer, syntax: &Syntax, rows: Range<usize>) -> Vec<C
             continue;
         };
         for row in first.max(rows.start)..=last.min(last_row) {
-            let (Some(line), Ok(base)) =
-                (lines.get_mut(row - rows.start), rope.try_line_to_byte(row))
+            let at = row - rows.start;
+            let (Some(line), Ok(base), Some(false)) =
+                (lines.get_mut(at), rope.try_line_to_byte(row), long.get(at))
             else {
                 continue;
             };
@@ -152,7 +206,8 @@ type Save = Rc<dyn Fn(&mut Buffer, &mut Window, &mut App) -> Result<(), String>>
 
 pub struct CodeEditor {
     buffer: Buffer,
-    syntax: Syntax,
+    syntax: Highlight,
+    kind: FileKind,
     carets: Vec<Caret>,
     marked: Option<Range<usize>>,
     widest: usize,
@@ -174,9 +229,14 @@ pub struct CodeEditor {
 
 impl CodeEditor {
     pub fn new(buffer: Buffer, syntax: Syntax, cx: &mut App) -> Self {
+        Self::shown(buffer, Highlight::Tree(syntax), FileKind::Text, cx)
+    }
+
+    fn shown(buffer: Buffer, syntax: Highlight, kind: FileKind, cx: &mut App) -> Self {
         let mut editor = CodeEditor {
             buffer,
             syntax,
+            kind,
             carets: vec![Caret::at(0)],
             marked: None,
             widest: 0,
@@ -201,11 +261,51 @@ impl CodeEditor {
 
     pub fn open(path: &Path, cx: &mut App) -> Result<Self, String> {
         let shown = path.display();
-        let language = Language::from_path(path)
-            .ok_or_else(|| format!("desk_core has no syntax for {shown}"))?;
-        let buffer = Buffer::load(path).map_err(|error| format!("{shown}: {error}"))?;
-        let syntax = Syntax::new(language, &buffer).map_err(|error| error.to_string())?;
-        Ok(Self::new(buffer, syntax, cx))
+        let size = fs::metadata(path)
+            .map_err(|error| format!("{shown}: {error}"))?
+            .len();
+        if size > REFUSED_BYTES {
+            return Err(format!(
+                "{shown} is {} MB, over the {} MB the editor opens",
+                size / READ_ONLY_BYTES,
+                REFUSED_BYTES / READ_ONLY_BYTES
+            ));
+        }
+        let bytes = fs::read(path).map_err(|error| format!("{shown}: {error}"))?;
+        if binary(bytes.get(..SNIFF_BYTES).unwrap_or(&bytes)) {
+            let note = format!("Binary file, {size} bytes, not shown.");
+            let buffer = Buffer::from_text(&note);
+            return Ok(Self::shown(
+                buffer,
+                Highlight::Plain,
+                FileKind::Binary(size),
+                cx,
+            ));
+        }
+        let buffer = Buffer::from_text(&String::from_utf8_lossy(&bytes));
+        if size > READ_ONLY_BYTES {
+            return Ok(Self::shown(
+                buffer,
+                Highlight::Plain,
+                FileKind::Large(size),
+                cx,
+            ));
+        }
+        let syntax = match Language::from_path(path) {
+            Some(language) => {
+                Highlight::Tree(Syntax::new(language, &buffer).map_err(|error| error.to_string())?)
+            }
+            None => Highlight::Plain,
+        };
+        Ok(Self::shown(buffer, syntax, FileKind::Text, cx))
+    }
+
+    pub fn kind(&self) -> FileKind {
+        self.kind
+    }
+
+    fn read_only(&self) -> bool {
+        self.kind != FileKind::Text
     }
 
     pub fn on_save(
@@ -228,7 +328,7 @@ impl CodeEditor {
         &self.buffer
     }
 
-    pub fn syntax(&self) -> &Syntax {
+    pub fn syntax(&self) -> &Highlight {
         &self.syntax
     }
 
@@ -462,8 +562,10 @@ impl CodeEditor {
     }
 
     fn settle(&mut self, lines: usize) {
-        let synced = self.syntax.sync(&mut self.buffer);
-        self.report("Could not colour", synced);
+        if let Highlight::Tree(syntax) = &mut self.syntax {
+            let synced = syntax.sync(&mut self.buffer);
+            self.report("Could not colour", synced);
+        }
         self.edited_since_found = !self.query.is_empty();
         self.carets = self
             .buffer
@@ -495,7 +597,7 @@ impl CodeEditor {
             .filter(|range| !range.is_empty() || !text.is_empty())
             .cloned()
             .collect();
-        if ranges.is_empty() {
+        if ranges.is_empty() || self.read_only() {
             return;
         }
         let lines = self.buffer.line_count();
@@ -553,6 +655,9 @@ impl CodeEditor {
     }
 
     fn history(&mut self, back: bool) {
+        if self.read_only() {
+            return;
+        }
         let lines = self.buffer.line_count();
         let before = self.buffer.rope().clone();
         let moved = if back {
@@ -659,7 +764,7 @@ impl CodeEditor {
             (true, "v") => self.paste(cx),
             (true, "f") => self.find(window, cx),
             (true, "s") => {
-                if let Some(save) = self.on_save.clone() {
+                if let Some(save) = self.on_save.clone().filter(|_| !self.read_only()) {
                     let saved = save(&mut self.buffer, window, cx);
                     self.failure = saved.err().map(|error| ("Could not save", error.into()));
                 }
@@ -722,7 +827,7 @@ impl CodeEditor {
     }
 
     fn rows(&self, rows: Range<usize>, caret_on: bool) -> Vec<CodeLine> {
-        let mut lines = code_lines(&self.buffer, &self.syntax, rows.clone());
+        let mut lines = coloured_lines(&self.buffer, self.syntax.spans(rows.clone()), rows.clone());
         let current = self.found.get(self.current);
         for (row, line) in rows.zip(lines.iter_mut()) {
             let Ok(start) = self.buffer.line_to_char(row) else {

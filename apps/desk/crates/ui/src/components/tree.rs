@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -6,16 +7,16 @@ use std::{fmt, fs, io};
 
 use desk_core::syntax::Language;
 use desk_motion::reduced_motion;
-use desk_motion::tokens::{EASE_OUT, HOVER as SLIDE, HOVER_MS, PANEL_OUT_MS, TOGGLE_MS};
+use desk_motion::tokens::{EASE_OUT, HOVER_MS, TOGGLE_MS};
 use desk_tiling::{Store, StoreError};
 use gpui::{
     AnyElement, App, ClickEvent, Context, ElementId, EventEmitter, Global, Image, ImageFormat,
-    SharedString, SpringState, Window, div, img, prelude::*, px,
+    ListSizingBehavior, ScrollStrategy, ScrollWheelEvent, SharedString, UniformListScrollHandle,
+    Window, div, img, prelude::*, px, uniform_list,
 };
 use serde_json::Value;
 
 use crate::components::chip::{GitStatus, git_name};
-use crate::components::overlay::{actions, context_menu};
 use crate::components::paint::ink;
 use crate::components::size::{
     FONT_TREE, HOVER, RADIUS_CHIP, ROW_ON, ROW_PAD_X, TREE_GAP, TREE_ROW,
@@ -30,24 +31,20 @@ const IGNORED_FADE: f32 = 0.42;
 const ICON_SIZE: f32 = 16.0;
 const DOT: f32 = 6.0;
 const LABEL_FONT: f32 = 11.0;
-const SETTLED_PX: f32 = 0.05;
 const UNHOVER_MS: Duration = Duration::from_millis(100);
+const FRAME_LOG_VAR: &str = "DESK_TREE_FRAMES";
+const FRAME_WATCH: Duration = Duration::from_millis(1000);
+const FRAME_BUDGET_MS: f32 = 1000.0 / 60.0;
 
 const PICK_FILE: &str = "editor-icons";
 
-pub const TREE_MENU: [&str; 10] = [
-    "New file",
-    "New folder",
-    "Rename  F2",
-    "Copy path",
-    "Copy relative path",
-    "Mention in chat",
-    "Open in Terminal",
-    "Reveal in Explorer",
-    "Collapse all",
-    "Delete",
-];
-const COLLAPSE_ALL: usize = 8;
+pub struct OpenProject(pub PathBuf);
+
+impl Global for OpenProject {}
+
+pub struct EditedFile(pub PathBuf);
+
+impl Global for EditedFile {}
 
 #[derive(Debug)]
 pub enum IconThemeError {
@@ -261,7 +258,10 @@ impl IconTheme {
             return Err(IconThemeError::Missing("a pack file"));
         };
         let field = |key: &'static str| pack.get(key).ok_or(IconThemeError::Missing(key));
-        let icons = shards
+        let aliases = field("aliases")?
+            .as_object()
+            .ok_or(IconThemeError::Missing("aliases"))?;
+        let images = shards
             .iter()
             .map(|shard| {
                 shard
@@ -277,18 +277,21 @@ impl IconTheme {
                     .as_str()
                     .ok_or_else(|| IconThemeError::NoIcon(id.clone()))?;
                 let image = Image::from_bytes(ImageFormat::Svg, svg.as_bytes().to_vec());
-                let icon = Icon {
-                    id: id.clone().into(),
-                    image: Arc::new(image),
-                };
-                Ok((id.as_str(), icon))
+                Ok((id.as_str(), Arc::new(image)))
             })
             .collect::<Result<HashMap<_, _>, IconThemeError>>()?;
         let icon = |id: &Value| -> Result<Icon, IconThemeError> {
-            id.as_str()
-                .and_then(|id| icons.get(id))
-                .cloned()
-                .ok_or_else(|| IconThemeError::NoIcon(id.to_string()))
+            let named = id
+                .as_str()
+                .ok_or_else(|| IconThemeError::NoIcon(id.to_string()))?;
+            let drawn = aliases.get(named).and_then(Value::as_str).unwrap_or(named);
+            let image = images
+                .get(drawn)
+                .ok_or_else(|| IconThemeError::NoIcon(named.to_owned()))?;
+            Ok(Icon {
+                id: named.to_owned().into(),
+                image: image.clone(),
+            })
         };
         let table = |key: &'static str| -> Result<Icons, IconThemeError> {
             field(key)?
@@ -437,7 +440,7 @@ fn badge(git: GitStatus) -> Option<&'static str> {
     }
 }
 
-fn strength(git: GitStatus) -> u8 {
+pub fn strength(git: GitStatus) -> u8 {
     match git {
         GitStatus::Ignored => 0,
         GitStatus::Untracked => 1,
@@ -510,23 +513,33 @@ fn flatten(roots: &[TreeNode], icons: &IconTheme, depth: usize, parent: &str) ->
     rows
 }
 
-fn unread_paths(rows: &[Row]) -> impl Iterator<Item = SharedString> + '_ {
+fn read_folders(rows: &[Row]) -> impl Iterator<Item = SharedString> + '_ {
     rows.iter()
-        .filter(|row| row.unread)
+        .filter(|row| row.folder && !row.unread)
         .map(|row| row.path.clone())
+}
+
+fn inside(path: &str, folder: &str) -> bool {
+    path.strip_prefix(folder)
+        .is_some_and(|rest| rest.starts_with('/'))
 }
 
 fn fraction(elapsed: Duration, span: Duration) -> f32 {
     (elapsed.as_secs_f32() / span.as_secs_f32()).min(1.0)
 }
 
-fn fold_span(to: f32) -> Duration {
-    if to > 0.0 { TOGGLE_MS } else { PANEL_OUT_MS }
+struct Fold {
+    started: Instant,
+    opening: bool,
 }
 
-struct Fold {
-    from: f32,
-    started: Instant,
+impl Fold {
+    fn eased(&self, now: Instant) -> f32 {
+        EASE_OUT(fraction(
+            now.saturating_duration_since(self.started),
+            TOGGLE_MS,
+        ))
+    }
 }
 
 struct Fade {
@@ -561,74 +574,115 @@ impl Fade {
     }
 }
 
-#[derive(Clone, Copy)]
-struct Slide {
-    from: SpringState,
-    moved: Instant,
+enum FrameLog {
+    Off,
+    Idle,
+    Watching(FrameWatch),
 }
 
-impl Slide {
-    fn offset(slide: Option<Slide>, now: Instant) -> SpringState {
-        slide.map_or(
-            SpringState {
-                position: 0.0,
-                velocity: 0.0,
-            },
-            |slide| {
-                SLIDE.step(
-                    slide.from,
-                    0.0,
-                    now.saturating_duration_since(slide.moved).as_secs_f32(),
-                )
-            },
-        )
+impl FrameLog {
+    fn from_env() -> Self {
+        match std::env::var_os(FRAME_LOG_VAR) {
+            Some(_) => FrameLog::Idle,
+            None => FrameLog::Off,
+        }
+    }
+
+    fn watch(&mut self, what: SharedString) {
+        let now = Instant::now();
+        match std::mem::replace(self, FrameLog::Off) {
+            FrameLog::Off => {}
+            FrameLog::Watching(watch) => {
+                let what = match watch.what == what {
+                    true => what,
+                    false => format!("{}, then {what}", watch.what).into(),
+                };
+                *self = FrameLog::Watching(FrameWatch {
+                    what,
+                    until: now + FRAME_WATCH,
+                    ..watch
+                });
+            }
+            FrameLog::Idle => *self = FrameLog::Watching(FrameWatch::new(what, now)),
+        }
+    }
+
+    fn tick(&mut self, now: Instant) -> bool {
+        let FrameLog::Watching(watch) = self else {
+            return false;
+        };
+        watch
+            .intervals
+            .push(now.saturating_duration_since(watch.last).as_secs_f32() * 1000.0);
+        watch.last = now;
+        if now < watch.until {
+            return true;
+        }
+        if let FrameLog::Watching(watch) = std::mem::replace(self, FrameLog::Idle) {
+            watch.report();
+        }
+        false
     }
 }
 
-struct Group {
-    depth: usize,
-    reveal: f32,
-    start: f32,
-    rows: Vec<AnyElement>,
+struct FrameWatch {
+    what: SharedString,
+    until: Instant,
+    last: Instant,
+    intervals: Vec<f32>,
+    slowest_rows: f32,
 }
 
-impl Group {
-    fn close(self, y: &mut f32, theme: &Theme) -> AnyElement {
-        let content = *y - self.start;
-        let shown = content * self.reveal;
-        *y = self.start + shown;
-        let guide = div()
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left(px(GUIDE_X + self.depth.saturating_sub(1) as f32 * INDENT))
-            .w(px(1.0))
-            .bg(ink(theme, GUIDE));
-        div()
-            .relative()
-            .flex()
-            .flex_col()
-            .flex_none()
-            .w_full()
-            .when(self.reveal < 1.0, |group| {
-                group.h(px(shown)).overflow_hidden().opacity(self.reveal)
-            })
-            .child(guide)
-            .children(self.rows)
-            .into_any_element()
+impl FrameWatch {
+    fn new(what: SharedString, now: Instant) -> Self {
+        FrameWatch {
+            what,
+            until: now + FRAME_WATCH,
+            last: now,
+            intervals: Vec::new(),
+            slowest_rows: 0.0,
+        }
+    }
+
+    fn report(mut self) {
+        let worst_at = self
+            .intervals
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map_or(0, |(at, _)| at.saturating_add(1));
+        self.intervals.sort_by(f32::total_cmp);
+        let count = self.intervals.len();
+        let at = |share: f32| {
+            let index = ((count as f32 - 1.0) * share).round() as usize;
+            self.intervals.get(index).copied().unwrap_or_default()
+        };
+        let over = self
+            .intervals
+            .iter()
+            .filter(|ms| **ms > FRAME_BUDGET_MS)
+            .count();
+        eprintln!(
+            "desk: tree frames {}: {count} frames, median {:.2} ms, p95 {:.2} ms, worst {:.2} ms at frame {worst_at}, {over} over {FRAME_BUDGET_MS:.1} ms, rows built in at most {:.2} ms",
+            self.what,
+            at(0.5),
+            at(0.95),
+            at(1.0),
+            self.slowest_rows,
+        );
     }
 }
 
 pub struct FileTree {
     id: SharedString,
+    frames: FrameLog,
     rows: Vec<Row>,
-    closed: BTreeSet<SharedString>,
+    shown: Vec<usize>,
+    expanded: BTreeSet<SharedString>,
     folds: HashMap<SharedString, Fold>,
     hovers: Vec<Fade>,
     selected: Option<SharedString>,
-    selected_y: Option<f32>,
-    slide: Option<Slide>,
-    slide_from: Option<SpringState>,
+    scroll: UniformListScrollHandle,
     badges: bool,
 }
 
@@ -637,22 +691,25 @@ impl EventEmitter<TreeEvent> for FileTree {}
 impl FileTree {
     pub fn new(id: impl Into<SharedString>, roots: Vec<TreeNode>, icons: &IconTheme) -> Self {
         let rows = flatten(&roots, icons, 0, "");
-        FileTree {
+        let mut tree = FileTree {
             id: id.into(),
-            closed: unread_paths(&rows).collect(),
+            frames: FrameLog::from_env(),
+            expanded: read_folders(&rows).collect(),
             rows,
+            shown: Vec::new(),
             folds: HashMap::new(),
             hovers: Vec::new(),
             selected: None,
-            selected_y: None,
-            slide: None,
-            slide_from: None,
+            scroll: UniformListScrollHandle::new(),
             badges: false,
-        }
+        };
+        tree.reshow();
+        tree
     }
 
     pub fn closed(mut self, path: &'static str) -> Self {
-        self.closed.insert(path.into());
+        self.expanded.remove(path);
+        self.reshow();
         self
     }
 
@@ -664,6 +721,18 @@ impl FileTree {
     pub fn badges(mut self) -> Self {
         self.badges = true;
         self
+    }
+
+    fn reshow(&mut self) {
+        let mut hidden_below = None;
+        self.shown.clear();
+        for (at, row) in self.rows.iter().enumerate() {
+            if hidden_below.is_some_and(|depth| row.depth > depth) {
+                continue;
+            }
+            hidden_below = (row.folder && !self.expanded.contains(&row.path)).then_some(row.depth);
+            self.shown.push(at);
+        }
     }
 
     pub fn load(&mut self, folder: &str, children: Vec<TreeNode>, icons: &IconTheme) -> bool {
@@ -680,20 +749,26 @@ impl FileTree {
         let start = at.saturating_add(1);
         let below = self
             .rows
+            .get(start..)
+            .unwrap_or_default()
             .iter()
-            .skip(start)
             .take_while(|row| row.depth > depth)
             .count();
+        self.frames
+            .watch(format!("load /{folder}, {} entries", children.len()).into());
         let rows = flatten(&children, icons, depth.saturating_add(1), folder);
-        self.closed.extend(unread_paths(&rows));
         self.rows.splice(start..start.saturating_add(below), rows);
+        self.reshow();
         true
     }
 
-    pub fn entries(&self) -> impl Iterator<Item = (&str, &str, bool)> {
-        self.rows
-            .iter()
-            .map(|row| (row.path.as_ref(), row.name.as_ref(), row.folder))
+    pub fn reset(&mut self, roots: Vec<TreeNode>, icons: &IconTheme) {
+        self.rows = flatten(&roots, icons, 0, "");
+        self.reshow();
+    }
+
+    pub fn open_folders(&self) -> Vec<SharedString> {
+        self.expanded.iter().cloned().collect()
     }
 
     pub fn reicon(&mut self, icons: &IconTheme, cx: &mut Context<Self>) {
@@ -707,39 +782,35 @@ impl FileTree {
         if self.selected.as_ref() == Some(&path) {
             return;
         }
-        let now = Instant::now();
-        let at = Slide::offset(self.slide, now);
-        self.slide_from = self
-            .selected_y
-            .filter(|_| !reduced_motion(cx))
-            .map(|y| SpringState {
-                position: y + at.position,
-                velocity: at.velocity,
-            });
-        self.slide = None;
-        self.hover(path.clone(), false, now);
+        self.hover(path.clone(), false, Instant::now());
+        if let Some(at) = self
+            .shown
+            .iter()
+            .position(|row| self.rows.get(*row).is_some_and(|row| row.path == path))
+        {
+            self.scroll.scroll_to_item(at, ScrollStrategy::Nearest);
+        }
         self.selected = Some(path);
         cx.notify();
     }
 
-    fn openness(&self, path: &SharedString, now: Instant) -> f32 {
-        let to = if self.closed.contains(path) { 0.0 } else { 1.0 };
-        self.folds.get(path).map_or(to, |fold| {
-            let elapsed = now.saturating_duration_since(fold.started);
-            fold.from + (to - fold.from) * EASE_OUT(fraction(elapsed, fold_span(to)))
-        })
+    pub fn collapse_all(&mut self, cx: &mut Context<Self>) {
+        self.expanded.clear();
+        self.folds.clear();
+        self.reshow();
+        cx.notify();
     }
 
-    fn toggle(&mut self, path: SharedString, reduced: bool, now: Instant) {
-        let from = self.openness(&path, now);
-        if !self.closed.remove(&path) {
-            self.closed.insert(path.clone());
+    fn toggle(&mut self, path: SharedString, reduced: bool) {
+        let opening = !self.expanded.remove(&path);
+        if opening {
+            self.expanded.insert(path.clone());
         }
-        if reduced {
-            self.folds.remove(&path);
-        } else {
-            self.folds.insert(path, Fold { from, started: now });
+        if !reduced {
+            let started = Instant::now();
+            self.folds.insert(path, Fold { started, opening });
         }
+        self.reshow();
     }
 
     fn hover(&mut self, path: SharedString, on: bool, now: Instant) {
@@ -768,29 +839,30 @@ impl FileTree {
             cx.emit(TreeEvent::Opened(path));
             return;
         }
-        self.toggle(path.clone(), reduced_motion(cx), Instant::now());
-        if unread {
+        self.frames.watch(format!("toggle /{path}").into());
+        self.toggle(path.clone(), reduced_motion(cx));
+        if unread && self.expanded.contains(&path) {
             cx.emit(TreeEvent::Unfolded(path));
         }
         cx.notify();
     }
 
-    fn picked(&mut self, at: &usize, _: &mut Window, cx: &mut Context<Self>) {
-        if *at != COLLAPSE_ALL {
-            return;
+    fn openness(&self, row: &Row, now: Instant) -> f32 {
+        let open = self.expanded.contains(&row.path);
+        match self.folds.get(&row.path) {
+            Some(fold) if fold.opening => fold.eased(now),
+            Some(fold) => 1.0 - fold.eased(now),
+            None if open => 1.0,
+            None => 0.0,
         }
-        let now = Instant::now();
-        let reduced = reduced_motion(cx);
-        let open: Vec<SharedString> = self
-            .rows
+    }
+
+    fn reveal(&self, row: &Row, now: Instant) -> f32 {
+        self.folds
             .iter()
-            .filter(|row| row.folder && !self.closed.contains(&row.path))
-            .map(|row| row.path.clone())
-            .collect();
-        for path in open {
-            self.toggle(path, reduced, now);
-        }
-        cx.notify();
+            .filter(|(folder, fold)| fold.opening && inside(&row.path, folder))
+            .map(|(_, fold)| fold.eased(now))
+            .fold(1.0, f32::min)
     }
 
     fn icon(row: &Row, open: f32) -> AnyElement {
@@ -810,15 +882,7 @@ impl FileTree {
             .into_any_element()
     }
 
-    fn row(
-        &self,
-        row: &Row,
-        open: f32,
-        own_fill: bool,
-        now: Instant,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn row(&self, row: &Row, now: Instant, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let ignored = row.git == Some(GitStatus::Ignored);
         let named = match (ignored, row.folder) {
             (true, _) => None,
@@ -830,34 +894,41 @@ impl FileTree {
             .hovers
             .iter()
             .find(|fade| fade.path == row.path)
-            .filter(|fade| !picked || !fade.on)
+            .filter(|_| !picked)
             .map_or(0.0, |fade| fade.level(now));
-        let fill = if own_fill { ROW_ON } else { HOVER * lit };
+        let fill = if picked { ROW_ON } else { HOVER * lit };
         let (folder, unread) = (row.folder, row.unread);
         let label = match (self.badges, row.git) {
             (true, Some(git)) if !folder => badge(git).map(|letter| (letter, git)),
             (false, Some(GitStatus::Conflict)) => Some(("conflict", GitStatus::Conflict)),
             _ => None,
         };
+        let open = if folder { self.openness(row, now) } else { 0.0 };
+        let reveal = self.reveal(row, now);
+        let guides = (1..=row.depth).map(|level| {
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(px(GUIDE_X + level.saturating_sub(1) as f32 * INDENT))
+                .w(px(1.0))
+                .bg(ink(theme, GUIDE))
+        });
         let clicked = row.path.clone();
         let hovered = row.path.clone();
-        div()
-            .id(ElementId::Name(row.path.clone()))
-            .relative()
+        let body = div()
             .flex()
-            .flex_none()
+            .flex_1()
+            .min_w_0()
+            .h_full()
             .items_center()
             .gap(px(TREE_GAP))
-            .w_full()
-            .min_w_0()
-            .h(px(TREE_ROW))
             .pl(px(ROW_PAD_X + row.depth as f32 * INDENT))
             .pr(px(ROW_PAD_X))
             .rounded(px(RADIUS_CHIP))
-            .text_size(px(FONT_TREE))
-            .cursor_pointer()
             .when(fill > 0.0, |line| line.bg(ink(theme, fill)))
             .when(ignored, |line| line.opacity(IGNORED_FADE).italic())
+            .when(reveal < 1.0, |line| line.opacity(reveal))
             .child(Self::icon(row, open))
             .child(git_name(row.name.clone(), named, theme).flex_1())
             .children(row.rolled.filter(|_| folder).map(|git| {
@@ -873,7 +944,18 @@ impl FileTree {
                     .text_size(px(LABEL_FONT))
                     .text_color(git.color(theme))
                     .child(text)
-            }))
+            }));
+        div()
+            .id(ElementId::Name(row.path.clone()))
+            .relative()
+            .flex()
+            .w_full()
+            .min_w_0()
+            .h(px(TREE_ROW))
+            .text_size(px(FONT_TREE))
+            .cursor_pointer()
+            .children(guides)
+            .child(body)
             .on_hover(cx.listener(move |this, on: &bool, _, cx| {
                 this.hover(hovered.clone(), *on, Instant::now());
                 cx.notify();
@@ -883,116 +965,49 @@ impl FileTree {
             }))
             .into_any_element()
     }
+
+    fn visible(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let theme = ActiveTheme::theme(cx);
+        let now = Instant::now();
+        let picked: Vec<usize> = self.shown.get(range).unwrap_or_default().to_vec();
+        let rows = picked
+            .into_iter()
+            .filter_map(|at| self.rows.get(at))
+            .map(|row| self.row(row, now, &theme, cx))
+            .collect();
+        if let FrameLog::Watching(watch) = &mut self.frames {
+            let ms = now.elapsed().as_secs_f32() * 1000.0;
+            watch.slowest_rows = watch.slowest_rows.max(ms);
+        }
+        rows
+    }
 }
 
 impl Render for FileTree {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = ActiveTheme::theme(cx);
         let now = Instant::now();
-        let closed = &self.closed;
-        self.folds.retain(|path, fold| {
-            let to = if closed.contains(path) { 0.0 } else { 1.0 };
-            now.saturating_duration_since(fold.started) < fold_span(to)
-        });
+        self.folds
+            .retain(|_, fold| now.saturating_duration_since(fold.started) < TOGGLE_MS);
         self.hovers.retain(|fade| fade.on || !fade.done(now));
-
-        let mut stack = vec![Group {
-            depth: 0,
-            reveal: 1.0,
-            start: 0.0,
-            rows: Vec::new(),
-        }];
-        let mut y = 0.0;
-        let mut hidden_below = None;
-        let mut selected_at = None;
-        for row in &self.rows {
-            if hidden_below.is_some_and(|depth| row.depth > depth) {
-                continue;
-            }
-            hidden_below = None;
-            while let Some(group) = stack.pop_if(|group| group.depth > row.depth) {
-                let closed = group.close(&mut y, &theme);
-                if let Some(parent) = stack.last_mut() {
-                    parent.rows.push(closed);
-                }
-            }
-            let open = if row.folder {
-                self.openness(&row.path, now)
-            } else {
-                0.0
-            };
-            let shown = stack.iter().all(|group| group.reveal >= 1.0);
-            let picked = self.selected.as_ref() == Some(&row.path);
-            if picked && shown {
-                selected_at = Some(y);
-            }
-            let element = self.row(row, open, picked && !shown, now, &theme, cx);
-            if let Some(top) = stack.last_mut() {
-                top.rows.push(element);
-            }
-            y += TREE_ROW;
-            match (row.folder, open > 0.0) {
-                (true, true) => stack.push(Group {
-                    depth: row.depth.saturating_add(1),
-                    reveal: open,
-                    start: y,
-                    rows: Vec::new(),
-                }),
-                (true, false) => hidden_below = Some(row.depth),
-                (false, _) => {}
-            }
-        }
-        while let Some(group) = stack.pop_if(|group| group.depth > 0) {
-            let closed = group.close(&mut y, &theme);
-            if let Some(parent) = stack.last_mut() {
-                parent.rows.push(closed);
-            }
-        }
-        let rows = stack.pop().map(|root| root.rows).unwrap_or_default();
-
-        if let (Some(from), Some(at)) = (self.slide_from.take(), selected_at) {
-            self.slide = Some(Slide {
-                from: SpringState {
-                    position: from.position - at,
-                    velocity: from.velocity,
-                },
-                moved: now,
-            });
-        }
-        let offset = Slide::offset(self.slide, now);
-        if SLIDE.is_settled(offset, 0.0, SETTLED_PX) {
-            self.slide = None;
-        }
-        self.selected_y = selected_at;
-
-        let moving = !self.folds.is_empty()
-            || self.slide.is_some()
-            || self.hovers.iter().any(|fade| !fade.done(now));
-        if moving {
+        let watching = self.frames.tick(now);
+        if watching || !self.folds.is_empty() || self.hovers.iter().any(|fade| !fade.done(now)) {
             window.request_animation_frame();
         }
-
-        let highlight = selected_at.map(|at| {
-            div()
-                .absolute()
-                .left_0()
-                .right_0()
-                .top(px(at + offset.position))
-                .h(px(TREE_ROW))
-                .rounded(px(RADIUS_CHIP))
-                .bg(ink(&theme, ROW_ON))
-        });
-        let list = div()
-            .relative()
-            .flex()
-            .flex_col()
-            .w_full()
-            .min_w_0()
-            .children(highlight)
-            .children(rows);
-        context_menu(actions(TREE_MENU))
-            .id(ElementId::Name(format!("{}-menu", self.id).into()))
-            .on_pick(cx.listener(Self::picked))
-            .child(list)
+        uniform_list(
+            self.id.clone(),
+            self.shown.len(),
+            cx.processor(|tree, range, _, cx| tree.visible(range, cx)),
+        )
+        .with_sizing_behavior(ListSizingBehavior::Infer)
+        .track_scroll(&self.scroll)
+        .w_full()
+        .flex_1()
+        .min_h_0()
+        .on_scroll_wheel(cx.listener(|tree, _: &ScrollWheelEvent, _, cx| {
+            if !matches!(tree.frames, FrameLog::Off) {
+                tree.frames.watch("scroll".into());
+                cx.notify();
+            }
+        }))
     }
 }

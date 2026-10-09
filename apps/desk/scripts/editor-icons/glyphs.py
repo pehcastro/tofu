@@ -9,9 +9,10 @@ def drawn(font_path, fill, points):
     font = TTFont(font_path)
     cmap = font.getBestCmap()
     glyphs = font.getGlyphSet()
-    top = font["hhea"].ascent
-    bottom = font["hhea"].descent
-    height = top - bottom
+    em = font["head"].unitsPerEm
+    margin = em * 24 // 256
+    top = font["hhea"].ascent - margin
+    height = em - 2 * margin
     found = {}
     for point in points:
         name = cmap.get(int(point, 16))
@@ -19,9 +20,8 @@ def drawn(font_path, fill, points):
             raise SystemExit(f"{font_path} has no glyph for {point}")
         pen = SVGPathPen(glyphs)
         glyphs[name].draw(pen)
-        width = glyphs[name].width
         found[point] = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 {-top} {width} {height}">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{margin} {-top} {height} {height}">'
             f'<path fill="{fill}" transform="scale(1 -1)" d="{pen.getCommands()}"/></svg>'
         )
     return found
