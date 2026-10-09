@@ -137,6 +137,16 @@ impl Subagents {
         self.screen.clone()
     }
 
+    pub fn reveal(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let agent = session(self.store.read(cx))
+            .and_then(|open| open.agents.get(id))
+            .and_then(board::shown);
+        agent.is_some_and(|agent| {
+            self.tile
+                .update(cx, |tile, cx| tile.reveal(agent, window, cx))
+        })
+    }
+
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
         self.board = Rc::new(

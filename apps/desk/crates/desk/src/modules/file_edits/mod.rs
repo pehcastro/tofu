@@ -176,6 +176,16 @@ impl FileEdits {
         self.files.len()
     }
 
+    pub fn reveal(&mut self, path: &str, cx: &mut Context<Self>) -> bool {
+        let Some(at) = self.files.iter().position(|file| file.path == path) else {
+            return false;
+        };
+        self.opened = at;
+        self.drawer = true;
+        cx.notify();
+        true
+    }
+
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         (self.files, self.traces) = self
             .store

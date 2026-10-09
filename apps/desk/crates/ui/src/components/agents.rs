@@ -1137,6 +1137,22 @@ impl AgentTile {
         cx.notify();
     }
 
+    pub fn reveal(&mut self, agent: Agent, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(at) = self.board.find(agent) else {
+            return false;
+        };
+        let status = self.board.lines.get(at).map(|line| line.agent.status);
+        if let Some(group) = AgentStatus::ALL
+            .iter()
+            .position(|each| Some(*each) == status)
+            .and_then(|group| self.open_groups.get_mut(group))
+        {
+            *group = true;
+        }
+        self.show(at, window, cx);
+        true
+    }
+
     fn close(&mut self, cx: &mut Context<Self>) {
         if self.open {
             self.open = false;

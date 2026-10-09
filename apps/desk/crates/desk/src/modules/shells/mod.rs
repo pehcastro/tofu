@@ -234,6 +234,15 @@ impl Shells {
         self.listed()
     }
 
+    pub fn reveal(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(at) = self.shells.iter().position(|shell| shell.name == name) else {
+            return false;
+        };
+        self.apply(ShellEvent::Pick(at), window, cx);
+        cx.notify();
+        true
+    }
+
     fn apply(&mut self, event: ShellEvent, window: &mut Window, cx: &mut App) {
         match event {
             ShellEvent::Pick(at) => {

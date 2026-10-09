@@ -332,14 +332,14 @@ fn excerpt(text: &str, range: Range<usize>) -> SharedString {
 #[derive(Clone)]
 enum Anchor {
     Chat(usize),
-    Row(Module),
+    Row(Module, String),
 }
 
 impl Anchor {
     fn module(&self) -> Module {
         match self {
             Anchor::Chat(_) => Module::Chat,
-            Anchor::Row(module) => module.clone(),
+            Anchor::Row(module, _) => module.clone(),
         }
     }
 }
@@ -362,7 +362,7 @@ fn find_groups(
     let mut groups = Vec::new();
     let mut found = Vec::new();
     for module in OPENABLE.iter().filter(|module| open.contains(module)) {
-        let texts: Vec<&str> = match module {
+        let rows: Vec<(&str, String)> = match module {
             Module::Chat => {
                 found.extend((0..chat_hits.len()).map(Anchor::Chat));
                 let hits: Vec<SharedString> = chat_hits
@@ -377,12 +377,20 @@ fn find_groups(
                 }
                 continue;
             }
-            Module::SubAgents => session.agents.values().map(|a| a.task.as_str()).collect(),
-            Module::FileEdits => session.files.keys().map(String::as_str).collect(),
+            Module::SubAgents => session
+                .agents
+                .iter()
+                .map(|(id, a)| (id.as_str(), format!("{} {} {}", a.kind, a.number, a.task)))
+                .collect(),
+            Module::FileEdits => session
+                .files
+                .keys()
+                .map(|path| (path.as_str(), path.clone()))
+                .collect(),
             Module::Shells => session
                 .shells
-                .values()
-                .map(|s| s.command.as_str())
+                .iter()
+                .map(|(name, s)| (name.as_str(), s.command.clone()))
                 .collect(),
             Module::Editor
             | Module::Terminal
@@ -390,18 +398,21 @@ fn find_groups(
             | Module::SourceControl
             | Module::Plugin(_) => Vec::new(),
         };
-        let hits: Vec<SharedString> = texts
+        let (hits, anchors): (Vec<SharedString>, Vec<Anchor>) = rows
             .iter()
-            .flat_map(|text| {
-                find_ranges(text, query)
-                    .into_iter()
-                    .map(|range| excerpt(text, range))
+            .flat_map(|(key, text)| {
+                find_ranges(text, query).into_iter().map(|range| {
+                    (
+                        excerpt(text, range),
+                        Anchor::Row(module.clone(), (*key).to_owned()),
+                    )
+                })
             })
-            .collect();
+            .unzip();
         if hits.is_empty() {
             continue;
         }
-        found.extend(hits.iter().map(|_| Anchor::Row(module.clone())));
+        found.extend(anchors);
         groups.push(FindGroup {
             label: module.name().to_owned().into(),
             hits,
@@ -688,11 +699,38 @@ impl Work {
         });
         eprintln!("desk: work: find jumped to {}", module.name());
         self.focus.focus(window, cx);
-        if let Anchor::Chat(hit) = anchor {
-            let query = &self.query;
-            self.mounted
-                .chat
-                .update(cx, |chat, cx| chat.anchor(query, hit, cx));
+        let revealed = match &anchor {
+            Anchor::Chat(hit) => {
+                let query = &self.query;
+                self.mounted
+                    .chat
+                    .update(cx, |chat, cx| chat.anchor(query, *hit, cx));
+                true
+            }
+            Anchor::Row(Module::SubAgents, key) => self
+                .mounted
+                .subagents
+                .update(cx, |module, cx| module.reveal(key, window, cx)),
+            Anchor::Row(Module::FileEdits, key) => self
+                .mounted
+                .file_edits
+                .update(cx, |module, cx| module.reveal(key, cx)),
+            Anchor::Row(Module::Shells, key) => self
+                .mounted
+                .shells
+                .update(cx, |module, cx| module.reveal(key, window, cx)),
+            Anchor::Row(
+                Module::Chat
+                | Module::Editor
+                | Module::Terminal
+                | Module::Browser
+                | Module::SourceControl
+                | Module::Plugin(_),
+                _,
+            ) => true,
+        };
+        if let (false, Anchor::Row(_, key)) = (revealed, &anchor) {
+            eprintln!("desk: find: {} row {key} is gone", module.name());
         }
         cx.notify();
     }
