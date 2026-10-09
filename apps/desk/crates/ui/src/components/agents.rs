@@ -32,7 +32,7 @@ use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON_SMALL, ICON_TINY};
 use crate::theme::{ColorToken, Theme};
 
-const OPEN_AT_START: [bool; 4] = [true, true, true, false];
+const OPEN_AT_START: [bool; 4] = [true; 4];
 const COUNT_FADE: f32 = 0.7;
 const TRACE_FADE: f32 = 0.7;
 const DONE_INK: f32 = 0.4;

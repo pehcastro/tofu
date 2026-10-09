@@ -374,7 +374,7 @@ impl RenderOnce for Sidebar {
         let inactive_open = *open.read(cx);
         let rows = HoverList::within(
             "rows",
-            div().flex().flex_col().flex_1().min_h_0(),
+            div().flex().flex_col().flex_grow(1.0).flex_shrink_0(),
             ink(&theme, HOVER),
             Corners::all(px(RADIUS_ROW)),
             &theme,
@@ -482,6 +482,15 @@ impl RenderOnce for Sidebar {
             .pt(px(SIDEBAR_PAD_TOP))
             .pb(px(SIDEBAR_PAD_BOTTOM))
             .child(head.on_click(self.picked(SidebarPick::Project)))
-            .child(rows.inert(div().flex_1()).item(docs))
+            .child(
+                div()
+                    .id("sessions")
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .overflow_y_scroll()
+                    .child(rows.inert(div().flex_1()).item(docs)),
+            )
     }
 }

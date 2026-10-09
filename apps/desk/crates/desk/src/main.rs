@@ -121,9 +121,10 @@ const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>]
 --repo opens a git repository in the git screen\n\
 screens: work settings accounts theme library classifier usage limits context session forks intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
-const SCREENS: [&str; 14] = [
+const SCREENS: [&str; 15] = [
     "work",
     "settings",
+    "editor",
     "accounts",
     "theme",
     "library",

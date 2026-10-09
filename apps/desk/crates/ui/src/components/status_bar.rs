@@ -366,7 +366,7 @@ fn fullest_item(item: Stateful<Div>, accounts: &[Account], theme: &Theme) -> Sta
     match (fullest, accounts.first()) {
         (Some((account, window, percent)), _) => {
             let level = Level::of(percent);
-            item.child(account.source.clone())
+            item.child(account.provider.clone())
                 .child(dim(window.label.clone(), theme))
                 .child(
                     div()
@@ -377,7 +377,7 @@ fn fullest_item(item: Stateful<Div>, accounts: &[Account], theme: &Theme) -> Sta
                         .child(format!("{percent}%")),
                 )
         }
-        (None, Some(account)) => item.child(account.source.clone()).child(icon(
+        (None, Some(account)) => item.child(account.provider.clone()).child(icon(
             Icon::Unreported,
             ICON_SMALL,
             ink(theme, T3),
