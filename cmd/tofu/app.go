@@ -743,8 +743,9 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		asked, guardErr := guarded(model, budget)
 		return hooks.SubAgent(asked), guardErr
 	}
+	person := hooks.Inbox.LeadAsks(hooks.Person)
 	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
-		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: hooks.Person, cron: hooks.Cron})
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron})
 	if err != nil {
 		return prepared, err
 	}
@@ -753,10 +754,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		prepared.Decisions = func() int { return gate.decisions }
 	}
 	config.Images = images
-	config.Person = hooks.Person
-	if settingText(e.dir, settingspkg.GatePrompt, say) != settingspkg.GatePromptAsk {
-		config.Person = hooks.Person.RunsWhatJevAsks()
-	}
+	config.Person = person.Asking(func() bool { return settingText(e.dir, settingspkg.GatePrompt, say) == settingspkg.GatePromptAsk })
 	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff = config, spawner, plan, budget.CeilingTokens, sessions, gateErr
 	return prepared, nil
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -50,6 +51,96 @@ type Inbox struct {
 	logs     map[*session.Log]int
 	unclosed []error
 	asked    []*Asked
+	waits    []*context.CancelCauseFunc
+	since    time.Time
+	waited   time.Duration
+	stopped  bool
+}
+
+type leadStopped struct{}
+
+func (leadStopped) Error() string {
+	return "the lead was stopped, so the wait for the person was withdrawn"
+}
+
+func (b *Inbox) LeadAsks(person Person) Person {
+	if b == nil || person == nil {
+		return person
+	}
+	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
+		ctx, withdraw := context.WithCancelCause(ctx)
+		defer b.waitOn(&withdraw)()
+		answer, err := person(ctx, request, decision)
+		if cause := context.Cause(ctx); errors.Is(cause, leadStopped{}) {
+			return PersonDenied, cause
+		}
+		return answer, err
+	}
+}
+
+func (b *Inbox) waitOn(withdraw *context.CancelCauseFunc) (done func()) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.stopped {
+		(*withdraw)(leadStopped{})
+	}
+	if len(b.waits) == 0 {
+		b.since = time.Now()
+	}
+	b.waits = append(b.waits, withdraw)
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		(*withdraw)(nil)
+		b.waits = slices.DeleteFunc(b.waits, func(open *context.CancelCauseFunc) bool { return open == withdraw })
+		if len(b.waits) == 0 {
+			b.waited += time.Since(b.since)
+		}
+	}
+}
+
+func (b *Inbox) StopLead() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.stopped = true
+	for _, withdraw := range b.waits {
+		(*withdraw)(leadStopped{})
+	}
+}
+
+func (b *Inbox) personTime() time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.waits) == 0 {
+		return b.waited
+	}
+	return b.waited + time.Since(b.since)
+}
+
+func (b *Inbox) awaitLead(ctx context.Context, held *heldSubAgent, answer chan bool, asked string, wait time.Duration) (bool, error) {
+	from, stalled := time.Now(), b.personTime()
+	var gaveUp error
+	for gaveUp == nil {
+		answerable := time.Since(from) - (b.personTime() - stalled)
+		if answerable >= wait {
+			gaveUp = fmt.Errorf("its %s to answer ran out: %w", wait, context.DeadlineExceeded)
+			break
+		}
+		timer := time.NewTimer(wait - answerable)
+		select {
+		case allowed := <-answer:
+			timer.Stop()
+			return allowed, nil
+		case <-ctx.Done():
+			gaveUp = context.Cause(ctx)
+		case <-timer.C:
+		}
+		timer.Stop()
+	}
+	if b.withdraw(held, answer, asked) {
+		return false, gaveUp
+	}
+	return <-answer, nil
 }
 
 type Asked struct {
@@ -463,6 +554,9 @@ func (b *Inbox) releasing(log *session.Log) error {
 
 func Lead(ctx context.Context, config Config, typed <-chan string, heard func(string), ended func(Row, error)) error {
 	var failed []error
+	config.Inbox.mu.Lock()
+	config.Inbox.stopped = false
+	config.Inbox.mu.Unlock()
 	for {
 		row, err := Run(ctx, config)
 		ended(row, err)

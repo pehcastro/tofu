@@ -14,7 +14,7 @@ import (
 	"tofu/internal/host"
 )
 
-var promptKeys = regexp.MustCompile(`\[1\] allow once\s+\[2\] deny\s+\[3\] always here`)
+var promptKeys = regexp.MustCompile(`\[1\] allow once\s+\[2\] deny\s+\[3\] always here\s+\[4\] never here\s+\[5\] cancel`)
 
 func awaitingApp(t *testing.T) (*App, <-chan Answer) {
 	t.Helper()
@@ -38,7 +38,7 @@ func awaitingApp(t *testing.T) (*App, <-chan Answer) {
 	return app, <-given
 }
 
-func TestAnAwaitingAskDrawsTheThreeKeysItTakes(t *testing.T) {
+func TestAnAwaitingAskDrawsTheFiveKeysItTakes(t *testing.T) {
 	app, _ := awaitingApp(t)
 	content := app.View().Content
 	if !promptKeys.MatchString(ansi.Strip(content)) {
@@ -55,6 +55,7 @@ func TestTheAnswerKeysEachSendTheirOwnAnswer(t *testing.T) {
 		{tea.KeyPressMsg{Code: '1', Text: "1"}, AllowedOnce},
 		{tea.KeyPressMsg{Code: '2', Text: "2"}, Denied},
 		{tea.KeyPressMsg{Code: '3', Text: "3"}, AlwaysHere},
+		{tea.KeyPressMsg{Code: '4', Text: "4"}, host.NeverHere},
 	} {
 		app, answers := awaitingApp(t)
 		app.Update(pressed.key)

@@ -18,11 +18,11 @@ func NewSettings(global, project string) Settings {
 	return Settings{global: global, project: project}
 }
 
-func (Settings) Name() string { return "settings" }
+func (Settings) Name() string { return turn.SettingsToolName }
 
 func (Settings) Definition() llm.Tool {
 	return llm.Tool{
-		Name: "settings",
+		Name: turn.SettingsToolName,
 		Description: "asks the person to change one of their settings, and only " + settings.SubAgentsPerTurn + " or " + settings.SubAgentDepth +
 			". the person answers yes or no before anything is written; on yes the global settings file changes and the next spawn in this turn reads the new value",
 		Parameters: map[string]any{

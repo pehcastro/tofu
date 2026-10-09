@@ -75,24 +75,16 @@ func hookEngine(ctx context.Context, config Config, turnID string) (*hook.Engine
 }
 
 func hookRefusal(ctx context.Context, config Config, request GateRequest, pre hook.Verdict) string {
-	switch {
-	case pre.Block != "":
+	if pre.Block != "" {
 		return "this call did not run: a PreToolUse hook refused it: " + pre.Block
-	case pre.Ask == "":
-		return ""
-	case config.Person == nil:
-		return "this call did not run: a PreToolUse hook asks the person first, and no person was available to answer: " + pre.Ask
 	}
-	who := answerer(ctx)
-	if config.Notify != nil && SubAgentAsking(ctx) == "" {
-		config.Notify("a PreToolUse hook asks you before " + request.Tool + " runs: " + pre.Ask)
+	if pre.Ask != "" {
+		if config.Person != nil && config.Notify != nil && SubAgentAsking(ctx) == "" {
+			config.Notify("a PreToolUse hook asks you before " + request.Tool + " runs: " + pre.Ask)
+		}
+		if _, refused := personRefusal(ctx, config.Person, request, GateDecision{HookAsk: pre.Ask}, "this call did not run: a PreToolUse hook asks first: "+pre.Ask); refused != "" {
+			return refused
+		}
 	}
-	answer, err := config.Person(ctx, request, GateDecision{HookAsk: pre.Ask})
-	switch {
-	case err != nil:
-		return "this call did not run: a PreToolUse hook asks " + who + " first, and " + who + " could not be asked: " + err.Error()
-	case answer.allows():
-		return ""
-	}
-	return "this call did not run: a PreToolUse hook asked " + who + ", and " + who + " did not allow it: " + pre.Ask
+	return personOnlyRefusal(ctx, config, request)
 }

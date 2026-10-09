@@ -22,7 +22,7 @@
                                                                                                     
   ⠋ waiting  |  3s  [request#91ccaf]                                                                
   ? bash wants git push --force origin develop   risk 2.00 over 1.50                     [tool#c1]  
-    [1] allow once  [2] deny  [3] always here                   the chat still takes what you type  
+    [1] allow once  [2] deny  [3] always here  [4] never here  [5] cancel                           
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

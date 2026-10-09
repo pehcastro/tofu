@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/internal/judge/ledger"
@@ -29,6 +34,7 @@ type GateDecision struct {
 	Reason     *ledger.Reason
 	PersonOnly bool
 	HookAsk    string
+	Failure    string
 }
 
 type Gate interface {
@@ -89,11 +95,29 @@ func (a PersonAnswer) Outcome() ledger.Outcome {
 type Person func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error)
 
 func (p Person) RunsWhatJevAsks() Person {
+	return p.Asking(func() bool { return false })
+}
+
+type autoRefusesAFailedGate struct{}
+
+func (autoRefusesAFailedGate) Error() string {
+	return "in auto a call the gate could not judge is refused rather than asked"
+}
+
+func (p Person) Asking(settingAsks func() bool) Person {
 	if p == nil {
 		return nil
 	}
 	return func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
-		if decision.ID != "" && !decision.PersonOnly {
+		asks, decided := QuestionsBlockFrom(ctx)
+		if !decided {
+			asks = settingAsks()
+		}
+		switch {
+		case asks || decision.PersonOnly:
+		case decision.Failure != "":
+			return PersonDenied, autoRefusesAFailedGate{}
+		case decision.ID != "":
 			return PersonNotAsked, nil
 		}
 		return p(ctx, request, decision)
@@ -120,38 +144,55 @@ func gateRefusal(ctx context.Context, person Person, request GateRequest, decisi
 }
 
 func refusedWhy(ctx context.Context, person Person, request GateRequest, decision GateDecision, gateErr string) string {
-	if gateErr != "" {
-		return "the gate could not answer, and a check that cannot run refuses: " + gateErr
-	}
-	switch decision.Verdict {
-	case ledger.VerdictUnset, ledger.VerdictAllow:
+	switch {
+	case gateErr != "":
+		decision = GateDecision{Verdict: ledger.VerdictAsk, Failure: gateErr}
+	case decision.Verdict == ledger.VerdictUnset, decision.Verdict == ledger.VerdictAllow:
 		return ""
-	case ledger.VerdictDeny:
+	case decision.Verdict == ledger.VerdictDeny:
 		return "the verdict is deny" + standing(decision.Reason)
-	case ledger.VerdictAsk:
-		if person == nil {
-			return "the verdict is ask" + standing(decision.Reason) + ", and no person was available to answer"
-		}
-		who := answerer(ctx)
-		answer, err := person(ctx, request, decision)
-		switch {
-		case err != nil:
-			return "the verdict is ask and " + who + " could not be asked: " + err.Error()
-		case answer.allows():
-			if decision.Reason != nil {
-				decision.Reason.AllowedBy = who
-				switch answer {
-				case PersonNotAsked:
-					decision.Reason.AllowedBy = allowedInAutoMode
-				case PersonNotAskedOwnScratch:
-					decision.Reason.AllowedBy = allowedByOwnScratch
-				}
-			}
-			return ""
-		}
-		return "the verdict is ask" + standing(decision.Reason) + ", and " + who + " did not allow it"
+	case decision.Verdict != ledger.VerdictAsk:
+		panic("turn: unknown verdict " + string(decision.Verdict))
 	}
-	panic("turn: unknown verdict " + string(decision.Verdict))
+	asked := "the verdict is ask" + standing(decision.Reason)
+	if decision.Failure != "" {
+		asked = "the gate could not answer, so the call is an ask: " + decision.Failure
+	}
+	answer, refused := personRefusal(ctx, person, request, decision, asked)
+	if refused == "" && decision.Reason != nil {
+		decision.Reason.AllowedBy = answerer(ctx)
+		switch answer {
+		case PersonNotAsked:
+			decision.Reason.AllowedBy = allowedInAutoMode
+		case PersonNotAskedOwnScratch:
+			decision.Reason.AllowedBy = allowedByOwnScratch
+		}
+	}
+	return refused
+}
+
+func personRefusal(ctx context.Context, person Person, request GateRequest, decision GateDecision, asked string) (PersonAnswer, string) {
+	if person == nil {
+		return PersonDenied, asked + ", and no person was available to answer"
+	}
+	who := answerer(ctx)
+	answer, err := person(ctx, request, decision)
+	switch {
+	case err != nil:
+		return answer, asked + ", and " + who + " could not be asked: " + err.Error()
+	case answer.allows():
+		return answer, ""
+	}
+	return answer, asked + ", and " + who + " did not allow it"
+}
+
+func personOnlyRefusal(ctx context.Context, config Config, request GateRequest) string {
+	if config.Gate != nil && config.GateMode == GateEnforce || !PersonOnly(config.Project, request) {
+		return ""
+	}
+	_, refused := personRefusal(ctx, config.Person, request, GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true},
+		"this call did not run: only the person allows a call that changes tofu's settings or a harness file")
+	return refused
 }
 
 func answerer(ctx context.Context) string {
@@ -172,29 +213,25 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 			return PersonNotAskedOwnScratch, nil
 		}
 		because := "the gate's verdict is ask" + standing(decision.Reason)
-		if decision.HookAsk != "" {
+		switch {
+		case decision.HookAsk != "":
 			because = "a PreToolUse hook asks first: " + decision.HookAsk
+		case decision.Failure != "":
+			because = "the gate could not answer: " + decision.Failure
 		}
 		wait := konst.SubAgentGateAnswerMillis * time.Millisecond
 		shown := cutOnRuneBoundary(string(request.Args), konst.GateAskArgsBytes, "\n...(%s of this call cut here: lookup with call "+request.Call+" returns it whole)...\n")
-		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s for you: call message with to %s and answer allow or deny. with no answer the call is refused.",
+		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s of the time you can answer: call message with to %s and answer allow or deny. with no answer the call is refused.",
 			id, request.Tool, shown, because, wait, id)
 		t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
 		defer t.roster.Reached(id, subagent.Working, "")
 		site.notice(id, asked)
-		started, answer := t.clock(), t.Inbox.ask(held, asked)
-		within, cancel := context.WithTimeout(ctx, wait)
-		defer cancel()
-		var allowed bool
-		select {
-		case allowed = <-answer:
-		case <-within.Done():
-			if t.Inbox.withdraw(held, answer, asked) {
-				unanswered := fmt.Errorf("the orchestrator did not answer within %s: %w", t.clock().Sub(started).Round(time.Millisecond), context.Cause(within))
-				site.notice(id, id+"'s "+request.Tool+" call is refused: "+unanswered.Error())
-				return PersonDenied, unanswered
-			}
-			allowed = <-answer
+		started := t.clock()
+		allowed, err := t.Inbox.awaitLead(ctx, held, t.Inbox.ask(held, asked), asked, wait)
+		if err != nil {
+			unanswered := fmt.Errorf("the orchestrator did not answer after %s: %w", t.clock().Sub(started).Round(time.Millisecond), err)
+			site.notice(id, id+"'s "+request.Tool+" call is refused: "+unanswered.Error())
+			return PersonDenied, unanswered
 		}
 		said, verdict := "deny", PersonDenied
 		if allowed {
@@ -241,4 +278,100 @@ func standing(reason *ledger.Reason) string {
 
 func number(value float64) string {
 	return strconv.FormatFloat(value, 'f', 2, 64)
+}
+
+const SettingsToolName = "settings"
+
+func PersonOnly(project string, request GateRequest) bool {
+	var args struct{ Path, Command string }
+	if json.Unmarshal(request.Args, &args) != nil {
+		return false
+	}
+	switch request.Tool {
+	case SettingsToolName:
+		return true
+	case "write", "edit":
+		return reachesHarnessFile(project, args.Path)
+	case bashToolName:
+		return shellChangesTheHarness(project, args.Command)
+	}
+	return false
+}
+
+func harnessFiles() []string {
+	return []string{
+		".tofu/settings.json", ".boji/settings.json",
+		".tofu/hooks.json", ".boji/hooks.json",
+		".tofu/hooks/trusted.json", ".boji/hooks/trusted.json",
+		".claude/settings.json", ".claude/settings.local.json",
+		".codex/hooks.json", ".codex/config.toml",
+	}
+}
+
+func readOnlyPrograms() []string {
+	return []string{"cat", "head", "tail", "less", "more", "grep", "egrep", "fgrep", "rg", "ls", "dir", "stat", "wc", "diff",
+		"cd", "pushd", "popd", "echo", "printf", "type", "file", "jq", "sha256sum", "md5sum", "realpath", "readlink", "test",
+		"get-content", "gc", "select-string", "sls"}
+}
+
+func shellChangesTheHarness(project, command string) bool {
+	readsOnly := true
+	for _, step := range subagent.ShellSteps(command) {
+		if slices.ContainsFunc(step.Changes, func(changed string) bool { return reachesHarnessFile(project, changed) }) {
+			return true
+		}
+		if step.Program == "tofu" && (slices.Contains(step.Args, "settings") && slices.Contains(step.Args, "set") ||
+			slices.Contains(step.Args, "hooks") && slices.Contains(step.Args, "trust")) {
+			return true
+		}
+		readsOnly = readsOnly && len(step.Changes) == 0 && slices.Contains(readOnlyPrograms(), step.Program)
+	}
+	lower := strings.ToLower(command)
+	return !readsOnly && slices.ContainsFunc(harnessFiles(), func(file string) bool {
+		dir, _, _ := strings.Cut(file, "/")
+		return strings.Contains(lower, dir) && strings.Contains(lower, path.Base(file))
+	})
+}
+
+func reachesHarnessFile(project, written string) bool {
+	full := written
+	home, _ := os.UserHomeDir()
+	for _, spelled := range []string{"~", "$HOME", "${HOME}", "$USERPROFILE", "${USERPROFILE}", "%USERPROFILE%", "$env:USERPROFILE"} {
+		if rest, spelt := strings.CutPrefix(strings.ToLower(written), strings.ToLower(spelled)); spelt && (rest == "" || rest[0] == '/' || rest[0] == '\\') {
+			full = home + written[len(spelled):]
+			break
+		}
+	}
+	if !filepath.IsAbs(full) {
+		full = filepath.Join(project, full)
+	}
+	names := []string{full}
+	if real, err := filepath.EvalSymlinks(full); err == nil {
+		names = append(names, real)
+	}
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(full)); err == nil {
+		names = append(names, filepath.Join(dir, filepath.Base(full)))
+	}
+	if target, err := os.Readlink(full); err == nil {
+		names = append(names, target)
+	}
+	return slices.ContainsFunc(names, namesHarnessFile)
+}
+
+func namesHarnessFile(name string) bool {
+	segments := strings.Split(strings.ToLower(path.Clean(strings.ReplaceAll(name, `\`, "/"))), "/")
+	for i, segment := range segments {
+		segment, _, _ = strings.Cut(segment, ":")
+		segments[i] = strings.TrimRight(segment, ". ")
+	}
+	named := "/" + strings.Join(segments, "/")
+	for _, file := range harnessFiles() {
+		parts := strings.Split(file, "/")
+		for k := range parts {
+			if strings.HasSuffix(named, "/"+strings.Join(parts[:k+1], "/")) {
+				return true
+			}
+		}
+	}
+	return false
 }

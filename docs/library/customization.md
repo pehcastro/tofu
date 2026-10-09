@@ -76,11 +76,12 @@ you asked, it names the rule and the rule's own reason, and waits:
   Its reason: this is the ordering that makes a test worthless rather than the test itself. ...
   You asked: unit tests on the parser. Override it?
 ? override no_unit_test_after_code?
-  [1] this project  [2] everywhere  [3] no
+  [1] this project  [2] everywhere  [3] no  [4] cancel
 ```
 
 **1** writes the override into `.tofu/rules/`, **2** into `~/.tofu/rules/`,
 both marked `by: asked`. **3** writes nothing, and tofu works within the rule.
+**4** stops the turn.
 Each question is asked fresh, never answered from an earlier one. From the
 next turn the prompt says the rule was switched off on purpose.
 

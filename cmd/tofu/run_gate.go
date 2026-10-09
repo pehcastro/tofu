@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
-	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -21,11 +18,9 @@ import (
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm/models"
-	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
-	"tofu/internal/turn/tools"
 )
 
 const oneCallAtATime = 1
@@ -43,6 +38,10 @@ type toolGate struct {
 	decisions int
 	costUSD   float64
 }
+
+type jevUnavailable struct{ cause error }
+
+func (u jevUnavailable) Error() string { return "jev could not judge the call: " + u.cause.Error() }
 
 type unusableRule struct{ err error }
 
@@ -185,108 +184,20 @@ func gateKey() (string, error) {
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
 	row, err := g.ask(ctx, request)
 	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason}
-	if err != nil {
+	var unavailable jevUnavailable
+	switch {
+	case errors.As(err, &unavailable):
+		decision.Failure, err = unavailable.Error(), nil
+	case err != nil:
 		decision = turn.GateDecision{Verdict: ledger.VerdictAsk}
 	}
-	if decision.Verdict != ledger.VerdictDeny && (request.Tool == (tools.Settings{}).Name() || changesTheHarness(g.cwd, request)) {
+	if decision.Verdict != ledger.VerdictDeny && turn.PersonOnly(g.cwd, request) {
 		decision.Verdict, decision.PersonOnly = ledger.VerdictAsk, true
 	}
 	if g.watch != nil {
 		g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
 	}
 	return decision, err
-}
-
-func harnessFiles() []string {
-	return []string{
-		".tofu/settings.json", ".boji/settings.json",
-		".tofu/hooks.json", ".boji/hooks.json",
-		".tofu/hooks/trusted.json", ".boji/hooks/trusted.json",
-		".claude/settings.json", ".claude/settings.local.json",
-		".codex/hooks.json", ".codex/config.toml",
-	}
-}
-
-func readOnlyPrograms() []string {
-	return []string{"cat", "head", "tail", "less", "more", "grep", "egrep", "fgrep", "rg", "ls", "dir", "stat", "wc", "diff",
-		"cd", "pushd", "popd", "echo", "printf", "type", "file", "jq", "sha256sum", "md5sum", "realpath", "readlink", "test",
-		"get-content", "gc", "select-string", "sls"}
-}
-
-func changesTheHarness(project string, request turn.GateRequest) bool {
-	var args struct{ Path, Command string }
-	if json.Unmarshal(request.Args, &args) != nil {
-		return false
-	}
-	switch request.Tool {
-	case (&turn.WriteTool{}).Name(), (tools.Edit{}).Name():
-		return reachesHarnessFile(project, args.Path)
-	case (&turn.BashTool{}).Name():
-		return shellChangesTheHarness(project, args.Command)
-	}
-	return false
-}
-
-func shellChangesTheHarness(project, command string) bool {
-	readsOnly := true
-	for _, step := range subagent.ShellSteps(command) {
-		if slices.ContainsFunc(step.Changes, func(changed string) bool { return reachesHarnessFile(project, changed) }) {
-			return true
-		}
-		if step.Program == "tofu" && (slices.Contains(step.Args, "settings") && slices.Contains(step.Args, "set") ||
-			slices.Contains(step.Args, "hooks") && slices.Contains(step.Args, "trust")) {
-			return true
-		}
-		readsOnly = readsOnly && len(step.Changes) == 0 && slices.Contains(readOnlyPrograms(), step.Program)
-	}
-	lower := strings.ToLower(command)
-	return !readsOnly && slices.ContainsFunc(harnessFiles(), func(file string) bool {
-		dir, _, _ := strings.Cut(file, "/")
-		return strings.Contains(lower, dir) && strings.Contains(lower, path.Base(file))
-	})
-}
-
-func reachesHarnessFile(project, written string) bool {
-	full := written
-	home, _ := os.UserHomeDir()
-	for _, spelled := range []string{"~", "$HOME", "${HOME}", "$USERPROFILE", "${USERPROFILE}", "%USERPROFILE%", "$env:USERPROFILE"} {
-		if rest, spelt := strings.CutPrefix(strings.ToLower(written), strings.ToLower(spelled)); spelt && (rest == "" || rest[0] == '/' || rest[0] == '\\') {
-			full = home + written[len(spelled):]
-			break
-		}
-	}
-	if !filepath.IsAbs(full) {
-		full = filepath.Join(project, full)
-	}
-	names := []string{full}
-	if real, err := filepath.EvalSymlinks(full); err == nil {
-		names = append(names, real)
-	}
-	if dir, err := filepath.EvalSymlinks(filepath.Dir(full)); err == nil {
-		names = append(names, filepath.Join(dir, filepath.Base(full)))
-	}
-	if target, err := os.Readlink(full); err == nil {
-		names = append(names, target)
-	}
-	return slices.ContainsFunc(names, namesHarnessFile)
-}
-
-func namesHarnessFile(name string) bool {
-	segments := strings.Split(strings.ToLower(path.Clean(strings.ReplaceAll(name, `\`, "/"))), "/")
-	for i, segment := range segments {
-		segment, _, _ = strings.Cut(segment, ":")
-		segments[i] = strings.TrimRight(segment, ". ")
-	}
-	named := "/" + strings.Join(segments, "/")
-	for _, file := range harnessFiles() {
-		parts := strings.Split(file, "/")
-		for k := range parts {
-			if strings.HasSuffix(named, "/"+strings.Join(parts[:k+1], "/")) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Row, error) {
@@ -314,7 +225,11 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
 	g.decisions++
 	if err != nil {
-		return appendFallbackRow(builtState, g.set, written, err)
+		row, writeErr := appendFallbackRow(builtState, g.set, written, err)
+		if writeErr != nil {
+			return row, writeErr
+		}
+		return row, jevUnavailable{err}
 	}
 	g.costUSD += decision.Usage.Cost
 	written.decision = &decision

@@ -108,6 +108,21 @@ func (m *Model) AsksToRemember() (string, Decision, bool) {
 	return entry.askID, *entry.Decision, true
 }
 
+type AskChoice struct {
+	Label   string
+	Answer  host.Answer
+	Cancels bool
+}
+
+func (m *Model) AskChoices() []AskChoice {
+	cancel := AskChoice{Label: "cancel", Cancels: true}
+	if m.AsksWhereToOverride() {
+		return []AskChoice{{Label: "this project", Answer: host.AllowedOnce}, {Label: "everywhere", Answer: host.AlwaysHere}, {Label: "no", Answer: host.Denied}, cancel}
+	}
+	return []AskChoice{{Label: "allow once", Answer: host.AllowedOnce}, {Label: "deny", Answer: host.Denied},
+		{Label: "always here", Answer: host.AlwaysHere}, {Label: "never here", Answer: host.NeverHere}, cancel}
+}
+
 func (m *Model) askLines() []string {
 	entry, open := m.openAsk()
 	if !open || entry.Decision.Remembers != "" {
@@ -117,18 +132,16 @@ func (m *Model) askLines() []string {
 	if tripped := tripped(*entry.Decision); tripped != "" {
 		head += askGap + tripped
 	}
-	labels := [...]string{"[1] allow once", "[2] deny", "[3] always here"}
 	if overriding := entry.Decision.OverridesRule; overriding != "" {
 		head = askMarker + "override " + overriding + "?"
-		labels = [...]string{"[1] this project", "[2] everywhere", "[3] no"}
 	}
 	id := ""
 	if short := trace.Short(entry.ID); short != "" {
 		id = askGap + look.TypedID(toolKind, short)
 	}
 	keys := ""
-	for _, label := range labels {
-		keys += look.DialogChoice(false, label)
+	for at, choice := range m.AskChoices() {
+		keys += look.DialogChoice(false, "["+strconv.Itoa(at+1)+"] "+choice.Label)
 	}
 	inner := m.width - 2*askPadX
 	typing := look.Faint(stillTakesTyping)

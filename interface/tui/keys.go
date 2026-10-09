@@ -18,6 +18,7 @@ import (
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
 	isettings "tofu/internal/settings"
+	"tofu/internal/turn/tools"
 )
 
 const (
@@ -115,7 +116,7 @@ func (a *App) quoteSelection() tea.Cmd {
 		return nil
 	}
 	cmd := a.show(screenChat)
-	a.view.Insert("[quote#" + selected + "] ")
+	a.view.Insert(tools.QuoteRef(selected) + " ")
 	return cmd
 }
 
@@ -124,15 +125,13 @@ func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if a.questionKey(key) {
 		return nil, true
 	}
-	if a.view.TakesAnswerDigits() {
-		answers := [...]Answer{AllowedOnce, Denied, AlwaysHere}
-		if a.view.AsksWhereToOverride() {
-			answers = [...]Answer{AllowedOnce, AlwaysHere, Denied}
+	if at, err := strconv.Atoi(key); err == nil && a.view.TakesAnswerDigits() && at >= 1 && at <= len(a.view.AskChoices()) {
+		if choice := a.view.AskChoices()[at-1]; choice.Cancels {
+			a.stopEverything()
+		} else {
+			a.answer(choice.Answer)
 		}
-		if at := slices.Index([]string{"1", "2", "3"}, key); at >= 0 {
-			a.answer(answers[at])
-			return nil, true
-		}
+		return nil, true
 	}
 	if handled, cmd := a.menuKey(key); handled {
 		return cmd, true
