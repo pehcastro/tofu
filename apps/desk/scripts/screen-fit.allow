@@ -29,3 +29,4 @@ crates/desk/src/screens/settings/mod.rs:shell  open() only picks a board: rows.r
 crates/desk/src/screens/platforms/mod.rs:shell  per-OS window chrome reference kept in the dev build only (milestones.md, 2026-10-08), it draws a whole window
 crates/desk/src/screens/intro/mod.rs:shell  first-run hero over a full-window picture, drawn before any tile exists
 crates/desk/src/screens/onboarding/mod.rs:shell  first-run hero over a full-window picture, drawn before any tile exists
+crates/desk/src/screens/accounts/mod.rs:outer_card  one of the side-by-side account columns inside the window tile (max_w COLUMN_SHARE), not a frame around the screen
