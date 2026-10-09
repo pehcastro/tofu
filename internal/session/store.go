@@ -400,7 +400,7 @@ func (s *Store) Head() (Head, error) {
 		return Head{}, err
 	}
 	for _, header := range listing.Sessions {
-		if header.ForkedInto == "" {
+		if _, side, _ := s.Side(header.ID); header.ForkedInto == "" && !side {
 			return Head{ID: header.ID, Derived: true}, nil
 		}
 	}
@@ -411,7 +411,27 @@ func (s *Store) SetHead(id string) error {
 	if id == "" {
 		return errors.New("session: the head has to name a session")
 	}
+	if _, side, err := s.Side(id); side || err != nil {
+		return err
+	}
 	return s.writeWhole(filepath.Join(s.dir, headName), []byte(id+"\n"))
+}
+
+func (s *Store) Side(id string) (Header, bool, error) {
+	header, err := s.read(id)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Header{}, false, nil
+	}
+	if err != nil {
+		return Header{}, false, err
+	}
+	chain, err := s.Ancestors(id)
+	for _, generation := range append([]Header{header}, chain...) {
+		if generation.Kind == KindSide {
+			return generation, true, nil
+		}
+	}
+	return Header{}, false, err
 }
 
 func (s *Store) read(id string) (Header, error) {

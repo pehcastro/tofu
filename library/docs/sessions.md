@@ -41,9 +41,8 @@ with every character that is not a letter or a digit turned into `-`, so
 - `log/`: the decision ledger
 - `shells/`: the shells an agent left running, and their logs
 
-None of this is written into the project. tofu never deletes a session
-on its own. Older versions kept all this in the project's `.tofu` folder;
-opening the app there, or `tofu migrate`, moves it into your home.
+None of this is written into the project, and tofu never deletes a
+session. `tofu migrate` moves what older versions kept in `.tofu`.
 
 ## Change it
 
@@ -54,15 +53,16 @@ Continue the head, or any other session:
 
 A session is named by its name (the newest generation), its id, or a
 handle: `tidy-moss-vole#12cp3.1` is the first generation, `12cp3` the
-family. A name from before this naming still finds its own generation,
-and `[session#9ff700]` from the header finds its generation too.
-
-Give a conversation a name you will find again, on every generation:
+family; `[session#9ff700]` from the header finds its generation too. In
+the app, `/resume` carries the last session and `/new` starts fresh.
 
     tofu session rename <name|id> "checkout redesign"
 
-In the app, `/resume` carries the last session into your next message,
-and `/new` starts fresh.
+    tofu session branch <name|id> --side [--preset notes] [--seed none]
+
+opens a side chat, never the head and never spawning, from the fork
+summary. It writes `read` nothing, `notes` `.md` and `.html`, `files`
+anything, or `--owns` globs; `sideChatAccess` sets the default, `read`.
 
 Move what an older version left in the project, or stop and restart a
 shell an agent left running:
@@ -78,7 +78,8 @@ shell an agent left running:
 
 lists this project's conversations, one row per family, newest first, `●`
 on the head, each with its handle, age, steps, state and task. A session
-that cannot be read goes under `unreadable` with a `✗`.
+that cannot be read goes under `unreadable` with a `✗`. `--all` adds the
+side chats.
 
     tofu session <name|id>
 
@@ -109,9 +110,8 @@ as sent, each wire attempt, and the response.
     tofu shells list
     tofu shells log <name>
 
-print a bar per context band of the newest session, then the shells with
-their state, pid and command, and one shell's output. Every verb here
-takes `--json` and prints one JSON document.
+print the newest session's context bands, the shells, and one shell's
+output. Every verb here takes `--json` and prints one JSON document.
 
 ## Undo it
 

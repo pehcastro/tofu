@@ -64,6 +64,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if depth := processDepth(); depth > shippedSubAgentProcessDepth {
 		return Row{}, ProcessDepthLimitError{Depth: depth, Limit: shippedSubAgentProcessDepth}
 	}
+	config, err := sideChat(config)
+	if err != nil {
+		return Row{}, err
+	}
 	dir := config.ArtifactDir
 	if dir == "" {
 		state, err := sys.ProjectStateDir()

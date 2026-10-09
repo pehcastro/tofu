@@ -73,6 +73,7 @@ const (
 	DecisionCap            = "decisionCap"
 	TurnMaySpawn           = "turnMaySpawn"
 	OneTurnPerProject      = "oneTurnPerProject"
+	SideChatAccess         = "sideChatAccess"
 	SubAgentsPerTurn       = "subAgentsPerTurn"
 	SubAgentDepth          = "subAgentDepth"
 	SubAgentCache          = "subAgentCache"
@@ -267,6 +268,7 @@ func Default() []Spec {
 			Least: 0, Most: konst.DecisionCapMost, Unit: "decisions a turn, where 0 means no cap"},
 		{Key: TurnMaySpawn, Label: "Sub-agents", Description: "a turn may spawn a sub-agent", Category: "Turn", Kind: Bool, Default: 1},
 		{Key: OneTurnPerProject, Label: "One turn per project", Description: "while one session runs a turn in this project, a turn from any other session is refused; off lets several sessions run turns in one repository at once", Category: "Turn", Kind: Bool, Default: 1},
+		{Key: SideChatAccess, Label: "Side chat access", Description: "what a new side chat may write: read writes nothing, notes writes .md and .html files, files writes anywhere, or a comma list of globs; a side chat never spawns, schedules, remembers or changes a setting, whatever this says", Category: "Turn", Kind: Text, DefaultText: "read"},
 		{Key: SubAgentsPerTurn, Label: "Sub-agents running at once", Description: "how many sub-agents may run at once; a spawn past it is refused until one ends, and the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentsPerTurnDefault,
 			Least: 1, Most: math.MaxInt32, Unit: "sub-agents running at once"},
 		{Key: SubAgentDepth, Label: "Sub-agent depth", Description: "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value", Category: "Turn", Kind: Int, Default: konst.SubAgentDepthDefault,

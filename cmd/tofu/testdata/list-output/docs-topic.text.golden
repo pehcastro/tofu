@@ -17,10 +17,10 @@ What it is
     memoryFromAllUsers, learn
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
-  - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, subAgentsPerTurn,
-    subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds,
-    verifySubAgents, agentSources, modelTier.genius, modelTier.smart,
-    modelTier.worker, modelTier.dumb
+  - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, sideChatAccess,
+    subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds,
+    subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius,
+    modelTier.smart, modelTier.worker, modelTier.dumb
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor
 
@@ -231,6 +231,12 @@ Turn
       while one session runs a turn in this project, a turn from any other
       session is refused; off lets several sessions run turns in one repository
       at once
+    sideChatAccess          read
+      any text
+      what a new side chat may write: read writes nothing, notes writes .md and
+      .html files, files writes anywhere, or a comma list of globs; a side chat
+      never spawns, schedules, remembers or changes a setting, whatever this
+      says
     subAgentsPerTurn        10
       at least 1 sub-agents running at once
       how many sub-agents may run at once; a spawn past it is refused until one

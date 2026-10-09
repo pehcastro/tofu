@@ -142,6 +142,10 @@ type Carried struct {
 	Event   string `json:"event,omitempty"`
 }
 
+type Kind string
+
+const KindSide Kind = "side"
+
 type EndReason string
 
 const (
@@ -227,6 +231,9 @@ type Header struct {
 	Head             string     `json:"head,omitempty"`
 	CarriedFrom      *Carried   `json:"carried_from,omitempty"`
 	BranchedFrom     *Carried   `json:"branched_from,omitempty"`
+	Kind             Kind       `json:"kind,omitempty"`
+	Owns             []string   `json:"owns,omitempty"`
+	Preset           string     `json:"preset,omitempty"`
 	Parent           string     `json:"-"`
 	ForkedInto       string     `json:"forked_into,omitempty"`
 	ForkKind         string     `json:"fork_kind,omitempty"`

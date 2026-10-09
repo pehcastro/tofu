@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	sessionSubcommands = "tofu session <name|id>, or tofu session list|info|trace|reads|resume|rename|request|find <name|id> [--json]"
+	sessionSubcommands = "tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|reads|resume|rename|request|find|branch <name|id> [--json]"
 	sessionFresh       = "no session recorded here"
 	sessionDay         = 24 * time.Hour
 	sessionWeek        = 7 * sessionDay
@@ -37,6 +37,7 @@ type sessionRow struct {
 	host.SessionInfo
 	lastAt time.Time
 	tasks  []string
+	sideOf string
 }
 
 type sessionListReport struct {
@@ -87,12 +88,22 @@ func sessionOperands(subcommand string) (string, int, bool) {
 }
 
 func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+	all := len(args) > 0 && args[0] == "list" && slices.Contains(args, "--all")
+	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return all && arg == "--all" })
 	handles, _, err := verbArgs(args[min(1, len(args)):])
 	o := verbOutput{verb: "session", usageLine: sessionSubcommands, asJSON: jsonAsked(args), out: out, errOut: errOut}
 	if len(withoutJSON(args)) == 0 {
 		return o.usage(errors.New("no subcommand"))
 	}
 	now := time.Now()
+	if args[0] == "branch" {
+		o.verb, o.usageLine = "session branch", sessionBranchUsage
+		ask, err := sessionBranchArgs(args[1:])
+		if err != nil {
+			return o.usage(err)
+		}
+		return sessionReport(o, func(store *session.Store) (sessionBranchReport, error) { return sessionBranch(store, ask) }, sessionBranchLines)
+	}
 	if args[0] == "find" {
 		o.verb, o.usageLine = "session find", sessionFindUsage
 		handle, query, err := sessionFindArgs(args[1:], now)
@@ -132,6 +143,7 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		if err != nil {
 			return o.fail(err)
 		}
+		report.Sessions = slices.DeleteFunc(report.Sessions, func(row sessionRow) bool { return !all && row.sideOf != "" })
 		return o.done(true, report, func(page cli.Page) []string { return sessionListLines(page, report, now) })
 	case "info":
 		row, _, err := sessionDetail(store, handles[0])
@@ -366,6 +378,9 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		row.Name = *header.Name
 	}
 	row.Handle = sessionShortID(header.ID)
+	if side, found, _ := store.Side(header.ID); found {
+		row.sideOf = handleOf(store, side.BranchedFrom.Session)
+	}
 	if identity, err := store.Identity(header.ID); err == nil {
 		row.Handle, row.Family, row.Generation = identity.Handle(), identity.Family, identity.Generation
 	}
@@ -426,6 +441,9 @@ func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []
 	rows := make([]cli.Row, len(report.Sessions))
 	for i, row := range report.Sessions {
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{row.Handle, sessionWhen(row.At, now), sessionSteps(row.Steps), row.Outcome}, Detail: oneLine(row.Task)}
+		if row.sideOf != "" {
+			rows[i].Detail = strings.Join(slices.DeleteFunc([]string{"side chat of " + row.sideOf, rows[i].Detail}, func(part string) bool { return part == "" }), " · ")
+		}
 		switch {
 		case row.Head && report.HeadDerived:
 			verdict = cli.Verdict{Mark: cli.Idle, Text: "newest " + rows[i].Cells[0]}
