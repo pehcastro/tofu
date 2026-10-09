@@ -670,32 +670,23 @@ func callReason(result session.ResultBody) string {
 	return strings.TrimSpace("exit " + code + ": " + lines[len(lines)-1])
 }
 
-type sessionTraced struct {
-	sessionTraceReport
-	Memory []session.TracedMemory `json:"memory,omitempty"`
-}
-
-func sessionTrace(store *session.Store, handle string) (sessionTraced, error) {
+func sessionTrace(store *session.Store, handle string) (sessionTraceReport, error) {
 	header, err := sessionHeader(store, handle)
 	if err != nil {
-		return sessionTraced{}, err
+		return sessionTraceReport{}, err
 	}
 	events, err := store.Events(header.ID)
 	if err != nil {
-		return sessionTraced{}, err
+		return sessionTraceReport{}, err
 	}
 	report, err := traceBody(store, header.ID, events, func(string, time.Time) bool { return true })
 	if err != nil {
-		return sessionTraced{}, err
+		return sessionTraceReport{}, err
 	}
 	report.Session, report.Name, report.Handle, report.Error, report.Events = header.ID, header.Named(), handleOf(store, header.ID), header.Error, len(events)
 	report.Messages = slices.DeleteFunc(report.Messages, func(said traceMessage) bool { return header.CarriedFrom != nil && said.Turn == header.ID })
 	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
-	if report, err = withAncestors(store, header, report); err != nil {
-		return sessionTraced{}, err
-	}
-	traced, err := store.Traced(header.ID, events)
-	return sessionTraced{report, traced.Memory}, err
+	return withAncestors(store, header, report)
 }
 
 func traceBody(store *session.Store, id string, events []session.Event, keep func(agent string, at time.Time) bool) (sessionTraceReport, error) {
@@ -760,11 +751,11 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 		sizes := store.Sizes(id)
 		report.Sizes = &sizes
 	}
-	report.Inserted, report.Changes, report.Notices = traced.Inserted, traced.Changes, traced.Notices
+	report.Inserted, report.Changes, report.Notices, report.Memory = traced.Inserted, traced.Changes, traced.Notices, traced.Memory
 	return report, nil
 }
 
-func sessionTraceLines(page cli.Page, report sessionTraced) []string {
+func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	agents := make([]cli.Row, len(report.Agents))
 	for i, run := range report.Agents {
 		calls := 0

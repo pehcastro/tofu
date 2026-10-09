@@ -117,6 +117,7 @@ type SessionTrace struct {
 	Changes  []session.TracedChange `json:"list_changes,omitempty"`
 	Notices  []session.TracedNotice `json:"notices,omitempty"`
 	Outlived []TraceOutlived        `json:"outlived,omitempty"`
+	Memory   []session.TracedMemory `json:"memory,omitempty"`
 	Cache    TraceCache             `json:"cache"`
 }
 
