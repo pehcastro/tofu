@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -117,7 +118,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 	}
 	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled,
-		Sessions: serveSessions, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
+		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},
@@ -167,8 +168,57 @@ func serveSessions(open string) (host.SessionList, error) {
 		if errors.As(store.Busy(row.ID), &held) {
 			list.Sessions[index].HeldBy = &host.SessionHolder{PID: held.PID, Since: held.Since}
 		}
+		list.Sessions[index].Kind = host.KindMain
+		if side, found, _ := store.Side(row.ID); found {
+			list.Sessions[index].Kind, list.Sessions[index].Owns, list.Sessions[index].Preset = host.KindSide, side.Owns, side.Preset
+			list.Sessions[index].Parent = &host.SessionParent{Session: side.BranchedFrom.Session, Event: side.BranchedFrom.Event}
+		}
 	}
 	return list, nil
+}
+
+func serveBranch(p host.SessionBranchParams) (host.SessionBranchResult, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return host.SessionBranchResult{}, err
+	}
+	report, err := sessionBranch(store, sessionBranchAsk{handle: p.Session, preset: p.Preset, owns: strings.Join(p.Owns, ","), seed: cmp.Or(p.Seed, string(turn.SeedSummary)), name: p.Name, side: true})
+	if err != nil {
+		return host.SessionBranchResult{}, err
+	}
+	return host.SessionBranchResult{Session: report.Session, Handle: report.Handle, Parent: host.SessionParent{Session: report.Parent.Session, Event: report.Parent.Event},
+		Owns: report.Owns, Preset: report.Preset, Carried: report.Carried}, nil
+}
+
+func serveAccess(p host.SessionAccessParams) (host.SessionAccess, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return host.SessionAccess{}, err
+	}
+	side, err := sessionHeader(store, p.Session)
+	if err == nil {
+		err = store.Busy(side.ID)
+	}
+	if err != nil {
+		return host.SessionAccess{}, err
+	}
+	access, err := turn.AccessOf(cmp.Or(p.Preset, turn.PresetRead))
+	switch {
+	case p.Preset != "" && len(p.Owns) > 0:
+		err = errors.New("name preset or owns, not both")
+	case len(p.Owns) > 0:
+		access, err = turn.OwnsAccess(p.Owns)
+	case err == nil && access.Preset == "":
+		err = fmt.Errorf("preset %q is none of %s, %s and %s", p.Preset, turn.PresetRead, turn.PresetNotes, turn.PresetFiles)
+	}
+	if err != nil {
+		return host.SessionAccess{}, err
+	}
+	header, err := store.SetAccess(side.ID, access.Owns, access.Preset)
+	if err != nil {
+		return host.SessionAccess{}, err
+	}
+	return host.SessionAccess{Session: header.ID, Owns: append([]string{}, header.Owns...), Preset: header.Preset}, nil
 }
 
 func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {

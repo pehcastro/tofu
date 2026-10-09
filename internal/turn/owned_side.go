@@ -135,13 +135,23 @@ func sideChat(config Config) (Config, error) {
 		return config, nil
 	}
 	side, found, err := config.Sessions.Side(config.Session)
-	if err != nil || !found {
+	if err != nil {
 		return config, err
 	}
+	store, own := config.Sessions, config.Session
 	boundary := subagent.NewBoundary(side.ID, "", side.Owns)
-	config.Tools = sideTools(config.Tools, boundary)
+	wrap := func(registry Registry) Registry {
+		if found {
+			registry = sideTools(registry, boundary)
+		}
+		return claimedTools(registry, store, own)
+	}
+	config.Tools = wrap(config.Tools)
 	if source := config.ToolSource; source != nil {
-		config.ToolSource = func() Registry { return sideTools(source(), boundary) }
+		config.ToolSource = func() Registry { return wrap(source()) }
+	}
+	if !found {
+		return config, nil
 	}
 	config.Instructions = strings.TrimSpace(config.Instructions + "\n\n" + "This is a side chat beside session " + side.BranchedFrom.Session +
 		", for talking with the person, not for doing that session's work: it never spawns, messages sub-agents, schedules, remembers, overrides a rule or changes a setting. " +
@@ -189,19 +199,34 @@ func (t sideWrite) Definition() llm.Tool {
 	return definition
 }
 
-func (t sideWrite) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func pathArg(tool string, raw json.RawMessage) (string, error) {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
+		return "", fmt.Errorf("%s: arguments are not the expected shape: %w", tool, err)
 	}
-	err := t.boundary.Write(args.Path)
+	return args.Path, nil
+}
+
+func (t sideWrite) refusal(raw json.RawMessage) error {
+	path, err := pathArg(t.Name(), raw)
+	if err != nil {
+		return err
+	}
+	err = t.boundary.Write(path)
 	if errors.As(err, &subagent.DeniedError{}) {
-		return Result{}, SideRefusedError{Tool: t.Name(), What: args.Path + " is left as it was", Owns: t.boundary.Owns()}
+		return SideRefusedError{Tool: t.Name(), What: path + " is left as it was", Owns: t.boundary.Owns()}
 	}
 	if err != nil {
-		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
+		return fmt.Errorf("%s: %w", t.Name(), err)
+	}
+	return nil
+}
+
+func (t sideWrite) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	if err := t.refusal(raw); err != nil {
+		return Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }
@@ -210,17 +235,24 @@ type sideShell struct {
 	ownedShell
 }
 
-func (t sideShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
-	result, err := t.ownedShell.Run(ctx, raw)
+func (t sideShell) refusal(raw json.RawMessage) error {
+	err := t.ownedShell.refusal(raw)
 	var denied subagent.DeniedError
 	var unread subagent.ReadListError
 	switch {
 	case errors.As(err, &denied):
-		return result, SideRefusedError{Tool: t.Name(), What: denied.Path + " is left as it was", Owns: t.boundary.Owns()}
+		return SideRefusedError{Tool: t.Name(), What: denied.Path + " is left as it was", Owns: t.boundary.Owns()}
 	case errors.As(err, &unread):
-		return result, SideRefusedError{Tool: t.Name(), What: unread.Program + " " + unread.Why + ", and bash here runs only commands that read, list, search or inspect, or run the project's own checks", Owns: t.boundary.Owns()}
+		return SideRefusedError{Tool: t.Name(), What: unread.Program + " " + unread.Why + ", and bash here runs only commands that read, list, search or inspect, or run the project's own checks", Owns: t.boundary.Owns()}
 	}
-	return result, err
+	return err
+}
+
+func (t sideShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	if err := t.refusal(raw); err != nil {
+		return Result{}, err
+	}
+	return t.tool.Run(ctx, raw)
 }
 
 type SideRefusedError struct {

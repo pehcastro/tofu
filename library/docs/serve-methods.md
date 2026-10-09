@@ -21,9 +21,15 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
 - `initialize`: takes `client`, `versions` and `capabilities`, where
   `questions` says it answers `tofu/askPerson`; answers `protocol`, `tofu`,
   `project` and `capabilities`, one name a family of methods
-- `session.list`: takes `search` and `limit`; answers `head` and `sessions`,
-  each `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`, `model`,
-  `costUsd`, `outcome`, `open` (here), `running` and `heldBy` (another tofu)
+- `session.list`: takes `search`, `limit` and `kind`; answers `head` and
+  `sessions`, each `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
+  `model`, `costUsd`, `outcome`, `open` (here), `running`, `heldBy` (another
+  tofu) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`
+- side chats (capability `side`): `session.branch` takes `session`, `kind:
+  "side"`, `seed` (`summary` or `none`), `owns` or `preset`, and `name`;
+  answers `session`, `handle`, `parent` `{session, event}`, `owns`, `preset`
+  and `carried`. `session.access` takes `session` and `owns` or `preset`,
+  `read` with neither, and errs while that chat's turn runs
 - `session.open`: takes `session` (none starts a fresh one), `asking` and
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
@@ -36,10 +42,9 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
 - `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`.
   `session.history`: takes `session`, `limit` and `before`; answers `lines`,
   each `{method, params}` as `session.open` sends it, from `first` of `total`
-- `session.info` and `session.trace` take `session` and answer what `tofu
-  session info` and `tofu session trace` print. `session.find` takes `session`
-  and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until` (a
-  duration like `2h` or a time); answers `handle`, `query` and `hits`
+- `session.info` and `session.trace` answer what `tofu session info` and
+  `trace` print. `session.find` takes `session` and any of `tool`, `command`,
+  `file`, `text`, `agent`, `since`, `until`; answers `handle`, `query`, `hits`
 - `turn.send`: takes `session`, `text`, `mentions` (each a `ref`, kept where
   `text` has it, else added at the end; a path gains `@`), `images` (png, jpg,
   gif or webp, or the send is refused), `wire`, `model` and `effort`; answers
@@ -76,10 +81,9 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   the library's `skills` and the folders'. `query.ledger.summary` takes
   `since`, a week back by default; answers `points`, each `count`, `week`,
   `would_ask`, `labeled`, `agreed`, `mean_ms`, `cost_usd` and `thresholds`
-- memory: `memory.add` takes `text`, `scope` (`global` or `project`) and
-  `kind`; `memory.edit` takes `scope`, `id` and `text`; `memory.remove` takes
-  `scope` and `id`. Each answers the entry, `{id, scope, kind, text, said, at,
-  by, file}`, and the running lead hears an add or an edit
+- memory: `memory.add` takes `text`, `scope` (`global`, `project`), `kind`;
+  `memory.edit` `scope`, `id`, `text`; `memory.remove` `scope`, `id`. Each answers
+  `{id, scope, kind, text, said, at, by, file}`; the running lead hears it
 - rules: `rules.add` takes `id`, `text`, `reason`, `concern`, `global` and
   `replace`; `rules.off` takes `id`, `reason` and `global`; `rules.remove` and
   `rules.restore` take `id` and `global`
@@ -87,32 +91,28 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `agents.set` `name`, `model`, `global`; `agents.remove` `name`, `global`
 - each rules and agents write, and `learn.apply`, answers `changes`, each
   `{change, what, file}` (`added`, `changed`, `removed`), and `undo`
-- learn: `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject`
-  `id` and `reason`, each the finding; `learn.apply` takes `id` and `project`
-- `reload` answers `project`, `first` and `parts` (`added`, `removed`,
-  `changed`); `models.reload` `sources` and `versions`; `hooks.trust` `trusted`
+- `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject` `id`,
+  `reason`, each the finding; `learn.apply` takes `id`, `project`
+- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`);
+  `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one
-  with no `done` still blocks a turn. `login.key` takes `provider` and `key`,
-  checked with the provider, `login.logout` `role`, `provider` and `number`;
-  both answer `note`. `login.start` takes `role` and `provider`;
+  with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
+  `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role` and `provider`;
   `settings.set` takes `key`, `value` and `scope`
-- `cron.command` takes the line you would type, such as `/loop 10m check the
-  build`, or `/cron delete all`, and answers `note`. `label` takes `row` and `outcome`
+- `cron.command` takes the line you would type, such as `/cron delete all`,
+  and answers `note`. `label` takes `row` and `outcome`
 - `status.list` (capability `status`): takes nothing; answers `records`, every
   `status` record as it stands, each `id`, `state`, `kind`, `progress`, `msg`
 
 ## Change it
 
-A `remember` ask (`tofu/requestApproval`, tool `remember`, `scope` is Jev's
-pick) answers `remember_global` (user global), `remember_user_local`,
-`remember_project` (project global) or `remember_project_local` as its
-`decisions` offer, `reject_*` keeps nothing; one it does not list errs.
+A `remember` ask (`tofu/requestApproval`, `scope` is Jev's pick) answers
+`remember_global`, `remember_user_local`, `remember_project` or
+`remember_project_local` as offered; `reject_*` keeps nothing, others err.
 
 ## Check it
 
-    tofu serve --schema
-
-prints `x-requests`, every method above with its `params` and `result`.
+`tofu serve --schema` prints `x-requests`, each method's `params` and `result`.
 
 ## Undo it
 

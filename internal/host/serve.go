@@ -32,6 +32,8 @@ type ServeConfig struct {
 	Verb     func(args []string) (VerbResult, error)
 	Quota    func() []QuotaWindow
 	Sessions func(open string) (SessionList, error)
+	Branch   func(SessionBranchParams) (SessionBranchResult, error)
+	Access   func(SessionAccessParams) (SessionAccess, error)
 	Wires    func() []string
 	Sources  map[string]string
 	Ledger   func(LedgerParams) (LedgerReport, error)
@@ -169,6 +171,10 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return result, err
 	case "session.rename":
 		return handle(raw, s.rename)
+	case "session.branch":
+		return handle(raw, s.branch)
+	case "session.access":
+		return handle(raw, s.access)
 	case "cron.command":
 		return handle(raw, func(p CronCommandParams) (any, error) {
 			reply, err := s.Host.CronCommand(p.Line)

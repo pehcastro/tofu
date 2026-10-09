@@ -434,6 +434,17 @@ func (s *Store) Side(id string) (Header, bool, error) {
 	return Header{}, false, err
 }
 
+func (s *Store) SetAccess(id string, owns []string, preset string) (Header, error) {
+	side, found, err := s.Side(id)
+	if err == nil && !found {
+		err = fmt.Errorf("session: %s is not a side chat, and only a side chat has an access to change", id)
+	}
+	if err != nil {
+		return Header{}, err
+	}
+	return s.edit(side.ID, func(header *Header) { header.Owns, header.Preset = owns, preset })
+}
+
 func (s *Store) read(id string) (Header, error) {
 	if err := namesOneSession(id); err != nil {
 		return Header{}, err

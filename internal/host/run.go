@@ -264,8 +264,20 @@ func (h *Host) holdTurn(id string) (func() error, error) {
 		err = h.hold(id)
 	}
 	h.mu.Unlock()
-	if err != nil || !h.engine.OneTurnPerProject() {
-		return func() error { return nil }, err
+	free := func() error { return nil }
+	if err != nil {
+		return free, err
+	}
+	side, found, err := store.Side(id)
+	switch {
+	case err != nil:
+		return free, err
+	case found && len(side.Owns) == 0:
+		return free, nil
+	case found:
+		return store.Claim(side)
+	case !h.engine.OneTurnPerProject():
+		return free, nil
 	}
 	return store.HoldTurn()
 }

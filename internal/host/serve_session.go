@@ -26,14 +26,39 @@ func (s *server) sessions(p SessionListParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	switch p.Kind {
+	case "", KindMain, KindSide:
+	default:
+		return nil, &Refusal{Code: CodeBadParams, Message: "kind " + p.Kind + " is neither " + KindMain + " nor " + KindSide}
+	}
 	search := strings.ToLower(p.Search)
 	list.Sessions = slices.DeleteFunc(list.Sessions, func(row SessionRow) bool {
-		return !strings.Contains(strings.ToLower(strings.Join([]string{row.ID, row.Name, row.Handle, row.Task}, "\n")), search)
+		return !strings.Contains(strings.ToLower(strings.Join([]string{row.ID, row.Name, row.Handle, row.Task}, "\n")), search) || p.Kind != "" && row.Kind != p.Kind
 	})
 	if p.Limit > 0 {
 		list.Sessions = list.Sessions[:min(p.Limit, len(list.Sessions))]
 	}
 	return list, nil
+}
+
+func (s *server) branch(p SessionBranchParams) (any, error) {
+	switch {
+	case s.Branch == nil:
+		return nil, &Refusal{Code: CodeRefused, Message: "this tofu branches no sessions"}
+	case p.Kind != KindSide:
+		return nil, &Refusal{Code: CodeBadParams, Message: "kind " + p.Kind + " is not built: only " + KindSide + " is, and a full branch for the Forks screen is not"}
+	}
+	return s.Branch(p)
+}
+
+func (s *server) access(p SessionAccessParams) (any, error) {
+	if s.Access == nil {
+		return nil, &Refusal{Code: CodeRefused, Message: "this tofu changes no side chat's access"}
+	}
+	if turn, running := s.Host.Turn(); running && p.Session == s.Host.ID() {
+		return nil, &Refusal{Code: CodeRefused, Message: "turn " + turn + " is running in this side chat: change its access when it ends"}
+	}
+	return s.Access(p)
 }
 
 func (s *server) listing() (SessionList, error) {

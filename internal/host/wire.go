@@ -619,6 +619,47 @@ type SessionOpenResult struct {
 type SessionListParams struct {
 	Search string `json:"search,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
+	Kind   string `json:"kind,omitempty"`
+}
+
+const (
+	KindMain = "main"
+	KindSide = "side"
+)
+
+type SessionBranchParams struct {
+	Session string   `json:"session"`
+	Kind    string   `json:"kind"`
+	Seed    string   `json:"seed,omitempty"`
+	Owns    []string `json:"owns,omitempty"`
+	Preset  string   `json:"preset,omitempty"`
+	Name    string   `json:"name,omitempty"`
+}
+
+type SessionParent struct {
+	Session string `json:"session"`
+	Event   string `json:"event,omitempty"`
+}
+
+type SessionBranchResult struct {
+	Session string        `json:"session"`
+	Handle  string        `json:"handle"`
+	Parent  SessionParent `json:"parent"`
+	Owns    []string      `json:"owns"`
+	Preset  string        `json:"preset,omitempty"`
+	Carried int           `json:"carried"`
+}
+
+type SessionAccessParams struct {
+	Session string   `json:"session"`
+	Owns    []string `json:"owns,omitempty"`
+	Preset  string   `json:"preset,omitempty"`
+}
+
+type SessionAccess struct {
+	Session string   `json:"session"`
+	Owns    []string `json:"owns"`
+	Preset  string   `json:"preset,omitempty"`
 }
 
 type SessionList struct {
@@ -648,6 +689,10 @@ type SessionRow struct {
 	Open        bool           `json:"open"`
 	Running     bool           `json:"running"`
 	HeldBy      *SessionHolder `json:"heldBy,omitempty"`
+	Kind        string         `json:"kind"`
+	Parent      *SessionParent `json:"parent,omitempty"`
+	Owns        []string       `json:"owns,omitempty"`
+	Preset      string         `json:"preset,omitempty"`
 }
 
 type SessionHolder struct {
@@ -930,6 +975,8 @@ func requests() []method {
 		{name: "session.state", params: NoParams{}, result: SessionState{}},
 		{name: "session.set", params: SessionSetParams{}, result: Ack{}},
 		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
+		{name: "session.branch", params: SessionBranchParams{}, result: SessionBranchResult{}},
+		{name: "session.access", params: SessionAccessParams{}, result: SessionAccess{}},
 		{name: "turn.send", params: TurnSendParams{}, result: TurnResult{}},
 		{name: "turn.steer", params: TurnSteerParams{}, result: SteerResult{}},
 		{name: "turn.sendNow", params: SendNowParams{}, result: Ack{}},
@@ -996,7 +1043,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side"}
 }
 
 const queryPrefix = "query."
