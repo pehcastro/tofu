@@ -219,7 +219,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if err == nil {
 			spent := stepFrom(id, len(row.Steps), timing, decision)
 			spent.AssistantText = ""
-			recorded.step(spent)
+			recorded.step(session.EventMemoryRequest, spent)
 		}
 		return decision, err
 	}
@@ -357,7 +357,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if err == nil {
 			spent := stepFrom(id, step, timing, decision)
 			spent.AssistantText = ""
-			recorded.step(spent)
+			recorded.step(session.EventRequest, spent)
 		}
 		state, missing := "", ""
 		switch {
@@ -374,7 +374,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	keep := func(step StepRow) {
 		flush()
-		recorded.step(step)
+		recorded.step(session.EventRequest, step)
 		row.Steps = append(row.Steps, step)
 		if config.Step != nil {
 			config.Step(step)

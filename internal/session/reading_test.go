@@ -52,6 +52,7 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 		asked(eventOf(t, EventToolResult, ResultBody{Content: "package main", ResultBytes: 12}), "c1"),
 		asked(eventOf(t, EventRequest, StepBody{Index: 1, AssistantText: "looking"}), ""),
 		asked(eventOf(t, EventCompaction, map[string]any{"compaction": map[string]int{"step": 1}}), ""),
+		eventOf(t, EventMemoryRequest, StepBody{Model: "haiku", PromptTokens: 900, CompletionTokens: 80}),
 		eventOf(t, EventAttachment, Attachment{File: "shot.png", Bytes: 9, Format: "png"}),
 		eventOf(t, EventTurnEnd, map[string]string{"outcome": "stopped"}),
 		eventOf(t, EventNotice, NoticeBody{Text: "the gate is off"}),
@@ -59,7 +60,32 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 	}
 }
 
-var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook}
+var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest}
+
+func TestAMemoryModelCallBetweenTheLeadsRequestsIsNotOneOfItsSteps(t *testing.T) {
+	events := []Event{
+		eventOf(t, EventRequest, StepBody{Index: 1, Model: "sonnet"}),
+		eventOf(t, EventMemoryRequest, StepBody{Model: "haiku", PromptTokens: 900}),
+		eventOf(t, EventRequest, StepBody{Index: 2, Model: "sonnet"}),
+	}
+	events[2].ID = "request-2"
+	shown, err := DefaultSettings().view(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reading, err := ReadEvents(shown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reading.Steps) != 2 || len(reading.Unknown) != 0 {
+		t.Fatalf("the lead took 2 steps and the session reads %d, unknown kinds %v", len(reading.Steps), reading.Unknown)
+	}
+	for _, step := range reading.Steps {
+		if step.Model != "sonnet" {
+			t.Fatalf("a step on %s is the memory model's call counted as the lead's", step.Model)
+		}
+	}
+}
 
 func readingOf(t *testing.T, reading Reading, kind EventKind) int {
 	t.Helper()

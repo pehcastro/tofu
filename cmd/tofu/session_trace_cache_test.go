@@ -11,6 +11,30 @@ import (
 	"tofu/internal/session"
 )
 
+func TestAMemoryModelCallIsNeverACacheBreakAndNeverHidesTheLeadsOwn(t *testing.T) {
+	start := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
+	var events []session.Event
+	var exchanges []session.Exchange
+	sent := func(request string, kind session.EventKind, messages []string, read, write int) {
+		body, _ := json.Marshal(map[string]int{"prompt_tokens": 3, "cache_read_tokens": read, "cache_write_tokens": write})
+		events = append(events, session.Event{ID: request, Kind: kind, Body: body})
+		exchanges = append(exchanges, session.Exchange{Request: request, At: start.Add(time.Duration(len(exchanges)) * time.Second), Tools: "tools", Messages: messages})
+	}
+	sent("lead-1", session.EventRequest, []string{"system", "task"}, 0, 20000)
+	sent("memory-1", session.EventMemoryRequest, []string{"compaction system", "input"}, 0, 0)
+	sent("lead-2", session.EventRequest, []string{"system", "task", "reply"}, 20000, 400)
+	sent("memory-2", session.EventMemoryRequest, []string{"compaction system", "other input"}, 0, 0)
+	sent("lead-3", session.EventRequest, []string{"changed system", "task", "reply"}, 0, 20400)
+
+	var broken []string
+	for _, cut := range cacheTrace(events, exchanges).Breaks {
+		broken = append(broken, cut.Request+" after "+cut.After)
+	}
+	if want := []string{"lead-3 after lead-2"}; !slices.Equal(broken, want) {
+		t.Fatalf("the breaks are %v, want %v", broken, want)
+	}
+}
+
 func TestTheTraceNamesACacheBreakOnlyWhereARequestReadLessThanItsOwnAgentLeftCached(t *testing.T) {
 	start := time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
 	var events []session.Event

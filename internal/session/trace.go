@@ -1,6 +1,7 @@
 package session
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -56,8 +57,20 @@ type TracedNotice struct {
 	Text  string    `json:"text"`
 }
 
+type TracedMemory struct {
+	Agent   string    `json:"agent,omitempty"`
+	Turn    string    `json:"turn,omitempty"`
+	Request string    `json:"request"`
+	At      time.Time `json:"at"`
+	Why     string    `json:"why,omitempty"`
+	Model   string    `json:"model,omitempty"`
+	Usage   Usage     `json:"usage"`
+	CostUSD float64   `json:"cost_usd"`
+}
+
 type Traced struct {
 	Exchanges []Exchange
+	Memory    []TracedMemory
 	Inserted  []TracedInsert
 	Changes   []TracedChange
 	Notices   []TracedNotice
@@ -96,6 +109,15 @@ func (s *Store) Traced(id string, events []Event) (Traced, error) {
 			if json.Unmarshal(event.Body, &notice) == nil {
 				traced.Notices = append(traced.Notices, TracedNotice{Agent: event.Agent, Turn: event.Turn, At: event.At, Text: notice.Text})
 			}
+		case EventMemoryRequest:
+			var step StepBody
+			_ = json.Unmarshal(event.Body, &step)
+			call := TracedMemory{Agent: event.Agent, Turn: event.Turn, Request: cmp.Or(event.Request, event.ID), At: event.At, Model: step.Model,
+				Usage: step.usage(), CostUSD: step.CostUSD}
+			if at := slices.IndexFunc(exchanges, func(exchange Exchange) bool { return exchange.Request == call.Request }); at >= 0 {
+				call.Why = exchanges[at].Why
+			}
+			traced.Memory = append(traced.Memory, call)
 		}
 	}
 	return traced, nil

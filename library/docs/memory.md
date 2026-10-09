@@ -91,7 +91,15 @@ builds a summary tree over a log of `kind` and `text` json lines and
 prints its view: recent items whole, older ones as summaries of at most
 512 bytes, written by the `memoryModel` subscription model
 (`claude-sub/claude-haiku-4-5-20251001`), never the OpenRouter key. The
-tree and view are saved, so a second run calls no model.
+tree and view are saved, so a second run calls no model. Its last line
+says how many nodes were summarized and how many model calls that took:
+a line over 512 bytes is asked for once more.
+
+The episode summaries written between turns are memory-model calls too.
+`tofu session trace <name>` lists them under `memory model`, with why
+each was asked, its tokens and its cost. They are not steps: `tofu
+session list` counts only the session's own model, and the trace never
+names a memory call as a cache break.
 `tofu memory zoom log.jsonl <id> <n>` opens line `id+n` into its halves,
 down to the item at `n` 1, and `tofu memory recall log.jsonl <regex>`
 searches the items. A scope's own `log.jsonl` takes all three: beside its

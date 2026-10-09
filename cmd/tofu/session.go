@@ -678,23 +678,32 @@ func callReason(result session.ResultBody) string {
 	return strings.TrimSpace("exit " + code + ": " + lines[len(lines)-1])
 }
 
-func sessionTrace(store *session.Store, handle string) (sessionTraceReport, error) {
+type sessionTraced struct {
+	sessionTraceReport
+	Memory []session.TracedMemory `json:"memory,omitempty"`
+}
+
+func sessionTrace(store *session.Store, handle string) (sessionTraced, error) {
 	header, err := sessionHeader(store, handle)
 	if err != nil {
-		return sessionTraceReport{}, err
+		return sessionTraced{}, err
 	}
 	events, err := store.Events(header.ID)
 	if err != nil {
-		return sessionTraceReport{}, err
+		return sessionTraced{}, err
 	}
 	report, err := traceBody(store, header.ID, events, func(string, time.Time) bool { return true })
 	if err != nil {
-		return sessionTraceReport{}, err
+		return sessionTraced{}, err
 	}
 	report.Session, report.Name, report.Handle, report.Error, report.Events = header.ID, header.Named(), handleOf(store, header.ID), header.Error, len(events)
 	report.Messages = slices.DeleteFunc(report.Messages, func(said traceMessage) bool { return header.CarriedFrom != nil && said.Turn == header.ID })
 	report.Agents, report.Outlived = append([]session.AgentRun{}, header.Agents...), callsAfterTheLeadLeft(store, header, events)
-	return withAncestors(store, header, report)
+	if report, err = withAncestors(store, header, report); err != nil {
+		return sessionTraced{}, err
+	}
+	traced, err := store.Traced(header.ID, events)
+	return sessionTraced{report, traced.Memory}, err
 }
 
 func traceBody(store *session.Store, id string, events []session.Event, keep func(agent string, at time.Time) bool) (sessionTraceReport, error) {
@@ -751,7 +760,9 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	exchanges := slices.DeleteFunc(traced.Exchanges, func(exchange session.Exchange) bool { return !keep(exchange.Agent, exchange.At) })
+	exchanges := slices.DeleteFunc(traced.Exchanges, func(exchange session.Exchange) bool {
+		return !keep(exchange.Agent, exchange.At) || slices.ContainsFunc(traced.Memory, func(call session.TracedMemory) bool { return call.Request == exchange.Request })
+	})
 	report.Requests, report.Cache = tracedRequests(report.Requests, exchanges), cacheTrace(events, exchanges)
 	if len(exchanges) > 0 {
 		sizes := store.Sizes(id)
@@ -761,7 +772,7 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 	return report, nil
 }
 
-func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
+func sessionTraceLines(page cli.Page, report sessionTraced) []string {
 	agents := make([]cli.Row, len(report.Agents))
 	for i, run := range report.Agents {
 		calls := 0
@@ -788,6 +799,11 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 			requests[i].Mark, requests[i].Detail = cli.Fail, oneLine(request.Error)
 		}
 		requests[i].Detail = recordedIn(request.RecordedIn) + requests[i].Detail
+	}
+	memory := make([]cli.Row, len(report.Memory))
+	for i, call := range report.Memory {
+		memory[i] = cli.Row{Mark: cli.Idle, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Request, call.Model,
+			"in " + strconv.Itoa(call.Usage.InputTokens) + " · out " + strconv.Itoa(call.Usage.OutputTokens) + " · cache read " + strconv.Itoa(call.Usage.CacheReadTokens) + " · wrote " + strconv.Itoa(call.Usage.CacheWriteTokens), dollars(call.CostUSD)}, Detail: call.Why}
 	}
 	calls := make([]cli.Row, len(report.Calls))
 	for i, call := range report.Calls {
@@ -865,7 +881,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	for _, section := range []struct {
 		name string
 		rows []cli.Row
-	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"cache breaks", cacheBreakRows(report.Cache.Breaks)}, {"messages", messages}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
+	}{{"sub-agents", agents}, {"sub-agents across a continue", outlivedRows(report.Outlived)}, {"requests", requests}, {"cache breaks", cacheBreakRows(report.Cache.Breaks)}, {"memory model", memory}, {"messages", messages}, {"messages tofu added", inserted}, {"calls", calls}, {"hooks", hooks}, {"list changes", changes}, {"notices", notices}, {"failures", failures}} {
 		if len(section.rows) > 0 {
 			lines = append(append(lines, "", page.Section(section.name, cli.Verdict{})), cli.Indent(page.Rows(section.rows)...)...)
 		}

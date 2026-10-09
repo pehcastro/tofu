@@ -159,8 +159,27 @@ with no model call:
 0+1|user: the dev server runs on port 4317
 1+1|lead: noted, I will start it there
 2+1|user: use pnpm, never npm
-4 nodes built now: 0 model calls on claude-sub/claude-haiku-4-5-20251001, 4 free, 0 failed; the view is 3 lines, 112 bytes of a 8192 byte budget
+4 nodes built now: 0 by 0 model calls on claude-sub/claude-haiku-4-5-20251001, 4 free, 0 failed; the view is 3 lines, 112 bytes of a 8192 byte budget
 ```
+
+`4 nodes built now: 113 by 120 model calls` means 113 nodes needed a summary
+and the memory model was asked 120 times: a line that came back over 512
+bytes is asked for once more.
+
+Between turns, the summaries of the episode log are written the same way.
+`tofu session trace <name>` lists each of those calls under `memory model`,
+with why it was asked, its tokens and its cost:
+
+```text
+memory model
+  ○ orchestrator  d81c1d7c-5458-441e-940a-aebfd0ecb516
+    claude-haiku-4-5-20251001  in 1180 · out 74 · cache read 0 · wrote 0
+    $0.000000  memory model: compress this item
+```
+
+They are not steps of the turn. `tofu session list` counts only the steps
+the session's own model took, and the trace never names a memory call as a
+cache break.
 
 `tofu memory recall log.jsonl port` prints every item that matches, word
 for word. A project's episode log is

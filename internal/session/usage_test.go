@@ -7,6 +7,44 @@ import (
 	"time"
 )
 
+func TestAMemoryModelCallIsSpentByTheMemoryAndLeavesTheLeadsModelAlone(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	store := NewStore(t.TempDir())
+	log, err := store.Open(Header{ID: "m", At: now.Add(-time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, event := range []Event{
+		{Kind: EventTurnStart, Body: []byte(`{"task":"t","wire":"anthropic","spend":"subscription","account":2}`)},
+		{Kind: EventRequest, Attempt: 1, Body: []byte(`{"model":"sonnet","prompt_tokens":100,"completion_tokens":10}`)},
+		{Kind: EventMemoryRequest, Attempt: 1, Body: []byte(`{"model":"haiku","prompt_tokens":700,"completion_tokens":70,"cost_usd":0.25}`)},
+		{Kind: EventRequest, Attempt: 1, Body: []byte(`{"model":"sonnet","prompt_tokens":200,"completion_tokens":20}`)},
+	} {
+		event.At, event.Turn = now.Add(time.Duration(i-10)*time.Minute), "turn-m"
+		if _, err := log.Append(event, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	history, err := store.UsageHistory(UsageDay, now, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spent := map[UsageSpender]UsageTotals{}
+	for _, row := range history.Spenders {
+		spent[row.UsageSpender] = row.UsageTotals
+	}
+	want := map[UsageSpender]UsageTotals{
+		{Session: "m", Role: UsageLead, Wire: "anthropic", Spend: "subscription", Account: 2, Model: "sonnet"}: {TokensIn: 300, TokensOut: 30, Requests: 2},
+		{Session: "m", Role: UsageMemory, Model: "haiku"}:                                                      {TokensIn: 700, TokensOut: 70, Requests: 1, CostUSD: 0.25},
+	}
+	if !reflect.DeepEqual(spent, want) {
+		t.Fatalf("spenders\n got %+v\nwant %+v", spent, want)
+	}
+}
+
 func TestUsageHistoryBucketsEveryRequestOnceByLocalHour(t *testing.T) {
 	zone := time.FixedZone("UTC-3", -3*60*60)
 	at := func(day, hour, minute int) time.Time { return time.Date(2026, 10, day, hour, minute, 0, 0, zone) }

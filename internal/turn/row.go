@@ -578,7 +578,7 @@ func (r *record) notice(text string) {
 	r.add(session.Event{Kind: session.EventNotice}, session.NoticeBody{Text: text})
 }
 
-func (r *record) step(step StepRow) {
+func (r *record) step(kind session.EventKind, step StepRow) {
 	if r == nil {
 		return
 	}
@@ -587,7 +587,7 @@ func (r *record) step(step StepRow) {
 	if asked.AssistantText == r.said[step.id] {
 		asked.AssistantText = ""
 	}
-	r.add(session.Event{ID: step.id, Kind: session.EventRequest, Request: step.id, Attempt: max(step.attempt, session.FirstAttempt)}, asked)
+	r.add(session.Event{ID: step.id, Kind: kind, Request: step.id, Attempt: max(step.attempt, session.FirstAttempt)}, asked)
 	if step.Compaction != nil || step.Fork != nil {
 		r.add(session.Event{Kind: session.EventCompaction, Request: step.id}, compactionRow{Compaction: step.Compaction, Fork: step.Fork})
 	}

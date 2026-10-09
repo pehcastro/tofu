@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -29,7 +30,7 @@ Call no tools, and output only the line, without an id+n| head.
 
 Goal: let tofu work later as well as if it remembered everything.
 
-Use the space up to the limit, and give it by value:
+Use the space up to the ruler, and give it by value:
 
 1. The person's words matter most: orders, decisions, corrections, questions and reasons. Keep them close to verbatim, however short.
 2. Then anything with lasting effect, and what failed and why.
@@ -37,6 +38,8 @@ Use the space up to the limit, and give it by value:
 4. Least of all, tool steps: what was done to what, and the outcome.
 
 Avoid omissions. Name a minor item in a word or two rather than drop it: an absent item can never be found. Copy names, numbers, ids, paths and errors exactly. Tag each item with its kind ("user: ...; lead: ..."), and credit quoted text to its real author. Never make anything look further along than it was. If told the line is too long, shorten it. Non-ASCII characters cost 2-4 bytes. Never write an em dash: use a colon, a comma or parentheses.`
+
+const compactionExample = `user: rename --fast to --quick, keep --fast working for one release, ask before touching config.toml; lead: renamed in cli/flags.go, --fast prints a warning; work: [Tester] TestFlags failed (want 3 flags, got 4), fixed the table, not the code; user: commit it; lead: committed 4f2a9c1; open: the warning wording`
 
 func memoryTreeVerb(o verbOutput, verb string, args []string) int {
 	budget := konst.MemtreeViewBytes
@@ -94,7 +97,9 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	if err != nil {
 		return o.fail(err)
 	}
+	var asked atomic.Int64
 	compact, slug, release := memoryCompactor(dir, func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
+		asked.Add(1)
 		return model.Ask(ctx, request)
 	})
 	defer release()
@@ -105,10 +110,10 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	view := store.View()
+	view, compacted := store.View(), built.Calls-len(built.Failed)
 	_, _ = io.WriteString(o.out, view)
-	_, _ = fmt.Fprintf(o.errOut, "%d nodes built now: %d model calls on %s, %d free, %d failed; the view is %d lines, %d bytes of a %d byte budget\n",
-		built.Calls-len(built.Failed)+built.Free, built.Calls, slug, built.Free, len(built.Failed), strings.Count(view, "\n"), len(view), budget)
+	_, _ = fmt.Fprintf(o.errOut, "%d nodes built now: %d by %d model calls on %s, %d free, %d failed; the view is %d lines, %d bytes of a %d byte budget\n",
+		compacted+built.Free, compacted, asked.Load(), slug, built.Free, len(built.Failed), strings.Count(view, "\n"), len(view), budget)
 	if len(built.Failed) > 0 {
 		return o.fail(fmt.Errorf("%d compactions failed and are tried again on the next build, the first: %w", len(built.Failed), built.Failed[0]))
 	}
@@ -133,7 +138,14 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		if len(model.Efforts) > 0 {
 			opts.effort = defaultEffort(model.Efforts)
 		}
-		opened, err = openAppWire(opts)
+		open := openAppWire
+		var deck *cassette
+		if deck, err = readCassette(os.Getenv(cassetteVariable)); deck != nil {
+			open = driveWire(deck)
+		}
+		if err == nil {
+			opened, err = open(opts)
+		}
 	}
 	release := func() {
 		if opened.held != nil {
@@ -144,7 +156,7 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		return func(context.Context, string, string, string) (string, error) { return "", err }, slug, release
 	}
 	var picking sync.Mutex
-	ruler := strings.Repeat("-", konst.MemtreeLineBytes)
+	ruler := strings.Repeat("-", len(compactionExample))
 	return func(ctx context.Context, before, left, right string) (string, error) {
 		picking.Lock()
 		account, err := opened.held.forTurn().Pick(ctx)
@@ -156,7 +168,8 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		if right != "" {
 			task, input = "merge these two adjacent lines", left+"\n"+right
 		}
-		asked := "<chat>\n" + before + "\n</chat>\n\nCompaction: " + task + " into one line of at most 512 bytes (about 70 words), the length of this ruler:\n" + ruler + "\n<input>\n" + input + "\n</input>"
+		asked := fmt.Sprintf("<chat>\n%s\n</chat>\n\nCompaction: %s into one line of about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\n<input>\n%s\n</input>\n<input> is %d words. Your line has at most %d: rewrite it shorter, never join or copy it.",
+			before, task, len(compactionExample), konst.MemtreeLineBytes, ruler, compactionExample, input, len(strings.Fields(input)), len(strings.Fields(compactionExample)))
 		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}, {Role: llm.RoleUser, Content: asked}}
 		asking := func(why string, messages []llm.Message) (string, error) {
 			decision, err := ask(ctx, why, wire, account.Model, llm.Request{Messages: messages})

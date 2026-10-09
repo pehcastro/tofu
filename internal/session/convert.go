@@ -206,7 +206,7 @@ func spent(events []Event, agent string) (Usage, float64) {
 	var usage Usage
 	var cost float64
 	for _, event := range events {
-		if event.Kind != EventRequest || event.Agent != agent {
+		if event.Kind != EventRequest && event.Kind != EventMemoryRequest || event.Agent != agent {
 			continue
 		}
 		var step StepBody
@@ -230,7 +230,7 @@ func stamp(converted *Converted) {
 			if event.Agent == "" {
 				header.Turns++
 			}
-		case EventRequest:
+		case EventRequest, EventMemoryRequest:
 			var step StepBody
 			_ = json.Unmarshal(event.Body, &step)
 			header.Usage, header.CostUSD = header.Usage.Plus(step.usage()), header.CostUSD+step.CostUSD

@@ -50,6 +50,7 @@ const (
 	UsageLead       UsageRole = "lead"
 	UsageSubAgent   UsageRole = "sub-agent"
 	UsageClassifier UsageRole = "classifier"
+	UsageMemory     UsageRole = "memory"
 )
 
 type UsageTotals struct {
@@ -170,13 +171,17 @@ func (s *Store) UsageHistory(span UsageSpan, now time.Time, classifier []Classif
 				var start TurnStart
 				_ = json.Unmarshal(event.Body, &start)
 				started[event.Agent] = start
-			case EventRequest:
+			case EventRequest, EventMemoryRequest:
 				body := spentIn(event)
-				models[event.Agent] = body.Model
 				totals = UsageTotals{TokensIn: body.PromptTokens, TokensOut: body.CompletionTokens, CacheRead: body.CacheReadTokens, CacheWrite: body.CacheWriteTokens, CostUSD: body.CostUSD}
 				if event.Attempt <= FirstAttempt {
 					totals.Requests = 1
 				}
+				if event.Kind == EventMemoryRequest {
+					count(event.At, UsageSpender{Session: header.ID, Role: UsageMemory, Model: body.Model}, totals)
+					continue
+				}
+				models[event.Agent] = body.Model
 			case EventToolResult:
 				totals.SiftedBytes = spentIn(event).SiftSavedBytes
 			case EventTurnEnd:
