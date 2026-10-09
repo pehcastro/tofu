@@ -257,6 +257,81 @@ func TestTheQuoteRuleReachesTheModelWhileItsModeSaysShadow(t *testing.T) {
 	}
 }
 
+func called(t *testing.T, scope, agent, call, tool, args string) session.Event {
+	t.Helper()
+	body, err := json.Marshal(session.CallBody{Tool: tool, Args: json.RawMessage(args)})
+	if err != nil {
+		t.Fatalf("encoding the recorded call: %v", err)
+	}
+	return session.Event{ID: session.EventIDFor(scope, call), Turn: scope, Agent: agent, Call: call, Attempt: session.FirstAttempt, Kind: session.EventToolCall, Body: body}
+}
+
+func answeredCall(t *testing.T, scope, agent, call, content string) session.Event {
+	t.Helper()
+	body, err := json.Marshal(session.ResultBody{Content: content, ToolOutcome: session.ToolOutcomeRan, ResultBytes: len(content)})
+	if err != nil {
+		t.Fatalf("encoding the recorded result: %v", err)
+	}
+	return session.Event{Turn: scope, Agent: agent, Call: call, Attempt: session.FirstAttempt, Kind: session.EventToolResult, Body: body}
+}
+
+func TestQuoteResolvesTheCallBehindAnEditAShellAnAskAndASubAgentRow(t *testing.T) {
+	const lead, later, helper = "turn-18d7474e7fae090c", "turn-18d7474e7fae0b22", "turn-18d7474e7fae0a11"
+	tool := recordedQuote(t,
+		spoke(t, "0f2c9b1a-1111-4aaa-8bbb-aaaaaade2233", session.RoleUser, "fix the port"),
+		called(t, lead, "", "toolu_edit", "edit", `{"path":"internal/serve/port.go","old":"8080","new":"9090"}`),
+		answeredCall(t, lead, "", "toolu_edit", "edited internal/serve/port.go"),
+		called(t, lead, "", "toolu_shell", "bash", `{"command":"go test ./internal/serve/"}`),
+		answeredCall(t, lead, "", "toolu_shell", "ok tofu/internal/serve"),
+		called(t, lead, "", "toolu_ask", "ask_person", `{"question":"which port"}`),
+		answeredCall(t, lead, "", "toolu_ask", "9090"),
+		called(t, lead, "", "toolu_spawn", "spawn", `{"task":"read the routes"}`),
+		answeredCall(t, lead, "", "toolu_spawn", "the routes are in routes.go"),
+		called(t, helper, helper, "toolu_shell", "bash", `{"command":"go vet ./internal/routes/"}`),
+		answeredCall(t, helper, helper, "toolu_shell", "vet found nothing"),
+		called(t, later, "", "toolu_edit", "edit", `{"path":"internal/serve/host.go"}`),
+		answeredCall(t, later, "", "toolu_edit", "edited internal/serve/host.go"),
+		called(t, later, "", "toolu_run", "bash", `{"command":"go run ./cmd/serve"}`),
+	)
+	for _, c := range []struct{ scope, call, want, result string }{
+		{lead, "toolu_edit", "internal/serve/port.go", "edited internal/serve/port.go"},
+		{lead, "toolu_shell", "go test ./internal/serve/", "ok tofu/internal/serve"},
+		{lead, "toolu_ask", "which port", "9090"},
+		{lead, "toolu_spawn", "read the routes", "the routes are in routes.go"},
+		{helper, "toolu_shell", "go vet ./internal/routes/", "vet found nothing"},
+		{later, "toolu_edit", "internal/serve/host.go", "edited internal/serve/host.go"},
+		{later, "toolu_run", "go run ./cmd/serve", "no result"},
+	} {
+		ref := "[quote" + shortOf(session.EventIDFor(c.scope, c.call)) + "]"
+		content, err := quoted(t, tool, ref)
+		if err != nil {
+			t.Fatalf("%s %s does not resolve: %v", c.call, ref, err)
+		}
+		for _, want := range []string{c.want, c.result} {
+			if !strings.Contains(content, want) {
+				t.Fatalf("%s %s does not carry %q:\n%s", c.call, ref, want, content)
+			}
+		}
+	}
+}
+
+func TestATurnAndACallEndingAlikeAreAmbiguousAndAMessageIsCountedOnce(t *testing.T) {
+	const lead = "turn-18d7474e7fae090c"
+	call := called(t, lead, "", "toolu_edit", "edit", `{"path":"a.go"}`)
+	tail := call.ID[len(call.ID)-6:]
+	tool := recordedQuote(t,
+		spoke(t, "0f2c9b1a-1111-4aaa-8bbb-aaaaaa"+tail, session.RoleUser, "fix it"),
+		call,
+		spoke(t, "0f2c9b1a-2222-4aaa-8bbb-bbbbbbde2299", session.RoleAssistant, "done"),
+	)
+	if _, err := quoted(t, tool, "#"+tail); err == nil || !strings.Contains(err.Error(), "more than one") {
+		t.Fatalf("a turn and a call sharing a tail came back as %v", err)
+	}
+	if content, err := quoted(t, tool, "  [quote#DE2299] "); err != nil || !strings.Contains(content, "done") {
+		t.Fatalf("a message read as an utterance and as an event came back as %v:\n%s", err, content)
+	}
+}
+
 func TestQuoteWithNoRecordedSessionSaysThereIsNothingToQuote(t *testing.T) {
 	if _, err := quoted(t, tools.NewQuote(nil, ""), "#de2233"); err == nil {
 		t.Fatal("a turn recording no session still answered a quote")

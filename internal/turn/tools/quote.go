@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -13,14 +15,52 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
 const (
-	quoteStepScope = "step:"
-	quoteOpenMark  = "[quote"
-	quoteCloseMark = "]"
+	quoteOpenMark   = "[quote"
+	quoteCloseMark  = "]"
+	quoteShortRunes = 6
 )
+
+type QuoteOutcome string
+
+const (
+	QuoteItem      QuoteOutcome = "item"
+	QuoteNotFound  QuoteOutcome = "not_found"
+	QuoteAmbiguous QuoteOutcome = "ambiguous"
+)
+
+type Quoted struct {
+	Outcome QuoteOutcome
+	Hash    string
+	Session string
+	Event   string
+	Speaker string
+	Noun    string
+	Words   string
+}
+
+func ShortID(id string) string {
+	if id == "" {
+		return ""
+	}
+	runes := []rune(id)
+	return "#" + string(runes[max(len(runes)-quoteShortRunes, 0):])
+}
+
+func SaidEventID(talk session.Conversation, index int) string {
+	return cmp.Or(talk.Said[index].Event, session.EventIDFor(talk.Session, "step:"+strconv.Itoa(index)))
+}
+
+func QuoteRef(id string) string {
+	if id == "" {
+		return ""
+	}
+	return quoteOpenMark + ShortID(id) + quoteCloseMark
+}
 
 type Quote struct {
 	store   *session.Store
@@ -36,11 +76,12 @@ func (q Quote) Name() string { return "quote" }
 func (q Quote) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "quote",
-		Description: "returns the words of one recorded turn of this session, named by the short id the person put in their message as [quote#abcd]. " +
-			"read the turn before answering and cite its words rather than paraphrase, because a paraphrase of what was said is a new claim rather than a citation. " +
-			"an id no turn ends with, or one that two turns end with, comes back as an error naming which of the two happened: ask for the reference again rather than quoting the nearest turn. " +
-			"it returns what was said and the names of the tools that ran, never a tool's arguments and never its output, " +
-			"and a turn larger than the result cap comes back cut, with a note saying how much of it is there.",
+		Description: "returns what one recorded item of this session holds, named by the short id the person put in their message as [quote#abcd]. " +
+			"the item is a turn, said by the person, by the agent or returned by a tool, or a tool call: an edit, a shell command, a question asked of the person, a sub-agent spawned, or a call a sub-agent made. " +
+			"read it before answering and cite its words rather than paraphrase, because a paraphrase of what was said is a new claim rather than a citation. " +
+			"an id nothing ends with, or one that two items end with, comes back as an error naming which of the two happened: ask for the reference again rather than quoting the nearest item. " +
+			"a turn comes back as what was said and the names of the tools it ran, never their arguments; a tool call comes back as its arguments and what it returned, with known keys masked. " +
+			"an item larger than the result cap comes back cut, with a note saying how much of it is there.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -60,67 +101,110 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("quote: arguments are not the expected shape: %w", err)
 	}
-	hash := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(args.ID), quoteOpenMark), quoteCloseMark)
-	if strings.Trim(hash, "#") == "" {
-		return turn.Result{}, errors.New("quote: id is required, and it is the reference the person wrote or the short id inside it")
-	}
-	if q.store == nil || q.session == "" {
-		return turn.Result{}, errors.New("quote: this turn is recording no session, so there is no turn to quote")
-	}
-	talk, said, at, err := q.quotedInChain(hash)
+	found, err := ResolveQuote(q.store, q.session, args.ID)
 	if err != nil {
 		return turn.Result{}, err
 	}
-	body, note := quoteCut(quoteWords(said))
-	header := fmt.Sprintf("quote %s, %s, turn %d of %d recorded in %s",
-		hash, quoteSpeaker(said.Role), at+1, len(talk.Said), talk.Session)
-	return turn.Result{
-		Content: withNote(header+"\n"+body+"\n", note),
-		Command: hash,
-	}, nil
+	switch found.Outcome {
+	case QuoteNotFound:
+		return turn.Result{}, fmt.Errorf("quote: %w in this session or any it was forked from: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashNotFound, found.Hash)
+	case QuoteAmbiguous:
+		return turn.Result{}, fmt.Errorf("quote: %w in %s: %q: ask for the reference again rather than quoting the nearest item", session.ErrEventHashAmbiguous, found.Session, found.Hash)
+	case QuoteItem:
+		body, note := quoteCut(found.Noun, found.Words)
+		header := fmt.Sprintf("quote %s, %s, recorded in %s", found.Hash, found.Speaker, found.Session)
+		return turn.Result{Content: withNote(header+"\n"+body+"\n", note), Command: found.Hash}, nil
+	}
+	panic("quote: unknown outcome " + string(found.Outcome))
 }
 
-func (q Quote) quotedInChain(hash string) (session.Conversation, session.Utterance, int, error) {
-	newest, err := q.store.Header(q.session)
+func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
+	hash := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(ref), quoteOpenMark), quoteCloseMark)
+	if strings.Trim(hash, "#") == "" {
+		return Quoted{}, errors.New("quote: id is required, and it is the reference the person wrote or the short id inside it")
+	}
+	if store == nil || recorded == "" {
+		return Quoted{}, errors.New("quote: this turn is recording no session, so there is nothing to quote")
+	}
+	newest, err := store.Header(recorded)
 	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
-		newest, err = q.store.Header(newest.ForkedInto)
+		newest, err = store.Header(newest.ForkedInto)
 	}
 	if err != nil {
-		return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w", err)
+		return Quoted{}, fmt.Errorf("quote: %w", err)
 	}
-	ancestors, err := q.store.Ancestors(newest.ID)
+	ancestors, err := store.Ancestors(newest.ID)
 	if err != nil {
-		return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w", err)
+		return Quoted{}, fmt.Errorf("quote: %w", err)
 	}
-	chain := append([]session.Header{newest}, ancestors...)
-	for _, header := range chain {
-		talk, err := q.store.Conversation(header.ID)
-		if err != nil {
-			return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w", err)
-		}
-		said, at, err := quotedTurn(talk, hash)
-		if !errors.Is(err, session.ErrEventHashNotFound) {
-			return talk, said, at, err
+	for _, header := range append([]session.Header{newest}, ancestors...) {
+		hits, err := quotedIn(store, header.ID, hash)
+		switch {
+		case err != nil:
+			return Quoted{}, err
+		case len(hits) == 1:
+			hits[0].Outcome, hits[0].Hash, hits[0].Session = QuoteItem, hash, header.ID
+			return hits[0], nil
+		case len(hits) > 1:
+			return Quoted{Outcome: QuoteAmbiguous, Hash: hash, Session: header.ID}, nil
 		}
 	}
-	return session.Conversation{}, session.Utterance{}, 0, fmt.Errorf("quote: %w in the %d sessions of this chain: %q: ask for the reference again rather than quoting the nearest turn", session.ErrEventHashNotFound, len(chain), hash)
+	return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
 }
 
-func quotedTurn(talk session.Conversation, hash string) (session.Utterance, int, error) {
-	events := make([]session.Event, len(talk.Said))
-	at := make(map[string]int, len(talk.Said))
-	for index, one := range talk.Said {
-		id := one.Event
-		if id == "" {
-			id = session.EventIDFor(talk.Session, quoteStepScope+strconv.Itoa(index))
-		}
-		events[index], at[id] = session.Event{ID: id}, index
-	}
-	found, err := session.FindByHash(events, hash)
+func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
+	talk, err := store.Conversation(recorded)
 	if err != nil {
-		return session.Utterance{}, 0, fmt.Errorf("quote: %w: ask for the reference again rather than quoting the nearest turn", err)
+		return nil, fmt.Errorf("quote: %w", err)
 	}
-	return talk.Said[at[found.ID]], at[found.ID], nil
+	events, err := store.Events(recorded)
+	if err != nil {
+		return nil, fmt.Errorf("quote: %w", err)
+	}
+	var hits []Quoted
+	for index, said := range talk.Said {
+		event := SaidEventID(talk, index)
+		if session.DrawnAs(event, hash) {
+			speaker := fmt.Sprintf("%s, turn %d of %d", quoteSpeaker(said.Role), index+1, len(talk.Said))
+			hits = append(hits, Quoted{Event: event, Speaker: speaker, Noun: "turn", Words: quoteWords(said)})
+		}
+	}
+	for _, event := range events {
+		if event.Kind != session.EventToolCall || !session.DrawnAs(event.ID, hash) {
+			continue
+		}
+		call, err := quotedCall(event, events)
+		if err != nil {
+			return nil, err
+		}
+		hits = append(hits, call)
+	}
+	return hits, nil
+}
+
+func quotedCall(call session.Event, events []session.Event) (Quoted, error) {
+	var asked session.CallBody
+	if err := json.Unmarshal(call.Body, &asked); err != nil {
+		return Quoted{}, fmt.Errorf("quote: the call %s is recorded in a shape this build cannot read: %w", call.ID, err)
+	}
+	speaker := "a call to " + asked.Tool
+	if call.Agent != "" {
+		speaker += " by the sub-agent " + call.Agent
+	}
+	words := "it called " + asked.Tool + " with " + string(asked.Args) + "\n"
+	answered := slices.IndexFunc(events, func(event session.Event) bool {
+		return event.Kind == session.EventToolResult && event.Call == call.Call && event.Agent == call.Agent && event.Turn == call.Turn
+	})
+	if answered < 0 {
+		words += "no result is recorded for it yet"
+	} else {
+		var result session.ResultBody
+		if err := json.Unmarshal(events[answered].Body, &result); err != nil {
+			return Quoted{}, fmt.Errorf("quote: the result of call %s is recorded in a shape this build cannot read: %w", call.ID, err)
+		}
+		words += "it " + cmp.Or(result.ToolOutcome, session.ToolOutcomeRan) + " and returned:\n" + cmp.Or(result.Content, result.Error)
+	}
+	return Quoted{Event: call.ID, Speaker: speaker, Noun: "call", Words: sys.LoadKeyRedactor().Redact(words)}, nil
 }
 
 func quoteSpeaker(role string) string {
@@ -150,7 +234,7 @@ func quoteWords(said session.Utterance) string {
 	return words
 }
 
-func quoteCut(words string) (string, string) {
+func quoteCut(noun, words string) (string, string) {
 	if len(words) <= konst.TurnResultBytesCap {
 		return words, ""
 	}
@@ -159,6 +243,6 @@ func quoteCut(words string) (string, string) {
 		kept--
 	}
 	return words[:kept], search.Note(search.Truncated, fmt.Sprintf(
-		"the turn is %d bytes and the first %d are here: the rest of it stays in the session record, which the person can open",
-		len(words), kept))
+		"the %s is %d bytes and the first %d are here: the rest of it stays in the session record, which the person can open",
+		noun, len(words), kept))
 }

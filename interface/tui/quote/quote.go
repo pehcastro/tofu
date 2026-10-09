@@ -2,11 +2,10 @@ package quote
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 
-	"tofu/interface/tui/trace"
 	isession "tofu/internal/session"
+	"tofu/internal/turn/tools"
 )
 
 type Turn struct {
@@ -16,15 +15,12 @@ type Turn struct {
 }
 
 const (
-	stepScope  = "step:"
 	youLabel   = "you"
 	agentLabel = "the agent"
 	toolLabel  = "a tool result"
-	openMark   = "[quote"
-	closeMark  = "]"
 )
 
-func Ref(event string) string { return openMark + trace.Short(event) + closeMark }
+func Ref(event string) string { return tools.QuoteRef(event) }
 
 func Collect(talk isession.Conversation) []Turn {
 	var turns []Turn
@@ -44,11 +40,7 @@ func Collect(talk isession.Conversation) []Turn {
 		if gist == "" {
 			continue
 		}
-		event := one.Event
-		if event == "" {
-			event = isession.EventIDFor(talk.Session, stepScope+strconv.Itoa(index))
-		}
-		turns = append(turns, Turn{Event: event, From: from, Text: gist})
+		turns = append(turns, Turn{Event: tools.SaidEventID(talk, index), From: from, Text: gist})
 	}
 	slices.Reverse(turns)
 	return turns

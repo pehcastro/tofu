@@ -63,7 +63,7 @@ func TestATurnRecordedWithNoIDIsGivenOneDerivedFromTheSessionAndItsPlace(t *test
 	if turns[0].Event == turns[1].Event {
 		t.Fatalf("two turns of a session that recorded no event id share %s", turns[0].Event)
 	}
-	if want := isession.EventIDFor(talk.Session, stepScope+"1"); turns[0].Event != want {
+	if want := isession.EventIDFor(talk.Session, "step:1"); turns[0].Event != want {
 		t.Fatalf("the newest turn was given %s, want the derived %s", turns[0].Event, want)
 	}
 }

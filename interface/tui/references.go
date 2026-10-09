@@ -8,6 +8,7 @@ import (
 
 	"tofu/interface/tui/feed"
 	"tofu/interface/tui/pointer"
+	"tofu/internal/turn/tools"
 )
 
 func (a *App) follow(ref string) tea.Cmd {
@@ -64,7 +65,7 @@ func (a *App) insertReference(ref string, focusChat bool) bool {
 		if id == "" {
 			return false
 		}
-		token = "[quote" + id + "]"
+		token = tools.QuoteRef(strings.TrimPrefix(id, "#"))
 	}
 	if focusChat {
 		a.current, a.dialogs = screenChat, nil
