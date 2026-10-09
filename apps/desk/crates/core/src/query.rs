@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::{Deserialize, Serialize};
+
 use crate::protocol::{
-    AccountStatus, ContextBand, ContextOccupancy, CredentialReport, QuotaWindow, UsageReport,
-    WindowReport, WindowStatus,
+    AccountStatus, AccountStatusState, Accounts, ContextBand, ContextOccupancy, CredentialReport,
+    QuotaWindow, UsageReport, WindowReport, WindowStatus,
 };
 
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -150,10 +153,102 @@ impl UsageReport {
     }
 }
 
+pub fn is_email(text: &str) -> bool {
+    text.split_once('@').is_some_and(|(local, domain)| {
+        !local.is_empty()
+            && domain.contains('.')
+            && !domain.contains('@')
+            && !text.contains(char::is_whitespace)
+    })
+}
+
+pub fn display_name(source: &str) -> String {
+    let words: Vec<String> = source
+        .split('-')
+        .map(|word| {
+            let mut chars = word.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().chain(chars).collect())
+                .unwrap_or_default()
+        })
+        .collect();
+    words.join(" ")
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FilledEmails(BTreeMap<String, BTreeMap<i64, String>>);
+
+impl FilledEmails {
+    pub fn get(&self, source: &str, id: i64) -> Option<&str> {
+        self.0.get(source)?.get(&id).map(String::as_str)
+    }
+
+    pub fn set(&mut self, source: &str, id: i64, email: Option<String>) {
+        let accounts = self.0.entry(source.to_owned()).or_default();
+        match email {
+            Some(email) => {
+                accounts.insert(id, email);
+            }
+            None => {
+                accounts.remove(&id);
+            }
+        }
+        self.0.retain(|_, accounts| !accounts.is_empty());
+    }
+
+    pub fn not_emails(&self) -> Vec<&str> {
+        self.0
+            .values()
+            .flat_map(BTreeMap::values)
+            .map(String::as_str)
+            .filter(|email| !is_email(email))
+            .collect()
+    }
+
+    pub fn filled(&self, mut accounts: Accounts) -> Accounts {
+        for subscription in &mut accounts.subscriptions {
+            for account in &mut subscription.accounts {
+                if account.email().is_none()
+                    && let Some(email) = self.get(&subscription.source, account.id)
+                {
+                    email.clone_into(&mut account.account);
+                }
+            }
+        }
+        accounts
+    }
+}
+
+impl AccountStatusState {
+    pub fn said(&self) -> &str {
+        match self {
+            AccountStatusState::InUse => "in use",
+            AccountStatusState::Standby => "standby",
+            AccountStatusState::SetAside => "set aside",
+            AccountStatusState::Unread => "not read yet",
+            AccountStatusState::Unchecked => "not checked",
+            AccountStatusState::RefreshFailed => "refresh failed",
+            AccountStatusState::Expired => "expired",
+            AccountStatusState::Refused => "refused",
+            AccountStatusState::Spent => "spent",
+            AccountStatusState::RateLimited => "rate limited",
+            AccountStatusState::Unknown(raw) => raw,
+        }
+    }
+
+    pub fn serving(&self) -> bool {
+        matches!(
+            self,
+            AccountStatusState::InUse | AccountStatusState::Standby
+        )
+    }
+}
+
 impl AccountStatus {
     pub fn email(&self) -> Option<&str> {
-        let (local, domain) = self.account.split_once('@')?;
-        (!local.is_empty() && domain.contains('.')).then_some(self.account.as_str())
+        is_email(&self.account).then_some(self.account.as_str())
     }
 
     pub fn live(&self, source: &str, quota: &[QuotaWindow]) -> Vec<WindowStatus> {

@@ -2,11 +2,12 @@ pub(crate) mod cassette;
 mod items;
 
 use std::collections::BTreeMap;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
-use std::{env, iter, slice, thread};
+use std::{env, fs, iter, slice, thread};
 
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
@@ -17,7 +18,7 @@ use desk_core::protocol::{
     SessionRenameParams, SessionTrace, ShellParams, TurnCompleted, TurnParams, TurnSendParams,
     TurnSteerParams, request, subagent,
 };
-use desk_core::query::{Answer, QueryError, Read};
+use desk_core::query::{Answer, FilledEmails, QueryError, Read};
 use desk_core::sessions::SessionRow;
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
@@ -37,6 +38,8 @@ use items::{Entry, Item};
 
 const CLIENT: &str = "tofu-desk";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
+const DESK_FOLDER: &str = "tofu-desk";
+const EMAILS_FILE: &str = "emails.json";
 const SIGN_IN_POLL: Duration = Duration::from_millis(500);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -105,6 +108,8 @@ pub struct Chat {
     aimed: bool,
     rows: Vec<SessionRow>,
     accounts: Answer<Accounts>,
+    told_accounts: Option<Accounts>,
+    emails: Result<FilledEmails, String>,
     signing: Option<SigningIn>,
     _signed: Option<Task<()>>,
     _drain: Option<Task<()>>,
@@ -146,6 +151,38 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
 
 pub fn fed(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Chat> {
     cx.new(|cx| Chat::new(Link::Fed, store, window, cx))
+}
+
+fn emails_at() -> Result<PathBuf, String> {
+    let home = |name: &str| {
+        env::var_os(name)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    };
+    let config = if cfg!(windows) {
+        home("APPDATA")
+    } else {
+        home("XDG_CONFIG_HOME").or_else(|| home("HOME").map(|home| home.join(".config")))
+    };
+    config
+        .map(|config| config.join(DESK_FOLDER).join(EMAILS_FILE))
+        .ok_or_else(|| "the desk has no app data folder for filled emails".to_owned())
+}
+
+fn load_emails() -> Result<FilledEmails, String> {
+    let path = emails_at()?;
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(FilledEmails::default()),
+        Err(error) => return Err(format!("{}: {error}", path.display())),
+    };
+    let emails: FilledEmails = serde_json::from_str(&text)
+        .map_err(|error| format!("{} is not filled emails: {error}", path.display()))?;
+    let bad = emails.not_emails();
+    if !bad.is_empty() {
+        return Err(format!("{} holds {bad:?}, not emails", path.display()));
+    }
+    Ok(emails)
 }
 
 fn tofu() -> PathBuf {
@@ -261,6 +298,8 @@ impl Chat {
             aimed: true,
             rows: Vec::new(),
             accounts: Answer::default(),
+            told_accounts: None,
+            emails: load_emails(),
             signing: None,
             _signed: None,
             _drain: None,
@@ -780,10 +819,20 @@ impl Chat {
                 ),
                 Err(error) => eprintln!("desk: {error}"),
             }
+            chat.told_accounts = answer.as_ref().ok().map(|read| read.value.clone());
             chat.accounts.answered(answer);
-            chat.store.update(cx, |_, cx| cx.notify());
+            chat.fill_accounts(cx);
             chat.ask_due(cx);
         });
+    }
+
+    fn fill_accounts(&mut self, cx: &mut Context<Self>) {
+        if let (Some(told), Some(read), Ok(emails)) =
+            (&self.told_accounts, &mut self.accounts.read, &self.emails)
+        {
+            read.value = emails.filled(told.clone());
+        }
+        self.store.update(cx, |_, cx| cx.notify());
     }
 
     pub fn sign_in(&mut self, source: &str, cx: &mut Context<Self>) {
@@ -1341,5 +1390,86 @@ impl Render for Chat {
                     .child(composer),
             )
             .children(meter)
+    }
+}
+
+#[cfg(feature = "screen-accounts")]
+mod keys {
+    use std::fs;
+
+    use desk_core::protocol::{LoginKeyParams, LoginNote, LogoutParams, request};
+    use desk_core::query::{FilledEmails, is_email};
+    use gpui::Context;
+
+    use super::{Chat, emails_at};
+
+    impl Chat {
+        pub fn filled_email(&self, source: &str, id: i64) -> Option<&str> {
+            self.emails.as_ref().ok()?.get(source, id)
+        }
+
+        pub fn fill_email(
+            &mut self,
+            source: &str,
+            id: i64,
+            typed: &str,
+            cx: &mut Context<Self>,
+        ) -> Result<(), String> {
+            let typed = typed.trim();
+            if !typed.is_empty() && !is_email(typed) {
+                return Err(format!("{typed} is not an email address"));
+            }
+            let emails = self.emails.as_mut().map_err(|error| error.clone())?;
+            let mut next = emails.clone();
+            next.set(source, id, (!typed.is_empty()).then(|| typed.to_owned()));
+            save_emails(&next)?;
+            *emails = next;
+            eprintln!("desk: email for {source} #{id} filled as {typed:?}");
+            self.fill_accounts(cx);
+            Ok(())
+        }
+
+        pub fn add_key(&mut self, provider: &str, key: &str, cx: &mut Context<Self>) {
+            let params = LoginKeyParams {
+                key: key.trim().to_owned(),
+                provider: provider.to_owned(),
+            };
+            eprintln!("desk: login.key {provider} asked");
+            self.request::<request::LoginKey>(&params, cx, Self::keyed);
+        }
+
+        pub fn remove_key(&mut self, provider: &str, role: &str, cx: &mut Context<Self>) {
+            let params = LogoutParams {
+                number: None,
+                provider: provider.to_owned(),
+                role: role.to_owned(),
+            };
+            eprintln!("desk: login.logout {provider} {role} asked");
+            self.request::<request::LoginLogout>(&params, cx, Self::keyed);
+        }
+
+        fn keyed(&mut self, reply: Result<LoginNote, String>, cx: &mut Context<Self>) {
+            match reply {
+                Ok(note) => eprintln!("desk: tofu said {}", note.note),
+                Err(error) => return self.fail(error, cx),
+            }
+            self.accounts.again();
+            self.ask_due(cx);
+        }
+    }
+
+    fn save_emails(emails: &FilledEmails) -> Result<(), String> {
+        let path = emails_at()?;
+        let failed = |error: &dyn std::fmt::Display| {
+            format!(
+                "filled emails cannot be saved to {}: {error}",
+                path.display()
+            )
+        };
+        let text = serde_json::to_string_pretty(emails).map_err(|error| failed(&error))?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| failed(&error))?;
+        }
+        fs::write(&path, text).map_err(|error| failed(&error))
     }
 }
