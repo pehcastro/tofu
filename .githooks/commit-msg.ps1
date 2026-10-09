@@ -62,4 +62,9 @@ if ($subject.Length -gt 72) {
 
 if ($subject -match '\.$') { Deny 'the subject ends with a period.' }
 
+if ($subject -match '^chore\(release\): (\S+)$') {
+    & "$PSScriptRoot\release-docs.ps1" $Matches[1] $body
+    exit $LASTEXITCODE
+}
+
 exit 0
