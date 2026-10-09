@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -58,46 +59,89 @@ func processName(word string) string {
 	return name
 }
 
+var (
+	flagShape  = regexp.MustCompile(`^(-{1,2}|/{1,2})([A-Za-z0-9]+)(:\$?[A-Za-z]+)?$`)
+	actionWord = regexp.MustCompile(`^[A-Za-z]+$`)
+)
+
 func killed(fields []string) []int {
 	if len(fields) < 2 {
 		return nil
 	}
 	program := strings.ToLower(processName(fields[0]))
-	if program == "powershell" || program == "pwsh" {
-		at := slices.IndexFunc(fields, func(field string) bool { return slices.Contains([]string{"-command", "-c"}, strings.ToLower(field)) })
-		if at < 0 {
-			return nil
-		}
-		return killed(fields[at+1:])
-	}
-	if !slices.Contains([]string{"kill", "taskkill", "pkill", "stop-process"}, program) {
+	switch program {
+	case "powershell", "pwsh", "bash", "sh", "cmd":
+		return wrappedKill(program, fields[1:])
+	case "kill", "taskkill", "pkill", "stop-process":
+	default:
 		return nil
 	}
 	var pids []int
 	for at := 1; at < len(fields); at++ {
 		field := strings.Trim(fields[at], `"'`)
-		flag := strings.ToLower(strings.TrimLeft(field, "-/"))
-		names := program == "pkill" && !strings.HasPrefix(field, "-")
-		if (program == "taskkill" && flag == "im" || program == "stop-process" && flag == "name") && at+1 < len(fields) {
-			at, field, names = at+1, strings.Trim(fields[at+1], `"'`), true
-		}
-		pid, err := strconv.Atoi(field)
-		switch {
-		case err == nil && pid > 0:
-			pids = append(pids, pid)
-		case names:
-			for _, name := range strings.Split(field, ",") {
-				named := processesNamed(name)
-				if len(named) == 0 {
+		shape := flagShape.FindStringSubmatch(field)
+		if shape != nil && (program == "taskkill" || shape[1][0] == '-') {
+			switch flag := strings.ToLower(shape[2]); {
+			case program == "kill" && flag == "l", program == "stop-process" && flag == "whatif",
+				program == "taskkill" && slices.Contains([]string{"s", "u", "p", "fi"}, flag):
+				return nil
+			case program == "stop-process" && slices.Contains([]string{"erroraction", "ea", "warningaction", "wa", "informationaction", "infa"}, flag):
+				if at+1 >= len(fields) || !actionWord.MatchString(strings.Trim(fields[at+1], `"'`)) {
+					return nil
+				}
+				at++
+			case (program == "taskkill" && flag == "im" || program == "stop-process" && (flag == "name" || flag == "processname")) && at+1 < len(fields):
+				at++
+				named := pidsIn(strings.Trim(fields[at], `"'`), processesNamed)
+				if named == nil {
 					return nil
 				}
 				pids = append(pids, named...)
 			}
-		case !strings.HasPrefix(field, "-") && !strings.HasPrefix(field, "/"):
+			continue
+		}
+		listed := pidsIn(field, asPid)
+		if listed == nil && program == "pkill" {
+			listed = pidsIn(field, processesNamed)
+		}
+		if listed == nil {
+			return nil
+		}
+		pids = append(pids, listed...)
+	}
+	return pids
+}
+
+func wrappedKill(program string, rest []string) []int {
+	for at, field := range rest {
+		switch flag := strings.ToLower(field); {
+		case flag == "-c" || flag == "-command" && (program == "powershell" || program == "pwsh") || flag == "/c" && program == "cmd":
+			return killed(rest[at+1:])
+		case at > 0 && slices.Contains([]string{"-executionpolicy", "-ep"}, strings.ToLower(rest[at-1])):
+		case !flagShape.MatchString(field):
 			return nil
 		}
 	}
+	return nil
+}
+
+func pidsIn(field string, lookup func(string) []int) []int {
+	var pids []int
+	for _, one := range strings.Split(field, ",") {
+		found := lookup(one)
+		if len(found) == 0 {
+			return nil
+		}
+		pids = append(pids, found...)
+	}
 	return pids
+}
+
+func asPid(word string) []int {
+	if pid, err := strconv.Atoi(word); err == nil && pid > 0 {
+		return []int{pid}
+	}
+	return nil
 }
 
 func (r *Registry) Owning(command string) []Shell {
