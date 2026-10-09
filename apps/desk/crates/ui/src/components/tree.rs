@@ -1,13 +1,16 @@
 use std::collections::{BTreeSet, HashMap};
-use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::{fmt, fs, io};
 
+use desk_core::syntax::Language;
 use desk_motion::reduced_motion;
 use desk_motion::tokens::{EASE_OUT, HOVER as SLIDE, HOVER_MS, PANEL_OUT_MS, TOGGLE_MS};
+use desk_tiling::{Store, StoreError};
 use gpui::{
-    AnyElement, ClickEvent, Context, ElementId, EventEmitter, Image, ImageFormat, SharedString,
-    SpringState, Window, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, ElementId, EventEmitter, Global, Image, ImageFormat,
+    SharedString, SpringState, Window, div, img, prelude::*, px,
 };
 use serde_json::Value;
 
@@ -30,41 +33,7 @@ const LABEL_FONT: f32 = 11.0;
 const SETTLED_PX: f32 = 0.05;
 const UNHOVER_MS: Duration = Duration::from_millis(100);
 
-const MATERIAL: &str = include_str!("../../assets/files/material.json");
-
-macro_rules! bundled {
-    ($($name:literal),* $(,)?) => {
-        [$(($name, include_bytes!(concat!("../../assets/files/", $name)).as_slice())),*]
-    };
-}
-
-const MATERIAL_SVGS: [(&str, &[u8]); 25] = bundled![
-    "document.svg",
-    "folder.svg",
-    "folder-open.svg",
-    "folder-github.svg",
-    "folder-github-open.svg",
-    "folder-command.svg",
-    "folder-command-open.svg",
-    "folder-database.svg",
-    "folder-database-open.svg",
-    "folder-src.svg",
-    "folder-src-open.svg",
-    "folder-public.svg",
-    "folder-public-open.svg",
-    "go.svg",
-    "go-mod.svg",
-    "react_ts.svg",
-    "typescript.svg",
-    "tune.svg",
-    "git.svg",
-    "readme.svg",
-    "license.svg",
-    "database.svg",
-    "yaml.svg",
-    "json.svg",
-    "nodejs.svg",
-];
+const PICK_FILE: &str = "editor-icons";
 
 pub const TREE_MENU: [&str; 10] = [
     "New file",
@@ -85,14 +54,22 @@ pub enum IconThemeError {
     Json(serde_json::Error),
     Missing(&'static str),
     NoIcon(String),
+    UnknownPack(String),
+    Home(StoreError),
+    Io(PathBuf, io::Error),
 }
 
 impl fmt::Display for IconThemeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            IconThemeError::Json(error) => write!(f, "icon theme is not json: {error}"),
-            IconThemeError::Missing(key) => write!(f, "icon theme has no {key}"),
-            IconThemeError::NoIcon(id) => write!(f, "icon theme names {id}, which is not bundled"),
+            IconThemeError::Json(error) => write!(f, "icon pack is not json: {error}"),
+            IconThemeError::Missing(key) => write!(f, "icon pack has no {key}"),
+            IconThemeError::NoIcon(id) => {
+                write!(f, "icon pack names {id}, which it has no svg for")
+            }
+            IconThemeError::UnknownPack(key) => write!(f, "no icon pack is called {key}"),
+            IconThemeError::Home(error) => write!(f, "the icon pick has nowhere to live: {error}"),
+            IconThemeError::Io(path, error) => write!(f, "{}: {error}", path.display()),
         }
     }
 }
@@ -101,8 +78,146 @@ impl std::error::Error for IconThemeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             IconThemeError::Json(error) => Some(error),
-            IconThemeError::Missing(_) | IconThemeError::NoIcon(_) => None,
+            IconThemeError::Home(error) => Some(error),
+            IconThemeError::Io(_, error) => Some(error),
+            IconThemeError::Missing(_)
+            | IconThemeError::NoIcon(_)
+            | IconThemeError::UnknownPack(_) => None,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IconPack {
+    Material,
+    Catppuccin,
+    Github,
+    Jetbrains,
+    Makinda,
+    Phosphor,
+    Pierre,
+    Symbols,
+}
+
+impl IconPack {
+    pub const ALL: [IconPack; 8] = [
+        IconPack::Material,
+        IconPack::Catppuccin,
+        IconPack::Github,
+        IconPack::Jetbrains,
+        IconPack::Makinda,
+        IconPack::Phosphor,
+        IconPack::Pierre,
+        IconPack::Symbols,
+    ];
+
+    pub const fn key(self) -> &'static str {
+        match self {
+            IconPack::Material => "material",
+            IconPack::Catppuccin => "catppuccin",
+            IconPack::Github => "github",
+            IconPack::Jetbrains => "jetbrains",
+            IconPack::Makinda => "makinda",
+            IconPack::Phosphor => "phosphor",
+            IconPack::Pierre => "pierre",
+            IconPack::Symbols => "symbols",
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            IconPack::Material => "Material",
+            IconPack::Catppuccin => "Catppuccin",
+            IconPack::Github => "GitHub",
+            IconPack::Jetbrains => "JetBrains",
+            IconPack::Makinda => "Makinda",
+            IconPack::Phosphor => "Phosphor",
+            IconPack::Pierre => "Pierre",
+            IconPack::Symbols => "Symbols",
+        }
+    }
+
+    fn shards(self) -> &'static [&'static str] {
+        macro_rules! pack {
+            ($($file:literal),+) => {
+                &[$(include_str!(concat!("../../assets/editor-icons/", $file))),+]
+            };
+        }
+        match self {
+            IconPack::Material => pack!("material.json"),
+            IconPack::Catppuccin => pack!("catppuccin.json", "catppuccin-2.json"),
+            IconPack::Github => pack!("github.json"),
+            IconPack::Jetbrains => pack!("jetbrains.json"),
+            IconPack::Makinda => pack!("makinda.json"),
+            IconPack::Phosphor => pack!("phosphor.json"),
+            IconPack::Pierre => pack!("pierre.json"),
+            IconPack::Symbols => pack!("symbols.json", "symbols-2.json", "symbols-3.json"),
+        }
+    }
+
+    fn pick_file() -> Result<PathBuf, IconThemeError> {
+        Ok(Store::home().map_err(IconThemeError::Home)?.join(PICK_FILE))
+    }
+
+    pub fn saved() -> Result<IconPack, IconThemeError> {
+        let path = Self::pick_file()?;
+        let key = match fs::read_to_string(&path) {
+            Ok(key) => key,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(IconPack::Material);
+            }
+            Err(error) => return Err(IconThemeError::Io(path, error)),
+        };
+        let key = key.trim();
+        IconPack::ALL
+            .into_iter()
+            .find(|pack| pack.key() == key)
+            .ok_or_else(|| IconThemeError::UnknownPack(key.to_owned()))
+    }
+
+    pub fn save(self) -> Result<(), IconThemeError> {
+        let path = Self::pick_file()?;
+        let written = path
+            .parent()
+            .map_or(Ok(()), fs::create_dir_all)
+            .and_then(|()| fs::write(&path, format!("{}\n", self.key())));
+        written.map_err(|error| IconThemeError::Io(path, error))
+    }
+}
+
+pub struct PickedPack(pub IconPack);
+
+impl Global for PickedPack {}
+
+pub fn picked_pack(cx: &mut App) -> IconPack {
+    if let Some(PickedPack(pack)) = cx.try_global::<PickedPack>() {
+        return *pack;
+    }
+    let pack = IconPack::saved().unwrap_or_else(|error| {
+        eprintln!("desk: the editor shows Material icons: {error}");
+        IconPack::Material
+    });
+    cx.set_global(PickedPack(pack));
+    pack
+}
+
+pub fn pick_pack(pack: IconPack, cx: &mut App) -> Result<(), IconThemeError> {
+    cx.set_global(PickedPack(pack));
+    pack.save()
+}
+
+fn vscode_language(language: Language) -> &'static str {
+    match language {
+        Language::Rust => "rust",
+        Language::Go => "go",
+        Language::TypeScript => "typescript",
+        Language::Tsx => "typescriptreact",
+        Language::JavaScript => "javascript",
+        Language::Python => "python",
+        Language::Json => "json",
+        Language::Toml => "toml",
+        Language::Markdown => "markdown",
+        Language::Bash => "shellscript",
     }
 }
 
@@ -112,90 +227,126 @@ impl From<serde_json::Error> for IconThemeError {
     }
 }
 
-type Icons = HashMap<String, Arc<Image>>;
+#[derive(Clone)]
+struct Icon {
+    id: SharedString,
+    image: Arc<Image>,
+}
+
+type Icons = HashMap<String, Icon>;
 
 pub struct IconTheme {
-    file: Arc<Image>,
-    folder: Arc<Image>,
-    folder_open: Arc<Image>,
+    file: Icon,
+    folder: Icon,
+    folder_open: Option<Icon>,
     file_names: Icons,
     file_extensions: Icons,
+    language_ids: Icons,
     folder_names: Icons,
     folder_names_open: Icons,
 }
 
 impl IconTheme {
     pub fn material() -> Result<Self, IconThemeError> {
-        Self::from_vscode(MATERIAL, &MATERIAL_SVGS)
+        Self::pack(IconPack::Material)
     }
 
-    pub fn from_vscode(json: &str, svgs: &[(&str, &[u8])]) -> Result<Self, IconThemeError> {
-        let theme: Value = serde_json::from_str(json)?;
-        let field = |key: &'static str| theme.get(key).ok_or(IconThemeError::Missing(key));
-        let images = field("iconDefinitions")?
-            .as_object()
-            .ok_or(IconThemeError::Missing("iconDefinitions"))?
+    pub fn pack(pack: IconPack) -> Result<Self, IconThemeError> {
+        let shards = pack
+            .shards()
             .iter()
-            .map(|(id, definition)| {
-                let path = definition
-                    .get("iconPath")
-                    .and_then(Value::as_str)
-                    .ok_or(IconThemeError::Missing("iconPath"))?;
-                let (_, bytes) = svgs
-                    .iter()
-                    .find(|(name, _)| *name == path)
-                    .ok_or_else(|| IconThemeError::NoIcon(path.to_owned()))?;
-                let image = Image::from_bytes(ImageFormat::Svg, bytes.to_vec());
-                Ok((id.as_str(), Arc::new(image)))
+            .map(|shard| serde_json::from_str::<Value>(shard))
+            .collect::<Result<Vec<_>, _>>()?;
+        let [pack, ..] = shards.as_slice() else {
+            return Err(IconThemeError::Missing("a pack file"));
+        };
+        let field = |key: &'static str| pack.get(key).ok_or(IconThemeError::Missing(key));
+        let icons = shards
+            .iter()
+            .map(|shard| {
+                shard
+                    .get("icons")
+                    .and_then(Value::as_object)
+                    .ok_or(IconThemeError::Missing("icons"))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .map(|(id, svg)| {
+                let svg = svg
+                    .as_str()
+                    .ok_or_else(|| IconThemeError::NoIcon(id.clone()))?;
+                let image = Image::from_bytes(ImageFormat::Svg, svg.as_bytes().to_vec());
+                let icon = Icon {
+                    id: id.clone().into(),
+                    image: Arc::new(image),
+                };
+                Ok((id.as_str(), icon))
             })
             .collect::<Result<HashMap<_, _>, IconThemeError>>()?;
-        let image = |id: &Value| {
+        let icon = |id: &Value| -> Result<Icon, IconThemeError> {
             id.as_str()
-                .and_then(|id| images.get(id))
+                .and_then(|id| icons.get(id))
                 .cloned()
                 .ok_or_else(|| IconThemeError::NoIcon(id.to_string()))
         };
-        let one = |key: &'static str| image(field(key)?);
-        let table = |key: &'static str| {
+        let table = |key: &'static str| -> Result<Icons, IconThemeError> {
             field(key)?
                 .as_object()
                 .ok_or(IconThemeError::Missing(key))?
                 .iter()
-                .map(|(name, id)| Ok((name.to_lowercase(), image(id)?)))
-                .collect::<Result<Icons, IconThemeError>>()
+                .map(|(name, id)| Ok((name.to_lowercase(), icon(id)?)))
+                .collect()
         };
         Ok(IconTheme {
-            file: one("file")?,
-            folder: one("folder")?,
-            folder_open: one("folderExpanded")?,
+            file: icon(field("file")?)?,
+            folder: icon(field("folder")?)?,
+            folder_open: pack.get("folderOpen").map(icon).transpose()?,
             file_names: table("fileNames")?,
             file_extensions: table("fileExtensions")?,
+            language_ids: table("languageIds")?,
             folder_names: table("folderNames")?,
-            folder_names_open: table("folderNamesExpanded")?,
+            folder_names_open: table("folderNamesOpen")?,
         })
     }
 
-    fn file(&self, name: &str) -> Arc<Image> {
+    fn file(&self, name: &str) -> &Icon {
         let name = name.to_lowercase();
         let by_extension = || {
             name.match_indices('.')
-                .filter_map(|(at, _)| name.get(at + 1..))
+                .filter_map(|(at, _)| name.get(at.saturating_add(1)..))
                 .find_map(|extension| self.file_extensions.get(extension))
+        };
+        let by_language = || {
+            Language::from_path(Path::new(&name))
+                .and_then(|language| self.language_ids.get(vscode_language(language)))
         };
         self.file_names
             .get(&name)
             .or_else(by_extension)
+            .or_else(by_language)
             .unwrap_or(&self.file)
-            .clone()
     }
 
-    fn folder(&self, name: &str, open: bool) -> Arc<Image> {
-        let (names, fallback) = if open {
-            (&self.folder_names_open, &self.folder_open)
-        } else {
-            (&self.folder_names, &self.folder)
-        };
-        names.get(&name.to_lowercase()).unwrap_or(fallback).clone()
+    fn folder(&self, name: &str, open: bool) -> &Icon {
+        let name = name.to_lowercase();
+        let shut = self.folder_names.get(&name);
+        if !open {
+            return shut.unwrap_or(&self.folder);
+        }
+        self.folder_names_open
+            .get(&name)
+            .or(shut)
+            .or(self.folder_open.as_ref())
+            .unwrap_or(&self.folder)
+    }
+
+    pub fn file_icon(&self, name: &str) -> &str {
+        &self.file(name).id
+    }
+
+    pub fn folder_icon(&self, name: &str, open: bool) -> &str {
+        &self.folder(name, open).id
     }
 }
 
@@ -301,6 +452,19 @@ struct Row {
     open_icon: Arc<Image>,
 }
 
+fn row_icons(icons: &IconTheme, name: &str, folder: bool) -> (Arc<Image>, Arc<Image>) {
+    match folder {
+        true => (
+            icons.folder(name, false).image.clone(),
+            icons.folder(name, true).image.clone(),
+        ),
+        false => {
+            let icon = &icons.file(name).image;
+            (icon.clone(), icon.clone())
+        }
+    }
+}
+
 fn flatten(roots: &[TreeNode], icons: &IconTheme, depth: usize, parent: &str) -> Vec<Row> {
     let mut rows = Vec::new();
     let mut pending: Vec<(usize, SharedString, &TreeNode)> = roots
@@ -321,17 +485,8 @@ fn flatten(roots: &[TreeNode], icons: &IconTheme, depth: usize, parent: &str) ->
                 )
             }));
         }
-        let (folder, shut_icon, open_icon) = match &node.kind {
-            NodeKind::File => {
-                let icon = icons.file(&node.name);
-                (false, icon.clone(), icon)
-            }
-            NodeKind::Folder(_) | NodeKind::Unread(_) => (
-                true,
-                icons.folder(&node.name, false),
-                icons.folder(&node.name, true),
-            ),
-        };
+        let folder = !matches!(node.kind, NodeKind::File);
+        let (shut_icon, open_icon) = row_icons(icons, &node.name, folder);
         rows.push(Row {
             depth,
             path,
@@ -525,6 +680,19 @@ impl FileTree {
         self.closed.extend(unread_paths(&rows));
         self.rows.splice(start..start.saturating_add(below), rows);
         true
+    }
+
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &str, bool)> {
+        self.rows
+            .iter()
+            .map(|row| (row.path.as_ref(), row.name.as_ref(), row.folder))
+    }
+
+    pub fn reicon(&mut self, icons: &IconTheme, cx: &mut Context<Self>) {
+        for row in &mut self.rows {
+            (row.shut_icon, row.open_icon) = row_icons(icons, &row.name, row.folder);
+        }
+        cx.notify();
     }
 
     pub fn select(&mut self, path: SharedString, cx: &mut Context<Self>) {

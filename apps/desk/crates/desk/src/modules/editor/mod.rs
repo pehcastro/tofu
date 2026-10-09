@@ -17,7 +17,9 @@ use desk_ui::components::chip::GitStatus;
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::components::history::{blame_gutter, inline_blame};
-use desk_ui::components::tree::{FileTree, IconTheme, TreeEvent, TreeNode};
+use desk_ui::components::tree::{
+    FileTree, IconPack, IconTheme, PickedPack, TreeEvent, TreeNode, picked_pack,
+};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
@@ -72,7 +74,8 @@ pub fn open_dir(
     if !root.is_dir() {
         return Err(format!("--dir {} is not a folder", root.display()));
     }
-    let icons = IconTheme::material().map_err(|error| error.to_string())?;
+    let pack = picked_pack(cx);
+    let icons = IconTheme::pack(pack).map_err(|error| error.to_string())?;
     let git = repository(&root);
     let listing = Listing {
         states: git
@@ -82,10 +85,12 @@ pub fn open_dir(
         root,
     };
     let tree = FileTree::new("editor-files", listing.children(""), &icons).badges();
+    log_icons(pack, &icons, &tree);
     let folder = Folder {
         tree: cx.new(|_| tree),
         listing,
         icons,
+        pack,
         git,
     };
     let file = file.map(absolute).map(|full| {
@@ -136,8 +141,27 @@ struct Repo {
 struct Folder {
     listing: Listing,
     icons: IconTheme,
+    pack: IconPack,
     git: Option<Arc<GitBinary>>,
     tree: Entity<FileTree>,
+}
+
+fn log_icons(pack: IconPack, icons: &IconTheme, tree: &FileTree) {
+    for (path, name, folder) in tree.entries() {
+        match folder {
+            true => eprintln!(
+                "desk: editor icon {} {path}/ {} {}",
+                pack.key(),
+                icons.folder_icon(name, false),
+                icons.folder_icon(name, true)
+            ),
+            false => eprintln!(
+                "desk: editor icon {} {path} {}",
+                pack.key(),
+                icons.file_icon(name)
+            ),
+        }
+    }
 }
 
 struct Listing {
@@ -506,6 +530,7 @@ pub struct Editor {
     source: Source,
     _watch: Option<Subscription>,
     _tree: Option<Subscription>,
+    _pack: Option<Subscription>,
     _marking: Option<Task<()>>,
     _blaming: Option<Task<()>>,
 }
@@ -527,6 +552,7 @@ impl Editor {
             source,
             _watch: None,
             _tree: None,
+            _pack: None,
             _marking: None,
             _blaming: None,
         }
@@ -539,10 +565,49 @@ impl Editor {
         } = &self.source
         {
             self._tree = Some(cx.subscribe_in(&folder.tree, window, Self::tree_event));
+            self._pack = Some(cx.observe_global::<PickedPack>(Self::repack));
         }
         self.watch(cx);
         self.follow(cx);
         self
+    }
+
+    fn repack(&mut self, cx: &mut Context<Self>) {
+        let Source::Disk {
+            folder: Some(folder),
+            ..
+        } = &mut self.source
+        else {
+            return;
+        };
+        let PickedPack(pack) = *cx.global::<PickedPack>();
+        if pack == folder.pack {
+            return;
+        }
+        let started = Instant::now();
+        let icons = match IconTheme::pack(pack) {
+            Ok(icons) => icons,
+            Err(error) => {
+                eprintln!(
+                    "desk: editor keeps {} icons, {} failed: {error}",
+                    folder.pack.key(),
+                    pack.key()
+                );
+                return;
+            }
+        };
+        folder.tree.update(cx, |tree, cx| {
+            tree.reicon(&icons, cx);
+            log_icons(pack, &icons, tree);
+        });
+        eprintln!(
+            "desk: editor icons {} -> {} in {} ms",
+            folder.pack.key(),
+            pack.key(),
+            started.elapsed().as_millis()
+        );
+        folder.icons = icons;
+        folder.pack = pack;
     }
 
     fn watch(&mut self, cx: &mut Context<Self>) {

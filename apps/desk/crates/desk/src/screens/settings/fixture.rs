@@ -1,4 +1,5 @@
 use desk_ui::components::settings::Source;
+use desk_ui::components::tree::IconPack;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageId {
@@ -37,10 +38,10 @@ impl PageId {
             PageId::Git => &GIT,
             PageId::Appearance => &APPEARANCE,
             PageId::Keys => &KEYS,
+            PageId::Editor => &EDITOR,
             PageId::Turn
             | PageId::Notify
             | PageId::Workspaces
-            | PageId::Editor
             | PageId::Context
             | PageId::Shell
             | PageId::Browser
@@ -88,6 +89,7 @@ impl Scope {
 pub enum Control {
     Switch(bool),
     Value(&'static str),
+    Pack(IconPack),
 }
 
 pub struct Setting {
@@ -135,6 +137,58 @@ const fn value(
         source,
     }
 }
+
+const fn pack(pack: IconPack, desc: &'static str) -> Setting {
+    Setting {
+        key: pack.key(),
+        name: pack.label(),
+        desc,
+        control: Control::Pack(pack),
+        source: Source::Default,
+    }
+}
+
+const EDITOR: Page = Page {
+    title: "Editor",
+    desc: "How the editor draws your files.",
+    groups: &[(
+        "File icons",
+        &[
+            pack(
+                IconPack::Material,
+                "The icons the desk shipped with. 25 icons.",
+            ),
+            pack(
+                IconPack::Catppuccin,
+                "Mocha. 619 icons by name, extension, language and folder.",
+            ),
+            pack(
+                IconPack::Github,
+                "One file icon and one folder icon, nothing else.",
+            ),
+            pack(
+                IconPack::Jetbrains,
+                "New UI, dark. 131 icons, open folders keep their icon.",
+            ),
+            pack(
+                IconPack::Makinda,
+                "Stroke. 111 icons by name, extension, language and folder.",
+            ),
+            pack(
+                IconPack::Phosphor,
+                "26 glyphs by extension. Folders are plain.",
+            ),
+            pack(
+                IconPack::Pierre,
+                "Complete, coloured. 56 icons by name and extension.",
+            ),
+            pack(
+                IconPack::Symbols,
+                "320 icons by name, extension, language and folder.",
+            ),
+        ],
+    )],
+};
 
 const TURN: Page = Page {
     title: "Turn and sub-agents",

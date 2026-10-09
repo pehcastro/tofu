@@ -10,6 +10,7 @@ use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::settings::{
     SettingRow, Source, key_binding, page_title, setting_group, setting_group_clickable,
 };
+use desk_ui::components::tree::{IconPack, pick_pack, picked_pack};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{ClickEvent, Context, Div, Render, SharedString, Window, div, prelude::*, px, relative};
@@ -92,6 +93,22 @@ impl Rows {
             .child(list.selected(selected))
     }
 
+    fn press(&mut self, key: &str, cx: &mut Context<Self>) {
+        let pack = IconPack::ALL.into_iter().find(|pack| pack.key() == key);
+        let Some(pack) = pack.filter(|_| self.page == PageId::Editor) else {
+            return self.flip(key, cx);
+        };
+        let was = picked_pack(cx);
+        match pick_pack(pack, cx) {
+            Ok(()) => eprintln!("desk: settings file icons {} -> {}", was.key(), pack.key()),
+            Err(error) => eprintln!(
+                "desk: settings file icons {} for this run only: {error}",
+                pack.key()
+            ),
+        }
+        cx.notify();
+    }
+
     fn flip(&mut self, key: &str, cx: &mut Context<Self>) {
         let found = self
             .page
@@ -127,6 +144,17 @@ impl Rows {
                 .font_family(mono(theme))
                 .text_size(px(VALUE_TEXT))
                 .into_any_element(),
+            Control::Pack(pack) => {
+                let used = picked_pack(cx) == pack;
+                chip(if used { "in use" } else { "use" }, None, theme)
+                    .text_size(px(VALUE_TEXT))
+                    .text_color(if used {
+                        theme.color(ColorToken::TextStrong)
+                    } else {
+                        theme.color(ColorToken::TextMuted)
+                    })
+                    .into_any_element()
+            }
         };
         SettingRow {
             id: setting.key.into(),
@@ -213,7 +241,7 @@ impl Render for Rows {
                     setting_group_clickable(
                         label,
                         rows,
-                        cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
+                        cx.listener(|this, key: &SharedString, _, cx| this.press(key, cx)),
                         &theme,
                     )
                 } else {
