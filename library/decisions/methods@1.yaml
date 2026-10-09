@@ -22,9 +22,13 @@ methods:
     method: cheap
     why: a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing
     cost: nothing, and no call is made
+  memory_scope:
+    method: judged
+    why: in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run
+    cost: not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency
   ask:
     method: unwired
-    why: jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, and no cost a session can be produced. the recorded ledger carries no ask row and nothing measures moments of doubt per session
+    why: jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, measured on the wording before it named the lead, and no cost a session can be produced. ask_person now writes an ask row in shadow for every question the lead puts to the person, and the code asks now until those rows are labelled
   file_shortlist:
     method: unwired
     why: the point is parked because three of its four questions name their own answer in their own prompt, so nothing measured there separates a ranking arm from a regular expression pulling a filename out of the task. 8 recordable turns carry 2 distinct tasks in the recorded sessions, against the floor of 12 questions this shape needs. a later join attempt cleared that floor at 13 distinct-task rows, but all 13 name their own answer too, so the corpus is still not built and the point is parked harder than before

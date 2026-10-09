@@ -1,0 +1,83 @@
+name: memory_scope
+domain: general
+questions_version: 1
+
+state:
+  - candidate
+  - said
+  - repository
+  - repository_tofu_ignored
+
+questions:
+  scope:
+    type: choice
+    instructions: >-
+      An agent offers to keep `candidate`, one line, for later sessions.
+      `said` holds the words the person typed that it comes from, empty when
+      there are none. `repository` names the repository the session works in,
+      empty outside one. `repository_tofu_ignored` says whether git ignores
+      the repository's .tofu folder: when it does not, whatever is kept there
+      is committed and every teammate reads it. Choose where the line belongs.
+    escape: none
+    options:
+      - name: user_global
+        criteria: >-
+          A habit or preference of the person that holds in every project,
+          whatever the repository: how they write, speak or want work done
+          anywhere.
+      - name: user_local
+        criteria: >-
+          The person's own wish about how work goes in this repository: an
+          order, a habit or a way of working they want here, which a teammate
+          working in the same repository would not be bound by.
+      - name: project_global
+        criteria: >-
+          A fact about this project as it runs on this one machine: its
+          environment, local paths, installed tools or quirks of this checkout,
+          not something every teammate shares.
+      - name: project_local
+        criteria: >-
+          A requirement the project itself imposes on whoever works in it,
+          whatever their preference: its build, its toolchain, its checks, its
+          layout or its hooks, fit to travel with the repository's own files.
+      - name: none
+        criteria: >-
+          Not worth keeping: tied to the work in progress, unclear, or not a
+          standing rule at all.
+
+  durable:
+    type: noul
+    instructions: >-
+      Judge whether `candidate` is a standing rule that later sessions should
+      follow, rather than a step of the work in progress.
+    criteria:
+      true: >-
+        It holds beyond the current task: a habit, a preference, a convention
+        or a fact about the setup.
+      false: >-
+        It is a step, a plan or a finding of the current task only.
+
+  stated:
+    type: noul
+    instructions: >-
+      Judge whether the person stated `candidate` themselves. `said` holds the
+      words they typed, empty when there are none.
+    criteria:
+      true: >-
+        `said` states the rule in substance and `candidate` restates it.
+      false: >-
+        `candidate` is the agent's own inference: `said` does not state it, or
+        is empty.
+
+  names_private:
+    type: noul
+    instructions: >-
+      Judge whether `candidate` carries anything private to the person that a
+      teammate should not read.
+    criteria:
+      true: >-
+        It names a person, a home or user directory path, an email address, a
+        session, or quotes a message of theirs.
+      false: >-
+        It names nothing private: a path inside the repository, a tool, a
+        command or a version is not private.

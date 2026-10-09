@@ -5,18 +5,97 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/question"
+	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
+
+const OutcomeKindMemoryScope = "memory-scope"
+
+type ScopeJudge struct {
+	Client *jev.Client
+	Set    question.Set
+	Ledger *ledger.Writer
+}
+
+type scopeJudgement struct {
+	row          ledger.Row
+	pick         memory.Scope
+	refusesLocal bool
+}
+
+func (j *ScopeJudge) judge(ctx context.Context, entry memory.Entry, project string) scopeJudgement {
+	if j == nil {
+		return scopeJudgement{refusesLocal: true}
+	}
+	full, _ := filepath.Abs(project)
+	ignored := exec.CommandContext(ctx, "git", "-C", full, "check-ignore", "-q", sys.StateDir(full)).Run() == nil
+	body, builder, err := state.BuildMemoryScope(state.MemoryScopeState{Candidate: entry.Text, Said: entry.Said, Repository: filepath.Base(full), RepositoryTofuIgnored: ignored})
+	if err != nil {
+		return scopeJudgement{refusesLocal: true}
+	}
+	shadow := "the person's pick on the card is the label; a names_private yes refuses project local"
+	row := ledger.Row{Point: state.MemoryScopePoint, Questions: j.Set.Name, Version: j.Set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: builder, State: body,
+		Reason: &ledger.Reason{Question: state.MemoryNamesPrivateQuestion, Comparison: ">= its no", Mode: ledger.ModeShadow, ModeReason: &shadow}}
+	asked := make([]jev.Question, len(j.Set.Questions))
+	for i, q := range j.Set.Questions {
+		asked[i] = q.ToJev()
+	}
+	decision, err := j.Client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	if err != nil {
+		failed := "jev could not answer, so project local is refused: " + err.Error()
+		row.Reason.ModeReason = &failed
+		return scopeJudgement{row: row, refusesLocal: true}
+	}
+	row.Build, row.Model, row.RequestID = decision.Build, decision.Alias, decision.RequestID
+	row.LatencyMS, row.Cost = decision.Latency.Milliseconds(), decision.Usage.Cost
+	for _, q := range j.Set.Questions {
+		answer := decision.Answers[q.Name]
+		recorded := ledger.Answer{Question: q.Name, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerNoul, Noul: answer.Noul}
+		if q.Kind == question.KindChoice {
+			recorded = ledger.Answer{Question: q.Name, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: answer.Choice, Dist: distOf(answer.Probabilities)}
+		}
+		row.Answers = append(row.Answers, recorded)
+	}
+	private := decision.Answers[state.MemoryNamesPrivateQuestion].Noul
+	row.Reason.Value, row.Reason.Threshold = private, 1-private
+	judged := scopeJudgement{row: row, refusesLocal: state.RefusesProjectLocal(private, true)}
+	if picked, err := memory.ParseScope(state.MemoryScopeOf(decision.Answers[state.MemoryScopeQuestion].Choice)); err == nil && (picked != memory.ProjectLocal || !judged.refusesLocal) {
+		judged.pick = picked
+	}
+	return judged
+}
+
+func (j *ScopeJudge) record(judged scopeJudgement, verdict ledger.Verdict) (string, error) {
+	if j == nil {
+		return "", nil
+	}
+	judged.row.Verdict = verdict
+	written, err := j.Ledger.Append(judged.row)
+	return written.ID, err
+}
+
+func (j *ScopeJudge) label(row, pick string) error {
+	if row == "" {
+		return nil
+	}
+	return j.Ledger.Backfill(row, ledger.Outcome{Kind: OutcomeKindMemoryScope, Detail: pick})
+}
 
 type Remember struct {
 	Ask     turn.Person
@@ -25,6 +104,7 @@ type Remember struct {
 	Project string
 	Inbox   *turn.Inbox
 	Auto    func() bool
+	Judge   *ScopeJudge
 }
 
 func (Remember) Name() string { return turn.RememberToolName }
@@ -76,12 +156,28 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if family, err := r.Store.Identity(r.Session); err == nil {
 		entry.Session = family.Family
 	}
-	if !r.Auto() || entry.Scope == memory.ProjectLocal {
-		if entry.Scope != memory.Global {
+	judged := r.Judge.judge(ctx, entry, r.Project)
+	refused := entry.Scope == memory.ProjectLocal && judged.refusesLocal
+	asks := !r.Auto() || entry.Scope == memory.ProjectLocal
+	verdict := ledger.VerdictAllow
+	switch {
+	case refused:
+		verdict = ledger.VerdictDeny
+	case asks:
+		verdict = ledger.VerdictAsk
+	}
+	row, err := r.Judge.record(judged, verdict)
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("remember: the %s row did not write: %w", state.MemoryScopePoint, err)
+	}
+	switch {
+	case refused:
+		return turn.Result{Content: "refused project local: every teammate reads it, and it names something of the person's, or Jev could not say it does not. offer it as user-local or project-global instead"}, nil
+	case asks && r.Ask == nil:
+		return turn.Result{Content: "no person is here to answer, so nothing was kept"}, nil
+	case asks:
+		if entry.Scope = cmp.Or(judged.pick, entry.Scope); entry.Scope != memory.Global {
 			entry.Scope = memory.Project
-		}
-		if r.Ask == nil {
-			return turn.Result{Content: "no person is here to answer, so nothing was kept"}, nil
 		}
 		shown, err := json.Marshal(map[string]string{"statement": entry.Text, "scope": string(entry.Scope), "said": args.Said})
 		if err != nil {
@@ -91,15 +187,21 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		if err != nil {
 			return turn.Result{Content: "the person could not be asked, so nothing was kept: " + err.Error()}, nil
 		}
+		picked := state.MemoryScopeNone
 		switch answer {
 		case turn.PersonDenied:
-			return turn.Result{Content: "the person said no, and nothing was kept"}, nil
 		case turn.PersonAllowedOnce:
-			entry.Scope = memory.Project
+			entry.Scope, picked = memory.Project, string(memory.Project)
 		case turn.PersonAlwaysHere:
-			entry.Scope = memory.Global
+			entry.Scope, picked = memory.Global, string(memory.Global)
 		default:
 			panic("tools: unknown person answer")
+		}
+		if err := r.Judge.label(row, picked); err != nil {
+			return turn.Result{}, fmt.Errorf("remember: the person's pick did not reach the ledger, so nothing was kept: %w", err)
+		}
+		if answer == turn.PersonDenied {
+			return turn.Result{Content: "the person said no, and nothing was kept"}, nil
 		}
 	}
 	shelves, err := memory.Open(r.Project)
@@ -138,4 +240,12 @@ func (r Remember) typedInChain() ([]string, error) {
 		}
 	}
 	return typed, nil
+}
+
+func distOf(probabilities map[string]float64) []ledger.Slice {
+	dist := make([]ledger.Slice, 0, len(probabilities))
+	for _, option := range slices.Sorted(maps.Keys(probabilities)) {
+		dist = append(dist, ledger.Slice{Option: option, P: probabilities[option]})
+	}
+	return dist
 }

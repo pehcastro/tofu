@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"sort"
@@ -10,7 +11,10 @@ import (
 	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
+	"tofu/internal/judge/state"
 	"tofu/internal/sys"
+	"tofu/internal/turn/tools"
+	"tofu/library/questions"
 )
 
 type judgeOutcome struct {
@@ -311,4 +315,24 @@ func toLedgerReason(r gate.Reason) *ledger.Reason {
 		Ambiguous:  r.Ambiguous,
 		Mode:       r.Mode.Ledger(),
 	}
+}
+
+func memoryScopeJudge(dir string, say func(string)) *tools.ScopeJudge {
+	layers, err := question.Layers(questions.Files(), dir)
+	var set question.Set
+	if err == nil {
+		set, _, err = question.Resolve(state.MemoryScopeRef, layers)
+	}
+	var client *jev.Client
+	if err == nil {
+		client, err = newJevClient(oneCallAtATime)
+	}
+	logDir, logErr := sys.LogDir()
+	if err = cmp.Or(err, logErr); err != nil {
+		if say != nil {
+			say("remember asks Jev nothing and refuses project local: " + err.Error())
+		}
+		return nil
+	}
+	return &tools.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(logDir)}
 }
