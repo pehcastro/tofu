@@ -33,7 +33,7 @@ const HEADER_GAP: f32 = 4.0;
 const NEW_BUTTON_GAP: f32 = 2.0;
 const MORE_LIST_MIN: f32 = 180.0;
 const DIRTY_DOT: f32 = 7.0;
-const TAB_MIN_WIDTH: f32 = 72.0;
+const TAB_MIN_WIDTH: f32 = 32.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TabMark {
