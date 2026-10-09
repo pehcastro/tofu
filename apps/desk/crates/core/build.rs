@@ -112,7 +112,10 @@ fn enumerations(structs: &[(&String, &Map<String, Value>)]) -> Fallible<Enums> {
     let mut owners: BTreeMap<(String, Vec<String>), Vec<String>> = BTreeMap::new();
     for (name, def) in structs {
         for (field, property) in properties(def)? {
-            if let Some(values) = property.get("enum") {
+            if let Some(values) = property
+                .get("enum")
+                .or_else(|| property["items"].get("enum"))
+            {
                 let values = serde_json::from_value::<Vec<String>>(values.clone())?;
                 owners
                     .entry((field.clone(), values))

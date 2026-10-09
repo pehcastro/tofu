@@ -13,11 +13,11 @@ use std::{env, fs, iter, slice, thread};
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
-    Accounts, ApprovalAnswer, ApprovalDecision, ApprovalRequest, ContextReport, CredentialReport,
-    CronCommandParams, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams,
-    Notification, PROTOCOL, Request, RequestId, SessionAsking, SessionInfo, SessionListParams,
-    SessionOpenParams, SessionParams, SessionRenameParams, SessionSetParams, SessionTrace,
-    ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
+    Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
+    Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
+    PROTOCOL, Request, RequestId, SessionAsking, SessionInfo, SessionListParams, SessionOpenParams,
+    SessionParams, SessionRenameParams, SessionSetParams, SessionTrace, ShellParams, TurnCompleted,
+    TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
@@ -55,10 +55,10 @@ const CONTENT_WIDTH: f32 = 672.0;
 const COLUMN_TOP: f32 = 16.0;
 const DOCK_GAP: f32 = 8.0;
 const DOCK_INSET: f32 = 16.0;
-const DECISIONS: [ApprovalDecision; 3] = [
-    ApprovalDecision::AllowOnce,
-    ApprovalDecision::RejectOnce,
-    ApprovalDecision::AllowAlways,
+const DECISIONS: [Decision; 3] = [
+    Decision::AllowOnce,
+    Decision::RejectOnce,
+    Decision::AllowAlways,
 ];
 
 type Opened = Result<(Bridge, InitializeResult), BridgeError>;
@@ -859,6 +859,9 @@ impl Chat {
                     state.pick.model.as_deref().unwrap_or("none"),
                     models.models.len()
                 );
+                if let Err(error) = chat.store.update(cx, |store, _| store.shells_now(&state)) {
+                    eprintln!("desk: the store refused session.state from tofu: {error}");
+                }
                 chat.pick = state.pick;
                 chat.listed(&models, cx);
             });

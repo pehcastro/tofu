@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use super::ModelError;
 use crate::protocol::{
     AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, ModelPick,
-    Notification, Origin, OriginKind, PlanStep, QuotaWindow, RequestId, SessionForked,
-    TurnCompletedStatus, UsageUpdated,
+    Notification, Origin, OriginKind, PlanStep, QuotaWindow, RequestId, SessionForked, ShellKept,
+    ShellNow, ShellNowState, ShellReady, TurnCompletedStatus, UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,6 +40,8 @@ pub struct Turn {
 pub struct Tool {
     pub name: String,
     pub agent: Option<String>,
+    pub instance: Option<String>,
+    pub mention: Option<String>,
     pub args: serde_json::Value,
     pub output: Option<String>,
     pub failed: bool,
@@ -61,6 +63,7 @@ pub struct Agent {
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
     pub thinking: String,
+    pub mention: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +79,11 @@ pub struct Shell {
     pub ended_at: Option<String>,
     pub first_seen: std::time::Instant,
     pub port: Option<u16>,
+    pub dir: String,
+    pub kept: Option<ShellKept>,
+    pub ready: Option<ShellReady>,
+    pub left_over: bool,
+    pub mention: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -142,6 +150,38 @@ fn orphan(event: &'static str, id: &str) -> ModelError {
 impl Session {
     pub(super) fn ask(&mut self, id: RequestId, asked: ApprovalRequest) {
         self.approvals.insert(asked.approval.clone(), (id, asked));
+    }
+
+    pub(super) fn shells_now(&mut self, now: &[ShellNow]) -> Result<(), ModelError> {
+        for later in now {
+            let Some(shell) = self.shells.get_mut(&later.shell) else {
+                continue;
+            };
+            match &later.state {
+                ShellNowState::Running => {}
+                ShellNowState::Exited => shell.exited = true,
+                ShellNowState::Killed => {
+                    shell.exited = true;
+                    shell.killed = true;
+                }
+                ShellNowState::Unknown(value) => {
+                    return Err(ModelError::UnknownValue {
+                        field: "shell state",
+                        value: value.clone(),
+                    });
+                }
+            }
+            if shell.exited {
+                shell.exit_code = shell.exit_code.or(later.exit_code);
+                shell.ended_at = shell.ended_at.take().or_else(|| later.ended_at.clone());
+            }
+            shell.dir.clone_from(&later.dir);
+            shell.kept.clone_from(&later.kept);
+            shell.ready.clone_from(&later.ready);
+            shell.left_over = later.left_over.unwrap_or_default();
+            shell.port = later.port.and_then(|port| u16::try_from(port).ok());
+        }
+        Ok(())
     }
 
     fn say(&mut self, turn: &str, agent: &Option<String>, role: Role, text: &str, complete: bool) {
@@ -256,6 +296,8 @@ impl Session {
                     Tool {
                         name: e.tool.clone(),
                         agent: e.agent.clone(),
+                        instance: e.instance.clone(),
+                        mention: e.r#ref.clone(),
                         args: e.args.clone(),
                         output: None,
                         failed: false,
@@ -302,6 +344,7 @@ impl Session {
                         started_at: Some(e.started_at.clone()),
                         ended_at: None,
                         thinking: String::new(),
+                        mention: e.r#ref.clone(),
                     },
                 );
             }
@@ -332,7 +375,7 @@ impl Session {
                     .ok_or_else(|| orphan("agent.ended", &e.instance))?;
                 agent.state = known(&e.state)?;
                 agent.report = Some(e.report.clone());
-                self.last_seen(&e.instance);
+                agent.ended_at = Some(e.ended_at.clone());
             }
             N::FileEdit(e) => {
                 if let FileEditOp::Unknown(value) = &e.op {
@@ -360,7 +403,12 @@ impl Session {
                         started_at: Some(e.started_at.clone()),
                         ended_at: None,
                         first_seen: std::time::Instant::now(),
-                        port: None,
+                        port: e.port.and_then(|port| u16::try_from(port).ok()),
+                        dir: e.dir.clone(),
+                        kept: e.kept.clone(),
+                        ready: e.ready.clone(),
+                        left_over: e.left_over.unwrap_or_default(),
+                        mention: e.r#ref.clone(),
                     },
                 );
             }
@@ -400,7 +448,11 @@ impl Session {
             }
             N::Resync(e) => self.dropped = self.dropped.saturating_add(e.dropped),
             N::SessionSettings(e) => self.pick = Some(e.pick.clone()),
-            N::ItemPersisted(_) | N::SessionListed(_) => {}
+            N::ItemPersisted(_)
+            | N::SessionListed(_)
+            | N::Status(_)
+            | N::MemoryScoped(_)
+            | N::QuestionResolved(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }

@@ -1,5 +1,87 @@
 {
   "$defs": {
+    "AccountOrder": {
+      "additionalProperties": false,
+      "properties": {
+        "accounts": {
+          "items": {
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "role": {
+          "enum": [
+            "llm",
+            "classifier",
+            "search"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "source",
+        "accounts"
+      ],
+      "type": "object"
+    },
+    "AccountSpend": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "requests": {
+          "type": "integer"
+        },
+        "role": {
+          "type": "string"
+        },
+        "sifted_bytes": {
+          "type": "integer"
+        },
+        "tokens_in": {
+          "type": "integer"
+        },
+        "tokens_out": {
+          "type": "integer"
+        },
+        "turn_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "account",
+        "role",
+        "tokens_in",
+        "tokens_out",
+        "cache_read",
+        "cache_write",
+        "requests",
+        "turn_ms",
+        "cost_usd",
+        "sifted_bytes"
+      ],
+      "type": "object"
+    },
     "AccountStatus": {
       "additionalProperties": false,
       "properties": {
@@ -98,10 +180,20 @@
         "agent": {
           "type": "string"
         },
+        "durationMs": {
+          "type": "integer"
+        },
+        "endedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
         "instance": {
           "type": "string"
         },
         "item": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "report": {
@@ -136,7 +228,9 @@
         "seq",
         "instance",
         "state",
-        "report"
+        "report",
+        "endedAt",
+        "durationMs"
       ],
       "type": "object"
     },
@@ -230,6 +324,9 @@
             "null"
           ]
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -288,6 +385,9 @@
           "type": "string"
         },
         "model": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "report": {
@@ -368,7 +468,9 @@
             "reject_always",
             "cancelled",
             "remember_project",
-            "remember_global"
+            "remember_global",
+            "remember_user_local",
+            "remember_project_local"
           ],
           "type": "string"
         }
@@ -388,11 +490,34 @@
           "type": "string"
         },
         "args": {},
+        "decisions": {
+          "items": {
+            "enum": [
+              "allow_once",
+              "allow_always",
+              "reject_once",
+              "reject_always",
+              "cancelled",
+              "remember_project",
+              "remember_global",
+              "remember_user_local",
+              "remember_project_local"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "item": {
           "type": "string"
         },
         "judged": {
           "$ref": "#/$defs/Judgement"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -418,7 +543,8 @@
         "approval",
         "tool",
         "target",
-        "args"
+        "args",
+        "decisions"
       ],
       "type": "object"
     },
@@ -442,11 +568,16 @@
             "reject_always",
             "cancelled",
             "remember_project",
-            "remember_global"
+            "remember_global",
+            "remember_user_local",
+            "remember_project_local"
           ],
           "type": "string"
         },
         "item": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -454,6 +585,9 @@
         },
         "session": {
           "type": "string"
+        },
+        "standing": {
+          "type": "boolean"
         },
         "turn": {
           "type": "string"
@@ -652,6 +786,15 @@
         "fork": {
           "$ref": "#/$defs/ContextFork"
         },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/recall.Item"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },
@@ -693,6 +836,9 @@
           "type": "integer"
         },
         "item": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -737,11 +883,31 @@
     "CredentialReport": {
       "additionalProperties": false,
       "properties": {
+        "account": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
         "plan": {
           "type": "string"
         },
         "provider": {
           "type": "string"
+        },
+        "read_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "retry_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "stale": {
+          "type": "boolean"
         },
         "state": {
           "type": "string"
@@ -867,6 +1033,9 @@
         "live": {
           "type": "integer"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -903,6 +1072,13 @@
             "null"
           ]
         },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
         "enforced": {
           "type": "boolean"
         },
@@ -920,6 +1096,9 @@
         },
         "reason": {
           "$ref": "#/$defs/Reason"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -951,7 +1130,8 @@
         "answers",
         "enforced",
         "point",
-        "tool"
+        "tool",
+        "at"
       ],
       "type": "object"
     },
@@ -1408,6 +1588,9 @@
             "null"
           ]
         },
+        "instance": {
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
@@ -1419,6 +1602,9 @@
           "type": "string"
         },
         "path": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -1439,6 +1625,62 @@
         "path",
         "op",
         "hunks"
+      ],
+      "type": "object"
+    },
+    "ForkGeneration": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "end_reason": {
+          "type": "string"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "fork_kind": {
+          "type": "string"
+        },
+        "forked_into": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer"
+        },
+        "here": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string"
+        },
+        "tokens_after": {
+          "type": "integer"
+        },
+        "tokens_before": {
+          "type": "integer"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "usage": {
+          "$ref": "#/$defs/session.Usage"
+        }
+      },
+      "required": [
+        "session",
+        "generation",
+        "at",
+        "turns",
+        "usage",
+        "cost_usd",
+        "here"
       ],
       "type": "object"
     },
@@ -1942,6 +2184,9 @@
         "state_hash": {
           "type": "string"
         },
+        "subject": {
+          "$ref": "#/$defs/state.Subject"
+        },
         "turn_id": {
           "type": "string"
         },
@@ -1969,6 +2214,44 @@
         "request_id",
         "precedents"
       ],
+      "type": "object"
+    },
+    "LedgerSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "corrupt": {
+          "type": "integer"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/ledger.PointSummary"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "since",
+        "points",
+        "corrupt"
+      ],
+      "type": "object"
+    },
+    "LedgerSummaryParams": {
+      "additionalProperties": false,
+      "properties": {
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [],
       "type": "object"
     },
     "LibraryDomain": {
@@ -2091,6 +2374,48 @@
       ],
       "type": "object"
     },
+    "LimitsReport": {
+      "additionalProperties": false,
+      "properties": {
+        "burns": {
+          "items": {
+            "$ref": "#/$defs/quota.Burn"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "order": {
+          "items": {
+            "$ref": "#/$defs/AccountOrder"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "spend": {
+          "items": {
+            "$ref": "#/$defs/AccountSpend"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "torn_readings": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "burns",
+        "torn_readings",
+        "order",
+        "spend"
+      ],
+      "type": "object"
+    },
     "LoginKeyParams": {
       "additionalProperties": false,
       "properties": {
@@ -2163,6 +2488,9 @@
         "item": {
           "type": "string"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -2220,6 +2548,42 @@
       ],
       "type": "object"
     },
+    "MemoryLine": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "n",
+        "text"
+      ],
+      "type": "object"
+    },
+    "MemoryRecallParams": {
+      "additionalProperties": false,
+      "properties": {
+        "regex": {
+          "type": "string"
+        },
+        "store": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "store",
+        "regex"
+      ],
+      "type": "object"
+    },
     "MemoryRemoveParams": {
       "additionalProperties": false,
       "properties": {
@@ -2254,6 +2618,61 @@
       ],
       "type": "object"
     },
+    "MemoryScopedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "offered": {
+          "type": "string"
+        },
+        "picked": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "statement",
+        "offered",
+        "picked",
+        "by"
+      ],
+      "type": "object"
+    },
     "MemoryShelf": {
       "additionalProperties": false,
       "properties": {
@@ -2277,14 +2696,120 @@
         },
         "scope": {
           "type": "string"
+        },
+        "weight": {
+          "$ref": "#/$defs/memory.Weight"
         }
       },
       "required": [
         "scope",
         "dir",
+        "weight",
         "entries",
         "bytes",
         "limit"
+      ],
+      "type": "object"
+    },
+    "MemoryView": {
+      "additionalProperties": false,
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/MemoryLine"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "store": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "store",
+        "lines"
+      ],
+      "type": "object"
+    },
+    "MemoryViewParams": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "type": "object"
+    },
+    "MemoryZoomParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "store": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "store",
+        "id",
+        "n"
+      ],
+      "type": "object"
+    },
+    "MentionParams": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "MentionResolved": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "type": "string"
+        },
+        "line": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "item",
+            "not_found",
+            "ambiguous"
+          ],
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "speaker": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome",
+        "ref"
       ],
       "type": "object"
     },
@@ -2687,6 +3212,9 @@
         "logSeq": {
           "type": "integer"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -2752,6 +3280,9 @@
             "null"
           ]
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -2786,6 +3317,132 @@
       ],
       "type": "object"
     },
+    "QuestionAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/turn.PersonReply"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "submitted",
+            "cancelled",
+            "undelivered"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome",
+        "answers"
+      ],
+      "type": "object"
+    },
+    "QuestionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "item": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/turn.PersonQuestion"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "waitMs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "question",
+        "questions",
+        "blocking",
+        "waitMs"
+      ],
+      "type": "object"
+    },
+    "QuestionResolved": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "submitted",
+            "cancelled",
+            "undelivered"
+          ],
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "question",
+        "outcome",
+        "by"
+      ],
+      "type": "object"
+    },
     "QuotaUpdated": {
       "additionalProperties": false,
       "properties": {
@@ -2793,6 +3450,9 @@
           "type": "string"
         },
         "item": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -3039,6 +3699,9 @@
         "item": {
           "type": "string"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -3086,6 +3749,17 @@
         "file": {
           "type": "string"
         },
+        "fires": {
+          "type": "integer"
+        },
+        "fires_week": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "type": "array"
+        },
         "id": {
           "type": "string"
         },
@@ -3102,6 +3776,12 @@
           "$ref": "#/$defs/OverrideListing"
         },
         "switch": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "trigger": {
           "type": "string"
         }
       },
@@ -3177,6 +3857,9 @@
           ],
           "type": "string"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -3208,6 +3891,162 @@
         }
       },
       "required": [],
+      "type": "object"
+    },
+    "SessionAccess": {
+      "additionalProperties": false,
+      "properties": {
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "preset": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "owns"
+      ],
+      "type": "object"
+    },
+    "SessionAccessParams": {
+      "additionalProperties": false,
+      "properties": {
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "preset": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ],
+      "type": "object"
+    },
+    "SessionBranchParams": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "preset": {
+          "type": "string"
+        },
+        "seed": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SessionBranchResult": {
+      "additionalProperties": false,
+      "properties": {
+        "carried": {
+          "type": "integer"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parent": {
+          "$ref": "#/$defs/SessionParent"
+        },
+        "preset": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "handle",
+        "parent",
+        "owns",
+        "carried"
+      ],
+      "type": "object"
+    },
+    "SessionDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "branches": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "family": {
+          "type": "string"
+        },
+        "generations": {
+          "items": {
+            "$ref": "#/$defs/ForkGeneration"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "info": {
+          "$ref": "#/$defs/SessionInfo"
+        }
+      },
+      "required": [
+        "info",
+        "family",
+        "generations",
+        "branches"
+      ],
       "type": "object"
     },
     "SessionFind": {
@@ -3288,6 +4127,9 @@
           "type": "string"
         },
         "kind": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -3526,6 +4368,9 @@
     "SessionListParams": {
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "type": "string"
+        },
         "limit": {
           "type": "integer"
         },
@@ -3580,6 +4425,9 @@
         "item": {
           "type": "string"
         },
+        "kind": {
+          "type": "string"
+        },
         "lastAt": {
           "format": "date-time",
           "type": "string"
@@ -3592,6 +4440,27 @@
         },
         "open": {
           "type": "boolean"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parent": {
+          "$ref": "#/$defs/SessionParent"
+        },
+        "preset": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
         },
         "running": {
           "type": "boolean"
@@ -3630,7 +4499,8 @@
         "subAgents",
         "expired",
         "open",
-        "running"
+        "running",
+        "kind"
       ],
       "type": "object"
     },
@@ -3681,6 +4551,21 @@
         }
       },
       "required": [],
+      "type": "object"
+    },
+    "SessionParent": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session"
+      ],
       "type": "object"
     },
     "SessionRenameParams": {
@@ -3737,6 +4622,9 @@
         "id": {
           "type": "string"
         },
+        "kind": {
+          "type": "string"
+        },
         "lastAt": {
           "format": "date-time",
           "type": "string"
@@ -3749,6 +4637,24 @@
         },
         "open": {
           "type": "boolean"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parent": {
+          "$ref": "#/$defs/SessionParent"
+        },
+        "preset": {
+          "type": "string"
         },
         "running": {
           "type": "boolean"
@@ -3774,7 +4680,8 @@
         "subAgents",
         "expired",
         "open",
-        "running"
+        "running",
+        "kind"
       ],
       "type": "object"
     },
@@ -3819,6 +4726,9 @@
         },
         "pick": {
           "$ref": "#/$defs/ModelPick"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -3892,6 +4802,15 @@
         "pick": {
           "$ref": "#/$defs/ModelPick"
         },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/QuestionRequest"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "running": {
           "type": "boolean"
         },
@@ -3907,6 +4826,15 @@
             "null"
           ]
         },
+        "standing": {
+          "items": {
+            "$ref": "#/$defs/StandingAnswer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "turn": {
           "$ref": "#/$defs/RunningTurn"
         }
@@ -3916,6 +4844,8 @@
         "running",
         "pick",
         "approvals",
+        "standing",
+        "questions",
         "agents",
         "shells",
         "cron"
@@ -4068,6 +4998,9 @@
           "type": "string"
         },
         "name": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "root": {
@@ -4236,6 +5169,9 @@
         "killed": {
           "type": "boolean"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -4265,6 +5201,9 @@
         "command": {
           "type": "string"
         },
+        "dir": {
+          "type": "string"
+        },
         "endedAt": {
           "format": "date-time",
           "type": "string"
@@ -4272,8 +5211,30 @@
         "exitCode": {
           "type": "integer"
         },
+        "kept": {
+          "enum": [
+            "background",
+            "moved"
+          ],
+          "type": "string"
+        },
+        "leftOver": {
+          "type": "boolean"
+        },
         "pid": {
           "type": "integer"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "ready": {
+          "enum": [
+            "port",
+            "line",
+            "waited",
+            "stopped"
+          ],
+          "type": "string"
         },
         "shell": {
           "type": "string"
@@ -4296,7 +5257,8 @@
         "command",
         "pid",
         "state",
-        "startedAt"
+        "startedAt",
+        "dir"
       ],
       "type": "object"
     },
@@ -4311,6 +5273,9 @@
         },
         "offset": {
           "type": "integer"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -4415,11 +5380,39 @@
         "command": {
           "type": "string"
         },
+        "dir": {
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
+        "kept": {
+          "enum": [
+            "background",
+            "moved"
+          ],
+          "type": "string"
+        },
+        "leftOver": {
+          "type": "boolean"
+        },
         "pid": {
           "type": "integer"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "ready": {
+          "enum": [
+            "port",
+            "line",
+            "waited",
+            "stopped"
+          ],
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -4446,7 +5439,133 @@
         "shell",
         "command",
         "pid",
-        "startedAt"
+        "startedAt",
+        "dir"
+      ],
+      "type": "object"
+    },
+    "SkillsReport": {
+      "additionalProperties": false,
+      "properties": {
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/skill.Skill"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "skills",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "StandingAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow_once",
+            "allow_always",
+            "reject_once",
+            "reject_always",
+            "cancelled",
+            "remember_project",
+            "remember_global",
+            "remember_user_local",
+            "remember_project_local"
+          ],
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "StatusList": {
+      "additionalProperties": false,
+      "properties": {
+        "records": {
+          "items": {
+            "$ref": "#/$defs/status.Record"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "type": "object"
+    },
+    "StatusReport": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "state"
       ],
       "type": "object"
     },
@@ -4477,6 +5596,9 @@
         },
         "readAt": {
           "format": "date-time",
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -4546,6 +5668,9 @@
         "item": {
           "type": "string"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -4586,6 +5711,9 @@
         "failed": {
           "type": "boolean"
         },
+        "instance": {
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
@@ -4593,6 +5721,9 @@
           "type": "integer"
         },
         "output": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -4629,7 +5760,13 @@
           "type": "string"
         },
         "args": {},
+        "instance": {
+          "type": "string"
+        },
         "item": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -4976,6 +6113,9 @@
         "item": {
           "type": "string"
         },
+        "ref": {
+          "type": "string"
+        },
         "seq": {
           "type": "integer"
         },
@@ -5097,6 +6237,9 @@
         },
         "origin": {
           "$ref": "#/$defs/Origin"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -5220,9 +6363,12 @@
       ],
       "type": "object"
     },
-    "UsageReport": {
+    "UsageAnswer": {
       "additionalProperties": false,
       "properties": {
+        "age_ms": {
+          "type": "integer"
+        },
         "fullest_window": {
           "type": "string"
         },
@@ -5244,6 +6390,10 @@
             "null"
           ]
         },
+        "read_at": {
+          "format": "date-time",
+          "type": "string"
+        },
         "spend_limit": {
           "type": "string"
         },
@@ -5259,7 +6409,74 @@
       "required": [
         "state",
         "providers",
-        "spend_limit"
+        "spend_limit",
+        "read_at",
+        "age_ms"
+      ],
+      "type": "object"
+    },
+    "UsageHistoryParams": {
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "range": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "range"
+      ],
+      "type": "object"
+    },
+    "UsageHistoryReport": {
+      "additionalProperties": false,
+      "properties": {
+        "buckets": {
+          "items": {
+            "$ref": "#/$defs/session.UsageBucket"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sifted_tokens": {
+          "type": "integer"
+        },
+        "skipped": {
+          "items": {
+            "$ref": "#/$defs/SessionSkip"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "span": {
+          "type": "string"
+        },
+        "spenders": {
+          "items": {
+            "$ref": "#/$defs/session.UsageRow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "total": {
+          "$ref": "#/$defs/session.UsageTotals"
+        }
+      },
+      "required": [
+        "span",
+        "buckets",
+        "total",
+        "spenders",
+        "sifted_tokens",
+        "skipped"
       ],
       "type": "object"
     },
@@ -5279,6 +6496,9 @@
           "type": "string"
         },
         "model": {
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "seq": {
@@ -5321,6 +6541,9 @@
         },
         "origin": {
           "$ref": "#/$defs/Origin"
+        },
+        "ref": {
+          "type": "string"
         },
         "seq": {
           "type": "integer"
@@ -5652,6 +6875,60 @@
             },
             "params": {
               "$ref": "#/$defs/SessionRenameParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.branch"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionBranchParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.access"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionAccessParams"
             }
           },
           "required": [
@@ -6404,6 +7681,87 @@
               "const": "2.0"
             },
             "method": {
+              "const": "memory.view"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryViewParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "memory.zoom"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryZoomParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "memory.recall"
+            },
+            "params": {
+              "$ref": "#/$defs/MemoryRecallParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "memory.add"
             },
             "params": {
@@ -6890,6 +8248,33 @@
               "const": "2.0"
             },
             "method": {
+              "const": "mention.resolve"
+            },
+            "params": {
+              "$ref": "#/$defs/MentionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "query.accounts"
             },
             "params": {
@@ -6917,10 +8302,172 @@
               "const": "2.0"
             },
             "method": {
+              "const": "query.session"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.usage.history"
+            },
+            "params": {
+              "$ref": "#/$defs/UsageHistoryParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.limits"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.skills"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.ledger.summary"
+            },
+            "params": {
+              "$ref": "#/$defs/LedgerSummaryParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "learn.apply"
             },
             "params": {
               "$ref": "#/$defs/LearnApplyParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "status.list"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
             }
           },
           "required": [
@@ -7135,6 +8682,30 @@
             },
             "result": {
               "$ref": "#/$defs/ApprovalAnswer"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "result": {
+              "$ref": "#/$defs/QuestionAnswer"
             }
           },
           "required": [
@@ -7770,6 +9341,65 @@
       ],
       "type": "object"
     },
+    "ledger.PointSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "agreed": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "labeled": {
+          "type": "integer"
+        },
+        "mean_ms": {
+          "type": "integer"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "point": {
+          "type": "string"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/ledger.Threshold"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "week": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 7,
+          "minItems": 7,
+          "type": "array"
+        },
+        "would_ask": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "point",
+        "mode",
+        "count",
+        "week",
+        "would_ask",
+        "labeled",
+        "agreed",
+        "mean_ms",
+        "cost_usd",
+        "thresholds"
+      ],
+      "type": "object"
+    },
     "ledger.Reason": {
       "additionalProperties": false,
       "properties": {
@@ -7957,11 +9587,30 @@
       ],
       "type": "object"
     },
+    "ledger.Threshold": {
+      "additionalProperties": false,
+      "properties": {
+        "comparison": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "comparison",
+        "value"
+      ],
+      "type": "object"
+    },
     "memory.Entry": {
       "additionalProperties": false,
       "properties": {
         "at": {
           "format": "date-time",
+          "type": "string"
+        },
+        "author": {
           "type": "string"
         },
         "by": {
@@ -7987,6 +9636,9 @@
         },
         "text": {
           "type": "string"
+        },
+        "yours": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -7996,7 +9648,102 @@
         "text",
         "at",
         "by",
+        "author",
+        "yours",
         "file"
+      ],
+      "type": "object"
+    },
+    "memory.Weight": {
+      "additionalProperties": false,
+      "properties": {
+        "precedence": {
+          "type": "integer"
+        },
+        "promotes_to": {
+          "type": "string"
+        },
+        "view_bytes": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "precedence",
+        "view_bytes"
+      ],
+      "type": "object"
+    },
+    "quota.Burn": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "integer"
+        },
+        "full_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "per_hour": {
+          "type": "number"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "resets_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "samples": {
+          "type": "integer"
+        },
+        "used_fraction": {
+          "type": "number"
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "account",
+        "window",
+        "used_fraction",
+        "resets_at",
+        "samples",
+        "per_hour",
+        "full_at"
+      ],
+      "type": "object"
+    },
+    "recall.Item": {
+      "additionalProperties": false,
+      "properties": {
+        "band": {
+          "type": "string"
+        },
+        "fate": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "step": {
+          "type": "integer"
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "band",
+        "kind",
+        "name",
+        "tokens",
+        "fate",
+        "step"
       ],
       "type": "object"
     },
@@ -8287,6 +10034,153 @@
       ],
       "type": "object"
     },
+    "session.UsageBucket": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "requests": {
+          "type": "integer"
+        },
+        "sifted_bytes": {
+          "type": "integer"
+        },
+        "start": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "tokens_in": {
+          "type": "integer"
+        },
+        "tokens_out": {
+          "type": "integer"
+        },
+        "turn_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "tokens_in",
+        "tokens_out",
+        "cache_read",
+        "cache_write",
+        "requests",
+        "turn_ms",
+        "cost_usd",
+        "sifted_bytes"
+      ],
+      "type": "object"
+    },
+    "session.UsageRow": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "requests": {
+          "type": "integer"
+        },
+        "role": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "sifted_bytes": {
+          "type": "integer"
+        },
+        "spend": {
+          "type": "string"
+        },
+        "tokens_in": {
+          "type": "integer"
+        },
+        "tokens_out": {
+          "type": "integer"
+        },
+        "turn_ms": {
+          "type": "integer"
+        },
+        "wire": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "tokens_in",
+        "tokens_out",
+        "cache_read",
+        "cache_write",
+        "requests",
+        "turn_ms",
+        "cost_usd",
+        "sifted_bytes"
+      ],
+      "type": "object"
+    },
+    "session.UsageTotals": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "requests": {
+          "type": "integer"
+        },
+        "sifted_bytes": {
+          "type": "integer"
+        },
+        "tokens_in": {
+          "type": "integer"
+        },
+        "tokens_out": {
+          "type": "integer"
+        },
+        "turn_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tokens_in",
+        "tokens_out",
+        "cache_read",
+        "cache_write",
+        "requests",
+        "turn_ms",
+        "cost_usd",
+        "sifted_bytes"
+      ],
+      "type": "object"
+    },
     "settings.RaisedVersion": {
       "additionalProperties": false,
       "properties": {
@@ -8304,6 +10198,90 @@
         "key",
         "from",
         "to"
+      ],
+      "type": "object"
+    },
+    "skill.Skill": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "origin",
+        "path",
+        "dir",
+        "hidden"
+      ],
+      "type": "object"
+    },
+    "state.Subject": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "status.Record": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "integer"
+        },
+        "state": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
       ],
       "type": "object"
     },
@@ -8543,6 +10521,86 @@
       "required": [
         "event",
         "ran"
+      ],
+      "type": "object"
+    },
+    "turn.PersonOption": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "description"
+      ],
+      "type": "object"
+    },
+    "turn.PersonQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/turn.PersonOption"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "question": {
+          "type": "string"
+        },
+        "recommended": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "header",
+        "question",
+        "type"
+      ],
+      "type": "object"
+    },
+    "turn.PersonReply": {
+      "additionalProperties": false,
+      "properties": {
+        "chosen": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "chosen"
       ],
       "type": "object"
     },
@@ -9292,10 +11350,70 @@
           "const": "2.0"
         },
         "method": {
+          "const": "question.resolved"
+        },
+        "params": {
+          "$ref": "#/$defs/QuestionResolved"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "memory.scoped"
+        },
+        "params": {
+          "$ref": "#/$defs/MemoryScopedEvent"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "item.persisted"
         },
         "params": {
           "$ref": "#/$defs/Persisted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "status"
+        },
+        "params": {
+          "$ref": "#/$defs/StatusReport"
         }
       },
       "required": [
@@ -9358,6 +11476,33 @@
         "id": {
           "type": [
             "string",
+            "integer"
+          ]
+        },
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "tofu/askPerson"
+        },
+        "params": {
+          "$ref": "#/$defs/QuestionRequest"
+        }
+      },
+      "required": [
+        "id",
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": [
+            "string",
             "integer",
             "null"
           ]
@@ -9381,6 +11526,12 @@
             },
             {
               "$ref": "#/$defs/Ack"
+            },
+            {
+              "$ref": "#/$defs/SessionBranchResult"
+            },
+            {
+              "$ref": "#/$defs/SessionAccess"
             },
             {
               "$ref": "#/$defs/TurnResult"
@@ -9446,6 +11597,9 @@
               "$ref": "#/$defs/DocsAnswer"
             },
             {
+              "$ref": "#/$defs/MemoryView"
+            },
+            {
               "$ref": "#/$defs/memory.Entry"
             },
             {
@@ -9470,7 +11624,7 @@
               "$ref": "#/$defs/LoginNote"
             },
             {
-              "$ref": "#/$defs/UsageReport"
+              "$ref": "#/$defs/UsageAnswer"
             },
             {
               "$ref": "#/$defs/DoctorReport"
@@ -9488,10 +11642,31 @@
               "$ref": "#/$defs/SessionTrace"
             },
             {
+              "$ref": "#/$defs/MentionResolved"
+            },
+            {
               "$ref": "#/$defs/Accounts"
             },
             {
+              "$ref": "#/$defs/SessionDetail"
+            },
+            {
+              "$ref": "#/$defs/UsageHistoryReport"
+            },
+            {
+              "$ref": "#/$defs/LimitsReport"
+            },
+            {
+              "$ref": "#/$defs/SkillsReport"
+            },
+            {
+              "$ref": "#/$defs/LedgerSummary"
+            },
+            {
               "$ref": "#/$defs/WriteReceipt"
+            },
+            {
+              "$ref": "#/$defs/StatusList"
             }
           ]
         }
@@ -9560,6 +11735,9 @@
     "item.persisted": {
       "$ref": "#/$defs/Persisted"
     },
+    "memory.scoped": {
+      "$ref": "#/$defs/MemoryScopedEvent"
+    },
     "message.completed": {
       "$ref": "#/$defs/Text"
     },
@@ -9580,6 +11758,9 @@
     },
     "plan.updated": {
       "$ref": "#/$defs/PlanUpdated"
+    },
+    "question.resolved": {
+      "$ref": "#/$defs/QuestionResolved"
     },
     "quota.updated": {
       "$ref": "#/$defs/QuotaUpdated"
@@ -9607,6 +11788,9 @@
     },
     "shell.started": {
       "$ref": "#/$defs/ShellStarted"
+    },
+    "status": {
+      "$ref": "#/$defs/StatusReport"
     },
     "thinking.delta": {
       "$ref": "#/$defs/Text"
@@ -9759,12 +11943,44 @@
         "$ref": "#/$defs/memory.Entry"
       }
     },
+    "memory.recall": {
+      "params": {
+        "$ref": "#/$defs/MemoryRecallParams"
+      },
+      "result": {
+        "$ref": "#/$defs/MemoryView"
+      }
+    },
     "memory.remove": {
       "params": {
         "$ref": "#/$defs/MemoryRemoveParams"
       },
       "result": {
         "$ref": "#/$defs/memory.Entry"
+      }
+    },
+    "memory.view": {
+      "params": {
+        "$ref": "#/$defs/MemoryViewParams"
+      },
+      "result": {
+        "$ref": "#/$defs/MemoryView"
+      }
+    },
+    "memory.zoom": {
+      "params": {
+        "$ref": "#/$defs/MemoryZoomParams"
+      },
+      "result": {
+        "$ref": "#/$defs/MemoryView"
+      }
+    },
+    "mention.resolve": {
+      "params": {
+        "$ref": "#/$defs/MentionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/MentionResolved"
       }
     },
     "models.reload": {
@@ -9847,12 +12063,28 @@
         "$ref": "#/$defs/LedgerReport"
       }
     },
+    "query.ledger.summary": {
+      "params": {
+        "$ref": "#/$defs/LedgerSummaryParams"
+      },
+      "result": {
+        "$ref": "#/$defs/LedgerSummary"
+      }
+    },
     "query.library": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
         "$ref": "#/$defs/LibraryReport"
+      }
+    },
+    "query.limits": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/LimitsReport"
       }
     },
     "query.memory": {
@@ -9879,12 +12111,28 @@
         "$ref": "#/$defs/RuleListReport"
       }
     },
+    "query.session": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionDetail"
+      }
+    },
     "query.settings": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
         "$ref": "#/$defs/SettingsReport"
+      }
+    },
+    "query.skills": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SkillsReport"
       }
     },
     "query.update": {
@@ -9900,7 +12148,15 @@
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/UsageReport"
+        "$ref": "#/$defs/UsageAnswer"
+      }
+    },
+    "query.usage.history": {
+      "params": {
+        "$ref": "#/$defs/UsageHistoryParams"
+      },
+      "result": {
+        "$ref": "#/$defs/UsageHistoryReport"
       }
     },
     "reload": {
@@ -9941,6 +12197,22 @@
       },
       "result": {
         "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "session.access": {
+      "params": {
+        "$ref": "#/$defs/SessionAccessParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionAccess"
+      }
+    },
+    "session.branch": {
+      "params": {
+        "$ref": "#/$defs/SessionBranchParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionBranchResult"
       }
     },
     "session.compact": {
@@ -10063,6 +12335,14 @@
         "$ref": "#/$defs/ShellRunResult"
       }
     },
+    "status.list": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/StatusList"
+      }
+    },
     "turn.send": {
       "params": {
         "$ref": "#/$defs/TurnSendParams"
@@ -10113,6 +12393,14 @@
     }
   },
   "x-serverRequests": {
+    "tofu/askPerson": {
+      "params": {
+        "$ref": "#/$defs/QuestionRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/QuestionAnswer"
+      }
+    },
     "tofu/requestApproval": {
       "params": {
         "$ref": "#/$defs/ApprovalRequest"

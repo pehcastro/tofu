@@ -4,7 +4,7 @@ use crate::desk::resets;
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{
-    AccountStatus, Accounts, QuotaWindow, UsageReport, UsageReportState, WindowStatus,
+    AccountStatus, Accounts, QuotaWindow, UsageAnswer, UsageAnswerState, WindowStatus,
 };
 use desk_core::query::{Answer, display_name};
 use desk_ui::component::icon;
@@ -66,7 +66,7 @@ struct Source {
 
 #[derive(Default, PartialEq)]
 struct Seen {
-    usage: Answer<UsageReport>,
+    usage: Answer<UsageAnswer>,
     accounts: Answer<Accounts>,
     quota: Vec<QuotaWindow>,
 }
@@ -221,10 +221,10 @@ impl Limits {
             .read
             .as_ref()
             .map(|read| match &read.value.state {
-                UsageReportState::Serving => "serving".to_owned(),
-                UsageReportState::NeedsAttention => "needs attention".to_owned(),
-                UsageReportState::None => "nothing signed in".to_owned(),
-                UsageReportState::Unknown(raw) => raw.clone(),
+                UsageAnswerState::Serving => "serving".to_owned(),
+                UsageAnswerState::NeedsAttention => "needs attention".to_owned(),
+                UsageAnswerState::None => "nothing signed in".to_owned(),
+                UsageAnswerState::Unknown(raw) => raw.clone(),
             });
         div()
             .flex()

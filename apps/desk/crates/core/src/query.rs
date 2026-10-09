@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
     AccountStatus, AccountStatusState, Accounts, ContextBand, ContextOccupancy, CredentialReport,
-    DecisionMade, LedgerRow, QuotaWindow, Reason, UsageReport, Verdict, WindowReport, WindowStatus,
+    DecisionMade, LedgerRow, QuotaWindow, Reason, UsageAnswer, Verdict, WindowReport, WindowStatus,
 };
 
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -111,7 +111,7 @@ impl ContextOccupancy {
     }
 }
 
-impl UsageReport {
+impl UsageAnswer {
     pub fn live(&self, quota: &[QuotaWindow]) -> Vec<CredentialReport> {
         let mut accounts: Vec<(&str, &str)> = Vec::new();
         for window in quota {
@@ -179,6 +179,8 @@ fn ledger_decision(row: &LedgerRow, session: &str, turn: &str, seq: i64) -> Deci
     DecisionMade {
         agent: None,
         answers: Vec::new(),
+        at: row.at.clone(),
+        call: None,
         enforced: reason
             .and_then(|reason| reason.mode.as_deref())
             .is_some_and(|mode| mode == "enforced"),
@@ -198,6 +200,7 @@ fn ledger_decision(row: &LedgerRow, session: &str, turn: &str, seq: i64) -> Deci
                 threshold: reason.threshold,
                 value: reason.value,
             }),
+        r#ref: None,
         seq,
         session: session.to_owned(),
         tool: row

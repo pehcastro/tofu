@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use crate::bridge::Event;
 use crate::protocol::{
     ContextReport, CronState, Notification, QuotaWindow, RuleListReport, ServerRequest,
-    SessionInfo, SessionTrace, UsageReport, session::AgentRun, subagent,
+    SessionInfo, SessionState, SessionTrace, UsageAnswer, session::AgentRun, subagent,
 };
 use crate::query::Answer;
 
@@ -43,7 +43,7 @@ pub struct Store {
     pub opened: SystemTime,
     pub sessions: BTreeMap<String, Session>,
     pub open: Option<String>,
-    pub usage: Answer<UsageReport>,
+    pub usage: Answer<UsageAnswer>,
     pub agents: Answer<subagent::Found>,
     pub rules: Answer<RuleListReport>,
     pub context: Answer<ContextReport>,
@@ -92,6 +92,13 @@ impl Store {
         self.session(session).cron = Some(state);
     }
 
+    pub fn shells_now(&mut self, state: &SessionState) -> Result<(), ModelError> {
+        match self.sessions.get_mut(&state.session) {
+            Some(session) => session.shells_now(&state.shells),
+            None => Ok(()),
+        }
+    }
+
     fn apply(&mut self, event: &Event) -> Result<(), ModelError> {
         match event {
             Event::Notification(Notification::SessionForked(fork)) => {
@@ -121,6 +128,10 @@ impl Store {
                 Ok(())
             }
             Event::Request {
+                request: ServerRequest::TofuAskPerson(_),
+                ..
+            } => Err(ModelError::UnknownEvent("tofu/askPerson".to_owned())),
+            Event::Request {
                 request: ServerRequest::Unknown { method, .. },
                 ..
             } => Err(ModelError::UnknownEvent(method.clone())),
@@ -149,6 +160,9 @@ fn session_of(notification: &Notification) -> Result<&str, ModelError> {
         N::Failure(e) | N::Note(e) => &e.session,
         N::FileEdit(e) => &e.session,
         N::ItemPersisted(e) => &e.session,
+        N::MemoryScoped(e) => &e.session,
+        N::QuestionResolved(e) => &e.session,
+        N::Status(e) => &e.session,
         N::MessageCompleted(e) | N::MessageDelta(e) | N::ThinkingDelta(e) => &e.session,
         N::TurnSteered(e) => &e.session,
         N::SessionListed(e) => &e.session,
