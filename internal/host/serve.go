@@ -488,20 +488,25 @@ func (s *server) answered(id, result json.RawMessage) {
 		return
 	}
 	asked, pending := s.pending[approval]
-	if !pending || (answer.Decision == RememberProject || answer.Decision == RememberGlobal) && asked.Tool != turn.RememberToolName {
+	if !pending {
 		return
 	}
-	switch answer.Decision {
-	case AllowOnce, RememberProject:
-		s.Host.AnswerAsk(approval, AllowedOnce)
-	case AllowAlways, RememberGlobal:
-		s.Host.AnswerAsk(approval, AlwaysHere)
-	case RejectOnce:
-		s.Host.AnswerAsk(approval, Denied)
-	case RejectAlways:
-		s.Host.AnswerAsk(approval, NeverHere)
-	case Cancelled:
+	scope, remembers := keptAs(answer.Decision)
+	switch {
+	case answer.Decision == Cancelled:
 		s.Host.Stop()
+	case asked.Tool == turn.RememberToolName:
+		if !remembers || !s.Host.AnswerMemory(approval, scope) {
+			return
+		}
+	case answer.Decision == AllowOnce:
+		s.Host.AnswerAsk(approval, AllowedOnce)
+	case answer.Decision == AllowAlways:
+		s.Host.AnswerAsk(approval, AlwaysHere)
+	case answer.Decision == RejectOnce:
+		s.Host.AnswerAsk(approval, Denied)
+	case answer.Decision == RejectAlways:
+		s.Host.AnswerAsk(approval, NeverHere)
 	default:
 		return
 	}

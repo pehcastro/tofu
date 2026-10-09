@@ -17,7 +17,6 @@ import (
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
-	"tofu/internal/memory"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -187,7 +186,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
 	heard := func(typed string) { emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1}) }
 	var reported []error
-	asking := turn.WithQuestionsBlock(turn.WithPersonForm(turn.WithShellRegistry(ctx, h.shells), askForm(emit, h.questions)), h.questionsBlock)
+	asking := turn.WithQuestionsBlock(turn.WithPersonForm(turn.WithShellRegistry(tools.WithMemoryPick(ctx, pickMemory(emit, h.memoryPicks)), h.shells), askForm(emit, h.questions)), h.questionsBlock)
 	leadErr := turn.Lead(asking, config, live.Steering, heard, func(row turn.Row, err error) {
 		watch.stop.reset()
 		steps.Store(0)
@@ -308,20 +307,15 @@ func gateOffEvent(gateErr error) Event {
 func awaitPerson(emit func(Event), book *asks) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		place := askedPlace(request)
-		var overriding struct {
-			Rule, Question, Statement string
-			Scope                     memory.Scope
-		}
-		if request.Tool == (tools.RuleOverride{}).Name() || request.Tool == turn.RememberToolName {
+		var overriding struct{ Rule, Question string }
+		if request.Tool == (tools.RuleOverride{}).Name() {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
-		standing := overriding.Question == "" && overriding.Statement == "" && request.Tool != hookTrustTool
+		standing := overriding.Question == "" && request.Tool != hookTrustTool
 		stood, stands := book.stood(place)
 		stands = stands && standing
 		id := cmp.Or(decision.ID, session.NewEventID())
 		switch {
-		case overriding.Statement != "":
-			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, Remembers: overriding.Statement, MemoryScope: overriding.Scope}})
 		case overriding.Question != "":
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})

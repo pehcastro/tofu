@@ -78,8 +78,8 @@ session alone:
 - `ask`: a gate jev would ask about sends `tofu/requestApproval` as a
   request, and the turn waits. Answer with `allow_once`, `allow_always`,
   `reject_once`, `reject_always`, or `cancelled`, which stops the turn. The
-  first answer wins. A `remember` ask also takes `remember_project` or
-  `remember_global`, where to keep the memory
+  first answer wins. A `remember` ask takes `remember_` plus where to keep
+  it (`global`, `user_local`, `project`, `project_local`), or a reject
 
 `session.set` also takes `wire`, `model` and `effort`, and holds them for
 every later turn and cron fire. A `wire` is the source that pays, as the

@@ -118,17 +118,35 @@ func (VerdictName) enum() []string { return []string{Allow.String(), Ask.String(
 type ApprovalDecision string
 
 const (
-	AllowOnce       ApprovalDecision = "allow_once"
-	AllowAlways     ApprovalDecision = "allow_always"
-	RejectOnce      ApprovalDecision = "reject_once"
-	RejectAlways    ApprovalDecision = "reject_always"
-	Cancelled       ApprovalDecision = "cancelled"
-	RememberProject ApprovalDecision = "remember_project"
-	RememberGlobal  ApprovalDecision = "remember_global"
+	AllowOnce            ApprovalDecision = "allow_once"
+	AllowAlways          ApprovalDecision = "allow_always"
+	RejectOnce           ApprovalDecision = "reject_once"
+	RejectAlways         ApprovalDecision = "reject_always"
+	Cancelled            ApprovalDecision = "cancelled"
+	RememberProject      ApprovalDecision = "remember_project"
+	RememberGlobal       ApprovalDecision = "remember_global"
+	RememberUserLocal    ApprovalDecision = "remember_user_local"
+	RememberProjectLocal ApprovalDecision = "remember_project_local"
 )
 
 func (ApprovalDecision) enum() []string {
-	return []string{string(AllowOnce), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal)}
+	return []string{string(AllowOnce), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal), string(RememberUserLocal), string(RememberProjectLocal)}
+}
+
+func keptAs(decision ApprovalDecision) (memory.Scope, bool) {
+	switch decision {
+	case RememberGlobal:
+		return memory.Global, true
+	case RememberProject:
+		return memory.Project, true
+	case RememberUserLocal:
+		return memory.UserLocal, true
+	case RememberProjectLocal:
+		return memory.ProjectLocal, true
+	case RejectOnce, RejectAlways:
+		return "", true
+	}
+	return "", false
 }
 
 type AskingMode string

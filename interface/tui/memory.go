@@ -31,19 +31,32 @@ type offerDialog struct {
 	palette.Confirm
 	rule      string
 	scope     memory.Scope
+	next      memory.Scope
+	scopes    []memory.Scope
 	leadAskID string
 }
 
-func memoryCard(rule string, scope memory.Scope, leadAskID string) *offerDialog {
-	where, other := "in every project", memory.Project
-	if scope == memory.Project {
-		where, other = "for this project", memory.Global
+func keptWhere(scope memory.Scope) string {
+	switch scope {
+	case memory.Global:
+		return "for you, in every project"
+	case memory.UserLocal:
+		return "for you, in this repository"
+	case memory.Project:
+		return "for this project, on this machine"
+	case memory.ProjectLocal:
+		return "for everyone in this repository, committed with it"
 	}
-	return &offerDialog{palette.NewConfirm("[&"+orchestrator+"] wants to add a "+string(scope)+" memory", "tab: a "+string(other)+" memory instead", rule, []palette.Item{
-		{Title: "Yes", Description: "keep it " + where, Key: "1", ID: offerYes},
+	panic("tui: unknown memory scope " + string(scope))
+}
+
+func memoryCard(rule string, scope memory.Scope, scopes []memory.Scope, leadAskID string) *offerDialog {
+	next := scopes[(slices.Index(scopes, scope)+1)%len(scopes)]
+	return &offerDialog{palette.NewConfirm("[&"+orchestrator+"] wants to add a "+string(scope)+" memory", "tab: a "+string(next)+" memory instead", rule, []palette.Item{
+		{Title: "Yes", Description: "keep it " + keptWhere(scope), Key: "1", ID: offerYes},
 		{Title: "No", Description: "keep nothing", Key: "2", ID: offerNo},
 		{Title: "Always", Description: "keep it, and keep every later one without asking: turns on auto memory", Key: "3", ID: offerAlways},
-	}), rule, scope, leadAskID}
+	}), rule, scope, next, scopes, leadAskID}
 }
 
 func (a *App) showLeadMemoryAsk() {
@@ -58,7 +71,7 @@ func (a *App) showLeadMemoryAsk() {
 		a.view.Focus()
 	}
 	if asks && !alreadyShown {
-		a.push(memoryCard(decision.Remembers, decision.MemoryScope, id))
+		a.push(memoryCard(decision.Remembers, decision.MemoryScope, decision.MemoryScopes, id))
 	}
 }
 
@@ -67,12 +80,7 @@ func (d *offerDialog) over(a *App, base string) string { return d.Over(base, a.w
 func (d *offerDialog) key(a *App, msg tea.KeyPressMsg) tea.Cmd {
 	keyed := map[string]string{"1": offerYes, "2": offerNo, "3": offerAlways}
 	if msg.String() == "tab" {
-		if d.scope == memory.Global {
-			d.scope = memory.Project
-		} else {
-			d.scope = memory.Global
-		}
-		d.Confirm = memoryCard(d.rule, d.scope, d.leadAskID).Confirm
+		*d = *memoryCard(d.rule, d.next, d.scopes, d.leadAskID)
 		return nil
 	}
 	if answer, pressed := keyed[msg.String()]; pressed {
@@ -89,12 +97,9 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 	if !choice.Done && !choice.Cancelled {
 		return nil
 	}
-	answer := Denied
+	var kept memory.Scope
 	if choice.ID == offerYes || choice.ID == offerAlways {
-		answer = AllowedOnce
-		if d.scope == memory.Global {
-			answer = AlwaysHere
-		}
+		kept = d.scope
 	}
 	if choice.ID == offerAlways && a.store != nil {
 		note := "auto memory is on, as you answered always. tofu settings set autoMemory false asks first again"
@@ -104,7 +109,7 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 		a.refreshSettingsRows()
 		a.view.Append(session.Entry{Kind: session.Note, Body: note})
 	}
-	if a.options.Host != nil && a.options.Host.Answer(d.leadAskID, answer) {
+	if a.options.Host != nil && a.options.Host.AnswerMemory(d.leadAskID, kept) {
 		a.view.Resume(d.leadAskID)
 	}
 	return a.pop()

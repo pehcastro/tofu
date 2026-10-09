@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/memory"
 	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
@@ -137,12 +138,33 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 		}()
 		return got, <-awaited
 	}
-	remembered := `{"statement":"prefers tabs","scope":"project","said":"I prefer tabs"}`
-	for decision, want := range map[string]turn.PersonAnswer{"remember_project": turn.PersonAllowedOnce, "remember_global": turn.PersonAlwaysHere} {
-		got, id := ask(turn.RememberToolName, remembered)
-		s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"`+decision+`"}`))
-		if answer := <-got; answer != want {
-			t.Errorf("%s on a remember ask answered %v, want %v", decision, answer, want)
+	picked := make(chan string, 1)
+	pick := pickMemory(func(event Event) {
+		s.publish(event)
+		if event.Kind == EventAwaitPerson {
+			picked <- event.ID
+		}
+	}, h.memoryPicks)
+	offer := tools.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: memory.UserLocal, Scopes: []memory.Scope{memory.Global, memory.UserLocal, memory.Project, memory.ProjectLocal}}
+	for _, answers := range [][2]string{{"remember_global", "user-global"}, {"remember_project", "project-global"}, {"remember_user_local", "user-local"}, {"remember_project_local", "project-local"}, {"allow_once", "ignored"}, {"reject_once", ""}} {
+		kept := make(chan memory.Scope, 1)
+		go func() {
+			scope, _ := pick(context.Background(), offer)
+			kept <- scope
+		}()
+		id := <-picked
+		s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"`+answers[0]+`"}`))
+		if answers[1] == "ignored" {
+			select {
+			case scope := <-kept:
+				t.Fatalf("allow_once on a remember ask kept it as %q, want it ignored", scope)
+			case <-time.After(100 * time.Millisecond):
+			}
+			s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"reject_once"}`))
+			answers[1] = ""
+		}
+		if scope := <-kept; scope != memory.Scope(answers[1]) {
+			t.Errorf("%s on a remember ask kept it as %q, want %q", answers[0], scope, answers[1])
 		}
 	}
 	got, id := ask("bash", `{"command":"git push --force"}`)

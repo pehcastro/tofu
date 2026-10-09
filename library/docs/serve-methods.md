@@ -103,10 +103,10 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
 
 ## Change it
 
-A `remember` ask, `tofu/requestApproval` with tool `remember`, takes
-`remember_project` or `remember_global` as its answer, where to keep the
-memory; on any other ask those two are ignored. `allow_once` keeps it in the
-project and `allow_always` globally, as before.
+A `remember` ask (`tofu/requestApproval`, tool `remember`, `scope` is Jev's
+pick) answers `remember_global` (user global), `remember_user_local`,
+`remember_project` (project global) or `remember_project_local`; `reject_*`
+keeps nothing, `allow_*` is ignored, and other asks ignore `remember_*`.
 
 ## Check it
 

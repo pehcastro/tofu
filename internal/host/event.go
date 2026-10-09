@@ -166,6 +166,7 @@ type Decision struct {
 	OverridesRule string
 	Remembers     string
 	MemoryScope   memory.Scope
+	MemoryScopes  []memory.Scope
 }
 
 type PlanState int

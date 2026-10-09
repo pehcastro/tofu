@@ -749,7 +749,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		asking = append(asking, askPersonTool(dir, run.leadAsks, config.Inbox, run.notify))
 	}
 	if run.sessions != nil && memoryOn(dir) {
-		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
+		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
 		if opts.agent == "" {
 			zoom := &tools.Zoom{Project: dir, Compactor: func() (memtree.Compact, func()) {

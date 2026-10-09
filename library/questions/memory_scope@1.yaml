@@ -27,9 +27,9 @@ questions:
           anywhere.
       - name: user_local
         criteria: >-
-          The person's own wish about how work goes in this repository: an
-          order, a habit or a way of working they want here, which a teammate
-          working in the same repository would not be bound by.
+          The person's own process in this repository: the order they want
+          steps taken in, a habit or a way of working they ask for here.
+          Nothing breaks or is rejected when a teammate works otherwise.
       - name: project_global
         criteria: >-
           A fact about this project as it runs on this one machine: its
@@ -37,9 +37,10 @@ questions:
           not something every teammate shares.
       - name: project_local
         criteria: >-
-          A requirement the project itself imposes on whoever works in it,
-          whatever their preference: its build, its toolchain, its checks, its
-          layout or its hooks, fit to travel with the repository's own files.
+          A requirement the project itself imposes on whoever works in it: its
+          build, its toolchain, its checks, its layout or its hooks, which
+          break or reject work done otherwise. Fit to travel with the
+          repository's own files.
       - name: none
         criteria: >-
           Not worth keeping: tied to the work in progress, unclear, or not a

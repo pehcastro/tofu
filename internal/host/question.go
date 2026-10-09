@@ -14,20 +14,23 @@ type answeredQuestion struct {
 	by string
 }
 
-type questions struct {
+type replies[T any] struct {
 	mu      sync.Mutex
-	waiting map[string]chan answeredQuestion
+	waiting map[string]chan T
 }
 
-func (q *questions) wait(id string) chan answeredQuestion {
-	reply := make(chan answeredQuestion, 1)
+func (q *replies[T]) wait(id string) chan T {
+	reply := make(chan T, 1)
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.waiting == nil {
+		q.waiting = map[string]chan T{}
+	}
 	q.waiting[id] = reply
 	return reply
 }
 
-func (q *questions) answer(id string, given answeredQuestion) bool {
+func (q *replies[T]) answer(id string, given T) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	reply, open := q.waiting[id]
@@ -38,7 +41,7 @@ func (q *questions) answer(id string, given answeredQuestion) bool {
 	return open
 }
 
-func (q *questions) forget(id string) {
+func (q *replies[T]) forget(id string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	delete(q.waiting, id)
@@ -54,7 +57,7 @@ func (h *Host) AnswerQuestion(id string, answer QuestionAnswer, by string) bool 
 	return h.questions.answer(id, answeredQuestion{answer, by})
 }
 
-func askForm(emit func(Event), book *questions) turn.PersonForm {
+func askForm(emit func(Event), book *replies[answeredQuestion]) turn.PersonForm {
 	return func(ctx context.Context, asked []turn.PersonQuestion, wait time.Duration) ([]turn.PersonReply, error) {
 		id := session.NewEventID()
 		reply := book.wait(id)

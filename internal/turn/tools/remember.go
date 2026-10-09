@@ -25,7 +25,10 @@ import (
 	"tofu/internal/turn"
 )
 
-const OutcomeKindMemoryScope = "memory-scope"
+const (
+	OutcomeKindMemoryScope = "memory-scope"
+	refusedLocal           = "refused project local: every teammate reads it, and it names something of the person's, or Jev could not say it does not. offer it as user-local or project-global instead"
+)
 
 type ScopeJudge struct {
 	Client *jev.Client
@@ -97,8 +100,22 @@ func (j *ScopeJudge) label(row, pick string) error {
 	return j.Ledger.Backfill(row, ledger.Outcome{Kind: OutcomeKindMemoryScope, Detail: pick})
 }
 
+type MemoryOffer struct {
+	Statement string
+	Said      string
+	Scope     memory.Scope
+	Scopes    []memory.Scope
+}
+
+type MemoryPick func(ctx context.Context, offer MemoryOffer) (memory.Scope, error)
+
+type memoryPickKey struct{}
+
+func WithMemoryPick(ctx context.Context, pick MemoryPick) context.Context {
+	return context.WithValue(ctx, memoryPickKey{}, pick)
+}
+
 type Remember struct {
-	Ask     turn.Person
 	Store   *session.Store
 	Session string
 	Project string
@@ -116,7 +133,7 @@ func (Remember) Definition() llm.Tool {
 			"said must be their own words, copied exactly from a message they typed in this conversation; anything else is refused. " +
 			"statement is the rule itself and nothing else: one line, at most " + strconv.Itoa(konst.MemoryRuleBytes) + " bytes, imperative or declarative, naming no one: no name, no the person, the user, he or she, such as: " +
 			"Desk UI primitives are widened to fit a new need; never build a parallel copy in a caller. a longer statement, a second line, or one that names the person is refused with the reason. " +
-			"the person answers yes, no, or always, and picks user-global or project-global on the card; nothing is kept before a yes. scope says where it belongs: user-global the person everywhere, project-global this project in the person's home, user-local the person in this repository, project-local the team in this repository. without scope a person entry goes to user-global, a project or reference entry to project-global",
+			"the person answers yes, no, or always, and picks one of the four scopes on the card; nothing is kept before a yes. scope says where it belongs: user-global the person everywhere, project-global this project in the person's home, user-local the person in this repository, project-local the team in this repository. without scope a person entry goes to user-global, a project or reference entry to project-global",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -170,39 +187,31 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("remember: the %s row did not write: %w", state.MemoryScopePoint, err)
 	}
+	pick, _ := ctx.Value(memoryPickKey{}).(MemoryPick)
 	switch {
 	case refused:
-		return turn.Result{Content: "refused project local: every teammate reads it, and it names something of the person's, or Jev could not say it does not. offer it as user-local or project-global instead"}, nil
-	case asks && r.Ask == nil:
+		return turn.Result{Content: refusedLocal}, nil
+	case asks && pick == nil:
 		return turn.Result{Content: "no person is here to answer, so nothing was kept"}, nil
 	case asks:
-		if entry.Scope = cmp.Or(judged.pick, entry.Scope); entry.Scope != memory.Global {
-			entry.Scope = memory.Project
+		scopes := []memory.Scope{memory.Global, memory.UserLocal, memory.Project, memory.ProjectLocal}
+		if judged.refusesLocal {
+			scopes = scopes[:3]
 		}
-		shown, err := json.Marshal(map[string]string{"statement": entry.Text, "scope": string(entry.Scope), "said": args.Said})
-		if err != nil {
-			return turn.Result{}, err
-		}
-		answer, err := r.Ask(ctx, turn.GateRequest{Tool: turn.RememberToolName, Args: shown}, turn.GateDecision{Verdict: ledger.VerdictAsk})
+		picked, err := pick(ctx, MemoryOffer{Statement: entry.Text, Said: args.Said, Scope: cmp.Or(judged.pick, entry.Scope), Scopes: scopes})
 		if err != nil {
 			return turn.Result{Content: "the person could not be asked, so nothing was kept: " + err.Error()}, nil
 		}
-		picked := state.MemoryScopeNone
-		switch answer {
-		case turn.PersonDenied:
-		case turn.PersonAllowedOnce:
-			entry.Scope, picked = memory.Project, string(memory.Project)
-		case turn.PersonAlwaysHere:
-			entry.Scope, picked = memory.Global, string(memory.Global)
-		default:
-			panic("tools: unknown person answer")
-		}
-		if err := r.Judge.label(row, picked); err != nil {
+		if err := r.Judge.label(row, cmp.Or(string(picked), state.MemoryScopeNone)); err != nil {
 			return turn.Result{}, fmt.Errorf("remember: the person's pick did not reach the ledger, so nothing was kept: %w", err)
 		}
-		if answer == turn.PersonDenied {
+		switch {
+		case picked == "":
 			return turn.Result{Content: "the person said no, and nothing was kept"}, nil
+		case !slices.Contains(scopes, picked):
+			return turn.Result{Content: refusedLocal}, nil
 		}
+		entry.Scope = picked
 	}
 	shelves, err := memory.Open(r.Project)
 	if err != nil {
