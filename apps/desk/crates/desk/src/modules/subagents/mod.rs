@@ -7,6 +7,8 @@ use desk_core::model::{Session, Store};
 use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile};
 use desk_ui::components::avatar::{Agent, AgentStatus};
 use desk_ui::components::glyph::Glyph;
+
+use super::chat::{Trace, mention};
 use gpui::{
     AnyView, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, Subscription,
     Window,
@@ -65,8 +67,8 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
             this.update(cx, |_, cx| cx.emit(ExpandAgent(*agent)))
                 .unwrap_or_else(|_| eprintln!("desk: sub-agents: the module is gone"));
         };
-        let tile = cx.new(|cx| AgentTile::new(board.clone(), mention, expand, cx));
-        let screen = cx.new(|_| AgentScreen::new(board.clone(), mention));
+        let tile = cx.new(|cx| AgentTile::new(board.clone(), mentioner(&store), expand, cx));
+        let screen = cx.new(|_| AgentScreen::new(board.clone(), mentioner(&store)));
         Subagents {
             _watch: cx.observe(&store, |module, _, cx| {
                 module.rebuild(cx);
@@ -93,11 +95,28 @@ fn empty() -> AgentBoard {
     }
 }
 
-fn mention(agent: &Agent, _: &mut Window, _: &mut App) {
-    eprintln!(
-        "desk: {} mentioned, and the composer takes no mention yet",
-        agent.name()
-    );
+fn mentioner(store: &Entity<Store>) -> impl Fn(&Agent, &mut Window, &mut App) + 'static {
+    let store = store.downgrade();
+    move |agent, window, cx| {
+        let found = store.upgrade().and_then(|store| {
+            let session = store.read(cx).open_session()?;
+            let member = session.agents.values().find(|member| {
+                board::shown(member).is_some_and(|shown| {
+                    shown.kind == agent.kind && shown.instance == agent.instance
+                })
+            })?;
+            Some(Trace {
+                token: member.mention.clone()?,
+                glyph: Glyph::Agents,
+                label: agent.name().to_string(),
+                detail: member.task.lines().next().unwrap_or_default().to_owned(),
+            })
+        });
+        match found {
+            Some(trace) => mention(trace, window, cx),
+            None => eprintln!("desk: {} has no ref on the wire to mention", agent.name()),
+        }
+    }
 }
 
 fn session(store: &Store) -> Option<&Session> {

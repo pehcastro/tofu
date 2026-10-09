@@ -1,5 +1,6 @@
 pub(crate) mod cassette;
 mod items;
+mod mention;
 
 use std::collections::BTreeMap;
 use std::io::ErrorKind;
@@ -38,6 +39,8 @@ use gpui::{
 
 use cassette::{Replay, Step};
 use items::{Entry, Item};
+use mention::{Files, Mention, Menu};
+pub use mention::{Trace, mention};
 
 const CLIENT: &str = "tofu-desk";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
@@ -121,6 +124,11 @@ pub struct Chat {
     ledger: Option<(String, Option<usize>)>,
     emails: Result<FilledEmails, String>,
     signing: Option<SigningIn>,
+    mentions: Vec<Mention>,
+    menu: Option<Menu>,
+    dismissed: Option<usize>,
+    files: Files,
+    _files: Option<Task<()>>,
     _signed: Option<Task<()>>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
@@ -161,7 +169,9 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
 }
 
 pub fn fed(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Chat> {
-    cx.new(|cx| Chat::new(Link::Fed, store, window, cx))
+    let chat = cx.new(|cx| Chat::new(Link::Fed, store, window, cx));
+    mention::aim(&chat, cx);
+    chat
 }
 
 fn emails_at() -> Result<PathBuf, String> {
@@ -206,7 +216,7 @@ pub fn live(
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<Chat> {
-    cx.new(|cx| {
+    let chat = cx.new(|cx| {
         let (sender, opened) = flume::bounded::<Opened>(1);
         thread::spawn(move || {
             let bridge = Bridge::open(serve_command(&tofu(), &project), CLIENT, PROTOCOL);
@@ -233,7 +243,9 @@ pub fn live(
             this.update(cx, |chat, cx| chat.stopped(cx)).ok();
         }));
         chat
-    })
+    });
+    mention::aim(&chat, cx);
+    chat
 }
 
 impl Approval {
@@ -274,7 +286,11 @@ impl Chat {
                 .max_lines(FIELD_LINES)
                 .on_submit(submit)
         });
-        cx.observe(&area, |_, _, cx| cx.notify()).detach();
+        cx.observe_in(&area, window, |chat, _, window, cx| {
+            chat.typed(window, cx);
+            cx.notify();
+        })
+        .detach();
         let find = FindBar::new(window, cx);
         let changed = cx.listener(|chat, (query, current): &(String, usize), _, cx| {
             chat.found(query, *current, cx);
@@ -331,6 +347,11 @@ impl Chat {
             ledger: None,
             emails: load_emails(),
             signing: None,
+            mentions: Vec::new(),
+            menu: None,
+            dismissed: None,
+            files: Files::default(),
+            _files: None,
             _signed: None,
             _drain: None,
             _flash: None,
@@ -1277,7 +1298,12 @@ impl Chat {
     }
 
     fn send(&mut self, text: &str, cx: &mut Context<Self>) {
-        let text = text.trim().to_owned();
+        if let Some(held) = self.held() {
+            return eprintln!("desk: send held: {held}");
+        }
+        let mut words = self.take_tokens();
+        words.push(text.trim().to_owned());
+        let text = words.join(" ").trim().to_owned();
         if text.is_empty() {
             return;
         }
@@ -1565,14 +1591,22 @@ impl Render for Chat {
         let mode = picker("chat-asking", String::from(self.asking.clone()), &theme)
             .on_click(cx.listener(|chat, _: &ClickEvent, _, cx| chat.flip(cx)));
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
+        let pick = cx.listener(|chat, at: &usize, window, cx| chat.pick(*at, window, cx));
+        let unmention = cx.listener(|chat, at: &usize, _, cx| chat.remove_mention(*at, cx));
         let composer = Composer::new("chat-composer", self.area.clone())
             .content_width(px(CONTENT_WIDTH))
             .busy(self.running(cx).is_some())
             .phase(if waiting { "waiting on you" } else { "working" })
             .model(self.models.clone())
             .effort(mode)
+            .traces(self.chips())
+            .held(self.held().is_some())
+            .menu(self.mention_menu(), move |at, window, cx| {
+                pick(&at, window, cx)
+            })
             .on_send(cx.listener(|chat, text: &str, _, cx| chat.send(text, cx)))
-            .on_stop(move |window, cx| stop(&(), window, cx));
+            .on_stop(move |window, cx| stop(&(), window, cx))
+            .on_remove_trace(move |at, window, cx| unmention(&at, window, cx));
         let answer = cx.listener(|chat, act: &Act, _, cx| chat.act(*act, cx));
         let ask = self.approval.as_ref().map(|shown| {
             ask_bar(
@@ -1595,6 +1629,9 @@ impl Render for Chat {
         };
         div()
             .track_focus(&self.focus)
+            .capture_key_down(cx.listener(|chat, event: &KeyDownEvent, window, cx| {
+                chat.mention_key(event, window, cx)
+            }))
             .on_key_down(cx.listener(|chat, event: &KeyDownEvent, _, cx| chat.key(event, cx)))
             .on_action(cx.listener(Self::open_find))
             .capture_any_mouse_down(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = true))

@@ -19,10 +19,11 @@ use crate::components::overlay::{Align, Placement, Popover, Side};
 use crate::components::paint::{drop, glyph, ink, pressed, ring, tint};
 use crate::components::size::{
     CAPTION_TEXT, CHIP, CHIP_PAD, COMPOSER_PAD_BOTTOM, COMPOSER_PAD_LEFT, COMPOSER_PAD_RIGHT,
-    COMPOSER_PAD_TOP, COMPOSER_RING, FONT_BADGE, FONT_CAP2, FONT_CHAT, FONT_SMALL, FONT_TAB, HOVER,
-    LINE_CHAT, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, RADIUS_BADGE, RADIUS_CHIP, RADIUS_COMPOSER,
-    RADIUS_ROW, ROW_PAD_X, ROW_PAD_Y, T1, T2, T3,
+    COMPOSER_PAD_TOP, COMPOSER_RING, FCHIP, FCHIP_PAD, FONT_BADGE, FONT_CAP2, FONT_CHAT,
+    FONT_SMALL, FONT_TAB, HOVER, LINE_CHAT, MENTION_TINT, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
+    RADIUS_BADGE, RADIUS_CHIP, RADIUS_COMPOSER, RADIUS_ROW, ROW_PAD_X, ROW_PAD_Y, T1, T2, T3,
 };
+use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON, ICON_SMALL};
@@ -106,9 +107,38 @@ const FOLDER: &str = r#"<path d="M2.5 4.5h4l1.5 1.5h5.5v6.5h-11z"/>"#;
 const CLOCK: &str = r#"<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/>"#;
 const WORKING: &str = "working";
 
+const CHIPS_SHOWN: usize = 3;
+const MENU_SHADE: f32 = 1.0;
+
 type OnText = Rc<dyn Fn(&str, &mut Window, &mut App)>;
 type OnAction = Rc<dyn Fn(&mut Window, &mut App)>;
 type OnIndex = Rc<dyn Fn(usize, &mut Window, &mut App)>;
+
+#[derive(Clone)]
+pub struct TraceChip {
+    pub glyph: Glyph,
+    pub label: SharedString,
+    pub broken: Option<SharedString>,
+}
+
+#[derive(Clone)]
+pub struct MentionRow {
+    pub glyph: Glyph,
+    pub label: SharedString,
+    pub detail: SharedString,
+}
+
+#[derive(Clone)]
+pub struct MentionGroup {
+    pub title: SharedString,
+    pub rows: Vec<MentionRow>,
+}
+
+#[derive(Clone)]
+pub struct MentionMenu {
+    pub groups: Vec<MentionGroup>,
+    pub at: usize,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ComposerVariant {
@@ -217,7 +247,9 @@ pub struct Composer {
     busy: bool,
     phase: Option<SharedString>,
     files: Vec<SharedString>,
-    traces: Vec<SharedString>,
+    traces: Vec<TraceChip>,
+    held: bool,
+    menu: Option<(MentionMenu, OnIndex)>,
     queued: Vec<SharedString>,
     model: Option<AnyElement>,
     effort: Option<AnyElement>,
@@ -240,6 +272,8 @@ impl Composer {
             phase: None,
             files: Vec::new(),
             traces: Vec::new(),
+            held: false,
+            menu: None,
             queued: Vec::new(),
             model: None,
             effort: None,
@@ -278,8 +312,23 @@ impl Composer {
         self
     }
 
-    pub fn traces(mut self, traces: Vec<SharedString>) -> Self {
+    pub fn traces(mut self, traces: Vec<TraceChip>) -> Self {
         self.traces = traces;
+        self
+    }
+
+    pub fn held(mut self, held: bool) -> Self {
+        self.held = held;
+        self
+    }
+
+    pub fn menu(
+        mut self,
+        menu: Option<MentionMenu>,
+        on_pick: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        let on_pick: OnIndex = Rc::new(on_pick);
+        self.menu = menu.map(|menu| (menu, on_pick));
         self
     }
 
@@ -336,7 +385,7 @@ impl Composer {
 }
 
 impl RenderOnce for Composer {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let typed = !self.area.read(cx).text().trim().is_empty();
         let chips = !self.files.is_empty() || !self.traces.is_empty();
@@ -349,7 +398,7 @@ impl RenderOnce for Composer {
         let attach = attach("composer-attach", size, self.on_attach, &theme);
         let action = send(
             &self.area,
-            typed,
+            (typed || !self.traces.is_empty()) && !self.held,
             self.busy,
             self.on_send,
             self.on_stop,
@@ -384,19 +433,21 @@ impl RenderOnce for Composer {
                     }),
             )
         });
-        let traces = self.traces.into_iter().enumerate().map(|(ix, name)| {
-            let on_remove = on_remove_trace.clone();
-            mention(
-                ("composer-trace-x", ix),
-                name,
-                &theme,
-                move |_, window, cx| {
-                    if let Some(on_remove) = &on_remove {
-                        on_remove(ix, window, cx);
-                    }
-                },
-            )
-        });
+        let shown = self.traces.len().min(CHIPS_SHOWN);
+        let mut traces: Vec<AnyElement> = self
+            .traces
+            .iter()
+            .take(shown)
+            .enumerate()
+            .map(|(ix, chip)| {
+                trace_chip("composer", ix, chip, &on_remove_trace, &theme, window, cx)
+            })
+            .collect();
+        if self.traces.len() > CHIPS_SHOWN {
+            traces.push(
+                more_chips(&self.traces, &on_remove_trace, &theme, window, cx).into_any_element(),
+            );
+        }
         let shell = div()
             .flex()
             .rounded(px(RADIUS_COMPOSER))
@@ -443,6 +494,25 @@ impl RenderOnce for Composer {
                 .child(pickers)
                 .child(action)
         };
+        let menu = self
+            .menu
+            .map(|(menu, on_pick)| mention_rows(&menu, &on_pick, &theme));
+        let shell = Popover::new("composer-mention-menu", shell)
+            .open(menu.is_some())
+            .placement(Placement {
+                side: Side::Top,
+                align: Align::Start,
+                offset: MENU_OFFSET,
+            })
+            .fit(MENU_MIN)
+            .children(menu.map(|menu| {
+                div()
+                    .flex()
+                    .flex_col()
+                    .mx(px(MENU_PAD - POPOVER_PAD_X))
+                    .my(px(MENU_PAD - POPOVER_PAD_Y))
+                    .child(menu)
+            }));
         let on_unqueue = self.on_unqueue;
         let waiting = self.queued.len();
         let queued =
@@ -519,6 +589,190 @@ impl RenderOnce for Composer {
             .children(status)
             .child(shell)
     }
+}
+
+fn trace_chip(
+    id: &'static str,
+    ix: usize,
+    chip: &TraceChip,
+    on_remove: &Option<OnIndex>,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    let remove = on_remove.clone();
+    let body = mention(
+        (id, ix),
+        chip.glyph,
+        chip.label.clone(),
+        chip.broken.is_some(),
+        theme,
+        move |_, window, cx| {
+            if let Some(remove) = &remove {
+                remove(ix, window, cx);
+            }
+        },
+    );
+    match &chip.broken {
+        None => body.into_any_element(),
+        Some(why) => tooltip(
+            ElementId::Name(format!("{id}-tip-{ix}").into()),
+            body.id(ElementId::Name(format!("{id}-chip-{ix}").into())),
+            Edge::Frame,
+            why.clone(),
+            theme,
+            window,
+            cx,
+        )
+        .into_any_element(),
+    }
+}
+
+fn more_chips(
+    traces: &[TraceChip],
+    on_remove: &Option<OnIndex>,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Popover {
+    let open = window.use_keyed_state("composer-more-open", cx, |_, _| false);
+    let shown = *open.read(cx);
+    let flip = open.clone();
+    let broken = traces
+        .iter()
+        .skip(CHIPS_SHOWN)
+        .any(|chip| chip.broken.is_some());
+    let mark = match broken {
+        true => theme.color(ColorToken::StatusDanger),
+        false => theme.color(ColorToken::MentionText),
+    };
+    let trigger = pressed(
+        div()
+            .id("composer-more")
+            .flex()
+            .flex_none()
+            .items_center()
+            .h(px(FCHIP))
+            .px(px(FCHIP_PAD))
+            .rounded(px(RADIUS_CHIP))
+            .cursor_pointer()
+            .bg(tint(mark, MENTION_TINT))
+            .font_family(mono(theme))
+            .text_size(px(FONT_SMALL))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(mark)
+            .on_click(move |_, _, cx| {
+                flip.update(cx, |open, cx| {
+                    *open = !*open;
+                    cx.notify();
+                })
+            })
+            .child(format!("+{}", traces.len() - CHIPS_SHOWN)),
+        mark,
+    );
+    let close = open.clone();
+    let all = traces
+        .iter()
+        .enumerate()
+        .map(|(ix, chip)| trace_chip("composer-all", ix, chip, on_remove, theme, window, cx));
+    Popover::new("composer-more-menu", trigger)
+        .open(shown)
+        .placement(Placement {
+            side: Side::Top,
+            align: Align::Start,
+            offset: MENU_OFFSET,
+        })
+        .fit(MENU_MIN)
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .items_start()
+                .gap(px(ROW_GAP))
+                .on_mouse_down_out(move |_, _, cx| {
+                    close.update(cx, |open, cx| {
+                        *open = false;
+                        cx.notify();
+                    })
+                })
+                .children(all),
+        )
+}
+
+fn mention_rows(menu: &MentionMenu, on_pick: &OnIndex, theme: &Theme) -> HoverList {
+    let fill = ink(theme, HOVER);
+    let corners = Corners::all(px(RADIUS_ROW));
+    let row = |ix: usize, entry: &MentionRow| {
+        let on_pick = on_pick.clone();
+        div()
+            .id(("composer-mention-row", ix))
+            .flex()
+            .items_center()
+            .gap(px(ROW_INNER_GAP))
+            .px(px(ROW_PAD_X))
+            .py(px(ROW_PAD_Y))
+            .rounded(px(RADIUS_ROW))
+            .cursor_pointer()
+            .text_color(ink(theme, T1))
+            .hover(move |style| style.bg(fill))
+            .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
+            .on_click(move |_, window, cx| on_pick(ix, window, cx))
+            .child(glyph(
+                entry.glyph,
+                ICON_SMALL,
+                theme.color(ColorToken::Trace),
+            ))
+            .child(
+                div()
+                    .flex_none()
+                    .font_family(mono(theme))
+                    .text_size(px(FONT_SMALL))
+                    .child(entry.label.clone()),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .pl(px(ROW_INNER_GAP))
+                    .text_size(px(FONT_SMALL))
+                    .text_color(ink(theme, T3))
+                    .child(entry.detail.clone()),
+            )
+    };
+    let mut entries = 0;
+    let mut marked = None;
+    let mut list = HoverList::within(
+        "composer-mentions",
+        div().flex().flex_col(),
+        fill,
+        corners,
+        theme,
+    )
+    .backdrop(tint(theme.color(ColorToken::ToastFill), MENU_SHADE));
+    let mut first = 0;
+    for group in &menu.groups {
+        if group.rows.is_empty() {
+            continue;
+        }
+        list = list.inert(caption(&group.title, theme));
+        entries += 1;
+        for (offset, entry) in group.rows.iter().enumerate() {
+            if first + offset == menu.at {
+                marked = Some(entries);
+            }
+            list = list.item(row(first + offset, entry));
+            entries += 1;
+        }
+        first += group.rows.len();
+    }
+    if entries == 0 {
+        list = list.inert(caption("Nothing matches", theme));
+    }
+    list.keyed(marked.map(|at| Marker {
+        at,
+        kind: GlideKind::Eased,
+        fill,
+        corners,
+    }))
 }
 
 fn send(

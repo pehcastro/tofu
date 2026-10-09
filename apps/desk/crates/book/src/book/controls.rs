@@ -319,7 +319,9 @@ impl ControlsState {
         let removable = if self.mention_shown {
             mention(
                 "mention",
+                Glyph::Agents,
                 "go-dev 2",
+                false,
                 theme,
                 cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.controls.mention_shown = false;

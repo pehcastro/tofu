@@ -1,9 +1,11 @@
+use super::chat::{Trace, mention};
 use super::replayed::{self, Replayed};
 
 use std::rc::Rc;
 
 use desk_core::model::{Session, Store};
 use desk_core::protocol::{FileEdit as Edit, FileEditOp, HunkLineKind};
+use desk_ui::components::chip;
 use desk_ui::components::diff::{FileChange, FileDiff};
 use desk_ui::components::file_edits::{EditedFile, FileEdit, file_edits, file_history};
 use desk_ui::components::glyph::Glyph;
@@ -20,6 +22,7 @@ const TILE_WIDTH: f32 = 513.0;
 pub struct FileEdits {
     store: Entity<Store>,
     files: Vec<EditedFile>,
+    traces: Vec<Vec<(SharedString, Trace)>>,
     opened: usize,
     drawer: bool,
     _watch: Subscription,
@@ -59,6 +62,7 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<FileEdits> {
         }),
         store,
         files: Vec::new(),
+        traces: Vec::new(),
         opened: 0,
         drawer: false,
     })
@@ -101,20 +105,25 @@ fn shown(session: &Session, edit: &Edit) -> Result<FileEdit, String> {
             |agent| format!("{} {}", agent.kind, agent.number).into(),
         )
     });
-    let at = session
-        .tools
-        .get(&edit.item)
-        .and_then(|tool| tool.started_at.as_deref()?.get(11..19))
-        .map_or_else(|| format!("seq {}", edit.seq), str::to_owned);
     Ok(FileEdit {
         agent,
-        at: at.into(),
+        at: shown_at(session, edit).into(),
         diff: Rc::new(diff),
     })
 }
 
-fn files(session: &Session) -> Vec<EditedFile> {
-    let mut files: Vec<(i64, EditedFile)> = session
+fn shown_at(session: &Session, edit: &Edit) -> String {
+    session
+        .tools
+        .get(&edit.item)
+        .and_then(|tool| tool.started_at.as_deref()?.get(11..19))
+        .map_or_else(|| format!("seq {}", edit.seq), str::to_owned)
+}
+
+type EditMentions = Vec<(SharedString, Trace)>;
+
+fn files(session: &Session) -> Vec<(EditedFile, EditMentions)> {
+    let mut files: Vec<(i64, EditedFile, EditMentions)> = session
         .files
         .iter()
         .map(|(path, edits)| {
@@ -133,16 +142,33 @@ fn files(session: &Session) -> Vec<EditedFile> {
                 }
             }
             let newest = edits.iter().map(|edit| edit.seq).max().unwrap_or_default();
+            let traces = edits
+                .iter()
+                .filter_map(|edit| {
+                    let token = edit.r#ref.clone()?;
+                    let at = shown_at(session, edit);
+                    let trace = Trace {
+                        token,
+                        glyph: Glyph::Pencil,
+                        label: path.clone(),
+                        detail: format!("edited at {at}"),
+                    };
+                    Some((format!("Mention the edit at {at}").into(), trace))
+                })
+                .collect();
             let file = EditedFile {
                 path: path.clone().into(),
                 edits: shown,
                 by,
             };
-            (newest, file)
+            (newest, file, traces)
         })
         .collect();
-    files.sort_by_key(|(newest, _)| std::cmp::Reverse(*newest));
-    files.into_iter().map(|(_, file)| file).collect()
+    files.sort_by_key(|(newest, ..)| std::cmp::Reverse(*newest));
+    files
+        .into_iter()
+        .map(|(_, file, traces)| (file, traces))
+        .collect()
 }
 
 impl FileEdits {
@@ -151,11 +177,13 @@ impl FileEdits {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        self.files = self
+        (self.files, self.traces) = self
             .store
             .read(cx)
             .open_session()
-            .map_or_else(Vec::new, files);
+            .map_or_else(Vec::new, files)
+            .into_iter()
+            .unzip();
     }
 
     pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
@@ -194,6 +222,17 @@ impl Render for FileEdits {
             .files
             .get(self.opened)
             .map(|file| file_history(("file-history", self.opened), file, &theme));
+        let mentions = self
+            .traces
+            .get(self.opened)
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .map(|(at, (words, trace))| {
+                let trace = trace.clone();
+                chip::trace(("file-edit-mention", at), words.clone(), &theme)
+                    .on_click(move |_, window, cx| mention(trace.clone(), window, cx))
+            });
         div()
             .relative()
             .size_full()
@@ -214,6 +253,7 @@ impl Render for FileEdits {
                             .id("file-history-scroll")
                             .size_full()
                             .overflow_y_scroll()
+                            .child(div().flex().flex_wrap().gap_2().p_3().children(mentions))
                             .children(history),
                     ),
             )

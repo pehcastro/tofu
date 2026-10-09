@@ -3,9 +3,11 @@ use std::time::Duration;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::inner_card;
 use desk_ui::components::composer::{
-    Composer, ComposerVariant, HomeComposer, HomeProject, HomeSession, SessionStatus,
+    Composer, ComposerVariant, HomeComposer, HomeProject, HomeSession, MentionGroup, MentionMenu,
+    MentionRow, SessionStatus, TraceChip,
 };
 use desk_ui::components::form::TextArea;
+use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{Dropdown, DropdownTrigger, actions};
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
@@ -29,6 +31,70 @@ const TURN: Duration = Duration::from_secs(3);
 const PHASE: &str = "running 2 sub-agents";
 const ATTACHED: [&str; 2] = ["internal/turn/loop.go", "loop_test.go"];
 const TRACED: [&str; 2] = ["turn 14", "go-dev / TOFU-612"];
+const MENTIONED: [(Glyph, &str); 5] = [
+    (Glyph::Terminal, "dev-server"),
+    (Glyph::Agents, "go-dev 2"),
+    (Glyph::Pencil, "notes/store.go"),
+    (Glyph::Code, "grep ORDER BY"),
+    (Glyph::Trace, "quote#zzzzzz"),
+];
+const BROKEN: &str = "not found: tofu has no recorded item with this id";
+const SAMPLES: [&str; 4] = [
+    "one chip",
+    "three chips",
+    "five chips, one broken",
+    "the @ menu",
+];
+const SAMPLE_WIDTH: f32 = 520.0;
+const MENU_ROOM: f32 = 220.0;
+
+fn chips(count: usize) -> Vec<TraceChip> {
+    let (broken, sound): (Vec<_>, Vec<_>) = MENTIONED
+        .iter()
+        .take(count)
+        .copied()
+        .partition(|(_, label)| label.contains('#'));
+    broken
+        .into_iter()
+        .chain(sound)
+        .map(|(glyph, label)| TraceChip {
+            glyph,
+            label: label.into(),
+            broken: label.contains('#').then(|| BROKEN.into()),
+        })
+        .collect()
+}
+
+fn rows(entries: &[(Glyph, &str, &str)]) -> Vec<MentionRow> {
+    entries
+        .iter()
+        .map(|(glyph, label, detail)| MentionRow {
+            glyph: *glyph,
+            label: (*label).into(),
+            detail: (*detail).into(),
+        })
+        .collect()
+}
+
+fn sample_menu(at: usize) -> Option<MentionMenu> {
+    let group = |title: &str, entries: &[(Glyph, &str, &str)]| MentionGroup {
+        title: title.to_owned().into(),
+        rows: rows(entries),
+    };
+    (at == 3).then(|| MentionMenu {
+        groups: vec![
+            group(
+                "Files",
+                &[
+                    (Glyph::File, "package.json", ""),
+                    (Glyph::File, "packages/api/package.json", ""),
+                ],
+            ),
+            group("Traces", &[(Glyph::Terminal, "dev-server", "bun run dev")]),
+        ],
+        at: 0,
+    })
+}
 
 fn shared(names: &[&str]) -> Vec<SharedString> {
     names.iter().map(|&name| SharedString::from(name)).collect()
@@ -198,6 +264,7 @@ pub(super) struct ComposerPage {
     attachments: Vec<SharedString>,
     traces: Vec<SharedString>,
     pickers: [Entity<Dropdown>; 2],
+    samples: Vec<Entity<TextArea>>,
 }
 
 impl ComposerPage {
@@ -218,6 +285,7 @@ impl ComposerPage {
                 picker.update(cx, |picker, _| picker.trigger(DropdownTrigger::Flat));
                 picker
             }),
+            samples: Vec::new(),
         }
     }
 
@@ -338,7 +406,16 @@ impl ComposerPage {
             .busy(self.turn.is_some())
             .phase(PHASE)
             .attachments(self.attachments.clone())
-            .traces(self.traces.clone())
+            .traces(
+                self.traces
+                    .iter()
+                    .map(|label| TraceChip {
+                        glyph: Glyph::Trace,
+                        label: label.clone(),
+                        broken: None,
+                    })
+                    .collect(),
+            )
             .queued(self.queued.clone())
             .model(model)
             .effort(effort)
@@ -383,6 +460,39 @@ impl ComposerPage {
                 .child(spread(theme).children(variants))
                 .child(div().flex().child(restore)),
         );
-        div().flex().flex_col().gap_6().child(home).child(tile)
+        if self.samples.is_empty() {
+            self.samples = SAMPLES
+                .iter()
+                .map(|_| cx.new(|cx| TextArea::new(ASK.into(), window, cx).bare()))
+                .collect();
+        }
+        let samples = self.samples.iter().enumerate().map(|(at, area)| {
+            let count = [1, 3, 5, 1].get(at).copied().unwrap_or(0);
+            let menu = sample_menu(at);
+            let room = if menu.is_some() { MENU_ROOM } else { 0.0 };
+            named(
+                SAMPLES.get(at).copied().unwrap_or_default(),
+                theme,
+                div().w(px(SAMPLE_WIDTH)).pt(px(room)).child(
+                    Composer::new(("composer-sample", at), area.clone())
+                        .variant(ComposerVariant::Grown)
+                        .traces(chips(count))
+                        .held(count == MENTIONED.len())
+                        .menu(menu, |_, _, _| {}),
+                ),
+            )
+        });
+        let states = block(
+            "DESK-250 mentions: 1, 3 and 5 chips with the +2 and a broken chip and the @ menu",
+            theme,
+            div().flex().flex_col().gap_4().children(samples),
+        );
+        div()
+            .flex()
+            .flex_col()
+            .gap_6()
+            .child(home)
+            .child(tile)
+            .child(states)
     }
 }

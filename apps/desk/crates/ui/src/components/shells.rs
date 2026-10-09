@@ -156,6 +156,7 @@ pub struct Shells {
     on: OnShell,
     kill: Option<OnKill>,
     asking: Option<usize>,
+    traced: Option<Vec<bool>>,
 }
 
 impl Shells {
@@ -174,6 +175,7 @@ impl Shells {
             on: Rc::new(on),
             kill: None,
             asking: None,
+            traced: None,
         }
     }
 
@@ -184,6 +186,11 @@ impl Shells {
 
     pub fn asking(mut self, asking: Option<usize>) -> Self {
         self.asking = asking;
+        self
+    }
+
+    pub fn traced(mut self, traced: Vec<bool>) -> Self {
+        self.traced = Some(traced);
         self
     }
 }
@@ -358,6 +365,10 @@ fn meta(text: impl Into<SharedString>, theme: &Theme) -> Div {
         .child(text.into())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the panel draws one shell from the tile's own state, and a struct built for its one caller would only forward these"
+)]
 fn panel(
     id: &SharedString,
     ix: usize,
@@ -366,6 +377,7 @@ fn panel(
     theme: &Theme,
     on: &OnShell,
     ending: Ending<'_>,
+    traced: bool,
 ) -> Div {
     let (offered, asked) = match ending {
         Ending::Hidden => (false, None),
@@ -416,15 +428,17 @@ fn panel(
                 emit(on, ShellEvent::AskKill(ix)),
             )
         }))
-        .child(
-            trace(
-                ElementId::Name(format!("{id}-trace").into()),
-                shell.name.clone(),
-                theme,
+        .when(traced, |header| {
+            header.child(
+                trace(
+                    ElementId::Name(format!("{id}-trace").into()),
+                    "Mention in chat".into(),
+                    theme,
+                )
+                .flex_none()
+                .on_click(emit(on, ShellEvent::Trace(ix))),
             )
-            .flex_none()
-            .on_click(emit(on, ShellEvent::Trace(ix))),
-        );
+        });
     let facts = div()
         .flex()
         .items_center()
@@ -513,6 +527,7 @@ impl RenderOnce for Shells {
             on,
             kill,
             asking,
+            traced,
         } = self;
         let theme = ActiveTheme::theme(cx);
         let width = Width::of(format!("{id}-width"), window, cx);
@@ -583,9 +598,12 @@ impl RenderOnce for Shells {
             (Some(_), false) => Ending::Offered,
             (Some(kill), true) => Ending::Asking(kill),
         };
-        let body = shells
-            .get(active)
-            .map(|shell| panel(&id, active, shell, fit, &theme, &on, ending));
+        let body = shells.get(active).map(|shell| {
+            let traced = traced
+                .as_ref()
+                .is_none_or(|traced| traced.get(active).copied().unwrap_or(false));
+            panel(&id, active, shell, fit, &theme, &on, ending, traced)
+        });
         div()
             .relative()
             .flex()

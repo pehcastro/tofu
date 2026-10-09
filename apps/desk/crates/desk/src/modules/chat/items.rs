@@ -6,10 +6,17 @@ use desk_ui::components::chat::{
     self, Agent, AgentMark, Block, Marks, Span, Verdict, agent_row, command, cron_row, fail, foot,
     lead, note, you,
 };
+use desk_ui::components::chip;
+use desk_ui::components::glyph::Glyph;
 use desk_ui::theme::Theme;
-use gpui::{AnyElement, IntoElement, SharedString};
+use gpui::{
+    AnyElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div,
+};
 use serde_json::Value;
 
+use super::mention::{Trace, mention, tool_glyph};
+
+const MENTION: &str = "Mention in chat";
 const ARGUMENT_KEYS: [&str; 4] = ["command", "path", "pattern", "url"];
 
 #[derive(Clone, PartialEq)]
@@ -51,11 +58,13 @@ pub enum Item {
         text: SharedString,
         failed: bool,
         tail: Option<SharedString>,
+        trace: Option<Trace>,
     },
     Agent {
         mark: AgentMark,
         name: SharedString,
         summary: SharedString,
+        trace: Option<Trace>,
     },
     Note(SharedString),
     Failure(SharedString),
@@ -114,13 +123,26 @@ pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
                     .output
                     .as_deref()
                     .map(|output| format!("{} lines", output.lines().count()).into()),
+                trace: tool.mention.clone().map(|token| Trace {
+                    token,
+                    glyph: tool_glyph(&tool.name),
+                    label: tool.name.clone(),
+                    detail: argument(&tool.args),
+                }),
             })
         }
         Entry::Agent(id) => {
             let agent = session.agents.get(id)?;
+            let name = format!("{} {}", agent.kind, agent.number);
             Some(Item::Agent {
                 mark: mark(&agent.state),
-                name: format!("{} {}", agent.kind, agent.number).into(),
+                trace: agent.mention.clone().map(|token| Trace {
+                    token,
+                    glyph: Glyph::Agents,
+                    label: name.clone(),
+                    detail: agent.task.clone(),
+                }),
+                name: name.into(),
                 summary: agent
                     .report
                     .clone()
@@ -172,7 +194,7 @@ fn clock(session: &Session, turn: &str) -> SharedString {
         .into()
 }
 
-fn argument(args: &Value) -> String {
+pub(super) fn argument(args: &Value) -> String {
     ARGUMENT_KEYS
         .iter()
         .find_map(|key| args.get(key)?.as_str())
@@ -256,32 +278,63 @@ pub fn render(item: &Item, at: usize, marks: &[Marks], theme: &Theme) -> AnyElem
             text,
             failed,
             tail,
-        } => command(
-            ("chat-tool", at),
-            *busy,
-            text.clone(),
-            failed.then(|| Verdict::Exit("failed".into())),
-            tail.clone(),
+            trace,
+        } => traced(
+            command(
+                ("chat-tool", at),
+                *busy,
+                text.clone(),
+                failed.then(|| Verdict::Exit("failed".into())),
+                tail.clone(),
+                theme,
+            ),
+            ("chat-tool-mention", at),
+            trace,
             theme,
-        )
-        .into_any_element(),
+        ),
         Item::Agent {
             mark,
             name,
             summary,
-        } => agent_row(
-            ("chat-agent", at),
-            &Agent {
-                mark: *mark,
-                name: name.clone(),
-                summary: summary.clone(),
-                link: None,
-            },
+            trace,
+        } => traced(
+            agent_row(
+                ("chat-agent", at),
+                &Agent {
+                    mark: *mark,
+                    name: name.clone(),
+                    summary: summary.clone(),
+                    link: None,
+                },
+                theme,
+            ),
+            ("chat-agent-mention", at),
+            trace,
             theme,
-        )
-        .into_any_element(),
+        ),
         Item::Note(text) => note(text.clone(), theme).into_any_element(),
         Item::Failure(text) => fail("failed", text.clone(), "", theme).into_any_element(),
         Item::Foot(text) => foot(text.clone(), theme).into_any_element(),
     }
+}
+
+fn traced(
+    row: impl IntoElement,
+    id: (&'static str, usize),
+    trace: &Option<Trace>,
+    theme: &Theme,
+) -> AnyElement {
+    let Some(trace) = trace.clone() else {
+        return row.into_any_element();
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(div().flex_1().min_w_0().child(row))
+        .child(
+            chip::trace(id, MENTION.into(), theme)
+                .on_click(move |_, window, cx| mention(trace.clone(), window, cx)),
+        )
+        .into_any_element()
 }

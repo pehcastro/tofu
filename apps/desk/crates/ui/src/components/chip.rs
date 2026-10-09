@@ -22,6 +22,8 @@ use crate::live::ActiveTheme;
 use crate::metrics::{ICON_SMALL, ICON_TINY};
 use crate::theme::{ColorToken, Theme, WordToken};
 
+const MENTION_WIDTH: f32 = 220.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
     Live,
@@ -283,31 +285,40 @@ pub fn agent_pill(kind: AgentKind, text: impl Into<SharedString>, theme: &Theme)
 
 pub fn mention(
     id: impl Into<ElementId>,
+    kind: Glyph,
     text: impl Into<SharedString>,
+    broken: bool,
     theme: &Theme,
     on_remove: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> Div {
+    let (mark, words) = match broken {
+        true => (
+            theme.color(ColorToken::StatusDanger),
+            theme.color(ColorToken::StatusDanger),
+        ),
+        false => (
+            theme.color(ColorToken::Trace),
+            theme.color(ColorToken::MentionText),
+        ),
+    };
     div()
         .flex()
         .flex_none()
         .items_center()
         .gap_1p5()
+        .max_w(px(MENTION_WIDTH))
         .h(px(FCHIP))
         .pl(px(FCHIP_PAD))
         .pr_1()
         .rounded(px(RADIUS_CHIP_SMALL))
-        .bg(tint(theme.color(ColorToken::Trace), MENTION_TINT))
+        .bg(tint(mark, MENTION_TINT))
         .font_family(mono(theme))
         .text_size(px(FONT_SMALL))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(theme.color(ColorToken::MentionText))
-        .child(glyph(
-            Glyph::Trace,
-            ICON_SMALL,
-            theme.color(ColorToken::Trace),
-        ))
-        .child(div().truncate().child(text.into()))
-        .child(remove_x(id, theme.color(ColorToken::MentionText), theme).on_click(on_remove))
+        .text_color(words)
+        .child(glyph(kind, ICON_SMALL, mark))
+        .child(div().min_w_0().truncate().child(text.into()))
+        .child(remove_x(id, words, theme).on_click(on_remove))
 }
 
 pub fn remove_x(id: impl Into<ElementId>, color: Rgba, theme: &Theme) -> Stateful<Div> {

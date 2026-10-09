@@ -7,6 +7,8 @@ use std::time::Instant;
 use desk_core::model::{Session, Store};
 use desk_core::protocol::ShellReady;
 use desk_ui::components::glyph::Glyph;
+
+use super::chat::{Trace, mention};
 use desk_ui::components::shells::{Runtime, Shell, ShellEvent, ShellState, Shells as ShellsTile};
 use gpui::{
     AnyView, App, AppContext, Context, Entity, IntoElement, Render, SharedString, Subscription,
@@ -23,6 +25,7 @@ pub struct Shells {
     store: Entity<Store>,
     kill: Kill,
     shells: Vec<Shell>,
+    traces: Vec<Option<Trace>>,
     active: usize,
     listing: bool,
     asking: Option<usize>,
@@ -64,6 +67,7 @@ pub fn mount(store: Entity<Store>, kill: Kill, cx: &mut App) -> Entity<Shells> {
         store,
         kill,
         shells: Vec::new(),
+        traces: Vec::new(),
         active: 0,
         listing: false,
         asking: None,
@@ -171,24 +175,39 @@ impl Shells {
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let session = self.store.read(cx).open_session();
-        let mut shells: Vec<(Option<&str>, Shell)> = session.map_or_else(Vec::new, |session| {
-            session
-                .shells
-                .iter()
-                .filter_map(|(name, stored)| {
-                    shown(session, name, stored).map(|shell| (stored.started_at.as_deref(), shell))
-                })
-                .collect()
-        });
-        shells.sort_by_key(|(started, _)| *started);
-        self.shells = shells.into_iter().map(|(_, shell)| shell).collect();
+        let mut shells: Vec<(Option<&str>, Shell, Option<Trace>)> =
+            session.map_or_else(Vec::new, |session| {
+                session
+                    .shells
+                    .iter()
+                    .filter_map(|(name, stored)| {
+                        let trace = stored.mention.clone().map(|token| Trace {
+                            token,
+                            glyph: Glyph::Terminal,
+                            label: name.clone(),
+                            detail: stored.command.clone(),
+                        });
+                        shown(session, name, stored)
+                            .map(|shell| (stored.started_at.as_deref(), shell, trace))
+                    })
+                    .collect()
+            });
+        shells.sort_by_key(|(started, ..)| *started);
+        (self.shells, self.traces) = shells
+            .into_iter()
+            .map(|(_, shell, trace)| (shell, trace))
+            .unzip();
         self.active = self.active.min(self.shells.len().saturating_sub(1));
         self.asking = self.asking.filter(|at| {
             self.shells
                 .get(*at)
                 .is_some_and(|shell| shell.state.endable())
         });
-        eprintln!("desk: tile shells rebuilt {}", self.listed());
+        eprintln!(
+            "desk: tile shells rebuilt {}, {} with a ref on the wire",
+            self.listed(),
+            self.traces.iter().flatten().count()
+        );
     }
 
     fn listed(&self) -> String {
@@ -215,7 +234,7 @@ impl Shells {
         self.listed()
     }
 
-    fn apply(&mut self, event: ShellEvent) {
+    fn apply(&mut self, event: ShellEvent, window: &mut Window, cx: &mut App) {
         match event {
             ShellEvent::Pick(at) => {
                 self.active = at;
@@ -226,7 +245,11 @@ impl Shells {
             ShellEvent::Dismiss => self.listing = false,
             ShellEvent::AskKill(at) => self.asking = Some(at),
             ShellEvent::Keep => self.asking = None,
-            ShellEvent::Close(at) | ShellEvent::Open(at) | ShellEvent::Trace(at) => {
+            ShellEvent::Trace(at) => match self.traces.get(at).cloned().flatten() {
+                Some(trace) => mention(trace, window, cx),
+                None => eprintln!("desk: shells: shell {at} has no ref on the wire to mention"),
+            },
+            ShellEvent::Close(at) | ShellEvent::Open(at) => {
                 eprintln!("desk: shells: {event:?} on shell {at} is not wired");
             }
         }
@@ -247,12 +270,13 @@ impl Render for Shells {
             self.shells.clone(),
             self.active,
             self.listing,
-            cx.listener(|module, event: &ShellEvent, _, cx| {
-                module.apply(*event);
+            cx.listener(|module, event: &ShellEvent, window, cx| {
+                module.apply(*event, window, cx);
                 cx.notify();
             }),
         )
         .asking(self.asking)
+        .traced(self.traces.iter().map(Option::is_some).collect())
         .on_kill(cx.listener(|module, picked: &usize, _, cx| {
             module.asking = None;
             match module.shells.get(*picked) {
