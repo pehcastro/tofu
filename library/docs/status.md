@@ -28,14 +28,23 @@ The records tofu sends:
   `idle` at the prompt and after you stop a turn. A turn that ends while
   the terminal is not focused leaves `done`, which becomes `idle` the next
   time you focus the terminal, press a key or click.
+  An `ask_person` question waiting on you is `blocked:kind=question`.
 - `agents/<name>`, one for each sub-agent: `working`, `blocked:kind=question`
   while it waits on an answer from the lead, `blocked:kind=permission` while
   one of its calls waits on you, `done` when it finished or sits in review,
   `idle` when parked, `error` when it failed. The message is what it is
-  doing now.
+  doing now. A sub-agent's own sub-agent sits under it:
+  `agents/go-dev-1/agents/research-1`.
 - `shells/<name>`, one for each kept shell: `working` while it runs, `done`
   when it exited 0, `error` with the exit code otherwise. The message is the
   command. A shell you killed has no record.
+- A program in a kept shell that reports OSC 7501 itself speaks for that
+  shell: `blocked:kind=auth` from a nested `claude` makes the shell blocked
+  on auth, and `progress=40` is the shell's progress. Its own child ids sit
+  under `shells/<name>/`. When it exits, its `working` and `blocked`
+  reports drop, and its `done` and `error` stay. Both endings are read,
+  `ESC \` and `BEL`; Git Bash on Windows drops a report ended by `ESC \`
+  before tofu sees it, so a script there ends with `\a`.
 - `cron/<id>` while a cron job's turn runs, with the lead's state, and
   until you have seen the turn it started.
 
@@ -45,6 +54,13 @@ Nowhere on disk. The app works the records out from what it already
 shows, after every change on the screen, and writes a report only when a
 record changed. A `done` or `error` record for a sub-agent or a shell
 clears once you open the sub-agents screen or the shells screen.
+
+`tofu serve --stdio` sends the same records as `status` notifications,
+each with `id`, `state` and the optional `kind`, `progress`, `app`,
+`title` and `msg`. There the lead has the id `tofu`, and every record
+tofu makes itself carries `app=tofu`. `status.list` answers every record as it stands, for a
+client that connects late. A `done` record on the wire lasts until the
+next turn starts.
 
 A name becomes a segment of the id: a byte outside letters, digits and
 `_.+-` becomes `_`, and a segment stops at 32 bytes. The real name is in

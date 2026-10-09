@@ -818,6 +818,7 @@ func notifications() []method {
 		{name: "session.settings", params: SessionSettings{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
 		{name: "item.persisted", params: Persisted{}},
+		{name: statusMethod, params: StatusReport{}},
 		{name: resyncMethod, params: Resync{}},
 	}
 }
@@ -878,6 +879,7 @@ func requests() []method {
 		{name: "session.trace", params: SessionParams{}, result: SessionTrace{}},
 		{name: queryPrefix + "accounts", params: NoParams{}, result: Accounts{}},
 		{name: "learn.apply", params: LearnApplyParams{}, result: WriteReceipt{}},
+		{name: statusMethod + ".list", params: NoParams{}, result: StatusList{}},
 	}
 	for _, write := range []string{"rules.add", "rules.off", "rules.remove", "rules.restore"} {
 		methods = append(methods, method{name: write, params: RuleWriteParams{}, result: WriteReceipt{}})
@@ -890,7 +892,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status"}
 }
 
 const queryPrefix = "query."

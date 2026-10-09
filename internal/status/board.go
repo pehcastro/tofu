@@ -37,6 +37,22 @@ func (b *Board) Apply(r Record) bool {
 	return !held || !same(was.record, r)
 }
 
+func (b *Board) Sync(wanted []Record) []Record {
+	var sent []Record
+	for _, held := range b.List() {
+		gone := Record{ID: held.ID, State: Clear}
+		if !slices.ContainsFunc(wanted, func(record Record) bool { return record.ID == held.ID }) && b.Apply(gone) {
+			sent = append(sent, gone)
+		}
+	}
+	for _, record := range wanted {
+		if b.Apply(record) {
+			sent = append(sent, record)
+		}
+	}
+	return sent
+}
+
 func (b *Board) List() []Record {
 	listed := make([]Record, 0, len(b.held))
 	for _, id := range slices.Sorted(maps.Keys(b.held)) {

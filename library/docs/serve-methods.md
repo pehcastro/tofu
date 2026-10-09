@@ -50,7 +50,8 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
 - `session.trace`: takes `session`; answers what `tofu session trace` prints:
   `requests`, `calls`, `hooks`, `failures`, `messages`, `agents` and `cache`
 - `turn.send`: takes `session`, `text`, `mentions`, `images`, `wire`, `model`
-  and `effort`; answers `turn`. `turn.steer` takes `session`,
+  and `effort`; answers `turn`. One path in `images` that is not a png, jpg,
+  gif or webp refuses the whole send. `turn.steer` takes `session`,
   `expectedTurnId` and `text`; answers `turn` and `id`, the queued message.
   `turn.sendNow` (capability `sendNow`) takes `id`, or none for every queued
   message; answers `ok`, and errs `-32000` when no turn runs or that id is not
@@ -97,6 +98,8 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `provider`. `settings.set` takes `key`, `value` and `scope`
 - `cron.command` takes the line you would type, such as `/loop 10m check the
   build`, or `/cron delete all`, and answers `note`. `label` takes `row` and `outcome`
+- `status.list` (capability `status`): takes nothing; answers `records`, every
+  `status` record as it stands, each `id`, `state`, `kind`, `progress`, `msg`
 
 ## Change it
 

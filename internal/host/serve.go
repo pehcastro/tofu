@@ -56,6 +56,7 @@ type server struct {
 	shells  map[string]*watchedShell
 	command context.CancelFunc
 	usage   usageHeld
+	status  statusFeed
 }
 
 func Serve(cfg ServeConfig) error {
@@ -206,6 +207,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		})
 	case "login.start":
 		return handle(raw, func(p LoginParams) (any, error) { return s.Verb([]string{"login", p.Role, p.Provider}) })
+	case statusMethod + ".list":
+		return handle(raw, s.statusList)
 	}
 	return s.data(method, raw)
 }
@@ -534,6 +537,8 @@ func (s *server) publish(event Event) {
 		go s.listed()
 	}
 	s.translated(event)
+	s.status.follow(event)
+	s.reportStatus()
 }
 
 func (s *server) cronState() CronState {
@@ -592,6 +597,9 @@ type watchedShell struct {
 	sent      int
 	cursor    shell.Cursor
 	stream    string
+	command   string
+	exitCode  *int
+	status    shellStatus
 }
 
 func (s *server) watched(name string) *watchedShell {
@@ -603,6 +611,10 @@ func (s *server) watched(name string) *watchedShell {
 
 func (s *server) follow(name string, watched *watchedShell, mask func(string) string) error {
 	text, err := s.Shells.Follow(name, &watched.cursor)
+	text, reports := watched.status.stream.Take(text)
+	for _, report := range reports {
+		watched.status.program.Apply(report)
+	}
 	watched.stream += mask(text)
 	return err
 }
@@ -636,7 +648,8 @@ func (s *server) scanShells(first bool) {
 	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
 		listed[one.Name] = true
 		watched := s.watched(one.Name)
-		watched.owner = one.Owner
+		watched.owner, watched.command, watched.exitCode = one.Owner, mask(one.Command), one.ExitCode
+		watched.status.ranHere = watched.status.ranHere || one.State == shell.Running
 		if watched.announced && watched.state != shell.Running || !watched.announced && first && one.State != shell.Running {
 			watched.announced, watched.state = true, one.State
 			continue
@@ -667,6 +680,7 @@ func (s *server) scanShells(first bool) {
 		s.box.push(kept("shell.exited", &ShellExited{Identity: s.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
 		watched.state = shell.Exited
 	}
+	s.reportStatus()
 }
 
 func (s *server) windDown() {

@@ -70,6 +70,7 @@ type watcher struct {
 	stop      *leadStop
 	ran       func(agent string) session.AgentRun
 	ends      map[string]session.AgentRun
+	parents   map[string]string
 }
 
 type tokenTally struct {
@@ -384,8 +385,18 @@ func (a *watcher) subAgents() []SubAgentRow {
 	if a.ends == nil {
 		a.ends = map[string]session.AgentRun{}
 	}
+	if a.parents == nil {
+		a.parents = map[string]string{}
+	}
 	for index := range rows {
 		row := &rows[index]
+		parent, known := a.parents[row.Name]
+		if !known {
+			if run := a.ran(row.Name); run.Agent != "" {
+				parent, a.parents[row.Name] = run.ParentAgent, run.ParentAgent
+			}
+		}
+		row.Parent = parent
 		if !ended(row.State) {
 			delete(a.ends, row.Name)
 			continue

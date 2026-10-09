@@ -61,6 +61,8 @@ answers. This page is what serve sends without being asked.
 - `shell.started`: only a kept shell, never a one-shot, with `kept`
   (`background` or `moved`), `dir`, `port`, `ready` and `leftOver`; every one
   ends in `shell.exited` with `endedAt`, and `exitCode` when tofu saw it
+- `status`: what the lead, each sub-agent, shell and cron job is doing, as
+  OSC 7501 records; `status.list` answers them all. `tofu docs status`
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never
   waits; `session.state` answers it
 - `tofu serve --schema` prints the JSON Schema of every line written, and of
@@ -85,9 +87,8 @@ picker spells it: `claude-sub`, `codex-sub`, `openrouter` or `meta`. One
 nobody here is signed in on is refused, and a new `wire` with no `model`
 takes that wire's default.
 
-`turn.send` takes the same three, and `images`, a list of `{"path": ...}`.
-Each is copied into the session and `[Image #N]` is added to the text. A png,
-jpg, gif or webp is taken; anything else refuses the whole send.
+`turn.send` takes the same three, and `images`, a list of `{"path": ...}`:
+a png, jpg, gif or webp, copied into the session as `[Image #N]`.
 
 A message sent with `turn.steer` while a turn runs waits until the lead's
 next step reads it. `turn.sendNow` sends it now: tofu drops the lead's model
@@ -116,5 +117,4 @@ the rest, and ends with `turn.completed` carrying `status: finished`.
 ## Undo it
 
 Close standard input: tofu stops the running turn, writes what it still
-holds, and exits. The session stays on disk like any other, and
-`tofu session list` shows it.
+holds, and exits. The session stays on disk; `tofu session list` shows it.

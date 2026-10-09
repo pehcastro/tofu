@@ -14,6 +14,8 @@ import (
 	"tofu/internal/konst"
 )
 
+const programStatus = "\x1b]7501;"
+
 type screenText struct {
 	out    io.Writer
 	held   []byte
@@ -94,13 +96,17 @@ func (s *screenText) escape(rest []byte, text *bytes.Buffer) int {
 		return end + 1
 	case ']':
 		bell, terminator := bytes.IndexByte(rest, '\a'), bytes.Index(rest, []byte("\x1b\\"))
+		end := 0
 		switch {
 		case bell >= 0 && (terminator < 0 || bell < terminator):
-			return bell + 1
+			end = bell + 1
 		case terminator >= 0:
-			return terminator + 2
+			end = terminator + 2
 		}
-		return 0
+		if bytes.HasPrefix(rest[:end], []byte(programStatus)) {
+			text.Write(rest[:end])
+		}
+		return end
 	}
 	return 2
 }

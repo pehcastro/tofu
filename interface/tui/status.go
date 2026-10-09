@@ -9,10 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/shells"
-	"tofu/interface/tui/subagent"
 	"tofu/internal/host"
 	"tofu/internal/status"
-	roster "tofu/internal/subagent"
 )
 
 const statusApp = "tofu"
@@ -78,18 +76,9 @@ func (a *App) leadSeen() {
 }
 
 func (a *App) reportStatus() tea.Cmd {
-	wanted := a.statusRecords()
 	var reports strings.Builder
-	for _, record := range wanted {
-		if a.statusWatch.shown.Apply(record) {
-			reports.WriteString(status.Encode(record))
-		}
-	}
-	for _, shown := range a.statusWatch.shown.List() {
-		gone := status.Record{ID: shown.ID, State: status.Clear}
-		if !slices.ContainsFunc(wanted, func(record status.Record) bool { return record.ID == shown.ID }) && a.statusWatch.shown.Apply(gone) {
-			reports.WriteString(status.Encode(gone))
-		}
+	for _, record := range a.statusWatch.shown.Sync(a.statusRecords()) {
+		reports.WriteString(status.Encode(record))
 	}
 	if reports.Len() == 0 {
 		return nil
@@ -113,18 +102,20 @@ func (a *App) statusRecords() []status.Record {
 		asked[ask.Agent] = ask
 	}
 	if ask, blocked := asked[""]; blocked {
-		lead.State, lead.Kind, lead.Msg = status.Blocked, status.Permission, ask.Tool+": "+ask.Text
+		lead.State = status.Blocked
+		lead.Kind, lead.Msg = host.AskStatus(ask)
 	}
 	records := []status.Record{lead}
 	if watch.cron != "" {
 		records = append(records, status.Record{ID: status.Path("cron", watch.cron), State: lead.State, Kind: lead.Kind, Title: watch.cron, Msg: lead.Msg})
 	}
 	for _, row := range a.subAgents {
-		record, ended := agentRecord(row)
+		record := host.AgentStatus(row, a.subAgents)
 		if ask, blocked := asked[row.Name]; blocked {
-			record.State, record.Kind, record.Msg = status.Blocked, status.Permission, ask.Tool+": "+ask.Text
+			record.State = status.Blocked
+			record.Kind, record.Msg = host.AskStatus(ask)
 		}
-		if a.unseen(record, ended, a.current == screenAgents) {
+		if a.unseen(record, row.Ended, a.current == screenAgents) {
 			records = append(records, record)
 		}
 	}
@@ -148,25 +139,6 @@ func (a *App) unseen(record status.Record, ended time.Time, viewed bool) bool {
 		a.statusWatch.seen[record.ID] = ended
 	}
 	return !a.statusWatch.seen[record.ID].Equal(ended)
-}
-
-func agentRecord(row subagent.Row) (status.Record, time.Time) {
-	record := status.Record{ID: status.Path("agents", row.Name), Title: row.Name, Msg: row.Doing}
-	switch row.State {
-	case roster.Working, roster.Reopened:
-		record.State = status.Working
-	case roster.WaitingAnswer:
-		record.State, record.Kind = status.Blocked, status.Question
-	case roster.InReview, roster.Finished:
-		record.State = status.Done
-	case roster.Parked:
-		record.State = status.Idle
-	case roster.Errored:
-		record.State = status.Errored
-	default:
-		panic("tui: unknown sub-agent state " + row.State.String())
-	}
-	return record, row.Ended
 }
 
 func shellRecord(entry shells.Entry) (status.Record, time.Time) {
