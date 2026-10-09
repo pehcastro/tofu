@@ -192,7 +192,6 @@ pub fn window(theme: &Theme, body: Div) -> Div {
         .relative()
         .flex()
         .flex_col()
-        .bg(theme.color(ColorToken::SurfaceWindow))
         .font_family(theme.word(WordToken::ShapeFont))
         .text_size(px(FONT_BASE))
         .line_height(px(LINE))

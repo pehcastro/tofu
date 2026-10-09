@@ -1,7 +1,7 @@
 use std::fs;
 
 use desk_core::control::TELL_BADGE;
-use desk_ui::components::card::{caption, inner_card, outer_card};
+use desk_ui::components::card::{caption, inner_card};
 use desk_ui::components::form::segmented;
 use desk_ui::components::list::{HoverList, row};
 use desk_ui::components::overlay::toast;
@@ -13,6 +13,7 @@ use gpui::{
 };
 
 use crate::pick;
+use crate::screens::frame;
 
 const LIST_WIDTH: f32 = 300.0;
 const MODES: [Mode; 2] = [Mode::Dark, Mode::Light];
@@ -144,12 +145,8 @@ impl Render for ThemeScreen {
                     }),
                 ))
         });
-        outer_card(&theme)
-            .size_full()
-            .relative()
-            .flex_col()
+        let body = div()
             .gap_3()
-            .p_4()
             .child(caption("Themes", &theme))
             .child(
                 inner_card(&theme)
@@ -163,7 +160,7 @@ impl Render for ThemeScreen {
                     ),
             )
             .child(caption("Mode", &theme))
-            .child(div().flex().child(modes))
-            .children(told)
+            .child(div().flex().child(modes));
+        frame::window(&theme, body).children(told)
     }
 }

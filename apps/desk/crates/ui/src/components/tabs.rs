@@ -7,9 +7,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use desk_motion::tokens::{EASE_OUT, PANEL_OUT_MS};
 use desk_motion::{Glide, GlideKind, reduced_motion};
 use gpui::{
-    AnyElement, App, Bounds, Corners, Div, ElementId, Entity, FocusHandle, Image, MouseButton,
-    Pixels, Point, Rgba, ScrollHandle, SharedString, Stateful, Window, canvas, div, img, point,
-    prelude::*, px, size,
+    Action, AnyElement, App, Bounds, Corners, DispatchPhase, Div, ElementId, Entity, FocusHandle,
+    Image, MouseButton, MouseMoveEvent, Pixels, Point, Rgba, ScrollHandle, SharedString, Stateful,
+    Window, canvas, div, img, point, prelude::*, px, size,
 };
 
 use crate::component::icon;
@@ -56,6 +56,13 @@ pub struct Tab {
 pub struct TabFlag {
     pub icon: Icon,
     pub tip: SharedString,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = tabs, no_json)]
+pub struct ScreenTabMenu {
+    pub at: usize,
+    pub position: Point<Pixels>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1361,14 +1368,24 @@ impl RenderOnce for TabStrip {
             }
             Shape::Header { screens } => {
                 let screen = active >= tabs.len();
+                let (asker, first) = (focus.clone(), tabs.len());
+                let screen_menu: Press = Rc::new(move |ix, position, window, cx| {
+                    let at = ix.saturating_sub(first);
+                    asker.dispatch_action(&ScreenTabMenu { at, position }, window, cx);
+                });
                 let header = |at: (usize, &Tab, bool), window: &mut Window, cx: &mut App| {
                     let (ix, tab, screen) = at;
+                    let opens = if screen {
+                        Some(&screen_menu)
+                    } else {
+                        menu.as_ref()
+                    };
                     let item = tab_frame(
                         &id,
                         (tab, image(ix)),
                         pick(ix, FONT_BODY, ink(&theme, SHELL_TEXT)),
                         &theme,
-                        (&on, &shut, press.as_ref(), menu.as_ref()),
+                        (&on, &shut, press.as_ref(), opens),
                     )
                     .h(px(if screen { NEW_TAB } else { TAB }))
                     .rounded(px(header_radius(screen)))
@@ -1421,9 +1438,26 @@ impl RenderOnce for TabStrip {
             }
         };
         let (painter, marker_id) = (state.clone(), id.clone());
+        let (mover, felt, flow) = (state.clone(), slots.clone(), tabs.len());
         let bars = canvas(
             move |bounds, _, cx| width.record(bounds.size.width, cx),
-            move |_, (), window, cx| {
+            move |bounds, (), window, cx| {
+                let mask = window.content_mask().bounds.intersect(&bounds);
+                window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+                    if phase != DispatchPhase::Bubble {
+                        return;
+                    }
+                    let inside = mask.contains(&event.position);
+                    mover.update(cx, |motion, cx| {
+                        if motion.point(inside.then_some(event.position), &felt) {
+                            cx.notify();
+                        }
+                    });
+                    let at = mover.read(cx).pointed(&felt, flow);
+                    if let (Some(pointed), Some(at), true) = (&pointed, at, inside) {
+                        pointed(at, window, cx);
+                    }
+                });
                 let (marker, moving) = painter.update(cx, |motion, _| {
                     motion.paint_marker(&marker_id, Instant::now())
                 });
@@ -1439,19 +1473,16 @@ impl RenderOnce for TabStrip {
         .top_0()
         .left_0()
         .size_full();
-        let (measured, mover, leaver) = (state.clone(), state.clone(), state);
-        let (seen, felt, left) = (slots.clone(), slots.clone(), slots);
-        let flow = tabs.len();
+        let measured = state;
+        let seen = slots;
         let shifted = scroll.clone();
         frame
             .relative()
             .w_full()
-            .on_children_prepainted(move |bounds, window, cx| {
+            .on_children_prepainted(move |_, window, cx| {
                 let shift = shifted.offset();
-                let items: Vec<Bounds<Pixels>> = bounds
-                    .get(1..)
-                    .unwrap_or_default()
-                    .iter()
+                let items: Vec<Bounds<Pixels>> = (1..shifted.children_count())
+                    .filter_map(|ix| shifted.bounds_for_item(ix))
                     .map(|item| Bounds::new(item.origin + shift, item.size))
                     .collect();
                 let mouse = window.mouse_position();
@@ -1474,26 +1505,6 @@ impl RenderOnce for TabStrip {
                     if to != active {
                         stepper(&TabEvent::Select(to), window, cx);
                     }
-                }
-            })
-            .on_mouse_move(move |event, window, cx| {
-                mover.update(cx, |motion, cx| {
-                    if motion.point(Some(event.position), &felt) {
-                        cx.notify();
-                    }
-                });
-                let at = mover.read(cx).pointed(&felt, flow);
-                if let (Some(pointed), Some(at)) = (&pointed, at) {
-                    pointed(at, window, cx);
-                }
-            })
-            .on_hover(move |inside, _, cx| {
-                if !*inside {
-                    leaver.update(cx, |motion, cx| {
-                        if motion.point(None, &left) {
-                            cx.notify();
-                        }
-                    });
                 }
             })
             .child(bars)

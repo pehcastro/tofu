@@ -8,15 +8,18 @@ mod catalog;
 use board::inner;
 
 use crate::modules::chat::Chat;
+use crate::screens::frame;
+use desk_core::control::TELL_BADGE;
 use desk_core::protocol::{AccountStatus, AccountStatusState, KeyStatus};
 use desk_core::query::display_name;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, outer_card};
 use desk_ui::components::form::TextArea;
-use desk_ui::components::overlay::popover;
+use desk_ui::components::overlay::{popover, toast};
 use desk_ui::components::paint::{ink, tint};
 use desk_ui::components::size::T3;
 use desk_ui::live::ActiveTheme;
+use desk_ui::metrics::TOAST_BOTTOM;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, Focusable, FontWeight,
@@ -620,14 +623,24 @@ impl Render for Accounts {
                     .child(self.accounts(&theme, cx))
                     .when(self.adding, |grid| grid.child(self.add(&theme, cx))),
             );
-        board::root(
-            &theme,
-            body,
-            self.told.clone(),
-            cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.told = None;
-                cx.notify();
-            }),
-        )
+        let told = self.told.clone().map(|message| {
+            div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .bottom(px(TOAST_BOTTOM))
+                .flex()
+                .justify_center()
+                .child(toast(
+                    message,
+                    TELL_BADGE,
+                    &theme,
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.told = None;
+                        cx.notify();
+                    }),
+                ))
+        });
+        frame::window(&theme, body).children(told)
     }
 }

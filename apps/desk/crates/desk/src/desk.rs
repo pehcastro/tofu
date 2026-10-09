@@ -41,7 +41,7 @@ use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
-use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
+use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side, context_menu};
 use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
@@ -55,7 +55,7 @@ use desk_ui::components::status_bar::{
 };
 use desk_ui::components::status_bar::{Accounts, Status};
 #[cfg(feature = "screen-work")]
-use desk_ui::components::tabs::{Tab, TabFlag, TabMark};
+use desk_ui::components::tabs::{ScreenTabMenu, Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
 use desk_ui::components::title_bar::{Github, TitleBar};
@@ -76,7 +76,7 @@ use gpui::{
     div, prelude::*, px, size,
 };
 #[cfg(feature = "screen-work")]
-use gpui::{ClipboardItem, Focusable};
+use gpui::{ClipboardItem, Focusable, Point};
 #[cfg(feature = "screen-work")]
 use std::path::PathBuf;
 #[cfg(feature = "screen-work")]
@@ -228,7 +228,19 @@ pub struct Desk {
     #[cfg(feature = "screen-work")]
     closed_screens: Vec<ClosedScreen>,
     #[cfg(feature = "screen-work")]
+    held: Vec<Held>,
+    #[cfg(feature = "screen-work")]
+    menu_screen: Option<&'static str>,
+    #[cfg(feature = "screen-work")]
+    menu_at: Option<Point<Pixels>>,
+    #[cfg(feature = "screen-work")]
     cron: Entity<MenuButton>,
+}
+
+#[cfg(feature = "screen-work")]
+struct Held {
+    name: &'static str,
+    locked: bool,
 }
 
 #[cfg(feature = "screen-work")]
@@ -397,7 +409,7 @@ fn standing(state: &AccountStatusState) -> Standing {
 }
 
 #[cfg(feature = "screen-work")]
-fn resets(stamp: &str, now: chrono::DateTime<chrono::Local>) -> Option<Reset> {
+pub(crate) fn resets(stamp: &str, now: chrono::DateTime<chrono::Local>) -> Option<Reset> {
     let at = chrono::DateTime::parse_from_rfc3339(stamp)
         .ok()?
         .with_timezone(&chrono::Local);
@@ -493,6 +505,12 @@ impl Desk {
             expanded_in: Vec::new(),
             #[cfg(feature = "screen-work")]
             closed_screens: Vec::new(),
+            #[cfg(feature = "screen-work")]
+            held: Vec::new(),
+            #[cfg(feature = "screen-work")]
+            menu_screen: None,
+            #[cfg(feature = "screen-work")]
+            menu_at: None,
             #[cfg(feature = "screen-work")]
             cron: cron_button(cx),
         };
@@ -643,7 +661,7 @@ impl Desk {
     }
 
     #[cfg(feature = "screen-work")]
-    fn strip(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn strip(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let work = self.work()?.clone();
         let screens: Vec<Tab> = self
             .tabbed
@@ -652,7 +670,11 @@ impl Desk {
                 label: screen_mark(name).map_or(*name, |mark| mark.label).into(),
                 icon: screen_mark(name).map(|mark| mark.glyph),
                 count: None,
-                mark: TabMark::Close,
+                mark: match self.held.iter().find(|held| held.name == *name) {
+                    Some(Held { locked: true, .. }) => TabMark::Locked,
+                    Some(Held { locked: false, .. }) => TabMark::Pinned,
+                    None => TabMark::Close,
+                },
                 flag: self
                     .expanded_in
                     .iter()
@@ -673,8 +695,8 @@ impl Desk {
             .filter(|name| screen_mark(name).is_some())
             .collect();
         let screen = self.tabbed.iter().position(|name| self.shown.name == *name);
-        let desk = cx.weak_entity();
-        Some(work.update(cx, |work, cx| {
+        let (desk, picker) = (cx.weak_entity(), cx.weak_entity());
+        let strip = work.update(cx, |work, cx| {
             work.tabs(
                 &screens,
                 &openable,
@@ -686,7 +708,86 @@ impl Desk {
                 },
                 cx,
             )
-        }))
+        });
+        let held = self
+            .menu_screen
+            .and_then(|name| self.held.iter().find(|held| held.name == name));
+        let (pinned, locked) = held.map_or((false, false), |held| (true, held.locked));
+        let items = [
+            Some(MenuItem::action(if pinned { "Unpin" } else { "Pin" }).icon(Glyph::Pin)),
+            Some(MenuItem::action(if locked { "Unlock" } else { "Lock" }).icon(Glyph::Lock)),
+            (!pinned).then(|| MenuItem::action("Close").icon(Icon::Close)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        Some(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(
+                    context_menu(items)
+                        .id("screen-tab-menu")
+                        .open_at(self.menu_at.take())
+                        .on_pick(move |pick, window, cx| {
+                            picker
+                                .update(cx, |desk, cx| desk.picked_screen(*pick, window, cx))
+                                .unwrap_or_else(|_| eprintln!("desk: the desk is gone"));
+                        })
+                        .child(strip),
+                )
+                .into_any_element(),
+        )
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn screen_menu(&mut self, asked: &ScreenTabMenu, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(name) = self.tabbed.get(asked.at).copied() else {
+            return eprintln!("desk: screen tab {} is not open", asked.at);
+        };
+        self.menu_screen = Some(name);
+        self.menu_at = Some(asked.position);
+        eprintln!("desk: screen {name} menu");
+        cx.notify();
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn picked_screen(&mut self, pick: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(name) = self.menu_screen else {
+            return eprintln!("desk: the screen menu has no tab");
+        };
+        let at = self.held.iter().position(|held| held.name == name);
+        let locked = at
+            .and_then(|at| self.held.get(at))
+            .is_some_and(|held| held.locked);
+        match (pick, at) {
+            (0, Some(at)) => {
+                self.held.remove(at);
+            }
+            (0, None) => self.held.push(Held {
+                name,
+                locked: false,
+            }),
+            (1, Some(at)) if locked => {
+                self.held.remove(at);
+            }
+            (1, Some(at)) => {
+                if let Some(held) = self.held.get_mut(at) {
+                    held.locked = true;
+                }
+            }
+            (1, None) => self.held.push(Held { name, locked: true }),
+            (2, None) => return self.close_screen(name, window, cx),
+            (pick, _) => return eprintln!("desk: screen menu has no item {pick}"),
+        }
+        let held = self.held.iter().find(|held| held.name == name);
+        eprintln!(
+            "desk: screen {name} pinned={} locked={}",
+            held.is_some(),
+            held.is_some_and(|held| held.locked)
+        );
+        cx.notify();
     }
 
     #[cfg(feature = "screen-work")]
@@ -780,7 +881,11 @@ impl Desk {
             reason = "only the work screen is fitted to the window"
         )
     )]
-    fn content(&self, theme: &Theme, cx: &mut Context<Self>) -> (Option<AnyElement>, AnyElement) {
+    fn content(
+        &mut self,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> (Option<AnyElement>, AnyElement) {
         #[cfg(feature = "screen-work")]
         let tabs = self.strip(theme, cx);
         #[cfg(not(feature = "screen-work"))]
@@ -1606,8 +1711,10 @@ impl Render for Desk {
         let menu = self.projects.menu.clone();
         #[cfg(not(feature = "screen-work"))]
         let menu: Option<Entity<Palette>> = None;
-        div()
-            .size_full()
+        let root = div();
+        #[cfg(feature = "screen-work")]
+        let root = root.on_action(cx.listener(Self::screen_menu));
+        root.size_full()
             .relative()
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(Self::global_key))
