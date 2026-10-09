@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -78,7 +79,26 @@ struct Mounted {
     subagents: Entity<Subagents>,
     file_edits: Entity<FileEdits>,
     shells: Entity<Shells>,
-    terminal: Entity<TerminalModule>,
+    terminal: TerminalSlot,
+    project: PathBuf,
+}
+
+#[derive(Clone, Default)]
+struct TerminalSlot(Rc<RefCell<Option<Entity<TerminalModule>>>>);
+
+impl TerminalSlot {
+    fn current(&self) -> AnyElement {
+        self.0
+            .borrow()
+            .clone()
+            .map_or_else(|| div().into_any_element(), IntoElement::into_any_element)
+    }
+}
+
+impl Render for TerminalSlot {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().child(self.current())
+    }
 }
 
 fn build(
@@ -99,10 +119,9 @@ fn build(
         workspaces.push(Workspace::new(WORK_NAME, Preset::Work));
     }
     let store = cx.new(|_| Store::default());
-    let terminal = terminal::mount(&project, cx);
     let chat = match replay {
         Some(_) => chat::fed(store.clone(), window, cx),
-        None => chat::live(project, store.clone(), window, cx),
+        None => chat::live(project.clone(), store.clone(), window, cx),
     };
     let killer = chat.downgrade();
     let kill: Kill = Rc::new(move |shell, cx| {
@@ -114,7 +133,8 @@ fn build(
         subagents: subagents::mount(store.clone(), cx),
         file_edits: file_edits::mount(store.clone(), cx),
         shells: shells::mount(store.clone(), kill, cx),
-        terminal,
+        terminal: TerminalSlot::default(),
+        project,
         store,
         chat,
     };
@@ -396,7 +416,7 @@ fn body(mounted: &Mounted, module: &Module, theme: &Theme) -> AnyElement {
         Module::SubAgents => mounted.subagents.clone().into_any_element(),
         Module::FileEdits => mounted.file_edits.clone().into_any_element(),
         Module::Shells => mounted.shells.clone().into_any_element(),
-        Module::Terminal => mounted.terminal.clone().into_any_element(),
+        Module::Terminal => mounted.terminal.current(),
         Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
             empty_state(
                 SharedString::from(format!("work-empty-{}", module.name())),
@@ -482,7 +502,7 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
             .into(),
         Module::FileEdits => tiled(mounted.file_edits.clone().into(), None, cx),
         Module::Shells => tiled(mounted.shells.clone().into(), None, cx),
-        Module::Terminal => tiled(mounted.terminal.clone().into(), None, cx),
+        Module::Terminal => tiled(cx.new(|_| mounted.terminal.clone()).into(), None, cx),
         Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
             return eprintln!(
                 "desk: work: {} is not mounted, so it does not expand",
@@ -586,6 +606,23 @@ fn settled(layouts: Layouts) -> Settled {
 impl Work {
     pub fn chat(&self) -> &Entity<Chat> {
         &self.mounted.chat
+    }
+
+    fn keep_terminal(&mut self, cx: &mut Context<Self>) {
+        let open = self.board.workspaces().iter().any(|workspace| {
+            workspace
+                .tiles(EVERYWHERE)
+                .iter()
+                .any(|(stack, _)| stack.modules.contains(&Module::Terminal))
+        });
+        let held = self.mounted.terminal.0.borrow().is_some();
+        if open && !held {
+            let mounted = terminal::mount(&self.mounted.project, cx);
+            self.mounted.terminal.0.replace(Some(mounted));
+        } else if !open && held {
+            eprintln!("desk: terminal: its tile closed, so its shell ends");
+            self.mounted.terminal.0.replace(None);
+        }
     }
 
     pub fn last_closed_at(&self) -> Option<Instant> {
@@ -1036,6 +1073,7 @@ impl Focusable for Work {
 impl Render for Work {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
+        self.keep_terminal(cx);
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));

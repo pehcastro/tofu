@@ -15,10 +15,12 @@ use alacritty_terminal::vte::ansi::Processor;
 use desk_core::limits::TERMINAL_SCROLLBACK_LINES;
 use futures::StreamExt;
 use gpui::{
-    App, Context, EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Pixels, Render,
-    ScrollWheelEvent, Task, Window, canvas, div, prelude::*, px,
+    App, Bounds, Context, ElementInputHandler, EntityInputHandler, EventEmitter, FocusHandle,
+    Focusable, IntoElement, KeyDownEvent, Pixels, Point, Render, ScrollWheelEvent, Task,
+    UTF16Selection, Window, canvas, div, prelude::*, px,
 };
 use std::cell::RefCell;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -213,14 +215,28 @@ impl Terminal {
         let app_cursor = self.term.mode().contains(TermMode::APP_CURSOR);
         match key_input(&event.keystroke, app_cursor) {
             Some(KeyInput::Scroll(scroll)) => self.term.scroll_display(scroll),
-            Some(KeyInput::Send(bytes)) => {
-                self.term.scroll_display(Scroll::Bottom);
-                self.send(bytes);
+            Some(KeyInput::Send(bytes)) => self.type_bytes(bytes),
+            Some(KeyInput::Paste) => {
+                let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+                    return;
+                };
+                let text = text.replace("\r\n", "\r").replace('\n', "\r");
+                let text = if self.term.mode().contains(TermMode::BRACKETED_PASTE) {
+                    format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', ""))
+                } else {
+                    text
+                };
+                self.type_bytes(text.into_bytes());
             }
             None => return,
         }
         cx.stop_propagation();
         cx.notify();
+    }
+
+    fn type_bytes(&mut self, bytes: Vec<u8>) {
+        self.term.scroll_display(Scroll::Bottom);
+        self.send(bytes);
     }
 
     fn scroll_wheel(&mut self, event: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -240,9 +256,80 @@ impl Focusable for Terminal {
     }
 }
 
+impl EntityInputHandler for Terminal {
+    fn text_for_range(
+        &mut self,
+        _: Range<usize>,
+        _: &mut Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn selected_text_range(
+        &mut self,
+        _: bool,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
+        None
+    }
+
+    fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
+        None
+    }
+
+    fn unmark_text(&mut self, _: &mut Window, _: &mut Context<Self>) {}
+
+    fn replace_text_in_range(
+        &mut self,
+        _: Option<Range<usize>>,
+        text: &str,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !text.is_empty() {
+            self.type_bytes(text.as_bytes().to_vec());
+            cx.notify();
+        }
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        _: Option<Range<usize>>,
+        _: &str,
+        _: Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) {
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        _: Range<usize>,
+        element_bounds: Bounds<Pixels>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<Bounds<Pixels>> {
+        Some(element_bounds)
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        _: Point<Pixels>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<usize> {
+        None
+    }
+}
+
 impl Render for Terminal {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let terminal = cx.entity();
+        let typed = terminal.clone();
+        let focus = self.focus.clone();
         let focused = self.focus.is_focused(window);
         let palette = self.palette;
         div()
@@ -262,7 +349,10 @@ impl Render for Terminal {
                             .update(cx, |terminal, _| terminal.frame(cols, rows, cell.height));
                         paint::prepare(&frame, bounds.origin, cell, focused, &palette, window)
                     },
-                    |_, painted, window, cx| painted.paint(window, cx),
+                    move |bounds, painted, window, cx| {
+                        window.handle_input(&focus, ElementInputHandler::new(bounds, typed), cx);
+                        painted.paint(window, cx);
+                    },
                 )
                 .size_full(),
             )

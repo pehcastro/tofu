@@ -6,6 +6,7 @@ const CONTROL_MASK: u8 = 0x1f;
 pub(crate) enum KeyInput {
     Send(Vec<u8>),
     Scroll(Scroll),
+    Paste,
 }
 
 pub(crate) fn key_input(keystroke: &Keystroke, app_cursor: bool) -> Option<KeyInput> {
@@ -22,6 +23,9 @@ pub(crate) fn key_input(keystroke: &Keystroke, app_cursor: bool) -> Option<KeyIn
         if let Some(scroll) = scroll {
             return Some(KeyInput::Scroll(scroll));
         }
+    }
+    if modifiers.control && !modifiers.alt && key == "v" {
+        return Some(KeyInput::Paste);
     }
     let arrow = |code: char| {
         let lead = if app_cursor { 'O' } else { '[' };
@@ -43,11 +47,12 @@ pub(crate) fn key_input(keystroke: &Keystroke, app_cursor: bool) -> Option<KeyIn
         "delete" => b"\x1b[3~".to_vec(),
         "pageup" => b"\x1b[5~".to_vec(),
         "pagedown" => b"\x1b[6~".to_vec(),
-        _ => match (modifiers.control, key.as_bytes()) {
-            (true, [letter]) if letter.is_ascii_alphabetic() => {
+        _ => match (modifiers.control, modifiers.alt, key.as_bytes()) {
+            (true, false, [letter]) if letter.is_ascii_alphabetic() => {
                 vec![letter.to_ascii_lowercase() & CONTROL_MASK]
             }
-            _ => keystroke.key_char.clone()?.into_bytes(),
+            (false, true, _) => keystroke.key_char.clone()?.into_bytes(),
+            _ => return None,
         },
     };
     let meta = modifiers.alt && !modifiers.control;
