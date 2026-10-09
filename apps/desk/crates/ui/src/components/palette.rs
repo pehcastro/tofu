@@ -18,8 +18,8 @@ use crate::components::overlay::menu_surface;
 use crate::components::paint::{glyph, ink};
 use crate::components::scroll::ScrollArea;
 use crate::components::size::{
-    FIELD, FONT_SMALL, GROUP_PAD_BOTTOM, GROUP_PAD_TOP, HOVER, LINE_CAP, MENU_PAD, RADIUS_POP,
-    RADIUS_ROW, ROW_GAP, ROW_PAD_X, ROW_PAD_Y, T2, T3,
+    CAPTION_TEXT, FIELD, FONT_SMALL, GROUP_PAD_BOTTOM, GROUP_PAD_TOP, HOVER, LINE_CAP, MENU_PAD,
+    RADIUS_POP, RADIUS_ROW, ROW_GAP, ROW_PAD_X, ROW_PAD_Y, T2, T3,
 };
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -71,6 +71,7 @@ type OnClose = Rc<dyn Fn(&mut Window, &mut App)>;
 
 pub struct Palette {
     items: Vec<PaletteEntry>,
+    marks: Vec<(SharedString, Glyph)>,
     field: Entity<TextArea>,
     query: String,
     highlighted: usize,
@@ -114,6 +115,7 @@ impl Palette {
             .detach();
             Palette {
                 items,
+                marks: Vec::new(),
                 field,
                 query: String::new(),
                 highlighted: 0,
@@ -131,6 +133,10 @@ impl Palette {
         self.items = items;
         self.highlighted = self.highlighted.min(self.matched().len().saturating_sub(1));
         cx.notify();
+    }
+
+    pub fn marks(&mut self, marks: Vec<(SharedString, Glyph)>) {
+        self.marks = marks;
     }
 
     pub fn on_pick(&mut self, on_pick: impl Fn(&SharedString, &mut Window, &mut App) + 'static) {
@@ -251,6 +257,11 @@ impl Palette {
     ) -> Stateful<Div> {
         let spans = self.row_spans.clone();
         let scroll = self.scroll.clone();
+        let mark = self
+            .marks
+            .iter()
+            .find(|(id, _)| *id == item.id)
+            .map(|(_, mark)| glyph(*mark, ICON_SMALL, ink(theme, CAPTION_TEXT)));
         bare_row(("palette-row", at), false, false, theme)
             .on_prepaint(move |prepaint, _, _| {
                 let mut spans = spans.borrow_mut();
@@ -270,6 +281,7 @@ impl Palette {
             .on_click(cx.listener(move |palette, _: &ClickEvent, window, cx| {
                 palette.pick(at, window, cx);
             }))
+            .children(mark)
             .map(|row| match detail {
                 None => row.child(
                     div()

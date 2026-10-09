@@ -7,6 +7,7 @@ use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::chip::{GitStatus, git_name, trace};
 use desk_ui::components::feed::{Feed, FeedEntry, FeedEvent};
+use desk_ui::components::find::{FindGroup, find_results};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::list::{
     HoverVariant, RowGlide, bare_row, group_header, row, separator, table,
@@ -703,26 +704,53 @@ impl ListsState {
     }
 
     fn table(&self, theme: &Theme) -> Div {
-        sections().child(
-            section(
-                "Table",
-                "5,000 rows, only the visible ones laid out. Hover glides, row 3 is selected.",
-                theme,
-            )
-            .child(div().h(px(LIST_HEIGHT)).flex().child(
-                shell(titled("Ledger: 5,000 rows"), theme).flex_1().child(
-                    inner_card(theme).p_1().child(table(
-                        "table",
-                        &data::COLUMNS,
-                        data::TABLE_ROWS,
-                        Some(SELECTED_ROW),
-                        &self.table,
-                        theme,
-                        data::table_cell,
-                    )),
+        let found = |label: &'static str, hits: &[&'static str]| FindGroup {
+            label: label.into(),
+            hits: hits.iter().map(|hit| SharedString::from(*hit)).collect(),
+        };
+        let groups = [
+            found(
+                "Chat",
+                &["list the planets in a table", "the planets route returns"],
+            ),
+            found("Sub-agents", &["add a planets endpoint to hono"]),
+            found("File edits", &["src/routes/planets.ts"]),
+        ];
+        sections()
+            .child(
+                section(
+                    "Find across tiles",
+                    "Ctrl F in a workspace. Hits grouped by tile with counts; row 2 is current.",
+                    theme,
+                )
+                .child(
+                    div().w(px(STATIC_ROW_WIDTH)).child(
+                        inner_card(theme)
+                            .p_1()
+                            .child(find_results(&groups, 2, theme, None)),
+                    ),
                 ),
-            )),
-        )
+            )
+            .child(
+                section(
+                    "Table",
+                    "5,000 rows, only the visible ones laid out. Hover glides, row 3 is selected.",
+                    theme,
+                )
+                .child(div().h(px(LIST_HEIGHT)).flex().child(
+                    shell(titled("Ledger: 5,000 rows"), theme).flex_1().child(
+                        inner_card(theme).p_1().child(table(
+                            "table",
+                            &data::COLUMNS,
+                            data::TABLE_ROWS,
+                            Some(SELECTED_ROW),
+                            &self.table,
+                            theme,
+                            data::table_cell,
+                        )),
+                    ),
+                )),
+            )
     }
 
     fn feed(&self, theme: &Theme) -> Div {

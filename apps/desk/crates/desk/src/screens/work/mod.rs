@@ -1,13 +1,15 @@
+use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Instant;
 
 use desk_core::model::Store;
 use desk_tiling::{
-    Action, Module, NUDGE, Preset, Side, Store as Layouts, Target, TileId, WORKSPACE_EDGE,
-    Workspace, Zone,
+    Action, Module, NUDGE, Preset, Rect, Refusal, Side, Store as Layouts, Target, TileId,
+    WORKSPACE_EDGE, Workspace, Zone,
 };
 use desk_ui::components::empty::{EmptyAction, empty_state};
+use desk_ui::components::find::{FindBar, FindGroup, find_ranges};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
 use desk_ui::components::tabs::{Tab, TabEvent, header_tabs, new_tab_glyph};
@@ -21,8 +23,9 @@ use gpui::{
     prelude::*, px,
 };
 
+use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark};
 use crate::modules::chat::cassette::{Replay, Step};
-use crate::modules::chat::{self, Chat};
+use crate::modules::chat::{self, Chat, Find};
 use crate::modules::file_edits::{self, FileEdits};
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
@@ -163,6 +166,20 @@ fn build(
                 below: 0.0,
             },
         );
+        let find = FindBar::new(window, cx);
+        let (searcher, jumper) = (cx.weak_entity(), cx.weak_entity());
+        find.update(cx, |bar, _| {
+            bar.on_change(move |query, _, _, cx| {
+                searcher
+                    .update(cx, |work, cx| work.search(query, cx))
+                    .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+            });
+            bar.on_pick(move |at, window, cx| {
+                jumper
+                    .update(cx, |work, cx| work.jump(at, window, cx))
+                    .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
+            });
+        });
         let plus = MenuButton::new("New".into(), Vec::new(), cx);
         plus.update(cx, |button, _| {
             button.trigger(|_, theme| new_tab_glyph("work-new", theme));
@@ -176,12 +193,16 @@ fn build(
             focus,
             mounted,
             replay,
+            find,
+            found: Vec::new(),
             _watched: watched,
         }
     }))
 }
 
 pub struct Work {
+    find: Entity<FindBar>,
+    found: Vec<Module>,
     board: TilingBoard<Work>,
     nudge: Option<f32>,
     plus: Entity<MenuButton>,
@@ -201,6 +222,15 @@ fn glyph(module: &Module) -> Option<Glyph> {
         Module::Shells | Module::Terminal => Some(Glyph::Terminal),
         Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => None,
     }
+}
+
+enum ScreenRow {
+    Open(&'static ScreenMark),
+    Insights(Vec<&'static ScreenMark>),
+}
+
+fn screen_row(mark: &ScreenMark) -> MenuItem {
+    MenuItem::action(mark.label).icon(mark.glyph)
 }
 
 fn module_row(module: &Module) -> MenuItem {
@@ -244,6 +274,79 @@ fn session(store: &Entity<Store>, cx: &App) -> Option<SharedString> {
         &session.name
     };
     Some(name.clone().into())
+}
+
+const EXCERPT_LEAD: usize = 24;
+const EVERYWHERE: Rect = Rect {
+    x: 0.0,
+    y: 0.0,
+    w: 0.0,
+    h: 0.0,
+};
+
+fn excerpt(text: &str, range: Range<usize>) -> SharedString {
+    let start = text
+        .get(..range.start)
+        .and_then(|head| head.rfind('\n'))
+        .map_or(0, |at| at + 1);
+    let end = text
+        .get(range.end..)
+        .and_then(|tail| tail.find('\n'))
+        .map_or(text.len(), |at| range.end + at);
+    let lead = text.get(start..range.start).unwrap_or_default();
+    let lead = match lead.char_indices().rev().nth(EXCERPT_LEAD) {
+        Some((at, _)) => format!("…{}", lead.get(at..).unwrap_or_default()),
+        None => lead.trim_start().to_owned(),
+    };
+    format!("{lead}{}", text.get(range.start..end).unwrap_or_default()).into()
+}
+
+fn find_groups(store: &Store, open: &[Module], query: &str) -> (Vec<FindGroup>, Vec<Module>) {
+    let sessions = &store.sessions;
+    let Some(session) = store
+        .open
+        .as_ref()
+        .and_then(|id| sessions.get(id))
+        .or_else(|| sessions.values().next())
+    else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut groups = Vec::new();
+    let mut found = Vec::new();
+    for module in OPENABLE.iter().filter(|module| open.contains(module)) {
+        let texts: Vec<&str> = match module {
+            Module::Chat => session.messages.iter().map(|m| m.text.as_str()).collect(),
+            Module::SubAgents => session.agents.values().map(|a| a.task.as_str()).collect(),
+            Module::FileEdits => session.files.keys().map(String::as_str).collect(),
+            Module::Shells => session
+                .shells
+                .values()
+                .map(|s| s.command.as_str())
+                .collect(),
+            Module::Editor
+            | Module::Terminal
+            | Module::Browser
+            | Module::SourceControl
+            | Module::Plugin(_) => Vec::new(),
+        };
+        let hits: Vec<SharedString> = texts
+            .iter()
+            .flat_map(|text| {
+                find_ranges(text, query)
+                    .into_iter()
+                    .map(|range| excerpt(text, range))
+            })
+            .collect();
+        if hits.is_empty() {
+            continue;
+        }
+        found.extend(hits.iter().map(|_| module.clone()));
+        groups.push(FindGroup {
+            label: module.name().to_owned().into(),
+            hits,
+        });
+    }
+    (groups, found)
 }
 
 fn body(mounted: &Mounted, module: &Module, theme: &Theme) -> AnyElement {
@@ -410,6 +513,58 @@ impl Work {
         reopened
     }
 
+    fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
+        eprintln!("desk: work: find across tiles open");
+        self.find.update(cx, |bar, cx| bar.open(window, cx));
+        cx.stop_propagation();
+    }
+
+    fn search(&mut self, query: &str, cx: &mut Context<Self>) {
+        let open: Vec<Module> = self
+            .board
+            .workspaces()
+            .get(self.board.active())
+            .map(|workspace| {
+                workspace
+                    .tiles(EVERYWHERE)
+                    .into_iter()
+                    .flat_map(|(stack, _)| stack.modules.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let (groups, found) = find_groups(self.mounted.store.read(cx), &open, query);
+        eprintln!(
+            "desk: work: find {query:?}: {}",
+            groups
+                .iter()
+                .map(|group| format!("{} {}", group.label, group.hits.len()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        self.found = found;
+        self.find.update(cx, |bar, cx| bar.set_groups(groups, cx));
+    }
+
+    fn jump(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(module) = self.found.get(at).cloned() else {
+            return;
+        };
+        self.board.apply(true, |workspace, area| {
+            let (tile, index) = workspace
+                .tiles(area)
+                .into_iter()
+                .find_map(|(stack, _)| {
+                    let index = stack.modules.iter().position(|open| *open == module)?;
+                    Some((stack.id, index))
+                })
+                .ok_or(Refusal::NoSuchTile)?;
+            workspace.activate(tile, index)
+        });
+        eprintln!("desk: work: find jumped to {}", module.name());
+        self.focus.focus(window, cx);
+        cx.notify();
+    }
+
     pub fn fit(&mut self, below: f32) {
         self.board.keep_below(below);
     }
@@ -550,10 +705,44 @@ impl Work {
             .chain(OPENABLE.iter().map(module_row))
             .chain([MenuItem::Caption("Screens, open as a tab".into())])
             .chain(
-                openable
-                    .iter()
-                    .map(|name| MenuItem::action(*name).icon(Glyph::Window)),
+                Self::screen_rows(openable)
+                    .into_iter()
+                    .map(|row| match row {
+                        ScreenRow::Open(mark) => screen_row(mark),
+                        ScreenRow::Insights(marks) => MenuItem::Submenu {
+                            label: "Insights".into(),
+                            icon: Some(Glyph::Sparkle.into()),
+                            items: marks.into_iter().map(screen_row).collect(),
+                        },
+                    }),
             )
+            .collect()
+    }
+
+    fn screen_rows(openable: &[&'static str]) -> Vec<ScreenRow> {
+        let present = |group: ScreenGroup| -> Vec<&'static ScreenMark> {
+            SCREEN_MARKS
+                .iter()
+                .filter(|mark| mark.group == group && openable.contains(&mark.name))
+                .collect()
+        };
+        let insights = present(ScreenGroup::Insights);
+        present(ScreenGroup::Top)
+            .into_iter()
+            .map(ScreenRow::Open)
+            .chain((!insights.is_empty()).then_some(ScreenRow::Insights(insights)))
+            .collect()
+    }
+
+    fn screen_picks(openable: &[&'static str]) -> Vec<Option<&'static str>> {
+        Self::screen_rows(openable)
+            .into_iter()
+            .flat_map(|row| match row {
+                ScreenRow::Open(mark) => vec![Some(mark.name)],
+                ScreenRow::Insights(marks) => std::iter::once(None)
+                    .chain(marks.iter().map(|mark| Some(mark.name)))
+                    .collect(),
+            })
             .collect()
     }
 
@@ -596,7 +785,8 @@ impl Work {
                 self.board.spawn(OPENABLE.get(at - tiles.start)?.clone());
             }
             at => {
-                let name = openable.get(at.checked_sub(tiles.end + 1)?)?;
+                let picks = Self::screen_picks(openable);
+                let name = (*picks.get(at.checked_sub(tiles.end + 1)?)?)?;
                 return Some(Strip::Open(name));
             }
         }
@@ -766,7 +956,9 @@ impl Render for Work {
             .relative()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key))
+            .capture_action(cx.listener(Self::open_find))
             .child(self.board.watch(band, cx).child(board))
+            .child(self.find.clone())
             .children(self.replay.as_ref().map(Replay::meter))
     }
 }

@@ -3,6 +3,8 @@ use crate::modules::chat::Find;
 use crate::modules::chat::{Chat, Listed, Touched};
 #[cfg(feature = "screen-work")]
 use crate::project::{self, Head, Picked};
+#[cfg(all(feature = "screen-work", feature = "screen-accounts"))]
+use crate::screens::accounts::Accounts as AccountsScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-classifier"))]
 use crate::screens::classifier::Classifier;
 #[cfg(all(feature = "screen-work", feature = "screen-context"))]
@@ -36,6 +38,7 @@ use desk_ui::components::agents::AgentScreen;
 use desk_ui::components::card::{inner_card, outer_card};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
+use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
@@ -98,16 +101,56 @@ const REOPEN_ID: &str = "tab.reopen";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
-const LIVE_SCREENS: [&str; 8] = [
-    "theme",
-    "limits",
-    "classifier",
-    "library",
-    "context",
-    "session",
-    "forks",
-    "usage",
+const EDITOR_SCREEN: &str = "editor";
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ScreenGroup {
+    Top,
+    Insights,
+}
+
+pub struct ScreenMark {
+    pub name: &'static str,
+    pub label: &'static str,
+    pub glyph: Glyph,
+    pub group: ScreenGroup,
+}
+
+const fn mark(
+    name: &'static str,
+    label: &'static str,
+    glyph: Glyph,
+    group: ScreenGroup,
+) -> ScreenMark {
+    ScreenMark {
+        name,
+        label,
+        glyph,
+        group,
+    }
+}
+
+pub const SCREEN_MARKS: [ScreenMark; 11] = [
+    mark("editor", "Editor", Glyph::Code, ScreenGroup::Top),
+    mark("library", "Library", Glyph::Book, ScreenGroup::Top),
+    mark("settings", "Settings", Glyph::Settings, ScreenGroup::Top),
+    mark("accounts", "Accounts", Glyph::Person, ScreenGroup::Top),
+    mark("theme", "Theme", Glyph::Palette, ScreenGroup::Top),
+    mark(
+        "classifier",
+        "Classifier",
+        Glyph::Brain,
+        ScreenGroup::Insights,
+    ),
+    mark("usage", "Usage", Glyph::BarChart, ScreenGroup::Insights),
+    mark("limits", "Limits", Glyph::Gauge, ScreenGroup::Insights),
+    mark("context", "Context", Glyph::Attach, ScreenGroup::Insights),
+    mark("session", "Session", Glyph::Chat, ScreenGroup::Insights),
+    mark("forks", "Forks", Glyph::Branch, ScreenGroup::Insights),
 ];
+
+pub fn screen_mark(name: &str) -> Option<&'static ScreenMark> {
+    SCREEN_MARKS.iter().find(|mark| mark.name == name)
+}
 #[cfg(feature = "screen-work")]
 const CRON_PROMPT_CHARS: usize = 32;
 #[cfg(feature = "screen-work")]
@@ -377,7 +420,9 @@ fn resets(stamp: &str, now: chrono::DateTime<chrono::Local>) -> Option<Reset> {
 fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
     let screens = screens.iter().map(|screen| PaletteItem {
         id: format!("{SCREEN_ID}{}", screen.name).into(),
-        label: screen.name.into(),
+        label: screen_mark(screen.name)
+            .map_or(screen.name, |mark| mark.label)
+            .into(),
         group: "Screens".into(),
         keys: None,
     });
@@ -418,7 +463,14 @@ impl Desk {
     ) -> Self {
         let palette = Palette::new(commands(&screens), window, cx);
         let picked = cx.listener(|desk, id: &SharedString, window, cx| desk.picked(id, window, cx));
-        palette.update(cx, |palette, _| palette.on_pick(picked));
+        let marks = SCREEN_MARKS
+            .iter()
+            .map(|mark| (format!("{SCREEN_ID}{}", mark.name).into(), mark.glyph))
+            .collect();
+        palette.update(cx, |palette, _| {
+            palette.on_pick(picked);
+            palette.marks(marks);
+        });
         #[cfg_attr(
             not(feature = "screen-work"),
             expect(unused_mut, reason = "only the work screen adopts a project")
@@ -446,6 +498,8 @@ impl Desk {
         };
         #[cfg(feature = "screen-work")]
         desk.adopt_launched(window, cx);
+        #[cfg(feature = "screen-work")]
+        desk.park_editor(window, cx);
         desk.focus_shown(window, cx);
         cx.spawn(async move |this, cx| {
             let answer = cx.background_executor().spawn(async { ask_github() }).await;
@@ -506,7 +560,8 @@ impl Desk {
                 feature = "screen-context",
                 feature = "screen-session",
                 feature = "screen-forks",
-                feature = "screen-usage"
+                feature = "screen-usage",
+                feature = "screen-accounts"
             )
         ))]
         self.feed_screens(cx);
@@ -594,8 +649,8 @@ impl Desk {
             .tabbed
             .iter()
             .map(|name| Tab {
-                label: (*name).into(),
-                icon: None,
+                label: screen_mark(name).map_or(*name, |mark| mark.label).into(),
+                icon: screen_mark(name).map(|mark| mark.glyph),
                 count: None,
                 mark: TabMark::Close,
                 flag: self
@@ -615,7 +670,7 @@ impl Desk {
             .screens
             .iter()
             .map(|screen| screen.name)
-            .filter(|name| LIVE_SCREENS.contains(name))
+            .filter(|name| screen_mark(name).is_some())
             .collect();
         let screen = self.tabbed.iter().position(|name| self.shown.name == *name);
         let desk = cx.weak_entity();
@@ -931,6 +986,27 @@ impl Desk {
         chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
     }
 
+    fn park_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.shown.name != WORK_SCREEN {
+            return;
+        }
+        let Some(screen) = self
+            .screens
+            .iter()
+            .find(|screen| screen.name == EDITOR_SCREEN)
+        else {
+            return eprintln!("desk: screen {EDITOR_SCREEN} is not in this build");
+        };
+        match (screen.open)(None, window, cx) {
+            Ok(view) => {
+                self.parked.push(Shown::new(EDITOR_SCREEN.into(), view));
+                self.tabbed.push(EDITOR_SCREEN);
+                eprintln!("desk: screen {EDITOR_SCREEN} parked");
+            }
+            Err(error) => eprintln!("desk: screen {EDITOR_SCREEN} did not open: {error}"),
+        }
+    }
+
     fn adopt_launched(&mut self, window: &Window, cx: &mut Context<Self>) {
         let Some(work) = self
             .work()
@@ -999,7 +1075,8 @@ impl Desk {
             feature = "screen-context",
             feature = "screen-session",
             feature = "screen-forks",
-            feature = "screen-usage"
+            feature = "screen-usage",
+            feature = "screen-accounts"
         ))]
         self.feed_screens(cx);
         cx.notify();
@@ -1012,7 +1089,8 @@ impl Desk {
         feature = "screen-context",
         feature = "screen-session",
         feature = "screen-forks",
-        feature = "screen-usage"
+        feature = "screen-usage",
+        feature = "screen-accounts"
     ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
@@ -1049,6 +1127,10 @@ impl Desk {
             #[cfg(feature = "screen-forks")]
             if let Ok(forks) = view.clone().downcast::<ForksScreen>() {
                 forks.update(cx, |forks, cx| forks.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-accounts")]
+            if let Ok(accounts) = view.clone().downcast::<AccountsScreen>() {
+                accounts.update(cx, |accounts, cx| accounts.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-usage")]
             if let Ok(usage) = view.downcast::<UsageScreen>() {

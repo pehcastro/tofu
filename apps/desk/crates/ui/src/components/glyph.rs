@@ -31,10 +31,17 @@ pub enum Glyph {
     Star,
     Sparkle,
     Folder,
+    Settings,
+    Person,
+    Palette,
+    Branch,
+    BarChart,
+    Brain,
+    Gauge,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 25] = [
+    const ALL: [Glyph; 32] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -60,6 +67,13 @@ impl Glyph {
         Glyph::Star,
         Glyph::Sparkle,
         Glyph::Folder,
+        Glyph::Settings,
+        Glyph::Person,
+        Glyph::Palette,
+        Glyph::Branch,
+        Glyph::BarChart,
+        Glyph::Brain,
+        Glyph::Gauge,
     ];
 
     pub const WORKSPACE: [(&'static str, Glyph); 12] = [
@@ -111,6 +125,13 @@ impl Glyph {
             Glyph::Star => "glyphs/star.svg",
             Glyph::Sparkle => "glyphs/sparkle.svg",
             Glyph::Folder => "glyphs/folder.svg",
+            Glyph::Settings => "glyphs/settings.svg",
+            Glyph::Person => "glyphs/person.svg",
+            Glyph::Palette => "glyphs/palette.svg",
+            Glyph::Branch => "glyphs/branch.svg",
+            Glyph::BarChart => "glyphs/bar-chart.svg",
+            Glyph::Brain => "glyphs/brain.svg",
+            Glyph::Gauge => "glyphs/gauge.svg",
         }
     }
 
@@ -141,6 +162,13 @@ impl Glyph {
             Glyph::Star => include_str!("../../assets/icons/star.svg"),
             Glyph::Sparkle => include_str!("../../assets/icons/sparkle.svg"),
             Glyph::Folder => include_str!("../../assets/icons/folder.svg"),
+            Glyph::Settings => include_str!("../../assets/icons/settings.svg"),
+            Glyph::Person => include_str!("../../assets/icons/person.svg"),
+            Glyph::Palette => include_str!("../../assets/icons/color-palette.svg"),
+            Glyph::Branch => include_str!("../../assets/icons/branch-fork.svg"),
+            Glyph::BarChart => include_str!("../../assets/icons/bar-chart.svg"),
+            Glyph::Brain => include_str!("../../assets/icons/brain.svg"),
+            Glyph::Gauge => include_str!("../../assets/icons/gauge.svg"),
         }
     }
 
