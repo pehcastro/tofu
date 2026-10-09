@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 alacritty_terminal = "0.26"
 desk_core.workspace = true
+flume = { version = "0.11.1", default-features = false, features = ["async"] }
 futures = "0.3"
 gpui.workspace = true
 portable-pty = "0.9"

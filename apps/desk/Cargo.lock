@@ -1524,6 +1524,7 @@ version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "desk_core",
+ "flume",
  "futures",
  "gpui-ce",
  "gpui_ce_platform",
@@ -1538,10 +1539,10 @@ version = "0.1.0"
 name = "desk_ui"
 version = "0.1.0"
 dependencies = [
- "async-channel",
  "desk_core",
  "desk_motion",
  "desk_tiling",
+ "flume",
  "gpui-ce",
  "serde_json",
 ]

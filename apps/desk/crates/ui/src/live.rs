@@ -1,10 +1,9 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender as StopSender};
 use std::time::SystemTime;
 use std::{fs, thread};
 
-use async_channel::Sender;
+use flume::{Receiver, RecvTimeoutError, Sender};
 use gpui::{App, Global};
 
 use crate::metrics::THEME_POLL;
@@ -23,7 +22,7 @@ pub struct ActiveTheme {
 impl Global for ActiveTheme {}
 
 struct ThemeWatch {
-    _stops_on_drop: StopSender<()>,
+    _stops_on_drop: Sender<()>,
 }
 
 impl Global for ThemeWatch {}
@@ -65,8 +64,8 @@ pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError>
         Some(built) => built,
         None => built_in()?,
     };
-    let (sender, receiver) = async_channel::unbounded();
-    let (stop, stopped) = mpsc::channel();
+    let (sender, receiver) = flume::unbounded();
+    let (stop, stopped) = flume::unbounded();
     cx.set_global(ThemeWatch {
         _stops_on_drop: stop,
     });
@@ -86,7 +85,7 @@ pub fn start(dir: PathBuf, name: String, cx: &mut App) -> Result<(), ThemeError>
         layers: layers.into(),
     });
     cx.spawn(async move |cx| {
-        while let Ok(loaded) = receiver.recv().await {
+        while let Ok(loaded) = receiver.recv_async().await {
             cx.update(|cx| apply(loaded, cx));
         }
     })
@@ -157,7 +156,7 @@ fn watch(
             stamps(&loaded.files)
         };
         files.clone_from(&loaded.files);
-        if sender.send_blocking(loaded).is_err() {
+        if sender.send(loaded).is_err() {
             return;
         }
     }

@@ -1,10 +1,7 @@
-use futures::SinkExt;
-use futures::channel::mpsc;
-use futures::executor::block_on;
+use flume::r#async::RecvStream;
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
-use std::sync::mpsc as sync;
 use std::thread;
 
 const READ_CHUNK: usize = 16 * 1024;
@@ -17,7 +14,7 @@ pub(crate) enum Output {
 
 pub(crate) struct Pty {
     master: Box<dyn MasterPty + Send>,
-    input: sync::Sender<Vec<u8>>,
+    input: flume::Sender<Vec<u8>>,
 }
 
 impl Pty {
@@ -25,7 +22,7 @@ impl Pty {
         cwd: &Path,
         cols: u16,
         rows: u16,
-    ) -> Result<(Self, mpsc::Receiver<Output>), String> {
+    ) -> Result<(Self, RecvStream<'static, Output>), String> {
         let pair = native_pty_system()
             .openpty(size(cols, rows))
             .map_err(|error| format!("could not open a pty: {error:#}"))?;
@@ -45,7 +42,7 @@ impl Pty {
             .master
             .take_writer()
             .map_err(|error| format!("could not write the pty: {error:#}"))?;
-        let (input, pending) = sync::channel::<Vec<u8>>();
+        let (input, pending) = flume::unbounded::<Vec<u8>>();
         thread::spawn(move || {
             for bytes in pending {
                 if writer
@@ -57,8 +54,8 @@ impl Pty {
                 }
             }
         });
-        let (mut output, received) = mpsc::channel(OUTPUT_BACKLOG);
-        let mut exits = output.clone();
+        let (output, received) = flume::bounded(OUTPUT_BACKLOG);
+        let exits = output.clone();
         thread::spawn(move || {
             let mut chunk = vec![0; READ_CHUNK];
             loop {
@@ -66,7 +63,7 @@ impl Pty {
                     Ok(0) => return,
                     Ok(read) => {
                         let bytes = chunk.get(..read).unwrap_or_default().to_vec();
-                        if block_on(output.send(Output::Bytes(bytes))).is_err() {
+                        if output.send(Output::Bytes(bytes)).is_err() {
                             return;
                         }
                     }
@@ -77,14 +74,14 @@ impl Pty {
         });
         thread::spawn(move || {
             let code = child.wait().ok().map(|status| status.exit_code());
-            block_on(exits.send(Output::Exited(code)))
+            exits.send(Output::Exited(code))
         });
         Ok((
             Pty {
                 master: pair.master,
                 input,
             },
-            received,
+            received.into_stream(),
         ))
     }
 
