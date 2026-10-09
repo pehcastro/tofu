@@ -3,7 +3,9 @@ use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::sidebar::{
     Project, SIDEBAR_COLUMN, Session, SessionAt, SessionState, Sidebar, SidebarPick,
 };
-use desk_ui::components::status_bar::{Branch, ContextUse, Quota, Status, StatusBar, StatusPick};
+use desk_ui::components::status_bar::{
+    Account, Accounts, Branch, ContextUse, SessionGroup, Status, StatusBar, StatusPick, UsageWindow,
+};
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
     Github, GithubUser, Notice, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
@@ -217,25 +219,82 @@ fn frame(bar: impl IntoElement) -> Div {
 }
 
 pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
+    let window = |label: &str, percent: Option<u8>, reset: Option<&str>| UsageWindow {
+        label: label.to_owned().into(),
+        percent,
+        reset: reset.map(|reset| reset.to_owned().into()),
+    };
+    let claude = Account {
+        name: "claude-sub".into(),
+        plan: Some("max".into()),
+        trouble: None,
+        windows: vec![
+            window("5h", Some(34), Some("resets in 2h 14m")),
+            window("7d", Some(72), Some("resets Thu 09:00")),
+        ],
+    };
+    let codex = Account {
+        name: "codex-sub".into(),
+        plan: Some("pro".into()),
+        trouble: None,
+        windows: vec![window("7d", Some(3), Some("resets Wed 04:23"))],
+    };
+    let unreported = Account {
+        name: "claude-sub".into(),
+        plan: None,
+        trouble: None,
+        windows: vec![
+            window("5h", Some(31), Some("resets in 8m")),
+            window("7d opus", None, None),
+        ],
+    };
     let board = Status {
         branch: Some(Branch {
             name: "main".into(),
             ahead: 2,
         }),
         session: Some("clear-sable-eagle".into()),
-        context: Some(ContextUse {
-            tokens: "20k".into(),
-            share: 0.08,
+        session_group: Some(SessionGroup {
+            context: Some(ContextUse {
+                tokens: "20k".into(),
+                share: 0.08,
+            }),
+            classifier: 4,
+            cron: 1,
         }),
-        quota: Some(Quota {
-            account: "claude-sub".into(),
-            window: "5h".into(),
-            percent: 34,
-        }),
-        classifier: 4,
-        cron: 1,
+        accounts: Accounts::Read(vec![claude.clone()]),
         problem: None,
     };
+    let no_session = Status {
+        branch: board.branch.clone(),
+        accounts: Accounts::Read(vec![claude.clone()]),
+        ..Status::default()
+    };
+    let quota_states = [
+        ("Status bar, no session, quota open", no_session.clone()),
+        (
+            "Status bar, no session, reading",
+            Status {
+                accounts: Accounts::Reading,
+                ..no_session.clone()
+            },
+        ),
+        ("Status bar, one account two windows", board.clone()),
+        (
+            "Status bar, two accounts",
+            Status {
+                accounts: Accounts::Read(vec![claude, codex]),
+                ..board.clone()
+            },
+        ),
+        (
+            "Status bar, a window not reported",
+            Status {
+                accounts: Accounts::Read(vec![unreported]),
+                ..no_session
+            },
+        ),
+    ];
     let opened = [
         (
             "Title bar, IWIN-1, bell open",
@@ -262,16 +321,22 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         .flex()
         .flex_col()
         .gap_4()
-        .child(named(
-            "Status bar, quota open",
-            theme,
-            frame(
-                StatusBar::new("chrome-status-quota", board.clone(), picked_status(cx))
-                    .version(Some("0.5.1".into()))
-                    .quota_open(true),
-            )
-            .pt(px(POP_ROOM)),
-        ))
+        .children(
+            quota_states
+                .into_iter()
+                .enumerate()
+                .map(|(at, (name, status))| {
+                    named(
+                        name,
+                        theme,
+                        frame(
+                            StatusBar::new(("chrome-status-quota", at), status, picked_status(cx))
+                                .quota_open(true),
+                        )
+                        .pt(px(POP_ROOM)),
+                    )
+                }),
+        )
         .child(named(
             "Sidebar sessions, each state, right click a row for its menu",
             theme,
