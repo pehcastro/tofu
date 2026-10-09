@@ -352,6 +352,10 @@ impl IconTheme {
     pub fn folder_icon(&self, name: &str, open: bool) -> &str {
         &self.folder(name, open).id
     }
+
+    pub fn folder_image(&self, name: &str, open: bool) -> Arc<Image> {
+        self.folder(name, open).image.clone()
+    }
 }
 
 pub enum NodeKind {

@@ -34,6 +34,11 @@ use fixture::{COUNT_TEST, Line, NOTES, STORE};
 const BLAME_IDLE: Duration = Duration::from_millis(500);
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
+    if board.is_none() {
+        let here = std::env::current_dir()
+            .map_err(|error| format!("the editor has no working folder: {error}"))?;
+        return open_dir(&here, None, None, window, cx);
+    }
     let scale = window.scale_factor();
     let source = Source::Fixture {
         notes: fixture_editor(NOTES, notes_marks(scale), cx),
@@ -608,6 +613,7 @@ impl Editor {
         );
         folder.icons = icons;
         folder.pack = pack;
+        cx.notify();
     }
 
     fn watch(&mut self, cx: &mut Context<Self>) {

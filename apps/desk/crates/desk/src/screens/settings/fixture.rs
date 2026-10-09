@@ -1,5 +1,4 @@
 use desk_ui::components::settings::Source;
-use desk_ui::components::tree::IconPack;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageId {
@@ -89,7 +88,7 @@ impl Scope {
 pub enum Control {
     Switch(bool),
     Value(&'static str),
-    Pack(IconPack),
+    Pack,
 }
 
 pub struct Setting {
@@ -138,55 +137,20 @@ const fn value(
     }
 }
 
-const fn pack(pack: IconPack, desc: &'static str) -> Setting {
-    Setting {
-        key: pack.key(),
-        name: pack.label(),
-        desc,
-        control: Control::Pack(pack),
-        source: Source::Default,
-    }
-}
+pub const FILE_ICONS: &str = "file-icons";
 
 const EDITOR: Page = Page {
     title: "Editor",
     desc: "How the editor draws your files.",
     groups: &[(
-        "File icons",
-        &[
-            pack(
-                IconPack::Material,
-                "The icons the desk shipped with. 25 icons.",
-            ),
-            pack(
-                IconPack::Catppuccin,
-                "Mocha. 619 icons by name, extension, language and folder.",
-            ),
-            pack(
-                IconPack::Github,
-                "One file icon and one folder icon, nothing else.",
-            ),
-            pack(
-                IconPack::Jetbrains,
-                "New UI, dark. 131 icons, open folders keep their icon.",
-            ),
-            pack(
-                IconPack::Makinda,
-                "Stroke. 111 icons by name, extension, language and folder.",
-            ),
-            pack(
-                IconPack::Phosphor,
-                "26 glyphs by extension. Folders are plain.",
-            ),
-            pack(
-                IconPack::Pierre,
-                "Complete, coloured. 56 icons by name and extension.",
-            ),
-            pack(
-                IconPack::Symbols,
-                "320 icons by name, extension, language and folder.",
-            ),
-        ],
+        "Files",
+        &[Setting {
+            key: FILE_ICONS,
+            name: "File icons",
+            desc: "The icon pack the file tree and the file tabs draw.",
+            control: Control::Pack,
+            source: Source::Default,
+        }],
     )],
 };
 

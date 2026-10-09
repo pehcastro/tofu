@@ -6,7 +6,7 @@ use desk_ui::components::overlay::toast;
 use desk_ui::theme::Theme;
 use gpui::{
     App, BoxShadow, ClickEvent, Div, FontWeight, Image, ImageFormat, Img, Rgba, SharedString,
-    Window, div, img, linear_color_stop, linear_gradient, point, prelude::*, px, rgb,
+    Window, div, img, point, prelude::*, px, rgb,
 };
 
 pub const SANS: &str = "Geist";
@@ -41,9 +41,7 @@ pub const CHAT: &str = r#"<path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13
 pub const DOWN: &str = r#"<path d="M5 6.5l3 3 3-3"/>"#;
 pub const SEND: &str = r#"<path d="M8 12.5v-9M4.5 7L8 3.5 11.5 7"/>"#;
 
-const UNDERLAY: u32 = 0x232329;
 const SHELL: u32 = 0x18171e;
-const FRAME_PAD: f32 = 20.0;
 const TOAST_BOTTOM: f32 = 44.0;
 
 const FONTS: [&[u8]; 6] = [
@@ -170,39 +168,11 @@ pub fn square(size: f32, radius: f32) -> Div {
 }
 
 pub fn shell() -> Div {
-    div()
-        .relative()
-        .flex()
-        .flex_col()
-        .min_w_0()
-        .min_h_0()
-        .px(px(3.0))
-        .pb(px(3.0))
-        .rounded(px(12.0))
-        .bg(rgb(SHELL))
-        .shadow(vec![ring(white(0.06))])
+    div().relative().flex().flex_col().min_w_0().min_h_0()
 }
 
 pub fn inner() -> Div {
-    div()
-        .relative()
-        .flex()
-        .flex_1()
-        .min_h_0()
-        .overflow_hidden()
-        .rounded(px(11.0))
-        .bg(linear_gradient(
-            180.0,
-            linear_color_stop(white(0.012), 0.0),
-            linear_color_stop(white(0.0), 1.0),
-        ))
-        .shadow(vec![BoxShadow {
-            color: white(0.07).into(),
-            offset: point(px(0.0), px(1.0)),
-            blur_radius: px(0.0),
-            spread_radius: px(0.0),
-            inset: true,
-        }])
+    div().relative().flex().flex_1().min_h_0().overflow_hidden()
 }
 
 pub fn cap(body: &str) -> Div {
@@ -227,8 +197,7 @@ pub fn frame(
         .min_w_0()
         .relative()
         .flex()
-        .p(px(FRAME_PAD))
-        .bg(rgb(UNDERLAY))
+        .bg(rgb(SHELL))
         .font_family(SANS)
         .text_size(px(14.0))
         .line_height(px(23.0))
