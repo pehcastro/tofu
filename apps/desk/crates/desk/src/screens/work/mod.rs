@@ -31,15 +31,17 @@ use crate::modules::file_edits::{self, FileEdits};
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
 use crate::modules::subagents::{self, ExpandAgent, Subagents};
+use crate::modules::terminal::{self, TerminalModule};
 use crate::project;
 
 const BOARD: &str = "36-agents";
 const WORK_NAME: &str = "work";
-const OPENABLE: [Module; 4] = [
+const OPENABLE: [Module; 5] = [
     Module::Chat,
     Module::SubAgents,
     Module::FileEdits,
     Module::Shells,
+    Module::Terminal,
 ];
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
@@ -76,6 +78,7 @@ struct Mounted {
     subagents: Entity<Subagents>,
     file_edits: Entity<FileEdits>,
     shells: Entity<Shells>,
+    terminal: Entity<TerminalModule>,
 }
 
 fn build(
@@ -96,6 +99,7 @@ fn build(
         workspaces.push(Workspace::new(WORK_NAME, Preset::Work));
     }
     let store = cx.new(|_| Store::default());
+    let terminal = terminal::mount(&project, cx);
     let chat = match replay {
         Some(_) => chat::fed(store.clone(), window, cx),
         None => chat::live(project, store.clone(), window, cx),
@@ -110,6 +114,7 @@ fn build(
         subagents: subagents::mount(store.clone(), cx),
         file_edits: file_edits::mount(store.clone(), cx),
         shells: shells::mount(store.clone(), kill, cx),
+        terminal,
         store,
         chat,
     };
@@ -391,20 +396,19 @@ fn body(mounted: &Mounted, module: &Module, theme: &Theme) -> AnyElement {
         Module::SubAgents => mounted.subagents.clone().into_any_element(),
         Module::FileEdits => mounted.file_edits.clone().into_any_element(),
         Module::Shells => mounted.shells.clone().into_any_element(),
-        Module::Editor
-        | Module::Terminal
-        | Module::Browser
-        | Module::SourceControl
-        | Module::Plugin(_) => empty_state(
-            SharedString::from(format!("work-empty-{}", module.name())),
-            module.name().to_owned(),
-            Some("not mounted in the work screen yet".into()),
-            &[],
-            &[],
-            theme,
-            |_, _, _| {},
-        )
-        .into_any_element(),
+        Module::Terminal => mounted.terminal.clone().into_any_element(),
+        Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
+            empty_state(
+                SharedString::from(format!("work-empty-{}", module.name())),
+                module.name().to_owned(),
+                Some("not mounted in the work screen yet".into()),
+                &[],
+                &[],
+                theme,
+                |_, _, _| {},
+            )
+            .into_any_element()
+        }
     }
 }
 
@@ -418,7 +422,7 @@ impl EventEmitter<Expanded> for Work {}
 
 const SUB_AGENTS: &str = "Sub-agents";
 
-pub const EXPANDABLE: [&str; 4] = ["Chat", SUB_AGENTS, "File edits", "Shells"];
+pub const EXPANDABLE: [&str; 5] = ["Chat", SUB_AGENTS, "File edits", "Shells", "Terminal"];
 
 struct Tiled {
     glyph: Option<Glyph>,
@@ -478,11 +482,8 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
             .into(),
         Module::FileEdits => tiled(mounted.file_edits.clone().into(), None, cx),
         Module::Shells => tiled(mounted.shells.clone().into(), None, cx),
-        Module::Editor
-        | Module::Terminal
-        | Module::Browser
-        | Module::SourceControl
-        | Module::Plugin(_) => {
+        Module::Terminal => tiled(mounted.terminal.clone().into(), None, cx),
+        Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
             return eprintln!(
                 "desk: work: {} is not mounted, so it does not expand",
                 module.name()

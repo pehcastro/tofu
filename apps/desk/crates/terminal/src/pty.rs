@@ -1,5 +1,5 @@
 use flume::r#async::RecvStream;
-use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
 use std::thread;
@@ -15,6 +15,8 @@ pub(crate) enum Output {
 pub(crate) struct Pty {
     master: Box<dyn MasterPty + Send>,
     input: flume::Sender<Vec<u8>>,
+    killer: Box<dyn ChildKiller + Send + Sync>,
+    pid: Option<u32>,
 }
 
 impl Pty {
@@ -34,6 +36,8 @@ impl Pty {
             .spawn_command(command)
             .map_err(|error| format!("could not start the shell: {error:#}"))?;
         drop(pair.slave);
+        let killer = child.clone_killer();
+        let pid = child.process_id();
         let mut reader = pair
             .master
             .try_clone_reader()
@@ -80,9 +84,21 @@ impl Pty {
             Pty {
                 master: pair.master,
                 input,
+                killer,
+                pid,
             },
             received.into_stream(),
         ))
+    }
+
+    pub(crate) fn pid(&self) -> Option<u32> {
+        self.pid
+    }
+
+    pub(crate) fn kill(&mut self) -> Result<(), String> {
+        self.killer
+            .kill()
+            .map_err(|error| format!("could not kill the shell: {error:#}"))
     }
 
     pub(crate) fn send(&self, bytes: Vec<u8>) -> bool {
@@ -93,6 +109,14 @@ impl Pty {
         self.master
             .resize(size(cols, rows))
             .map_err(|error| format!("could not resize the pty: {error:#}"))
+    }
+}
+
+impl Drop for Pty {
+    fn drop(&mut self) {
+        if let Err(error) = self.kill() {
+            eprintln!("{error}");
+        }
     }
 }
 

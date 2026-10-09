@@ -100,6 +100,10 @@ impl Terminal {
         }
     }
 
+    pub fn pid(&self) -> Option<u32> {
+        self.pty.as_ref().and_then(Pty::pid)
+    }
+
     pub fn restart(&mut self, cx: &mut Context<Self>) {
         self.term = blank_term(self.grid, self.replies.clone());
         self.parser = Processor::new();

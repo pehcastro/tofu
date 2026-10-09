@@ -68,6 +68,8 @@ mod modules {
     pub mod shells;
     #[cfg(any(feature = "module-subagents", feature = "screen-work"))]
     pub mod subagents;
+    #[cfg(feature = "screen-work")]
+    pub mod terminal;
 }
 
 use std::cell::Cell;
