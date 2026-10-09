@@ -38,6 +38,7 @@ func (b *Board) Apply(r Record) bool {
 }
 
 func (b *Board) Sync(wanted []Record) []Record {
+	wanted = wanted[:min(len(wanted), maxRecords)]
 	var sent []Record
 	for _, held := range b.List() {
 		gone := Record{ID: held.ID, State: Clear}

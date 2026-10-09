@@ -2,6 +2,8 @@ package status
 
 import (
 	"encoding/base64"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -192,6 +194,26 @@ func TestStatusBoardHoldsOneRecordPerID(t *testing.T) {
 	board.Apply(Record{State: Clear})
 	if listed := board.List(); len(listed) != 0 {
 		t.Errorf("clear with no id left %+v", listed)
+	}
+}
+
+func TestStatusBoardSyncPastCapacitySendsOnce(t *testing.T) {
+	wanted := []Record{{State: Idle, App: "tofu"}}
+	for index := range maxRecords + 50 {
+		wanted = append(wanted, Record{State: Done, ID: Path("shells", "bash-"+strconv.Itoa(index))})
+	}
+	var board Board
+	first := board.Sync(wanted)
+	if len(first) != maxRecords || first[0].ID != "" {
+		t.Fatalf("first sync sent %d records led by %q, want %d led by the lead", len(first), first[0].ID, maxRecords)
+	}
+	if again := board.Sync(wanted); len(again) != 0 {
+		t.Fatalf("an unchanged set past capacity sent %d records again, want none", len(again))
+	}
+	gone, entering := wanted[1], wanted[maxRecords]
+	moved := board.Sync(slices.Delete(slices.Clone(wanted), 1, 2))
+	if len(moved) != 2 || moved[0] != (Record{ID: gone.ID, State: Clear}) || moved[1] != entering {
+		t.Fatalf("one record leaving sent %+v, want the clear of %s and %s entering", moved, gone.ID, entering.ID)
 	}
 }
 

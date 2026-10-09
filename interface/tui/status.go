@@ -120,7 +120,7 @@ func (a *App) statusRecords() []status.Record {
 			records = append(records, record)
 		}
 	}
-	for _, entry := range a.shells.Entries {
+	for _, entry := range slices.Backward(a.shells.Entries) {
 		record, ended := shellRecord(entry)
 		if record.State != status.Clear && a.unseen(record, ended, a.current == screenShells) {
 			records = append(records, record)
