@@ -18,6 +18,8 @@ const PLUGIN_PREFIX: &str = "plugin:";
 const FOLDER: &str = "tofu-desk";
 const LAYOUTS: &str = "layouts";
 const EXTENSION: &str = "layout";
+const STATES: &str = "projects";
+const STATE_EXTENSION: &str = "json";
 const MAX_DEPTH: usize = MAX_TILES;
 const V1_NAME: &str = "work";
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
@@ -80,29 +82,38 @@ impl Store {
     }
 
     pub fn for_project(project: &Path) -> Result<Store, StoreError> {
-        let name = project
-            .file_name()
-            .filter(|name| {
-                Path::new(name)
-                    .components()
-                    .all(|part| matches!(part, Component::Normal(_)))
-            })
-            .ok_or_else(|| StoreError::BadProject(project.display().to_string()))?;
-        let key = project
-            .to_string_lossy()
-            .bytes()
-            .fold(FNV_OFFSET, |hash, byte| {
-                (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
-            });
-        let file = format!("{}-{key:016x}.{EXTENSION}", name.to_string_lossy());
-        let path = Store::home()?.join(LAYOUTS).join(file);
-        Ok(Store { path })
+        project_file(project, LAYOUTS, EXTENSION).map(|path| Store { path })
+    }
+
+    pub fn state_file(project: &Path) -> Result<PathBuf, StoreError> {
+        project_file(project, STATES, STATE_EXTENSION)
     }
 
     pub fn at(path: PathBuf) -> Store {
         Store { path }
     }
+}
 
+fn project_file(project: &Path, folder: &str, extension: &str) -> Result<PathBuf, StoreError> {
+    let name = project
+        .file_name()
+        .filter(|name| {
+            Path::new(name)
+                .components()
+                .all(|part| matches!(part, Component::Normal(_)))
+        })
+        .ok_or_else(|| StoreError::BadProject(project.display().to_string()))?;
+    let key = project
+        .to_string_lossy()
+        .bytes()
+        .fold(FNV_OFFSET, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+        });
+    let file = format!("{}-{key:016x}.{extension}", name.to_string_lossy());
+    Ok(Store::home()?.join(folder).join(file))
+}
+
+impl Store {
     pub fn load(&self) -> Result<Option<Vec<Workspace>>, StoreError> {
         let text = match fs::read_to_string(&self.path) {
             Ok(text) => text,

@@ -115,7 +115,7 @@ fn open_repo(
     Err("--repo needs the git module: rebuild with --features module-git".to_owned())
 }
 
-const USAGE: &str = "usage: desk [--screen <name> [--board <ID>] [--file <path>] [--dir <path>] [--repo <path>]]\n\
+const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>] [--repo <path>]]\n\
 --file opens a file in the editor screen\n\
 --dir lists a folder in the editor screen's file tree\n\
 --repo opens a git repository in the git screen\n\
@@ -201,6 +201,7 @@ fn screen(name: &str) -> Result<Open, String> {
 fn parse(args: &[String]) -> Result<Launch, String> {
     match args {
         [] => Ok(Launch::Desk),
+        [folder] if !folder.starts_with("--") => Ok(Launch::Desk),
         [flag, name, rest @ ..] if flag == "--screen" => {
             let (mut board, mut file, mut dir, mut repo) = (None, None, None, None);
             for pair in rest.chunks(2) {

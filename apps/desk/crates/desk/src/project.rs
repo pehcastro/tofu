@@ -15,9 +15,11 @@ use desk_ui::components::palette::{
 };
 use desk_ui::components::sidebar::{Project, Session, SessionAt, SessionState};
 use gpui::{App, Entity, Window};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 const RECENTS: &str = "recents.json";
+const PROJECT_VARIABLE: &str = "DESK_PROJECT";
+const STATE_VERSION: u64 = 1;
 const MOST_RECENT: usize = 8;
 pub const RECENT_ID: &str = "project.recent.";
 pub const OPEN_FOLDER_ID: &str = "project.open";
@@ -47,8 +49,122 @@ impl Head {
 }
 
 pub fn launch() -> Result<PathBuf, String> {
-    env::current_dir()
-        .map_err(|error| format!("the desk cannot read the folder it runs in: {error}"))
+    launched().map(|(folder, _)| folder)
+}
+
+pub fn launched() -> Result<(PathBuf, &'static str), String> {
+    let named = env::args_os()
+        .nth(1)
+        .filter(|argument| !argument.to_string_lossy().starts_with("--"))
+        .map(|folder| (folder, "the folder argument"))
+        .or_else(|| {
+            env::var_os(PROJECT_VARIABLE)
+                .filter(|folder| !folder.is_empty())
+                .map(|folder| (folder, PROJECT_VARIABLE))
+        });
+    if let Some((folder, from)) = named {
+        let folder = std::path::absolute(&folder)
+            .map_err(|error| format!("{from} {} is not a path: {error}", folder.display()))?;
+        if !folder.is_dir() {
+            return Err(format!("{from} {} is not a folder", folder.display()));
+        }
+        return Ok((folder, from));
+    }
+    let recent = recents()
+        .unwrap_or_else(|error| {
+            eprintln!("desk: recents: {error}");
+            Vec::new()
+        })
+        .into_iter()
+        .find(|folder| folder.is_dir());
+    match recent {
+        Some(folder) => Ok((folder, "the most recent project")),
+        None => env::current_dir()
+            .map(|folder| (folder, "the launch folder"))
+            .map_err(|error| format!("the desk cannot read the folder it runs in: {error}")),
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct Kept {
+    pub name: String,
+    pub pinned: bool,
+    pub locked: bool,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct Remembered {
+    pub session: Option<String>,
+    pub screens: Vec<Kept>,
+    pub focus: String,
+}
+
+fn state_file(folder: &Path) -> Result<PathBuf, String> {
+    Layouts::state_file(folder).map_err(|error| error.to_string())
+}
+
+pub fn read_state(folder: &Path) -> Result<Option<Remembered>, String> {
+    let path = state_file(folder)?;
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("{}: {error}", path.display())),
+    };
+    parse_state(&text)
+        .map(Some)
+        .map_err(|reason| format!("{}: {reason}", path.display()))
+}
+
+fn parse_state(text: &str) -> Result<Remembered, String> {
+    let state: Value = serde_json::from_str(text).map_err(|error| error.to_string())?;
+    match state.get("version").and_then(Value::as_u64) {
+        Some(STATE_VERSION) => {}
+        Some(other) => return Err(format!("version {other} is not {STATE_VERSION}")),
+        None => return Err("it has no version".to_owned()),
+    }
+    let text_at =
+        |value: &Value, key: &str| value.get(key).and_then(Value::as_str).map(str::to_owned);
+    let flag_at =
+        |value: &Value, key: &str| value.get(key).and_then(Value::as_bool).unwrap_or(false);
+    let screens = state
+        .get("screens")
+        .and_then(Value::as_array)
+        .ok_or("it has no screens list")?
+        .iter()
+        .map(|screen| {
+            Ok(Kept {
+                name: text_at(screen, "name").ok_or("a screen has no name")?,
+                pinned: flag_at(screen, "pinned"),
+                locked: flag_at(screen, "locked"),
+            })
+        })
+        .collect::<Result<Vec<Kept>, String>>()?;
+    Ok(Remembered {
+        session: text_at(&state, "session"),
+        screens,
+        focus: text_at(&state, "focus").ok_or("it has no focus")?,
+    })
+}
+
+pub fn write_state(folder: &Path, state: &Remembered) -> Result<(), String> {
+    let path = state_file(folder)?;
+    let failed = |error: io::Error| format!("{}: {error}", path.display());
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(failed)?;
+    }
+    let screens: Vec<Value> = state
+        .screens
+        .iter()
+        .map(|kept| json!({"name": kept.name, "pinned": kept.pinned, "locked": kept.locked}))
+        .collect();
+    let text = serde_json::to_string_pretty(&json!({
+        "version": STATE_VERSION,
+        "session": state.session,
+        "screens": screens,
+        "focus": state.focus,
+    }))
+    .map_err(|error| error.to_string())?;
+    fs::write(&path, text).map_err(failed)
 }
 
 pub fn name(folder: &Path) -> String {

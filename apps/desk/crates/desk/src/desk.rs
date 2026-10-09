@@ -102,6 +102,8 @@ const REOPEN_ID: &str = "tab.reopen";
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
 const EDITOR_SCREEN: &str = "editor";
+#[cfg(feature = "screen-work")]
+const SAVE_AFTER: std::time::Duration = std::time::Duration::from_millis(500);
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScreenGroup {
     Top,
@@ -254,8 +256,13 @@ struct Projects {
     active: Vec<String>,
     renaming: Option<Renaming>,
     refused: Option<Option<SharedString>>,
+    restored: bool,
+    restoring: Option<String>,
+    written: Option<project::Remembered>,
     _watch: Vec<gpui::Subscription>,
     _head: Option<Task<()>>,
+    _reading: Option<Task<()>>,
+    _saving: Option<Task<()>>,
 }
 
 #[cfg(feature = "screen-work")]
@@ -662,6 +669,16 @@ impl Desk {
         desk.adopt_launched(window, cx);
         #[cfg(feature = "screen-work")]
         desk.park_editor(window, cx);
+        #[cfg(feature = "screen-work")]
+        {
+            let closing = cx.weak_entity();
+            window.on_window_should_close(cx, move |_, cx| {
+                if let Err(error) = closing.update(cx, |desk, cx| desk.save_now(cx)) {
+                    eprintln!("desk: the project state was not saved at close: {error}");
+                }
+                true
+            });
+        }
         desk.focus_shown(window, cx);
         cx.spawn(async move |this, cx| {
             let answer = cx.background_executor().spawn(async { ask_github() }).await;
@@ -729,6 +746,8 @@ impl Desk {
         self.feed_screens(cx);
         self.focus_shown(window, cx);
         eprintln!("desk: screen {name}");
+        #[cfg(feature = "screen-work")]
+        self.remember_state(cx);
         cx.notify();
     }
 
@@ -930,6 +949,7 @@ impl Desk {
             held.is_some(),
             held.is_some_and(|held| held.locked)
         );
+        self.remember_state(cx);
         cx.notify();
     }
 
@@ -985,6 +1005,7 @@ impl Desk {
         self.tabbed.retain(|tabbed| *tabbed != name);
         self.expanded_in.retain(|(expanded, _)| *expanded != name);
         eprintln!("desk: screen {name} closed");
+        self.remember_state(cx);
         cx.notify();
     }
 
@@ -1257,9 +1278,220 @@ impl Desk {
         else {
             return;
         };
-        match project::launch() {
-            Ok(folder) => self.adopt(folder, &work, window, cx),
+        match project::launched() {
+            Ok((folder, from)) => {
+                eprintln!("desk: launch opens {} from {from}", folder.display());
+                self.adopt(folder, &work, window, cx)
+            }
             Err(error) => eprintln!("desk: {error}"),
+        }
+    }
+
+    fn restore(
+        &mut self,
+        read: Result<Option<project::Remembered>, String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let saved = match read {
+            Ok(Some(saved)) => saved,
+            Ok(None) => {
+                eprintln!("desk: restore: this project has no saved state yet");
+                self.projects.restored = true;
+                return self.remember_state(cx);
+            }
+            Err(error) => {
+                eprintln!(
+                    "desk: restore: nothing is restored, because the saved state is unreadable: {error}"
+                );
+                self.projects.restored = true;
+                return self.remember_state(cx);
+            }
+        };
+        let kept: Vec<(&'static str, &project::Kept)> = saved
+            .screens
+            .iter()
+            .filter_map(|kept| {
+                let name = self
+                    .screens
+                    .iter()
+                    .map(|screen| screen.name)
+                    .find(|name| *name == kept.name && screen_mark(name).is_some())?;
+                Some((name, kept))
+            })
+            .collect();
+        let wanted = |name: &str| kept.iter().any(|(kept, _)| *kept == name);
+        if self.shown.name != WORK_SCREEN && !wanted(&self.shown.name) {
+            self.show(WORK_SCREEN, window, cx);
+        }
+        self.parked
+            .retain(|parked| matches!(parked.body, Body::Work(_)) || wanted(&parked.name));
+        let mut tabbed = Vec::new();
+        for (name, _) in &kept {
+            let open = self.shown.name == *name || self.parked.iter().any(|p| p.name == *name);
+            let opened = open
+                || match self.screens.iter().find(|screen| screen.name == *name) {
+                    Some(screen) => match (screen.open)(None, window, cx) {
+                        Ok(view) => {
+                            self.parked.push(Shown::new((*name).into(), view));
+                            true
+                        }
+                        Err(error) => {
+                            eprintln!("desk: restore: screen {name} did not open: {error}");
+                            false
+                        }
+                    },
+                    None => false,
+                };
+            if opened {
+                tabbed.push(*name);
+            }
+        }
+        self.held = kept
+            .iter()
+            .filter(|(name, kept)| (kept.pinned || kept.locked) && tabbed.contains(name))
+            .map(|(name, kept)| Held {
+                name,
+                locked: kept.locked,
+            })
+            .collect();
+        self.tabbed = tabbed;
+        self.projects.restoring = saved.session.clone();
+        self.projects.restored = true;
+        eprintln!(
+            "desk: restore: screens [{}] focus {} session {}",
+            self.tabbed.join(", "),
+            saved.focus,
+            saved.session.as_deref().unwrap_or("none")
+        );
+        let focus = self
+            .tabbed
+            .iter()
+            .copied()
+            .find(|name| *name == saved.focus)
+            .unwrap_or(WORK_SCREEN);
+        if self.shown.name != focus {
+            self.show(focus, window, cx);
+        }
+        self.projects.written = Some(self.snapshot(cx));
+        self.restore_session(cx);
+        cx.notify();
+    }
+
+    fn restore_session(&mut self, cx: &mut Context<Self>) {
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return;
+        };
+        if chat.read(cx).rows().is_empty() {
+            return;
+        }
+        let Some(id) = self.projects.restoring.take() else {
+            return;
+        };
+        if chat.read(cx).rows().iter().any(|row| row.id == id) {
+            eprintln!("desk: restore: session {id}");
+            chat.update(cx, |chat, cx| chat.open_session(Some(id), cx));
+        } else {
+            eprintln!(
+                "desk: restore: the last session {id} is no longer in this project, so none is opened"
+            );
+        }
+    }
+
+    fn snapshot(&self, cx: &App) -> project::Remembered {
+        let screens: Vec<project::Kept> = self
+            .tabbed
+            .iter()
+            .filter(|name| {
+                !self
+                    .expanded_in
+                    .iter()
+                    .any(|(expanded, _)| expanded == *name)
+            })
+            .map(|name| {
+                let held = self.held.iter().find(|held| held.name == *name);
+                project::Kept {
+                    name: (*name).to_owned(),
+                    pinned: held.is_some(),
+                    locked: held.is_some_and(|held| held.locked),
+                }
+            })
+            .collect();
+        let focus = match screens.iter().any(|kept| *kept.name == *self.shown.name) {
+            true => self.shown.name.to_string(),
+            false => WORK_SCREEN.to_owned(),
+        };
+        let session = self
+            .projects
+            .restoring
+            .clone()
+            .or_else(|| {
+                self.work()
+                    .and_then(|work| work.read(cx).chat().read(cx).open_id().map(str::to_owned))
+            })
+            .or_else(|| {
+                self.projects
+                    .written
+                    .as_ref()
+                    .and_then(|written| written.session.clone())
+            });
+        project::Remembered {
+            session,
+            screens,
+            focus,
+        }
+    }
+
+    fn remember_state(&mut self, cx: &mut Context<Self>) {
+        let Some(folder) = self.projects.head.as_ref().map(|head| head.folder.clone()) else {
+            return;
+        };
+        if !self.projects.restored {
+            return;
+        }
+        let state = self.snapshot(cx);
+        if self.projects.written.as_ref() == Some(&state) {
+            return;
+        }
+        self.projects.written = Some(state.clone());
+        self.projects._saving = Some(cx.spawn(async move |_, cx| {
+            cx.background_executor().timer(SAVE_AFTER).await;
+            let shown = folder.display().to_string();
+            let wrote = cx
+                .background_executor()
+                .spawn(async move { project::write_state(&folder, &state) })
+                .await;
+            match wrote {
+                Ok(()) => eprintln!("desk: remembered the state of {shown}"),
+                Err(error) => eprintln!("desk: the project state was not saved: {error}"),
+            }
+        }));
+    }
+
+    fn save_now(&mut self, cx: &mut Context<Self>) {
+        let Some(folder) = self.projects.head.as_ref().map(|head| head.folder.clone()) else {
+            return;
+        };
+        if !self.projects.restored {
+            return eprintln!(
+                "desk: close: the saved state was never restored, so it is kept as it was"
+            );
+        }
+        self.projects._saving = None;
+        let state = self.snapshot(cx);
+        match project::write_state(&folder, &state) {
+            Ok(()) => eprintln!(
+                "desk: close: remembered screens [{}] focus {} session {}",
+                state
+                    .screens
+                    .iter()
+                    .map(|kept| kept.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                state.focus,
+                state.session.as_deref().unwrap_or("none")
+            ),
+            Err(error) => eprintln!("desk: close: the project state was not saved: {error}"),
         }
     }
 
@@ -1293,10 +1525,14 @@ impl Desk {
             ),
             cx.subscribe(&chat, |desk, _, _: &Listed, cx| {
                 desk.track_running(cx);
+                desk.restore_session(cx);
                 cx.notify();
             }),
             cx.subscribe(&chat, |desk, _, _: &Touched, cx| desk.reread_head(cx)),
-            cx.observe(&chat, |desk, _, cx| desk.track_running(cx)),
+            cx.observe(&chat, |desk, _, cx| {
+                desk.track_running(cx);
+                desk.remember_state(cx);
+            }),
             cx.observe(&store, |desk, store, cx| {
                 for (id, session) in &store.read(cx).sessions {
                     desk.bell.gather(id, session);
@@ -1309,6 +1545,24 @@ impl Desk {
             Err(error) => eprintln!("desk: recents: {error}"),
         }
         cx.set_global(OpenProject(folder.clone()));
+        if let Some(saving) = self.projects._saving.take() {
+            saving.detach();
+        }
+        self.projects.restored = false;
+        self.projects.restoring = None;
+        self.projects.written = None;
+        let reading = folder.clone();
+        self.projects._reading = Some(cx.spawn_in(window, async move |desk, cx| {
+            let read = cx
+                .background_executor()
+                .spawn(async move { project::read_state(&reading) })
+                .await;
+            if let Err(error) =
+                desk.update_in(cx, |desk, window, cx| desk.restore(read, window, cx))
+            {
+                eprintln!("desk: restore: the desk closed before its state was read: {error}");
+            }
+        }));
         self.projects.head = Some(Head::empty(folder));
         self.reread_head(cx);
         #[cfg(any(
