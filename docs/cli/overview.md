@@ -87,6 +87,21 @@ tofu reload [--json]
 tofu settings [get <key> | set [--scope global|project] <key> <value>] [--json]
 ```
 
+### Boards
+
+```
+tofu boardy init --key KEY [--name text] [--json]
+tofu boardy new [--board KEY] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--as name] <title> [--json]
+tofu boardy list [--board KEY] [--status s] [--all] [--json]
+tofu boardy show <ticket> [--json]
+tofu boardy move <ticket> <status> [--reason text] [--as name] [--json]
+tofu boardy log <ticket> <text> [--as name] [--json]
+tofu boardy lint [--board KEY] [--json]
+tofu boardy boards [--json]
+```
+
+See [Boardy](/docs/features/boardy).
+
 ### Judgment
 
 ```

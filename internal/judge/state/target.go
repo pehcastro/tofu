@@ -3,7 +3,10 @@ package state
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 type TargetClass string
@@ -139,7 +142,7 @@ func locationOf(full string, where roots) TargetLocation {
 	switch {
 	case under(full, where.Scratch):
 		return LocationSessionScratch
-	case under(full, where.Project):
+	case under(full, where.Project), strings.Contains(full, "/"+projectBoardsDirName+"/") && under(full, projectBoards(where.Project)):
 		return LocationInsideProject
 	case under(full, "/tmp"), under(full, os.TempDir()):
 		return LocationTemp
@@ -147,6 +150,19 @@ func locationOf(full string, where roots) TargetLocation {
 		return LocationUnknown
 	}
 	return LocationOutsideProject
+}
+
+const projectBoardsDirName = "boards"
+
+func projectBoards(project string) string {
+	if project == "" {
+		return ""
+	}
+	state, err := sys.ProjectStateDirAt(project)
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(state, projectBoardsDirName)
 }
 
 func under(full, root string) bool {
