@@ -260,7 +260,9 @@ func (h *Host) Stop() {
 func (h *Host) StopLead() {
 	h.mu.Lock()
 	h.stopped = true
+	inbox := h.inbox
 	h.mu.Unlock()
+	inbox.StopLead()
 	select {
 	case h.stopLead <- struct{}{}:
 	default:
@@ -268,7 +270,7 @@ func (h *Host) StopLead() {
 }
 
 func (h *Host) Answer(id string, answer Answer) bool {
-	if h.asks.answer(id, answer) {
+	if answered, _ := h.asks.answer(id, answer); answered {
 		return true
 	}
 	select {
@@ -279,7 +281,11 @@ func (h *Host) Answer(id string, answer Answer) bool {
 	}
 }
 
-func (h *Host) AnswerAsk(id string, answer Answer) bool { return h.asks.answer(id, answer) }
+func (h *Host) AnswerAsk(id string, answer Answer) (answered, stands bool) {
+	return h.asks.answer(id, answer)
+}
+
+func (h *Host) Standing() []StandingAnswer { return h.asks.standingNow() }
 
 func (h *Host) Close() {
 	h.mu.Lock()

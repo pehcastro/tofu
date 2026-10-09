@@ -190,7 +190,7 @@ func sessionUpdated(id Identity, event Event) outgoing {
 }
 
 func approvalRequest(id Identity, event Event) ApprovalRequest {
-	asked := ApprovalRequest{Identity: id, Approval: event.ID, Tool: event.Tool, Target: event.Text, Args: wholeJSON(event.Args)}
+	asked := ApprovalRequest{Identity: id, Approval: event.ID, Tool: event.Tool, Target: event.Text, Args: wholeJSON(event.Args), Decisions: event.Accepts}
 	if event.Decision != nil {
 		judged := judgementOf(*event.Decision)
 		asked.Judged = &judged

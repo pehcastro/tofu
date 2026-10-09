@@ -143,20 +143,46 @@ func (ApprovalDecision) enum() []string {
 	return []string{string(AllowOnce), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal), string(RememberUserLocal), string(RememberProjectLocal)}
 }
 
-func keptAs(decision ApprovalDecision) (memory.Scope, bool) {
+func keptAs(decision ApprovalDecision) memory.Scope {
 	switch decision {
 	case RememberGlobal:
-		return memory.Global, true
+		return memory.Global
 	case RememberProject:
-		return memory.Project, true
+		return memory.Project
 	case RememberUserLocal:
-		return memory.UserLocal, true
+		return memory.UserLocal
 	case RememberProjectLocal:
-		return memory.ProjectLocal, true
-	case RejectOnce, RejectAlways:
-		return "", true
+		return memory.ProjectLocal
 	}
-	return "", false
+	return ""
+}
+
+func rememberedAs(scope memory.Scope) ApprovalDecision {
+	switch scope {
+	case memory.Global:
+		return RememberGlobal
+	case memory.Project:
+		return RememberProject
+	case memory.UserLocal:
+		return RememberUserLocal
+	case memory.ProjectLocal:
+		return RememberProjectLocal
+	}
+	panic("host: unknown memory scope " + string(scope))
+}
+
+func personAnswerOf(decision ApprovalDecision) Answer {
+	switch decision {
+	case AllowOnce:
+		return AllowedOnce
+	case AllowAlways:
+		return AlwaysHere
+	case RejectOnce:
+		return Denied
+	case RejectAlways:
+		return NeverHere
+	}
+	panic("host: no answer for the decision " + string(decision))
 }
 
 type AskingMode string
@@ -466,11 +492,17 @@ type SessionUpdated struct {
 
 type ApprovalRequest struct {
 	Identity
-	Approval string          `json:"approval"`
-	Tool     string          `json:"tool"`
-	Target   string          `json:"target"`
-	Args     json.RawMessage `json:"args"`
-	Judged   *Judgement      `json:"judged,omitempty"`
+	Approval  string             `json:"approval"`
+	Tool      string             `json:"tool"`
+	Target    string             `json:"target"`
+	Args      json.RawMessage    `json:"args"`
+	Judged    *Judgement         `json:"judged,omitempty"`
+	Decisions []ApprovalDecision `json:"decisions"`
+}
+
+type StandingAnswer struct {
+	Target   string           `json:"target"`
+	Decision ApprovalDecision `json:"decision"`
 }
 
 type ApprovalAnswer struct {
@@ -514,6 +546,7 @@ type ApprovalResolved struct {
 	Approval string           `json:"approval"`
 	Decision ApprovalDecision `json:"decision"`
 	By       string           `json:"by"`
+	Standing bool             `json:"standing,omitempty"`
 }
 
 type Persisted struct {
@@ -651,6 +684,7 @@ type SessionState struct {
 	Asking    AskingMode        `json:"asking,omitempty"`
 	Pick      ModelPick         `json:"pick"`
 	Approvals []ApprovalRequest `json:"approvals"`
+	Standing  []StandingAnswer  `json:"standing"`
 	Questions []QuestionRequest `json:"questions"`
 	Agents    []AgentNow        `json:"agents"`
 	Shells    []ShellNow        `json:"shells"`

@@ -1,12 +1,14 @@
 package host
 
 import (
+	"maps"
 	"slices"
 	"sync"
 )
 
 type waitingAsk struct {
 	id    string
+	place string
 	reply chan Answer
 }
 
@@ -23,36 +25,53 @@ func (a *asks) stood(place string) (Answer, bool) {
 	return answer, stands
 }
 
-func (a *asks) stand(place string, answer Answer) {
+func (a *asks) standingNow() []StandingAnswer {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.standing[place] = answer
+	now := []StandingAnswer{}
+	for _, place := range slices.Sorted(maps.Keys(a.standing)) {
+		decision := AllowAlways
+		if a.standing[place] == NeverHere {
+			decision = RejectAlways
+		}
+		now = append(now, StandingAnswer{Target: place, Decision: decision})
+	}
+	return now
 }
 
-func (a *asks) wait(id string) (<-chan Answer, func()) {
+func (a *asks) wait(id, standsAt string) (<-chan Answer, func()) {
 	reply := make(chan Answer, 1)
 	a.mu.Lock()
-	a.waiting = append(a.waiting, waitingAsk{id: id, reply: reply})
+	a.waiting = append(a.waiting, waitingAsk{id: id, place: standsAt, reply: reply})
 	a.mu.Unlock()
-	return reply, func() { a.take(id) }
-}
-
-func (a *asks) answer(id string, given Answer) bool {
-	reply, waiting := a.take(id)
-	if waiting {
-		reply <- given
+	return reply, func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		a.take(id)
 	}
-	return waiting
 }
 
-func (a *asks) take(id string) (chan Answer, bool) {
+func (a *asks) answer(id string, given Answer) (answered, stands bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	asked, waiting := a.take(id)
+	if !waiting {
+		return false, false
+	}
+	stands = asked.place != "" && (given == AlwaysHere || given == NeverHere)
+	if stands {
+		a.standing[asked.place] = given
+	}
+	asked.reply <- given
+	return true, stands
+}
+
+func (a *asks) take(id string) (waitingAsk, bool) {
 	at := slices.IndexFunc(a.waiting, func(one waitingAsk) bool { return one.id == id })
 	if at < 0 {
-		return nil, false
+		return waitingAsk{}, false
 	}
-	reply := a.waiting[at].reply
+	asked := a.waiting[at]
 	a.waiting = slices.Delete(a.waiting, at, at+1)
-	return reply, true
+	return asked, true
 }

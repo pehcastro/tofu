@@ -63,12 +63,14 @@ func TestAClientThatAnswersQuestionsGetsTheRequestTheStateAndTheResolution(t *te
 	if len(state.Questions) != 1 || state.Questions[0].Question != id || state.Questions[0].Blocking || state.Questions[0].WaitMs != 120000 {
 		t.Fatalf("session.state lists %+v, want the open question, not blocking, 120000 ms", state.Questions)
 	}
-	s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"outcome":"submitted","answers":[{"id":"lib","chosen":["requests"]}]}`))
-	s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"allow_once"}`))
-	if len(s.state().Questions) != 1 {
-		t.Fatal("an answer naming no offered option, or an approval answer, closed the question")
+	unoffered := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"outcome":"submitted","answers":[{"id":"lib","chosen":["requests"]}]}`))
+	approval := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"allow_once"}`))
+	if len(s.state().Questions) != 1 || unoffered == nil || approval == nil {
+		t.Fatalf("an answer naming no offered option (%v), or an approval answer (%v), closed the question or got no error", unoffered, approval)
 	}
-	s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"outcome":"submitted","answers":[{"id":"lib","chosen":["resty"]}]}`))
+	if err := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"outcome":"submitted","answers":[{"id":"lib","chosen":["resty"]}]}`)); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case replies := <-got:
 		if len(replies) != 1 || replies[0].Chosen[0] != "resty" {

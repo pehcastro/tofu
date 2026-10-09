@@ -64,7 +64,7 @@ func (s *server) listed() {
 func (s *server) state() SessionState {
 	turn, running := s.Host.Turn()
 	asking, pick := s.Host.Settings()
-	state := SessionState{Session: s.Host.ID(), Running: running, Asking: asking, Pick: s.shown(pick), Shells: s.shellsNow(), Cron: s.cronState()}
+	state := SessionState{Session: s.Host.ID(), Running: running, Asking: asking, Pick: s.shown(pick), Standing: s.Host.Standing(), Shells: s.shellsNow(), Cron: s.cronState()}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if running && s.items.turn == turn {

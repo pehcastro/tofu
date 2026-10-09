@@ -28,8 +28,8 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
 - `session.state`, the answer to `resync`: `running` and its `turn`, `asking`,
-  the `pick`, waiting approvals, open `questions`, sub-agents, the kept shells
-  as `shell.started` carries them, the context window and the cron jobs
+  the `pick`, waiting approvals, `standing` answers (`target`, `decision`),
+  open `questions`, sub-agents, kept shells, the context and the cron jobs
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
   turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
@@ -105,8 +105,8 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
 
 A `remember` ask (`tofu/requestApproval`, tool `remember`, `scope` is Jev's
 pick) answers `remember_global` (user global), `remember_user_local`,
-`remember_project` (project global) or `remember_project_local`; `reject_*`
-keeps nothing, `allow_*` is ignored, and other asks ignore `remember_*`.
+`remember_project` (project global) or `remember_project_local` as its
+`decisions` offer, `reject_*` keeps nothing; one it does not list errs.
 
 ## Check it
 

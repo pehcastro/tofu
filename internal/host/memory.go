@@ -24,7 +24,11 @@ func pickMemory(emit func(Event), book *replies[memory.Scope]) tools.MemoryPick 
 		reply := book.wait(id)
 		defer book.forget(id)
 		emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: turn.RememberToolName, Verdict: Ask, Remembers: offer.Statement, MemoryScope: offer.Scope, MemoryScopes: offer.Scopes}})
-		emit(Event{Kind: EventAwaitPerson, ID: id, Tool: turn.RememberToolName, Args: shown})
+		accepts := []ApprovalDecision{}
+		for _, scope := range offer.Scopes {
+			accepts = append(accepts, rememberedAs(scope))
+		}
+		emit(Event{Kind: EventAwaitPerson, ID: id, Tool: turn.RememberToolName, Args: shown, Accepts: append(accepts, RejectOnce, RejectAlways, Cancelled)})
 		defer emit(Event{Kind: EventResumed, ID: id})
 		select {
 		case picked := <-reply:

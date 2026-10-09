@@ -41,18 +41,14 @@ answers. This page is what serve sends without being asked.
   `schedule`, `prompt`, `paused`, `next` and `ended`; a fire that starts a
   turn shows in its `origin` alone, one joining a running turn sends a `note`
 - `tool.started`, `tool.completed` and `file.edit` by a sub-agent carry its
-  `agent` and `instance`, live and on a replay, which keeps each event's real
-  `turn` and item
-- `agent.ended`: `endedAt`, `durationMs` and the `turn` that spawned it, as
-  recorded, so a replay matches live
+  `agent` and `instance`, live and replayed, with their real `turn` and item
+- `agent.ended`: `endedAt`, `durationMs` and the `turn` that spawned it
 - `turn.steered`: the lead read a message sent mid-turn, until then queued
 - `quota.updated`: on open, after each turn and every five minutes, each
   window's `percent`; `windows: []`, none answered
 - `item.persisted`: every line of `events.jsonl` with its `logSeq`, so history
   after a seq is a read of the log; a tool call's names its `tool.started`
-- `decision`: every gate, with `at` and `call`, the item of the
-  `tool.started` it judged; `tofu/requestApproval`, a request, when a gate
-  asks you, and `approval.resolved`, which answer won and who sent it
+- `decision`: every gate, with `at` and `call`, the `tool.started` it judged
 - `tofu/askPerson`, a request, when the lead asks a question with options,
   only to a client whose `initialize` declared `questions`; any other is
   `undelivered` at once. Answer `{"outcome":"submitted","answers":[{"id":
@@ -72,40 +68,44 @@ answers. This page is what serve sends without being asked.
 
 Confirmations follow the setting `gatePrompt`, auto unless you changed it.
 `session.open` and `session.set` take `asking`, `ask` or `auto`, for that
-session alone:
+session alone. Every gate sends a `decision` event either way:
 
-- `auto`: no request is sent; every gate still sends a `decision` event
-- `ask`: a gate jev would ask about sends `tofu/requestApproval` as a
-  request, and the turn waits. Answer with `allow_once`, `allow_always`,
-  `reject_once`, `reject_always`, or `cancelled`, which stops the turn. The
-  first answer wins. A `remember` ask takes `remember_` plus where to keep
-  it (`global`, `user_local`, `project`, `project_local`), or a reject
+- `auto`: a call jev would ask about runs unasked, and one the gate could
+  not judge is refused. `tofu/requestApproval` still comes, and the turn
+  waits, for a change to tofu's settings or a harness file, a PreToolUse
+  hook that asks, untrusted project hooks, `remember` and `rule_override`
+- `ask`: those, and every call jev would ask about or could not judge
+- a request's `decisions` are the answers it takes: `allow_once`,
+  `allow_always`, `reject_once`, `reject_always`, `cancelled` (stops the
+  turn), or for `remember` where to keep it. Any other answer, or one to an
+  id nothing waits on, gets an error reply. The first answer wins, and
+  `approval.resolved` names it and who sent it
+- `allow_always` and `reject_always` stand for that target until tofu exits:
+  `approval.resolved` says `standing`, `session.state` lists them, and each
+  call one decides unasked is a `standing` row in `tofu why`
+- a turn a cron job started has nobody to ask: what would ask is refused,
+  saying no person, and nothing waits. `turn.stop` with `lead: true`
+  withdraws a waiting approval, which resolves `cancelled`
 
-`session.set` also takes `wire`, `model` and `effort`, and holds them for
-every later turn and cron fire. A `wire` is the source that pays, as the
-picker spells it: `claude-sub`, `codex-sub`, `openrouter` or `meta`. One
-nobody here is signed in on is refused, and a new `wire` with no `model`
-takes that wire's default.
+`session.set` also takes `wire`, `model` and `effort`, held for every later
+turn and cron fire. A `wire` is the source that pays: `claude-sub`,
+`codex-sub`, `openrouter` or `meta`. One nobody is signed in on is refused;
+a new `wire` with no `model` takes its default. `turn.send` takes the same
+three, and `images`, png, jpg, gif or webp `{"path": ...}`, kept as
+`[Image #N]`.
 
-`turn.send` takes the same three, and `images`, a list of `{"path": ...}`:
-a png, jpg, gif or webp, copied into the session as `[Image #N]`.
-
-A message sent with `turn.steer` while a turn runs waits until the lead's
-next step reads it. `turn.sendNow` sends it now: tofu drops the lead's model
-request in flight and asks that step again with the message, keeping every
-tool result, sub-agent and shell. One message, or every queued one, which is
-Esc in the terminal; Esc again, or Esc with nothing queued, is `turn.stop`.
-The lead is asked for one line saying what the message changes before its
-next tool call, and `tofu session trace` warns on a step that skipped it.
-
-`--cassette PATH` answers every model call from a recorded cassette, as
-`tofu drive` does, so a frontend is built with no model and no network.
+A `turn.steer` message waits for the lead's next step. `turn.sendNow` sends
+it now: tofu drops the model request in flight and asks that step again with
+it, keeping every tool result, sub-agent and shell; Esc in the terminal,
+where Esc again is `turn.stop`. The lead says in one line what it changes
+before its next tool call, and `tofu session trace` warns on a skip.
 
 ## Check it
 
     tofu serve --stdio --cassette hi.cassette
 
-with `hi.cassette` holding `{"text":"hi"}`, then type:
+`--cassette` answers every model call as `tofu drive` does, with no network;
+with `hi.cassette` holding `{"text":"hi"}`, type:
 
     {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"client":"me"}}
     {"jsonrpc":"2.0","id":2,"method":"session.open","params":{}}

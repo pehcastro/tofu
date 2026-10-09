@@ -26,7 +26,13 @@ func TestServeListsSessionsReportsStateAndKeepsTheSettingsItWasGiven(t *testing.
 		images, _ := h.takePendingImages(task)
 		played <- playedTurn{pick: pick, task: task, images: len(images)}
 		if strings.Contains(task, "ask me") {
-			live.Emit(Event{Kind: EventAwaitPerson, ID: "ask-1", Tool: "bash", Text: "rm -rf build", Args: json.RawMessage(`{"command":"rm -rf build"}`)})
+			reply, forget := h.asks.wait("ask-1", "")
+			defer forget()
+			live.Emit(Event{Kind: EventAwaitPerson, ID: "ask-1", Tool: "bash", Text: "rm -rf build", Args: json.RawMessage(`{"command":"rm -rf build"}`), Accepts: []ApprovalDecision{AllowOnce}})
+			select {
+			case <-reply:
+			case <-ctx.Done():
+			}
 			select {
 			case <-release:
 			case <-ctx.Done():

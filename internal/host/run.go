@@ -26,6 +26,7 @@ import (
 
 const (
 	placeWords    = 2
+	standingPoint = "standing"
 	cancelledAt   = "cancelled at"
 	hookTrustTool = "hooks"
 )
@@ -90,7 +91,12 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
-	person := awaitPerson(emit, h.asks)
+	person, asking := awaitPerson(emit, h.asks), turn.WithQuestionsBlock(turn.WithShellRegistry(ctx, h.shells), h.questionsBlock)
+	if live.Origin.Kind == OriginCron {
+		person = unattended
+	} else {
+		asking = turn.WithPersonForm(tools.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
+	}
 	var prepared Prepared
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
 		Lead:     func(model turn.Model) turn.Model { watch.inner = model; return watch },
@@ -143,12 +149,6 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	config.SessionSource, h.started = h.started, ""
 	config.History, config.Prefix = h.carried, h.prefix
 	config.TaskOrigin.Source = live.Origin.recorded()
-	switch h.asking {
-	case AskingAsk:
-		config.Person = person
-	case AskingAuto:
-		config.Person = person.RunsWhatJevAsks()
-	}
 	h.mu.Unlock()
 	var steps atomic.Int64
 	config.Steering = func() []string { return h.steering.take(emit, int(steps.Load())+1) }
@@ -186,7 +186,6 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
 	heard := func(typed string) { emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1}) }
 	var reported []error
-	asking := turn.WithQuestionsBlock(turn.WithPersonForm(turn.WithShellRegistry(tools.WithMemoryPick(ctx, pickMemory(emit, h.memoryPicks)), h.shells), askForm(emit, h.questions)), h.questionsBlock)
 	leadErr := turn.Lead(asking, config, live.Steering, heard, func(row turn.Row, err error) {
 		watch.stop.reset()
 		steps.Store(0)
@@ -311,33 +310,34 @@ func awaitPerson(emit func(Event), book *asks) turn.Person {
 		if request.Tool == (tools.RuleOverride{}).Name() {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
-		standing := overriding.Question == "" && request.Tool != hookTrustTool
-		stood, stands := book.stood(place)
-		stands = stands && standing
+		standsAt, accepts := place, []ApprovalDecision{AllowOnce, AllowAlways, RejectOnce, RejectAlways, Cancelled}
+		if overriding.Question != "" || request.Tool == hookTrustTool {
+			standsAt, accepts = "", []ApprovalDecision{AllowOnce, AllowAlways, RejectOnce, Cancelled}
+		}
+		stood, stands := book.stood(standsAt)
 		id := cmp.Or(decision.ID, session.NewEventID())
 		switch {
 		case overriding.Question != "":
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})
-		case stands && stood == AlwaysHere:
-			return turn.PersonAlwaysHere, nil
 		case stands:
+			recordStanding(request, place, stood)
+			if stood == AlwaysHere {
+				return turn.PersonAlwaysHere, nil
+			}
 			return turn.PersonDenied, nil
 		}
-		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx)}
+		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx), Accepts: accepts}
 		if decision.Verdict != ledger.VerdictUnset {
 			judged := gateDecision(request.Tool, decision)
 			asked.Decision = &judged
 		}
-		reply, forget := book.wait(asked.ID)
+		reply, forget := book.wait(asked.ID, standsAt)
 		defer forget()
 		emit(asked)
 		defer emit(Event{Kind: EventResumed, ID: asked.ID, Agent: asked.Agent})
 		select {
 		case answered := <-reply:
-			if (answered == AlwaysHere || answered == NeverHere) && standing {
-				book.stand(place, answered)
-			}
 			var out turn.PersonAnswer
 			switch answered {
 			case AlwaysHere:
@@ -366,6 +366,32 @@ func recordPersonAnswer(id string, answer turn.PersonAnswer) {
 		return
 	}
 	_ = ledger.NewWriter(dir).Backfill(id, answer.Outcome())
+}
+
+func recordStanding(request turn.GateRequest, place string, stood Answer) {
+	dir, err := sys.LogDir()
+	if err != nil {
+		return
+	}
+	body, err := ledger.Canonical(map[string]string{"tool": request.Tool, "target": place})
+	if err != nil {
+		return
+	}
+	verdict := ledger.VerdictDeny
+	if stood == AlwaysHere {
+		verdict = ledger.VerdictAllow
+	}
+	_, _ = ledger.NewWriter(dir).Append(ledger.Row{Point: standingPoint, StateHash: ledger.HashOf(body), State: body, Verdict: verdict, TurnID: request.TurnID})
+}
+
+type noPerson struct{}
+
+func (noPerson) Error() string {
+	return "no person: a cron job started this turn and nobody is there to answer, so a call that would ask is refused"
+}
+
+func unattended(context.Context, turn.GateRequest, turn.GateDecision) (turn.PersonAnswer, error) {
+	return turn.PersonDenied, noPerson{}
 }
 
 func askedPlace(request turn.GateRequest) string {

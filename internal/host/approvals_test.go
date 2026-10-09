@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -39,8 +40,10 @@ func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {
 			order = append(order, <-awaited)
 		}
 		first, second := order[0], order[1]
-		s.answered(json.RawMessage(`"`+second+`"`), json.RawMessage(`{"decision":"reject_once"}`))
-		s.answered(json.RawMessage(`"`+first+`"`), json.RawMessage(`{"decision":"allow_once"}`))
+		if err := errors.Join(s.answered(json.RawMessage(`"`+second+`"`), json.RawMessage(`{"decision":"reject_once"}`)),
+			s.answered(json.RawMessage(`"`+first+`"`), json.RawMessage(`{"decision":"allow_once"}`))); err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
 		for id, want := range map[string]turn.PersonAnswer{first: turn.PersonAllowedOnce, second: turn.PersonDenied} {
 			select {
 			case answer := <-got[id]:

@@ -80,6 +80,7 @@ type Event struct {
 	Turn      string
 	Questions []turn.PersonQuestion
 	Wait      time.Duration
+	Accepts   []ApprovalDecision
 }
 
 type Status string

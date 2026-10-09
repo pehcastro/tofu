@@ -153,14 +153,19 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 			kept <- scope
 		}()
 		id := <-picked
-		s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"`+answers[0]+`"}`))
+		err := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"`+answers[0]+`"}`))
+		if (err == nil) == (answers[1] == "ignored") {
+			t.Errorf("%s on a remember ask replied %v", answers[0], err)
+		}
 		if answers[1] == "ignored" {
 			select {
 			case scope := <-kept:
 				t.Fatalf("allow_once on a remember ask kept it as %q, want it ignored", scope)
 			case <-time.After(100 * time.Millisecond):
 			}
-			s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"reject_once"}`))
+			if err := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"reject_once"}`)); err != nil {
+				t.Fatal(err)
+			}
 			answers[1] = ""
 		}
 		if scope := <-kept; scope != memory.Scope(answers[1]) {
@@ -168,13 +173,17 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 		}
 	}
 	got, id := ask("bash", `{"command":"git push --force"}`)
-	s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"remember_global"}`))
+	if err := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"remember_global"}`)); err == nil {
+		t.Error("remember_global on a bash ask got no error reply")
+	}
 	select {
 	case answer := <-got:
 		t.Fatalf("remember_global on a bash ask answered it %v", answer)
 	case <-time.After(100 * time.Millisecond):
 	}
-	s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"reject_once"}`))
+	if err := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"reject_once"}`)); err != nil {
+		t.Fatal(err)
+	}
 	if answer := <-got; answer != turn.PersonDenied {
 		t.Errorf("reject_once after an ignored remember answer gave %v", answer)
 	}

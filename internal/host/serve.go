@@ -95,14 +95,18 @@ func (s *server) receive(line []byte) {
 		Method string          `json:"method"`
 		Params json.RawMessage `json:"params"`
 		Result json.RawMessage `json:"result"`
+		Error  json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(line, &in); err != nil {
 		s.respond(json.RawMessage("null"), nil, &Refusal{Code: CodeParse, Message: err.Error()})
 		return
 	}
 	switch {
+	case in.Method == "" && in.Error != nil:
 	case in.Method == "" && in.ID != nil:
-		s.answered(in.ID, in.Result)
+		if err := s.answered(in.ID, in.Result); err != nil {
+			s.respond(in.ID, nil, err)
+		}
 	case in.ID == nil:
 	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "mention.resolve", "shell.run", "session.list", "session.history", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
 		go func() {
@@ -481,58 +485,54 @@ func (s *server) shellKill(p ShellParams) (any, error) {
 	return Ack{OK: true}, s.Shells.Kill(p.Shell)
 }
 
-func (s *server) answered(id, result json.RawMessage) {
+func (s *server) answered(id, result json.RawMessage) error {
 	var approval string
-	var answer ApprovalAnswer
-	if json.Unmarshal(id, &approval) != nil {
-		return
-	}
+	_ = json.Unmarshal(id, &approval)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if asked, open := s.asked[approval]; open {
-		s.questionAnswered(asked, result)
-		return
-	}
-	if json.Unmarshal(result, &answer) != nil {
-		return
+		return s.questionAnswered(asked, result)
 	}
 	asked, pending := s.pending[approval]
 	if !pending {
-		return
+		return &Refusal{Code: CodeInvalid, Message: "nothing waits on the answer " + string(id) + ": it was answered, withdrawn, or never asked"}
 	}
-	scope, remembers := keptAs(answer.Decision)
+	var answer ApprovalAnswer
+	if json.Unmarshal(result, &answer) != nil || !slices.Contains(asked.Decisions, answer.Decision) {
+		accepted := make([]string, len(asked.Decisions))
+		for index, decision := range asked.Decisions {
+			accepted[index] = string(decision)
+		}
+		return &Refusal{Code: CodeBadParams, Message: "approval " + approval + " takes a decision of " + strings.Join(accepted, ", ")}
+	}
+	answered, stands := true, false
 	switch {
 	case answer.Decision == Cancelled:
 		s.Host.Stop()
 	case asked.Tool == turn.RememberToolName:
-		if !remembers || !s.Host.AnswerMemory(approval, scope) {
-			return
-		}
-	case answer.Decision == AllowOnce:
-		s.Host.AnswerAsk(approval, AllowedOnce)
-	case answer.Decision == AllowAlways:
-		s.Host.AnswerAsk(approval, AlwaysHere)
-	case answer.Decision == RejectOnce:
-		s.Host.AnswerAsk(approval, Denied)
-	case answer.Decision == RejectAlways:
-		s.Host.AnswerAsk(approval, NeverHere)
+		answered = s.Host.AnswerMemory(approval, keptAs(answer.Decision))
 	default:
-		return
+		answered, stands = s.Host.AnswerAsk(approval, personAnswerOf(answer.Decision))
+	}
+	if !answered {
+		return &Refusal{Code: CodeInvalid, Message: "approval " + approval + " was withdrawn before this answer arrived"}
 	}
 	delete(s.pending, approval)
-	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client}))
+	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands}))
+	return nil
 }
 
-func (s *server) questionAnswered(asked QuestionRequest, result json.RawMessage) {
+func (s *server) questionAnswered(asked QuestionRequest, result json.RawMessage) error {
 	var answer QuestionAnswer
 	if json.Unmarshal(result, &answer) != nil || answer.Outcome != QuestionSubmitted && answer.Outcome != QuestionCancelled || !offered(asked.Questions, answer.Answers) {
-		return
+		return &Refusal{Code: CodeBadParams, Message: "question " + asked.Question + " takes submitted with answers among its options, or cancelled"}
 	}
 	if !s.Host.AnswerQuestion(asked.Question, answer, s.client) {
-		return
+		return &Refusal{Code: CodeInvalid, Message: "question " + asked.Question + " was withdrawn before this answer arrived"}
 	}
 	delete(s.asked, asked.Question)
 	s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: asked.Question, Outcome: answer.Outcome, By: s.client}))
+	return nil
 }
 
 func offered(questions []turn.PersonQuestion, answers []turn.PersonReply) bool {
