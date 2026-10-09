@@ -131,6 +131,11 @@ exit 0
         "topic": "update",
         "title": "Updating tofu",
         "summary": "how tofu finds the latest release, installs it in the background or with tofu update, and says when to restart"
+      },
+      {
+        "topic": "usage",
+        "title": "Subscription quota",
+        "summary": "how tofu reads each subscription's 5 hour and 7 day windows, shares one reading between every tofu process, and keeps the last one when the vendor says no"
       }
     ],
     "entries": [
@@ -408,7 +413,13 @@ exit 0
         "ask": "how much subscription quota is left",
         "do": "tofu usage",
         "check": "tofu usage --history",
-        "topic": "models"
+        "topic": "usage"
+      },
+      {
+        "ask": "why the quota reading is stale or how old it is",
+        "do": "tofu usage",
+        "check": "tofu usage --json",
+        "topic": "usage"
       },
       {
         "ask": "add a skill for every project",

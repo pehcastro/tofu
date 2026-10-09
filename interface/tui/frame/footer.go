@@ -135,6 +135,9 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 		head = append(head, panel(footerSeparator+name+" ", look.Text))
 		if quota.Reported {
 			head = append(head, panel(widget.Percent(quota.Fraction), look.Amber))
+			if quota.Stale {
+				head = append(head, panel(" read "+widget.Until(status.At.Sub(quota.ReadAt))+" ago", look.FaintColor))
+			}
 		} else {
 			head = append(head, panel("not reported", look.FaintColor))
 		}

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
@@ -23,20 +24,16 @@ const (
 )
 
 const (
-	pollTimeout       = 15 * time.Second
-	freshFor          = 5 * time.Minute
-	freshJitter       = 0.25
-	coolFloor         = time.Minute
-	coolCap           = 10 * time.Minute
-	heardEvery        = time.Minute
-	loggedLookback    = 7 * 24 * time.Hour
-	lockRetry         = 25 * time.Millisecond
-	nearLimitWatch    = 0.75
-	nearLimitWatchFor = 2 * time.Minute
-	nearLimitClose    = 0.90
-	nearLimitCloseFor = time.Minute
-	nearLimitAt       = 0.99
-	nearLimitAtFor    = 30 * time.Second
+	pollTimeout       = konst.QuotaPollTimeoutSeconds * time.Second
+	freshFor          = konst.QuotaFreshMinutes * time.Minute
+	coolFloor         = konst.QuotaCoolFloorMinutes * time.Minute
+	coolCap           = konst.QuotaCoolCapMinutes * time.Minute
+	heardEvery        = konst.QuotaHeardEverySeconds * time.Second
+	loggedLookback    = konst.QuotaLoggedLookbackDays * 24 * time.Hour
+	lockRetry         = konst.QuotaLockRetryMillis * time.Millisecond
+	nearLimitWatchFor = konst.QuotaNearLimitWatchSeconds * time.Second
+	nearLimitCloseFor = konst.QuotaNearLimitCloseSeconds * time.Second
+	nearLimitAtFor    = konst.QuotaNearLimitAtSeconds * time.Second
 )
 
 type Credential interface {
@@ -83,7 +80,7 @@ func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
 	if account.AccountID == "" {
 		report, _, err := p.fetch(ctx, account)
 		if err != nil {
-			return Report{Provider: account.Provider, FetchedAt: p.now()}, err
+			return Report{Provider: account.Provider}, err
 		}
 		p.note(account, report)
 		return report, nil
@@ -169,15 +166,19 @@ func (p *Poller) freshFor(report Report) time.Duration {
 			fullest = max(fullest, window.Used.Fraction)
 		}
 		switch {
-		case fullest >= nearLimitAt:
+		case fullest >= konst.QuotaNearLimitAt:
 			return nearLimitAtFor
-		case fullest >= nearLimitClose:
+		case fullest >= konst.QuotaNearLimitClose:
 			return nearLimitCloseFor
-		case fullest >= nearLimitWatch:
+		case fullest >= konst.QuotaNearLimitWatch:
 			return nearLimitWatchFor
 		}
 	}
-	return time.Duration(float64(freshFor) * (1 + freshJitter*(2*p.spread()-1)))
+	return Jittered(freshFor, p.spread())
+}
+
+func Jittered(base time.Duration, spread float64) time.Duration {
+	return time.Duration(float64(base) * (1 + konst.QuotaJitter*(2*spread-1)))
 }
 
 func (p *Poller) note(account Account, report Report) {

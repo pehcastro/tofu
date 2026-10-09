@@ -40,26 +40,26 @@ func usageVerb(args []string, out, errOut io.Writer) int {
 		return usageHistoryVerb(out, errOut, o.asJSON)
 	}
 	now := time.Now()
-	report, read, err := readUsage(now)
+	report, err := readUsage(now)
 	if err != nil {
 		return o.fail(err)
 	}
-	return o.done(true, report, func(page cli.Page) []string { return usagePage(page, report, read, now) })
+	return o.done(true, report, func(page cli.Page) []string { return usagePage(page, report, now) })
 }
 
 func usageFail(errOut io.Writer, err error) int {
 	return printFailure(errOut, exitVerdict, "tofu usage: "+err.Error(), "")
 }
 
-func readUsage(now time.Time) (usageReport, []pollResult, error) {
+func readUsage(now time.Time) (usageReport, error) {
 	results, err := pollCredentials(context.Background(), time.Now, nil)
 	if err != nil {
-		return usageReport{}, nil, err
+		return usageReport{}, err
 	}
 	report := usageReport{State: usageServing, Providers: credentialReports(results, now), SpendLimit: quota.SpendLimitLine()}
 	if len(results) == 0 {
 		report.State, report.Missing = usageNone, doctorBlockers()
-		return report, results, nil
+		return report, nil
 	}
 	fullest := -1.0
 	for _, provider := range report.Providers {
@@ -72,10 +72,10 @@ func readUsage(now time.Time) (usageReport, []pollResult, error) {
 			}
 		}
 	}
-	return report, results, nil
+	return report, nil
 }
 
-func usagePage(page cli.Page, report usageReport, read []pollResult, now time.Time) []string {
+func usagePage(page cli.Page, report usageReport, now time.Time) []string {
 	verdict := cli.Verdict{Mark: cli.Done, Text: string(report.State)}
 	switch report.State {
 	case usageServing:
@@ -107,14 +107,14 @@ func usagePage(page cli.Page, report usageReport, read []pollResult, now time.Ti
 			}
 			facts = append(facts, cli.Fact{Label: window.ID, Text: text})
 		}
-		if held := read[i].report; !held.FetchedAt.IsZero() {
-			text := held.FetchedAt.UTC().Format(time.RFC3339) + ", " + widget.Until(now.Sub(held.FetchedAt)) + " ago, from the " + string(held.Source)
-			if held.Stale {
+		if !provider.ReadAt.IsZero() {
+			text := provider.ReadAt.Format(time.RFC3339) + ", " + widget.Until(now.Sub(provider.ReadAt)) + " ago, from the " + provider.Source
+			if provider.Stale {
 				text += ", stale"
 			}
 			facts = append(facts, cli.Fact{Label: "read", Text: page.Label(text)})
 		}
-		if left := read[i].report.RetryAt.Sub(now); left > 0 {
+		if left := provider.RetryAt.Sub(now); left > 0 {
 			facts = append(facts, cli.Fact{Label: "retry", Text: page.Label("in " + widget.Until(left))})
 		}
 		lines = append(lines, page.Card(page.Subject(cmp.Or(provider.Plan, "plan not reported")), cardVerdict, page.Facts(facts))...)

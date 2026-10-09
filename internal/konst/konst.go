@@ -417,6 +417,24 @@ const (
 )
 
 const (
+	QuotaPollTimeoutSeconds    = 15
+	QuotaFreshMinutes          = 5
+	QuotaJitter                = 0.25
+	QuotaCoolFloorMinutes      = 1
+	QuotaCoolCapMinutes        = 10
+	QuotaHeardEverySeconds     = 60
+	QuotaLoggedLookbackDays    = 7
+	QuotaLockRetryMillis       = 25
+	QuotaRenameTries           = 20
+	QuotaNearLimitWatch        = 0.75
+	QuotaNearLimitWatchSeconds = 120
+	QuotaNearLimitClose        = 0.90
+	QuotaNearLimitCloseSeconds = 60
+	QuotaNearLimitAt           = 0.99
+	QuotaNearLimitAtSeconds    = 30
+)
+
+const (
 	AskPersonWaitSeconds    = 120
 	AskPersonQuestionsMost  = 4
 	AskPersonOptionsLeast   = 2

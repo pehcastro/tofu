@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           53 matches
+Docs · "change the colours"                                           55 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -42,6 +42,8 @@ Docs · "change the colours"                                           53 matche
     → tofu docs status
   Updating tofu
     → tofu docs update
+  Subscription quota
+    → tofu docs usage
   stop the animations
     → tofu settings set animations off
   show every tool call in the chat
@@ -62,6 +64,8 @@ Docs · "change the colours"                                           53 matche
     → /models in the app, then pick a model
   always run the orchestrator on one model
     → write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
+  why the quota reading is stale or how old it is
+    → tofu usage
   see which skills the model is offered
     → tofu run --dir . --show-prompt "anything"
   store the openrouter key the gate needs

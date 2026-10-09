@@ -36,6 +36,8 @@ type Quota struct {
 	Fraction float64
 	Reported bool
 	ResetsAt time.Time
+	ReadAt   time.Time
+	Stale    bool
 }
 
 type Context = host.Context

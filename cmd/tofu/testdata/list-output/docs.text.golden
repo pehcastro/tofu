@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 90 asks                                                         25 topics
+Docs · 91 asks                                                         26 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -140,8 +140,6 @@ models  sign in to a subscription, name a model as source/model, choose the
     → write model: <source/model> in ~/.tofu/roles/orchestrator.yaml
   stop tofu from using a model
     → write use: excluded and a reason in ~/.tofu/models/<provider>/<model>.yaml
-  how much subscription quota is left
-    → tofu usage
 
 rules  add your own rules for every project or for one, switch a rule off, and
   see which rules run
@@ -255,6 +253,14 @@ update  how tofu finds the latest release, installs it in the background or
     → tofu update
   is there a newer tofu
     → tofu update --check
+
+usage  how tofu reads each subscription's 5 hour and 7 day windows, shares one
+  reading between every tofu process, and keeps the last one when the vendor
+  says no
+  how much subscription quota is left
+    → tofu usage
+  why the quota reading is stale or how old it is
+    → tofu usage
 
   → tofu docs <topic>
   → tofu docs "a few words"

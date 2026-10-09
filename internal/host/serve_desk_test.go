@@ -76,37 +76,37 @@ func TestDeskACronFireThatStartsATurnSaysSoOnlyByItsOriginAndDeleteAllEmptiesThe
 	}
 }
 
-func TestDeskQueryUsageAnswersWhatItLastReadAtOnceAndSaysHowOld(t *testing.T) {
+func TestDeskQueryUsageAsksTheSharedCacheEachTimeAndDatesItselfByItsOldestReading(t *testing.T) {
 	var reads atomic.Int32
 	verb := func(args []string) (VerbResult, error) {
 		if args[0] != "usage" {
 			return VerbResult{}, nil
 		}
 		reads.Add(1)
-		time.Sleep(300 * time.Millisecond)
-		return VerbResult{OK: true, Data: json.RawMessage(`{"state":"serving","providers":[{"provider":"claude-sub","state":"serving"}],"spend_limit":"none"}`)}, nil
+		return VerbResult{OK: true, Data: json.RawMessage(`{"state":"needs attention","providers":[
+			{"provider":"claude-sub","account":"#1","state":"serving","read_at":"2026-10-09T05:20:00Z","source":"reply headers"},
+			{"provider":"claude-sub","account":"#2","state":"rate limited","read_at":"2026-10-09T05:17:12Z","source":"usage endpoint","stale":true,"retry_at":"2026-10-09T05:24:41Z"},
+			{"provider":"codex-sub","account":"#3","state":"not polled"}],"spend_limit":"none"}`)}, nil
 	}
 	c, _, _ := serving(t, nil, ServeConfig{Verb: verb})
 	c.ask("1", "initialize", `{"client":"desk"}`)
 	c.answer("1", &InitializeResult{})
+	var first, second UsageAnswer
 	c.ask("2", "query.usage", `{}`)
-	var cold UsageAnswer
-	c.answer("2", &cold)
-
-	asked := time.Now()
+	c.answer("2", &first)
 	c.ask("3", "query.usage", `{}`)
-	var warm UsageAnswer
-	c.answer("3", &warm)
-	took := time.Since(asked)
+	c.answer("3", &second)
 
-	if took > 150*time.Millisecond {
-		t.Errorf("a warm query.usage took %s, want the reading it already holds", took)
+	if got := reads.Load(); got != 2 {
+		t.Errorf("two query.usage read the cache %d times, want twice: serve holds no reading of its own", got)
 	}
-	if got := reads.Load(); got != 1 {
-		t.Errorf("two query.usage read the providers %d times, want once", got)
+	oldest := time.Date(2026, 10, 9, 5, 17, 12, 0, time.UTC)
+	if !second.ReadAt.Equal(oldest) || second.AgeMs < time.Since(oldest).Milliseconds()-1000 {
+		t.Errorf("the answer is dated %s, %d ms old, want its oldest reading %s", second.ReadAt, second.AgeMs, oldest)
 	}
-	if warm.ReadAt.IsZero() || !warm.ReadAt.Equal(cold.ReadAt) || warm.AgeMs < 0 || len(warm.Providers) != 1 {
-		t.Errorf("the warm answer is %+v after %+v, want the same reading with its age", warm, cold)
+	stale := second.Providers[1]
+	if !stale.Stale || stale.Source != "usage endpoint" || !stale.RetryAt.Equal(time.Date(2026, 10, 9, 5, 24, 41, 0, time.UTC)) || second.Providers[0].Stale {
+		t.Errorf("the providers came back as %+v", second.Providers)
 	}
 }
 

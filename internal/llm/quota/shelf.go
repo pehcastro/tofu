@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/transport"
 )
 
 const (
-	shelfDirName     = "latest"
-	shelfKeyBytes    = 8
-	shelfRenameTries = 20
+	shelfDirName  = "latest"
+	shelfKeyBytes = 8
 )
 
 type shelved struct {
@@ -56,7 +56,7 @@ func (s shelf) write(held shelved) error {
 	if err := os.WriteFile(s.data+".next", raw, 0o644); err != nil {
 		return err
 	}
-	for range shelfRenameTries {
+	for range konst.QuotaRenameTries {
 		if err = os.Rename(s.data+".next", s.data); err == nil {
 			return nil
 		}

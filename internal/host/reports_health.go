@@ -39,6 +39,10 @@ type CredentialReport struct {
 	Plan     string         `json:"plan,omitempty"`
 	State    string         `json:"state"`
 	Windows  []WindowReport `json:"windows,omitempty"`
+	ReadAt   time.Time      `json:"read_at,omitzero"`
+	Source   string         `json:"source,omitempty"`
+	Stale    bool           `json:"stale,omitempty"`
+	RetryAt  time.Time      `json:"retry_at,omitzero"`
 }
 
 type WindowReport struct {

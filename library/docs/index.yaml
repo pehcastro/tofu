@@ -181,7 +181,11 @@
 - ask: how much subscription quota is left
   do: tofu usage
   check: tofu usage --history
-  topic: models
+  topic: usage
+- ask: why the quota reading is stale or how old it is
+  do: tofu usage
+  check: tofu usage --json
+  topic: usage
 - ask: add a skill for every project
   do: write ~/.tofu/skills/<name>/SKILL.md with a name and a description
   check: tofu run --dir . --show-prompt "anything"

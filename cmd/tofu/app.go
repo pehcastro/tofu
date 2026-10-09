@@ -546,6 +546,8 @@ func quotaFrames(results []pollResult, err error) []frame.Quota {
 				Fraction: window.Used.Fraction,
 				Reported: window.Used.Reported,
 				ResetsAt: window.ResetsAt,
+				ReadAt:   result.report.FetchedAt,
+				Stale:    result.report.Stale,
 			})
 		}
 	}

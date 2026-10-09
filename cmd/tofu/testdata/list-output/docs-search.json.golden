@@ -89,6 +89,10 @@ exit 0
         "do": "tofu docs update"
       },
       {
+        "text": "Subscription quota",
+        "do": "tofu docs usage"
+      },
+      {
         "text": "stop the animations",
         "do": "tofu settings set animations off"
       },
@@ -127,6 +131,10 @@ exit 0
       {
         "text": "always run the orchestrator on one model",
         "do": "write model: <source/model> in ~/.tofu/roles/orchestrator.yaml"
+      },
+      {
+        "text": "why the quota reading is stale or how old it is",
+        "do": "tofu usage"
       },
       {
         "text": "see which skills the model is offered",

@@ -64,8 +64,8 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `settings`, `rules` (each with `text`, `trigger`, `fires` and `fires_week`,
   seven days, today last), `agents`, `library`, `memory`, `hooks`,
   `changelog` (with `seen`), `update` (it never installs), `usage` (each
-  provider row's `account` and `name`; the last reading at once, with
-  `read_at` and `age_ms`, read again behind the answer past five minutes),
+  provider row's `account`, `name`, `read_at`, `source`, `stale` and
+  `retry_at`; the answer's `read_at` and `age_ms` are its oldest reading's),
   `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes
   `session`; `items`, each `{band, kind, name, tokens, fate, step}`) and
   `ledger` (takes `id`, or `last` and `point`; `rows` with `precedents` and

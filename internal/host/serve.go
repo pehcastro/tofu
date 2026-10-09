@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/llm/quota"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
@@ -59,7 +61,6 @@ type server struct {
 	answers bool
 	shells  map[string]*watchedShell
 	command context.CancelFunc
-	usage   usageHeld
 	status  statusFeed
 }
 
@@ -164,9 +165,6 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		result, err := handle(raw, s.open)
 		if err == nil {
 			go s.quota()
-		}
-		if err == nil && s.Verb != nil {
-			go s.refreshUsage()
 		}
 		return result, err
 	case "session.rename":
@@ -646,13 +644,11 @@ func (s *server) quota() {
 }
 
 func (s *server) pollQuota(quit <-chan struct{}) {
-	every := time.NewTicker(konst.ServeQuotaPollMinutes * time.Minute)
-	defer every.Stop()
 	for {
 		select {
 		case <-quit:
 			return
-		case <-every.C:
+		case <-time.After(quota.Jittered(konst.ServeQuotaPollMinutes*time.Minute, rand.Float64())):
 			s.quota()
 		}
 	}
