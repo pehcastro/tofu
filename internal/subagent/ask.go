@@ -3,11 +3,24 @@ package subagent
 import "fmt"
 
 type AskState struct {
-	Path          string `json:"path"`
-	InOwns        bool   `json:"in_owns"`
-	Answered      bool   `json:"answered_by_spec_or_ticket"`
-	Precedent     bool   `json:"precedent_exists"`
-	Reversibility string `json:"reversibility"`
+	Asker         Asker       `json:"asker"`
+	Question      string      `json:"question"`
+	Options       []AskOption `json:"options"`
+	Recommended   string      `json:"recommended"`
+	Path          string      `json:"path"`
+	InOwns        bool        `json:"in_owns"`
+	Answered      bool        `json:"answered_by_spec_or_ticket"`
+	Precedent     bool        `json:"precedent_exists"`
+	Reversibility string      `json:"reversibility"`
+}
+
+type Asker string
+
+const AskerLead Asker = "lead"
+
+type AskOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description"`
 }
 
 const (

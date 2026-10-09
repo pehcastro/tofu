@@ -32,6 +32,7 @@ const (
 	sourceMessage       = "message to this sub-agent"
 	sourceGateAsk       = "sub-agent gate ask"
 	sourceMemory        = "memory saved"
+	sourceAnswer        = "question answer"
 )
 
 type inboxItem struct {
@@ -48,6 +49,47 @@ type Inbox struct {
 	held     map[string]*heldSubAgent
 	logs     map[*session.Log]int
 	unclosed []error
+	asked    []*Asked
+}
+
+type Asked struct {
+	inbox *Inbox
+	poll  string
+}
+
+func (b *Inbox) Open(poll string) *Asked {
+	asked := &Asked{inbox: b, poll: poll}
+	b.mu.Lock()
+	b.asked = append(b.asked, asked)
+	b.mu.Unlock()
+	return asked
+}
+
+func (q *Asked) Answer(said string) {
+	q.inbox.mu.Lock()
+	q.inbox.items = append(q.inbox.items, inboxItem{text: said, source: sourceAnswer, posted: time.Now()})
+	q.inbox.mu.Unlock()
+	q.inbox.signal()
+}
+
+func (q *Asked) Close() {
+	q.inbox.mu.Lock()
+	q.inbox.asked = slices.DeleteFunc(q.inbox.asked, func(open *Asked) bool { return open == q })
+	q.inbox.mu.Unlock()
+	q.inbox.signal()
+}
+
+func (b *Inbox) stillAsked() []string {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	polls := make([]string, len(b.asked))
+	for i, open := range b.asked {
+		polls[i] = open.poll
+	}
+	return polls
 }
 
 func NewInbox() *Inbox {
@@ -133,10 +175,10 @@ func (b *Inbox) takeItems() []inboxItem {
 func (b *Inbox) next(ctx context.Context, typed <-chan string) ([]inboxItem, string) {
 	for {
 		b.mu.Lock()
-		taken, running := b.items, b.running
+		taken, waiting := b.items, b.running+len(b.asked)
 		b.items = nil
 		b.mu.Unlock()
-		if len(taken) > 0 || running == 0 {
+		if len(taken) > 0 || waiting == 0 {
 			return taken, ""
 		}
 		select {

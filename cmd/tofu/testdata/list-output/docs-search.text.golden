@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           52 matches
+Docs · "change the colours"                                           53 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -8,6 +8,8 @@ Docs · "change the colours"                                           52 matche
     → /cron edit c1 --schedule "every 30m" --reason "the build is stable"
   Sub-agents
     → tofu docs agents
+  When the lead asks you
+    → tofu docs asking
   Browser
     → tofu docs browser
   Commands in the app

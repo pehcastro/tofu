@@ -3,6 +3,10 @@ domain: general
 questions_version: 1
 
 state:
+  - asker
+  - question
+  - options
+  - recommended
   - path
   - in_owns
   - answered_by_spec_or_ticket
@@ -13,32 +17,37 @@ questions:
   action:
     type: choice
     instructions: >-
-      A worker doing ticketed work hit a moment of doubt about `path`. The
-      state already carries whether `in_owns` holds for that path, whether
-      `answered_by_spec_or_ticket` already settles it, whether
-      `precedent_exists` from an earlier decision, and what `reversibility`
-      says about the cost of a wrong guess. Choose the one action the worker
+      Someone doing work hit a moment of doubt. `asker` says who: the lead,
+      who would put `question` to the person, or a sub-agent, who would put
+      it to the orchestrator. `options` are the ways out the asker sees and
+      `recommended` is the one it would take. Where the doubt is about a
+      file, `path` names it and `in_owns` says whether the asker may write
+      it. `answered_by_spec_or_ticket` says whether a spec or a ticket
+      already settles it, `precedent_exists` whether an earlier decision
+      does, and `reversibility` what a wrong guess costs. Each is empty or
+      false when nothing on hand says. Choose the one action the asker
       should take right now.
     escape: ask_now
     options:
       - name: proceed
         criteria: >-
-          Enough is already known: take the reading the state already points
-          to and keep working, with nothing left to settle.
+          Enough is already known: take the recommended option or the
+          reading the state already points to, say so, and keep working,
+          with nothing left to settle.
       - name: ask_now
         criteria: >-
           The doubt blocks real work, and a wrong guess would be costly or
-          hard to reverse: stop and put the question to the orchestrator
-          before doing anything else.
+          hard to reverse: put the question to whoever answers the asker
+          before doing anything the answer touches.
       - name: defer_to_end
         criteria: >-
-          The doubt does not block the rest of the ticket: finish everything
+          The doubt does not block the rest of the work: finish everything
           the answer does not touch, and carry the question to the report.
 
   determined:
     type: noul
     instructions: >-
-      Judge whether the doubt about `path` is already settled by
+      Judge whether the doubt in `question` is already settled by
       `answered_by_spec_or_ticket` or `precedent_exists`, without asking
       anyone.
     criteria:
@@ -46,5 +55,5 @@ questions:
         The spec, the ticket's own text, or a recorded precedent already
         answers this: nothing needs to be asked.
       false: >-
-        Nothing already on hand answers this: the worker is genuinely
+        Nothing already on hand answers this: the asker is genuinely
         guessing.

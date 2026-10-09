@@ -744,8 +744,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		return rules, err
 	}
 	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
+	if run.leadAsks != nil {
+		asking = append(asking, askPersonTool(dir, run.leadAsks, config.Inbox, run.notify))
+	}
 	if run.sessions != nil && memoryOn(dir) {
-		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox,
+		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {

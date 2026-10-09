@@ -21,6 +21,10 @@ exit 0
         "do": "tofu docs agents"
       },
       {
+        "text": "When the lead asks you",
+        "do": "tofu docs asking"
+      },
+      {
         "text": "Browser",
         "do": "tofu docs browser"
       },

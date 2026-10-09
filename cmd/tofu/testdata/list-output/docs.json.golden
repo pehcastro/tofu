@@ -13,6 +13,11 @@ exit 0
         "summary": "add a sub-agent for every project or for one, choose the model it runs, and remove it"
       },
       {
+        "topic": "asking",
+        "title": "When the lead asks you",
+        "summary": "how the lead puts a decision to you with options and a recommended one, what auto and ask do with it, and when it cannot ask"
+      },
+      {
         "topic": "browser",
         "title": "Browser",
         "summary": "how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there"

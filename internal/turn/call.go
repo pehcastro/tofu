@@ -16,11 +16,12 @@ import (
 const (
 	RuleOverrideToolName = "rule_override"
 	RememberToolName     = "remember"
+	AskPersonToolName    = "ask_person"
 )
 
 func gateExempt(tool string) bool {
 	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == referenceToolName ||
-		tool == RuleOverrideToolName || tool == RememberToolName || tool == LookupToolName || tool == messageTool{}.Name()
+		tool == RuleOverrideToolName || tool == RememberToolName || tool == AskPersonToolName || tool == LookupToolName || tool == messageTool{}.Name()
 }
 
 const theToolSucceededAndPrintedNothing = "the tool ran, succeeded and printed nothing."

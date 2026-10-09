@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 90 asks                                                         24 topics
+Docs · 90 asks                                                         25 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -16,6 +16,9 @@ agents  add a sub-agent for every project or for one, choose the model it
     → tofu agents remove <name>
   set up three sub-agents at once, each on its own model
     → tofu agents add <name> --description "<what it does>" --model <source/model>, once per sub-agent
+
+asking  how the lead puts a decision to you with options and a recommended
+  one, what auto and ask do with it, and when it cannot ask
 
 browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
   badge, and what tofu never does there

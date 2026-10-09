@@ -40,6 +40,8 @@ const aMessageArrivedMidTurn = "the person's next message arrived while you were
 
 const theLeadSkippedTheLine = "the lead read a message from the person mid-turn and called a tool without a line saying what it changes"
 
+const cronTaskSource = "cron "
+
 type SentNow struct{}
 
 func (SentNow) Error() string {
@@ -84,6 +86,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		source = func() Registry { return config.Tools }
 	}
 	var recorded *record
+	personAnswers := config.Person != nil && config.SpawnedFrom == "" && !strings.HasPrefix(config.TaskOrigin.Source, cronTaskSource)
+	unoffered := func(name string) bool { return !personAnswers && name == AskPersonToolName }
 	withLoopTools := func(tools []Tool) []Tool {
 		added := slices.Clone(tools)
 		for _, tool := range tools {
@@ -102,8 +106,14 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		return added
 	}
+	answerable := func(tools []Tool) []Tool {
+		return slices.DeleteFunc(tools, func(tool Tool) bool { return unoffered(tool.Name()) })
+	}
 	currentTools := func() Registry {
-		return NewRegistry(withLoopTools(source().tools)...)
+		return NewRegistry(answerable(withLoopTools(source().tools))...)
+	}
+	sending := func(definitions []llm.Tool) []llm.Tool {
+		return slices.DeleteFunc(slices.Clone(config.Prefix.toolsOr(definitions)), func(tool llm.Tool) bool { return unoffered(tool.Name) })
 	}
 	now := config.Now
 	if now == nil {
@@ -131,7 +141,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	start := now()
 	origin := newID()
-	sentTools := withLoopTools(config.Tools.tools)
+	sentTools := answerable(withLoopTools(config.Tools.tools))
 	usedTools := make([]string, len(sentTools))
 	for i, tool := range sentTools {
 		usedTools[i] = tool.Name()
@@ -174,7 +184,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
-	if system := config.Prefix.hold(config.SystemMessage(), currentTools().Definitions()); system != "" {
+	if system := config.Prefix.hold(config.SystemMessage(), NewRegistry(withLoopTools(source().tools)...).Definitions()); system != "" {
 		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
 	}
 	afterSystem := len(messages)
@@ -343,7 +353,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			return finish(outcome)
 		}
 		messages = append(slices.Clone(history), inserted(sourceLastWord, lead+andThisIsItsLastStep, time.Time{}))
-		request := llm.Request{Messages: messages, Tools: config.Prefix.toolsOr(currentTools().Definitions())}
+		request := llm.Request{Messages: messages, Tools: sending(currentTools().Definitions())}
 		if len(request.Tools) > 0 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
@@ -373,7 +383,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if promptRefused != "" {
 		return fail(errors.New("a UserPromptSubmit hook refused this prompt: " + promptRefused))
 	}
-	schemas, err := json.Marshal(config.Prefix.toolsOr(currentTools().Definitions()))
+	schemas, err := json.Marshal(sending(currentTools().Definitions()))
 	if err != nil {
 		return fail(err)
 	}
@@ -434,7 +444,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		flush()
 	}
-	askedAgainAfterBlank := false
+	askedAgainAfterBlank, polled := false, false
 	steeredAt := 0
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
@@ -478,7 +488,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 
 		stepTools := currentTools()
-		definitions := config.Prefix.toolsOr(stepTools.Definitions())
+		definitions := sending(stepTools.Definitions())
 		schemas, err := json.Marshal(definitions)
 		if err != nil {
 			return fail(err)
@@ -586,7 +596,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			if offered := handedBack(decision.Content); offered != "" && config.SpawnedFrom == "" && concluding == "" && handbacks < konst.LeadHandbackContinuations {
 				handbacks++
 				stepRow.Warnings = append(stepRow.Warnings, "the lead ended by handing the person a step, so it was asked to take it: "+offered)
-				messages = append(messages, inserted(sourceHandback, handbackNote(offered), time.Time{}))
+				messages = append(messages, inserted(sourceHandback, handbackNote(offered, stepTools), time.Time{}))
+				keep(stepRow)
+				continue
+			}
+			if open := config.Inbox.stillAsked(); len(open) > 0 && !polled {
+				polled = true
+				messages = append(messages, inserted(sourceHandback, pollNote(open), time.Time{}))
 				keep(stepRow)
 				continue
 			}
