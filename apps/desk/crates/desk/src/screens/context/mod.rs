@@ -3,7 +3,7 @@ use super::frame;
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{ContextOccupancy, ContextReport};
-use desk_core::query::Answer;
+use desk_core::query::{Answer, QueryError, Read};
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::inner_card;
@@ -13,12 +13,14 @@ use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::list::row;
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::T2;
+use desk_ui::components::skeleton::{pulse, skeleton_bar, skeleton_block, skeleton_lines};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, FontWeight,
     Rgba, SharedString, Subscription, WeakEntity, Window, div, prelude::*, px, relative,
 };
+use std::collections::BTreeMap;
 
 use frame::{ellipsis, load_fonts, note, panel, panes, title, window};
 
@@ -37,6 +39,7 @@ const LINE_RISE: f32 = 140.0;
 const NO_COMPACTION: f32 = -1.0;
 const FILL_TRACK: f32 = 4.0;
 const PERCENT_WIDTH: f32 = 44.0;
+const SKELETON_GRID: f32 = 150.0;
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     if let Some(board) = board {
@@ -49,10 +52,14 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
         .new(|_| ContextScreen {
             source: None,
             answer: Answer::default(),
+            kept: BTreeMap::new(),
             open: None,
+            switching: false,
             live: None,
             trail: Vec::new(),
+            trail_of: None,
             charts: None,
+            said: String::new(),
         })
         .into())
 }
@@ -60,10 +67,20 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
 pub struct ContextScreen {
     source: Option<Source>,
     answer: Answer<ContextReport>,
+    kept: BTreeMap<String, Read<ContextReport>>,
     open: Option<String>,
+    switching: bool,
     live: Option<(i64, i64)>,
     trail: Vec<i64>,
+    trail_of: Option<(Option<String>, String)>,
     charts: Option<Charts>,
+    said: String,
+}
+
+enum Shown<'a> {
+    Loading,
+    Failed(&'a QueryError),
+    Read(&'a Read<ContextReport>),
 }
 
 struct Charts {
@@ -139,34 +156,78 @@ impl ContextScreen {
                 open.as_deref().unwrap_or("none")
             );
         }
-        let fresh = store.context.read != self.answer.read;
         let moved = live != self.live;
+        self.switching = match open {
+            Some(_) => false,
+            None => self.switching || self.open.is_some(),
+        };
         self.answer = store.context.clone();
         self.live = live;
         self.open = open;
-        if let Some(read) = self.answer.read.as_ref().filter(|_| fresh) {
-            self.trail = read
-                .value
-                .occupancy
-                .iter()
-                .map(|occupancy| occupancy.total)
-                .collect();
-        }
-        if let (Some((reading, _)), true) = (live, moved)
-            && self
-                .answer
-                .read
-                .as_ref()
-                .is_some_and(|read| self.elsewhere(&read.value).is_none())
+        if let Some(read) = &self.answer.read
+            && let Some(session) = &read.value.session
         {
+            self.kept.insert(session.clone(), read.clone());
+        }
+        let shown = self.shown_read();
+        let shown_of = shown.map(|read| (read.value.session.clone(), read.at.clone()));
+        let current = shown.is_some_and(|read| self.elsewhere(&read.value).is_none());
+        let first = shown
+            .and_then(|read| read.value.occupancy.as_ref())
+            .map(|occupancy| occupancy.total);
+        if shown_of != self.trail_of {
+            self.trail = first.into_iter().collect();
+            self.trail_of = shown_of;
+        } else if let (Some((reading, _)), true, true) = (live, moved, current) {
             self.trail.push(reading);
         }
         self.charts = self.draw(cx);
+        let said = match self.shown() {
+            Shown::Loading => "loading".to_owned(),
+            Shown::Failed(error) => format!("failed: {error}"),
+            Shown::Read(read) => format!(
+                "{} {}",
+                if read.value.occupancy.is_some() {
+                    "filled"
+                } else {
+                    "empty"
+                },
+                read.value.session.as_deref().unwrap_or("none")
+            ),
+        };
+        if said != self.said {
+            eprintln!(
+                "desk: context state {said} for open {} asking {}",
+                self.open.as_deref().unwrap_or("none"),
+                self.answer.asking
+            );
+            self.said = said;
+        }
         cx.notify();
     }
 
+    fn shown(&self) -> Shown<'_> {
+        let kept = match &self.open {
+            Some(open) => self.kept.get(open),
+            None if self.switching => None,
+            None => self.answer.read.as_ref(),
+        };
+        match (kept, &self.answer.failed) {
+            (Some(read), _) => Shown::Read(read),
+            (None, Some(error)) if !self.answer.asking && !self.switching => Shown::Failed(error),
+            (None, _) => Shown::Loading,
+        }
+    }
+
+    fn shown_read(&self) -> Option<&Read<ContextReport>> {
+        match self.shown() {
+            Shown::Read(read) => Some(read),
+            Shown::Loading | Shown::Failed(_) => None,
+        }
+    }
+
     fn draw(&self, cx: &mut Context<Self>) -> Option<Charts> {
-        let report = &self.answer.read.as_ref()?.value;
+        let report = &self.shown_read()?.value;
         let occupancy = report.occupancy.as_ref()?;
         let theme = ActiveTheme::theme(cx);
         let total = self.total(report, occupancy);
@@ -229,7 +290,7 @@ impl ContextScreen {
     }
 
     fn header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let read = self.answer.read.as_ref().map(|read| {
+        let read = self.shown_read().map(|read| {
             format!(
                 "{}, query.context read {}",
                 read.value.name.as_deref().unwrap_or("unnamed session"),
@@ -267,14 +328,9 @@ impl ContextScreen {
             return None;
         }
         let name = report.name.as_deref().unwrap_or("an unnamed session");
-        Some(match &self.open {
-            Some(open) => format!(
-                "query.context reported {name}, read before {open} opened, and is being read again"
-            ),
-            None => format!(
-                "no session is open, so query.context reported {name}, the newest session on disk"
-            ),
-        })
+        Some(format!(
+            "no session is open, so query.context reported {name}, the newest session on disk"
+        ))
     }
 
     fn total(&self, report: &ContextReport, occupancy: &ContextOccupancy) -> Total {
@@ -292,19 +348,7 @@ impl ContextScreen {
         }
     }
 
-    fn waiting(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let Some(error) = &self.answer.failed else {
-            return empty_state(
-                "context-reading",
-                "Reading the context",
-                Some("asked the tofu this project runs for query.context".into()),
-                &[],
-                &[],
-                theme,
-                |_, _, _| {},
-            )
-            .into_any_element();
-        };
+    fn failed(&self, error: &QueryError, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let again = cx.listener(|screen, _: &(), _, cx| screen.reread(cx));
         empty_state(
             "context-failed",
@@ -323,14 +367,17 @@ impl ContextScreen {
     }
 
     fn body(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let Some(read) = &self.answer.read else {
-            return div()
-                .flex()
-                .flex_col()
-                .gap(px(8.0))
-                .child(self.header(theme, cx))
-                .child(self.waiting(theme, cx))
-                .into_any_element();
+        let page = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .child(self.header(theme, cx));
+        let read = match self.shown() {
+            Shown::Read(read) => read,
+            Shown::Loading => return page.child(loading(theme, cx)).into_any_element(),
+            Shown::Failed(error) => {
+                return page.child(self.failed(error, theme, cx)).into_any_element();
+            }
         };
         let report = &read.value;
         let shown = match &report.occupancy {
@@ -362,12 +409,7 @@ impl ContextScreen {
             )
             .into_any_element(),
         };
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(8.0))
-            .child(self.header(theme, cx))
-            .children(self.elsewhere(report).map(|said| warn(said, theme)))
+        page.children(self.elsewhere(report).map(|said| note(said, theme)))
             .children(
                 self.answer
                     .failed
@@ -637,6 +679,43 @@ fn grouped(count: i64) -> String {
         said.push(digit);
     }
     said
+}
+
+fn loading(theme: &Theme, cx: &App) -> Div {
+    let card = |lines: usize, key: &'static str| {
+        inner_card(theme)
+            .px(px(16.0))
+            .py(px(14.0))
+            .child(skeleton_lines(key, lines, theme, cx))
+    };
+    panes()
+        .child(
+            frame::fraction(div(), 1.2, WINDOW_LEAST)
+                .flex()
+                .flex_col()
+                .gap(px(PANEL_GAP))
+                .child(
+                    inner_card(theme)
+                        .px(px(16.0))
+                        .py(px(14.0))
+                        .gap(px(14.0))
+                        .child(pulse(
+                            "context-figure",
+                            0,
+                            skeleton_bar(0.3, FIGURE, theme),
+                            cx,
+                        ))
+                        .child(pulse(
+                            "context-grid",
+                            1,
+                            skeleton_block(SKELETON_GRID, theme),
+                            cx,
+                        ))
+                        .child(skeleton_lines("context-legend", 2, theme, cx)),
+                )
+                .child(card(3, "context-growth")),
+        )
+        .child(frame::fraction(card(8, "context-bands"), 1.0, BANDS_LEAST))
 }
 
 fn warn(text: impl Into<SharedString>, theme: &Theme) -> Div {

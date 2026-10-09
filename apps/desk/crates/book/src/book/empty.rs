@@ -1,5 +1,6 @@
 use desk_ui::components::empty::{EmptyAction, EmptyHint, empty_state};
 use desk_ui::components::glyph::Glyph;
+use desk_ui::components::skeleton::{pulse, skeleton_bar, skeleton_block, skeleton_lines};
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, SharedString, Window, div, prelude::*, px};
 
@@ -9,6 +10,7 @@ use super::kit::block;
 const BARE_HEIGHT: f32 = 120.0;
 const ACTIONS_HEIGHT: f32 = 200.0;
 const TILING_HEIGHT: f32 = 460.0;
+const SKELETON_GAP: f32 = 14.0;
 
 const CHAT_ACTIONS: [(&str, Option<Glyph>, Option<&str>); 3] = [
     ("New chat", Some(Glyph::Chat), Some("ctrl n")),
@@ -70,6 +72,23 @@ pub(super) fn empty_page(theme: &Theme, _window: &mut Window, cx: &mut Context<B
         .flex()
         .flex_col()
         .gap_3()
+        .child(block(
+            "Loading, a muted skeleton that pulses unless motion is reduced",
+            theme,
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(SKELETON_GAP))
+                .p(px(SKELETON_GAP))
+                .child(pulse(
+                    "skeleton-title",
+                    0,
+                    skeleton_bar(0.3, 22.0, theme),
+                    cx,
+                ))
+                .child(pulse("skeleton-block", 1, skeleton_block(72.0, theme), cx))
+                .child(skeleton_lines("skeleton-lines", 4, theme, cx)),
+        ))
         .child(block(
             "Title only",
             theme,

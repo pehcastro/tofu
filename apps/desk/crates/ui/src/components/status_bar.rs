@@ -413,7 +413,7 @@ fn loading(id: &'static str, theme: &Theme, cx: &App) -> AnyElement {
         return div()
             .size(px(LOADING_DOT))
             .rounded_full()
-            .bg(theme.color(ColorToken::StatusLive))
+            .bg(ink(theme, T3))
             .into_any_element();
     }
     spinner(id, theme).into_any_element()

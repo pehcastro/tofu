@@ -29,6 +29,7 @@ pub mod sheet;
 pub mod shells;
 pub mod sidebar;
 pub mod size;
+pub mod skeleton;
 pub mod status_bar;
 pub mod tabs;
 pub mod term;

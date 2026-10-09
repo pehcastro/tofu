@@ -422,7 +422,7 @@ pub fn spinner(id: impl Into<ElementId>, theme: &Theme) -> impl IntoElement {
         id,
         SPINNER,
         ink(theme, SPINNER_TRACK),
-        theme.color(ColorToken::StatusLive),
+        ink(theme, T3),
         theme,
     )
 }
