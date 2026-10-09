@@ -10,8 +10,7 @@ verbs: serve
 Every request `tofu serve --stdio` answers; `tofu docs serve` says how to
 start it, `tofu serve --schema` carries every field. Reads, reloads, the
 `session.*` and `memory.*` reads, `mention.resolve`, `shell.run`,
-`learn.scan`, `setup.check` and the logins answer out of order, so none of
-them holds `turn.stop`.
+`learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`.
 
 A read, a reload, a write and `learn.*` answer the verb's `--json` report with
 no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
