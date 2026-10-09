@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use std::{env, fs, iter, slice, thread};
 
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
-use desk_core::model::{Role, Store};
+use desk_core::model::{Role, Statuses, Store};
 use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
     Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
@@ -595,6 +595,7 @@ impl Chat {
     pub fn restart(&mut self, cx: &mut Context<Self>) {
         self.store.update(cx, |store, cx| {
             store.sessions.clear();
+            store.statuses = Statuses::default();
             cx.notify();
         });
         self.orders.clear();
@@ -632,6 +633,12 @@ impl Chat {
         });
         let before = match applied {
             Ok(before) => before,
+            Err(error) if matches!(event, Event::Notification(Notification::Status(_))) => {
+                return self.fail(
+                    format!("tofu sent a status the desk cannot read: {error}"),
+                    cx,
+                );
+            }
             Err(error) => return eprintln!("desk: the store refused an event from tofu: {error}"),
         };
         for (id, session) in &self.store.read(cx).sessions {
@@ -710,6 +717,9 @@ impl Chat {
                 | Notification::AgentEnded(_)
                 | Notification::UsageUpdated(_)),
             ) => return eprintln!("desk: tofu sent {notification:?}"),
+            Event::Notification(Notification::Status(report)) => {
+                return eprintln!("desk: status {} {}", report.item, report.state);
+            }
             Event::Request { request, .. } => {
                 eprintln!("desk: tofu asks {request:?}");
                 return;
@@ -1203,6 +1213,24 @@ impl Chat {
     fn ask_due(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.link, Link::Ready(_)) {
             return;
+        }
+        if let Some(open) = self.open_id().map(str::to_owned)
+            && self
+                .store
+                .update(cx, |store, _| store.statuses.take_due(&open))
+        {
+            self.call::<request::StatusList>(&NoParams {}, cx, move |chat, list, cx| {
+                let listed = chat.store.update(cx, |store, cx| {
+                    cx.notify();
+                    store.statuses.listed(&open, &list.records)
+                });
+                match listed {
+                    Ok(changes) => changes
+                        .iter()
+                        .for_each(|(id, state)| eprintln!("desk: status {id} {}", state.word())),
+                    Err(error) => chat.fail(format!("status.list: {error}"), cx),
+                }
+            });
         }
         let open = SessionParams {
             session: self.open_id().map(str::to_owned),

@@ -8,6 +8,7 @@ use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, SystemTime};
 
 use desk_core::git::{Git, GitBinary, State};
+use desk_core::model::{StatusState, Statuses};
 use desk_core::sessions::SessionRow;
 use desk_tiling::Store as Layouts;
 use desk_ui::components::palette::{
@@ -244,21 +245,22 @@ pub const ACTIVE_FOR: Duration = Duration::from_secs(3600);
 pub struct Opened<'a> {
     pub active: &'a [String],
     pub open: Option<&'a str>,
-    pub waiting: bool,
-    pub working: bool,
+    pub statuses: &'a Statuses,
 }
 
 pub fn sidebar(head: &Head, rows: &[SessionRow], opened: &Opened) -> Project {
     let now = SystemTime::now();
     let active = opened.active.iter().map(|id| {
         let row = rows.iter().find(|row| row.id == *id);
-        let shown = opened.open == Some(id.as_str());
         Session {
             name: row.map_or(id.as_str(), SessionRow::title).to_owned().into(),
-            state: match (shown && opened.waiting, shown && opened.working) {
-                (true, _) => SessionState::Waiting,
-                (false, true) => SessionState::Running,
-                (false, false) => SessionState::Idle,
+            state: match opened.statuses.activity(id) {
+                Some(StatusState::Blocked) => SessionState::Waiting,
+                Some(StatusState::Working) => SessionState::Running,
+                Some(
+                    StatusState::Idle | StatusState::Done | StatusState::Error | StatusState::Clear,
+                ) => SessionState::Idle,
+                None => SessionState::Unreported,
             },
             age: row.and_then(|row| row.age(now)).unwrap_or_default().into(),
         }

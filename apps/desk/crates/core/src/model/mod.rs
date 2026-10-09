@@ -1,4 +1,5 @@
 mod session;
+mod status;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -12,6 +13,7 @@ use crate::protocol::{
 use crate::query::Answer;
 
 pub use session::{Agent, Message, Role, Session, Shell, Tool, Turn};
+pub use status::{Change, Status, StatusState, Statuses};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelError {
@@ -51,6 +53,7 @@ pub struct Store {
     pub lineage: BTreeMap<String, Answer<SessionInfo>>,
     pub trace: Answer<SessionTrace>,
     pub quota: Vec<QuotaWindow>,
+    pub statuses: Statuses,
 }
 
 impl Default for Store {
@@ -67,6 +70,7 @@ impl Default for Store {
             lineage: BTreeMap::new(),
             trace: Answer::default(),
             quota: Vec::new(),
+            statuses: Statuses::default(),
         }
     }
 }
@@ -108,6 +112,7 @@ impl Store {
                 Ok(())
             }
             Event::Notification(Notification::SessionListed(_)) => Ok(()),
+            Event::Notification(Notification::Status(report)) => self.statuses.report(report),
             Event::Notification(Notification::Unknown { method, .. }) => {
                 Err(ModelError::UnknownEvent(method.clone()))
             }
@@ -115,6 +120,9 @@ impl Store {
                 if let Notification::QuotaUpdated(updated) = notification {
                     self.quota.clone_from(&updated.windows);
                     self.usage.notified();
+                }
+                if let Notification::Resync(_) = notification {
+                    self.statuses.again();
                 }
                 let id = session_of(notification)?;
                 self.session(id).apply(notification)

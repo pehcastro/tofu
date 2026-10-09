@@ -59,24 +59,27 @@ pub enum SessionState {
     Waiting,
     Stopped,
     Failed,
+    Unreported,
 }
 
 impl SessionState {
-    pub const ALL: [SessionState; 5] = [
+    pub const ALL: [SessionState; 6] = [
         SessionState::Running,
         SessionState::Idle,
         SessionState::Waiting,
         SessionState::Stopped,
         SessionState::Failed,
+        SessionState::Unreported,
     ];
 
     pub fn word(self) -> &'static str {
         match self {
             SessionState::Running => "running",
             SessionState::Idle => "idle",
-            SessionState::Waiting => "waiting for approval",
+            SessionState::Waiting => "waiting for you",
             SessionState::Stopped => "stopped",
             SessionState::Failed => "failed",
+            SessionState::Unreported => "not reported by tofu",
         }
     }
 }
@@ -281,6 +284,7 @@ fn state_mark(at: SessionAt, state: SessionState, reduced: bool, theme: &Theme) 
         SessionState::Failed => {
             icon(Icon::Close, SPINNER, theme.color(ColorToken::StatusDanger)).into_any_element()
         }
+        SessionState::Unreported => div().into_any_element(),
     }
 }
 

@@ -1693,15 +1693,10 @@ impl Desk {
     fn sidebar_project(&self, cx: &App) -> Option<Project> {
         let head = self.projects.head.as_ref()?;
         let chat = self.work()?.read(cx).chat().read(cx);
-        let open = chat.open_id();
-        let waiting = open
-            .and_then(|id| chat.store().read(cx).sessions.get(id))
-            .is_some_and(|session| !session.approvals.is_empty());
         let opened = project::Opened {
             active: &self.projects.active,
-            open,
-            waiting,
-            working: chat.busy(cx),
+            open: chat.open_id(),
+            statuses: &chat.store().read(cx).statuses,
         };
         Some(project::sidebar(head, chat.rows(), &opened))
     }
