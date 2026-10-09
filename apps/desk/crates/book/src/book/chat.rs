@@ -9,7 +9,7 @@ use desk_ui::components::ask::{
 };
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::chat::{
-    self, Agent, AgentMark, Block, Call, FIND_RESERVE, Hit, Marks, Span, Verdict, agent_list,
+    self, Agent, AgentMark, Block, Call, FIND_RESERVE, Face, Hit, Marks, Span, Verdict, agent_list,
     agent_row, agents, calls, command, cron_row, fail, find_hits, folding, foot, hit_marks, lead,
     note, queued, tools, you,
 };
@@ -28,6 +28,47 @@ use gpui::{
 
 use super::Book;
 use super::kit::{block, label, toggle};
+
+const GATE_ANSWER: &str = "The gate reads the policy first so that a verdict is never invented.
+
+## What the policy carries
+
+- the mode it was declared in
+- the lock that resolved it
+- the thresholds
+
+None of the three is knowable from the wire alone, so `tool_gate` waits for `policy.Resolve` before it answers.";
+
+const MARKDOWN_SAMPLE: &str = r#"# Markdown sample
+
+Text can be **bold**, *italic*, ***both***, ~~struck~~ or `inline code`, and a [link to the docs](https://github.com/gpui-ce/gpui-ce).
+
+| Tool | Calls | Share |
+|:-----|:-----:|------:|
+| read | 12 | 48% |
+| edit | 9 | 36% |
+| shell | 4 | 16% |
+
+```rust
+fn main() {
+    let count: u32 = 3;
+    println!("{count} tools");
+}
+```
+
+- [x] parse the reply
+- [ ] draw the chart
+- a plain bullet
+
+1. first
+2. second
+
+> A quote keeps its **emphasis**
+> across two lines.
+
+---
+
+<Chart kind="bar" values={[1, 2, 3]} />"#;
 
 const BOARD_WIDTH: f32 = 760.0;
 const CONTENT_WIDTH: f32 = 672.0;
@@ -133,11 +174,11 @@ fn asked(time: &'static str, text: &'static str) -> Row {
 }
 
 fn plain(text: &'static str) -> Span {
-    Span::Plain(text.into())
+    Span::new(Face::Plain, text)
 }
 
 fn code(text: &'static str) -> Span {
-    Span::Code(text.into())
+    Span::new(Face::Code, text)
 }
 
 fn spoke(spans: Vec<Span>) -> Vec<Block> {
@@ -248,28 +289,10 @@ fn conversation() -> Vec<Row> {
             calls: gate_calls(),
             footnote: Some("The outputs are in Sub-agents under lead, each with its trace."),
         },
-        said(
-            "14:32",
-            vec![
-                Block::Para(vec![plain(
-                    "The gate reads the policy first so that a verdict is never invented.",
-                )]),
-                Block::Heading("What the policy carries".into()),
-                Block::Bullets(vec![
-                    "the mode it was declared in".into(),
-                    "the lock that resolved it".into(),
-                    "the thresholds".into(),
-                ]),
-                Block::Para(vec![
-                    plain("None of the three is knowable from the wire alone, so "),
-                    code("tool_gate"),
-                    plain(" waits for "),
-                    code("policy.Resolve"),
-                    plain(" before it answers."),
-                ]),
-            ],
-        ),
+        said("14:32", chat::markdown(GATE_ANSWER)),
         Row::Foot("cooked for 16s · waited 0s"),
+        asked("14:34", "reply with a markdown sample"),
+        said("14:34", chat::markdown(MARKDOWN_SAMPLE)),
         asked(
             "14:36",
             "check the loader with a sub-agent, I want a second read",
@@ -392,7 +415,7 @@ fn conversation() -> Vec<Row> {
                 plain(
                     "Two callers binary-search by id, so insertion order is part of the API. The lead decided it when go-dev asked at 16:12 ",
                 ),
-                Span::Mention("ask#c41e09".into()),
+                Span::new(Face::Mention, "ask#c41e09"),
                 plain("."),
             ]),
         ),
@@ -811,7 +834,7 @@ fn paint(
             theme,
         ),
         Some(Row::Queued(text)) => queued(*text, theme),
-        Some(Row::Lead { time, body }) => lead(*time, body, marks, theme),
+        Some(Row::Lead { time, body }) => lead(id, *time, body, marks, theme),
         Some(Row::Tools {
             count,
             summary,
@@ -920,11 +943,12 @@ fn streamed(at: usize, theme: &Theme) -> AnyElement {
             theme,
         ),
         2 => lead(
+            ("chat-stream-lead", at),
             time,
             &[Block::Para(vec![
-                Span::Plain(format!("row {at}: the lead read ").into()),
-                Span::Code(format!("part_{at}.go").into()),
-                Span::Plain(" and moved on.".into()),
+                Span::new(Face::Plain, format!("row {at}: the lead read ")),
+                Span::new(Face::Code, format!("part_{at}.go")),
+                Span::new(Face::Plain, " and moved on."),
             ])],
             &[],
             theme,

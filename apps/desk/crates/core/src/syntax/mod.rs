@@ -251,7 +251,7 @@ impl Syntax {
             ..self.rope.line_to_char(lines.end.min(last));
         let mut spans = Vec::new();
         let mut chunks = self.chunks.borrow_mut();
-        for chunk in lines.start / CHUNK_LINES..lines.end.div_ceil(CHUNK_LINES) {
+        for chunk in lines.start / CHUNK_LINES..lines.end.min(last).div_ceil(CHUNK_LINES) {
             let found = chunks.entry(chunk).or_insert_with(|| {
                 self.paint_lines(chunk * CHUNK_LINES..(chunk + 1) * CHUNK_LINES)
             });

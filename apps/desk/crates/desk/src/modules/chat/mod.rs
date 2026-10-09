@@ -906,7 +906,11 @@ impl Chat {
                 at += usize::from(slot.item.is_some());
                 continue;
             }
-            let now = items::item(session, entry);
+            let now = items::item(
+                session,
+                entry,
+                self.slots.get(index).and_then(|slot| slot.item.as_ref()),
+            );
             let settled = items::settled(session, entry);
             let was = match self.slots.get_mut(index) {
                 Some(slot) => {

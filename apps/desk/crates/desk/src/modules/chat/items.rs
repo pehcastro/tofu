@@ -1,22 +1,27 @@
+use std::cell::RefCell;
+use std::env;
 use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use desk_core::model::{Role, Session};
 use desk_core::protocol::{AgentState, Origin, OriginKind};
 use desk_ui::components::chat::{
-    self, Agent, AgentMark, Block, Marks, Span, Verdict, agent_row, command, cron_row, fail, foot,
-    lead, note, you,
+    self, Agent, AgentMark, Block, Marks, Streaming, Verdict, agent_row, command, cron_row, fail,
+    foot, lead, note, you,
 };
 use desk_ui::components::chip;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::theme::Theme;
 use gpui::{
-    AnyElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div,
+    AnyElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled,
+    canvas, div, prelude::FluentBuilder,
 };
 use serde_json::Value;
 
 use super::mention::{Trace, mention, tool_glyph};
 
 const MENTION: &str = "Mention in chat";
+const FRAME_LOG: &str = "DESK_FRAME_LOG";
 const ARGUMENT_KEYS: [&str; 4] = ["command", "path", "pattern", "url"];
 
 #[derive(Clone, PartialEq)]
@@ -32,12 +37,14 @@ pub enum Entry {
 pub struct Lead {
     time: SharedString,
     text: SharedString,
+    complete: bool,
     blocks: Rc<Vec<Block>>,
+    streaming: Option<Rc<RefCell<Streaming>>>,
 }
 
 impl PartialEq for Lead {
     fn eq(&self, other: &Self) -> bool {
-        self.time == other.time && self.text == other.text
+        self.time == other.time && self.text == other.text && self.complete == other.complete
     }
 }
 
@@ -80,7 +87,34 @@ pub fn settled(session: &Session, entry: &Entry) -> bool {
     }
 }
 
-pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
+fn said(time: SharedString, text: SharedString, complete: bool, was: Option<&Item>) -> Lead {
+    if complete {
+        return Lead {
+            blocks: Rc::new(chat::markdown(&text)),
+            complete,
+            streaming: None,
+            time,
+            text,
+        };
+    }
+    let streaming = match was {
+        Some(Item::Lead(Lead {
+            streaming: Some(streaming),
+            ..
+        })) => streaming.clone(),
+        _ => Rc::default(),
+    };
+    let blocks = Rc::new(streaming.borrow_mut().blocks(&text));
+    Lead {
+        blocks,
+        complete,
+        streaming: Some(streaming),
+        time,
+        text,
+    }
+}
+
+pub fn item(session: &Session, entry: &Entry, was: Option<&Item>) -> Option<Item> {
     match entry {
         Entry::Message(at) => {
             let message = session.messages.get(*at).filter(|m| m.agent.is_none())?;
@@ -89,11 +123,9 @@ pub fn item(session: &Session, entry: &Entry) -> Option<Item> {
             match &message.role {
                 Role::User | Role::Steer => Some(Item::You { time, text }),
                 Role::Cron { job, schedule } => Some(cron(session, job, schedule, &message.text)),
-                Role::Assistant if !text.is_empty() => Some(Item::Lead(Lead {
-                    blocks: Rc::new(blocks(&text)),
-                    time,
-                    text,
-                })),
+                Role::Assistant if !text.is_empty() => {
+                    Some(Item::Lead(said(time, text, message.complete, was)))
+                }
                 Role::Assistant | Role::Thinking => None,
                 Role::Note => Some(Item::Note(text)),
                 Role::Failure => Some(Item::Failure(text)),
@@ -210,38 +242,6 @@ fn mark(state: &AgentState) -> AgentMark {
     }
 }
 
-fn blocks(text: &str) -> Vec<Block> {
-    text.split("\n\n")
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            if let Some(heading) = part.strip_prefix('#') {
-                return Block::Heading(heading.trim_start_matches('#').trim().to_owned().into());
-            }
-            let bullets: Option<Vec<SharedString>> = part
-                .lines()
-                .map(|line| {
-                    line.trim_start()
-                        .strip_prefix("- ")
-                        .map(|item| item.to_owned().into())
-                })
-                .collect();
-            bullets.map_or_else(|| Block::Para(spans(part)), Block::Bullets)
-        })
-        .collect()
-}
-
-fn spans(text: &str) -> Vec<Span> {
-    text.split('`')
-        .enumerate()
-        .filter(|(_, piece)| !piece.is_empty())
-        .map(|(at, piece)| match at % 2 {
-            1 => Span::Code(piece.to_owned().into()),
-            _ => Span::Plain(piece.to_owned().into()),
-        })
-        .collect()
-}
-
 pub fn pieces(item: &Item) -> Vec<String> {
     match item {
         Item::You { text, .. } => vec![text.to_string()],
@@ -267,7 +267,18 @@ pub fn render(item: &Item, at: usize, marks: &[Marks], theme: &Theme) -> AnyElem
             theme,
         )
         .into_any_element(),
-        Item::Lead(said) => lead(said.time.clone(), &said.blocks, marks, theme).into_any_element(),
+        Item::Lead(said) => lead(
+            ("chat-lead", at),
+            said.time.clone(),
+            &said.blocks,
+            marks,
+            theme,
+        )
+        .when(
+            !said.complete && env::var_os(FRAME_LOG).is_some(),
+            |drawn| drawn.child(stream_meter()),
+        )
+        .into_any_element(),
         Item::Cron {
             job,
             schedule,
@@ -316,6 +327,20 @@ pub fn render(item: &Item, at: usize, marks: &[Marks], theme: &Theme) -> AnyElem
         Item::Failure(text) => fail("failed", text.clone(), "", theme).into_any_element(),
         Item::Foot(text) => foot(text.clone(), theme).into_any_element(),
     }
+}
+
+fn stream_meter() -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        |_, (), window, _| {
+            if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
+                eprintln!("desk: chat stream frame {}", now.as_micros());
+            }
+            window.request_animation_frame();
+        },
+    )
+    .absolute()
+    .size_0()
 }
 
 fn traced(
