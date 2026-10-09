@@ -6,18 +6,16 @@ use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::SessionInfo;
 use desk_core::query::{Answer, QueryError};
-use desk_ui::components::avatar::spinner;
-use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::fork_chain::{Fork, ForkChain, Generation};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, SharedString,
-    Subscription, WeakEntity, Window, div, prelude::*, px,
+    AnyView, App, AppContext, Context, Div, Entity, EntityId, SharedString, Subscription,
+    WeakEntity, Window, div, prelude::*, px,
 };
 
-use frame::{ellipsis, load_fonts, note, panel, title, window};
+use frame::{ellipsis, load_fonts, note, reread, titled, window};
 
 const NO_TOFU: &str =
     "Forks reads session.info from the tofu the work screen runs, and no work screen is open here.";
@@ -178,8 +176,7 @@ impl ForksScreen {
         chat.update(cx, |chat, cx| chat.reread_lineage(cx));
     }
 
-    fn header(&self, links: &[Link], theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let asking = self.lineage.values().any(|answer| answer.asking);
+    fn about(&self, links: &[Link]) -> Option<String> {
         let read = links.iter().rev().find_map(|link| match link {
             Link::Read(info) => self
                 .lineage
@@ -188,7 +185,7 @@ impl ForksScreen {
                 .map(|read| (info, clock(&read.at))),
             Link::Waiting(..) => None,
         });
-        let read = read.map(|(info, at)| {
+        read.map(|(info, at)| {
             let generations = links.len();
             format!(
                 "{} generation{} of {}, session.info read {at}",
@@ -196,27 +193,10 @@ impl ForksScreen {
                 if generations == 1 { "" } else { "s" },
                 info.name.as_deref().unwrap_or(&info.id)
             )
-        });
-        div()
-            .flex()
-            .flex_none()
-            .flex_wrap()
-            .items_center()
-            .gap(px(10.0))
-            .px(px(4.0))
-            .child(title("Forks"))
-            .children(read.map(|read| ellipsis(note(read, theme))))
-            .child(div().flex_1())
-            .when(asking, |header| {
-                header.child(spinner("forks-asking", theme))
-            })
-            .child(
-                button("forks-reread", "Read again", None, ButtonKind::Plain, theme)
-                    .on_click(cx.listener(|screen, _: &ClickEvent, _, cx| screen.reread(cx))),
-            )
+        })
     }
 
-    fn body(&self, open: &str, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    fn body(&self, open: &str, theme: &Theme) -> Div {
         let shown = chain(open, &self.lineage);
         let never = match shown.links.as_slice() {
             [Link::Read(info)]
@@ -238,17 +218,16 @@ impl ForksScreen {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .child(self.header(&shown.links, theme, cx))
+            .children(
+                self.about(&shown.links)
+                    .map(|about| ellipsis(note(about, theme)).px(px(4.0))),
+            )
             .children(failures)
             .child(
-                panel("Generations, root first", None, theme).child(
-                    div()
-                        .px(px(6.0))
-                        .pt(px(4.0))
-                        .min_w_0()
-                        .child(ForkChain::new(theme, generations(open, &shown.links)))
-                        .children(never.map(|never| div().pt(px(10.0)).child(note(never, theme)))),
-                ),
+                div()
+                    .min_w_0()
+                    .child(ForkChain::new(theme, generations(open, &shown.links)))
+                    .children(never.map(|never| div().pt(px(10.0)).child(note(never, theme)))),
             )
             .child(note(
                 "every value is a field of session.info, one read per generation",
@@ -411,8 +390,17 @@ impl Render for ForksScreen {
         let body = match (&self.source, self.open.clone()) {
             (None, _) => empty("forks-no-tofu", "No tofu to ask", NO_TOFU),
             (Some(_), None) => empty("forks-no-session", "No session open", NO_SESSION),
-            (Some(_), Some(open)) => self.body(&open, &theme, cx).into_any_element(),
+            (Some(_), Some(open)) => self.body(&open, &theme).into_any_element(),
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        let asking = self.lineage.values().any(|answer| answer.asking);
+        let trailing = self
+            .source
+            .is_some()
+            .then(|| reread("forks", asking, &theme, cx, ForksScreen::reread).into_any_element());
+        window(
+            titled("forks", trailing),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

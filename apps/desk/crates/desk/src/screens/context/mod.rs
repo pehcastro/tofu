@@ -4,8 +4,6 @@ use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{ContextOccupancy, ContextReport};
 use desk_core::query::{Answer, QueryError, Read};
-use desk_ui::components::avatar::spinner;
-use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::inner_card;
 use desk_ui::components::charts::{ContextLine, DotGrid, GridPart, Said, cached, legend};
 use desk_ui::components::chip::mono;
@@ -17,12 +15,12 @@ use desk_ui::components::skeleton::{pulse, skeleton_bar, skeleton_block, skeleto
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, FontWeight,
-    Rgba, SharedString, Subscription, WeakEntity, Window, div, prelude::*, px, relative,
+    AnyElement, AnyView, App, AppContext, Context, Div, Entity, EntityId, FontWeight, Rgba,
+    SharedString, Subscription, WeakEntity, Window, div, prelude::*, px, relative,
 };
 use std::collections::BTreeMap;
 
-use frame::{ellipsis, load_fonts, note, panel, panes, title, window};
+use frame::{Gate, ellipsis, load_fonts, note, panel, panes, reread, titled, window};
 
 const NO_TOFU: &str = "The context reads query.context from the tofu the work screen runs, and no work screen is open here.";
 const STRONG_SWATCH: f32 = 0.55;
@@ -60,6 +58,7 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             trail_of: None,
             charts: None,
             said: String::new(),
+            gate: Gate::default(),
         })
         .into())
 }
@@ -75,6 +74,7 @@ pub struct ContextScreen {
     trail_of: Option<(Option<String>, String)>,
     charts: Option<Charts>,
     said: String,
+    gate: Gate,
 }
 
 enum Shown<'a> {
@@ -135,12 +135,16 @@ impl ContextScreen {
         if store.context == self.answer && live == self.live && open == self.open {
             return;
         }
+        if !self.answer.asking && store.context.asking {
+            eprintln!("desk: context: asked query.context at {}", frame::stamp());
+        }
         if self.answer.asking
             && !store.context.asking
             && let Some(read) = &store.context.read
         {
             eprintln!(
-                "desk: context shows query.context at {} for {} {}: {}",
+                "desk: context: answer at {}, query.context at {} for {} {}: {}",
+                frame::stamp(),
                 read.at,
                 read.value.name.as_deref().unwrap_or("unnamed"),
                 read.value.session.as_deref().unwrap_or("none"),
@@ -168,6 +172,9 @@ impl ContextScreen {
             && let Some(session) = &read.value.session
         {
             self.kept.insert(session.clone(), read.clone());
+        }
+        if matches!(self.shown(), Shown::Loading) {
+            self.gate.wait();
         }
         let shown = self.shown_read();
         let shown_of = shown.map(|read| (read.value.session.clone(), read.at.clone()));
@@ -289,39 +296,6 @@ impl ContextScreen {
         chat.update(cx, |chat, cx| chat.reread_context(cx));
     }
 
-    fn header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let read = self.shown_read().map(|read| {
-            format!(
-                "{}, query.context read {}",
-                read.value.name.as_deref().unwrap_or("unnamed session"),
-                read.at
-            )
-        });
-        div()
-            .flex()
-            .flex_none()
-            .flex_wrap()
-            .items_center()
-            .gap(px(10.0))
-            .px(px(4.0))
-            .child(title("Context"))
-            .children(read.map(|read| ellipsis(note(read, theme))))
-            .child(div().flex_1())
-            .when(self.answer.asking, |header| {
-                header.child(spinner("context-asking", theme))
-            })
-            .child(
-                button(
-                    "context-reread",
-                    "Read again",
-                    None,
-                    ButtonKind::Plain,
-                    theme,
-                )
-                .on_click(cx.listener(|screen, _: &ClickEvent, _, cx| screen.reread(cx))),
-            )
-    }
-
     fn elsewhere(&self, report: &ContextReport) -> Option<String> {
         let reported = report.session.as_deref();
         if reported.is_some() && reported == self.open.as_deref() {
@@ -367,11 +341,7 @@ impl ContextScreen {
     }
 
     fn body(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let page = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.0))
-            .child(self.header(theme, cx));
+        let page = div().flex().flex_col().gap(px(8.0));
         let read = match self.shown() {
             Shown::Read(read) => read,
             Shown::Loading => return page.child(loading(theme, cx)).into_any_element(),
@@ -380,6 +350,12 @@ impl ContextScreen {
             }
         };
         let report = &read.value;
+        let about = format!(
+            "{}, query.context read {}",
+            report.name.as_deref().unwrap_or("unnamed session"),
+            read.at
+        );
+        let page = page.child(ellipsis(note(about, theme)).px(px(4.0)));
         let shown = match &report.occupancy {
             Some(occupancy) => panes()
                 .child(
@@ -736,8 +712,34 @@ impl Render for ContextScreen {
                 |_, _, _| {},
             )
             .into_any_element(),
-            Some(_) => self.body(&theme, cx),
+            Some(_) => {
+                let mut gate = std::mem::take(&mut self.gate);
+                let ready = !matches!(self.shown(), Shown::Loading);
+                let shown = gate.show(
+                    "context",
+                    ready,
+                    |cx| loading(&theme, cx).into_any_element(),
+                    |cx| self.body(&theme, cx),
+                    cx,
+                );
+                self.gate = gate;
+                shown
+            }
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        let trailing = self.source.is_some().then(|| {
+            reread(
+                "context",
+                self.answer.asking,
+                &theme,
+                cx,
+                ContextScreen::reread,
+            )
+            .into_any_element()
+        });
+        window(
+            titled("context", trailing),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

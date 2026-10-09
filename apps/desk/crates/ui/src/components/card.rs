@@ -4,6 +4,7 @@ use gpui::{
 };
 
 use crate::component::{control, icon};
+use crate::components::button::{ButtonKind, button};
 use crate::components::glyph::Glyph;
 use crate::components::paint::{drop, glyph, ink, ring, tint, top_light};
 use crate::components::size::{
@@ -64,41 +65,48 @@ pub fn inner_card(theme: &Theme) -> Div {
 
 pub enum Header {
     Title(Option<Glyph>, SharedString, Option<AnyElement>),
+    TitleTabs(Option<Glyph>, SharedString, AnyElement, Option<AnyElement>),
     Tabs(AnyElement, Option<AnyElement>),
+}
+
+fn tab_slot(tabs: AnyElement) -> Div {
+    div()
+        .min_w_0()
+        .h(px(TAB_IN_TILE))
+        .flex()
+        .flex_col()
+        .child(tabs)
 }
 
 pub fn shell(header: Header, theme: &Theme) -> Div {
     let top = div()
         .flex()
         .flex_none()
+        .h(px(HEADER))
         .gap_1p5()
         .pr(px(HEADER_PAD_RIGHT))
         .text_size(px(FONT_SMALL))
         .font_weight(FontWeight::MEDIUM)
         .text_color(ink(theme, SHELL_TEXT));
-    let top = match header {
-        Header::Title(icon, title, trailing) => top
-            .h(px(HEADER))
-            .items_center()
-            .pl(px(HEADER_PAD_LEFT))
-            .children(icon.map(|icon| glyph(icon, ICON_SMALL, ink(theme, SHELL_TEXT))))
-            .child(div().flex_1().min_w_0().truncate().child(title))
-            .children(trailing),
-        Header::Tabs(tabs, trailing) => top
-            .h(px(HEADER))
-            .items_end()
-            .pl(px(HEADER_PAD_LEFT_TABBED))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h(px(TAB_IN_TILE))
-                    .flex()
-                    .flex_col()
-                    .child(tabs),
-            )
-            .children(trailing.map(|trailing| div().self_center().child(trailing))),
+    let (icon, title, tabs, trailing) = match header {
+        Header::Title(icon, title, trailing) => (icon, title, None, trailing),
+        Header::TitleTabs(icon, title, tabs, trailing) => (icon, title, Some(tabs), trailing),
+        Header::Tabs(tabs, trailing) => {
+            let top = top
+                .items_end()
+                .pl(px(HEADER_PAD_LEFT_TABBED))
+                .child(tab_slot(tabs).flex_1())
+                .children(trailing.map(|trailing| div().self_center().child(trailing)));
+            return outer_card(theme).flex_col().child(top);
+        }
     };
+    let top = top
+        .items_center()
+        .pl(px(HEADER_PAD_LEFT))
+        .children(icon.map(|icon| glyph(icon, ICON_SMALL, ink(theme, SHELL_TEXT))))
+        .child(div().flex_1().min_w_0().truncate().child(title))
+        .children(tabs.map(|tabs| tab_slot(tabs).flex_none().self_end()))
+        .children(trailing);
     outer_card(theme).flex_col().child(top)
 }
 
@@ -114,6 +122,47 @@ pub fn header_action(
         .size(px(HEADER - 2.0 * HEADER_ACTION_INSET))
         .rounded(px(RADIUS_CHIP_SMALL))
         .child(icon(glyph, ICON_SMALL, theme.color(ColorToken::TextIcon)))
+}
+
+pub fn strip_tab(
+    id: impl Into<ElementId>,
+    label: SharedString,
+    active: bool,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let radius = px(theme.number(NumberToken::CardsInnerRadius));
+    let tab = div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .h(px(TAB_IN_TILE))
+        .px_3()
+        .rounded_tl(radius)
+        .rounded_tr(radius)
+        .whitespace_nowrap()
+        .child(label);
+    let lit = ink(theme, SHELL_TEXT);
+    if active {
+        tab.bg(theme.color(ColorToken::CardsInnerFill))
+            .text_color(lit)
+    } else {
+        tab.cursor_pointer()
+            .text_color(ink(theme, CAPTION_TEXT))
+            .hover(move |tab| tab.text_color(lit))
+    }
+}
+
+pub fn header_button(
+    id: impl Into<ElementId>,
+    label: &'static str,
+    theme: &Theme,
+) -> Stateful<Div> {
+    button(id, label, None, ButtonKind::Text, theme)
+        .h(px(HEADER - 2.0 * HEADER_ACTION_INSET))
+        .px_2()
+        .rounded(px(RADIUS_CHIP_SMALL))
+        .text_size(px(FONT_SMALL))
 }
 
 pub fn caption(text: impl Into<SharedString>, theme: &Theme) -> Div {

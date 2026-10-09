@@ -15,7 +15,7 @@ use gpui::{
     px,
 };
 
-use frame::{load_fonts, note, title, window};
+use frame::{load_fonts, note, titled, window};
 
 const NO_TOFU: &str = "The classifier screen shows the decisions tofu sends to the work screen, and no work screen is open here.";
 const NONE: &str =
@@ -274,33 +274,31 @@ impl Render for Classifier {
                 .flex_col()
                 .gap(px(8.0))
                 .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap(px(10.0))
-                        .px(px(4.0))
-                        .child(title("Classifier"))
-                        .child(note(
-                            match past {
-                                Some((_, Past::Reading)) => {
-                                    "this session's live decisions, its ledger still reading"
-                                }
-                                Some((_, Past::Failed(_))) => {
-                                    "this session's live decisions, its ledger did not answer"
-                                }
-                                Some((_, Past::Read(_))) | None => {
-                                    "this session's decisions, from tofu's ledger and live"
-                                }
-                            },
-                            &theme,
-                        )),
+                    note(
+                        match past {
+                            Some((_, Past::Reading)) => {
+                                "this session's live decisions, its ledger still reading"
+                            }
+                            Some((_, Past::Failed(_))) => {
+                                "this session's live decisions, its ledger did not answer"
+                            }
+                            Some((_, Past::Read(_))) | None => {
+                                "this session's decisions, from tofu's ledger and live"
+                            }
+                        },
+                        &theme,
+                    )
+                    .px(px(4.0)),
                 )
                 .child(self.points(&theme))
                 .child(self.ledger(&theme))
                 .child(self.sandbox(&theme, cx))
                 .into_any_element(),
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        window(
+            titled("classifier", None),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

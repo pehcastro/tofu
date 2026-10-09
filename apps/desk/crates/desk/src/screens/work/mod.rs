@@ -8,6 +8,7 @@ use desk_tiling::{
     Action, Module, NUDGE, Preset, Rect, Refusal, Side, Store as Layouts, Target, TileId,
     WORKSPACE_EDGE, Workspace, Zone,
 };
+use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::find::{FindBar, FindGroup, find_ranges};
 use desk_ui::components::glyph::Glyph;
@@ -20,7 +21,7 @@ use desk_ui::theme::Theme;
 use gpui::{
     AnyElement, AnyView, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
     IntoElement, KeyDownEvent, Pixels, Point, Render, SharedString, Subscription, Window, div,
-    prelude::*, px,
+    prelude::*, px, relative,
 };
 
 use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark};
@@ -419,15 +420,64 @@ const SUB_AGENTS: &str = "Sub-agents";
 
 pub const EXPANDABLE: [&str; 4] = ["Chat", SUB_AGENTS, "File edits", "Shells"];
 
+struct Tiled {
+    glyph: Option<Glyph>,
+    name: SharedString,
+    view: AnyView,
+    chat: Option<(Entity<Chat>, Subscription)>,
+}
+
+impl Render for Tiled {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = ActiveTheme::theme(cx);
+        let session = self.chat.as_ref().and_then(|(chat, _)| {
+            let chat = chat.read(cx);
+            let open = chat.open_id()?;
+            let title = chat
+                .rows()
+                .iter()
+                .find(|row| row.id == open)
+                .map_or(open, |row| row.title());
+            Some(
+                div()
+                    .flex_none()
+                    .max_w(relative(0.5))
+                    .truncate()
+                    .child(SharedString::from(title.to_owned()))
+                    .into_any_element(),
+            )
+        });
+        shell(
+            Header::Title(self.glyph, self.name.clone(), session),
+            &theme,
+        )
+        .size_full()
+        .min_w_0()
+        .child(inner_card(&theme).child(self.view.clone()))
+    }
+}
+
 fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<Work>) {
+    let tiled = |view: AnyView, chat: Option<Entity<Chat>>, cx: &mut Context<Work>| -> AnyView {
+        cx.new(|cx| Tiled {
+            glyph: glyph(module),
+            name: module.name().to_owned().into(),
+            view,
+            chat: chat.map(|chat| {
+                let watch = cx.observe(&chat, |_, _, cx| cx.notify());
+                (chat, watch)
+            }),
+        })
+        .into()
+    };
     let view: AnyView = match module {
-        Module::Chat => mounted.chat.clone().into(),
+        Module::Chat => tiled(mounted.chat.clone().into(), Some(mounted.chat.clone()), cx),
         Module::SubAgents => mounted
             .subagents
             .update(cx, |module, cx| module.screen(None, cx))
             .into(),
-        Module::FileEdits => mounted.file_edits.clone().into(),
-        Module::Shells => mounted.shells.clone().into(),
+        Module::FileEdits => tiled(mounted.file_edits.clone().into(), None, cx),
+        Module::Shells => tiled(mounted.shells.clone().into(), None, cx),
         Module::Editor
         | Module::Terminal
         | Module::Browser

@@ -1,7 +1,7 @@
 use std::iter;
 
 use desk_core::protocol::{OverrideListing, RuleListReport, RuleListing};
-use desk_ui::components::card::{caption, inner_card};
+use desk_ui::components::card::caption;
 use desk_ui::components::chip::{badge, mono};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::list::row;
@@ -10,7 +10,7 @@ use desk_ui::components::size::T2;
 use desk_ui::theme::Theme;
 use gpui::{AnyElement, ClickEvent, Context, Div, div, prelude::*, px};
 
-use super::frame::{SHELL_PILLS, fraction, note, panel, pills};
+use super::frame::{SHELL_PILLS, fraction, note, pills};
 use super::{Library, fact, warn};
 
 const ID_LEAST: f32 = 200.0;
@@ -76,7 +76,8 @@ impl Library {
             ))
             .child(note(
                 format!(
-                    "from {}, {} overridden, {stale} stale",
+                    "{} rules from {}, {} overridden, {stale} stale",
+                    rules.rules.len(),
                     rules.origin,
                     overridden.len()
                 ),
@@ -96,14 +97,12 @@ impl Library {
             .filter(|rule| self.kind.is_none_or(|kind| kind == rule.kind))
             .enumerate()
             .map(|(at, rule)| self.rule_row(at, rule, theme, cx));
-        panel(format!("{} rules", rules.rules.len()), None, theme)
-            .child(
-                inner_card(theme)
-                    .p(px(6.0))
-                    .child(filter)
-                    .child(columns)
-                    .children(rows),
-            )
+        div()
+            .flex()
+            .flex_col()
+            .child(filter)
+            .child(columns)
+            .children(rows)
             .into_any_element()
     }
 

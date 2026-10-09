@@ -74,9 +74,6 @@ pub enum Scope {
 }
 
 impl Scope {
-    pub const ALL: [Scope; 2] = [Scope::Everywhere, Scope::Project];
-    pub const LABELS: [&'static str; 2] = ["Everywhere", "This project"];
-
     pub fn source(self) -> Source {
         match self {
             Scope::Everywhere => Source::Global,

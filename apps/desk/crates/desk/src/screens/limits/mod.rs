@@ -8,7 +8,6 @@ use desk_core::protocol::{
 };
 use desk_core::query::{Answer, display_name};
 use desk_ui::component::icon;
-use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, inner_card};
 use desk_ui::components::charts::{DotMeter, cached};
@@ -27,7 +26,7 @@ use gpui::{
     SharedString, Subscription, WeakEntity, Window, div, prelude::*, px,
 };
 
-use frame::{ellipsis, fraction, load_fonts, note, panel, panes, title, window};
+use frame::{ellipsis, fraction, load_fonts, note, panel, panes, reread, titled, window};
 
 const CARD_LEAST: f32 = 320.0;
 const STATE_DOT: f32 = 8.0;
@@ -215,36 +214,31 @@ impl Limits {
         view
     }
 
-    fn header(&self, usage: &UsageReport, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let state = match &usage.state {
-            UsageReportState::Serving => "serving",
-            UsageReportState::NeedsAttention => "needs attention",
-            UsageReportState::None => "nothing signed in",
-            UsageReportState::Unknown(raw) => raw,
-        };
+    fn trailing(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+        let state = self
+            .seen
+            .usage
+            .read
+            .as_ref()
+            .map(|read| match &read.value.state {
+                UsageReportState::Serving => "serving".to_owned(),
+                UsageReportState::NeedsAttention => "needs attention".to_owned(),
+                UsageReportState::None => "nothing signed in".to_owned(),
+                UsageReportState::Unknown(raw) => raw.clone(),
+            });
         div()
             .flex()
             .flex_none()
-            .flex_wrap()
             .items_center()
-            .gap(px(10.0))
-            .px(px(4.0))
-            .child(title("Limits"))
-            .child(badge(state, theme))
-            .child(div().flex_1())
-            .when(self.seen.usage.asking, |header| {
-                header.child(spinner("limits-asking", theme))
-            })
-            .child(
-                button(
-                    "limits-reread",
-                    "Read again",
-                    None,
-                    ButtonKind::Plain,
-                    theme,
-                )
-                .on_click(cx.listener(|limits, _: &ClickEvent, _, cx| limits.reread(cx))),
-            )
+            .gap(px(8.0))
+            .children(state.map(|state| badge(state, theme)))
+            .child(reread(
+                "limits",
+                self.seen.usage.asking,
+                theme,
+                cx,
+                Limits::reread,
+            ))
     }
 
     fn account(
@@ -417,7 +411,6 @@ impl Limits {
             };
         };
         let usage = &read.value;
-        let header = self.header(usage, theme, cx);
         let failed = self.seen.usage.failed.as_ref().map(|error| {
             note(format!("the last read failed: {error}"), theme)
                 .text_color(theme.color(ColorToken::StatusWarn))
@@ -458,7 +451,6 @@ impl Limits {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .child(header)
             .children(failed)
             .child(body)
             .into_any_element()
@@ -499,6 +491,14 @@ impl Render for Limits {
             .into_any_element(),
             Some(_) => self.read(&theme, surface, cx),
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        let trailing = self
+            .source
+            .is_some()
+            .then(|| self.trailing(&theme, cx).into_any_element());
+        window(
+            titled("limits", trailing),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

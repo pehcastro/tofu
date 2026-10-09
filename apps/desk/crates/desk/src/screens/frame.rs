@@ -1,14 +1,21 @@
 use std::borrow::Cow;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use desk_ui::components::card::{caption, outer_card};
+use crate::desk::screen_mark;
+use desk_ui::components::avatar::spinner;
+use desk_ui::components::card::{
+    Header, caption, header_button, inner_card, outer_card, shell, strip_tab,
+};
 use desk_ui::components::chip::mono;
+use desk_ui::components::glyph::Glyph;
 use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{HEADER, HEADER_PAD_LEFT, HEADER_PAD_RIGHT, SHELL_PAD, T3};
+use desk_ui::components::skeleton::{Hold, Stage, reveal};
 use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
     AnyElement, App, ClickEvent, Context, Div, FontWeight, HighlightStyle, Rgba, SharedString,
-    StyledText, div, prelude::*, px, relative, rgb_to_hsla,
+    StyledText, Task, div, prelude::*, px, relative, rgb_to_hsla,
 };
 
 const FONTS: [&[u8]; 6] = [
@@ -26,7 +33,6 @@ const SHELL_RING: f32 = 0.06;
 pub const BODY_TEXT: f32 = 0.9;
 const FONT_BASE: f32 = 14.0;
 pub const LINE: f32 = 23.0;
-const TITLE: f32 = 19.0;
 const PILL_ON: f32 = 0.12;
 const PILL_OFF: f32 = 0.5;
 
@@ -40,17 +46,6 @@ pub struct Pills {
     item_y: f32,
     item_radius: f32,
 }
-
-pub const HEADER_PILLS: Pills = Pills {
-    pad: 2.0,
-    radius: 9.0,
-    fill: 0.05,
-    font: 12.5,
-    line: LINE,
-    item_x: 11.0,
-    item_y: 4.0,
-    item_radius: 7.0,
-};
 
 pub const SHELL_PILLS: Pills = Pills {
     pad: 2.0,
@@ -107,14 +102,6 @@ pub fn load_fonts(cx: &App) -> Result<(), String> {
     }
     text.add_fonts(FONTS.iter().map(|font| Cow::Borrowed(*font)).collect())
         .map_err(|error| format!("the desk cannot load Geist: {error}"))
-}
-
-pub fn title(text: &'static str) -> Div {
-    div()
-        .text_size(px(TITLE))
-        .line_height(relative(1.0))
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(text)
 }
 
 pub fn note(text: impl Into<SharedString>, theme: &Theme) -> Div {
@@ -185,20 +172,152 @@ pub fn pills<V: 'static, T: Copy + PartialEq + 'static>(
         }))
 }
 
-pub fn window(theme: &Theme, body: Div) -> Div {
+pub fn titled(name: &'static str, trailing: Option<AnyElement>) -> Header {
+    let (glyph, label) = named(name);
+    Header::Title(glyph, label, trailing)
+}
+
+pub fn tabbed(name: &'static str, tabs: AnyElement, trailing: Option<AnyElement>) -> Header {
+    let (glyph, label) = named(name);
+    Header::TitleTabs(glyph, label, tabs, trailing)
+}
+
+fn named(name: &'static str) -> (Option<Glyph>, SharedString) {
+    let mark = screen_mark(name);
+    (
+        mark.map(|mark| mark.glyph),
+        mark.map_or(name, |mark| mark.label).into(),
+    )
+}
+
+pub fn reread<V: 'static>(
+    id: &'static str,
+    asking: bool,
+    theme: &Theme,
+    cx: &mut Context<V>,
+    again: fn(&mut V, &mut Context<V>),
+) -> Div {
     div()
-        .size_full()
-        .min_w_0()
-        .relative()
         .flex()
-        .flex_col()
-        .font_family(theme.word(WordToken::ShapeFont))
-        .text_size(px(FONT_BASE))
-        .line_height(px(LINE))
-        .text_color(ink(theme, BODY_TEXT))
+        .flex_none()
+        .items_center()
+        .gap(px(6.0))
+        .when(asking, |strip| {
+            strip.child(spinner(SharedString::from(format!("{id}-asking")), theme))
+        })
         .child(
-            ScrollArea::new("screen").child(body.min_h_full().p(px(FRAME_PAD)).flex().flex_col()),
+            header_button(
+                SharedString::from(format!("{id}-reread")),
+                "Read again",
+                theme,
+            )
+            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| again(view, cx))),
         )
+}
+
+pub fn tile_tabs<V: 'static, T: Copy + PartialEq + 'static>(
+    id: &'static str,
+    options: &[(T, &'static str)],
+    chosen: T,
+    theme: &Theme,
+    cx: &mut Context<V>,
+    pick: fn(&mut V, T, &mut Context<V>),
+) -> AnyElement {
+    div()
+        .flex()
+        .h_full()
+        .items_end()
+        .gap_0p5()
+        .children(options.iter().map(|(value, label)| {
+            let value = *value;
+            strip_tab(
+                SharedString::from(format!("{id}-{label}")),
+                (*label).into(),
+                value == chosen,
+                theme,
+            )
+            .on_click(cx.listener(move |view, _: &ClickEvent, _, cx| {
+                pick(view, value, cx);
+                cx.notify();
+            }))
+        }))
+        .into_any_element()
+}
+
+pub fn stamp() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_millis())
+}
+
+#[derive(Default)]
+pub struct Gate {
+    hold: Hold,
+    wake: Option<Task<()>>,
+}
+
+impl Gate {
+    pub fn wait(&mut self) {
+        self.hold.wait(Instant::now());
+    }
+
+    pub fn show<V: 'static>(
+        &mut self,
+        screen: &'static str,
+        ready: bool,
+        skeleton: impl FnOnce(&mut Context<V>) -> AnyElement,
+        content: impl FnOnce(&mut Context<V>) -> AnyElement,
+        cx: &mut Context<V>,
+    ) -> AnyElement {
+        match self.hold.stage(ready, Instant::now()) {
+            Stage::Skeleton => skeleton(cx),
+            Stage::Wake(left) => {
+                self.wake = Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(left).await;
+                    if let Err(error) = this.update(cx, |_, cx| cx.notify()) {
+                        eprintln!(
+                            "desk: {screen}: the skeleton hold ended on a closed screen: {error}"
+                        );
+                    }
+                }));
+                skeleton(cx)
+            }
+            Stage::Reveal(step, held) => {
+                if let Some(held) = held {
+                    eprintln!(
+                        "desk: {screen}: first content frame at {} after {} ms of skeleton",
+                        stamp(),
+                        held.as_millis()
+                    );
+                }
+                reveal(
+                    SharedString::from(format!("{screen}-reveal")),
+                    step,
+                    content(cx),
+                )
+            }
+            Stage::Shown => content(cx),
+        }
+    }
+}
+
+pub fn tile(header: Header, theme: &Theme, body: impl IntoElement) -> Div {
+    shell(header, theme).relative().size_full().min_w_0().child(
+        inner_card(theme)
+            .font_family(theme.word(WordToken::ShapeFont))
+            .text_size(px(FONT_BASE))
+            .line_height(px(LINE))
+            .text_color(ink(theme, BODY_TEXT))
+            .child(body),
+    )
+}
+
+pub fn window(header: Header, theme: &Theme, body: Div) -> Div {
+    tile(
+        header,
+        theme,
+        ScrollArea::new("screen").child(body.min_h_full().p(px(FRAME_PAD)).flex().flex_col()),
+    )
 }
 
 pub fn panes() -> Div {

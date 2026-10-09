@@ -20,7 +20,7 @@ use gpui::{
     Subscription, WeakEntity, Window, div, prelude::*, px, relative, rgb,
 };
 
-use frame::{ellipsis, fraction, load_fonts, note, panel, panes, title, window};
+use frame::{ellipsis, fraction, load_fonts, note, panel, panes, titled, window};
 
 const NO_TOFU: &str =
     "Usage reads the session the work screen has open, and no work screen is open here.";
@@ -450,22 +450,15 @@ impl UsageScreen {
         cx.notify();
     }
 
-    fn header(&self, session: &str, theme: &Theme) -> Div {
-        div()
-            .flex()
-            .flex_none()
-            .flex_wrap()
-            .items_center()
-            .gap(px(10.0))
-            .px(px(4.0))
-            .child(title("Usage"))
-            .child(ellipsis(note(
-                format!(
-                    "{session} · totals from session.info, calls from session.trace and usage.updated since {}",
-                    self.seen.opened
-                ),
-                theme,
-            )))
+    fn about(&self, session: &str, theme: &Theme) -> Div {
+        ellipsis(note(
+            format!(
+                "{session} · totals from session.info, calls from session.trace and usage.updated since {}",
+                self.seen.opened
+            ),
+            theme,
+        ))
+        .px(px(4.0))
     }
 
     fn whole_row(&self, theme: &Theme) -> Div {
@@ -604,7 +597,7 @@ impl UsageScreen {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .child(self.header(session, theme))
+            .child(self.about(session, theme))
             .child(self.whole_row(theme))
             .child(top)
             .children(bottom)
@@ -697,6 +690,10 @@ impl Render for UsageScreen {
             (Some(_), None) => empty("usage-no-session", "No session open", NO_SESSION, &theme),
             (Some(_), Some(session)) => self.body(session, &theme, cx).into_any_element(),
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        window(
+            titled("usage", None),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

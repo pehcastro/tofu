@@ -1,8 +1,7 @@
 use std::fs;
 
 use desk_core::control::TELL_BADGE;
-use desk_ui::components::card::{caption, inner_card};
-use desk_ui::components::form::segmented;
+use desk_ui::components::card::caption;
 use desk_ui::components::list::{HoverList, row};
 use desk_ui::components::overlay::toast;
 use desk_ui::live::ActiveTheme;
@@ -112,20 +111,13 @@ impl Render for ThemeScreen {
             .choices
             .iter()
             .position(|choice| choice.file == self.active);
-        let mode = match theme.mode() {
-            Mode::Dark => 0,
-            Mode::Light => 1,
-        };
-        let modes = segmented(
-            "mode",
-            &MODES.map(Mode::label),
-            mode,
+        let modes = frame::tile_tabs(
+            "theme-mode",
+            &MODES.map(|mode| (mode, mode.label())),
+            theme.mode(),
             &theme,
-            cx.listener(|this, at: &usize, _, cx| {
-                if let Some(mode) = MODES.get(*at) {
-                    this.choose(None, *mode, cx);
-                }
-            }),
+            cx,
+            |this, mode, cx| this.choose(None, mode, cx),
         );
         let told = self.told.clone().map(|message| {
             div()
@@ -145,22 +137,13 @@ impl Render for ThemeScreen {
                     }),
                 ))
         });
-        let body = div()
-            .gap_3()
-            .child(caption("Themes", &theme))
-            .child(
-                inner_card(&theme)
-                    .flex_none()
-                    .w(px(LIST_WIDTH))
-                    .p_2()
-                    .child(
-                        HoverList::new("themes", &theme)
-                            .items(rows)
-                            .selected(active),
-                    ),
-            )
-            .child(caption("Mode", &theme))
-            .child(div().flex().child(modes));
-        frame::window(&theme, body).children(told)
+        let body = div().gap_3().child(caption("Themes", &theme)).child(
+            div().flex_none().w(px(LIST_WIDTH)).child(
+                HoverList::new("themes", &theme)
+                    .items(rows)
+                    .selected(active),
+            ),
+        );
+        frame::window(frame::tabbed("theme", modes, None), &theme, body).children(told)
     }
 }

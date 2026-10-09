@@ -7,19 +7,17 @@ use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{RuleListReport, subagent};
 use desk_core::query::{Answer, QueryError, Read};
-use desk_ui::components::avatar::spinner;
-use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::T3;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, SharedString,
+    AnyElement, AnyView, App, AppContext, Context, Div, Entity, EntityId, SharedString,
     Subscription, WeakEntity, Window, div, prelude::*, px,
 };
 
-use frame::{HEADER_PILLS, ellipsis, load_fonts, note, pills, title, window};
+use frame::{load_fonts, note, reread, tabbed, tile_tabs, window};
 
 const NO_TOFU: &str = "The library reads agents and rules from the tofu the work screen runs, and no work screen is open here.";
 const FACT_KEY: f32 = 96.0;
@@ -129,53 +127,6 @@ impl Library {
         chat.update(cx, |chat, cx| chat.reread_library(cx));
     }
 
-    fn header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let (asking, read, verb) = match self.tab {
-            Tab::Rules => (
-                self.rules.asking,
-                self.rules.read.as_ref().map(|read| read.at.as_str()),
-                "tofu rules list",
-            ),
-            Tab::Agents => (
-                self.agents.asking,
-                self.agents.read.as_ref().map(|read| read.at.as_str()),
-                "tofu agents",
-            ),
-        };
-        div()
-            .flex()
-            .flex_none()
-            .flex_wrap()
-            .items_center()
-            .gap(px(10.0))
-            .px(px(4.0))
-            .child(title("Library"))
-            .child(pills(
-                "library-tab",
-                &[(Tab::Rules, "Rules"), (Tab::Agents, "Agents")],
-                self.tab,
-                &HEADER_PILLS,
-                theme,
-                cx,
-                |library, tab| library.tab = tab,
-            ))
-            .children(read.map(|at| ellipsis(note(format!("{verb}, read {}", clock(at)), theme))))
-            .child(div().flex_1())
-            .when(asking, |header| {
-                header.child(spinner("library-asking", theme))
-            })
-            .child(
-                button(
-                    "library-reread",
-                    "Read again",
-                    None,
-                    ButtonKind::Plain,
-                    theme,
-                )
-                .on_click(cx.listener(|library, _: &ClickEvent, _, cx| library.reread(cx))),
-            )
-    }
-
     fn waiting(
         &self,
         failed: Option<&QueryError>,
@@ -235,7 +186,6 @@ impl Library {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .child(self.header(theme, cx))
             .children(failed.map(|error| warn(format!("the last read failed: {error}"), theme)))
             .child(shown)
             .into_any_element()
@@ -294,6 +244,37 @@ impl Render for Library {
             .into_any_element(),
             Some(_) => self.body(&theme, cx),
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        let tabs = tile_tabs(
+            "library-tab",
+            &[(Tab::Rules, "Rules"), (Tab::Agents, "Agents")],
+            self.tab,
+            &theme,
+            cx,
+            |library, tab, _| library.tab = tab,
+        );
+        let (asking, at) = match self.tab {
+            Tab::Rules => (
+                self.rules.asking,
+                self.rules.read.as_ref().map(|read| clock(&read.at)),
+            ),
+            Tab::Agents => (
+                self.agents.asking,
+                self.agents.read.as_ref().map(|read| clock(&read.at)),
+            ),
+        };
+        let trailing = self.source.is_some().then(|| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .children(at.map(|at| note(format!("read {at}"), &theme)))
+                .child(reread("library", asking, &theme, cx, Library::reread))
+                .into_any_element()
+        });
+        window(
+            tabbed("library", tabs, trailing),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

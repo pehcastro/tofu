@@ -13,7 +13,7 @@ use desk_core::control::TELL_BADGE;
 use desk_core::protocol::{AccountStatus, AccountStatusState, KeyStatus};
 use desk_core::query::display_name;
 use desk_ui::components::button::{ButtonKind, button};
-use desk_ui::components::card::{caption, outer_card};
+use desk_ui::components::card::{caption, header_button, outer_card};
 use desk_ui::components::form::TextArea;
 use desk_ui::components::overlay::{popover, toast};
 use desk_ui::components::paint::{ink, tint};
@@ -29,7 +29,6 @@ use gpui::{
 use catalog::{ACCOUNTS_NOTE, SIGN_IN_SOURCES};
 
 const SHELL_HEADER: f32 = 28.0;
-const TITLE: f32 = 19.0;
 const DESC: f32 = 13.0;
 const SMALL: f32 = 12.0;
 const ROW_LINE: f32 = 18.0;
@@ -577,42 +576,17 @@ fn row(theme: &Theme) -> Div {
 impl Render for Accounts {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let title = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap_2p5()
-            .px_1()
-            .child(
-                div()
-                    .text_size(px(TITLE))
-                    .line_height(relative(1.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Accounts"),
-            )
-            .child(small("what pays for each model", &theme).text_size(px(DESC)))
-            .child(div().flex_1())
-            .child(
-                button(
-                    "add-account",
-                    "+ Add account",
-                    None,
-                    ButtonKind::Primary,
-                    &theme,
-                )
-                .on_click(Self::toggle_add(cx)),
-            );
+        let add = header_button("add-account", "+ Add account", &theme)
+            .on_click(Self::toggle_add(cx))
+            .into_any_element();
         let body = div()
             .flex_1()
             .min_h_0()
             .flex()
             .flex_col()
             .gap_2p5()
-            .mb_2()
-            .pt_1p5()
-            .px_1p5()
             .overflow_hidden()
-            .child(title)
+            .child(small("what pays for each model", &theme).text_size(px(DESC)))
             .child(
                 div()
                     .flex_1()
@@ -641,6 +615,6 @@ impl Render for Accounts {
                     }),
                 ))
         });
-        frame::window(&theme, body).children(told)
+        frame::window(frame::titled("accounts", Some(add)), &theme, body).children(told)
     }
 }

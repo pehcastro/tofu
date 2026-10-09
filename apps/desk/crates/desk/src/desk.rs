@@ -34,8 +34,6 @@ use desk_core::query::Answer;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
-use desk_ui::components::agents::AgentScreen;
-use desk_ui::components::card::{inner_card, outer_card};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
@@ -725,7 +723,6 @@ impl Desk {
             div()
                 .flex_1()
                 .min_w_0()
-                .flex()
                 .child(
                     context_menu(items)
                         .id("screen-tab-menu")
@@ -902,18 +899,12 @@ impl Desk {
                     .child(work.clone())
                     .into_any_element()
             }
-            Body::View(view) => match view.clone().downcast::<AgentScreen>() {
-                Ok(framed) => div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .child(framed)
-                    .into_any_element(),
-                Err(view) => outer_card(theme)
-                    .flex_1()
-                    .child(inner_card(theme).child(view))
-                    .into_any_element(),
-            },
+            Body::View(view) => div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .child(view.clone())
+                .into_any_element(),
             Body::Whole(view) => view.clone().into_any_element(),
         };
         (tabs, body)

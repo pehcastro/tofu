@@ -6,8 +6,6 @@ use crate::modules::chat::Chat;
 use desk_core::model::{Role, Session, Store};
 use desk_core::protocol::{HunkLineKind, SessionInfo, SessionTrace, TurnCompletedStatus};
 use desk_core::query::{Answer, QueryError, Read};
-use desk_ui::components::avatar::spinner;
-use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, inner_card, outer_card};
 use desk_ui::components::chip::mono;
 use desk_ui::components::empty::{EmptyAction, empty_state};
@@ -22,7 +20,7 @@ use gpui::{
     Rgba, SharedString, Subscription, WeakEntity, Window, div, prelude::*, px, relative,
 };
 
-use frame::{ellipsis, fraction, load_fonts, note, panel, panes, title, window};
+use frame::{Gate, ellipsis, fraction, load_fonts, note, panel, panes, reread, titled, window};
 
 const NO_TOFU: &str = "The session reads session.info and session.trace from the tofu the work screen runs, and no work screen is open here.";
 const COUNT_LEAST: f32 = 150.0;
@@ -50,6 +48,7 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             digests: BTreeMap::new(),
             picked: None,
             said: String::new(),
+            gate: Gate::default(),
         })
         .into())
 }
@@ -63,6 +62,7 @@ pub struct SessionScreen {
     digests: BTreeMap<String, Digest>,
     picked: Option<String>,
     said: String,
+    gate: Gate,
 }
 
 struct Source {
@@ -165,6 +165,13 @@ impl SessionScreen {
         if *info == self.answer && open == self.open && !fresh {
             return;
         }
+        if self.answer.asking != info.asking {
+            eprintln!(
+                "desk: session: {} session.info at {}",
+                if info.asking { "asked" } else { "answer to" },
+                frame::stamp()
+            );
+        }
         if let (Some(id), Some(digest)) = (&open, digest) {
             eprintln!(
                 "desk: session digest for {id}: {} turns, {} files, {} tokens",
@@ -183,6 +190,9 @@ impl SessionScreen {
         };
         self.answer = info.clone();
         self.open = open;
+        if matches!(self.shown(), Shown::Loading) {
+            self.gate.wait();
+        }
         let said = match self.shown() {
             Shown::Loading => "loading".to_owned(),
             Shown::Failed(error) => format!("failed: {error}"),
@@ -232,44 +242,26 @@ impl SessionScreen {
         chat.update(cx, |chat, cx| chat.reread_info(cx));
     }
 
-    fn header(&self, info: Option<&SessionInfo>, theme: &Theme, cx: &mut Context<Self>) -> Div {
-        let about = info.map(|info| {
-            let mut said = vec![format!("started {}", clock(&info.at))];
-            said.extend(info.model.clone());
-            said.extend(info.outcome.clone());
-            if let (Some(at), Some(of)) = (info.generation, info.generations) {
-                said.push(format!("generation {at} of {of}"));
-            }
-            said.join(" · ")
-        });
+    fn about(info: &SessionInfo, theme: &Theme) -> Div {
+        let mut said = vec![format!("started {}", clock(&info.at))];
+        said.extend(info.model.clone());
+        said.extend(info.outcome.clone());
+        if let (Some(at), Some(of)) = (info.generation, info.generations) {
+            said.push(format!("generation {at} of {of}"));
+        }
         div()
             .flex()
-            .flex_none()
-            .flex_wrap()
             .items_center()
             .gap(px(10.0))
             .px(px(4.0))
-            .child(title("Session"))
-            .children(info.map(|info| {
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(info.name.clone().unwrap_or_else(|| info.handle.clone()))
-            }))
-            .children(about.map(|about| ellipsis(note(about, theme))))
-            .child(div().flex_1())
-            .when(self.answer.asking, |header| {
-                header.child(spinner("session-asking", theme))
-            })
+            .min_w_0()
             .child(
-                button(
-                    "session-reread",
-                    "Read again",
-                    None,
-                    ButtonKind::Plain,
-                    theme,
-                )
-                .on_click(cx.listener(|screen, _: &ClickEvent, _, cx| screen.reread(cx))),
+                div()
+                    .flex_none()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(info.name.clone().unwrap_or_else(|| info.handle.clone())),
             )
+            .child(ellipsis(note(said.join(" · "), theme)))
     }
 
     fn failed(&self, error: &QueryError, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
@@ -293,21 +285,9 @@ impl SessionScreen {
     fn body(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let read = match self.shown() {
             Shown::Read(read) => read,
-            Shown::Loading => {
-                return div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.0))
-                    .child(self.header(None, theme, cx))
-                    .child(loading(theme, cx));
-            }
+            Shown::Loading => return loading(theme, cx),
             Shown::Failed(error) => {
-                return div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.0))
-                    .child(self.header(None, theme, cx))
-                    .child(self.failed(error, theme, cx));
+                return div().flex().flex_col().child(self.failed(error, theme, cx));
             }
         };
         let info = &read.value;
@@ -316,7 +296,7 @@ impl SessionScreen {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .child(self.header(Some(info), theme, cx))
+            .child(Self::about(info, theme))
             .children(
                 self.answer
                     .failed
@@ -838,8 +818,34 @@ impl Render for SessionScreen {
                 |_, _, _| {},
             )
             .into_any_element(),
-            Some(_) => self.body(&theme, cx).into_any_element(),
+            Some(_) => {
+                let mut gate = std::mem::take(&mut self.gate);
+                let ready = !matches!(self.shown(), Shown::Loading);
+                let shown = gate.show(
+                    "session",
+                    ready,
+                    |cx| loading(&theme, cx).into_any_element(),
+                    |cx| self.body(&theme, cx).into_any_element(),
+                    cx,
+                );
+                self.gate = gate;
+                shown
+            }
         };
-        window(&theme, div().flex_1().flex().flex_col().child(body))
+        let trailing = self.source.is_some().then(|| {
+            reread(
+                "session",
+                self.answer.asking,
+                &theme,
+                cx,
+                SessionScreen::reread,
+            )
+            .into_any_element()
+        });
+        window(
+            titled("session", trailing),
+            &theme,
+            div().flex_1().flex().flex_col().child(body),
+        )
     }
 }

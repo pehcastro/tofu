@@ -3,9 +3,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use desk_tiling::SHORTCUTS;
-use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::chip::{chip, flat_chip, mono};
-use desk_ui::components::form::{input, segmented, switch_bare};
+use desk_ui::components::form::{input, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::paint::{ms, presented, tint};
@@ -321,21 +320,16 @@ impl Rows {
 impl Render for Rows {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let chosen = Scope::ALL
-            .iter()
-            .position(|scope| *scope == self.scope)
-            .unwrap_or(0);
-        let scope = segmented(
-            "scope",
-            &Scope::LABELS,
-            chosen,
+        let scope = frame::tile_tabs(
+            "settings-scope",
+            &[
+                (Scope::Everywhere, "Everywhere"),
+                (Scope::Project, "This project"),
+            ],
+            self.scope,
             &theme,
-            cx.listener(|this, at: &usize, _, cx| {
-                if let Some(scope) = Scope::ALL.get(*at) {
-                    this.scope = *scope;
-                    cx.notify();
-                }
-            }),
+            cx,
+            |rows, scope, _| rows.scope = scope,
         );
         let page = self.page.page();
         let groups = self.groups(&theme, window, cx);
@@ -375,17 +369,15 @@ impl Render for Rows {
             .flex()
             .flex_col()
             .child(ScrollArea::new("settings-content").child(page_body));
-        let body = shell(
-            Header::Title(None, "Settings".into(), Some(scope.into_any_element())),
+        frame::tile(
+            frame::tabbed("settings", scope, None),
             &theme,
-        )
-        .flex_1()
-        .child(
-            inner_card(&theme)
-                .flex_row()
+            div()
+                .flex_1()
+                .min_h_0()
+                .flex()
                 .child(self.nav(&theme, cx))
                 .child(content),
-        );
-        frame::window(&theme, div().child(body))
+        )
     }
 }
