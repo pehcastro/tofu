@@ -10,6 +10,17 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.9-fix1 - 2026-10-09
+
+The app opens and answers keys in a project with hundreds of finished shells.
+
+### Fixed
+
+- `tofu` and `tofu --continue` no longer freeze in a project with more than 256 finished shells: the status board keeps the newest 256 and writes each to the terminal once, where 0.5.9 wrote every one again on every screen update and ignored keys and Ctrl+C.
+- Standing answers stay with the session and come back when it reopens.
+- A side chat's held paths hold against the lead's bash and its sub-agents.
+- Signed-in accounts stay signed in until the server ends them, and the picker uses the account used least recently first.
+
 ## 0.5.9 - 2026-10-09
 
 Memory that keeps a project's whole conversation, a lead that asks with options instead of stopping, and everything the desk asked of `tofu serve`.
