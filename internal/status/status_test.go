@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -214,6 +215,37 @@ func TestStatusBoardSyncPastCapacitySendsOnce(t *testing.T) {
 	moved := board.Sync(slices.Delete(slices.Clone(wanted), 1, 2))
 	if len(moved) != 2 || moved[0] != (Record{ID: gone.ID, State: Clear}) || moved[1] != entering {
 		t.Fatalf("one record leaving sent %+v, want the clear of %s and %s entering", moved, gone.ID, entering.ID)
+	}
+}
+
+func TestStatusBoardStampsAtOnAStateChangeOnly(t *testing.T) {
+	tick := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	board := Board{Now: func() time.Time { tick = tick.Add(time.Minute); return tick }}
+	first := board.Sync([]Record{{ID: "build", State: Working, Msg: "one"}})
+	if len(first) != 1 || !first[0].At.Equal(time.Date(2026, 10, 9, 12, 1, 0, 0, time.UTC)) {
+		t.Fatalf("a new record went out as %+v, want it stamped 12:01", first)
+	}
+	if again := board.Sync([]Record{{ID: "build", State: Working, Msg: "one"}}); len(again) != 0 {
+		t.Fatalf("an unchanged record went out again as %+v: the stamp made it look new", again)
+	}
+	reworded := board.Sync([]Record{{ID: "build", State: Working, Msg: "two"}})
+	if len(reworded) != 1 || !reworded[0].At.Equal(first[0].At) {
+		t.Fatalf("a new msg in the same state went out as %+v, want the 12:01 stamp kept", reworded)
+	}
+	finished := board.Sync([]Record{{ID: "build", State: Done, Msg: "two"}})
+	if len(finished) != 1 || !finished[0].At.After(first[0].At) {
+		t.Fatalf("a state change went out as %+v, want a stamp after 12:01", finished)
+	}
+	if listed := board.List(); len(listed) != 1 || !listed[0].At.Equal(finished[0].At) {
+		t.Fatalf("the board lists %+v, want the stamp it sent", listed)
+	}
+	board.Apply(Record{ID: "build", State: Clear})
+	if back := board.Sync([]Record{{ID: "build", State: Done, Msg: "two"}}); len(back) != 1 || !back[0].At.After(finished[0].At) {
+		t.Fatalf("a record cleared and back went out as %+v, want a fresh stamp", back)
+	}
+	var unclocked Board
+	if sent := unclocked.Sync([]Record{{ID: "build", State: Working}}); len(sent) != 1 || !sent[0].At.IsZero() {
+		t.Fatalf("a board with no clock stamped %+v", sent)
 	}
 }
 

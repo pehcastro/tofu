@@ -767,7 +767,22 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	config.Images = images
 	config.Person = person.Asking(func() bool { return settingText(e.dir, settingspkg.GatePrompt, say) == settingspkg.GatePromptAsk })
 	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff = config, spawner, plan, budget.CeilingTokens, sessions, gateErr
+	prepared.Account = spentAccount(opened.held, opened.selected.ID)
 	return prepared, nil
+}
+
+func spentAccount(held *accounts, model string) func(int64) host.TurnAccount {
+	return func(id int64) host.TurnAccount {
+		spent := host.TurnAccount{Source: string(held.provider), AccountID: id, Model: model}
+		if held.store == nil {
+			return spent
+		}
+		rows, err := held.store.List()
+		if at := slices.IndexFunc(rows, func(row cred.Row) bool { return row.ID == id }); err == nil && at >= 0 {
+			spent.Login = accountName(rows[at].Credential.Identity, false)
+		}
+		return spent
+	}
 }
 
 func oneLine(text string) string {

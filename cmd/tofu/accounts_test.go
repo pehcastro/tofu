@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -48,6 +49,8 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 	}
 
 	config, _ := mustConfig(t, opts, built, runtime{accounts: held, spend: turn.SpendSubscription})
+	var taken []turn.AccountTaken
+	config.AccountTaken = func(account turn.AccountTaken) { taken = append(taken, account) }
 	row, err := turn.Run(context.Background(), config)
 	if err != nil {
 		t.Fatalf("turn.Run: %v", err)
@@ -60,6 +63,10 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 	}
 	if row.Account != 2 {
 		t.Fatalf("the row says account %d after the move", row.Account)
+	}
+	want := []turn.AccountTaken{{ID: 1, Reason: turn.AccountPicked}, {ID: 2, From: 1, Reason: turn.AccountMoved}}
+	if !slices.Equal(taken, want) {
+		t.Fatalf("the turn reported spending %+v, want %+v", taken, want)
 	}
 	t.Logf("\n%s", said)
 }

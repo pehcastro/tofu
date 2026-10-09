@@ -20,6 +20,7 @@ import (
 	"tofu/internal/llm/quota"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/status"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
@@ -62,10 +63,12 @@ type server struct {
 	shells  map[string]*watchedShell
 	command context.CancelFunc
 	status  statusFeed
+	probed  time.Time
 }
 
 func Serve(cfg ServeConfig) error {
-	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID())}
+	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
+		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}}
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
 	quit := make(chan struct{})
@@ -111,7 +114,7 @@ func (s *server) receive(line []byte) {
 			s.respond(in.ID, nil, err)
 		}
 	case in.ID == nil:
-	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
+	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
 		go func() {
 			result, err := s.call(in.Method, in.Params)
 			s.respond(in.ID, result, err)
@@ -196,6 +199,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.compact)
 	case "session.history":
 		return handle(raw, s.history)
+	case "session.turns":
+		return handle(raw, s.turns)
 	case queryPrefix + "ledger":
 		return handle(raw, func(p LedgerParams) (any, error) {
 			if s.Ledger == nil {
@@ -223,6 +228,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, func(p LoginParams) (any, error) { return s.Verb([]string{"login", p.Role, p.Provider}) })
 	case statusMethod + ".list":
 		return handle(raw, s.statusList)
+	case statusMethod + ".ack":
+		return handle(raw, s.statusAck)
 	}
 	return s.data(method, raw)
 }
@@ -599,6 +606,7 @@ func (s *server) publish(event Event) {
 	case EventTurnEnded:
 		go s.quota()
 		go s.listed()
+		go s.turnEnded(s.items.turn)
 	case EventTurnStarted, EventForkEnd:
 		go s.listed()
 	}
@@ -664,6 +672,27 @@ type watchedShell struct {
 	command   string
 	exitCode  *int
 	status    shellStatus
+	portFrom  int
+}
+
+func (w *watchedShell) portPrinted() int {
+	port := shell.PortInOutput(w.stream[w.portFrom:])
+	w.portFrom = max(w.portFrom, strings.LastIndexByte(w.stream, '\n')+1)
+	return port
+}
+
+func (s *server) listenersOf(found []shell.Shell) map[string]int {
+	window := konst.BackgroundYieldMillis * time.Millisecond
+	waiting := slices.DeleteFunc(slices.Clone(found), func(one shell.Shell) bool {
+		return one.State != shell.Running || one.Kept == "" || one.Port != 0 || time.Since(one.Started) < window
+	})
+	if len(waiting) == 0 || time.Since(s.probed) < window {
+		return nil
+	}
+	s.probed = time.Now()
+	lookup, cancel := context.WithTimeout(context.Background(), konst.PortHolderTimeoutMillis*time.Millisecond)
+	defer cancel()
+	return s.Shells.Listening(lookup, waiting)
 }
 
 func (s *server) watched(name string) *watchedShell {
@@ -705,7 +734,7 @@ func (s *server) scanShells(first bool) {
 	if err != nil {
 		return
 	}
-	mask := sys.LoadKeyRedactor().Redact
+	mask, listening := sys.LoadKeyRedactor().Redact, s.listenersOf(found)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	listed := map[string]bool{}
@@ -720,12 +749,19 @@ func (s *server) scanShells(first bool) {
 		}
 		id := s.items.identity(one.Owner, one.Name)
 		_ = s.follow(one.Name, watched, mask)
+		learned := 0
+		if port := cmp.Or(listening[one.Name], watched.portPrinted()); port > 0 && one.Port == 0 && one.Kept != "" && s.Shells.SetPort(one.Name, port) == nil {
+			one.Port, learned = port, port
+		}
 		if !watched.announced {
 			s.box.push(kept("shell.started", &ShellStarted{Identity: id, Shell: one.Name, Command: mask(one.Command), PID: one.PID, StartedAt: one.Started,
-				Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver()}))
+				Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), call: one.Call}))
 			if first {
 				watched.sent = len(watched.stream)
 			}
+		}
+		if learned > 0 {
+			s.box.push(kept("shell.ready", &ShellListening{Identity: id, Shell: one.Name, Port: learned}))
 		}
 		if len(watched.stream) > watched.sent {
 			s.box.push(merged("shell.output", one.Name, &ShellOutput{Identity: id, Shell: one.Name, Offset: watched.sent, Text: watched.stream[watched.sent:]}))

@@ -23,6 +23,7 @@ type Filter struct {
 	Mode    Mode
 	Version int
 	TurnID  string
+	Turns   map[string]bool
 	Origin  Origin
 	Since   time.Time
 	Until   time.Time
@@ -246,7 +247,7 @@ func (f Filter) match(row Row) bool {
 	if f.Version != 0 && row.Version != f.Version {
 		return false
 	}
-	if f.TurnID != "" && row.TurnID != f.TurnID {
+	if f.TurnID != "" && row.TurnID != f.TurnID || f.Turns != nil && !f.Turns[row.TurnID] {
 		return false
 	}
 	if f.Origin != OriginAny && row.Origin() != f.Origin {

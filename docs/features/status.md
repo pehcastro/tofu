@@ -102,5 +102,9 @@ printf '\e]7501;state=clear\a'
 
 Over `tofu serve --stdio`, every record arrives as a `status` event with
 `id`, `state` and the optional keys, and `status.list` answers every record
-as it stands, for a client that connects late. See [Serving tofu to another
-program](/docs/cli/serve).
+as it stands, for a client that connects late. On the wire a record also
+says `at`, when it entered its state, so a client can show "blocked 3m ago",
+and a blocked record names the approval or question it waits on as `ask`.
+`status.ack` with a record's `id` clears a `done` or `error` record once the
+person has seen it, the way opening the tab does in the app. See [Serving
+tofu to another program](/docs/cli/serve).

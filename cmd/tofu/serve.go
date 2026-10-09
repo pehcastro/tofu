@@ -224,6 +224,27 @@ func serveAccess(p host.SessionAccessParams) (host.SessionAccess, error) {
 	return host.SessionAccess{Session: header.ID, Owns: append([]string{}, header.Owns...), Preset: header.Preset}, nil
 }
 
+func sessionTurnIDs(handle string) (map[string]bool, time.Time, error) {
+	store, err := sessionstore.Open()
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	header, err := store.Header(handle)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	events, err := store.Events(header.ID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	turns := map[string]bool{}
+	for _, event := range events {
+		turns[event.Turn], turns[event.Agent] = true, true
+	}
+	delete(turns, "")
+	return turns, header.At, nil
+}
+
 func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 	var args []string
 	if p.ID != "" {
@@ -236,8 +257,16 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 		args = append(args, "--point", p.Point)
 	}
 	opts, err := parseWhyArgs(args)
+	if err == nil && p.Session != "" && p.ID != "" {
+		err = errors.New("session goes with last, not with an id")
+	}
 	if err != nil {
 		return host.LedgerReport{}, &host.Refusal{Code: host.CodeBadParams, Message: err.Error()}
+	}
+	if p.Session != "" {
+		if opts.turns, opts.since, err = sessionTurnIDs(p.Session); err != nil {
+			return host.LedgerReport{}, err
+		}
 	}
 	found, err := whyFind(opts)
 	if err != nil {
@@ -316,13 +345,20 @@ func serveVerbs(errOut io.Writer) func([]string) (host.VerbResult, error) {
 
 func serveQuota(kept *quota.Poller) func() []host.QuotaWindow {
 	return func() []host.QuotaWindow {
+		results, err := pollCredentials(context.Background(), time.Now, kept)
+		if err != nil {
+			return nil
+		}
 		var windows []host.QuotaWindow
-		for _, read := range quotaFrames(pollCredentials(context.Background(), time.Now, kept)) {
-			window := host.QuotaWindow{Account: read.Account, Window: read.Label, Percent: read.Fraction * percentOfOne, Reported: read.Reported}
-			if !read.ResetsAt.IsZero() {
-				window.ResetsAt = &read.ResetsAt
+		for _, result := range results {
+			for _, read := range quotaFrames([]pollResult{result}, nil) {
+				window := host.QuotaWindow{Account: read.Account, Window: read.Label, Percent: read.Fraction * percentOfOne, Reported: read.Reported,
+					Source: string(result.report.Provider), AccountID: result.row}
+				if !read.ResetsAt.IsZero() {
+					window.ResetsAt = &read.ResetsAt
+				}
+				windows = append(windows, window)
 			}
-			windows = append(windows, window)
 		}
 		return windows
 	}

@@ -59,8 +59,13 @@ clears once you open the sub-agents screen or the shells screen.
 each with `id`, `state` and the optional `kind`, `progress`, `app`,
 `title` and `msg`. There the lead has the id `tofu`, and every record
 tofu makes itself carries `app=tofu`. `status.list` answers every record as it stands, for a
-client that connects late. A `done` record on the wire lasts until the
-next turn starts.
+client that connects late; it takes `session`, which must be the open one.
+On the wire a record also carries `at`, when it entered its state, kept
+while only its message changes, and a blocked lead, cron job or sub-agent
+carries `ask`, the id of the approval or question it waits on. A `done`
+record on the wire lasts until the next turn starts, or until a client
+sends `status.ack` with its `id`, which clears a `done` or `error` record
+until that id leaves the state, as opening the screen does in the app.
 
 A name becomes a segment of the id: a byte outside letters, digits and
 `_.+-` becomes `_`, and a segment stops at 32 bytes. The real name is in

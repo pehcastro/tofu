@@ -58,6 +58,26 @@ func TestADefaultPortIsGuessedOnlyForADevServer(t *testing.T) {
 	}
 }
 
+func TestALocalAddressInOutputNamesThePortWhateverTheColours(t *testing.T) {
+	for printed, want := range map[string]int{
+		"\x1b[32mhttp://localhost:8765\x1b[0m\n":                       8765,
+		"  Local:   http://localhost:\x1b[1m5173\x1b[22m/\n":           5173,
+		"listening on 127.0.0.1:4000":                                  4000,
+		"bound [::1]:4001 and more":                                    4001,
+		"0.0.0.0:4002":                                                 4002,
+		"\x1b]8;;http://localhost:3001/\x1b\\open\x1b]8;;\x1b\\":       3001,
+		"first http://localhost:3002 then http://localhost:3003":       3002,
+		"Network: http://192.168.1.5:3000/ and https://example.com:80": 0,
+		"mylocalhost:3000":                                             0,
+		"localhost:99999 and localhost:0":                              0,
+		"compiled in 12:30":                                            0,
+	} {
+		if got := PortInOutput(printed); got != want {
+			t.Errorf("%q named port %d, want %d", printed, got, want)
+		}
+	}
+}
+
 func TestABackgroundStartOnAHeldPortIsRefusedNamingTheHolder(t *testing.T) {
 	port := listenOnIPv6Loopback(t)
 	command := "PORT=" + strconv.Itoa(port) + " bun run dev"

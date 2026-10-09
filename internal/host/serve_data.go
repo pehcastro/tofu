@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/command"
 	"tofu/internal/learn"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
@@ -67,6 +68,8 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		})
 	case queryPrefix + "settings":
 		return typedVerb[SettingsReport](s, raw, "settings")
+	case queryPrefix + "commands":
+		return handle(raw, func(NoParams) (any, error) { return CommandList{Commands: command.Table()}, nil })
 	case queryPrefix + "rules":
 		return handle(raw, func(NoParams) (any, error) {
 			report, err := verbAs[RuleListReport](s, "rules", "list")

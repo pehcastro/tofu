@@ -25,6 +25,8 @@ type whyOpts struct {
 	point string
 	json  bool
 	state bool
+	turns map[string]bool
+	since time.Time
 }
 
 type whyReport struct {
@@ -231,7 +233,7 @@ func whyRows(reader *ledger.Reader, opts whyOpts) ([]ledger.Row, error) {
 		return []ledger.Row{row}, nil
 	}
 	var window []ledger.Row
-	if _, err := reader.Each(ledger.Filter{Point: opts.point}, func(row ledger.Row) error {
+	if _, err := reader.Each(ledger.Filter{Point: opts.point, Turns: opts.turns, Since: opts.since}, func(row ledger.Row) error {
 		window = append(window, row)
 		if len(window) > opts.count {
 			window = window[1:]

@@ -43,6 +43,7 @@ type Shell struct {
 	Command  string     `json:"command"`
 	Dir      string     `json:"dir"`
 	Owner    string     `json:"owner"`
+	Call     string     `json:"call,omitempty"`
 	TofuPID  int        `json:"tofu_pid,omitempty"`
 	PID      int        `json:"pid"`
 	State    State      `json:"state"`
@@ -233,6 +234,9 @@ func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, p
 	}
 	if process.killed {
 		return
+	}
+	if raw, err := os.ReadFile(r.statePath(started.Name)); err == nil {
+		_ = json.Unmarshal(raw, &started)
 	}
 	ended := time.Now()
 	started.State, started.Ended, started.ExitCode = Exited, &ended, &code

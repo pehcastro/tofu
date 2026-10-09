@@ -68,6 +68,7 @@ type Prepared struct {
 	Sessions  *session.Store
 	GateOff   error
 	Close     func()
+	Account   func(id int64) TurnAccount
 }
 
 func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
@@ -154,6 +155,14 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	config.Steering = func() []string { return h.steering.take(emit, int(steps.Load())+1) }
 	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
+	config.AccountTaken = func(taken turn.AccountTaken) {
+		spent := TurnAccount{AccountID: taken.ID}
+		if prepared.Account != nil {
+			spent = prepared.Account(taken.ID)
+		}
+		spent.Reason, spent.FromAccount = AccountReason(taken.Reason), taken.From
+		emit(Event{Kind: EventAccount, Account: &spent})
+	}
 	config.Appended = func(logged session.Event) {
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
 	}

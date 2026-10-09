@@ -51,6 +51,17 @@ func shellOwnerFrom(ctx context.Context) string {
 	return owner
 }
 
+type shellCallKey struct{}
+
+func withShellCall(ctx context.Context, callEvent string) context.Context {
+	return context.WithValue(ctx, shellCallKey{}, callEvent)
+}
+
+func shellCallFrom(ctx context.Context) string {
+	call, _ := ctx.Value(shellCallKey{}).(string)
+	return call
+}
+
 func NewBashTool(root string) (*BashTool, error) {
 	return NewBashToolCached(root, nil)
 }
@@ -386,6 +397,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
 		Port:   shell.NamedPort(string(t.root), args.Command, cmd.Env),
 		Kept:   shell.KeptBackground,
+		Call:   shellCallFrom(ctx),
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
@@ -412,7 +424,7 @@ func deadlineResult(command, output string, deadline time.Duration) Result {
 }
 
 func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (Result, error) {
-	wait := shell.Wait{Within: min(deadline, t.softLimit)}
+	wait := shell.Wait{Within: min(deadline, t.softLimit), Call: shellCallFrom(ctx)}
 	if deadline > t.softLimit {
 		wait.Kept = shell.KeptMoved
 	}

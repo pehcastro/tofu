@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -134,7 +135,24 @@ func resolvedSetting(store *settingspkg.Store, spec settingspkg.Spec) settingVal
 	if scope, fromFile := store.Source(spec.Key); fromFile {
 		source = scope.String()
 	}
-	return settingValue{Key: spec.Key, Category: spec.Category, Value: settingOf(store, spec), Source: source}
+	row := settingValue{Key: spec.Key, Category: spec.Category, Value: settingOf(store, spec), Source: source,
+		Label: spec.Label, Description: spec.Description, Kind: host.SettingText, Unit: spec.Unit, Restart: spec.Restart}
+	switch {
+	case spec.Kind == settingspkg.Bool:
+		row.Kind = host.SettingBool
+	case spec.Kind == settingspkg.Int:
+		row.Kind, row.Min = host.SettingInt, &spec.Least
+		if spec.Most < math.MaxInt32 {
+			row.Max = &spec.Most
+		}
+	case spec.Kind != settingspkg.Text:
+		panic(fmt.Sprintf("settings: %s has kind %d, which the wire does not name", spec.Key, spec.Kind))
+	case spec.ListOf != nil:
+		row.Kind, row.Choices = host.SettingList, spec.ListOf
+	case spec.Choices != nil:
+		row.Kind, row.Choices = host.SettingChoice, spec.Choices
+	}
+	return row
 }
 
 func settingsPage(page cli.Page, report settingsReport) []string {

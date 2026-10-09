@@ -85,10 +85,32 @@ type SettingsReport struct {
 }
 
 type SettingValue struct {
-	Key      string `json:"key"`
-	Category string `json:"category"`
-	Value    any    `json:"value"`
-	Source   string `json:"source"`
+	Key         string      `json:"key"`
+	Category    string      `json:"category"`
+	Value       any         `json:"value"`
+	Source      string      `json:"source"`
+	Label       string      `json:"label"`
+	Description string      `json:"description"`
+	Kind        SettingKind `json:"kind"`
+	Choices     []string    `json:"choices,omitempty"`
+	Min         *int        `json:"min,omitempty"`
+	Max         *int        `json:"max,omitempty"`
+	Unit        string      `json:"unit,omitempty"`
+	Restart     bool        `json:"restart,omitempty"`
+}
+
+type SettingKind string
+
+const (
+	SettingBool   SettingKind = "bool"
+	SettingInt    SettingKind = "int"
+	SettingText   SettingKind = "text"
+	SettingChoice SettingKind = "choice"
+	SettingList   SettingKind = "list"
+)
+
+func (SettingKind) enum() []string {
+	return []string{string(SettingBool), string(SettingInt), string(SettingText), string(SettingChoice), string(SettingList)}
 }
 
 type RuleListReport struct {

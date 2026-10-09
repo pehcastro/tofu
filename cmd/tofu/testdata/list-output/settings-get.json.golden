@@ -9,7 +9,20 @@ exit 0
     "key": "theme",
     "category": "Appearance",
     "value": "Nord",
-    "source": "project"
+    "source": "project",
+    "label": "Theme",
+    "description": "tofu uses Zed Nu Disco; choose a palette",
+    "kind": "choice",
+    "choices": [
+      "tofu",
+      "tofu light",
+      "tofu dusk",
+      "Solarized Light",
+      "Dracula",
+      "Nord",
+      "Gruvbox",
+      "terminal"
+    ]
   },
   "problems": []
 }

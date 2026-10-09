@@ -27,42 +27,40 @@ answers. This page is what serve sends without being asked.
 - `initialize` first; anything else before it errs. Its `capabilities` name
   each family of methods, so a client tells an older tofu from a newer
 - `session.open` replays the chat as events; `session.history` pages it
-- `session.listed`: the open row of `session.list` again when a turn starts or
-  ends, after a fork and a rename; `session.updated` follows every turn, a
-  rename and a compaction, with `lastAt`, the last record
+- `session.listed`: the open row of `session.list` again when a turn starts or ends, after a fork and a
+  rename; `session.updated` follows every turn, a rename and a compaction, with `lastAt`, the last record;
+  `session.turns.updated` carries the ended turn's `digest`, one row of `session.turns`
+- `turn.account`: the account a turn spends, `source`, `account_id`, `login`, `model` and `reason`:
+  `picked` as it starts, `moved` with `from_account` when tofu leaves a spent account mid-turn
 - `session.settings`: `asking` and the `pick` of wire, model and effort, sent
   to every client when `session.set` changes them
-- `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`,
-  `{"kind":"cron","job":"c1","schedule":"every 30m"}`,
-  `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop
-  hook"}`: you, a cron fire, a sub-agent's report, a line tofu added. Older
-  sessions, and a cron fire that joined a running turn, read as `person`
-- `cron.updated` and `query.cron`: `live`, `goals` and each job's `id`,
-  `schedule`, `prompt`, `paused`, `next` and `ended`; a fire that starts a
-  turn shows in its `origin` alone, one joining a running turn sends a `note`
+- `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`, `{"kind":"cron","job":"c1",
+  "schedule":"every 30m"}`, `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop hook"}`:
+  you, a cron fire, a sub-agent's report, a line tofu added. Older sessions, and a cron fire that joined a
+  running turn, read as `person`
+- `cron.updated` and `query.cron`: `live`, `goals` and each job's `id`, `schedule`, `prompt`, `paused`, `next`
+  and `ended`; a fire that starts a turn shows in its `origin` alone, one joining a running turn sends a `note`
 - `tool.started`, `tool.completed` and `file.edit` by a sub-agent carry its
   `agent` and `instance`, live and replayed, with their real `turn` and item
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
   `turn.steered`: the lead read a message sent mid-turn, until then queued
-- `quota.updated`: on open, after each turn and every five minutes, each
-  window's `percent`; `windows: []`, none answered
+- `quota.updated`: on open, after each turn and every five minutes, each window's `percent`, `source` and
+  `account_id`, the id `query.accounts` uses; `windows: []`, none answered
 - `item.persisted`: every line of `events.jsonl` with its `logSeq`, so history
   after a seq is a read of the log; a tool call's names its `tool.started`
 - `decision`: every gate, with `at` and `call`, the `tool.started` it judged
 - `memory.scoped`: a `remember` kept or answered: `statement`, `offered` (Jev's
   pick, else the lead's), `picked` (`none` for no), `by` (`person`, `auto`)
-- `tofu/askPerson`, a request, when the lead asks a question with options,
-  only to a client whose `initialize` declared `questions`; any other is
-  `undelivered` at once. Answer `{"outcome":"submitted","answers":[{"id":
-  "lib","chosen":["resty"],"text":""}]}` or `cancelled`; `question.resolved`
-  says how and by whom. `tofu docs asking`
-- `shell.started`: only a kept shell, never a one-shot, with `kept`
-  (`background` or `moved`), `dir`, `port`, `ready` and `leftOver`; every one
-  ends in `shell.exited` with `endedAt`, and `exitCode` when tofu saw it
-- `status`: what the lead, each sub-agent, shell and cron job is doing, as
-  OSC 7501 records; `status.list` answers them all. `tofu docs status`
-- a slow reader: past 128 queued lines tofu drops, sends `resync`, never
-  waits; `session.state` answers it
+- `tofu/askPerson`, a request, when the lead asks a question with options, only to a client whose `initialize`
+  declared `questions`; any other is `undelivered` at once. Answer `{"outcome":"submitted","answers":[{"id":
+  "lib","chosen":["resty"],"text":""}]}` or `cancelled`; `question.resolved` says how and by whom. `tofu docs asking`
+- `shell.started`: only a kept shell, never a one-shot, with `kept` (`background` or `moved`), `dir`, `port`,
+  `ready`, `leftOver` and `ref`, the quote of the call that started it; every one ends in `shell.exited` with
+  `endedAt`, and `exitCode` when tofu saw it. `shell.ready` `{shell, port}` follows once tofu reads a local
+  address in its output, colours stripped, or finds its process listening ten seconds after it started
+- `status`: what the lead, each sub-agent, shell and cron job is doing, as OSC 7501 records with `at`, when
+  the state began, and `ask` on a blocked one; `status.list` answers them all. `tofu docs status`
+- a slow reader: past 128 queued lines tofu drops, sends `resync`, never waits; `session.state` answers it
 - `tofu serve --schema`: the JSON Schema of every line out, in under `$defs.clientMessage`
 
 ## Change it

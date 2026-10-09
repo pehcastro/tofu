@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/internal/judge/ledger"
@@ -13,6 +14,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/rule"
 	"tofu/internal/session"
+	"tofu/internal/sift"
 	"tofu/internal/skill"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -24,6 +26,7 @@ const (
 	ledgerSummaryDays  = 7
 	classifierLookback = 31 * 24 * time.Hour
 	shippedLibraryRoot = "library"
+	shellSiftTool      = "bash"
 	tokensPerThousand  = 1000
 )
 
@@ -252,6 +255,9 @@ func (s *server) withSubjects(report LedgerReport) (LedgerReport, error) {
 		subject, err := state.SubjectOf(body)
 		if err != nil {
 			return report, err
+		}
+		if builder, _, _ := strings.Cut(row.StateBuilder, "@"); builder == sift.ShellSchema {
+			subject.Tool = shellSiftTool
 		}
 		report.Rows[i].Subject = &subject
 	}

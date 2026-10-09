@@ -41,9 +41,31 @@ type CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked func(StepRow)
 
 type CalledAsEachToolCallAnswersAndBeforeTheNextRequest func(llm.Message)
 
+type AccountReason string
+
+const (
+	AccountPicked AccountReason = "picked"
+	AccountMoved  AccountReason = "moved"
+)
+
+type AccountTaken struct {
+	ID     int64
+	From   int64
+	Reason AccountReason
+}
+
+type CalledWhenTheTurnStartsSpendingAnAccount func(AccountTaken)
+
+func (c Config) tookAccount(taken AccountTaken) {
+	if c.AccountTaken != nil && taken.ID != 0 {
+		c.AccountTaken(taken)
+	}
+}
+
 type Config struct {
 	Model           Model
 	Accounts        Accounts
+	AccountTaken    CalledWhenTheTurnStartsSpendingAnAccount
 	Spend           Spend
 	Tools           Registry
 	ToolSource      func() Registry

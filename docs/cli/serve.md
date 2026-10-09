@@ -39,26 +39,35 @@ turn, settings and login methods, the families include:
 
 | Family | Requests | What they answer |
 |---|---|---|
-| `boards` | `query.session`, `query.usage.history`, `query.limits`, `query.skills`, `query.ledger.summary` | the fork tree; usage by hour or day with who spent it; each account's burn rate and when a window fills; the skills; a week of decisions per point |
+| `boards` | `query.session`, `query.usage.history`, `query.limits`, `query.skills`, `query.ledger.summary`, `session.turns` | the fork tree; usage by hour or day with who spent it; each account's burn rate and when a window fills; the skills; a week of decisions per point; one digest per turn with its origin, outcome, held calls, sub-agents, files with line counts, tokens and cost |
+| `commands` | `query.commands` | every slash command with its arguments, what it does, whether it runs in tofu or only in the interface, and what a client needs to offer it |
 | `memory` | `memory.add`, `memory.edit`, `memory.remove`, `memory.view`, `memory.zoom`, `memory.recall` | entries in the four scopes, and the episode and scope views opened line by line |
 | `side` | `session.branch`, `session.access` | a side chat beside the lead, and what it may write |
-| `status` | `status.list` | every program status record as it stands |
+| `status` | `status.list`, `status.ack` | every program status record as it stands, with when it entered its state and the approval or question a blocked one waits on; an acknowledged finished record clears |
 | `mention` | `mention.resolve` | the item a `ref` points at |
-| `queries` | `query.context`, `query.rules`, `query.usage` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age |
+| `queries` | `query.context`, `query.rules`, `query.usage`, `query.settings`, `query.ledger` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the decisions of one session |
 
 `session.state` lists the approvals waiting, the standing answers, the
 open questions, the sub-agents, the kept shells and the cron jobs, which is
-what a client reads after it falls behind.
+what a client reads after it falls behind. Each kept shell carries its port
+and a `ref` that `mention.resolve` turns back into the call that started it.
 
 ## Events it sends unasked
 
 - `status`, one per program status record: the lead, each sub-agent, each
   kept shell and each cron job. See [Program status](/docs/features/status).
 - `shell.started` only for a shell tofu keeps, never a one-shot command,
-  and `shell.exited` for every one of them.
+  and `shell.exited` for every one of them. `shell.ready` carries a dev
+  server's port once tofu reads `http://localhost:3000` or a like address in
+  its output, colours and all, or finds the shell's own process listening,
+  so `npm run dev` gets its port though the command never names one.
+- `turn.account`: the account a turn spends, `picked` as it starts, and
+  `moved`, naming the account it left, when tofu moves off a spent one.
+- `session.turns.updated`: the digest of a turn that just ended, the same
+  row `session.turns` answers, so a client updates one row.
 - `quota.updated` when a session opens, after each turn and every five
-  minutes, with each reading's age. See [Subscription
-  quota](/docs/llms/quota).
+  minutes, with each reading's age and the `source` and `account_id` it
+  belongs to. See [Subscription quota](/docs/llms/quota).
 - `memory.scoped` when a remember card is answered: the rule, the scope
   offered, the scope picked and who picked it.
 - `approval.resolved` and `question.resolved`, naming the answer and who

@@ -10,6 +10,7 @@ import (
 	"tofu/interface/tui/palette"
 	"tofu/interface/tui/quote"
 	"tofu/interface/tui/session"
+	"tofu/internal/command"
 	"tofu/internal/keymap"
 	isession "tofu/internal/session"
 	"tofu/internal/sys"
@@ -23,45 +24,33 @@ const (
 )
 
 func commands(options Options) []session.Command {
-	listed := []session.Command{
-		{Name: "chat", What: "the conversation and the composer"},
-		{Name: "sub-agents", What: "every tool call and every sub-agent, in one feed"},
-		{Name: "file-edits", What: "every changed line, who made it and where"},
-		{Name: "shells", What: "the persistent processes an agent left running"},
-		{Name: "models", What: "every model the signed subscriptions serve, and which one the next turn runs"},
-		{Name: "status", What: "each subscription's quota windows and when they reset"},
-		{Name: "attach", What: "reference a file in this workspace"},
-		{Name: "settings", What: "appearance, keys, roles, and the file each value came from"},
-		{Name: "keys", What: "every key the app answers to, and what it does"},
-		{Name: "links", What: "every link this conversation carried, newest first"},
-		{Name: "quote", What: "cite a past turn by id, newest first"},
-		{Name: "copy", What: "put the last answer on the clipboard"},
-		{Name: "copy-call", What: "put the last tool call and its result on the clipboard"},
-		{Name: "memory", What: "what tofu remembers for you, global and for this project"},
-		{Name: "remember", What: "keep a line for every later session: /remember <what>"},
+	var listed []session.Command
+	for _, one := range command.Table() {
+		if offered(options, one.Needs) {
+			listed = append(listed, session.Command{Name: one.Name, What: one.Summary})
+		}
 	}
-	if options.Reload != nil {
-		listed = append(listed, session.Command{Name: "reload", What: "re-read settings, rules, skills, sub-agents, models, instructions and keys from disk"})
+	return listed
+}
+
+func offered(options Options, needs command.Needs) bool {
+	switch needs {
+	case command.Always:
+		return true
+	case command.Reload:
+		return options.Reload != nil
+	case command.Resume:
+		return options.Resume != nil
+	case command.Fresh:
+		return options.NewSession != nil
+	case command.Compact:
+		return options.Compact != nil
+	case command.Undo:
+		return options.Undo != nil
+	case command.Cron:
+		return options.Host != nil
 	}
-	if options.Resume != nil {
-		listed = append(listed, session.Command{Name: "resume", What: "pick a session of this project to carry into the next task"})
-	}
-	if options.NewSession != nil {
-		listed = append(listed, session.Command{Name: "new", What: "start fresh, carrying nothing from the last session"})
-	}
-	if options.Compact != nil {
-		listed = append(listed, session.Command{Name: "compact", What: "shrink the old tool results the next turn carries to an artifact handle each"})
-	}
-	if options.Undo != nil {
-		listed = append(listed, session.Command{Name: "undo", What: "put back the files the last turn changed, or the last N with /undo N"})
-	}
-	if options.Host != nil {
-		listed = append(listed,
-			session.Command{Name: "cron", What: "the scheduled jobs: list, history, edit, pause, resume, delete"},
-			session.Command{Name: "loop", What: "repeat a prompt on an interval: /loop 10m <prompt>"},
-			session.Command{Name: "goal", What: `fire after each turn until a check passes: /goal <prompt> --until "<cmd>"`})
-	}
-	return append(listed, session.Command{Name: "quit", What: "leave tofu"})
+	panic("tui: unknown command need " + string(needs))
 }
 
 func (a *App) menuKey(key string) (bool, tea.Cmd) {

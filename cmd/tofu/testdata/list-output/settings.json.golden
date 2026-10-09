@@ -13,319 +13,612 @@ exit 0
         "key": "theme",
         "category": "Appearance",
         "value": "Nord",
-        "source": "project"
+        "source": "project",
+        "label": "Theme",
+        "description": "tofu uses Zed Nu Disco; choose a palette",
+        "kind": "choice",
+        "choices": [
+          "tofu",
+          "tofu light",
+          "tofu dusk",
+          "Solarized Light",
+          "Dracula",
+          "Nord",
+          "Gruvbox",
+          "terminal"
+        ]
       },
       {
         "key": "density",
         "category": "Appearance",
         "value": "comfortable",
-        "source": "default"
+        "source": "default",
+        "label": "Density",
+        "description": "Spacing across lists and panels",
+        "kind": "choice",
+        "choices": [
+          "compact",
+          "comfortable",
+          "spacious"
+        ]
       },
       {
         "key": "animations",
         "category": "Appearance",
         "value": "subtle",
-        "source": "default"
+        "source": "default",
+        "label": "Animations",
+        "description": "Motion for conversational states",
+        "kind": "choice",
+        "choices": [
+          "off",
+          "subtle",
+          "full"
+        ]
       },
       {
         "key": "statusBar",
         "category": "Appearance",
         "value": "compact",
-        "source": "default"
+        "source": "default",
+        "label": "Status bar",
+        "description": "Context, quotas, and runtime counters",
+        "kind": "choice",
+        "choices": [
+          "compact",
+          "detailed",
+          "hidden"
+        ]
       },
       {
         "key": "colorMode",
         "category": "Appearance",
         "value": "auto",
-        "source": "default"
+        "source": "default",
+        "label": "Color mode",
+        "description": "Terminal color capability",
+        "kind": "choice",
+        "choices": [
+          "auto",
+          "truecolor",
+          "256 colors",
+          "ANSI 16"
+        ]
       },
       {
         "key": "composer",
         "category": "Interaction",
         "value": "standard",
-        "source": "default"
+        "source": "default",
+        "label": "Composer",
+        "description": "Enter sends; Shift+Enter inserts a line break",
+        "kind": "choice",
+        "choices": [
+          "standard",
+          "compact",
+          "expanded"
+        ]
       },
       {
         "key": "gatePrompt",
         "category": "Interaction",
         "value": "auto",
-        "source": "default"
+        "source": "default",
+        "label": "Confirmations",
+        "description": "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer. A project hook, a rule override and the model changing a setting ask you in both",
+        "kind": "choice",
+        "choices": [
+          "auto",
+          "ask"
+        ]
       },
       {
         "key": "askPersonWaitSeconds",
         "category": "Interaction",
         "value": 120,
-        "source": "default"
+        "source": "default",
+        "label": "Question wait",
+        "description": "under auto, a question the lead asks you takes its recommended option after this many seconds, and the lead never stops for it; the question stays open and a later answer still reaches the lead. under ask the lead waits with no timeout. the next turn reads the new value",
+        "kind": "int",
+        "min": 1,
+        "unit": "seconds before the recommended option is taken under auto"
       },
       {
         "key": "readBeforeEdit",
         "category": "Interaction",
         "value": false,
-        "source": "global"
+        "source": "global",
+        "label": "Read before edit",
+        "description": "an edit or a write to a file this session has not read, or that changed since it was read, is refused",
+        "kind": "bool"
       },
       {
         "key": "autoUpdate",
         "category": "Interaction",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Auto update",
+        "description": "on installs a newer tofu release in the background, looked up at most once an hour, and the next start runs it; off only says in the chat that one is out, and tofu update installs it. A build from source never updates",
+        "kind": "bool"
       },
       {
         "key": "chatShowsTools",
         "category": "Context",
         "value": false,
-        "source": "default"
+        "source": "default",
+        "label": "Tool detail",
+        "description": "chat shows every tool call",
+        "kind": "bool"
       },
       {
         "key": "agentFeeds",
         "category": "Context",
         "value": "full",
-        "source": "default"
+        "source": "default",
+        "label": "Agent feeds",
+        "description": "full keeps every sub-agents event, summary the latest 200, off shows only the list of agents",
+        "kind": "choice",
+        "choices": [
+          "full",
+          "summary",
+          "off"
+        ]
       },
       {
         "key": "showThinking",
         "category": "Context",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Thinking",
+        "description": "thinking shows in each agent's sub-agents feed; t there toggles it",
+        "kind": "bool"
       },
       {
         "key": "thinkingSummary",
         "category": "Context",
         "value": "summarized",
-        "source": "default"
+        "source": "default",
+        "label": "Thinking summary",
+        "description": "summarized asks Claude for a summary of its thinking; omitted asks for none, so no thinking reaches the sub-agents feed",
+        "kind": "choice",
+        "choices": [
+          "summarized",
+          "omitted"
+        ]
       },
       {
         "key": "images",
         "category": "Context",
         "value": "auto",
-        "source": "default"
+        "source": "default",
+        "label": "Images",
+        "description": "auto sends a pasted image only to a model that can see, inline always sends, off never attaches",
+        "kind": "choice",
+        "choices": [
+          "auto",
+          "inline",
+          "off"
+        ]
       },
       {
         "key": "projectInstructionsCap",
         "category": "Context",
         "value": 32768,
-        "source": "default"
+        "source": "default",
+        "label": "Project instructions",
+        "description": "bytes of your instruction files sent each turn",
+        "kind": "int",
+        "min": 1,
+        "max": 262144,
+        "unit": "bytes of AGENTS.md and CLAUDE.md sent each turn"
       },
       {
         "key": "instructionSources",
         "category": "Context",
         "value": "agents-first",
-        "source": "default"
+        "source": "default",
+        "label": "Instruction files",
+        "description": "a folder with both AGENTS.md and CLAUDE.md sends one: agents-first sends AGENTS.md, claude-first sends CLAUDE.md, both sends both and costs more tokens. Read from the working directory up to its git root; the home directory gives only ~/.tofu/AGENTS.md",
+        "kind": "choice",
+        "choices": [
+          "agents-first",
+          "claude-first",
+          "both"
+        ]
       },
       {
         "key": "skills",
         "category": "Context",
         "value": "on",
-        "source": "default"
+        "source": "default",
+        "label": "Skills",
+        "description": "on lists the skills in .tofu, .agents and .claude skill folders to the model and offers the skill tool; off sends neither. The project gives all three, the home directory only ~/.tofu/skills",
+        "kind": "choice",
+        "choices": [
+          "on",
+          "off"
+        ]
       },
       {
         "key": "memory",
         "category": "Context",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Memory",
+        "description": "on sends what you asked tofu to remember to the lead on every request and lets the lead offer one short rule; off sends none and offers nothing. tofu memory lists the entries",
+        "kind": "bool"
       },
       {
         "key": "autoMemory",
         "category": "Context",
         "value": false,
-        "source": "default"
+        "source": "default",
+        "label": "Auto memory",
+        "description": "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on",
+        "kind": "bool"
       },
       {
         "key": "episodes",
         "category": "Context",
         "value": "on",
-        "source": "default"
+        "source": "default",
+        "label": "Episodes",
+        "description": "on keeps the conversation in this project as episodes, sends their view after the memory and through every fork, and offers zoom and recall; off keeps none, sends none and offers neither, while the memory still goes. Needs memory on",
+        "kind": "choice",
+        "choices": [
+          "on",
+          "off"
+        ]
       },
       {
         "key": "memoryFromAllUsers",
         "category": "Context",
         "value": "off",
-        "source": "default"
+        "source": "default",
+        "label": "Memory from all users",
+        "description": "on applies the user local memory every author kept in this repository's .tofu folder; off applies only yours. Project local memory applies to everyone either way",
+        "kind": "choice",
+        "choices": [
+          "on",
+          "off"
+        ]
       },
       {
         "key": "memoryModel",
         "category": "Context",
         "value": "claude-sub/claude-haiku-4-5-20251001",
-        "source": "default"
+        "source": "default",
+        "label": "Memory model",
+        "description": "the subscription model that writes memory summaries, one line of at most 512 bytes each, as source/model; never the OpenRouter key",
+        "kind": "text"
       },
       {
         "key": "learn",
         "category": "Context",
         "value": false,
-        "source": "default"
+        "source": "default",
+        "label": "Learn",
+        "description": "on lets tofu learn send a window around each message you typed to Jev for labels, and write each proposal with your lead model, after printing how many windows and bytes; off runs tofu learn on this machine only",
+        "kind": "bool"
       },
       {
         "key": "diffContext",
         "category": "Files",
         "value": "3",
-        "source": "default"
+        "source": "default",
+        "label": "Diff context",
+        "description": "Lines around changed hunks, at most the 3 each diff carries",
+        "kind": "choice",
+        "choices": [
+          "2",
+          "3",
+          "5",
+          "8"
+        ]
       },
       {
         "key": "hyperlinks",
         "category": "Files",
         "value": "auto",
-        "source": "default"
+        "source": "default",
+        "label": "Hyperlinks",
+        "description": "OSC 8 terminal file links; off prints the bare path",
+        "kind": "choice",
+        "choices": [
+          "auto",
+          "on",
+          "off"
+        ]
       },
       {
         "key": "groupByAgent",
         "category": "Files",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Group by agent",
+        "description": "Author filters in edit feeds",
+        "kind": "bool"
       },
       {
         "key": "persistentRegistry",
         "category": "Shell",
         "value": false,
-        "source": "default"
+        "source": "default",
+        "label": "Persistent registry",
+        "description": "a running shell outlives tofu and the next launch lists it; off stops every shell on exit, even when tofu is killed",
+        "kind": "bool",
+        "restart": true
       },
       {
         "key": "logTail",
         "category": "Shell",
         "value": "500",
-        "source": "default"
+        "source": "default",
+        "label": "Log tail",
+        "description": "Lines retained per shell",
+        "kind": "choice",
+        "choices": [
+          "100",
+          "500",
+          "1000"
+        ]
       },
       {
         "key": "killConfirm",
         "category": "Shell",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Kill confirm",
+        "description": "Confirm process termination",
+        "kind": "bool"
       },
       {
         "key": "shell",
         "category": "Shell",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Shell",
+        "description": "a path, or the word wsl; empty resolves the person's own shell automatically",
+        "kind": "text"
       },
       {
         "key": "foldHidesShell",
         "category": "Shell",
         "value": false,
-        "source": "default"
+        "source": "default",
+        "label": "Fold hides shell",
+        "description": "the running line drops the shell count",
+        "kind": "bool"
       },
       {
         "key": "decisionCap",
         "category": "Turn",
         "value": 0,
-        "source": "default"
+        "source": "default",
+        "label": "Decision cap",
+        "description": "decision cap per turn, zero means no cap",
+        "kind": "int",
+        "min": 0,
+        "max": 1000,
+        "unit": "decisions a turn, where 0 means no cap"
       },
       {
         "key": "turnMaySpawn",
         "category": "Turn",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Sub-agents",
+        "description": "a turn may spawn a sub-agent",
+        "kind": "bool"
       },
       {
         "key": "oneTurnPerProject",
         "category": "Turn",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "One turn per project",
+        "description": "while one session runs a turn in this project, a turn from any other session is refused; off lets several sessions run turns in one repository at once",
+        "kind": "bool"
       },
       {
         "key": "sideChatAccess",
         "category": "Turn",
         "value": "read",
-        "source": "default"
+        "source": "default",
+        "label": "Side chat access",
+        "description": "what a new side chat may write: read writes nothing, notes writes .md and .html files, files writes anywhere, or a comma list of globs; a side chat never spawns, schedules, remembers or changes a setting, whatever this says",
+        "kind": "text"
       },
       {
         "key": "subAgentsPerTurn",
         "category": "Turn",
         "value": 10,
-        "source": "default"
+        "source": "default",
+        "label": "Sub-agents running at once",
+        "description": "how many sub-agents may run at once; a spawn past it is refused until one ends, and the next spawn reads the new value",
+        "kind": "int",
+        "min": 1,
+        "unit": "sub-agents running at once"
       },
       {
         "key": "subAgentDepth",
         "category": "Turn",
         "value": 2,
-        "source": "default"
+        "source": "default",
+        "label": "Sub-agent depth",
+        "description": "how deep a sub-agent may spawn its own sub-agents; the next spawn reads the new value",
+        "kind": "int",
+        "min": 1,
+        "unit": "levels of sub-agents"
       },
       {
         "key": "subAgentCache",
         "category": "Turn",
         "value": "1h",
-        "source": "default"
+        "source": "default",
+        "label": "Sub-agent cache",
+        "description": "how long a sub-agent's prompt cache lives; 5m writes cost less and expire after five idle minutes, 1h writes cost more and last an hour. the lead always keeps 1h, and the next spawn reads the new value",
+        "kind": "choice",
+        "choices": [
+          "1h",
+          "5m"
+        ]
       },
       {
         "key": "subAgentCheckSeconds",
         "category": "Turn",
         "value": 1800,
-        "source": "default"
+        "source": "default",
+        "label": "Sub-agent check",
+        "description": "every this many seconds the lead is sent a check on each running sub-agent, built from what tofu records with no model call: its steps, the files it changed, its gate and its last tool. 0 sends none; the next spawn reads the new value",
+        "kind": "int",
+        "min": 0,
+        "unit": "seconds between checks on a running sub-agent, where 0 sends none"
       },
       {
         "key": "subAgentWatchSeconds",
         "category": "Turn",
         "value": 600,
-        "source": "default"
+        "source": "default",
+        "label": "Sub-agent watch",
+        "description": "a sub-agent call open this many seconds gets a line in the chat saying what it is doing: waiting for the orchestrator's answer, running bash or building; a sub-agent with no new output, step or request for this long is shown as stalled",
+        "kind": "int",
+        "min": 1,
+        "unit": "seconds before a long call is named, and before a sub-agent with no progress is stalled"
       },
       {
         "key": "verifySubAgents",
         "category": "Turn",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Check sub-agents",
+        "description": "the lead checks each sub-agent's work itself before it reports, reading what it changed, running the build or the tests again and opening what it made; off takes the report as the result unless you ask for a check. tofu rules off verify_sub_agents turns it off too, whatever this says",
+        "kind": "bool"
       },
       {
         "key": "agentSources",
         "category": "Turn",
         "value": "tofu,agents,claude",
-        "source": "default"
+        "source": "default",
+        "label": "Agent folders",
+        "description": "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude, inside the project; the home directory gives only ~/.tofu/agents, and the library is always read",
+        "kind": "list",
+        "choices": [
+          "tofu",
+          "agents",
+          "claude"
+        ]
       },
       {
         "key": "modelTier.genius",
         "category": "Turn",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Genius tier",
+        "description": "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model",
+        "kind": "text"
       },
       {
         "key": "modelTier.smart",
         "category": "Turn",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Smart tier",
+        "description": "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model",
+        "kind": "text"
       },
       {
         "key": "modelTier.worker",
         "category": "Turn",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Worker tier",
+        "description": "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model",
+        "kind": "text"
       },
       {
         "key": "modelTier.dumb",
         "category": "Turn",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Dumb tier",
+        "description": "the model @dumb names; empty runs the orchestrator's model",
+        "kind": "text"
       },
       {
         "key": "browser",
         "category": "Browser",
         "value": "drive",
-        "source": "default"
+        "source": "default",
+        "label": "Browser",
+        "description": "drive lets the model read your Chrome tabs and click and type in them; read lets it only read them; off offers no browser tool",
+        "kind": "choice",
+        "choices": [
+          "off",
+          "read",
+          "drive"
+        ]
       },
       {
         "key": "browserDriver",
         "category": "Browser",
         "value": "subagent",
-        "source": "default"
+        "source": "default",
+        "label": "Browser driver",
+        "description": "subagent gives the browser steps to a browser sub-agent on browserModel, which the model spawns with a task and a tab; steps gives the model browser_observe and browser_act itself; goal gives it browser_do, where jev picks each step toward a whole goal",
+        "kind": "choice",
+        "choices": [
+          "subagent",
+          "steps",
+          "goal"
+        ]
       },
       {
         "key": "browserSteps",
         "category": "Browser",
         "value": 30,
-        "source": "default"
+        "source": "default",
+        "label": "Browser steps",
+        "description": "how many actions one browser task may take",
+        "kind": "int",
+        "min": 1,
+        "max": 60,
+        "unit": "actions a browser task"
       },
       {
         "key": "browserModel",
         "category": "Browser",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Browser model",
+        "description": "the subscription model a browser task asks for the text to type and for its answer, as source/model; empty takes the dumb tier, then the worker tier, then the turn's own model",
+        "kind": "text"
       },
       {
         "key": "browserEffort",
         "category": "Browser",
         "value": "",
-        "source": "default"
+        "source": "default",
+        "label": "Browser effort",
+        "description": "the effort the browser sub-agent runs at, when its model lists it; empty runs it at the model's own default, the lowest it lists at or above low",
+        "kind": "choice",
+        "choices": [
+          "",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
       },
       {
         "key": "browserCursor",
         "category": "Browser",
         "value": true,
-        "source": "default"
+        "source": "default",
+        "label": "Browser cursor",
+        "description": "a small cursor labelled tofu glides to each click in tofu's own tab, so you can see where it acts; it is drawn only, and never changes what tofu reads or clicks; read when Chrome starts the relay",
+        "kind": "bool"
       }
     ]
   },

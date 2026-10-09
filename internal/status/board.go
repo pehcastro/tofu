@@ -4,9 +4,11 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 )
 
 type Board struct {
+	Now   func() time.Time
 	held  map[string]stamped
 	clock int
 }
@@ -32,6 +34,12 @@ func (b *Board) Apply(r Record) bool {
 		oldest := slices.MinFunc(slices.Collect(maps.Keys(b.held)), func(x, y string) int { return b.held[x].updated - b.held[y].updated })
 		delete(b.held, oldest)
 	}
+	switch {
+	case held && was.record.State == r.State:
+		r.At = was.record.At
+	case b.Now != nil:
+		r.At = b.Now()
+	}
 	b.clock++
 	b.held[r.ID] = stamped{record: r, updated: b.clock}
 	return !held || !same(was.record, r)
@@ -48,7 +56,7 @@ func (b *Board) Sync(wanted []Record) []Record {
 	}
 	for _, record := range wanted {
 		if b.Apply(record) {
-			sent = append(sent, record)
+			sent = append(sent, b.held[record.ID].record)
 		}
 	}
 	return sent

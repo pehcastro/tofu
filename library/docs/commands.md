@@ -9,7 +9,7 @@ verbs: context, session, undo
 
 Typing `/` at the start of the composer opens the command list. Typing more
 filters it, the arrow keys pick a row, tab completes, and enter runs it. A
-command never reaches the model.
+command never reaches the model. The list is one table: `tofu serve` answers it as `query.commands`.
 
 - `/chat`, `/sub-agents`, `/file-edits`, `/shells`, `/settings`: open that screen
 - `/models`: choose the model the next turn runs
@@ -20,8 +20,7 @@ command never reaches the model.
 - `/links`: every link this conversation carried, newest first
 - `/quote`: cite a past turn by id; the `[message#id]` beside any message
   in the chat works the same when typed
-- `/copy`, `/copy-call`: put the last answer, or the last tool call and
-  its result, on the clipboard
+- `/copy`, `/copy-call`: put the last answer, or the last tool call and its result, on the clipboard
 - `/reload`: read settings, rules, skills, sub-agents, models,
   instructions and keys from disk again
 - `/resume`: pick a session of this project, newest first, and carry it

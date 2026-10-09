@@ -44,6 +44,7 @@ const (
 	EventTurnEnded
 	EventPersisted
 	EventMemoryScoped
+	EventAccount
 )
 
 type Event struct {
@@ -83,6 +84,7 @@ type Event struct {
 	Wait      time.Duration
 	Accepts   []ApprovalDecision
 	Scoped    *MemoryScoped
+	Account   *TurnAccount
 }
 
 type Status string
@@ -109,7 +111,7 @@ func (e Event) snapshot() bool {
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
-		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset, EventThinking, EventTurnStarted, EventTurnEnded, EventMemoryScoped:
+		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset, EventThinking, EventTurnStarted, EventTurnEnded, EventMemoryScoped, EventAccount:
 		return false
 	}
 	panic("host: unknown event kind")

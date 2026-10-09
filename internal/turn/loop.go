@@ -136,6 +136,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if account, err = config.Accounts.Pick(ctx); err != nil {
 			return Row{}, err
 		}
+		config.tookAccount(AccountTaken{ID: account.ID, Reason: AccountPicked})
 		if account.Model != nil {
 			model = account.Model
 		}
@@ -498,6 +499,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		if moved != nil {
 			row.Account = moved.ID
 			row.Warnings = append(row.Warnings, movedAccountWords(account, *moved, fork.TokensAfter))
+			config.tookAccount(AccountTaken{ID: moved.ID, From: account.ID, Reason: AccountMoved})
 			account = *moved
 			if moved.Model != nil {
 				model = moved.Model
@@ -779,7 +781,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				answers := make([]llm.Message, len(wave))
 				memoHits := make([]bool, len(wave))
 				if len(wave) == 1 {
-					rows[0], answers[0], memoHits[0] = wave[0].run(ctx, stepTools, config.ResultBytesCap, artifacts, 0)
+					rows[0], answers[0], memoHits[0] = wave[0].run(withShellCall(ctx, wave[0].id), stepTools, config.ResultBytesCap, artifacts, 0)
 				} else {
 					batches++
 					var running sync.WaitGroup
@@ -787,7 +789,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					for i, gated := range wave {
 						go func() {
 							defer running.Done()
-							rows[i], answers[i], memoHits[i] = gated.run(ctx, stepTools, config.ResultBytesCap, artifacts, batches)
+							rows[i], answers[i], memoHits[i] = gated.run(withShellCall(ctx, gated.id), stepTools, config.ResultBytesCap, artifacts, batches)
 						}()
 					}
 					running.Wait()

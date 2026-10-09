@@ -173,6 +173,10 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	case EventMemoryScoped:
 		id.Item = event.ID
 		return append(out, kept("memory.scoped", &MemoryScopedEvent{Identity: id, MemoryScoped: *event.Scoped}))
+	case EventAccount:
+		spent := *event.Account
+		spent.Identity = s.identity(event.Agent, s.mint("account"))
+		return append(out, kept("turn.account", &spent))
 	case EventForkStart, EventResumed, EventRequesting:
 		return out
 	}

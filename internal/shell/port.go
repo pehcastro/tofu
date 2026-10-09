@@ -27,6 +27,8 @@ const (
 	nextDefaultPort  = 3000
 	viteDefaultPort  = 5173
 	astroDefaultPort = 4321
+	highestPort      = 65535
+	procListenState  = "0A"
 )
 
 func PortOpen(host string, port int, timeout time.Duration) bool {
@@ -83,7 +85,39 @@ func listening(ctx context.Context) []listener {
 	if runtime.GOOS == "windows" {
 		return netstatListeners(ctx)
 	}
+	if _, err := exec.LookPath("lsof"); err != nil && runtime.GOOS == "linux" {
+		return procListeners()
+	}
 	return lsofListeners(ctx)
+}
+
+func procListeners() []listener {
+	sockets := map[string]listener{}
+	for _, table := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
+		raw, _ := os.ReadFile(table)
+		for line := range strings.Lines(string(raw)) {
+			fields := strings.Fields(line)
+			if len(fields) < 10 || fields[3] != procListenState {
+				continue
+			}
+			cut := strings.LastIndex(fields[1], ":")
+			if port, err := strconv.ParseInt(fields[1][cut+1:], 16, 32); err == nil {
+				sockets["socket:["+fields[9]+"]"] = listener{port: int(port), ipv6: strings.HasSuffix(table, "6")}
+			}
+		}
+	}
+	links, _ := filepath.Glob("/proc/[0-9]*/fd/*")
+	var found []listener
+	for _, link := range links {
+		target, _ := os.Readlink(link)
+		held, isListener := sockets[target]
+		if !isListener {
+			continue
+		}
+		held.pid, _ = strconv.Atoi(strings.Split(link, "/")[2])
+		found = append(found, held)
+	}
+	return found
 }
 
 func netstatListeners(ctx context.Context) []listener {
@@ -173,6 +207,43 @@ func (a Address) Holder() string {
 		return "a process this OS would not name"
 	}
 	return fmt.Sprintf("pid %d: %s", a.PID, cmp.Or(a.Command, "command line not readable"))
+}
+
+var (
+	controlSequence = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	localAddress    = regexp.MustCompile(`(?:^|[^\w.-])(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):(\d{1,5})\b`)
+)
+
+func PortInOutput(text string) int {
+	for _, match := range localAddress.FindAllStringSubmatch(controlSequence.ReplaceAllString(text, ""), -1) {
+		if port, _ := strconv.Atoi(match[1]); port > 0 && port <= highestPort {
+			return port
+		}
+	}
+	return 0
+}
+
+func (r *Registry) Listening(ctx context.Context, shells []Shell) map[string]int {
+	found := map[string]int{}
+	for _, held := range listening(ctx) {
+		for _, one := range shells {
+			if held.pid > 0 && treeHas(one.PID, held.pid) && (found[one.Name] == 0 || held.port < found[one.Name]) {
+				found[one.Name] = held.port
+			}
+		}
+	}
+	return found
+}
+
+func (r *Registry) SetPort(name string, port int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry, err := r.readLocked(name)
+	if err != nil || entry.Port != 0 {
+		return err
+	}
+	entry.Port = port
+	return r.writeLocked(entry)
 }
 
 func NamedPort(dir, command string, env []string) int {

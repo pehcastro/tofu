@@ -35,6 +35,15 @@ type statusFeed struct {
 	cron    string
 	asks    []Event
 	agents  []SubAgentRow
+	acked   map[string]bool
+}
+
+type StatusListParams struct {
+	Session string `json:"session,omitempty"`
+}
+
+type StatusAckParams struct {
+	ID string `json:"id"`
 }
 
 type shellStatus struct {
@@ -134,17 +143,17 @@ func (f *statusFeed) records(shells map[string]*watchedShell) []status.Record {
 		asked[ask.Agent] = ask
 	}
 	if ask, blocked := asked[""]; blocked {
-		lead.State = status.Blocked
+		lead.State, lead.Ask = status.Blocked, ask.ID
 		lead.Kind, lead.Msg = AskStatus(ask)
 	}
 	records := []status.Record{lead}
 	if f.cron != "" {
-		records = append(records, status.Record{ID: status.Path("cron", f.cron), State: lead.State, Kind: lead.Kind, App: statusApp, Title: f.cron, Msg: lead.Msg})
+		records = append(records, status.Record{ID: status.Path("cron", f.cron), State: lead.State, Kind: lead.Kind, App: statusApp, Title: f.cron, Msg: lead.Msg, Ask: lead.Ask})
 	}
 	for _, row := range f.agents {
 		record := AgentStatus(row, f.agents)
 		if ask, blocked := asked[row.Name]; blocked {
-			record.State = status.Blocked
+			record.State, record.Ask = status.Blocked, ask.ID
 			record.Kind, record.Msg = AskStatus(ask)
 		}
 		record.App = statusApp
@@ -188,8 +197,17 @@ func (w *watchedShell) records(name string) []status.Record {
 	return append([]status.Record{own}, records...)
 }
 
+func (f *statusFeed) unacked(records []status.Record) []status.Record {
+	return slices.DeleteFunc(records, func(record status.Record) bool {
+		if !record.State.Finished() {
+			delete(f.acked, record.ID)
+		}
+		return f.acked[record.ID]
+	})
+}
+
 func (s *server) reportStatus() {
-	for _, record := range s.status.board.Sync(s.status.records(s.shells)) {
+	for _, record := range s.status.board.Sync(s.status.unacked(s.status.records(s.shells))) {
 		agent := ""
 		if strings.HasPrefix(record.ID, "agents/") {
 			agent = record.Title
@@ -198,8 +216,29 @@ func (s *server) reportStatus() {
 	}
 }
 
-func (s *server) statusList(NoParams) (any, error) {
+func (s *server) statusList(p StatusListParams) (any, error) {
+	if p.Session != "" {
+		if err := s.sameSession(p.Session); err != nil {
+			return nil, err
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return StatusList{Records: s.status.board.List()}, nil
+}
+
+func (s *server) statusAck(p StatusAckParams) (any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	listed := s.status.board.List()
+	at := slices.IndexFunc(listed, func(record status.Record) bool { return record.ID == p.ID })
+	switch {
+	case at < 0:
+		return nil, &Refusal{Code: CodeRefused, Message: "no status record is listed as " + strconv.Quote(p.ID)}
+	case !listed[at].State.Finished():
+		return nil, &Refusal{Code: CodeRefused, Message: "status record " + strconv.Quote(p.ID) + " is " + string(listed[at].State) + ": only a done or error record is acknowledged"}
+	}
+	s.status.acked[p.ID] = true
+	s.reportStatus()
+	return Ack{OK: true}, nil
 }

@@ -242,8 +242,9 @@ func (l *resumedLead) recorded(message llm.Message) *session.Event {
 	return &l.said[at].logged
 }
 
-func (l *resumedLead) typed(content string) bool {
-	origin := l.origins[content]
+func (l *resumedLead) typed(content string) bool { return typedSource(l.origins[content]) }
+
+func typedSource(origin string) bool {
 	return origin == "" || strings.Contains(origin, typedByThePerson) || strings.Contains(origin, steeredByThePerson)
 }
 
@@ -255,20 +256,23 @@ func (o Origin) recorded() string {
 }
 
 func (l *resumedLead) originOf(content string) Origin {
-	source := l.origins[content]
+	origin := originFrom(l.origins[content])
+	if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(content, report.text) }); origin.Kind == OriginAgent && at >= 0 {
+		origin.Name = l.reports[at].agent
+	}
+	return origin
+}
+
+func originFrom(source string) Origin {
 	if fired, isCron := strings.CutPrefix(source, cronSource); isCron {
 		job, schedule, _ := strings.Cut(fired, " ")
 		return Origin{Kind: OriginCron, Job: job, Schedule: schedule}
 	}
 	switch {
-	case l.typed(content) || slices.Contains([]string{taskSource, forkTaskSource, forkCarrySource}, source):
+	case typedSource(source) || slices.Contains([]string{taskSource, forkTaskSource, forkCarrySource}, source):
 		return Origin{Kind: OriginPerson}
 	case strings.Contains(source, reportSource) || strings.Contains(source, gateAskSource):
-		agent := Origin{Kind: OriginAgent}
-		if at := slices.IndexFunc(l.reports, func(report recordedReport) bool { return strings.Contains(content, report.text) }); at >= 0 {
-			agent.Name = l.reports[at].agent
-		}
-		return agent
+		return Origin{Kind: OriginAgent}
 	}
 	return Origin{Kind: OriginTofu, Source: source}
 }

@@ -68,8 +68,11 @@ func (defs schemaDefs) of(t reflect.Type) any {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	if named, isEnum := reflect.Zero(t).Interface().(enumerated); isEnum {
+	switch named := reflect.Zero(t).Interface().(type) {
+	case enumerated:
 		return map[string]any{"type": "string", "enum": named.enum()}
+	case interface{ Enum() []string }:
+		return map[string]any{"type": "string", "enum": named.Enum()}
 	}
 	switch t {
 	case reflect.TypeFor[time.Time]():

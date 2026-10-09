@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -27,14 +28,24 @@ const (
 )
 
 type Record struct {
-	ID       string `json:"id,omitempty"`
-	State    State  `json:"state"`
-	Kind     Kind   `json:"kind,omitempty"`
-	Progress *int   `json:"progress,omitempty"`
-	App      string `json:"app,omitempty"`
-	Title    string `json:"title,omitempty"`
-	Msg      string `json:"msg,omitempty"`
+	ID       string    `json:"id,omitempty"`
+	State    State     `json:"state"`
+	Kind     Kind      `json:"kind,omitempty"`
+	Progress *int      `json:"progress,omitempty"`
+	App      string    `json:"app,omitempty"`
+	Title    string    `json:"title,omitempty"`
+	Msg      string    `json:"msg,omitempty"`
+	Ask      string    `json:"ask,omitempty"`
+	At       time.Time `json:"at,omitzero"`
 }
+
+func (State) Enum() []string {
+	return []string{string(Idle), string(Working), string(Done), string(Blocked), string(Errored), string(Clear)}
+}
+
+func (s State) Finished() bool { return s == Done || s == Errored }
+
+func (Kind) Enum() []string { return []string{string(Permission), string(Question), string(Auth)} }
 
 const (
 	introducer    = "\x1b]7501;"

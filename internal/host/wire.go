@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"tofu/internal/command"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/learn"
@@ -244,6 +245,22 @@ type TurnStarted struct {
 	StartedAt time.Time `json:"startedAt"`
 }
 
+type TurnAccount struct {
+	Identity
+	Source      string        `json:"source"`
+	AccountID   int64         `json:"account_id"`
+	Login       string        `json:"login,omitempty"`
+	Model       string        `json:"model"`
+	Reason      AccountReason `json:"reason"`
+	FromAccount int64         `json:"from_account,omitempty"`
+}
+
+type AccountReason string
+
+func (AccountReason) enum() []string {
+	return []string{string(turn.AccountPicked), string(turn.AccountMoved)}
+}
+
 type TurnCompleted struct {
 	Identity
 	Status      Status    `json:"status"`
@@ -341,6 +358,18 @@ type ShellStarted struct {
 	Port      int        `json:"port,omitempty"`
 	Ready     ShellReady `json:"ready,omitempty"`
 	LeftOver  bool       `json:"leftOver,omitempty"`
+	call      string
+}
+
+type ShellListening struct {
+	Identity
+	Shell string `json:"shell"`
+	Port  int    `json:"port"`
+}
+
+func (s *ShellStarted) refer() {
+	s.Identity.refer()
+	s.Ref = cmp.Or(tools.QuoteRef(s.call), s.Ref)
 }
 
 type ShellKept string
@@ -435,11 +464,13 @@ type QuotaUpdated struct {
 }
 
 type QuotaWindow struct {
-	Account  string     `json:"account"`
-	Window   string     `json:"window"`
-	Percent  float64    `json:"percent"`
-	Reported bool       `json:"reported"`
-	ResetsAt *time.Time `json:"resetsAt,omitempty"`
+	Account   string     `json:"account"`
+	Window    string     `json:"window"`
+	Percent   float64    `json:"percent"`
+	Reported  bool       `json:"reported"`
+	ResetsAt  *time.Time `json:"resetsAt,omitempty"`
+	Source    string     `json:"source,omitempty"`
+	AccountID int64      `json:"account_id,omitempty"`
 }
 
 type CronState struct {
@@ -768,6 +799,7 @@ type ShellNow struct {
 	Port      int        `json:"port,omitempty"`
 	Ready     ShellReady `json:"ready,omitempty"`
 	LeftOver  bool       `json:"leftOver,omitempty"`
+	Ref       string     `json:"ref,omitempty"`
 }
 
 type ShellState string
@@ -848,9 +880,10 @@ type ShellReadResult struct {
 }
 
 type LedgerParams struct {
-	ID    string `json:"id,omitempty"`
-	Last  int    `json:"last,omitempty"`
-	Point string `json:"point,omitempty"`
+	ID      string `json:"id,omitempty"`
+	Last    int    `json:"last,omitempty"`
+	Point   string `json:"point,omitempty"`
+	Session string `json:"session,omitempty"`
 }
 
 type LedgerReport struct {
@@ -929,6 +962,7 @@ type method struct {
 func notifications() []method {
 	return []method{
 		{name: "turn.started", params: TurnStarted{}},
+		{name: "turn.account", params: TurnAccount{}},
 		{name: "turn.completed", params: TurnCompleted{}},
 		{name: "turn.steered", params: Steered{}},
 		{name: "message.user", params: UserMessage{}},
@@ -944,6 +978,7 @@ func notifications() []method {
 		{name: "agent.updated", params: AgentUpdated{}},
 		{name: "agent.ended", params: AgentEnded{}},
 		{name: "shell.started", params: ShellStarted{}},
+		{name: "shell.ready", params: ShellListening{}},
 		{name: "shell.output", params: ShellOutput{}},
 		{name: "shell.exited", params: ShellExited{}},
 		{name: "decision", params: DecisionMade{}},
@@ -957,6 +992,7 @@ func notifications() []method {
 		{name: "session.forked", params: SessionForked{}},
 		{name: "session.updated", params: SessionUpdated{}},
 		{name: "session.listed", params: SessionListed{}},
+		{name: "session.turns.updated", params: SessionTurnUpdated{}},
 		{name: "session.settings", params: SessionSettings{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
 		{name: "question.resolved", params: QuestionResolved{}},
@@ -985,6 +1021,7 @@ func requests() []method {
 		{name: "turn.unsteer", params: UnsteerParams{}, result: UnsteerResult{}},
 		{name: "session.compact", params: NoParams{}, result: Compaction{}},
 		{name: "session.history", params: SessionHistoryParams{}, result: SessionHistory{}},
+		{name: "session.turns", params: SessionParams{}, result: SessionTurns{}},
 		{name: "shell.run", params: ShellRunParams{}, result: ShellRunResult{}},
 		{name: "undo", params: UndoParams{}, result: verb},
 		{name: "shell.read", params: ShellParams{}, result: ShellReadResult{}},
@@ -1034,7 +1071,9 @@ func requests() []method {
 		{name: queryPrefix + "skills", params: NoParams{}, result: SkillsReport{}},
 		{name: queryPrefix + "ledger.summary", params: LedgerSummaryParams{}, result: LedgerSummary{}},
 		{name: "learn.apply", params: LearnApplyParams{}, result: WriteReceipt{}},
-		{name: statusMethod + ".list", params: NoParams{}, result: StatusList{}},
+		{name: statusMethod + ".list", params: StatusListParams{}, result: StatusList{}},
+		{name: statusMethod + ".ack", params: StatusAckParams{}, result: Ack{}},
+		{name: queryPrefix + "commands", params: NoParams{}, result: CommandList{}},
 	}
 	for _, write := range []string{"rules.add", "rules.off", "rules.remove", "rules.restore"} {
 		methods = append(methods, method{name: write, params: RuleWriteParams{}, result: WriteReceipt{}})
@@ -1047,7 +1086,11 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands"}
 }
 
 const queryPrefix = "query."
+
+type CommandList struct {
+	Commands []command.Command `json:"commands"`
+}

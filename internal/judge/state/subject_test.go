@@ -12,6 +12,8 @@ func TestSubjectReadsTheToolAndItsTargetFromARecordedState(t *testing.T) {
 		{`{"tool":"web_fetch","input":{"url":"https://example.com"}}`, Subject{Tool: "web_fetch", URL: "https://example.com"}},
 		{`{"tool":"odd","input":{"command":42,"path":["a"]}}`, Subject{Tool: "odd"}},
 		{`{"task":"stop check state with no tool"}`, Subject{}},
+		{`{"task":"t","command":"npm test","exit_code":1,"stream":"stdout","position":"end","chunk":"x"}`, Subject{Command: "npm test"}},
+		{`{"tool":"bash","command":"outer","input":{"command":"inner"}}`, Subject{Tool: "bash", Command: "inner"}},
 	} {
 		got, err := SubjectOf([]byte(c.state))
 		if err != nil || got != c.want {

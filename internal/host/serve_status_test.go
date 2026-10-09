@@ -74,6 +74,10 @@ func serving(t *testing.T, play Play, cfg ServeConfig) (*wireClient, *Host, stri
 	t.Setenv("USERPROFILE", home)
 	h, _ := New(Config{Dir: project, Play: play})
 	t.Cleanup(h.Close)
+	return servingHost(t, h, project, cfg), h, project
+}
+
+func servingHost(t *testing.T, h *Host, project string, cfg ServeConfig) *wireClient {
 	clientIn, serveIn := io.Pipe()
 	serveOut, clientOut := io.Pipe()
 	c := &wireClient{t: t, in: serveIn, lines: make(chan wireLine, 64)}
@@ -96,7 +100,7 @@ func serving(t *testing.T, play Play, cfg ServeConfig) (*wireClient, *Host, stri
 		<-served
 		_ = serveOut.Close()
 	})
-	return c, h, project
+	return c
 }
 
 func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
