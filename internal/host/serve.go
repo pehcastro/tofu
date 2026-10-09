@@ -53,6 +53,8 @@ type server struct {
 	client  string
 	ready   bool
 	pending map[string]ApprovalRequest
+	asked   map[string]QuestionRequest
+	answers bool
 	shells  map[string]*watchedShell
 	command context.CancelFunc
 	usage   usageHeld
@@ -60,7 +62,7 @@ type server struct {
 }
 
 func Serve(cfg ServeConfig) error {
-	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID())}
+	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID())}
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
 	quit := make(chan struct{})
@@ -218,7 +220,7 @@ func (s *server) initialize(p InitializeParams) (any, error) {
 		return nil, &Refusal{Code: CodeInvalid, Message: "this tofu speaks " + Protocol + " and the client offered " + strings.Join(p.Versions, ", ")}
 	}
 	s.mu.Lock()
-	s.client, s.ready = p.Client, true
+	s.client, s.ready, s.answers = p.Client, true, slices.Contains(p.Capabilities, "questions")
 	s.mu.Unlock()
 	return InitializeResult{Protocol: Protocol, Tofu: konst.Version, Project: s.Dir, Capabilities: capabilities()}, nil
 }
@@ -473,11 +475,18 @@ func (s *server) shellKill(p ShellParams) (any, error) {
 func (s *server) answered(id, result json.RawMessage) {
 	var approval string
 	var answer ApprovalAnswer
-	if json.Unmarshal(id, &approval) != nil || json.Unmarshal(result, &answer) != nil {
+	if json.Unmarshal(id, &approval) != nil {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if asked, open := s.asked[approval]; open {
+		s.questionAnswered(asked, result)
+		return
+	}
+	if json.Unmarshal(result, &answer) != nil {
+		return
+	}
 	asked, pending := s.pending[approval]
 	if !pending || (answer.Decision == RememberProject || answer.Decision == RememberGlobal) && asked.Tool != turn.RememberToolName {
 		return
@@ -498,6 +507,33 @@ func (s *server) answered(id, result json.RawMessage) {
 	}
 	delete(s.pending, approval)
 	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client}))
+}
+
+func (s *server) questionAnswered(asked QuestionRequest, result json.RawMessage) {
+	var answer QuestionAnswer
+	if json.Unmarshal(result, &answer) != nil || answer.Outcome != QuestionSubmitted && answer.Outcome != QuestionCancelled || !offered(asked.Questions, answer.Answers) {
+		return
+	}
+	if !s.Host.AnswerQuestion(asked.Question, answer, s.client) {
+		return
+	}
+	delete(s.asked, asked.Question)
+	s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: asked.Question, Outcome: answer.Outcome, By: s.client}))
+}
+
+func offered(questions []turn.PersonQuestion, answers []turn.PersonReply) bool {
+	for _, reply := range answers {
+		at := slices.IndexFunc(questions, func(q turn.PersonQuestion) bool { return q.ID == reply.ID })
+		if at < 0 {
+			return false
+		}
+		for _, chosen := range reply.Chosen {
+			if !slices.ContainsFunc(questions[at].Options, func(o turn.PersonOption) bool { return o.Label == chosen }) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (s *server) pump(quit <-chan struct{}) {
@@ -524,8 +560,20 @@ func (s *server) publish(event Event) {
 	defer s.mu.Unlock()
 	switch event.Kind {
 	case EventAwaitPerson:
+		if event.Questions != nil && !s.answers {
+			go s.Host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, cmp.Or(s.client, "this client"))
+			return
+		}
+		if event.Questions != nil {
+			s.asked[event.ID] = questionRequest(s.items.identity(event.Agent, event.ID), event)
+			break
+		}
 		s.pending[event.ID] = approvalRequest(s.items.identity(event.Agent, event.ID), event)
 	case EventResumed:
+		if asked, open := s.asked[event.ID]; open {
+			delete(s.asked, event.ID)
+			s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: event.ID, Outcome: QuestionOutcome(event.Text), By: event.Detail}))
+		}
 		if asked, pending := s.pending[event.ID]; pending {
 			delete(s.pending, event.ID)
 			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: event.ID, Decision: Cancelled, By: "tofu"}))

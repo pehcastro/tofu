@@ -126,6 +126,7 @@ type Model struct {
 	SubAgents          []subagent.Row
 	Activity           []Activity
 	Spawns             int
+	Question           []string
 	now                func() time.Time
 	leadIdleSince      time.Time
 	waitingOn          int

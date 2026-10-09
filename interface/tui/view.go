@@ -174,6 +174,10 @@ func (a *App) body() string {
 		a.view.FoldHidesShell = a.flag(isettings.FoldHidesShell)
 		a.view.Welcome = nil
 		a.view.Notice, _ = a.shimmer()
+		a.view.Question = nil
+		if len(a.questions) > 0 {
+			a.view.Question = a.questions[0].Lines(a.width, a.options.Now())
+		}
 		if a.intro.shown {
 			a.view.Welcome, a.view.Notice = a.welcome, ""
 		}

@@ -11,6 +11,7 @@ import (
 	"tofu/internal/memory"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
+	"tofu/internal/turn"
 )
 
 type EventKind int
@@ -77,6 +78,8 @@ type Event struct {
 	LastAt    time.Time
 	Step      int
 	Turn      string
+	Questions []turn.PersonQuestion
+	Wait      time.Duration
 }
 
 type Status string

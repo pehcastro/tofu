@@ -155,6 +155,12 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		forked := *event.Fork
 		return append(out, kept("session.forked", &SessionForked{Identity: s.identity("", forked.To), From: forked.From, To: forked.To, Kind: forked.Kind, Before: forked.Before, After: forked.After}))
 	case EventAwaitPerson:
+		if event.Questions != nil {
+			asked := questionRequest(id, event)
+			request := kept(QuestionMethod, &asked)
+			request.msg.ID, _ = json.Marshal(event.ID)
+			return append(out, request)
+		}
 		asked := approvalRequest(id, event)
 		request := kept(ApprovalMethod, &asked)
 		request.msg.ID, _ = json.Marshal(event.ID)
@@ -190,6 +196,10 @@ func approvalRequest(id Identity, event Event) ApprovalRequest {
 		asked.Judged = &judged
 	}
 	return asked
+}
+
+func questionRequest(id Identity, event Event) QuestionRequest {
+	return QuestionRequest{Identity: id, Question: event.ID, Questions: event.Questions, Blocking: event.Wait == 0, WaitMs: event.Wait.Milliseconds()}
 }
 
 func wholeJSON(raw json.RawMessage) json.RawMessage {

@@ -28,9 +28,8 @@ answers. This page is what serve sends without being asked.
   each family of methods, so a client tells an older tofu from a newer
 - `session.open` replays the chat as events; `session.history` pages it
 - `session.listed`: the open row of `session.list` again when a turn starts or
-  ends, after a fork and after a rename, so a sidebar never asks.
-  `session.updated` follows every turn, a rename and a compaction, with
-  `lastAt`, the last record
+  ends, after a fork and a rename; `session.updated` follows every turn, a
+  rename and a compaction, with `lastAt`, the last record
 - `session.settings`: `asking` and the `pick` of wire, model and effort, sent
   to every client when `session.set` changes them
 - `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`,
@@ -38,26 +37,27 @@ answers. This page is what serve sends without being asked.
   `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop
   hook"}`: you, a cron fire, a sub-agent's report, a line tofu added. Older
   sessions, and a cron fire that joined a running turn, read as `person`
-- `cron.updated` and `query.cron` carry `live`, `goals` and each job's `id`,
-  `schedule`, `prompt`, `paused`, `next` and `ended`. A fire that starts a
-  turn is told by that turn's `origin` alone, with no `note`; a fire that
-  joins a running turn still sends one
-- `tool.started`, `tool.completed` and `file.edit` made by a sub-agent carry
-  its `agent` and `instance`, the name its `agent.started` carried, live and
-  on a replay; a replay carries each event's real `turn` and the item it had
-  live
-- `agent.ended`: `endedAt` and `durationMs` from the run the session
-  recorded, and the `turn` that spawned it, the same on a replay as live
-- `turn.steered`: the lead read a message sent mid-turn; until it comes, the
-  message is still queued
-- `quota.updated`: when a session opens, after every turn and every five
-  minutes, with each window's `percent`; `windows: []` means none answered
-- `item.persisted`: every line written to `events.jsonl`, with its `logSeq`,
-  so history after a seq is a read of the log; a tool call's notice names the
-  item of its `tool.started`
-- `decision`: every gate, with `at`, when it was judged, `call`, the item of
-  the `tool.started` it judged, and `tofu/requestApproval`, a request, when a
-  gate asks you; `approval.resolved` says which answer won and who sent it
+- `cron.updated` and `query.cron`: `live`, `goals` and each job's `id`,
+  `schedule`, `prompt`, `paused`, `next` and `ended`; a fire that starts a
+  turn shows in its `origin` alone, one joining a running turn sends a `note`
+- `tool.started`, `tool.completed` and `file.edit` by a sub-agent carry its
+  `agent` and `instance`, live and on a replay, which keeps each event's real
+  `turn` and item
+- `agent.ended`: `endedAt`, `durationMs` and the `turn` that spawned it, as
+  recorded, so a replay matches live
+- `turn.steered`: the lead read a message sent mid-turn, until then queued
+- `quota.updated`: on open, after each turn and every five minutes, each
+  window's `percent`; `windows: []`, none answered
+- `item.persisted`: every line of `events.jsonl` with its `logSeq`, so history
+  after a seq is a read of the log; a tool call's names its `tool.started`
+- `decision`: every gate, with `at` and `call`, the item of the
+  `tool.started` it judged; `tofu/requestApproval`, a request, when a gate
+  asks you, and `approval.resolved`, which answer won and who sent it
+- `tofu/askPerson`, a request, when the lead asks a question with options,
+  only to a client whose `initialize` declared `questions`; any other is
+  `undelivered` at once. Answer `{"outcome":"submitted","answers":[{"id":
+  "lib","chosen":["resty"],"text":""}]}` or `cancelled`; `question.resolved`
+  says how and by whom. `tofu docs asking`
 - `shell.started`: only a kept shell, never a one-shot, with `kept`
   (`background` or `moved`), `dir`, `port`, `ready` and `leftOver`; every one
   ends in `shell.exited` with `endedAt`, and `exitCode` when tofu saw it
@@ -65,8 +65,8 @@ answers. This page is what serve sends without being asked.
   OSC 7501 records; `status.list` answers them all. `tofu docs status`
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never
   waits; `session.state` answers it
-- `tofu serve --schema` prints the JSON Schema of every line written, and of
-  every line read under `$defs.clientMessage`
+- `tofu serve --schema`: the JSON Schema of every line out, and in under
+  `$defs.clientMessage`
 
 ## Change it
 

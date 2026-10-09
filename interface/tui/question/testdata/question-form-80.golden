@@ -1,0 +1,8 @@
+  ? HTTP client  1 of 4                                                         
+  auto-selected net/http after timeout; answering still changes it              
+  Which HTTP client should the fetcher use?                                     
+    1. net/http (recommended)  standard library, no dependency                  
+  › 2. resty  retries built in, one dependency                                  
+    │ client := resty.New().SetRetryCount(3)                                    
+    3. other  type it in the chat, then enter                                   
+  ↑↓ move   enter choose   tab next question   esc dismiss                      

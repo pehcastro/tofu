@@ -23,6 +23,7 @@ import (
 	"tofu/interface/tui/markdown"
 	"tofu/interface/tui/paste"
 	"tofu/interface/tui/pointer"
+	"tofu/interface/tui/question"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
@@ -208,6 +209,7 @@ type App struct {
 	keyChecks      int
 	setupNote      string
 	current        screen
+	questions      []*question.Form
 	view           session.Model
 	feed           feed.Model
 	edits          edits.Model

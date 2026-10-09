@@ -47,6 +47,7 @@ const (
 	ColorMode              = "colorMode"
 	Composer               = "composer"
 	GatePrompt             = "gatePrompt"
+	AskPersonWaitSeconds   = "askPersonWaitSeconds"
 	ReadBeforeEdit         = "readBeforeEdit"
 	AutoUpdate             = "autoUpdate"
 	ChatShowsTools         = "chatShowsTools"
@@ -226,6 +227,8 @@ func Default() []Spec {
 			Choices: []string{"standard", "compact", "expanded"}},
 		{Key: GatePrompt, Label: "Confirmations", Description: "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer. A project hook, a rule override and the model changing a setting ask you in both", Category: "Interaction", Kind: Text, DefaultText: GatePromptAuto,
 			Choices: []string{GatePromptAuto, GatePromptAsk}, Aliases: map[string]string{"run": GatePromptAuto}},
+		{Key: AskPersonWaitSeconds, Label: "Question wait", Description: "under auto, a question the lead asks you takes its recommended option after this many seconds, and the lead never stops for it; the question stays open and a later answer still reaches the lead. under ask the lead waits with no timeout. the next turn reads the new value", Category: "Interaction", Kind: Int, Default: konst.AskPersonWaitSeconds,
+			Least: 1, Most: math.MaxInt32, Unit: "seconds before the recommended option is taken under auto"},
 		{Key: ReadBeforeEdit, Label: "Read before edit", Description: "an edit or a write to a file this session has not read, or that changed since it was read, is refused", Category: "Interaction", Kind: Bool, Default: 1},
 		{Key: AutoUpdate, Label: "Auto update", Description: "on installs a newer tofu release in the background, looked up at most once an hour, and the next start runs it; off only says in the chat that one is out, and tofu update installs it. A build from source never updates", Category: "Interaction", Kind: Bool, Default: 1},
 		{Key: ChatShowsTools, Label: "Tool detail", Description: "chat shows every tool call", Category: "Context", Kind: Bool},

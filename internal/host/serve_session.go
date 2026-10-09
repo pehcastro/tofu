@@ -73,6 +73,8 @@ func (s *server) state() SessionState {
 	state.Context = s.items.context
 	state.Approvals = slices.AppendSeq([]ApprovalRequest{}, maps.Values(s.pending))
 	slices.SortFunc(state.Approvals, func(a, b ApprovalRequest) int { return strings.Compare(a.Approval, b.Approval) })
+	state.Questions = slices.AppendSeq([]QuestionRequest{}, maps.Values(s.asked))
+	slices.SortFunc(state.Questions, func(a, b QuestionRequest) int { return strings.Compare(a.Question, b.Question) })
 	state.Agents = []AgentNow{}
 	for _, row := range s.items.agents {
 		state.Agents = append(state.Agents, AgentNow{Instance: row.Name, Kind: row.Agent, Task: row.Doing, Owns: row.Owns, Model: row.Model,

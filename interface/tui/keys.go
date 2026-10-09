@@ -121,6 +121,9 @@ func (a *App) quoteSelection() tea.Cmd {
 
 func (a *App) composerKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	key := msg.String()
+	if a.questionKey(key) {
+		return nil, true
+	}
 	if a.view.TakesAnswerDigits() {
 		answers := [...]Answer{AllowedOnce, Denied, AlwaysHere}
 		if a.view.AsksWhereToOverride() {

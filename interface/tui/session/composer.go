@@ -1,6 +1,7 @@
 package session
 
 import (
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -46,7 +47,7 @@ func (m *Model) transcriptRows() int {
 }
 
 func (m *Model) statusRows() int {
-	rows := len(m.turnLines()) + len(m.queueLines())
+	rows := len(m.turnLines()) + len(m.Question) + len(m.queueLines())
 	if _, open := m.openAsk(); open {
 		rows += askBlockRows
 	}
@@ -57,7 +58,7 @@ func (m *Model) statusRows() int {
 }
 
 func (m *Model) footer() []string {
-	lines := append(append(m.turnLines(), m.askLines()...), m.queueLines()...)
+	lines := slices.Concat(m.turnLines(), m.askLines(), m.Question, m.queueLines())
 	if len(lines) > 0 {
 		lines = append([]string{""}, lines...)
 	}

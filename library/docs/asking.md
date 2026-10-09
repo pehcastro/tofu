@@ -24,18 +24,25 @@ two are kept apart.
 
 ## Where it lives
 
-The question appears where an approval does. The answer goes back to the
-lead as the tool's result under `ask`, and as a message under `auto`:
+In the chat the question is a form above the composer: each option with
+its description, the recommended one marked, and a last row, other, for
+an answer in your own words. Up and down move, a digit or enter chooses,
+space toggles an option of a `multi`, tab goes to the next question, and
+Esc dismisses it. On other, type the answer in the chat and press enter.
+The focused option's preview shows under it.
+
+The answer goes back to the lead as the tool's result under `ask`, and as
+a message under `auto`:
 
     {"outcome": "submitted", "answers": [
-      {"id": "lib", "status": "answered", "chosen": ["net/http"],
-       "note": "the person accepted the recommended option"}]}
+      {"id": "lib", "status": "answered", "chosen": ["net/http"]}]}
 
-- outcome: `submitted`; `cancelled`, the turn stopped while it waited;
-  `timed_out`, no answer in time under auto; `undelivered`, nobody could
-  be asked
-- status: `answered`; `skipped`, you declined the recommended option and
-  named no other; `unanswered`
+- outcome: `submitted`; `cancelled`, you pressed Esc or the turn stopped,
+  and the recommended option stands; `timed_out`, no answer in time under
+  auto; `undelivered`, nobody could be asked
+- status: `answered`; `skipped`, you chose nothing; `unanswered`
+- a client of `tofu serve` sees it as a `tofu/askPerson` request; see
+  `tofu docs serve`
 
 On anything but `submitted` the lead takes each recommended option, says
 which, and carries on.
@@ -51,14 +58,15 @@ waits:
 
 - `auto`: the work never stops on a question. The lead hears at once that
   it asked and keeps working on what does not depend on the answer. Your
-  answer reaches it as a message. With none in 2 minutes the recommended
-  option is taken, marked auto-selected after timeout, and the question
-  stays open: an answer you give later still arrives, so it can correct
-  course. A turn that ends with a question open ends its report with it
-  as a poll.
+  answer reaches it as a message. With none in `askPersonWaitSeconds`,
+  120 by default, the recommended option is taken, marked auto-selected
+  after timeout, and the form stays open: an answer you give later still
+  arrives, so it can correct course. A turn that ends with a question
+  open ends its report with it as a poll.
 - `ask`: the lead waits until you answer, with no timeout.
 
     tofu settings set gatePrompt ask
+    tofu settings set askPersonWaitSeconds 300
 
 ## Check it
 

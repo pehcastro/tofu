@@ -21,9 +21,9 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
 
 ## Where it lives
 
-- `initialize`: takes `client` and `versions`; answers `protocol`, `tofu`,
-  `project` and `capabilities`, one name a family of methods, so a client
-  tells an older tofu from a newer
+- `initialize`: takes `client`, `versions` and `capabilities`, where
+  `questions` says it answers `tofu/askPerson`; answers `protocol`, `tofu`,
+  `project` and `capabilities`, one name a family of methods
 - `session.list`: takes `search` and `limit`; answers `head` and `sessions`,
   a row each with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
   `model`, `costUsd`, `outcome` as the session recorded it, `open` for the
@@ -33,9 +33,9 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
 - `session.state`: `running` and its `turn`, `asking`, the `pick` of wire,
-  model and effort, waiting approvals, sub-agents, the kept shells with the
-  fields `shell.started` carries, the context window and the cron jobs; it is
-  the answer to `resync`
+  model and effort, waiting approvals, open `questions`, sub-agents, the kept
+  shells with the fields `shell.started` carries, the context window and the
+  cron jobs; it is the answer to `resync`
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
   turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family

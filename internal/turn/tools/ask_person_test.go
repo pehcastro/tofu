@@ -196,3 +196,94 @@ func TestAskPersonSendsNoLateAnswerAfterAStop(t *testing.T) {
 		t.Fatalf("a stopped question reached the lead as %q", taken)
 	}
 }
+
+const threeKinds = `{"questions":[{"id":"lib","header":"HTTP client","question":"Which HTTP client?","type":"choice",
+"options":[{"label":"net/http","description":"standard"},{"label":"resty","description":"retries","preview":"r := resty.New()"}],"recommended":0},
+{"id":"push","header":"Push","question":"Push when done?","type":"yesno","recommended":1},
+{"id":"name","header":"Name","question":"What is the module called?","type":"text"}]}`
+
+func TestAskPersonThroughTheFormSaysWhatWasChosenTypedAndSkipped(t *testing.T) {
+	var shown []turn.PersonQuestion
+	var waited time.Duration
+	form := func(_ context.Context, questions []turn.PersonQuestion, wait time.Duration) ([]turn.PersonReply, error) {
+		shown, waited = questions, wait
+		return []turn.PersonReply{{ID: "lib", Chosen: []string{"resty"}}, {ID: "push", Chosen: []string{}}, {ID: "name", Chosen: []string{}, Text: "fetchx"}}, nil
+	}
+	tool := tools.AskPerson{Person: personSays(turn.PersonDenied, nil), Auto: func() bool { return false }, Wait: time.Minute}
+	result, err := tool.Run(turn.WithPersonForm(t.Context(), form), json.RawMessage(threeKinds))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Outcome string `json:"outcome"`
+		Answers []struct {
+			ID, Status, Text string
+			Chosen           []string
+		} `json:"answers"`
+	}
+	if err := json.Unmarshal([]byte(result.Content), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "submitted" || len(got.Answers) != 3 {
+		t.Fatalf("got %s", result.Content)
+	}
+	want := []string{"answered resty ", "skipped  ", "answered  fetchx"}
+	for i, answer := range got.Answers {
+		if line := answer.Status + " " + strings.Join(answer.Chosen, ",") + " " + answer.Text; line != want[i] {
+			t.Errorf("answer %d reads %q, want %q", i, line, want[i])
+		}
+	}
+	if waited != 0 {
+		t.Errorf("ask mode handed the form a wait of %s, want none", waited)
+	}
+	if len(shown) != 3 || len(shown[1].Options) != 2 || shown[1].Options[0].Label != "yes" || shown[0].Options[1].Preview == "" {
+		t.Fatalf("the form was shown %+v, want yes and no for the yesno and the preview kept", shown)
+	}
+}
+
+func TestAskPersonFormOutcomesWhenNobodyChooses(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		err     error
+		outcome string
+	}{
+		{"esc", turn.QuestionDismissed{}, "cancelled"},
+		{"a client without questions", turn.QuestionUndelivered{Why: "the client did not declare questions"}, "undelivered"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			form := func(context.Context, []turn.PersonQuestion, time.Duration) ([]turn.PersonReply, error) {
+				return nil, c.err
+			}
+			tool := tools.AskPerson{Person: personSays(turn.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+			result, err := tool.Run(turn.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries))
+			if err != nil || !strings.Contains(result.Content, `"outcome":"`+c.outcome+`"`) || !strings.Contains(result.Content, `"chosen":["net/http"]`) {
+				t.Fatalf("got %q, %v, want %s with the recommended standing", result.Content, err, c.outcome)
+			}
+		})
+	}
+}
+
+func TestAskPersonInAutoKeepsTheFormOpenPastTheWait(t *testing.T) {
+	release := make(chan struct{})
+	var waited time.Duration
+	form := func(_ context.Context, _ []turn.PersonQuestion, wait time.Duration) ([]turn.PersonReply, error) {
+		waited = wait
+		<-release
+		return []turn.PersonReply{{ID: "lib", Chosen: []string{"resty"}}}, nil
+	}
+	inbox := turn.NewInbox()
+	tool := tools.AskPerson{Person: personSays(turn.PersonDenied, nil), Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
+	if _, err := tool.Run(turn.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries)); err != nil {
+		t.Fatal(err)
+	}
+	if first := inboxSays(t, inbox); !strings.Contains(first, "timed_out") {
+		t.Fatalf("first message %q, want timed_out", first)
+	}
+	close(release)
+	if later := inboxSays(t, inbox); !strings.Contains(later, `"chosen":["resty"]`) {
+		t.Fatalf("the late answer read %q, want resty", later)
+	}
+	if waited != 20*time.Millisecond {
+		t.Fatalf("the form was told to wait %s", waited)
+	}
+}

@@ -187,7 +187,8 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
 	heard := func(typed string) { emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1}) }
 	var reported []error
-	leadErr := turn.Lead(turn.WithShellRegistry(ctx, h.shells), config, live.Steering, heard, func(row turn.Row, err error) {
+	asking := turn.WithQuestionsBlock(turn.WithPersonForm(turn.WithShellRegistry(ctx, h.shells), askForm(emit, h.questions)), h.questionsBlock)
+	leadErr := turn.Lead(asking, config, live.Steering, heard, func(row turn.Row, err error) {
 		watch.stop.reset()
 		steps.Store(0)
 		if err != nil {

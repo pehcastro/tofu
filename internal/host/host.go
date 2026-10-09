@@ -110,6 +110,8 @@ type Host struct {
 	spent  *tokenTally
 	shown  map[string]bool
 	asks   *asks
+
+	questions *questions
 }
 
 type pendingImage struct {
@@ -120,22 +122,23 @@ type pendingImage struct {
 func New(cfg Config) (*Host, []string) {
 	cronMove := make(chan struct{}, 1)
 	h := &Host{
-		dir:      cfg.Dir,
-		engine:   cfg.Engine,
-		play:     cfg.Play,
-		now:      cfg.Now,
-		shells:   cfg.Shells,
-		events:   make(chan Event, konst.HostEventBuffer),
-		answers:  make(chan Answer, 1),
-		steering: steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
-		stopLead: make(chan struct{}, 1),
-		sendNow:  make(chan struct{}, 1),
-		cron:     &cron.Book{Check: cfg.Check, Changed: cronMove},
-		cronMove: cronMove,
-		id:       cfg.Resumed.Session,
-		started:  SourceStartup,
-		shown:    map[string]bool{},
-		asks:     &asks{standing: map[string]Answer{}},
+		dir:       cfg.Dir,
+		engine:    cfg.Engine,
+		play:      cfg.Play,
+		now:       cfg.Now,
+		shells:    cfg.Shells,
+		events:    make(chan Event, konst.HostEventBuffer),
+		answers:   make(chan Answer, 1),
+		steering:  steerQueue{ready: make(chan string, konst.HostSteeringQueue)},
+		stopLead:  make(chan struct{}, 1),
+		sendNow:   make(chan struct{}, 1),
+		cron:      &cron.Book{Check: cfg.Check, Changed: cronMove},
+		cronMove:  cronMove,
+		id:        cfg.Resumed.Session,
+		started:   SourceStartup,
+		shown:     map[string]bool{},
+		asks:      &asks{standing: map[string]Answer{}},
+		questions: &questions{waiting: map[string]chan answeredQuestion{}},
 	}
 	if h.now == nil {
 		h.now = time.Now

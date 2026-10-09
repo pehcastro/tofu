@@ -52,6 +52,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "askPersonWaitSeconds",
+        "category": "Interaction",
+        "value": 120,
+        "source": "default"
+      },
+      {
         "key": "readBeforeEdit",
         "category": "Interaction",
         "value": false,

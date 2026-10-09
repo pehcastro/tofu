@@ -12,6 +12,7 @@ import (
 
 	"tofu/interface/tui/edits"
 	"tofu/interface/tui/feed"
+	"tofu/interface/tui/question"
 	"tofu/interface/tui/session"
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
@@ -156,6 +157,36 @@ func (a *App) unqueue() {
 	if !leadTookIt {
 		a.view.Unqueue()
 	}
+}
+
+const questionAnsweredHere = "tui"
+
+func (a *App) questionKey(key string) bool {
+	if len(a.questions) == 0 {
+		return false
+	}
+	form := a.questions[0]
+	typed := a.view.Value()
+	action, took := form.Key(key, typed)
+	if !took {
+		return false
+	}
+	if typed != "" {
+		a.view.Redraft("")
+	}
+	answer := host.QuestionAnswer{Outcome: host.QuestionSubmitted, Answers: form.Replies()}
+	switch action {
+	case question.Kept:
+		return true
+	case question.Dismissed:
+		answer = host.QuestionAnswer{Outcome: host.QuestionCancelled}
+	case question.Submitted:
+	}
+	a.questions = a.questions[1:]
+	if a.options.Host != nil {
+		a.options.Host.AnswerQuestion(form.ID, answer, questionAnsweredHere)
+	}
+	return true
 }
 
 func (a *App) answer(answer Answer) {
@@ -435,9 +466,14 @@ func (a *App) absorb(event Event) {
 	case EventPlan:
 		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
+		if event.Questions != nil {
+			a.questions = append(a.questions, question.Open(event.ID, event.Questions, event.Wait, at))
+			return
+		}
 		a.view.Await(event.ID, event.Tool, event.Text, event.Decision)
 		a.showLeadMemoryAsk()
 	case EventResumed:
+		a.questions = slices.DeleteFunc(a.questions, func(form *question.Form) bool { return form.ID == event.ID })
 		a.view.Resume(event.ID)
 		a.showLeadMemoryAsk()
 	case EventPersisted:

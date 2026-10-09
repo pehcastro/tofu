@@ -71,7 +71,7 @@ func (f *statusFeed) follow(event Event) {
 	case EventSubAgent:
 		f.agents = event.SubAgents
 	case EventTurnEnded:
-		f.asks = nil
+		f.asks = slices.DeleteFunc(f.asks, func(asked Event) bool { return asked.Questions == nil })
 		switch {
 		case f.failure != "":
 			f.lead = status.Errored

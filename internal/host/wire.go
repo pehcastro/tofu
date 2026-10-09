@@ -17,6 +17,7 @@ import (
 const (
 	Protocol       = "tofu.host/1"
 	ApprovalMethod = "tofu/requestApproval"
+	QuestionMethod = "tofu/askPerson"
 	resyncMethod   = "resync"
 	rpcVersion     = "2.0"
 )
@@ -448,6 +449,38 @@ type ApprovalAnswer struct {
 	Decision ApprovalDecision `json:"decision"`
 }
 
+type QuestionOutcome string
+
+const (
+	QuestionSubmitted   QuestionOutcome = "submitted"
+	QuestionCancelled   QuestionOutcome = "cancelled"
+	QuestionUndelivered QuestionOutcome = "undelivered"
+)
+
+func (QuestionOutcome) enum() []string {
+	return []string{string(QuestionSubmitted), string(QuestionCancelled), string(QuestionUndelivered)}
+}
+
+type QuestionRequest struct {
+	Identity
+	Question  string                `json:"question"`
+	Questions []turn.PersonQuestion `json:"questions"`
+	Blocking  bool                  `json:"blocking"`
+	WaitMs    int64                 `json:"waitMs"`
+}
+
+type QuestionAnswer struct {
+	Outcome QuestionOutcome    `json:"outcome"`
+	Answers []turn.PersonReply `json:"answers"`
+}
+
+type QuestionResolved struct {
+	Identity
+	Question string          `json:"question"`
+	Outcome  QuestionOutcome `json:"outcome"`
+	By       string          `json:"by"`
+}
+
 type ApprovalResolved struct {
 	Identity
 	Approval string           `json:"approval"`
@@ -590,6 +623,7 @@ type SessionState struct {
 	Asking    AskingMode        `json:"asking,omitempty"`
 	Pick      ModelPick         `json:"pick"`
 	Approvals []ApprovalRequest `json:"approvals"`
+	Questions []QuestionRequest `json:"questions"`
 	Agents    []AgentNow        `json:"agents"`
 	Shells    []ShellNow        `json:"shells"`
 	Context   *ContextUse       `json:"context,omitempty"`
@@ -817,6 +851,7 @@ func notifications() []method {
 		{name: "session.listed", params: SessionListed{}},
 		{name: "session.settings", params: SessionSettings{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
+		{name: "question.resolved", params: QuestionResolved{}},
 		{name: "item.persisted", params: Persisted{}},
 		{name: statusMethod, params: StatusReport{}},
 		{name: resyncMethod, params: Resync{}},
@@ -891,7 +926,7 @@ func requests() []method {
 }
 
 func capabilities() []string {
-	return []string{"approvals", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
+	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
 		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status"}
 }
 

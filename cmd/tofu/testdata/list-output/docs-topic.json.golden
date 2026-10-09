@@ -68,6 +68,14 @@ exit 0
         "description": "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer. A project hook, a rule override and the model changing a setting ask you in both"
       },
       {
+        "key": "askPersonWaitSeconds",
+        "category": "Interaction",
+        "default": "120",
+        "takes": "at least 1 seconds before the recommended option is taken under auto",
+        "restart": false,
+        "description": "under auto, a question the lead asks you takes its recommended option after this many seconds, and the lead never stops for it; the question stays open and a later answer still reaches the lead. under ask the lead waits with no timeout. the next turn reads the new value"
+      },
+      {
         "key": "readBeforeEdit",
         "category": "Interaction",
         "default": "true",

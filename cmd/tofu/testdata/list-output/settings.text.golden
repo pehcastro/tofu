@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     50 declared
+Settings · 2 set                                                     51 declared
 
 Appearance
   ● theme                   Nord                                  project
@@ -12,6 +12,7 @@ Appearance
 Interaction
     composer                standard                              default
     gatePrompt              auto                                  default
+    askPersonWaitSeconds    120                                   default
   ● readBeforeEdit          false                                 global
     autoUpdate              true                                  default
 

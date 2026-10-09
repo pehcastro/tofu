@@ -58,7 +58,8 @@ func (a *App) followStatus(msg tea.Msg) {
 			watch.cron = msg.Origin.Job
 		}
 	case Closed:
-		watch.after, watch.asks = status.Done, nil
+		watch.after = status.Done
+		watch.asks = slices.DeleteFunc(watch.asks, func(asked Event) bool { return asked.Questions == nil })
 		switch {
 		case watch.failure != "":
 			watch.after = status.Errored

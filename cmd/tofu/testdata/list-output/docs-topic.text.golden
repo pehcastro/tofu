@@ -115,6 +115,12 @@ Interaction
       verdict in the chat. ask stops on what jev would ask about until you
       answer. A project hook, a rule override and the model changing a setting
       ask you in both
+    askPersonWaitSeconds    120
+      at least 1 seconds before the recommended option is taken under auto
+      under auto, a question the lead asks you takes its recommended option
+      after this many seconds, and the lead never stops for it; the question
+      stays open and a later answer still reaches the lead. under ask the lead
+      waits with no timeout. the next turn reads the new value
     readBeforeEdit          true
       true or false
       an edit or a write to a file this session has not read, or that changed

@@ -79,6 +79,75 @@ func (q *Asked) Close() {
 	q.inbox.signal()
 }
 
+type QuestionType string
+
+const (
+	QuestionChoice QuestionType = "choice"
+	QuestionMulti  QuestionType = "multi"
+	QuestionText   QuestionType = "text"
+	QuestionYesNo  QuestionType = "yesno"
+)
+
+type PersonOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Preview     string `json:"preview,omitempty"`
+}
+
+type PersonQuestion struct {
+	ID          string         `json:"id"`
+	Header      string         `json:"header"`
+	Question    string         `json:"question"`
+	Type        QuestionType   `json:"type"`
+	Options     []PersonOption `json:"options,omitempty"`
+	Recommended *int           `json:"recommended,omitempty"`
+}
+
+type PersonReply struct {
+	ID     string   `json:"id"`
+	Chosen []string `json:"chosen"`
+	Text   string   `json:"text,omitempty"`
+}
+
+type PersonForm func(ctx context.Context, questions []PersonQuestion, wait time.Duration) ([]PersonReply, error)
+
+type QuestionDismissed struct{}
+
+func (QuestionDismissed) Error() string { return "the person dismissed the question" }
+
+type QuestionUndelivered struct{ Why string }
+
+func (e QuestionUndelivered) Error() string {
+	return "the question reached nobody who can answer it: " + e.Why
+}
+
+type QuestionsBlock func() (blocks, decided bool)
+
+type questionsBlockKey struct{}
+
+func WithQuestionsBlock(ctx context.Context, blocks QuestionsBlock) context.Context {
+	return context.WithValue(ctx, questionsBlockKey{}, blocks)
+}
+
+func QuestionsBlockFrom(ctx context.Context) (blocks, decided bool) {
+	read, set := ctx.Value(questionsBlockKey{}).(QuestionsBlock)
+	if !set {
+		return false, false
+	}
+	return read()
+}
+
+type personFormKey struct{}
+
+func WithPersonForm(ctx context.Context, form PersonForm) context.Context {
+	return context.WithValue(ctx, personFormKey{}, form)
+}
+
+func PersonFormFrom(ctx context.Context) PersonForm {
+	form, _ := ctx.Value(personFormKey{}).(PersonForm)
+	return form
+}
+
 func (b *Inbox) stillAsked() []string {
 	if b == nil {
 		return nil

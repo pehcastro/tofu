@@ -31,8 +31,9 @@ func Schema() ([]byte, error) {
 		}
 	}
 	asked, answer := defs.of(reflect.TypeOf(ApprovalRequest{})), defs.of(reflect.TypeOf(ApprovalAnswer{}))
-	server = append(server, envelope(ApprovalMethod, asked, numbered), reply("result", map[string]any{"anyOf": results}), reply("error", defs.of(reflect.TypeOf(Refusal{}))))
-	defs["clientMessage"] = map[string]any{"oneOf": append(client, reply("result", answer))}
+	question, chosen := defs.of(reflect.TypeOf(QuestionRequest{})), defs.of(reflect.TypeOf(QuestionAnswer{}))
+	server = append(server, envelope(ApprovalMethod, asked, numbered), envelope(QuestionMethod, question, numbered), reply("result", map[string]any{"anyOf": results}), reply("error", defs.of(reflect.TypeOf(Refusal{}))))
+	defs["clientMessage"] = map[string]any{"oneOf": append(client, reply("result", answer), reply("result", chosen))}
 	return json.MarshalIndent(map[string]any{
 		"$schema":         "https://json-schema.org/draft/2020-12/schema",
 		"$id":             Protocol,
@@ -43,6 +44,7 @@ func Schema() ([]byte, error) {
 		"x-requests":      requested,
 		"x-serverRequests": map[string]any{
 			ApprovalMethod: map[string]any{"params": asked, "result": answer},
+			QuestionMethod: map[string]any{"params": question, "result": chosen},
 		},
 	}, "", "  ")
 }
