@@ -768,8 +768,9 @@ pub(crate) fn tile_control(
     .when(reveal <= 0.0, |close| close.invisible())
 }
 
-fn mark(tab: &Tab, theme: &Theme) -> Option<Div> {
+fn mark(tab: &Tab, (ix, look): (usize, Look), theme: &Theme, ask: &Shut) -> Option<Div> {
     let slot = div()
+        .relative()
         .flex()
         .flex_none()
         .items_center()
@@ -780,11 +781,24 @@ fn mark(tab: &Tab, theme: &Theme) -> Option<Div> {
         TabMark::Close => return None,
         TabMark::Pinned => glyph(Glyph::Pin, ICON_TINY, caption).into_any_element(),
         TabMark::Locked => glyph(Glyph::Lock, ICON_TINY, caption).into_any_element(),
-        TabMark::Dirty => div()
-            .size(px(DIRTY_DOT))
-            .rounded_full()
-            .bg(ink(theme, T1))
-            .into_any_element(),
+        TabMark::Dirty => {
+            return Some(
+                slot.child(
+                    div()
+                        .size(px(DIRTY_DOT))
+                        .rounded_full()
+                        .bg(ink(theme, T1))
+                        .opacity(1.0 - look.reveal),
+                )
+                .child(
+                    close(ix, look, theme, ask.clone())
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .when(look.reveal <= 0.0, |close| close.invisible()),
+                ),
+            );
+        }
     };
     Some(slot.child(inner))
 }
@@ -846,6 +860,13 @@ fn tab_frame(
         dim,
     } = pick;
     let select = on.clone();
+    let asked = on.clone();
+    let ask: Shut = Rc::new(move |ix, window, cx| asked(&TabEvent::Close(ix), window, cx));
+    let middle = match tab.mark {
+        TabMark::Close => Some(shut.clone()),
+        TabMark::Dirty => Some(ask.clone()),
+        TabMark::Pinned | TabMark::Locked => None,
+    };
     let text = if chosen || look.lit {
         theme.color(ColorToken::TextStrong)
     } else {
@@ -857,7 +878,7 @@ fn tab_frame(
         .min_w_0()
         .pr(px(TAB_PAD_TAIL))
         .child(link(tab, image, font, theme, text))
-        .children(mark(tab, theme))
+        .children(mark(tab, (ix, look), theme, &ask))
         .when(tab.mark == TabMark::Close, |content| {
             content.child(room(ix, look, theme, shut))
         })
@@ -879,6 +900,12 @@ fn tab_frame(
             tab.on_mouse_down(MouseButton::Right, move |event, window, cx| {
                 cx.stop_propagation();
                 menu(ix, event.position, window, cx)
+            })
+        })
+        .when_some(middle, |tab, middle| {
+            tab.on_mouse_up(MouseButton::Middle, move |_, window, cx| {
+                cx.stop_propagation();
+                middle(ix, window, cx)
             })
         })
         .cursor_pointer()
@@ -1304,7 +1331,7 @@ impl RenderOnce for TabStrip {
         let slot = |ix: usize, tab: &Tab| Slot::Tab {
             ix,
             label: tab.label.clone(),
-            close: tab.mark == TabMark::Close,
+            close: matches!(tab.mark, TabMark::Close | TabMark::Dirty),
         };
         let width = Width::of(format!("{id}-width"), window, cx);
         let (cap, gap, font) = match &shape {

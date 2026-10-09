@@ -1,7 +1,9 @@
-use desk_motion::tokens::{EASE_OUT, HOVER_MS};
+use std::time::Duration;
+
+use desk_motion::tokens::EASE_OUT;
 use gpui::{
     Animation, AnimationExt, AnyElement, ClickEvent, Context, Div, ElementId, Entity, FontWeight,
-    Rgba, SharedString, Window, div, prelude::*, px, rgb,
+    ImageSource, ObjectFit, Rgba, SharedString, Window, div, img, prelude::*, px,
 };
 
 use crate::component::icon;
@@ -12,22 +14,22 @@ use crate::components::glyph::Glyph;
 use crate::components::overlay::{MenuButton, actions};
 use crate::components::paint::{glyph, ink, tint};
 use crate::components::size::{
-    CAPTION_TEXT, FONT_BODY, FONT_SMALL, FONT_TREE, HOVER, NUMBER_TEXT, RADIUS_BADGE, RADIUS_ROW,
-    ROW_ON, ROW_PAD_X, ROW_PAD_Y, T1, T3,
+    CAPTION_TEXT, CHIP_FILL, FONT_BODY, FONT_SMALL, FONT_TREE, HOVER, NUMBER_TEXT, RADIUS_BADGE,
+    RADIUS_ROW, ROW_ON, ROW_PAD_X, ROW_PAD_Y, T1, T3,
 };
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{AVATAR, ICON, ICON_SMALL};
 use crate::theme::{ColorToken, Theme, WordToken};
 
-const PERSON_FILL: u32 = 0x56_63_75;
-const PERSON_TEXT: u32 = 0xe6_ea_f0;
+const BLAME_FADE: Duration = Duration::from_millis(120);
+const INLINE_PAD: &str = "       ";
+const FACE_PICTURE_SHOWN: f32 = 0.5;
 const CODE_LINE: f32 = 22.0;
 const NUMBER_WIDTH: f32 = 52.0;
 const NUMBER_PAD: f32 = 18.0;
 const BLAME_WIDTH: f32 = 168.0;
 const BLAME_FACE: f32 = 14.0;
-const INLINE_GAP: f32 = 28.0;
 const AGENT_BAR: f32 = 3.0;
 const DOT: f32 = 6.0;
 const CHECKBOX: f32 = 14.0;
@@ -71,16 +73,17 @@ pub struct ChangedFile {
     pub agent: bool,
 }
 
-fn face(name: &str, side: f32) -> Div {
+fn face(name: &str, picture: Option<ImageSource>, side: f32, theme: &Theme) -> Div {
     div()
+        .relative()
         .flex_none()
         .size(px(side))
         .flex()
         .items_center()
         .justify_center()
         .rounded_full()
-        .bg(rgb(PERSON_FILL))
-        .text_color(rgb(PERSON_TEXT))
+        .bg(ink(theme, CHIP_FILL))
+        .text_color(ink(theme, NUMBER_TEXT))
         .text_size(px(side * FACE_TEXT_SHARE))
         .font_weight(FontWeight::SEMIBOLD)
         .child(
@@ -90,6 +93,16 @@ fn face(name: &str, side: f32) -> Div {
                 .to_uppercase()
                 .to_string(),
         )
+        .children(picture.map(|picture| {
+            img(picture)
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .rounded_full()
+                .object_fit(ObjectFit::Cover)
+                .opacity(FACE_PICTURE_SHOWN)
+        }))
 }
 
 fn dot(color: Rgba) -> Div {
@@ -217,7 +230,7 @@ impl History {
             .cursor_pointer()
             .when(picked, |row| row.bg(ink(theme, ROW_ON)))
             .when(!picked, |row| row.hover(move |style| style.bg(hover)))
-            .child(face(&commit.author, AVATAR))
+            .child(face(&commit.author, None, AVATAR, theme))
             .child(
                 div()
                     .flex()
@@ -337,7 +350,7 @@ pub fn blame_gutter(lines: &[BlameLine], theme: &Theme) -> Div {
                     .gap_1p5()
                     .min_w_0()
                     .text_color(grey)
-                    .child(face(name, BLAME_FACE))
+                    .child(face(name, None, BLAME_FACE, theme))
                     .child(
                         div()
                             .min_w_0()
@@ -406,24 +419,40 @@ pub fn blame_gutter(lines: &[BlameLine], theme: &Theme) -> Div {
     gutter
 }
 
-pub fn inline_blame(id: impl Into<ElementId>, name: &str, when: &str, theme: &Theme) -> AnyElement {
-    div()
+pub fn inline_blame(
+    id: impl Into<ElementId>,
+    name: &str,
+    when: &str,
+    picture: Option<ImageSource>,
+    reduced: bool,
+    theme: &Theme,
+) -> AnyElement {
+    let label = div()
         .flex()
         .flex_none()
         .items_center()
         .gap_1p5()
-        .ml(px(INLINE_GAP))
+        .child(
+            div()
+                .font_family(mono(theme))
+                .text_size(px(FONT_BODY))
+                .child(INLINE_PAD),
+        )
         .font_family(theme.word(WordToken::ShapeFont))
         .text_size(px(FONT_SMALL))
-        .text_color(ink(theme, CAPTION_TEXT))
-        .child(face(name, BLAME_FACE))
-        .child(format!("{name}, {when}"))
-        .with_animation(
-            id,
-            Animation::new(HOVER_MS).with_easing(EASE_OUT),
-            |label, shown| label.opacity(shown),
-        )
-        .into_any_element()
+        .text_color(theme.color(ColorToken::TextMuted))
+        .children(picture.map(|picture| face(name, Some(picture), BLAME_FACE, theme)))
+        .child(format!("{name}, {when}"));
+    match reduced {
+        true => label.into_any_element(),
+        false => label
+            .with_animation(
+                id,
+                Animation::new(BLAME_FADE).with_easing(EASE_OUT),
+                |label, shown| label.opacity(shown),
+            )
+            .into_any_element(),
+    }
 }
 
 fn same_blame(a: &Blame, b: &Blame) -> bool {

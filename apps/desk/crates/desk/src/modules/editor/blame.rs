@@ -11,13 +11,59 @@ const MONTH: i64 = 30 * DAY;
 const YEAR: i64 = 365 * DAY;
 const YOU: &str = "you";
 const NOT_COMMITTED: &str = "not committed";
+const NOREPLY: &str = "@users.noreply.github.com";
 
 pub struct Blamed {
     pub text: String,
     pub lines: Vec<git::BlameLine>,
+    pub own_email: Option<String>,
 }
 
-pub type Inline = (usize, SharedString, SharedString);
+#[derive(Clone, PartialEq)]
+pub struct Inline {
+    pub row: usize,
+    pub user: Option<SharedString>,
+    pub author: SharedString,
+    pub email: SharedString,
+    pub when: SharedString,
+    pub mine: bool,
+}
+
+impl Inline {
+    pub fn name(&self) -> SharedString {
+        let named = Some(self.author.clone()).filter(|author| !author.trim().is_empty());
+        self.user
+            .clone()
+            .or(named)
+            .unwrap_or_else(|| self.email.clone())
+    }
+}
+
+pub struct Me<'a> {
+    pub email: Option<&'a str>,
+    pub login: Option<&'a str>,
+}
+
+fn noreply_login(email: &str) -> Option<&str> {
+    let local = email.strip_suffix(NOREPLY)?;
+    Some(local.rsplit('+').next().unwrap_or(local)).filter(|login| !login.is_empty())
+}
+
+impl Me<'_> {
+    fn owns(&self, email: &str) -> bool {
+        let noreply = self.login.is_some_and(|login| {
+            noreply_login(email).is_some_and(|local| local.eq_ignore_ascii_case(login))
+        });
+        noreply || self.email == Some(email)
+    }
+
+    fn user(&self, email: &str) -> Option<SharedString> {
+        self.login
+            .filter(|_| self.owns(email))
+            .or_else(|| noreply_login(email))
+            .map(|login| login.to_owned().into())
+    }
+}
 
 fn now() -> i64 {
     SystemTime::now()
@@ -41,14 +87,25 @@ fn age(seconds: i64) -> String {
     format!("{count} {unit}{plural} ago")
 }
 
-pub fn inline(blamed: &Blamed, row: usize) -> Option<Inline> {
+pub fn inline(blamed: &Blamed, row: usize, me: &Me) -> Option<Inline> {
     let line = blamed.lines.get(row)?;
+    let email = line.email.clone().into();
     Some(match line.commit {
-        None => (row, YOU.into(), NOT_COMMITTED.into()),
-        Some(_) => (
+        None => Inline {
             row,
-            line.author.clone().into(),
-            age(now().saturating_sub(line.time)).into(),
-        ),
+            user: None,
+            author: YOU.into(),
+            email,
+            when: NOT_COMMITTED.into(),
+            mine: true,
+        },
+        Some(_) => Inline {
+            row,
+            user: me.user(&line.email),
+            author: line.author.clone().into(),
+            mine: me.owns(&line.email),
+            email,
+            when: age(now().saturating_sub(line.time)).into(),
+        },
     })
 }

@@ -11,28 +11,31 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use desk_core::git::{Against, Git, GitBinary, GitError, Hunk};
-use desk_core::syntax::Language;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
-use desk_ui::components::code_editor::CodeEditor;
+use desk_ui::components::code_editor::{CodeEditor, Highlight};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::history::inline_blame;
+use desk_ui::components::sheet::Sheet;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
+use desk_ui::components::title_bar::Github;
 use desk_ui::components::tree::{
     EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
     picked_pack,
 };
 use desk_ui::live::ActiveTheme;
+use desk_ui::motion::reduced_motion;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, Context, Entity, Focusable, Render, SharedString,
-    Subscription, Task, Window, div, prelude::*, px, relative,
+    AnyElement, AnyView, App, AppContext, Context, Entity, Focusable, KeyDownEvent, Render,
+    SharedString, Subscription, Task, Window, div, prelude::*, px, relative,
 };
 
 use crate::modules::chat::Find;
-use blame::{Blamed, Inline};
+use crate::title_bar::{ask_github, github};
+use blame::{Blamed, Inline, Me};
 use listing::{Listing, states};
 use watch::Watched;
 
@@ -42,6 +45,7 @@ const SIDE_LEAST: f32 = 180.0;
 const SIDE_MOST: f32 = 320.0;
 const PATH_HEIGHT: f32 = 30.0;
 const BAR_GAP: f32 = 8.0;
+const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let root = match cx.try_global::<OpenProject>() {
@@ -112,7 +116,10 @@ struct Page {
 }
 
 enum Asking {
-    Close(PathBuf),
+    Close {
+        path: PathBuf,
+        failed: Option<String>,
+    },
 }
 
 struct Folder {
@@ -150,6 +157,8 @@ pub struct Editor {
     active: usize,
     asking: Option<Asking>,
     find_logged: Option<(String, usize, usize)>,
+    github: Github,
+    alerted: SharedString,
     _tree: Subscription,
     _pack: Subscription,
     _project: Subscription,
@@ -170,6 +179,8 @@ impl Editor {
             active: 0,
             asking: None,
             find_logged: None,
+            github: Github::Asking,
+            alerted: SharedString::default(),
             _pack: cx.observe_global::<PickedPack>(Self::repack),
             _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
@@ -181,7 +192,30 @@ impl Editor {
         };
         editor.start_watching(cx);
         editor.refresh(cx);
+        cx.spawn(async move |this, cx| {
+            let answer = cx.background_executor().spawn(async { ask_github() }).await;
+            let told = this.update(cx, |editor, cx| editor.signed_in(github(answer), cx));
+            if let Err(error) = told {
+                eprintln!("desk: gh answered after the editor closed: {error}");
+            }
+        })
+        .detach();
         editor
+    }
+
+    fn signed_in(&mut self, github: Github, cx: &mut Context<Self>) {
+        self.github = github;
+        let Some(Page {
+            code: Ok(code),
+            repo: Some(repo),
+            ..
+        }) = self.pages.get_mut(self.active)
+        else {
+            return;
+        };
+        repo.inline = None;
+        let code = code.clone();
+        self.follow_blame(&code, cx);
     }
 
     fn reroot(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -541,10 +575,80 @@ impl Editor {
             return;
         };
         if page.dirty {
-            self.asking = Some(Asking::Close(page.path.clone()));
+            eprintln!("desk: editor asks before closing {}", page.path.display());
+            self.alerted = format!("Save changes to {}?", page.name).into();
+            self.asking = Some(Asking::Close {
+                path: page.path.clone(),
+                failed: None,
+            });
             return cx.notify();
         }
         self.drop_page(at, cx);
+    }
+
+    fn keep_open(&mut self, cx: &mut Context<Self>) {
+        if let Some(Asking::Close { path, .. }) = self.asking.take() {
+            eprintln!("desk: editor kept {}", path.display());
+        }
+        cx.notify();
+    }
+
+    fn close_unsaved(&mut self, cx: &mut Context<Self>) {
+        let Some(Asking::Close { path, .. }) = &self.asking else {
+            return;
+        };
+        if let Some(at) = self.pages.iter().position(|page| page.path == *path) {
+            eprintln!("desk: editor closes {} without saving", path.display());
+            self.drop_page(at, cx);
+        }
+    }
+
+    fn save_and_close(&mut self, cx: &mut Context<Self>) {
+        let Some(Asking::Close { path, failed }) = &mut self.asking else {
+            return;
+        };
+        let Some((at, Page { code: Ok(code), .. })) = self
+            .pages
+            .iter()
+            .enumerate()
+            .find(|(_, page)| page.path == *path)
+        else {
+            return;
+        };
+        match fs::write(&*path, code.read(cx).buffer().text()) {
+            Ok(()) => {
+                eprintln!("desk: editor saved {} before closing", path.display());
+                self.drop_page(at, cx);
+            }
+            Err(error) => {
+                eprintln!("desk: editor could not save {}: {error}", path.display());
+                *failed = Some(format!("Could not save: {error}"));
+                cx.notify();
+            }
+        }
+    }
+
+    fn alert(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = ActiveTheme::theme(cx);
+        let failed = match &self.asking {
+            Some(Asking::Close { failed, .. }) => failed.clone(),
+            None => None,
+        };
+        Sheet::new("editor-unsaved", self.alerted.clone())
+            .modal()
+            .open(self.asking.is_some())
+            .confirm("Save")
+            .on_confirm(answered(cx, Self::save_and_close))
+            .aside("Close without saving", answered(cx, Self::close_unsaved))
+            .on_cancel(answered(cx, Self::keep_open))
+            .child(div().truncate().child(UNSAVED_BODY))
+            .children(failed.map(|failed| {
+                div()
+                    .truncate()
+                    .text_color(theme.color(ColorToken::StatusDanger))
+                    .child(failed)
+            }))
+            .into_any_element()
     }
 
     fn drop_page(&mut self, at: usize, cx: &mut Context<Self>) {
@@ -681,8 +785,13 @@ impl Editor {
                 let blamed = cx
                     .background_executor()
                     .spawn(async move {
-                        git.blame(&path, Some(&text))
-                            .map(|lines| Blamed { text, lines })
+                        let lines = git.blame(&path, Some(&text))?;
+                        let own_email = git.own_email()?.map(str::to_owned);
+                        Ok::<_, GitError>(Blamed {
+                            text,
+                            lines,
+                            own_email,
+                        })
                     })
                     .await;
                 let applied = this.update(cx, |editor, cx| editor.blamed(blamed, started, cx));
@@ -691,26 +800,66 @@ impl Editor {
                 }
             }));
         }
+        let user = match &self.github {
+            Github::SignedIn(user) => Some(user),
+            Github::Asking | Github::SignedOut => None,
+        };
         let wanted = row
             .zip(
                 repo.blamed
                     .as_ref()
                     .filter(|blamed| rope == blamed.text.as_str()),
             )
-            .and_then(|(row, blamed)| blame::inline(blamed, row));
-        if wanted == repo.inline && shown == wanted.as_ref().map(|(row, _, _)| *row) {
+            .and_then(|(row, blamed)| {
+                let me = Me {
+                    email: blamed.own_email.as_deref(),
+                    login: user.map(|user| user.login.as_ref()),
+                };
+                blame::inline(blamed, row, &me)
+            });
+        if wanted == repo.inline && shown == wanted.as_ref().map(|inline| inline.row) {
             return;
         }
         repo.inline.clone_from(&wanted);
+        let picture = wanted
+            .as_ref()
+            .filter(|inline| inline.mine)
+            .and(user)
+            .and_then(|user| user.picture.clone());
+        if let Some(inline) = &wanted {
+            eprintln!(
+                "desk: editor blame {} line {}: shows {}, user {}, name {}, email <{}>, {}, {}",
+                repo.path,
+                inline.row + 1,
+                inline.name(),
+                inline.user.as_deref().unwrap_or("-"),
+                inline.author,
+                inline.email,
+                inline.when,
+                match &picture {
+                    Some(_) => "your github picture",
+                    None => "no icon",
+                }
+            );
+        }
+        let reduced = reduced_motion(cx);
         code.update(cx, |code, cx| {
             let mut marks = code.marks().clone();
             marks.retain(|_, mark| {
                 mark.trailing = None;
                 mark.gutter.is_some() || mark.edge.is_some() || mark.background.is_some()
             });
-            if let Some((row, name, when)) = wanted {
+            if let Some(inline) = wanted {
+                let (row, name, when) = (inline.row, inline.name(), inline.when);
                 marks.entry(row).or_default().trailing = Some(Rc::new(move |theme: &Theme| {
-                    inline_blame(("inline-blame", row), &name, &when, theme)
+                    inline_blame(
+                        ("inline-blame", row),
+                        &name,
+                        &when,
+                        picture.clone(),
+                        reduced,
+                        theme,
+                    )
                 }));
             }
             code.set_marks(marks);
@@ -849,46 +998,6 @@ impl Editor {
                 .text_color(theme.color(ColorToken::TextBase))
                 .child(div().flex_1().min_w_0().truncate().child(text))
         };
-        if let Some(Asking::Close(path)) = &self.asking {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let (shut, keep) = (path.clone(), path.clone());
-            return Some(
-                line(format!("{name} has changes that are not saved."))
-                    .child(
-                        button(
-                            "editor-close-anyway",
-                            "Close without saving",
-                            None,
-                            ButtonKind::Text,
-                            &theme,
-                        )
-                        .on_click(cx.listener(move |editor, _, _, cx| {
-                            if let Some(at) = editor.pages.iter().position(|page| page.path == shut)
-                            {
-                                editor.drop_page(at, cx);
-                            }
-                        })),
-                    )
-                    .child(
-                        button(
-                            "editor-close-keep",
-                            "Keep open",
-                            None,
-                            ButtonKind::Plain,
-                            &theme,
-                        )
-                        .on_click(cx.listener(move |editor, _, _, cx| {
-                            eprintln!("desk: editor kept {}", keep.display());
-                            editor.asking = None;
-                            cx.notify();
-                        })),
-                    )
-                    .into_any_element(),
-            );
-        }
         let page = self.pages.get(self.active).filter(|page| page.stale)?;
         Some(
             line(format!("{} changed on disk.", page.name))
@@ -992,11 +1101,19 @@ impl Render for Editor {
                     .overflow_hidden()
                     .child(self.code_area(&theme)),
             );
+        let asking = self.asking.is_some();
         shell(
             Header::Title(Some(Glyph::Code), "Editor".into(), None),
             &theme,
         )
         .size_full()
+        .relative()
+        .capture_key_down(cx.listener(move |editor, event: &KeyDownEvent, _, cx| {
+            if asking && event.keystroke.key == "escape" {
+                cx.stop_propagation();
+                editor.keep_open(cx);
+            }
+        }))
         .child(
             inner_card(&theme)
                 .flex_1()
@@ -1005,6 +1122,19 @@ impl Render for Editor {
                 .child(side)
                 .child(main),
         )
+        .child(self.alert(cx))
+    }
+}
+
+fn answered(
+    cx: &mut Context<Editor>,
+    act: fn(&mut Editor, &mut Context<Editor>),
+) -> impl Fn(&mut Window, &mut App) + 'static {
+    let editor = cx.weak_entity();
+    move |_, cx| {
+        if let Err(error) = editor.update(cx, act) {
+            eprintln!("desk: editor is gone before its alert answered: {error}");
+        }
     }
 }
 
@@ -1088,9 +1218,11 @@ fn file_editor(path: &Path, cx: &mut App) -> Opened {
             return Err(error.into());
         }
     };
-    let language = Language::from_path(path)
-        .map(|language| format!("{language:?}"))
-        .unwrap_or_else(|| "plain".to_owned());
+    let language = match editor.syntax() {
+        Highlight::Tree(syntax) => syntax.report(),
+        Highlight::Plain => "plain".to_owned(),
+    };
+    let language = language.split(' ').next().unwrap_or("plain");
     eprintln!(
         "desk: editor opened {shown} {language} {} lines",
         editor.buffer().line_count()

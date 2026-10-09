@@ -31,6 +31,9 @@ const KNOB_HIT: f32 = 18.0;
 const KNOB_LIT: f32 = 0.34;
 const SCRIM: f32 = 0.32;
 const SHEET_SIZE: f32 = 360.0;
+const MODAL_WIDTH: f32 = 420.0;
+const MODAL_SHARE: f32 = 0.9;
+const MODAL_RISE: f32 = 8.0;
 
 type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -237,18 +240,36 @@ fn stage(id: ElementId, slide: Entity<Slide>, side: Side) -> Stateful<Div> {
 }
 
 fn panel(side: Side, size: Length, pose: &Pose, extent: f32, theme: &Theme) -> Div {
-    let shadow = theme.color(ColorToken::Shadow);
     let push = pose.hidden * (extent + SHEET_INSET);
-    place(side, div().absolute(), size, push)
+    place(
+        side,
+        card(pose, inward(side, SHEET_SHADOW_Y.abs()), theme).absolute(),
+        size,
+        push,
+    )
+    .when(vertical(side), |panel| panel.flex_col())
+}
+
+fn modal_card(pose: &Pose, theme: &Theme) -> Div {
+    card(pose, point(px(0.0), px(SHEET_SHADOW_Y.abs())), theme)
+        .relative()
+        .top(px(pose.hidden * MODAL_RISE))
+        .w(px(MODAL_WIDTH))
+        .max_w(relative(MODAL_SHARE))
+        .opacity(pose.shown)
+}
+
+fn card(pose: &Pose, offset: Point<Pixels>, theme: &Theme) -> Div {
+    let shadow = theme.color(ColorToken::Shadow);
+    div()
         .flex()
-        .when(vertical(side), |panel| panel.flex_col())
         .bg(tint(theme.color(ColorToken::ToastFill), 1.0))
         .rounded(px(RADIUS_POP))
         .shadow(vec![
             ring(ink(theme, SHEET_RING)),
             BoxShadow {
                 color: tint(shadow, shadow.alpha * pose.shown).into(),
-                offset: inward(side, SHEET_SHADOW_Y.abs()),
+                offset,
                 blur_radius: px(POP_SHADOW_BLUR),
                 spread_radius: px(0.0),
                 inset: false,
@@ -418,6 +439,9 @@ pub struct Sheet {
     open: bool,
     on_cancel: Option<Handler>,
     on_confirm: Option<Handler>,
+    confirm: SharedString,
+    aside: Option<(SharedString, Handler)>,
+    modal: bool,
     children: Vec<AnyElement>,
 }
 
@@ -430,12 +454,34 @@ impl Sheet {
             open: false,
             on_cancel: None,
             on_confirm: None,
+            confirm: "Confirm".into(),
+            aside: None,
+            modal: false,
             children: Vec::new(),
         }
     }
 
     pub fn side(mut self, side: Side) -> Self {
         self.side = side;
+        self
+    }
+
+    pub fn modal(mut self) -> Self {
+        self.modal = true;
+        self
+    }
+
+    pub fn confirm(mut self, label: impl Into<SharedString>) -> Self {
+        self.confirm = label.into();
+        self
+    }
+
+    pub fn aside(
+        mut self,
+        label: impl Into<SharedString>,
+        on_aside: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.aside = Some((label.into(), Rc::new(on_aside)));
         self
     }
 
@@ -494,56 +540,66 @@ impl RenderOnce for Sheet {
                     .occlude()
                     .on_click(move |_, window, cx| outside(window, cx))
             });
-        let drawn = panel(
-            self.side,
-            px(SHEET_SIZE).into(),
-            &pose,
-            slide.read(cx).extent,
-            &theme,
-        )
-        .flex_col()
-        .child(
-            div()
-                .h(px(HEADER))
-                .flex()
-                .flex_none()
-                .items_center()
-                .px(px(HEADER_PAD_LEFT))
-                .child(div().flex_1().truncate().child(self.title)),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_h_0()
-                .px(px(HEADER_PAD_LEFT))
-                .overflow_hidden()
-                .children(self.children),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .justify_end()
-                .gap(px(BUTTON_GAP))
-                .p(px(HEADER_PAD_LEFT))
-                .child(
-                    button("sheet-cancel", "Cancel", None, ButtonKind::Plain, &theme)
-                        .on_click(move |_, window, cx| cancel(window, cx)),
-                )
-                .child(
-                    button(
-                        "sheet-confirm",
-                        "Confirm",
-                        None,
-                        ButtonKind::Primary,
-                        &theme,
+        let modal = self.modal;
+        let surface = if modal {
+            modal_card(&pose, &theme)
+        } else {
+            panel(
+                self.side,
+                px(SHEET_SIZE).into(),
+                &pose,
+                slide.read(cx).extent,
+                &theme,
+            )
+        };
+        let drawn = surface
+            .flex_col()
+            .child(
+                div()
+                    .h(px(HEADER))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .px(px(HEADER_PAD_LEFT))
+                    .child(div().flex_1().truncate().child(self.title)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .when(!modal, |body| body.flex_1().min_h_0())
+                    .px(px(HEADER_PAD_LEFT))
+                    .overflow_hidden()
+                    .children(self.children),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .justify_end()
+                    .gap(px(BUTTON_GAP))
+                    .p(px(HEADER_PAD_LEFT))
+                    .child(
+                        button("sheet-cancel", "Cancel", None, ButtonKind::Plain, &theme)
+                            .on_click(move |_, window, cx| cancel(window, cx)),
                     )
-                    .on_click(move |_, window, cx| confirm(window, cx)),
-                ),
-        );
+                    .children(self.aside.map(|(label, on_aside)| {
+                        button("sheet-aside", label, None, ButtonKind::Plain, &theme)
+                            .on_click(move |_, window, cx| on_aside(window, cx))
+                    }))
+                    .child(
+                        button(
+                            "sheet-confirm",
+                            self.confirm,
+                            None,
+                            ButtonKind::Primary,
+                            &theme,
+                        )
+                        .on_click(move |_, window, cx| confirm(window, cx)),
+                    ),
+            );
         stage(self.id, slide, self.side)
+            .when(modal, |stage| stage.flex().items_center().justify_center())
             .child(scrim)
             .child(drawn)
             .into_any_element()

@@ -167,25 +167,32 @@ pub fn diff(out: &str) -> Result<Vec<Hunk>, GitError> {
 }
 
 pub fn blame(out: &str) -> Result<Vec<BlameLine>, GitError> {
-    let mut known: HashMap<&str, (String, i64)> = HashMap::new();
+    let mut known: HashMap<&str, (String, String, i64)> = HashMap::new();
     let mut lines = Vec::new();
     let mut sha = "";
     let mut author = String::new();
+    let mut email = String::new();
     let mut time = 0;
     for line in out.lines() {
         if let Some(text) = line.strip_prefix('\t') {
-            let (author, time) = known
+            let (author, email, time) = known
                 .entry(sha)
-                .or_insert_with(|| (author.clone(), time))
+                .or_insert_with(|| (author.clone(), email.clone(), time))
                 .clone();
             lines.push(BlameLine {
                 commit: (sha != UNCOMMITTED).then(|| sha.to_owned()),
                 author,
+                email,
                 time,
                 text: text.to_owned(),
             });
         } else if let Some(name) = line.strip_prefix("author ") {
             name.clone_into(&mut author);
+        } else if let Some(mail) = line.strip_prefix("author-mail ") {
+            email = mail
+                .trim_start_matches('<')
+                .trim_end_matches('>')
+                .to_lowercase();
         } else if let Some(seconds) = line.strip_prefix("author-time ") {
             time = seconds
                 .parse()
@@ -198,4 +205,19 @@ pub fn blame(out: &str) -> Result<Vec<BlameLine>, GitError> {
         }
     }
     Ok(lines)
+}
+
+pub fn shortlog(out: &str) -> Result<HashMap<String, String>, GitError> {
+    let mut names = HashMap::new();
+    for line in out.lines().filter(|line| !line.trim().is_empty()) {
+        let (name, email) = line
+            .split_once('\t')
+            .and_then(|(_, who)| who.trim_end().rsplit_once(" <"))
+            .and_then(|(name, email)| Some((name, email.strip_suffix('>')?)))
+            .ok_or_else(|| unreadable("shortlog line", line))?;
+        names
+            .entry(email.to_lowercase())
+            .or_insert_with(|| name.to_owned());
+    }
+    Ok(names)
 }

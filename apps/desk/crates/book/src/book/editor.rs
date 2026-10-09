@@ -1,3 +1,4 @@
+use desk_motion::reduced_motion;
 use desk_ui::components::chip::GitStatus;
 use desk_ui::components::history::{
     Blame, BlameLine, ChangedFile, Changes, Commit, Day, History, blame_gutter, inline_blame,
@@ -193,13 +194,27 @@ fn blame() -> Vec<BlameLine> {
     .collect()
 }
 
-fn inline_blames(id: &'static str, theme: &Theme) -> Div {
+fn inline_blames(id: &'static str, reduced: bool, theme: &Theme) -> Div {
     div()
         .flex()
         .flex_col()
         .gap_2()
-        .child(inline_blame((id, 0usize), "pehcastro", "7 days ago", theme))
-        .child(inline_blame((id, 1usize), "you", "not committed", theme))
+        .child(inline_blame(
+            (id, 0usize),
+            "pehcastro",
+            "7 days ago",
+            None,
+            reduced,
+            theme,
+        ))
+        .child(inline_blame(
+            (id, 1usize),
+            "you",
+            "not committed",
+            None,
+            reduced,
+            theme,
+        ))
 }
 
 fn changes(cx: &mut Context<Book>) -> Entity<Changes> {
@@ -307,8 +322,9 @@ impl HistoryPage {
         }
     }
 
-    pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, _: &mut Context<Book>) -> Div {
+    pub(super) fn render(&mut self, theme: &Theme, _: &mut Window, cx: &mut Context<Book>) -> Div {
         let lines = blame();
+        let reduced = reduced_motion(cx);
         page()
             .child(twice(
                 "History: commits by day, click one to select it, Branch opens the picker",
@@ -339,11 +355,11 @@ impl HistoryPage {
                 self.changes_narrow.clone(),
             ))
             .child(twice(
-                "Inline blame: faint after the caret line's code, fades in over 150 ms",
+                "Inline blame: muted, seven columns after the caret line's code, fades in over 120 ms",
                 theme,
                 BLAME_WIDTH,
-                inline_blames("wide", theme),
-                inline_blames("narrow", theme),
+                inline_blames("wide", reduced, theme),
+                inline_blames("narrow", reduced, theme),
             ))
     }
 

@@ -82,6 +82,7 @@ pub struct Hunk {
 pub struct BlameLine {
     pub commit: Option<String>,
     pub author: String,
+    pub email: String,
     pub time: i64,
     pub text: String,
 }

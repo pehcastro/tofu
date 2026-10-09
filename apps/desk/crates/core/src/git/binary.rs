@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::env;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::thread;
 
 use super::{Against, BlameLine, Drift, Entry, Git, GitError, Hunk, parse};
@@ -12,6 +14,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub struct GitBinary {
     program: PathBuf,
     root: PathBuf,
+    names: OnceLock<HashMap<String, String>>,
+    own_email: OnceLock<Option<String>>,
 }
 
 fn run_in(
@@ -85,11 +89,33 @@ impl GitBinary {
         Ok(GitBinary {
             program,
             root: PathBuf::from(top.trim_end()),
+            names: OnceLock::new(),
+            own_email: OnceLock::new(),
         })
     }
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub fn own_email(&self) -> Result<Option<&str>, GitError> {
+        if let Some(own) = self.own_email.get() {
+            return Ok(own.as_deref());
+        }
+        let own = match self.run(&["config", "user.email"], None) {
+            Ok(email) => Some(email.trim().to_lowercase()).filter(|email| !email.is_empty()),
+            Err(GitError::Failed { code: Some(1), .. }) => None,
+            Err(error) => return Err(error),
+        };
+        Ok(self.own_email.get_or_init(|| own).as_deref())
+    }
+
+    fn names(&self) -> Result<&HashMap<String, String>, GitError> {
+        if let Some(names) = self.names.get() {
+            return Ok(names);
+        }
+        let names = parse::shortlog(&self.run(&["shortlog", "-sne", "HEAD"], None)?)?;
+        Ok(self.names.get_or_init(|| names))
     }
 
     pub fn drift(&self) -> Result<Option<Drift>, GitError> {
@@ -131,7 +157,18 @@ impl Git for GitBinary {
             args.extend(["--contents", "-"]);
         }
         args.extend(["--", path]);
-        parse::blame(&self.run(&args, contents)?)
+        let lines = parse::blame(&self.run(&args, contents)?)?;
+        let names = self.names()?;
+        Ok(lines
+            .into_iter()
+            .map(|line| match names.get(&line.email) {
+                Some(name) => BlameLine {
+                    author: name.clone(),
+                    ..line
+                },
+                None => line,
+            })
+            .collect())
     }
 
     fn stage(&self, paths: &[String]) -> Result<(), GitError> {
