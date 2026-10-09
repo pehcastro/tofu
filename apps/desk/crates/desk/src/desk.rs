@@ -17,6 +17,8 @@ use crate::screens::library::Library;
 use crate::screens::limits::Limits;
 #[cfg(all(feature = "screen-work", feature = "screen-session"))]
 use crate::screens::session::SessionScreen;
+#[cfg(all(feature = "screen-work", feature = "screen-settings"))]
+use crate::screens::settings::Rows as SettingsScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-usage"))]
 use crate::screens::usage::UsageScreen;
 #[cfg(feature = "screen-work")]
@@ -740,7 +742,8 @@ impl Desk {
                 feature = "screen-session",
                 feature = "screen-forks",
                 feature = "screen-usage",
-                feature = "screen-accounts"
+                feature = "screen-accounts",
+                feature = "screen-settings"
             )
         ))]
         self.feed_screens(cx);
@@ -1573,7 +1576,8 @@ impl Desk {
             feature = "screen-session",
             feature = "screen-forks",
             feature = "screen-usage",
-            feature = "screen-accounts"
+            feature = "screen-accounts",
+            feature = "screen-settings"
         ))]
         self.feed_screens(cx);
         cx.notify();
@@ -1587,7 +1591,8 @@ impl Desk {
         feature = "screen-session",
         feature = "screen-forks",
         feature = "screen-usage",
-        feature = "screen-accounts"
+        feature = "screen-accounts",
+        feature = "screen-settings"
     ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
@@ -1628,6 +1633,10 @@ impl Desk {
             #[cfg(feature = "screen-accounts")]
             if let Ok(accounts) = view.clone().downcast::<AccountsScreen>() {
                 accounts.update(cx, |accounts, cx| accounts.read_from(&chat, cx));
+            }
+            #[cfg(feature = "screen-settings")]
+            if let Ok(settings) = view.clone().downcast::<SettingsScreen>() {
+                settings.update(cx, |settings, cx| settings.read_from(&chat, cx));
             }
             #[cfg(feature = "screen-usage")]
             if let Ok(usage) = view.downcast::<UsageScreen>() {

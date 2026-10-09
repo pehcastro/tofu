@@ -1,71 +1,41 @@
-use desk_ui::components::settings::Source;
+use desk_core::settings::Scope as WireScope;
+use gpui::SharedString;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PageId {
-    Appearance,
+pub enum DeskPage {
     Keys,
-    Notify,
-    Workspaces,
     Editor,
     Git,
-    Turn,
-    Context,
-    Shell,
-    Browser,
-    Accounts,
 }
 
-impl PageId {
+impl DeskPage {
     pub fn name(self) -> &'static str {
         match self {
-            PageId::Appearance => "Appearance",
-            PageId::Keys => "Keyboard",
-            PageId::Notify => "Notifications",
-            PageId::Workspaces => "Workspaces",
-            PageId::Editor => "Editor",
-            PageId::Git => "Git",
-            PageId::Turn => "Turn and sub-agents",
-            PageId::Context => "Context",
-            PageId::Shell => "Shell",
-            PageId::Browser => "Browser",
-            PageId::Accounts => "Accounts and models",
+            DeskPage::Keys => "Keyboard",
+            DeskPage::Editor => "Editor",
+            DeskPage::Git => "Git",
         }
     }
 
     pub fn page(self) -> &'static Page {
         match self {
-            PageId::Git => &GIT,
-            PageId::Appearance => &APPEARANCE,
-            PageId::Keys => &KEYS,
-            PageId::Editor => &EDITOR,
-            PageId::Turn
-            | PageId::Notify
-            | PageId::Workspaces
-            | PageId::Context
-            | PageId::Shell
-            | PageId::Browser
-            | PageId::Accounts => &TURN,
+            DeskPage::Keys => &KEYS,
+            DeskPage::Editor => &EDITOR,
+            DeskPage::Git => &GIT,
         }
     }
 }
 
-pub const NAV: [(&str, &[PageId]); 4] = [
-    (
-        "General",
-        &[PageId::Appearance, PageId::Keys, PageId::Notify],
-    ),
-    ("Desk", &[PageId::Workspaces, PageId::Editor, PageId::Git]),
-    (
-        "tofu",
-        &[
-            PageId::Turn,
-            PageId::Context,
-            PageId::Shell,
-            PageId::Browser,
-        ],
-    ),
-    ("Models", &[PageId::Accounts]),
-];
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PageId {
+    Desk(DeskPage),
+    Tofu(SharedString),
+}
+
+pub const DESK_NAV: (&str, [DeskPage; 3]) =
+    ("Desk", [DeskPage::Keys, DeskPage::Editor, DeskPage::Git]);
+pub const TOFU_NAV: &str = "tofu";
+pub const FIRST_TOFU_PAGE: &str = "Turn";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
@@ -74,17 +44,16 @@ pub enum Scope {
 }
 
 impl Scope {
-    pub fn source(self) -> Source {
+    pub fn wire(self) -> WireScope {
         match self {
-            Scope::Everywhere => Source::Global,
-            Scope::Project => Source::Project,
+            Scope::Everywhere => WireScope::Global,
+            Scope::Project => WireScope::Project,
         }
     }
 }
 
 pub enum Control {
     Switch(bool),
-    Value(&'static str),
     Pack,
 }
 
@@ -93,7 +62,6 @@ pub struct Setting {
     pub name: &'static str,
     pub desc: &'static str,
     pub control: Control,
-    pub source: Source,
 }
 
 pub struct Page {
@@ -102,35 +70,12 @@ pub struct Page {
     pub groups: &'static [(&'static str, &'static [Setting])],
 }
 
-const fn switch(
-    key: &'static str,
-    name: &'static str,
-    desc: &'static str,
-    on: bool,
-    source: Source,
-) -> Setting {
+const fn switch(key: &'static str, name: &'static str, desc: &'static str) -> Setting {
     Setting {
         key,
         name,
         desc,
-        control: Control::Switch(on),
-        source,
-    }
-}
-
-const fn value(
-    key: &'static str,
-    name: &'static str,
-    desc: &'static str,
-    value: &'static str,
-    source: Source,
-) -> Setting {
-    Setting {
-        key,
-        name,
-        desc,
-        control: Control::Value(value),
-        source,
+        control: Control::Switch(true),
     }
 }
 
@@ -146,68 +91,8 @@ const EDITOR: Page = Page {
             name: "File icons",
             desc: "The icon pack the file tree and the file tabs draw.",
             control: Control::Pack,
-            source: Source::Default,
         }],
     )],
-};
-
-const TURN: Page = Page {
-    title: "Turn and sub-agents",
-    desc: "How the lead works, how many sub-agents it may run, and when it must stop and ask you.",
-    groups: &[
-        (
-            "Approvals",
-            &[
-                switch(
-                    "gatePrompt",
-                    "Ask before risky commands",
-                    "The lead stops for your answer when the classifier says ask. Off: it only logs.",
-                    false,
-                    Source::Default,
-                ),
-                switch(
-                    "turnMaySpawn",
-                    "Lead may spawn sub-agents",
-                    "Off keeps every change in the lead.",
-                    true,
-                    Source::Default,
-                ),
-                switch(
-                    "verifySubAgents",
-                    "Lead checks sub-agent work",
-                    "Re-runs checks and a browser check after a report. Costs requests.",
-                    false,
-                    Source::Project,
-                ),
-            ],
-        ),
-        (
-            "Limits",
-            &[
-                value(
-                    "subAgentsPerTurn",
-                    "Sub-agents per turn",
-                    "",
-                    "10",
-                    Source::Default,
-                ),
-                value(
-                    "subAgentDepth",
-                    "Sub-agent depth",
-                    "Sub-agents spawning sub-agents.",
-                    "2",
-                    Source::Default,
-                ),
-                value(
-                    "decisionCap",
-                    "Classifier decisions per turn",
-                    "",
-                    "200",
-                    Source::Global,
-                ),
-            ],
-        ),
-    ],
 };
 
 const GIT: Page = Page {
@@ -217,76 +102,24 @@ const GIT: Page = Page {
         (
             "Changes",
             &[
-                switch(
-                    "autoRefresh",
-                    "Refresh on file and git events",
-                    "",
-                    true,
-                    Source::Default,
-                ),
-                switch(
-                    "untracked",
-                    "Show untracked files",
-                    "",
-                    true,
-                    Source::Default,
-                ),
+                switch("autoRefresh", "Refresh on file and git events", ""),
+                switch("untracked", "Show untracked files", ""),
                 switch(
                     "agentMarks",
                     "Mark agent changes",
                     "Violet marks on lines and rows an agent wrote this session.",
-                    true,
-                    Source::Default,
                 ),
-                switch(
-                    "confirmDiscard",
-                    "Confirm before discarding",
-                    "",
-                    true,
-                    Source::Default,
-                ),
+                switch("confirmDiscard", "Confirm before discarding", ""),
             ],
         ),
         (
             "Blame",
             &[
-                switch(
-                    "gitBlame",
-                    "Git blame on the current line",
-                    "",
-                    true,
-                    Source::Default,
-                ),
-                switch(
-                    "agentBlame",
-                    "Agent blame on the current line",
-                    "",
-                    true,
-                    Source::Default,
-                ),
+                switch("gitBlame", "Git blame on the current line", ""),
+                switch("agentBlame", "Agent blame on the current line", ""),
             ],
         ),
     ],
-};
-
-const APPEARANCE: Page = Page {
-    title: "Appearance",
-    desc: "",
-    groups: &[(
-        "Look",
-        &[
-            value("theme", "Theme", "", "tofu", Source::Default),
-            value("density", "Density", "", "comfortable", Source::Default),
-            value("animations", "Animations", "", "subtle", Source::Global),
-            value(
-                "glass",
-                "Glass",
-                "Frost everywhere; refraction where the GPU path allows it.",
-                "frost",
-                Source::Default,
-            ),
-        ],
-    )],
 };
 
 const KEYS: Page = Page {

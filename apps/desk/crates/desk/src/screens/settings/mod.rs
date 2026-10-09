@@ -3,6 +3,8 @@ mod fixture;
 mod intro;
 mod rows;
 
+pub use rows::Rows;
+
 use desk_ui::live::ActiveTheme;
 use gpui::{AnyView, App, AppContext, Window};
 

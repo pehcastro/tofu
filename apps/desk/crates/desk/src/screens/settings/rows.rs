@@ -2,9 +2,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use desk_core::protocol::request::{QuerySettings, SettingsSet};
+use desk_core::protocol::{NoParams, Request, SettingsReport, SettingsSetParams, VerbResult};
+use desk_core::query::{Answer, QueryError, Read};
+use desk_core::settings::{self as wire, Settings, Value, refusal};
 use desk_tiling::SHORTCUTS;
-use desk_ui::components::chip::{chip, flat_chip, mono};
-use desk_ui::components::form::{input, switch_bare};
+use desk_ui::components::chip::flat_chip;
+use desk_ui::components::form::{TextInput, input, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::paint::{ms, presented, tint};
@@ -12,16 +16,21 @@ use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::settings::{
     SettingRow, Source, key_binding, page_title, setting_group, setting_group_clickable,
 };
+use desk_ui::components::skeleton::skeleton_lines;
 use desk_ui::components::tree::{IconPack, IconTheme, pick_pack, picked_pack};
 use desk_ui::live::ActiveTheme;
 use desk_ui::motion::{Phase, Presence, reduced_motion};
 use desk_ui::theme::{ColorToken, NumberToken, Theme};
 use gpui::{
-    ClickEvent, Context, Div, Image, MouseDownEvent, Render, SharedString, Window, deferred, div,
-    img, prelude::*, px, relative,
+    AnyElement, ClickEvent, Context, Div, Entity, EntityId, EntityInputHandler, Focusable, Image,
+    KeyDownEvent, MouseDownEvent, Render, SharedString, Subscription, WeakEntity, Window, deferred,
+    div, img, prelude::*, px, relative,
 };
 
-use super::fixture::{Control, KEYS_GROUP, NAV, PageId, Scope, Setting};
+use super::fixture::{
+    Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, KEYS_GROUP, PageId, Scope, Setting, TOFU_NAV,
+};
+use crate::modules::chat::Chat;
 use crate::screens::frame;
 
 const NAV_WIDTH: f32 = 247.0;
@@ -31,7 +40,6 @@ const NAV_TEXT: f32 = 13.5;
 const NAV_RULE: f32 = 0.35;
 const CONTENT_PAD_X: f32 = 28.0;
 const CONTENT_PAD_Y: f32 = 20.0;
-const VALUE_TEXT: f32 = 12.0;
 const PREVIEW_FILES: [&str; 4] = ["index.ts", "main.rs", "README.md", "package.json"];
 const PREVIEW_FOLDER: &str = "src";
 const PREVIEW_COLUMNS: u16 = 3;
@@ -43,6 +51,10 @@ const PREVIEW_FILL: f32 = 0.25;
 const PICKER_GAP: f32 = 12.0;
 const SELECT_WIDTH: f32 = 132.0;
 const MENU_DROP: f32 = 32.0;
+const PROBLEM_TEXT: f32 = 12.0;
+const PROBLEM_GAP: f32 = 4.0;
+const READING_LINES: usize = 8;
+const NO_TOFU: &str = "Settings reads tofu's settings from the tofu the work screen runs, and no work screen is open here.";
 
 pub struct Rows {
     page: PageId,
@@ -51,12 +63,23 @@ pub struct Rows {
     shown: Option<PageId>,
     packs: Presence,
     preview: Option<(IconPack, Vec<Arc<Image>>)>,
+    tofu: Option<(WeakEntity<Chat>, EntityId)>,
+    answer: Answer<Settings>,
+    switching: HashMap<String, bool>,
+    problems: HashMap<String, SharedString>,
+    fields: HashMap<String, Field>,
+}
+
+struct Field {
+    input: Entity<TextInput>,
+    seen: Option<String>,
+    _blur: Subscription,
 }
 
 impl Rows {
     pub fn new(theme: &Theme) -> Self {
         Rows {
-            page: PageId::Turn,
+            page: PageId::Tofu(FIRST_TOFU_PAGE.into()),
             scope: Scope::Project,
             flipped: HashMap::new(),
             shown: None,
@@ -65,6 +88,270 @@ impl Rows {
                 ms(theme, NumberToken::MotionExit),
             ),
             preview: None,
+            tofu: None,
+            answer: Answer::default(),
+            switching: HashMap::new(),
+            problems: HashMap::new(),
+            fields: HashMap::new(),
+        }
+    }
+
+    pub fn read_from(&mut self, chat: &Entity<Chat>, cx: &mut Context<Self>) {
+        if self
+            .tofu
+            .as_ref()
+            .is_some_and(|(_, id)| *id == chat.entity_id())
+        {
+            return;
+        }
+        self.tofu = Some((chat.downgrade(), chat.entity_id()));
+        self.answer.want();
+        self.answer.again();
+        self.ask(cx);
+        cx.notify();
+    }
+
+    fn send<R: Request>(
+        &self,
+        params: R::Params,
+        cx: &mut Context<Self>,
+        then: impl FnOnce(&mut Self, Result<R::Result, String>, &mut Context<Self>) + 'static,
+    ) where
+        R::Result: 'static,
+    {
+        let chat = self.tofu.as_ref().and_then(|(chat, _)| chat.upgrade());
+        let (sent, reply) = flume::bounded(1);
+        match chat {
+            Some(chat) => chat.update(cx, |chat, cx| {
+                chat.request::<R>(&params, cx, move |_, reply, _| {
+                    sent.send(reply).ok();
+                });
+            }),
+            None => {
+                sent.send(Err("the work screen that ran tofu is closed".to_owned()))
+                    .ok();
+            }
+        }
+        cx.spawn(async move |rows, cx| {
+            let Ok(reply) = reply.recv_async().await else {
+                return;
+            };
+            if let Err(error) = rows.update(cx, |rows, cx| then(rows, reply, cx)) {
+                eprintln!(
+                    "desk: settings closed before {} answered: {error}",
+                    R::METHOD
+                );
+            }
+        })
+        .detach();
+    }
+
+    fn ask(&mut self, cx: &mut Context<Self>) {
+        if !self.answer.take_due() {
+            return;
+        }
+        eprintln!("desk: settings asks {}", QuerySettings::METHOD);
+        self.send::<QuerySettings>(NoParams {}, cx, Self::landed);
+    }
+
+    fn landed(&mut self, reply: Result<SettingsReport, String>, cx: &mut Context<Self>) {
+        let read = reply
+            .and_then(|report| Settings::try_from(report).map_err(|error| error.to_string()))
+            .map(Read::now)
+            .map_err(|reason| QueryError {
+                method: QuerySettings::METHOD,
+                reason,
+            });
+        match &read {
+            Ok(read) => eprintln!(
+                "desk: settings read {} categories at {}: {}",
+                read.value.categories.len(),
+                read.at,
+                read.value
+                    .categories
+                    .iter()
+                    .map(|category| format!("{} {}", category.name, category.settings.len()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Err(error) => eprintln!("desk: settings: {error}"),
+        }
+        self.switching.clear();
+        self.answer.answered(read);
+        if let (PageId::Tofu(name), Some(read)) = (&self.page, &self.answer.read)
+            && !read
+                .value
+                .categories
+                .iter()
+                .any(|category| category.name == **name)
+            && let Some(first) = read.value.categories.first()
+        {
+            self.page = PageId::Tofu(first.name.clone().into());
+        }
+        cx.notify();
+    }
+
+    fn write(&mut self, key: String, value: String, cx: &mut Context<Self>) {
+        let scope = self.scope.wire();
+        eprintln!("desk: settings set {key} {value} in {}", scope.wire());
+        self.problems.remove(&key);
+        let params = SettingsSetParams {
+            key: key.clone(),
+            value,
+            scope: Some(scope.wire().to_owned()),
+        };
+        self.send::<SettingsSet>(params, cx, move |rows, reply, cx| {
+            rows.written(key, reply, cx)
+        });
+        cx.notify();
+    }
+
+    fn written(&mut self, key: String, reply: Result<VerbResult, String>, cx: &mut Context<Self>) {
+        match reply.map_or_else(Some, |result| refusal(&result)) {
+            Some(problem) => {
+                eprintln!("desk: settings {key} refused: {problem}");
+                self.switching.remove(&key);
+                if let Some(field) = self.fields.get_mut(&key) {
+                    field.seen = None;
+                }
+                self.problems.insert(key, sentence(&problem));
+            }
+            None => eprintln!("desk: settings {key} written"),
+        }
+        self.answer.again();
+        self.ask(cx);
+        cx.notify();
+    }
+
+    fn flip(&mut self, key: &str, cx: &mut Context<Self>) {
+        if let PageId::Tofu(_) = self.page {
+            let on = self.switching.get(key).copied().or_else(|| {
+                let read = self.answer.read.as_ref()?;
+                match read.value.get(key)?.value {
+                    Value::Switch(on) => Some(on),
+                    Value::Number(_) | Value::Text(_) => None,
+                }
+            });
+            let Some(on) = on else {
+                return;
+            };
+            self.switching.insert(key.to_owned(), !on);
+            return self.write(key.to_owned(), (!on).to_string(), cx);
+        }
+        let PageId::Desk(page) = self.page else {
+            return;
+        };
+        let found = page
+            .page()
+            .groups
+            .iter()
+            .flat_map(|(_, settings)| settings.iter())
+            .find_map(|setting| match setting.control {
+                Control::Switch(start) if setting.key == key => Some((setting.key, start)),
+                Control::Switch(_) | Control::Pack => None,
+            });
+        let Some((key, start)) = found else {
+            return;
+        };
+        let now = self.flipped.get(key).copied().unwrap_or(start);
+        self.flipped.insert(key, !now);
+        eprintln!("desk: settings {key} {now} -> {}", !now);
+        cx.notify();
+    }
+
+    fn commit(&mut self, key: &str, cx: &mut Context<Self>) {
+        let Some(field) = self.fields.get(key) else {
+            return;
+        };
+        let text = field.input.read(cx).text().to_owned();
+        if field.seen.as_deref() == Some(text.as_str()) {
+            return;
+        }
+        self.write(key.to_owned(), text, cx);
+    }
+
+    fn field(
+        &mut self,
+        key: &str,
+        value: &Value,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<TextInput> {
+        let shown = value.wire();
+        let field = self.fields.entry(key.to_owned()).or_insert_with(|| {
+            let input = TextInput::new(SharedString::default(), window, cx);
+            let named = key.to_owned();
+            let blur = cx.on_blur(&input.focus_handle(cx), window, move |rows, _, cx| {
+                rows.commit(&named, cx)
+            });
+            Field {
+                input,
+                seen: None,
+                _blur: blur,
+            }
+        });
+        if field.seen.as_deref() != Some(shown.as_str()) {
+            let all = field.input.read(cx).text().encode_utf16().count();
+            field.input.update(cx, |input, cx| {
+                input.replace_text_in_range(Some(0..all), &shown, window, cx)
+            });
+            field.seen = Some(shown);
+        }
+        field.input.clone()
+    }
+
+    fn tofu_row(
+        &mut self,
+        setting: &wire::Setting,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> SettingRow {
+        let key = setting.key.clone();
+        let control = match &setting.value {
+            Value::Switch(on) => {
+                let on = self.switching.get(&key).copied().unwrap_or(*on);
+                let flipped = key.clone();
+                switch_bare(SharedString::from(key.clone()), key.clone(), on, theme)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.flip(&flipped, cx);
+                    }))
+                    .into_any_element()
+            }
+            Value::Number(_) | Value::Text(_) => {
+                let input = self.field(&key, &setting.value, window, cx);
+                let entered = key.clone();
+                div()
+                    .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                        if event.keystroke.key == "enter" {
+                            cx.stop_propagation();
+                            this.commit(&entered, cx);
+                        }
+                    }))
+                    .child(input)
+                    .into_any_element()
+            }
+        };
+        let problem = self.problems.get(&key).cloned();
+        SettingRow {
+            id: key.clone().into(),
+            name: key.into(),
+            about: SharedString::default(),
+            source: badge(setting.source),
+            control: div()
+                .flex()
+                .flex_col()
+                .items_end()
+                .gap(px(PROBLEM_GAP))
+                .child(control)
+                .children(problem.map(|problem| {
+                    div()
+                        .text_size(px(PROBLEM_TEXT))
+                        .text_color(theme.color(ColorToken::StatusWarn))
+                        .child(problem)
+                }))
+                .into_any_element(),
         }
     }
 
@@ -72,18 +359,27 @@ impl Rows {
         let mut list = HoverList::new("settings-nav", theme);
         let mut at = 0;
         let mut selected = None;
-        for (label, pages) in NAV {
+        let tofu: Vec<PageId> = self
+            .answer
+            .read
+            .iter()
+            .flat_map(|read| &read.value.categories)
+            .map(|category| PageId::Tofu(category.name.clone().into()))
+            .collect();
+        let desk: Vec<PageId> = DESK_NAV.1.iter().copied().map(PageId::Desk).collect();
+        for (label, pages) in [(TOFU_NAV, tofu), (DESK_NAV.0, desk)] {
             list = list.inert(group_header(label, label, pages.len(), true, theme));
-            for page in pages.iter().copied() {
+            for page in pages {
                 at += 1;
                 if page == self.page {
                     selected = Some(at);
                 }
+                let name = page_name(&page);
                 list = list.item(
-                    row(page.name(), page == self.page, false, theme)
-                        .child(page.name())
+                    row(name.clone(), page == self.page, false, theme)
+                        .child(name)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            this.page = page;
+                            this.page = page.clone();
                             cx.notify();
                         })),
                 );
@@ -231,65 +527,50 @@ impl Rows {
             .child(select)
     }
 
-    fn flip(&mut self, key: &str, cx: &mut Context<Self>) {
-        let found = self
-            .page
-            .page()
-            .groups
-            .iter()
-            .flat_map(|(_, settings)| settings.iter())
-            .find_map(|setting| match setting.control {
-                Control::Switch(start) if setting.key == key => Some((setting.key, start)),
-                _ => None,
-            });
-        let Some((key, start)) = found else {
-            return;
-        };
-        let now = self.flipped.get(key).copied().unwrap_or(start);
-        self.flipped.insert(key, !now);
-        eprintln!("desk: settings {key} {now} -> {}", !now);
-        cx.notify();
-    }
-
-    fn row(
+    fn desk_row(
         &mut self,
         setting: &'static Setting,
         theme: &Theme,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> SettingRow {
-        let flipped = self.flipped.get(setting.key).copied();
         let control = match setting.control {
             Control::Switch(start) => {
-                switch_bare(setting.key, setting.name, flipped.unwrap_or(start), theme)
+                let on = self.flipped.get(setting.key).copied().unwrap_or(start);
+                switch_bare(setting.key, setting.name, on, theme)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
                         this.flip(setting.key, cx);
                     }))
                     .into_any_element()
             }
-            Control::Value(value) => chip(value, None, theme)
-                .font_family(mono(theme))
-                .text_size(px(VALUE_TEXT))
-                .into_any_element(),
             Control::Pack => self.pack_picker(theme, window, cx).into_any_element(),
         };
         SettingRow {
             id: setting.key.into(),
             name: setting.name.into(),
             about: setting.desc.into(),
-            source: flipped.map_or(setting.source, |_| self.scope.source()),
+            source: Source::Default,
             control,
         }
     }
 
-    fn groups(
+    fn desk_page(
         &mut self,
+        page: DeskPage,
         theme: &Theme,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Vec<(&'static str, Vec<SettingRow>)> {
-        if self.page == PageId::Keys {
+    ) -> Div {
+        let shown = page.page();
+        let title = page_title(
+            shown.title,
+            Some(shown.desc)
+                .filter(|desc| !desc.is_empty())
+                .map(Into::into),
+            theme,
+        );
+        if page == DeskPage::Keys {
             let keys = SHORTCUTS.iter().map(|shortcut| SettingRow {
                 id: shortcut.label.into(),
                 name: shortcut.label.into(),
@@ -302,19 +583,127 @@ impl Rows {
                 )
                 .into_any_element(),
             });
-            return vec![(KEYS_GROUP, keys.collect())];
+            self.log_page(page.name(), keys.len());
+            return div()
+                .child(title)
+                .child(setting_group(KEYS_GROUP, keys.collect(), theme));
         }
-        let page = self.page.page();
-        page.groups
+        let groups: Vec<(&str, Vec<SettingRow>)> = shown
+            .groups
             .iter()
             .map(|(label, settings)| {
                 let rows = settings
                     .iter()
-                    .map(|setting| self.row(setting, theme, window, cx));
+                    .map(|setting| self.desk_row(setting, theme, window, cx));
                 (*label, rows.collect())
             })
-            .collect()
+            .collect();
+        self.log_page(page.name(), groups.iter().map(|(_, rows)| rows.len()).sum());
+        div()
+            .child(title)
+            .children(groups.into_iter().map(|(label, rows)| {
+                setting_group_clickable(
+                    label,
+                    rows,
+                    cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
+                    theme,
+                )
+            }))
     }
+
+    fn tofu_page(
+        &mut self,
+        name: &str,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if self.tofu.is_none() {
+            return page_title(name.to_owned(), Some(NO_TOFU.into()), theme).into_any_element();
+        }
+        let Some(read) = self.answer.read.clone() else {
+            let reading = match &self.answer.failed {
+                Some(error) => frame::note(error.to_string(), theme),
+                None => skeleton_lines("settings-reading", READING_LINES, theme, cx),
+            };
+            return div()
+                .child(page_title(name.to_owned(), None, theme))
+                .child(reading)
+                .into_any_element();
+        };
+        let settings = &read.value;
+        let Some(category) = settings
+            .categories
+            .iter()
+            .find(|category| category.name == name)
+        else {
+            return page_title(
+                name.to_owned(),
+                Some(format!("tofu reports no {name} settings").into()),
+                theme,
+            )
+            .into_any_element();
+        };
+        let rows: Vec<SettingRow> = category
+            .settings
+            .iter()
+            .map(|setting| self.tofu_row(setting, theme, window, cx))
+            .collect();
+        self.log_page(name, rows.len());
+        let scope = self.scope.wire();
+        let about = format!(
+            "Read at {}. Changes go to {}.",
+            read.at,
+            settings.file(scope)
+        );
+        div()
+            .child(page_title(name.to_owned(), Some(about.into()), theme))
+            .children(
+                self.answer
+                    .failed
+                    .as_ref()
+                    .map(|error| frame::note(format!("the last read failed: {error}"), theme)),
+            )
+            .child(setting_group_clickable(
+                format!("{} keys", rows.len()),
+                rows,
+                cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
+                theme,
+            ))
+            .into_any_element()
+    }
+
+    fn log_page(&mut self, name: &str, count: usize) {
+        if self.shown.as_ref() != Some(&self.page) {
+            self.shown = Some(self.page.clone());
+            eprintln!("desk: settings page {name} shows {count} rows");
+        }
+    }
+}
+
+fn page_name(page: &PageId) -> SharedString {
+    match page {
+        PageId::Desk(page) => page.name().into(),
+        PageId::Tofu(name) => name.clone(),
+    }
+}
+
+fn badge(source: wire::Source) -> Source {
+    match source {
+        wire::Source::Default => Source::Default,
+        wire::Source::Global => Source::Global,
+        wire::Source::Project => Source::Project,
+    }
+}
+
+fn sentence(problem: &str) -> SharedString {
+    let said = problem.trim();
+    let stop = if said.ends_with(['.', '!', '?']) {
+        ""
+    } else {
+        "."
+    };
+    format!("{said}{stop}").into()
 }
 
 impl Render for Rows {
@@ -331,44 +720,20 @@ impl Render for Rows {
             cx,
             |rows, scope, _| rows.scope = scope,
         );
-        let page = self.page.page();
-        let groups = self.groups(&theme, window, cx);
-        let clickable = self.page != PageId::Keys;
-        if self.shown != Some(self.page) {
-            self.shown = Some(self.page);
-            let count: usize = groups.iter().map(|(_, rows)| rows.len()).sum();
-            eprintln!("desk: settings page {} shows {count} rows", page.title);
-        }
-        let page_body = div()
-            .px(px(CONTENT_PAD_X))
-            .py(px(CONTENT_PAD_Y))
-            .flex()
-            .flex_col()
-            .child(page_title(
-                page.title,
-                Some(page.desc)
-                    .filter(|desc| !desc.is_empty())
-                    .map(Into::into),
-                &theme,
-            ))
-            .children(groups.into_iter().map(|(label, rows)| {
-                if clickable {
-                    setting_group_clickable(
-                        label,
-                        rows,
-                        cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
-                        &theme,
-                    )
-                } else {
-                    setting_group(label, rows, &theme)
-                }
-            }));
-        let content = div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .child(ScrollArea::new("settings-content").child(page_body));
+        let page_body = match self.page.clone() {
+            PageId::Desk(page) => self.desk_page(page, &theme, window, cx).into_any_element(),
+            PageId::Tofu(name) => self.tofu_page(&name, &theme, window, cx),
+        };
+        let content = div().flex_1().min_w_0().flex().flex_col().child(
+            ScrollArea::new("settings-content").child(
+                div()
+                    .px(px(CONTENT_PAD_X))
+                    .py(px(CONTENT_PAD_Y))
+                    .flex()
+                    .flex_col()
+                    .child(page_body),
+            ),
+        );
         frame::tile(
             frame::tabbed("settings", scope, None),
             &theme,
