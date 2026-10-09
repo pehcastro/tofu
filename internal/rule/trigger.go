@@ -94,7 +94,27 @@ func LanguageOf(file string) string {
 	return ""
 }
 
+type Event string
+
+const (
+	EventNone   Event = ""
+	EventCreate Event = "create"
+	EventMove   Event = "move"
+	EventWiden  Event = "widen"
+	EventClose  Event = "close"
+)
+
+func ParseEvent(raw string) (Event, error) {
+	switch event := Event(raw); event {
+	case EventCreate, EventMove, EventWiden, EventClose:
+		return event, nil
+	}
+	return EventNone, fmt.Errorf("%q is not a board event: %s, %s, %s or %s", raw, EventCreate, EventMove, EventWiden, EventClose)
+}
+
 type Trigger struct {
+	event      Event
+	to         string
 	condition  *regexp.Regexp
 	touches    *regexp.Regexp
 	scope      string
@@ -105,7 +125,7 @@ type Trigger struct {
 }
 
 func (t Trigger) AlwaysOn() bool {
-	return t.condition == nil && t.touches == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
+	return t.event == EventNone && t.condition == nil && t.touches == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
 }
 
 func (t Trigger) String() string {
@@ -114,6 +134,8 @@ func (t Trigger) String() string {
 	}
 	var declared []string
 	for _, field := range []struct{ key, value string }{
+		{"on", string(t.event)},
+		{"to", t.to},
 		{"role", string(t.role)},
 		{"condition", regexpText(t.condition)},
 		{"touches", regexpText(t.touches)},
@@ -162,6 +184,8 @@ func regexpOf(declared, field, file, id string) (*regexp.Regexp, error) {
 }
 
 type declaredTrigger struct {
+	on        string
+	to        string
 	condition string
 	touches   string
 	scope     string
@@ -172,6 +196,12 @@ type declaredTrigger struct {
 }
 
 func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
+	if d.on != "" {
+		return boardTrigger(d, file, id)
+	}
+	if d.to != "" {
+		return Trigger{}, fmt.Errorf("%s: rule %q declares to: %s and no on:, and to names the status a board move reaches", file, id, d.to)
+	}
 	t := Trigger{scope: d.scope, verb: Verb(d.task), role: Role(d.role)}
 	switch t.role {
 	case RoleAny, RoleOrchestrator, RoleSubAgent:
@@ -204,9 +234,34 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 	return t, nil
 }
 
+func boardTrigger(d declaredTrigger, file, id string) (Trigger, error) {
+	event, err := ParseEvent(d.on)
+	if err != nil {
+		return Trigger{}, fmt.Errorf("%s: rule %q: %w", file, id, err)
+	}
+	if d != (declaredTrigger{on: d.on, to: d.to}) {
+		return Trigger{}, fmt.Errorf("%s: rule %q declares on: %s beside a prompt trigger, and a board rule fires on the board event alone", file, id, d.on)
+	}
+	if d.to != "" && event != EventMove && event != EventClose {
+		return Trigger{}, fmt.Errorf("%s: rule %q declares to: %s on %s, and only %s and %s reach a status", file, id, d.to, event, EventMove, EventClose)
+	}
+	return Trigger{event: event, to: d.to}, nil
+}
+
+func (t Trigger) On() Event { return t.event }
+
+func (t Trigger) To() string { return t.to }
+
+func (t Trigger) FiresOn(e BoardEvent) bool {
+	return t.event != EventNone && t.event == e.Event && (t.to == "" || t.to == e.To)
+}
+
 func (t Trigger) firesFor(task Task) (bool, string) {
 	if t.AlwaysOn() {
 		return true, "always on, the rule declares no trigger"
+	}
+	if t.event != EventNone {
+		return false, fmt.Sprintf("the rule fires on the board event %s, not on a prompt", t.event)
 	}
 	var why []string
 	if t.role != RoleAny {

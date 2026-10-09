@@ -75,6 +75,10 @@ func parseRule(data []byte, path string) (Rule, error) {
 	var declares declaredTrigger
 	err := scanKV(data, path, func(key, value string, line int) error {
 		switch key {
+		case "on":
+			declares.on = value
+		case "to":
+			declares.to = value
 		case "condition":
 			declares.condition = value
 		case "touches":
@@ -150,6 +154,9 @@ func parseRule(data []byte, path string) (Rule, error) {
 	}
 	if r.Checker == "" {
 		return Rule{}, fmt.Errorf("%s: rule %q is kind %s and declares no checker", path, r.ID, r.Kind)
+	}
+	if (r.Checker == CheckerCommand) != (r.Command != "") {
+		return Rule{}, fmt.Errorf("%s: rule %q: a command goes with checker %s, and that checker needs a command", path, r.ID, CheckerCommand)
 	}
 	return r, nil
 }
@@ -251,6 +258,8 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		}
 	case "text":
 		r.Text = value
+	case "command":
+		r.Command = value
 	case "notes":
 		r.Notes = value
 	case "reason", "by", "at":

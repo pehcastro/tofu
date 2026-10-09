@@ -8,6 +8,7 @@ const (
 	SubjectTextFile     Subject = "text_file"
 	SubjectOwnsWrite    Subject = "owns_write"
 	SubjectShellCommand Subject = "shell_command"
+	SubjectBoardEvent   Subject = "board_event"
 )
 
 type Artifact interface {
@@ -45,3 +46,14 @@ type ShellCommand struct {
 }
 
 func (ShellCommand) artifact() {}
+
+type BoardEvent struct {
+	Event    Event
+	Ticket   string
+	Path     string
+	From, To string
+	Actor    string
+	ByPerson bool
+}
+
+func (BoardEvent) artifact() {}

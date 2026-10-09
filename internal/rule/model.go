@@ -153,6 +153,7 @@ type Rule struct {
 	Concern      Concern
 	Domain       string
 	Checker      string
+	Command      string
 	Measurement  string
 	Source       string
 	Evidence     string
