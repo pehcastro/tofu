@@ -16,17 +16,17 @@ joins next session, and a sub-agent gets only what the lead cites as `[memory#id
 A kind says what it is about: `person` (how you work), `project` (a fact
 the code does not say) or `reference` (where something outside lives).
 Memory is not for what a rule, `AGENTS.md` or `CLAUDE.md` already says,
-nor for the task in front of you.
+nor for the task in front of you. The conversation is kept too, as episodes:
+your words, the lead's answers and sub-agent reports, never tool output; their
+view follows memory through every fork, and the lead opens it with `zoom` and `recall`.
 
 ## Where it lives
 
 Global is your home, local is the repository's `.tofu` folder:
 
 - `user-global`, `~/.tofu/memory/user/`: you, in every project
-- `project-global`, `~/.tofu/projects/<project>/memory/`: this project,
-  as this machine knows it
-- `user-local`, `<repo>/.tofu/memory/user/<author>/`: you, in this
-  repository
+- `project-global`, `~/.tofu/projects/<project>/memory/`: this project, as this machine knows it
+- `user-local`, `<repo>/.tofu/memory/user/<author>/`: you, in this repository
 - `project-local`, `<repo>/.tofu/memory/project/`: the team, travelling
   with the repository
 
@@ -96,7 +96,7 @@ tree and view are saved, so a second run calls no model.
 down to the item at `n` 1, and `tofu memory recall log.jsonl <regex>`
 searches the items. A scope's own `log.jsonl` takes all three: beside its
 entries in the home, under `~/.tofu/projects/<project>/local/` for a
-local one.
+local one. The episodes log is `~/.tofu/projects/<project>/episodes/log.jsonl`.
 
 ## Moving from the old shelves
 

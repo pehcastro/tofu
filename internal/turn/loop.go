@@ -188,7 +188,39 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
 	}
 	afterSystem := len(messages)
+	var keeper episodeKeeper
+	for _, tool := range config.Tools.tools {
+		if found, keeps := tool.(episodeKeeper); keeps && config.SpawnedFrom == "" {
+			keeper = found
+		}
+	}
+	episode := func(kind, text string) {
+		if keeper == nil || kind == "" || strings.TrimSpace(text) == "" {
+			return
+		}
+		if err := keeper.Keep(kind, text); err != nil {
+			row.Warnings = append(row.Warnings, "the episode log did not keep this "+kind+" item: "+err.Error())
+		}
+	}
+	answered := func(reply string) {
+		episode(episodeOfLead, reply)
+		if keeper == nil {
+			return
+		}
+		if err := keeper.Compact(); err != nil {
+			row.Warnings = append(row.Warnings, "the episode view was not summarized after this turn: "+err.Error())
+		}
+	}
 	messages = slices.Concat(messages, config.MemoryMessage(), config.History)
+	if keeper != nil && len(config.History) == 0 {
+		view, err := keeper.Episodes()
+		if err != nil {
+			row.Warnings = append(row.Warnings, "the episode view is not sent this session: "+err.Error())
+		}
+		if view != "" {
+			messages = withEpisodes(messages, view)
+		}
+	}
 	concluding, taken := "", ""
 	for _, tool := range config.Tools.tools {
 		if spawner, spawning := tool.(*SpawnTool); spawning && !spawner.ChecksWork {
@@ -213,6 +245,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	taskOrigin.Source, taskOrigin.TakenAt = cmp.Or(taskOrigin.Source, taskSource), start
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: first, Images: config.Images, Origin: taskOrigin})
+	episode(episodeKind(taskOrigin.Source), config.Task)
 
 	var written, shadowed sync.WaitGroup
 	var shadows sync.Mutex
@@ -274,7 +307,20 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		return compaction, err
 	}
-	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) string {
+	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
+		if keeper != nil {
+			view, err := keeper.Episodes()
+			missing := ""
+			if err != nil {
+				missing = "the fork carries no episode view, because reading it failed: " + err.Error()
+			}
+			if view != "" {
+				begun = withEpisodes(begun, view)
+			}
+			carryState(fork, begun, "", row.Session)
+			fork.TokensAfter = budget.Tokens(artifacts.preview, historyOf(begun))
+			return begun, missing
+		}
 		asked := beforeFork
 		if sentTokens(asked) > budget.Ceiling() {
 			asked = begun
@@ -301,7 +347,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		carryState(fork, begun, state, row.Session)
 		fork.TokensAfter = budget.Tokens(artifacts.preview, historyOf(begun))
-		return missing
+		return begun, missing
 	}
 	keep := func(step StepRow) {
 		flush()
@@ -462,11 +508,13 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					said.Images = config.ImagesOf(steered)
 				}
 				messages = append(messages, said)
+				episode(episodeOfPerson, steered)
 			}
 		}
 		if config.Inbox != nil {
 			for _, item := range config.Inbox.takeItems() {
 				messages = append(messages, inserted(item.source, item.text, item.posted))
+				episode(episodeKind(item.source), item.text)
 				if item.source == sourceMemory {
 					recorded.notice(item.text)
 				}
@@ -510,7 +558,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			if fork != nil {
 				forks++
 				fork.Into = origin + "-f" + strconv.Itoa(forks+1)
-				missing := stateCarried(fork, step, beforeFork, begun, definitions)
+				begun, missing := stateCarried(fork, step, beforeFork, begun, definitions)
 				forkInto(fork, before, beforeFork, begun, nil)
 				if missing != "" {
 					row.Warnings = append(row.Warnings, missing)
@@ -607,6 +655,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				continue
 			}
 			keep(stepRow)
+			answered(decision.Content)
 			return finish(OutcomeStopped), nil
 
 		case llm.OutcomeTruncated:
@@ -768,6 +817,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: strings.Join(started, "\n"), Origin: llm.Origin{Source: sourceSpawnLine, TakenAt: now()}})
 				}
 				keep(stepRow)
+				answered(decision.Content)
 				return finish(OutcomeStopped), nil
 			}
 			if stepRow.Compaction, err = trim(step, "after step "+strconv.Itoa(step)); err != nil {
@@ -804,7 +854,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				if fork != nil {
 					forks++
 					fork.Step, fork.Into = step, origin+"-f"+strconv.Itoa(forks+1)
-					missing := stateCarried(fork, step, beforeFork, begun, definitions)
+					begun, missing := stateCarried(fork, step, beforeFork, begun, definitions)
 					stepRow.Fork = fork
 					keep(stepRow)
 					forkInto(fork, "after step "+strconv.Itoa(step), beforeFork, begun, moved)

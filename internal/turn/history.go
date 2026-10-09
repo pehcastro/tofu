@@ -432,7 +432,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, task string, message
 	var shown []llm.Image
 	for _, message := range messages {
 		switch {
-		case message.Role == llm.RoleSystem || message.Origin.Source == sourceMemoryView:
+		case standsAtTheHead(message):
 			system = append(system, message)
 		case isTask(message):
 			shown = message.Images

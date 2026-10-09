@@ -20,6 +20,45 @@ const (
 	forkLookupLine  = "to see any call named below again, call lookup with its call id instead of reading or running it again: lookup returns that call and its result whole, from session %s or any earlier session of its line.\n"
 )
 
+const (
+	sourceEpisodeView = "episode view"
+	episodeOfPerson   = "user"
+	episodeOfLead     = "lead"
+	episodeOfReport   = "work"
+)
+
+type episodeKeeper interface {
+	Episodes() (string, error)
+	Keep(kind, text string) error
+	Compact() error
+}
+
+func standsAtTheHead(message llm.Message) bool {
+	return message.Role == llm.RoleSystem || message.Origin.Source == sourceMemoryView || message.Origin.Source == sourceEpisodeView
+}
+
+func episodeKind(source string) string {
+	switch {
+	case strings.Contains(source, sourceReport):
+		return episodeOfReport
+	case source == sourceTask || source == sourceTyped || source == sourceSteer:
+		return episodeOfPerson
+	}
+	return ""
+}
+
+func withEpisodes(messages []llm.Message, view string) []llm.Message {
+	if held := slices.IndexFunc(messages, func(message llm.Message) bool { return message.Origin.Source == sourceEpisodeView }); held >= 0 {
+		messages[held].Content = view
+		return messages
+	}
+	at := slices.IndexFunc(messages, func(message llm.Message) bool { return !standsAtTheHead(message) })
+	if at < 0 {
+		at = len(messages)
+	}
+	return slices.Insert(messages, at, llm.Message{Role: llm.RoleUser, Content: view, Origin: llm.Origin{Source: sourceEpisodeView}})
+}
+
 type quietAskKey struct{}
 
 func AskedQuietly(ctx context.Context) bool {

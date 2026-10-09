@@ -31,6 +31,7 @@ import (
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/llm/wire/openrouter"
 	"tofu/internal/memory"
+	"tofu/internal/memtree"
 	"tofu/internal/recall"
 	"tofu/internal/recipe"
 	"tofu/internal/rule"
@@ -750,6 +751,13 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if run.sessions != nil && memoryOn(dir) {
 		asking = append(asking, tools.Remember{Ask: run.leadAsks, Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
+		if opts.agent == "" {
+			zoom := &tools.Zoom{Project: dir, Compactor: func() (memtree.Compact, func()) {
+				compact, _, release := memoryCompactor(dir)
+				return compact, release
+			}}
+			asking = append(asking, zoom, tools.Recall{Zoom: zoom})
+		}
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
