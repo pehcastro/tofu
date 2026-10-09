@@ -45,7 +45,7 @@ impl Classifier {
                             .font_family(mono(theme))
                             .child(count.to_string()),
                     )
-                    .child(note("decisions since desk opened", theme)),
+                    .child(note("decisions in this session", theme)),
             )
         }))
     }
@@ -75,10 +75,7 @@ fn row(seen: &Seen, theme: &Theme) -> Div {
         Verdict::Deny => ("deny", Mark::Warn),
         Verdict::Unknown(raw) => (raw.as_str(), Mark::Warn),
     };
-    let turn = seen.turn_at.as_deref().map_or_else(
-        || "turn start unknown".to_owned(),
-        |stamp| format!("turn {}", stamp.get(11..19).unwrap_or(stamp)),
-    );
+    let turn = seen.when.said();
     div()
         .flex()
         .flex_col()

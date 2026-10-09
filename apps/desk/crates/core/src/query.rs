@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protocol::{
     AccountStatus, AccountStatusState, Accounts, ContextBand, ContextOccupancy, CredentialReport,
-    QuotaWindow, UsageReport, WindowReport, WindowStatus,
+    DecisionMade, LedgerRow, QuotaWindow, Reason, UsageReport, Verdict, WindowReport, WindowStatus,
 };
 
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -150,6 +150,70 @@ impl UsageReport {
                 provider
             })
             .collect()
+    }
+}
+
+pub const LEDGER_READ_LAST: i64 = 10_000;
+
+pub fn session_ledger(
+    rows: &[LedgerRow],
+    session: &str,
+    turns: &[&str],
+) -> Vec<(String, DecisionMade)> {
+    let mut found: Vec<(String, DecisionMade)> = rows
+        .iter()
+        .zip(0_i64..)
+        .filter_map(|(row, seq)| {
+            let turn = row.turn_id.as_deref()?;
+            turns
+                .contains(&turn)
+                .then(|| (row.at.clone(), ledger_decision(row, session, turn, seq)))
+        })
+        .collect();
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found
+}
+
+fn ledger_decision(row: &LedgerRow, session: &str, turn: &str, seq: i64) -> DecisionMade {
+    let reason = row.reason.as_ref();
+    DecisionMade {
+        agent: None,
+        answers: Vec::new(),
+        enforced: reason
+            .and_then(|reason| reason.mode.as_deref())
+            .is_some_and(|mode| mode == "enforced"),
+        failure: row.blocked_by.clone(),
+        item: row.id.clone(),
+        overrides_rule: None,
+        point: row.point.clone(),
+        reason: reason
+            .filter(|reason| !reason.question.is_empty())
+            .map(|reason| Reason {
+                blocked: reason.blocked.unwrap_or_default(),
+                dead_band: reason.dead_band.unwrap_or_default(),
+                levels: Vec::new(),
+                limit: reason.comparison.clone(),
+                question: reason.question.clone(),
+                relaxed_by: reason.relaxed_by.clone(),
+                threshold: reason.threshold,
+                value: reason.value,
+            }),
+        seq,
+        session: session.to_owned(),
+        tool: row
+            .fingerprint
+            .as_deref()
+            .and_then(|print| print.split_once('.'))
+            .map_or_else(
+                || "tool not recorded".to_owned(),
+                |(tool, _)| tool.to_owned(),
+            ),
+        turn: turn.to_owned(),
+        verdict: Verdict::from(if row.verdict.is_empty() {
+            "no verdict".to_owned()
+        } else {
+            row.verdict.clone()
+        }),
     }
 }
 
