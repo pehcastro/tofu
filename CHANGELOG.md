@@ -10,6 +10,35 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.9 - 2026-10-09
+
+Memory that keeps a project's whole conversation, a lead that asks with options instead of stopping, and everything the desk asked of `tofu serve`.
+
+### Added
+
+- **Memory in four scopes**: you and the project, each global in `~/.tofu/` or local in the repository's `.tofu/`. Jev suggests the scope on the remember card and you pick; a line that names something of yours never goes into the shared project scope. Entries in a repository carry an opaque author, never your email, and `memoryFromAllUsers` decides whether a teammate's own entries apply to you.
+- **An episode log per project**: your messages, the lead's replies and sub-agent reports, summarized as a tree whose recent lines stay whole. A fork carries it with no extra model call, and the lead can `zoom` into any line down to the original message or `recall` by pattern. `tofu memory tree`, `zoom` and `recall` read it, and `episodes` turns it off.
+- **`ask_person`**: the lead asks a question with options, a recommended one and free text. In auto it never stops the work: the recommended option stands after `askPersonWaitSeconds` and a later answer still reaches the lead.
+- **Side chats**: `tofu session branch <session> --side` opens a conversation beside the lead that reads by default (`sideChatAccess`, or the `notes` preset for `.md` and `.html`), never becomes the session `--continue` opens, and over `tofu serve` as `session.branch` and `session.access`.
+- **Program status over OSC 7501**: the app reports idle, working, blocked or done to the terminal, and `tofu serve` sends a `status` record for the lead, each sub-agent, each kept shell and each cron job, including a shell program's own report.
+- **For the desk on `tofu serve`**: the board queries (usage history, limits with burn rate, context items, skills, rule text and fires, a ledger summary, the fork tree), a `ref` on every item and `mention.resolve`, `tofu/askPerson`, the four-scope memory answers, memory views, zoom and recall, the approvals' accepted answers and standing answers.
+
+### Changed
+
+- **A sub-agent's ask costs the lead one quiet answer**: `allow_here` stands for that kind of call, and a lead turn that only answers asks ends without a chat message.
+- **A sub-agent's bash outside its paths only reads**: commands that would write, delete or run code are refused with the reason, on Windows, Linux and macOS.
+- **Memory opens the session as its own message** after the system prompt, so remembering something mid-session no longer rewrites the cached prompt; a sub-agent gets only the memory lines the lead cites.
+- **A shell is announced only when it is kept** and always ends on the wire; a running one-shot no longer shows on the shells screen.
+- **Jev fails over between OpenRouter and TypeSafe** when one cannot pay, is limited or does not answer, and a Jev that cannot answer refuses in auto and asks in ask mode.
+- **Quota reads the replies tofu already gets**, shares one cache across processes and shows the last reading with its age instead of a blank row after a 429.
+
+### Fixed
+
+- Stopping a process tofu started through `Stop-Process` or `taskkill` no longer goes to Jev.
+- A cron fire no longer reads twice, and `/cron delete all` empties the book.
+- A reopened session sends a sub-agent's tool events with the agent named.
+- Memory from 0.5.8 is copied, not moved, so an older tofu still reads it.
+
 ## 0.5.8 - 2026-10-08
 
 The lead controls its sub-agents, a message sent mid-turn goes in without stopping the work, and the desk can drive all of it over `tofu serve`.
