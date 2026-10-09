@@ -7,7 +7,7 @@ use desk_core::model::{Session, Store};
 use desk_core::protocol::{SessionInfo, SessionTrace};
 use desk_ui::components::card::{caption, inner_card, outer_card};
 use desk_ui::components::charts::{
-    BarLayout, BarLook, Bars, DotColumns, LILAC, MINT, Said, Series, cached,
+    BarLayout, BarLook, Bars, DotColumns, MINT, Said, Series, cached, hues,
 };
 use desk_ui::components::chip::mono;
 use desk_ui::components::empty::empty_state;
@@ -206,7 +206,7 @@ fn went(calls: &[Call]) -> Vec<(String, i64)> {
     ]
 }
 
-fn split(rows: Vec<(String, i64)>, color: u32, cx: &mut Context<UsageScreen>) -> Split {
+fn split(rows: Vec<(String, i64)>, cx: &mut Context<UsageScreen>) -> Split {
     let total = rows
         .iter()
         .fold(0, |sum: i64, row| sum.saturating_add(row.1))
@@ -225,12 +225,15 @@ fn split(rows: Vec<(String, i64)>, color: u32, cx: &mut Context<UsageScreen>) ->
         .collect();
     let series = vec![Series {
         name: "tokens".into(),
-        color: rgb(color),
+        color: rgb(MINT),
         values: rows.iter().map(|row| row.1 as f32).collect(),
     }];
     let labels = rows.iter().map(|row| row.0.clone().into()).collect();
+    let colors = hues(rows.iter().map(|row| row.0.as_str()));
     Split {
-        chart: cx.new(|_| Bars::new(series, labels, tips, BarLook::Gradient, BarLayout::Rows)),
+        chart: cx.new(|_| {
+            Bars::new(series, labels, tips, BarLook::Gradient, BarLayout::Rows).hued(colors)
+        }),
         rows,
     }
 }
@@ -427,19 +430,17 @@ impl UsageScreen {
                 let calls = &seen.calls;
                 Charts {
                     activity: cx.new(|_| activity(calls)),
-                    went: split(went(calls), LILAC, cx),
+                    went: split(went(calls), cx),
                     models: split(
                         summed(
                             calls
                                 .iter()
                                 .map(|call| (call.model.as_str(), call.tokens())),
                         ),
-                        MINT,
                         cx,
                     ),
                     agents: split(
                         summed(calls.iter().map(|call| (call.spender(), call.tokens()))),
-                        LILAC,
                         cx,
                     ),
                 }

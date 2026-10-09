@@ -2,7 +2,7 @@ use desk_ui::components::charts::{
     AMBER, BarLayout, BarLook, Bars, ContextLine, ContextRibbon, Donut, DotColumns, DotGrid,
     DotMeter, GridPart, LILAC, MINT, Mark, ROSE, Radar, RadarGrid, RadarLook, Radial, RadialShape,
     RibbonBranch, RibbonNote, RibbonSegment, SKY, Said, Series, Slice, Sparkline, Trend, TrendFill,
-    TrendStroke, cached, legend,
+    TrendStroke, cached, hues, legend,
 };
 use desk_ui::components::chip::mono;
 use desk_ui::components::form::segmented;
@@ -483,7 +483,7 @@ const BARS: [(&str, BarLook, usize, Tell); 3] = [
         Tell::Plain,
     ),
 ];
-const AGENT_BARS: &str = "Bars, gradient rows · tip: rank and share";
+const AGENT_BARS: &str = "Bars, gradient rows, a colour per agent · tip: rank and share";
 const AGENTS: [(&str, f32); 6] = [
     ("go-dev", 42.0),
     ("rust-designer", 31.0),
@@ -661,6 +661,7 @@ fn agent_bars() -> Bars {
         BarLook::Gradient,
         BarLayout::Rows,
     )
+    .hued(hues(AGENTS.iter().map(|&(name, _)| name)))
 }
 
 fn radar_chart(look: RadarLook, grid: RadarGrid) -> Radar {

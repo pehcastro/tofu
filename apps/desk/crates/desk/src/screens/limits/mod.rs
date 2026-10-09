@@ -3,10 +3,10 @@ use super::frame;
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{
-    AccountStatus, AccountStatusState, Accounts, QuotaWindow, UsageReport, UsageReportState,
-    WindowStatus,
+    AccountStatus, Accounts, QuotaWindow, UsageReport, UsageReportState, WindowStatus,
 };
-use desk_core::query::Answer;
+use desk_core::query::{Answer, display_name};
+use desk_ui::component::icon;
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, inner_card};
@@ -15,16 +15,20 @@ use desk_ui::components::chip::badge;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::T3;
+use desk_ui::components::tooltip::{Edge, tooltip};
+use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
+use desk_ui::metrics::{ICON, ICON_SMALL};
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, SharedString,
-    Subscription, WeakEntity, Window, div, prelude::*, px,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityId, FontWeight,
+    SharedString, Subscription, WeakEntity, Window, div, prelude::*, px,
 };
 
-use frame::{Mark, ellipsis, fraction, load_fonts, note, panel, rich, title, window};
+use frame::{ellipsis, fraction, load_fonts, note, panel, panes, title, window};
 
-const ACCOUNT_LEAST: f32 = 150.0;
+const CARD_LEAST: f32 = 320.0;
+const STATE_DOT: f32 = 8.0;
 const WINDOW_LEAST: f32 = 120.0;
 const READING: &str =
     "tofu asks every signed-in provider for its windows, which takes about ten seconds.";
@@ -83,7 +87,6 @@ struct Block {
 struct Meter {
     key: MeterKey,
     percent: Option<u32>,
-    reset: SharedString,
     view: Entity<DotMeter>,
 }
 
@@ -190,47 +193,27 @@ impl Limits {
         &mut self,
         key: MeterKey,
         quota: &WindowStatus,
-        read_at: &str,
         cx: &mut Context<Self>,
     ) -> Entity<DotMeter> {
         let percent = Some((quota.used * 100.0).round().clamp(0.0, 100.0) as u32);
-        let reset: SharedString = match &quota.resets_at {
-            None => "no reset reported".into(),
-            Some(stamp) => format!("resets {}", clock(stamp, read_at)).into(),
-        };
         if let Some(kept) = self
             .meters
             .iter()
-            .find(|meter| meter.key == key && meter.percent == percent && meter.reset == reset)
+            .find(|meter| meter.key == key && meter.percent == percent)
         {
             return kept.view.clone();
         }
-        let view = cx.new(|_| DotMeter::new(percent, "", false, reset.clone()));
+        let view = cx.new(|_| DotMeter::new(percent, "", false, ""));
         self.meters.retain(|meter| meter.key != key);
         self.meters.push(Meter {
             key,
             percent,
-            reset,
             view: view.clone(),
         });
         view
     }
 
-    fn header(
-        &self,
-        read_at: &str,
-        usage: &UsageReport,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let read = if self.seen.usage.stale {
-            format!(
-                "read {}, percentages since then from quota.updated",
-                clock(read_at, read_at)
-            )
-        } else {
-            format!("read {}", clock(read_at, read_at))
-        };
+    fn header(&self, usage: &UsageReport, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let state = match &usage.state {
             UsageReportState::Serving => "serving",
             UsageReportState::NeedsAttention => "needs attention",
@@ -246,11 +229,6 @@ impl Limits {
             .px(px(4.0))
             .child(title("Limits"))
             .child(badge(state, theme))
-            .child(ellipsis(
-                div()
-                    .text_size(px(12.0))
-                    .child(rich(&[(&read, Mark::Dim)], theme)),
-            ))
             .child(div().flex_1())
             .when(self.seen.usage.asking, |header| {
                 header.child(spinner("limits-asking", theme))
@@ -272,48 +250,58 @@ impl Limits {
         block: &Block,
         read_at: &str,
         theme: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let (said, state) = match &block.account.state {
-            AccountStatusState::InUse => ("in use", Mark::Dim),
-            AccountStatusState::Standby => ("standby", Mark::Dim),
-            AccountStatusState::SetAside => ("set aside", Mark::Dim),
-            AccountStatusState::Unread => ("not read yet", Mark::Dim),
-            AccountStatusState::Unchecked => ("not checked", Mark::Dim),
-            AccountStatusState::RefreshFailed => ("refresh failed", Mark::Warn),
-            AccountStatusState::Expired => ("expired", Mark::Warn),
-            AccountStatusState::Refused => ("refused", Mark::Warn),
-            AccountStatusState::Spent => ("spent", Mark::Warn),
-            AccountStatusState::RateLimited => ("rate limited", Mark::Warn),
-            AccountStatusState::Unknown(raw) => (raw.as_str(), Mark::Warn),
+        let tag = format!("{}-{}", block.source, block.account.id);
+        let serving = block.account.state.serving();
+        let mark = if serving {
+            div()
+                .size(px(STATE_DOT))
+                .rounded_full()
+                .bg(theme.color(ColorToken::StatusLive))
+        } else {
+            div().child(icon(
+                Icon::Warning,
+                ICON_SMALL,
+                theme.color(ColorToken::StatusWarn),
+            ))
         };
-        let label = fraction(div(), 1.0, ACCOUNT_LEAST)
-            .flex()
-            .flex_col()
-            .items_start()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(6.0))
-                    .text_size(px(13.5))
-                    .w_full()
-                    .child(rich(&[(&block.source, Mark::Strong)], theme))
-                    .children(
-                        block
-                            .email
-                            .clone()
-                            .map(|email| ellipsis(div()).text_color(ink(theme, T3)).child(email)),
-                    )
-                    .children(block.account.plan.clone().map(|plan| badge(plan, theme))),
+        let state = tooltip(
+            SharedString::from(format!("limits-state-tip-{tag}")),
+            div()
+                .id(SharedString::from(format!("limits-state-{tag}")))
+                .flex_none()
+                .size(px(ICON))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(mark),
+            Edge::Frame,
+            block.account.state.said().to_owned(),
+            theme,
+            window,
+            cx,
+        );
+        let source = block.source.clone();
+        let again = (!serving).then(|| {
+            button(
+                SharedString::from(format!("limits-sign-in-{tag}")),
+                "Sign in again",
+                None,
+                ButtonKind::Text,
+                theme,
             )
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .child(rich(&[(said, state)], theme)),
-            );
+            .on_click(cx.listener(move |limits, _: &ClickEvent, _, cx| {
+                if let Some(chat) = limits
+                    .source
+                    .as_ref()
+                    .and_then(|source| source.chat.upgrade())
+                {
+                    chat.update(cx, |chat, cx| chat.sign_in(&source, cx));
+                }
+            }))
+        });
         let windows: Vec<AnyElement> = block
             .windows
             .iter()
@@ -323,34 +311,92 @@ impl Limits {
                     account: block.account.id,
                     window: quota.id.clone(),
                 };
-                let meter = self.meter(key, quota, read_at, cx);
+                let meter = self.meter(key, quota, cx);
+                let reset = quota.resets_at.as_deref().map(|stamp| {
+                    let at = clock(stamp, read_at);
+                    tooltip(
+                        SharedString::from(format!("limits-reset-tip-{tag}-{}", quota.id)),
+                        div()
+                            .id(SharedString::from(format!(
+                                "limits-reset-{tag}-{}",
+                                quota.id
+                            )))
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .text_size(px(12.0))
+                            .text_color(ink(theme, T3))
+                            .child(icon(Icon::Reset, ICON_SMALL, ink(theme, T3)))
+                            .child(at.clone()),
+                        Edge::Frame,
+                        format!("Resets {at}"),
+                        theme,
+                        window,
+                        cx,
+                    )
+                });
                 fraction(div(), 1.0, WINDOW_LEAST)
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
-                    .child(caption(quota.id.clone(), theme))
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(caption(quota.id.clone(), theme))
+                            .children(reset),
+                    )
                     .child(cached(&meter, cx))
                     .into_any_element()
             })
             .collect();
-        div()
-            .flex()
-            .flex_wrap()
-            .items_start()
-            .gap(px(14.0))
-            .p(px(10.0))
-            .child(label)
-            .when(windows.is_empty(), |row| {
-                row.child(fraction(
-                    note("no window reported for this account", theme),
-                    1.0,
-                    WINDOW_LEAST,
-                ))
-            })
-            .children(windows)
+        let plan = block
+            .account
+            .plan
+            .as_deref()
+            .map_or("subscription".to_owned(), display_name);
+        fraction(panel(plan, None, theme), 1.0, CARD_LEAST).child(
+            inner_card(theme)
+                .flex_col()
+                .gap(px(14.0))
+                .p(px(14.0))
+                .child(
+                    div()
+                        .flex()
+                        .items_start()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap(px(2.0))
+                                .child(
+                                    div()
+                                        .text_size(px(13.5))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(display_name(&block.source)),
+                                )
+                                .children(block.email.clone().map(|email| {
+                                    ellipsis(div())
+                                        .text_size(px(12.0))
+                                        .text_color(ink(theme, T3))
+                                        .child(email)
+                                })),
+                        )
+                        .children(again)
+                        .child(state),
+                )
+                .when(windows.is_empty(), |card| {
+                    card.child(note("no window reported for this account", theme))
+                })
+                .child(div().flex().flex_wrap().gap(px(14.0)).children(windows)),
+        )
     }
 
-    fn read(&mut self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
+    fn read(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let Some(read) = self.seen.usage.read.clone() else {
             return match self.seen.usage.failed.clone() {
                 None => empty_state(
@@ -367,7 +413,7 @@ impl Limits {
             };
         };
         let usage = &read.value;
-        let header = self.header(&read.at, usage, theme, cx);
+        let header = self.header(usage, theme, cx);
         let failed = self.seen.usage.failed.as_ref().map(|error| {
             note(format!("the last read failed: {error}"), theme)
                 .text_color(theme.color(ColorToken::StatusWarn))
@@ -398,43 +444,11 @@ impl Limits {
             )
             .into_any_element()
         } else {
-            let rows: Vec<Div> = blocks
+            let cards: Vec<Div> = blocks
                 .iter()
-                .map(|block| self.account(block, &read.at, theme, cx))
+                .map(|block| self.account(block, &read.at, theme, window, cx))
                 .collect();
-            let keys: Vec<String> = self
-                .seen
-                .accounts
-                .read
-                .iter()
-                .flat_map(|read| &read.value.keys)
-                .map(|key| format!("{} {}", key.provider, String::from(key.role.clone())))
-                .collect();
-            let trailing = usage
-                .fullest_window
-                .as_ref()
-                .map(|fullest| note(format!("fullest {fullest}"), theme).into_any_element());
-            panel("Windows", trailing, theme)
-                .child(
-                    inner_card(theme)
-                        .py(px(4.0))
-                        .px(px(6.0))
-                        .children(rows)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap_x(px(14.0))
-                                .p(px(10.0))
-                                .text_size(px(12.0))
-                                .text_color(ink(theme, T3))
-                                .when(!keys.is_empty(), |line| {
-                                    line.child(caption("Keys", theme)).child(keys.join(" · "))
-                                })
-                                .child(usage.spend_limit.clone()),
-                        ),
-                )
-                .into_any_element()
+            panes().children(cards).into_any_element()
         };
         div()
             .flex()
@@ -478,7 +492,7 @@ fn clock(stamp: &str, read_at: &str) -> String {
 }
 
 impl Render for Limits {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, surface: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let body = match self.source {
             None => empty_state(
@@ -491,7 +505,7 @@ impl Render for Limits {
                 |_, _, _| {},
             )
             .into_any_element(),
-            Some(_) => self.read(&theme, cx),
+            Some(_) => self.read(&theme, surface, cx),
         };
         window(&theme, div().flex_1().flex().flex_col().child(body))
     }

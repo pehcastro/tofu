@@ -24,6 +24,27 @@ pub const AMBER: u32 = 0xe8c98a;
 pub const LILAC: u32 = 0xb9a6ea;
 pub const ROSE: u32 = 0xf1737d;
 pub const SKY: u32 = 0x9db8f0;
+pub const PALETTE: [u32; 5] = [MINT, LILAC, SKY, AMBER, ROSE];
+
+pub fn hues<'a>(names: impl IntoIterator<Item = &'a str>) -> Vec<Rgba> {
+    let mut taken = [false; PALETTE.len()];
+    names
+        .into_iter()
+        .map(|name| {
+            let start = name.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+                (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+            }) as usize;
+            let free = (0..PALETTE.len())
+                .map(|step| (start.wrapping_add(step)) % PALETTE.len())
+                .find(|&at| taken.get(at) == Some(&false))
+                .unwrap_or(start % PALETTE.len());
+            if let Some(slot) = taken.get_mut(free) {
+                *slot = true;
+            }
+            rgb(PALETTE.get(free).copied().unwrap_or(MINT))
+        })
+        .collect()
+}
 
 const STAGGER: Duration = Duration::from_millis(160);
 const WIPE: Duration = Duration::from_millis(300);
@@ -2332,6 +2353,7 @@ pub struct Bars {
     tips: Vec<Said>,
     look: BarLook,
     layout: BarLayout,
+    hues: Vec<Rgba>,
     tip: Tip,
     born: Option<Instant>,
 }
@@ -2350,9 +2372,15 @@ impl Bars {
             tips,
             look,
             layout,
+            hues: Vec::new(),
             tip: Tip::new(PIN_CELL),
             born: None,
         }
+    }
+
+    pub fn hued(mut self, hues: Vec<Rgba>) -> Self {
+        self.hues = hues;
+        self
     }
 
     fn count(&self) -> usize {
@@ -2379,7 +2407,10 @@ impl Bars {
                     slot,
                     from: base / peak * grow,
                     to: top / peak * grow,
-                    color: faded(line.color, dim(slot)),
+                    color: faded(
+                        self.hues.get(slot).copied().unwrap_or(line.color),
+                        dim(slot),
+                    ),
                     foot: index == 0,
                     cap: index == last,
                 });
