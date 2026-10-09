@@ -17,6 +17,7 @@ type arm string
 const (
 	armFloor arm = "floor"
 	armToday arm = "today"
+	armTree  arm = "tree"
 )
 
 type options struct {
@@ -37,7 +38,7 @@ func parse(args []string) (options, error) {
 	opts := options{}
 	set := flag.NewFlagSet("bench/memory", flag.ContinueOnError)
 	set.StringVar(&opts.corpus, "corpus", "fork30", "the corpus under bench/memory/testdata")
-	arms := set.String("arms", "floor,today", "floor: the questions alone in a fresh session; today: the whole chain on today's carry")
+	arms := set.String("arms", "today,tree", "floor: the questions alone in a fresh session; today: the chain with the memory setting off, so a fork carries one summary; tree: the chain with memory on, so a fork carries the episode view, with zoom and recall")
 	set.IntVar(&opts.chains, "chains", 0, "run the first N chains, 0 for all")
 	set.StringVar(&opts.tofu, "tofu", os.Getenv("TOFU_BIN"), "the tofu binary to drive, TOFU_BIN by default")
 	set.StringVar(&opts.wire, "wire", "claude-sub", "the source that pays for the lead")
@@ -49,8 +50,8 @@ func parse(args []string) (options, error) {
 		return options{}, err
 	}
 	for _, name := range strings.Split(*arms, ",") {
-		if !slices.Contains([]arm{armFloor, armToday}, arm(name)) {
-			return options{}, fmt.Errorf("--arms names %q, and the arms are floor and today", name)
+		if !slices.Contains([]arm{armFloor, armToday, armTree}, arm(name)) {
+			return options{}, fmt.Errorf("--arms names %q, and the arms are floor, today and tree", name)
 		}
 		opts.arms = append(opts.arms, arm(name))
 	}
@@ -116,7 +117,9 @@ func run(opts options, say printer) error {
 		for _, ch := range chains {
 			driven, err := driveChain(opts, env, filepath.Join(work, string(a), ch.ID), a, ch)
 			if err != nil {
-				return fmt.Errorf("arm %s, chain %s: %w", a, ch.ID, err)
+				score.failed++
+				say("%-6s %-16s FAILED after %d sessions, nothing counted: %v\n", a, ch.ID, len(driven.replies), err)
+				continue
 			}
 			say("%s", score.add(driven))
 		}

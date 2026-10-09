@@ -204,6 +204,7 @@ func (s *served) close() error {
 type chainRun struct {
 	chain       chain
 	answer      string
+	replies     [][]string
 	askedIn     string
 	generations []string
 	traces      []host.SessionTrace
@@ -213,7 +214,11 @@ type chainRun struct {
 
 func driveChain(opts options, env []string, dir string, a arm, ch chain) (chainRun, error) {
 	project := filepath.Join(dir, "project")
-	if err := writeFiles(project, map[string]string{".tofu/settings.json": `{"autoMemory": 0}`}); err != nil {
+	memory := 0
+	if a == armTree {
+		memory = 1
+	}
+	if err := writeFiles(project, map[string]string{".tofu/settings.json": fmt.Sprintf(`{"autoMemory": 0, "memory": %d}`, memory)}); err != nil {
 		return chainRun{}, err
 	}
 	s, err := serve(opts, env, project, filepath.Join(dir, "serve.log"))
@@ -235,16 +240,20 @@ func driveChain(opts options, env []string, dir string, a arm, ch chain) (chainR
 				return err
 			}
 		}
-		if a == armToday {
+		if a != armFloor {
 			for _, said := range ch.Sessions {
 				if err := writeFiles(project, said.Files); err != nil {
 					return err
 				}
+				var replies []string
 				for _, text := range said.Says {
-					if _, err := s.turn(text); err != nil {
+					reply, err := s.turn(text)
+					if err != nil {
 						return err
 					}
+					replies = append(replies, reply)
 				}
+				run.replies = append(run.replies, replies)
 				for path := range said.Files {
 					if err := os.Remove(filepath.Join(project, filepath.FromSlash(path))); err != nil {
 						return err

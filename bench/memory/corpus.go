@@ -19,9 +19,28 @@ const (
 	componentRunes    = 3
 )
 
+type capture struct {
+	Say   int    `json:"say"`
+	Label string `json:"label"`
+}
+
 type question struct {
-	Ask string   `json:"ask"`
-	Key []string `json:"key"`
+	Ask     string   `json:"ask"`
+	Key     []string `json:"key"`
+	Capture *capture `json:"capture"`
+}
+
+func (c capture) from(reply string) string {
+	marker := c.Label + "="
+	at := strings.LastIndex(reply, marker)
+	if at < 0 {
+		return ""
+	}
+	fields := strings.Fields(reply[at+len(marker):])
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Trim(fields[0], "`*_.,;:'\"()")
 }
 
 type session struct {
@@ -100,6 +119,49 @@ type leak struct {
 	chain, value, where string
 }
 
+type sources struct {
+	asks, typed, later []string
+}
+
+func (ch chain) sources() sources {
+	s := sources{typed: []string{ch.Lead}}
+	for _, q := range ch.Questions {
+		s.asks = append(s.asks, q.Ask)
+	}
+	for i, said := range ch.Sessions {
+		s.typed = append(s.typed, said.Says...)
+		if i > 0 {
+			s.later = append(s.later, slices.Collect(maps.Values(said.Files))...)
+		}
+	}
+	return s
+}
+
+func (s sources) leaksOf(id, value string) []leak {
+	var found []leak
+	for _, ask := range s.asks {
+		if holds(ask, value) {
+			found = append(found, leak{id, value, "a question names it"})
+		}
+		for _, part := range components(value) {
+			if len(part) >= componentRunes && holds(ask, part) {
+				found = append(found, leak{id, value, fmt.Sprintf("a question names %q, a component of it", part)})
+			}
+		}
+	}
+	for _, said := range s.typed {
+		if holds(said, value) {
+			found = append(found, leak{id, value, "the person types it, and a fork carries every typed message word for word"})
+		}
+	}
+	for _, body := range s.later {
+		if holds(body, value) {
+			found = append(found, leak{id, value, "a later session holds it"})
+		}
+	}
+	return found
+}
+
 func (c corpus) leaks() []leak {
 	var found []leak
 	for _, ch := range c.Chains {
@@ -108,39 +170,18 @@ func (c corpus) leaks() []leak {
 				len(ch.Sessions), len(ch.Questions), sessionsPerChain, questionsPerChain)})
 			continue
 		}
-		typed, later := []string{ch.Lead}, []string{}
-		for i, s := range ch.Sessions {
-			typed = append(typed, s.Says...)
-			if i > 0 {
-				later = append(later, slices.Collect(maps.Values(s.Files))...)
-			}
-		}
+		s := ch.sources()
 		for _, q := range ch.Questions {
+			if q.Capture != nil {
+				found = append(found, q.Capture.leaks(ch, s)...)
+				continue
+			}
 			answerable := false
 			for _, value := range q.Key {
 				for _, body := range ch.Sessions[0].Files {
 					answerable = answerable || holds(body, value)
 				}
-				for _, other := range ch.Questions {
-					if holds(other.Ask, value) {
-						found = append(found, leak{ch.ID, value, "a question names it"})
-					}
-					for _, part := range components(value) {
-						if len(part) >= componentRunes && holds(other.Ask, part) {
-							found = append(found, leak{ch.ID, value, fmt.Sprintf("a question names %q, a component of it", part)})
-						}
-					}
-				}
-				for _, said := range typed {
-					if holds(said, value) {
-						found = append(found, leak{ch.ID, value, "the person types it, and a fork carries every typed message word for word"})
-					}
-				}
-				for _, body := range later {
-					if holds(body, value) {
-						found = append(found, leak{ch.ID, value, "a file of a later session holds it"})
-					}
-				}
+				found = append(found, s.leaksOf(ch.ID, value)...)
 			}
 			if !answerable {
 				found = append(found, leak{ch.ID, strings.Join(q.Key, " | "), "no first session file holds any form of it, so the question cannot be answered"})
@@ -150,17 +191,37 @@ func (c corpus) leaks() []leak {
 	return found
 }
 
+func (c capture) leaks(ch chain, s sources) []leak {
+	marker := c.Label + "="
+	first := ch.Sessions[0].Says
+	if c.Say >= len(first) || !strings.Contains(first[c.Say], marker) {
+		return []leak{{ch.ID, marker, "the first session message it names does not ask for it, so the lead never says it"}}
+	}
+	uses := 0
+	for _, text := range append(slices.Clone(s.typed), s.asks...) {
+		uses += strings.Count(text, marker)
+	}
+	if uses > 1 {
+		return []leak{{ch.ID, marker, "more than one message the person types asks for it, so the value is not settled once in the first session"}}
+	}
+	return nil
+}
+
 func printLeaks(say printer, c corpus, found []leak) {
-	questions, values := 0, 0
+	questions, values, captured := 0, 0, 0
 	for _, ch := range c.Chains {
 		questions += len(ch.Questions)
 		for _, q := range ch.Questions {
 			values += len(q.Key)
+			if q.Capture != nil {
+				captured++
+			}
 		}
 	}
-	say("leakage check, corpus %s: %d chains, %d questions, %d accepted answer forms\n", c.Name, len(c.Chains), questions, values)
-	say("  each form, matched whole and case blind, must be absent from every question, every message the person types and every file of a later session,\n")
-	say("  no question may name a part of it of %d characters or more, and some first session file must hold it\n", componentRunes)
+	say("leakage check, corpus %s: %d chains, %d questions, %d written answer forms, %d answers the lead settles in the first session\n", c.Name, len(c.Chains), questions, values, captured)
+	say("  each form, matched whole and case blind, must be absent from every question, every message the person types and every later session,\n")
+	say("  no question may name a part of it of %d characters or more, and some first session file must hold it.\n", componentRunes)
+	say("  a settled answer is asked for in one first session message only, and the same rules run on the value the lead said before it is graded\n")
 	for _, l := range found {
 		say("  LEAK %s %q: %s\n", l.chain, l.value, l.where)
 	}

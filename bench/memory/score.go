@@ -4,10 +4,13 @@ import (
 	"cmp"
 	"fmt"
 	"math"
+	"math/bits"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"tofu/internal/konst"
 )
 
 const (
@@ -43,7 +46,7 @@ func answerLines(answer string, count int) ([]string, bool) {
 
 type armScore struct {
 	arm                   arm
-	chains, short         int
+	chains, short, failed int
 	questions             int
 	right, unparsed       int
 	turnTokens            []int
@@ -51,23 +54,74 @@ type armScore struct {
 	messages              int
 	forkCalls, forkTokens int
 	forkUSD               float64
+	episodeCalls          int
 	forks                 []int
 	models                []string
 	refused               int
 }
 
+func (r chainRun) keys(q question, s sources) ([]string, string) {
+	if q.Capture == nil {
+		return q.Key, ""
+	}
+	if len(r.replies) == 0 {
+		return nil, "this arm runs no first session, so the lead settled nothing"
+	}
+	value := q.Capture.from(r.replies[0][q.Capture.Say])
+	if value == "" {
+		return nil, "the lead never wrote " + q.Capture.Label + "="
+	}
+	if found := s.leaksOf(r.chain.ID, value); len(found) > 0 {
+		return []string{value}, found[0].where
+	}
+	return []string{value}, ""
+}
+
+func episodeCalls(r chainRun) int {
+	var items []string
+	for i, said := range r.chain.Sessions {
+		items = append(items, said.Says...)
+		if i < len(r.replies) {
+			items = append(items, r.replies[i]...)
+		}
+	}
+	items = append(items, r.chain.ask(), r.answer)
+	calls := len(items) - bits.OnesCount(uint(len(items)))
+	for _, text := range items {
+		if len("lead: "+text) > konst.MemtreeLineBytes {
+			calls++
+		}
+	}
+	return calls
+}
+
 func (s *armScore) add(r chainRun) string {
 	var row strings.Builder
 	lines, parsed := answerLines(r.answer, len(r.chain.Questions))
-	right := 0
+	from := r.chain.sources()
+	for _, later := range r.replies[min(1, len(r.replies)):] {
+		from.later = append(from.later, later...)
+	}
+	right, counted := 0, 0
 	for i, q := range r.chain.Questions {
-		mark := "wrong"
-		if slices.ContainsFunc(q.Key, func(value string) bool { return holds(lines[i], value) }) {
-			mark = "right"
-			right++
+		keys, out := r.keys(q, from)
+		mark := "out"
+		if out == "" {
+			counted++
+			mark = "wrong"
+			if slices.ContainsFunc(keys, func(value string) bool { return holds(lines[i], value) }) {
+				mark = "right"
+				right++
+			}
 		}
 		shown := []rune(strings.Join(strings.Fields(lines[i]), " "))
-		fmt.Fprintf(&row, "    %d %-5s key %-18s said %s\n", i+1, mark, q.Key[0], string(shown[:min(len(shown), shownRunes)]))
+		fmt.Fprintf(&row, "    %d %-5s key %-18s said %s\n", i+1, mark, cmp.Or(keys...), string(shown[:min(len(shown), shownRunes)]))
+		if out != "" {
+			fmt.Fprintf(&row, "      not counted: %s\n", out)
+		}
+	}
+	if s.arm == armTree {
+		s.episodeCalls += episodeCalls(r)
 	}
 	if !parsed {
 		s.unparsed++
@@ -107,11 +161,11 @@ func (s *armScore) add(r chainRun) string {
 	}
 	forks := len(r.generations) - 1
 	s.chains++
-	if s.arm == armToday && forks < forksNeeded {
+	if s.arm != armFloor && forks < forksNeeded {
 		s.short++
 		fmt.Fprintf(&row, "    SHORT: %d forks before the answer and a chain needs %d, so its answers are not counted\n", forks, forksNeeded)
 	} else {
-		s.questions += len(r.chain.Questions)
+		s.questions += counted
 		s.right += right
 	}
 	s.forks = append(s.forks, forks)
@@ -138,22 +192,28 @@ func per(count, messages int) float64 {
 
 func table(scores []armScore) string {
 	var out strings.Builder
-	header := "%-6s %6s %9s %11s %9s %9s %9s %10s %12s %14s %12s %9s %8s  %s\n"
+	header := "%-6s %9s %9s %11s %9s %9s %9s %10s %12s %14s %12s %14s %9s %8s  %s\n"
 	fmt.Fprintf(&out, header, "arm", "chains", "questions", "right", "turn p50", "turn p95", "turn max", "cache read",
-		"fork calls", "fork tokens", "fork usd", "forks", "refused", "model")
-	fmt.Fprintf(&out, header, "", "-short", "counted", "", "tokens", "tokens", "tokens", "share", "/100 msgs", "/100 msgs", "/100 msgs", "min-max", "asks", "as reported")
+		"fork calls", "fork tokens", "fork usd", "episode calls", "forks", "refused", "model")
+	fmt.Fprintf(&out, header, "", "ok-short", "counted", "", "tokens", "tokens", "tokens", "share", "/100 msgs", "/100 msgs", "/100 msgs", "/100, at most", "min-max", "asks", "as reported")
+	fmt.Fprintf(&out, header, "", "-failed", "", "", "", "", "", "", "", "", "", "", "", "", "")
 	for _, s := range scores {
 		readShare := 0.0
 		if s.prompt > 0 {
 			readShare = float64(s.read) * perHundred / float64(s.prompt)
 		}
-		fmt.Fprintf(&out, header, s.arm, fmt.Sprintf("%d-%d", s.chains, s.short), fmt.Sprint(s.questions),
+		forks := "-"
+		if len(s.forks) > 0 {
+			forks = fmt.Sprintf("%d-%d", slices.Min(s.forks), slices.Max(s.forks))
+		}
+		fmt.Fprintf(&out, header, s.arm, fmt.Sprintf("%d-%d-%d", s.chains, s.short, s.failed), fmt.Sprint(s.questions),
 			fmt.Sprintf("%d (%.0f%%)", s.right, per(s.right, s.questions)),
 			fmt.Sprint(percentile(s.turnTokens, 0.5)), fmt.Sprint(percentile(s.turnTokens, 0.95)), fmt.Sprint(percentile(s.turnTokens, 1)),
 			fmt.Sprintf("%.1f%%", readShare),
 			fmt.Sprintf("%.1f", per(s.forkCalls, s.messages)), fmt.Sprintf("%.0f", per(s.forkTokens, s.messages)),
 			fmt.Sprintf("%.4f", s.forkUSD*perHundred/float64(max(s.messages, 1))),
-			fmt.Sprintf("%d-%d", slices.Min(s.forks), slices.Max(s.forks)), fmt.Sprint(s.refused), strings.Join(s.models, ","))
+			fmt.Sprintf("%.1f", per(s.episodeCalls, s.messages)),
+			forks, fmt.Sprint(s.refused), strings.Join(s.models, ","))
 	}
 	for _, s := range scores {
 		if s.unparsed > 0 {

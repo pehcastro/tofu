@@ -1,0 +1,299 @@
+{
+  "name": "dialogue30",
+  "closers": [
+    "Write the team a detailed note of about 1500 words on what we decided so far in this conversation and why. Answer here, do not write a file.",
+    "Write the team a note of about 600 words on this last topic only, with what to do next. Answer here, do not write a file."
+  ],
+  "chains": [
+    {
+      "id": "d01-queue",
+      "sessions": [
+        {
+          "says": [
+            "We are adding a queue for invoice events. Invent a name for it, two lowercase words joined by a hyphen, nothing we have used in this conversation. Put it on a line of its own as QUEUE=<name>, then one sentence on why. Do not change any file.",
+            "Pick how many hours the dead-letter queue keeps a message, any whole number between 30 and 300 that you can defend. Put it on a line of its own as RETENTION=<hours>, then your reason.",
+            "Every message id needs a prefix of four uppercase letters. Choose one. Put it on a line of its own as PREFIX=<letters>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Draft a 120 word message to the team saying stand-up moves half an hour later from next week.",
+            "List five questions you would ask a candidate for a platform engineering role, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain the difference between a mutex and a semaphore in one paragraph, for a junior engineer."
+          ]
+        }
+      ],
+      "lead": "Back to the first things we decided in this conversation, about the invoice events queue.",
+      "questions": [
+        {"ask": "What name did you give the queue?", "capture": {"say": 0, "label": "QUEUE"}},
+        {"ask": "How many hours does the dead-letter queue keep a message?", "capture": {"say": 1, "label": "RETENTION"}},
+        {"ask": "Which prefix did you choose for message ids?", "capture": {"say": 2, "label": "PREFIX"}}
+      ]
+    },
+    {
+      "id": "d02-launch",
+      "sessions": [
+        {
+          "says": [
+            "We launch the new checkout next month and need a codename for it. Invent one, two lowercase words joined by a hyphen. Put it on a line of its own as CODENAME=<name>, then one sentence on why. Do not change any file.",
+            "What share of traffic should the canary take? Any whole number of percent between 11 and 89 that you can defend. Put it on a line of its own as CANARY=<percent>, then your reason.",
+            "Name the feature flag that gates it: three lowercase words joined by underscores. Put it on a line of its own as FLAG=<name>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Write a short agenda for a one hour retrospective, with a time box per item.",
+            "Suggest three ways to make code review faster without lowering the bar, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain what an idempotency key is and when an API needs one, in one paragraph."
+          ]
+        }
+      ],
+      "lead": "Back to the checkout launch we planned first in this conversation.",
+      "questions": [
+        {"ask": "What codename did you invent for the launch?", "capture": {"say": 0, "label": "CODENAME"}},
+        {"ask": "What share of traffic did you give the canary, in percent?", "capture": {"say": 1, "label": "CANARY"}},
+        {"ask": "What is the name of the feature flag that gates it?", "capture": {"say": 2, "label": "FLAG"}}
+      ]
+    },
+    {
+      "id": "d03-replica",
+      "sessions": [
+        {
+          "says": [
+            "We are adding a read replica for reporting. Give it a name: a mineral followed by two digits, lowercase, joined by a hyphen. Put it on a line of its own as REPLICA=<name>, then one sentence on why. Do not change any file.",
+            "Pick the connection pool size for it, any whole number between 37 and 213 that you can defend. Put it on a line of its own as POOL=<size>, then your reason.",
+            "Choose the start of the nightly backup window, any minute of the day in UTC as HH:MM. Put it on a line of its own as WINDOW=<HH:MM>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Draft a 100 word welcome note for a new engineer joining on Monday.",
+            "Give me four signs a service is ready to be split in two, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain eventual consistency to a product manager in one paragraph, with an everyday example."
+          ]
+        }
+      ],
+      "lead": "Back to the reporting read replica we set up first in this conversation.",
+      "questions": [
+        {"ask": "What name did you give the read replica?", "capture": {"say": 0, "label": "REPLICA"}},
+        {"ask": "What connection pool size did you pick?", "capture": {"say": 1, "label": "POOL"}},
+        {"ask": "At what time UTC does the backup window start?", "capture": {"say": 2, "label": "WINDOW"}}
+      ]
+    },
+    {
+      "id": "d04-drill",
+      "sessions": [
+        {
+          "says": [
+            "We are starting a pager rotation for the payments team. Invent a name for the rotation, two lowercase words joined by a hyphen. Put it on a line of its own as ROTATION=<name>, then one sentence on why. Do not change any file.",
+            "Pick the timeout for the payment provider client in milliseconds, any whole number between 1200 and 9800 that you can defend. Put it on a line of its own as TIMEOUT=<ms>, then your reason.",
+            "Give the runbook an id: RB- followed by three digits of your choice. Put it on a line of its own as RUNBOOK=<id>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Write a 120 word note asking the team to fill in the quarterly survey.",
+            "List four things a good pull request description says, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain backpressure in a streaming system in one paragraph, for a junior engineer."
+          ]
+        }
+      ],
+      "lead": "Back to the payments pager rotation we set up first in this conversation.",
+      "questions": [
+        {"ask": "What name did you give the rotation?", "capture": {"say": 0, "label": "ROTATION"}},
+        {"ask": "What timeout did you pick for the provider client, in milliseconds?", "capture": {"say": 1, "label": "TIMEOUT"}},
+        {"ask": "What id did you give the runbook?", "capture": {"say": 2, "label": "RUNBOOK"}}
+      ]
+    },
+    {
+      "id": "d05-pricing",
+      "sessions": [
+        {
+          "says": [
+            "We are adding a plan between free and pro. Invent its name, one capitalised word that is not a common English word. Put it on a line of its own as PLAN=<name>, then one sentence on why. Do not change any file.",
+            "Set its monthly price in cents, any whole number between 1000 and 9999 that you can defend. Put it on a line of its own as PRICE=<cents>, then your reason.",
+            "Make a launch coupon code of eight characters, uppercase letters and digits. Put it on a line of its own as COUPON=<code>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Draft a 100 word reply to a customer who asks why an export took an hour.",
+            "List five metrics you would put on a dashboard for a public API, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain the difference between a feature flag and a configuration setting in one paragraph."
+          ]
+        }
+      ],
+      "lead": "Back to the new plan we priced first in this conversation.",
+      "questions": [
+        {"ask": "What did you name the plan?", "capture": {"say": 0, "label": "PLAN"}},
+        {"ask": "What monthly price did you set, in cents?", "capture": {"say": 1, "label": "PRICE"}},
+        {"ask": "What is the launch coupon code?", "capture": {"say": 2, "label": "COUPON"}}
+      ]
+    },
+    {
+      "id": "d06-shards",
+      "sessions": [
+        {
+          "says": [
+            "Our test suite is too slow and we will shard it. Pick a fixed random seed for the shard assignment, any whole number between 10000 and 99999. Put it on a line of its own as SEED=<number>, then one sentence on why fixing it matters. Do not change any file.",
+            "How many shards should we start with? Any whole number between 5 and 61 that you can defend. Put it on a line of its own as SHARDS=<count>, then your reason.",
+            "Invent the CI label that triggers the sharded run, two lowercase words joined by a hyphen. Put it on a line of its own as LABEL=<label>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Write a short checklist for handing over on-call at the end of a week.",
+            "Suggest three names for an internal newsletter, one line each, and pick your favourite."
+          ]
+        },
+        {
+          "says": [
+            "Explain what a flaky test costs a team, in one paragraph, without numbers."
+          ]
+        }
+      ],
+      "lead": "Back to the test sharding we planned first in this conversation.",
+      "questions": [
+        {"ask": "Which seed did you pick for the shard assignment?", "capture": {"say": 0, "label": "SEED"}},
+        {"ask": "How many shards did we start with?", "capture": {"say": 1, "label": "SHARDS"}},
+        {"ask": "What CI label triggers the sharded run?", "capture": {"say": 2, "label": "LABEL"}}
+      ]
+    },
+    {
+      "id": "d07-api",
+      "sessions": [
+        {
+          "says": [
+            "We are adding an endpoint for bulk refunds. Invent the path segment for it, one lowercase word that is not refund, refunds or bulk. Put it on a line of its own as SEGMENT=<word>, then one sentence on why. Do not change any file.",
+            "Set its rate limit in requests per minute, any whole number between 140 and 990 that you can defend. Put it on a line of its own as LIMIT=<number>, then your reason.",
+            "Name the request header that carries the batch id: X- followed by two capitalised words joined by a hyphen. Put it on a line of its own as HEADER=<name>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Draft a 120 word note announcing a no-meeting Wednesday.",
+            "List four questions to ask before adding a new dependency, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain optimistic locking in one paragraph, with an example from a shop."
+          ]
+        }
+      ],
+      "lead": "Back to the bulk refund endpoint we designed first in this conversation.",
+      "questions": [
+        {"ask": "What path segment did you invent for the endpoint?", "capture": {"say": 0, "label": "SEGMENT"}},
+        {"ask": "What rate limit did you set, in requests per minute?", "capture": {"say": 1, "label": "LIMIT"}},
+        {"ask": "What is the name of the header that carries the batch id?", "capture": {"say": 2, "label": "HEADER"}}
+      ]
+    },
+    {
+      "id": "d08-storage",
+      "sessions": [
+        {
+          "says": [
+            "We need a storage bucket for exported reports. Invent its name, three lowercase words joined by hyphens. Put it on a line of its own as BUCKET=<name>, then one sentence on why. Do not change any file.",
+            "After how many days should an export be deleted? Any whole number between 45 and 400 that you can defend. Put it on a line of its own as DAYS=<number>, then your reason.",
+            "Name the encryption key alias: alias/ followed by one lowercase word, a hyphen and two digits. Put it on a line of its own as ALIAS=<alias>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Write a 100 word note thanking the support team for a busy month.",
+            "Suggest four ways to cut the time a new engineer takes to ship a first change, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain what a write-ahead log is for, in one paragraph."
+          ]
+        }
+      ],
+      "lead": "Back to the bucket for exported reports we set up first in this conversation.",
+      "questions": [
+        {"ask": "What name did you give the bucket?", "capture": {"say": 0, "label": "BUCKET"}},
+        {"ask": "After how many days is an export deleted?", "capture": {"say": 1, "label": "DAYS"}},
+        {"ask": "What is the encryption key alias?", "capture": {"say": 2, "label": "ALIAS"}}
+      ]
+    },
+    {
+      "id": "d09-train",
+      "sessions": [
+        {
+          "says": [
+            "We are moving to release trains. Invent a name for the first train, one capitalised made-up word. Put it on a line of its own as TRAIN=<name>, then one sentence on why. Do not change any file.",
+            "How long should the code freeze before each train last, in hours? Any whole number between 19 and 71 that you can defend. Put it on a line of its own as FREEZE=<hours>, then your reason.",
+            "Give the first train's build tag as v<major>.<minor>.<patch>, each number between 2 and 19, your choice. Put it on a line of its own as TAG=<tag>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Draft a 120 word note inviting the team to a lunch and learn on observability.",
+            "List five things to check before deleting an old database table, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain the difference between latency and throughput in one paragraph, with a road analogy."
+          ]
+        }
+      ],
+      "lead": "Back to the release trains we planned first in this conversation.",
+      "questions": [
+        {"ask": "What name did you invent for the first train?", "capture": {"say": 0, "label": "TRAIN"}},
+        {"ask": "How long is the code freeze, in hours?", "capture": {"say": 1, "label": "FREEZE"}},
+        {"ask": "What build tag did you give the first train?", "capture": {"say": 2, "label": "TAG"}}
+      ]
+    },
+    {
+      "id": "d10-docs",
+      "sessions": [
+        {
+          "says": [
+            "We are redesigning the docs site. Pick its accent colour as a six digit hex code with a leading hash. Put it on a line of its own as COLOR=<hex>, then one sentence on why. Do not change any file.",
+            "Invent the name of the new sidebar section for migration guides, two lowercase words joined by a hyphen. Put it on a line of its own as SECTION=<name>, then your reason.",
+            "How many shards should the docs search index have? Any whole number between 3 and 29 that you can defend. Put it on a line of its own as INDEXSHARDS=<count>."
+          ]
+        },
+        {
+          "says": [
+            "Different topic. Write a 100 word note asking for volunteers to mentor interns.",
+            "List four habits that keep a changelog useful, one line each."
+          ]
+        },
+        {
+          "says": [
+            "Explain what a content delivery network does in one paragraph, for a designer."
+          ]
+        }
+      ],
+      "lead": "Back to the docs site redesign we planned first in this conversation.",
+      "questions": [
+        {"ask": "Which accent colour did you pick, as a hex code?", "capture": {"say": 0, "label": "COLOR"}},
+        {"ask": "What did you name the new sidebar section?", "capture": {"say": 1, "label": "SECTION"}},
+        {"ask": "How many shards did you give the search index?", "capture": {"say": 2, "label": "INDEXSHARDS"}}
+      ]
+    }
+  ]
+}
