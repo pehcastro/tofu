@@ -5,11 +5,11 @@
   CATEGORIES                                                                 Solarized Light  ▾     
   › Appearance    05     Theme                                          esc                         
     Models & rol… 02     tofu uses Zed Nu Disco; choose a palette                                   
-    Interaction   06                                                             comfortable  ▾     
-    Context       11       tofu                                                                     
+    Interaction   07                                                             comfortable  ▾     
+    Context       13       tofu                                                                     
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
-    Turn          14                                                                                
+    Turn          15                                                                                
     Browser       06       tofu dusk                                                                
                                                                                      compact  ▾     
   NAVIGATE               >  Solarized Light                                                         

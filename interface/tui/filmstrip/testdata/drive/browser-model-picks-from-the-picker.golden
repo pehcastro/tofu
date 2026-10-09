@@ -65,11 +65,11 @@
   CATEGORIES              Browser                                                      drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and click and type in them…    
     Models & rol… 02                                                                                
-    Interaction   06      Browser driver                                            subagent  ▾     
-    Context       11      subagent gives the browser steps to a browser sub-agent on browserMod…    
+    Interaction   07      Browser driver                                            subagent  ▾     
+    Context       13      subagent gives the browser steps to a browser sub-agent on browserMod…    
     Files         03                                                                                
     Shell         05      Browser steps                                                   30  ▾     
-    Turn          14      how many actions one browser task may take                                
+    Turn          15      how many actions one browser task may take                                
   › Browser       06                                                                                
                         › Browser model                                  meta/muse-spark-1.3  ▾     
   NAVIGATE                the subscription model a browser task asks for the text to type and f…    

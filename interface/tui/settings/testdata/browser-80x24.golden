@@ -4,11 +4,11 @@
                                                                                 
   CATEGORIES            › Browser                                  drive  ▾     
     Appearance    05      drive lets the model read your Chrome tabs and cl…    
-    Interaction   04                                                            
-    Context       11      Browser driver                        subagent  ▾     
+    Interaction   05                                                            
+    Context       13      Browser driver                        subagent  ▾     
     Files         03      subagent gives the browser steps to a browser sub…    
     Shell         05                                                            
-    Turn          14      Browser steps                               30  ▾     
+    Turn          15      Browser steps                               30  ▾     
   › Browser       06      how many actions one browser task may take            
                                                                                 
   NAVIGATE                Browser model                          default  ▾     

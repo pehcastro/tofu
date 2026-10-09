@@ -14,16 +14,16 @@
                     Commands       alt+k                                                auto  ▾ 
   NAVIGATE          Settings       not set                                          r you: only…
   ↑↓ setting · ←    Models         ctrl+l                                           
-  section           Quote selection  ctrl+r                                                 ● on
-  ctrl+k search     Edit in editor  ctrl+g                                           that chang…
+  section           Quote selection  ctrl+r                                              120  ▾ 
+  ctrl+k search     Edit in editor  ctrl+g                                          nded option…
   esc chat          Prompt history  ctrl+p                                          
                                                                                             ● on
-                  Host editors may still intercept a chosen key.                     up at most…
+                  Host editors may still intercept a chosen key.                     that chang…
                                                                                     
-                  ↑↓ choose · enter edit · bksp clear · esc                         
-                                                                                    
+                  ↑↓ choose · enter edit · bksp clear · esc                                 ● on
+                                                                                     up at most…
                       
-                      
+                        enter change  ·  shift+tab scope  ·  esc chat
                       
                       
                       

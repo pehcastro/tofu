@@ -35,25 +35,25 @@
   CATEGORIES              Composer                                                  standard  ▾     
     Appearance    05      Enter sends; Shift+Enter inserts a line break                             
     Models & rol… 02                                                                                
-  › Interaction   06    › Keybindings                                                   edit  ▾     
-    Context       11      Change shortcuts handled inside tofu                                      
+  › Interaction   07    › Keybindings                                                   edit  ▾     
+    Context       13      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         05      Host integration                                       inspect Zed  ▾     
-    Turn          14      Detect host shortcut conflicts and available integrations                 
+    Turn          15      Detect host shortcut conflicts and available integrations                 
     Browser       06                                                                                
                           Confirmations                                                 auto  ▾     
   NAVIGATE                auto lets jev decide at every gate and work never stops for you: only…    
   ↑↓ setting · ←→                                                                                   
-  section                 Read before edit                                                  ● on    
-  ctrl+k search ·         an edit or a write to a file this session has not read, or that chang…    
+  section                 Question wait                                                  120  ▾     
+  ctrl+k search ·         under auto, a question the lead asks you takes its recommended option…    
   esc chat                                                                                          
+                          Read before edit                                                  ● on    
+                          an edit or a write to a file this session has not read, or that chang…    
+                                                                                                    
                           Auto update                                                       ● on    
                           on installs a newer tofu release in the background, looked up at most…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

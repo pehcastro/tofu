@@ -14,14 +14,14 @@
            CTRL+G  Edit in editor · ensure tofu receives this shortcut                     o  ▾ 
   NAVIGAT  CTRL+P  Prompt history · ensure tofu receives this shortcut                     only…
   ↑↓ sett  Change: forward these keys only while the terminal is focused.                  
-  section                                                                                   ● on
-  ctrl+k   SHORTCUT CONFLICTS                                                              hang…
+  section                                                                                  0  ▾ 
+  ctrl+k   SHORTCUT CONFLICTS                                                              tion…
   esc cha  CTRL+K  tofu Search · Zed keybinding / chord prefix                             
                                                                                             ● on
-           ZED USER KEYMAP                                                                 most…
+           ZED USER KEYMAP                                                                 hang…
            Status: keymap missing                                                          
-           Apply adds terminal-only rules after existing rules; Undo removes tofu's        
-           rules.                                                                          
+           Apply adds terminal-only rules after existing rules; Undo removes tofu's         ● on
+           rules.                                                                          most…
            >  Apply tofu keybindings                                                       
              Undo tofu keybindings                                                         
              Close                                                                         

@@ -5,11 +5,11 @@
   CATEGORIES            › Diff context                                                     3  ▾     
     Appearance    05      Lines around changed hunks, at most the 3 each diff carries               
     Models & rol… 02                                                                                
-    Interaction   06      Hyperlinks                                                     off  ▾     
-    Context       11      OSC 8 terminal file links; off prints the bare path                       
+    Interaction   07      Hyperlinks                                                     off  ▾     
+    Context       13      OSC 8 terminal file links; off prints the bare path                       
   › Files         03                                                                                
     Shell         05      Group by agent                                                    ● on    
-    Turn          14      Author filters in edit feeds                                              
+    Turn          15      Author filters in edit feeds                                              
     Browser       06                                                                                
                         enter change  ·  shift+tab scope  ·  esc chat                               
   NAVIGATE                                                                                          

@@ -5,26 +5,26 @@
   CATEGORIES            › Decision cap                                                     0  ▾     
     Appearance    05      decision cap per turn, zero means no cap                                  
     Models & rol… 02                                                                                
-    Interaction   06      Sub-agents                                                        ● on    
-    Context       11      a turn may spawn a sub-agent                                              
+    Interaction   07      Sub-agents                                                        ● on    
+    Context       13      a turn may spawn a sub-agent                                              
     Files         03                                                                                
     Shell         05      One turn per project                                              ● on    
-  › Turn          14      while one session runs a turn in this project, a turn from any other …    
+  › Turn          15      while one session runs a turn in this project, a turn from any other …    
     Browser       06                                                                                
-                          Sub-agents running at once                                      10  ▾     
-  NAVIGATE                how many sub-agents may run at once; a spawn past it is refused until…    
+                          Side chat access                                              read  ▾     
+  NAVIGATE                what a new side chat may write: read writes nothing, notes writes .md…    
   ↑↓ setting · ←→                                                                                   
-  section                 Sub-agent depth                                                  2  ▾     
-  ctrl+k search ·         how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
+  section                 Sub-agents running at once                                      10  ▾     
+  ctrl+k search ·         how many sub-agents may run at once; a spawn past it is refused until…    
   esc chat                                                                                          
+                          Sub-agent depth                                                  2  ▾     
+                          how deep a sub-agent may spawn its own sub-agents; the next spawn rea…    
+                                                                                                    
                           Sub-agent cache                                                 1h  ▾     
                           how long a sub-agent's prompt cache lives; 5m writes cost less and ex…    
                                                                                                     
                           Sub-agent check                                               1800  ▾     
                           every this many seconds the lead is sent a check on each running sub-…    
-                                                                                                    
-                          Sub-agent watch                                                600  ▾     
-                          a sub-agent call open this many seconds gets a line in the chat sayin…    
                                                                                                     
                         enter change  ·  shift+tab scope  ·  esc chat                               
                                                                                                     

@@ -5,11 +5,11 @@
   CATEGORIES            › Tool detail                                                      ○ off    
     Appearance    05      chat shows every tool call                                                
     Models & rol… 02                                                                                
-    Interaction   06      Agent feeds                                                   full  ▾     
-  › Context       11      full keeps every sub-agents event, summary the latest 200, off shows …    
+    Interaction   07      Agent feeds                                                   full  ▾     
+  › Context       13      full keeps every sub-agents event, summary the latest 200, off shows …    
     Files         03                                                                                
     Shell         05      Thinking                                                          ● on    
-    Turn          14      thinking shows in each agent's sub-agents feed; t there toggles it        
+    Turn          15      thinking shows in each agent's sub-agents feed; t there toggles it        
     Browser       06                                                                                
                           Thinking summary                                        summarized  ▾     
   NAVIGATE                summarized asks Claude for a summary of its thinking; omitted asks fo…    
