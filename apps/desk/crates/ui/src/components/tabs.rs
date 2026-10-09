@@ -8,8 +8,8 @@ use desk_motion::tokens::{EASE_OUT, PANEL_OUT_MS};
 use desk_motion::{Glide, GlideKind, reduced_motion};
 use gpui::{
     Action, AnyElement, App, Bounds, Corners, DispatchPhase, Div, ElementId, Entity, FocusHandle,
-    Image, MouseButton, MouseMoveEvent, Pixels, Point, Rgba, ScrollHandle, SharedString, Stateful,
-    Window, canvas, div, img, point, prelude::*, px, size,
+    Image, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, Rgba, ScrollHandle,
+    SharedString, Stateful, Window, canvas, div, img, point, prelude::*, px, size,
 };
 
 use crate::component::icon;
@@ -85,9 +85,15 @@ enum Slot {
         label: SharedString,
         close: bool,
     },
-    More,
+    More(Group),
     Button,
     Inert,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Group {
+    Workspaces,
+    Screens,
 }
 
 impl Slot {
@@ -98,7 +104,7 @@ impl Slot {
     fn label(&self) -> Option<&SharedString> {
         match self {
             Slot::Tab { label, .. } => Some(label),
-            Slot::More | Slot::Button | Slot::Inert => None,
+            Slot::More(_) | Slot::Button | Slot::Inert => None,
         }
     }
 }
@@ -249,12 +255,13 @@ struct Motion {
     widths: Vec<(SharedString, Pixels)>,
     more: Pixels,
     fixed: Pixels,
-    listing: bool,
+    listing: Option<Group>,
     list_focus: FocusHandle,
     strip_focus: FocusHandle,
     scroll: ScrollHandle,
     revealed: Option<(usize, Option<Pixels>)>,
     slide: Option<Slide>,
+    menued: bool,
 }
 
 fn unlearned_width(tab: &Tab, font: f32, window: &Window) -> Pixels {
@@ -270,7 +277,12 @@ fn unlearned_width(tab: &Tab, font: f32, window: &Window) -> Pixels {
     } else {
         px(0.0)
     };
-    (label + lead + px(TAB_PAD_LEFT + TAB_PAD_LINK + TAB_PAD_TAIL + CLOSE_BOX))
+    let mark = if tab.mark == TabMark::Close {
+        px(0.0)
+    } else {
+        px(CLOSE_BOX)
+    };
+    (label + lead + mark + px(TAB_PAD_LEFT + TAB_PAD_LINK + TAB_PAD_TAIL))
         .clamp(px(TAB_MIN_WIDTH), px(TAB_MAX_WIDTH))
 }
 
@@ -295,7 +307,7 @@ fn settled(bounds: Bounds<Pixels>, now: Instant) -> Glide {
 impl Motion {
     fn new(list_focus: FocusHandle, strip_focus: FocusHandle) -> Self {
         Self {
-            listing: false,
+            listing: None,
             list_focus,
             strip_focus,
             bounds: Vec::new(),
@@ -311,6 +323,7 @@ impl Motion {
             scroll: ScrollHandle::new(),
             revealed: None,
             slide: None,
+            menued: false,
         }
     }
 
@@ -385,23 +398,27 @@ impl Motion {
         sliding.is_some()
     }
 
-    fn learn(&mut self, items: &[Bounds<Pixels>], slots: &[Slot], flow: usize, gap: f32) {
+    fn learn(&mut self, items: &[Bounds<Pixels>], slots: &[Slot], gap: f32, now: Instant) {
         let closing = self.closing.map(|closing| closing.ix);
         let mut fixed = px(0.0);
         for (bounds, slot) in items.iter().zip(slots) {
             let width = bounds.size.width + px(gap);
             match slot {
-                Slot::Tab { ix, label, .. } if *ix < flow => {
-                    if closing == Some(*ix) {
-                        continue;
-                    }
+                Slot::Tab { ix, .. } if closing == Some(*ix) => {}
+                Slot::Tab { label, .. } => {
+                    let grown = self
+                        .lit
+                        .iter()
+                        .find(|lit| lit.label == *label)
+                        .map_or(0.0, |lit| lit.reveal.value(now));
+                    let width = width - px(CLOSE_BOX * grown);
                     match self.widths.iter_mut().find(|(known, _)| known == label) {
                         Some((_, known)) => *known = width,
                         None => self.widths.push((label.clone(), width)),
                     }
                 }
-                Slot::More => self.more = width,
-                Slot::Tab { .. } | Slot::Button | Slot::Inert => fixed += width,
+                Slot::More(_) => self.more = width,
+                Slot::Button | Slot::Inert => fixed += width,
             }
         }
         self.fixed = fixed;
@@ -409,34 +426,49 @@ impl Motion {
 
     fn fitting(
         &self,
-        tabs: &[Tab],
+        (tabs, screens): (&[Tab], &[Tab]),
         room: Option<Pixels>,
         (font, gap): (f32, f32),
         window: &Window,
-    ) -> usize {
+    ) -> (usize, usize) {
         let Some(room) = room.map(|room| room - self.fixed) else {
-            return tabs.len();
+            return (tabs.len(), screens.len());
         };
-        let mut used = px(0.0);
-        for (at, tab) in tabs.iter().enumerate() {
-            used += self
-                .widths
+        let width = |tab: &Tab| {
+            self.widths
                 .iter()
                 .find(|(known, _)| *known == tab.label)
                 .map_or_else(
                     || unlearned_width(tab, font, window) + px(gap),
                     |(_, width)| *width,
-                );
-            let more = if at + 1 < tabs.len() {
+                )
+        };
+        let run = |group: &[Tab], shown: usize| {
+            let more = if shown < group.len() {
                 self.more
             } else {
                 px(0.0)
             };
-            if used + more > room {
-                return at.max(1);
-            }
+            group
+                .iter()
+                .take(shown)
+                .map(width)
+                .fold(more, |sum, one| sum + one)
+        };
+        let every = run(tabs, tabs.len());
+        let least = screens.len().min(1);
+        if let Some(shown) = (least..=screens.len())
+            .rev()
+            .find(|shown| every + run(screens, *shown) <= room)
+        {
+            return (tabs.len(), shown);
         }
-        tabs.len()
+        let left = room - run(screens, least);
+        let shown = (1..tabs.len())
+            .rev()
+            .find(|shown| run(tabs, *shown) <= left)
+            .unwrap_or(1);
+        (shown.min(tabs.len()), least)
     }
 
     fn spot(&self, slots: &[Slot]) -> Option<Spot> {
@@ -466,7 +498,7 @@ impl Motion {
         for (bounds, slot) in self.bounds.iter().zip(slots) {
             let lead = match slot {
                 Slot::Tab { ix, .. } if *ix < flow => *ix,
-                Slot::Tab { .. } | Slot::More | Slot::Button | Slot::Inert => continue,
+                Slot::Tab { .. } | Slot::More(_) | Slot::Button | Slot::Inert => continue,
             };
             if bounds.contains(&pointer) {
                 return Some(lead);
@@ -510,7 +542,7 @@ impl Motion {
         &mut self,
         id: &str,
         slots: &[Slot],
-        chosen: Option<usize>,
+        focused: Option<usize>,
         (enter, leave): (Duration, Duration),
         now: Instant,
     ) -> Frame {
@@ -526,7 +558,7 @@ impl Motion {
             .iter()
             .filter_map(|slot| match slot {
                 Slot::Tab { ix, .. } => Some(ix.saturating_add(1)),
-                Slot::More | Slot::Button | Slot::Inert => None,
+                Slot::More(_) | Slot::Button | Slot::Inert => None,
             })
             .max()
             .unwrap_or(0);
@@ -537,7 +569,7 @@ impl Motion {
                 continue;
             };
             let hovered = spot.is_some_and(|spot| spot.at == at);
-            let reveal = if hovered || chosen == Some(at) {
+            let reveal = if hovered || focused == Some(at) {
                 1.0
             } else {
                 0.0
@@ -588,7 +620,7 @@ impl Motion {
 
     fn rows(&self, id: &str, slots: &[Slot], closing: Option<Closing>, now: Instant) -> Vec<Row> {
         let mut rows = Vec::new();
-        for slot in slots {
+        for (at, slot) in slots.iter().enumerate() {
             let Slot::Tab {
                 ix, label, close, ..
             } = slot
@@ -596,6 +628,9 @@ impl Motion {
                 continue;
             };
             let element = format!("{id}/{label}");
+            if let Some(bounds) = self.bounds.get(at) {
+                rows.push((element.clone(), "box_width", bounds.size.width.as_f32()));
+            }
             if let Some(closing) = closing.filter(|closing| closing.ix == *ix) {
                 let left = 1.0 - closing.progress(now);
                 rows.push((element.clone(), "width", closing.width.as_f32() * left));
@@ -733,19 +768,35 @@ pub(crate) fn tile_control(
     .when(reveal <= 0.0, |close| close.invisible())
 }
 
-fn mark(tab: &Tab, ix: usize, look: Look, theme: &Theme, shut: &Shut) -> Div {
+fn mark(tab: &Tab, theme: &Theme) -> Option<Div> {
     let slot = div()
         .flex()
         .flex_none()
         .items_center()
         .justify_center()
         .size(px(CLOSE_BOX));
-    match tab.mark {
-        TabMark::Close => slot.child(close(ix, look, theme, shut.clone())),
-        TabMark::Pinned => slot.child(glyph(Glyph::Pin, ICON_TINY, ink(theme, CAPTION_TEXT))),
-        TabMark::Locked => slot.child(glyph(Glyph::Lock, ICON_TINY, ink(theme, CAPTION_TEXT))),
-        TabMark::Dirty => slot.child(div().size(px(DIRTY_DOT)).rounded_full().bg(ink(theme, T1))),
-    }
+    let caption = ink(theme, CAPTION_TEXT);
+    let inner = match tab.mark {
+        TabMark::Close => return None,
+        TabMark::Pinned => glyph(Glyph::Pin, ICON_TINY, caption).into_any_element(),
+        TabMark::Locked => glyph(Glyph::Lock, ICON_TINY, caption).into_any_element(),
+        TabMark::Dirty => div()
+            .size(px(DIRTY_DOT))
+            .rounded_full()
+            .bg(ink(theme, T1))
+            .into_any_element(),
+    };
+    Some(slot.child(inner))
+}
+
+fn room(ix: usize, look: Look, theme: &Theme, shut: &Shut) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .justify_end()
+        .overflow_hidden()
+        .w(px(CLOSE_BOX * look.reveal))
+        .child(close(ix, look, theme, shut.clone()))
 }
 
 fn link(tab: &Tab, image: Option<&Arc<Image>>, font: f32, theme: &Theme, color: Rgba) -> Div {
@@ -806,15 +857,19 @@ fn tab_frame(
         .min_w_0()
         .pr(px(TAB_PAD_TAIL))
         .child(link(tab, image, font, theme, text))
-        .child(mark(tab, ix, look, theme, shut))
+        .children(mark(tab, theme))
+        .when(tab.mark == TabMark::Close, |content| {
+            content.child(room(ix, look, theme, shut))
+        })
         .when_some(fold, |content, fold| content.w(fold.width).flex_none());
     let (press, menu) = (press.cloned(), menu.cloned());
+    let grown = px(CLOSE_BOX * look.reveal);
     div()
         .id((id.clone(), ix))
         .flex()
         .items_center()
-        .min_w(px(TAB_MIN_WIDTH))
-        .max_w(px(TAB_MAX_WIDTH))
+        .min_w(px(TAB_MIN_WIDTH) + grown)
+        .max_w(px(TAB_MAX_WIDTH) + grown)
         .when_some(press, |tab, press| {
             tab.on_mouse_down(MouseButton::Left, move |event, window, cx| {
                 press(ix, event.position, window, cx)
@@ -841,12 +896,12 @@ fn tab_frame(
 
 fn flagged(
     item: Stateful<Div>,
-    (id, ix, tab): (&SharedString, usize, &Tab),
+    (id, ix, tab, menued): (&SharedString, usize, &Tab, bool),
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
 ) -> Stateful<Div> {
-    match &tab.flag {
+    match tab.flag.as_ref().filter(|_| !menued) {
         Some(flag) => tooltip(
             (SharedString::from(format!("{id}-flag")), ix),
             item,
@@ -860,9 +915,13 @@ fn flagged(
     }
 }
 
-fn more_tab(id: &SharedString, hidden: usize, theme: &Theme) -> Stateful<Div> {
+fn more_tab(id: &SharedString, group: Group, hidden: usize, theme: &Theme) -> Stateful<Div> {
+    let key = match group {
+        Group::Workspaces => usize::MAX - 1,
+        Group::Screens => usize::MAX - 2,
+    };
     div()
-        .id((id.clone(), usize::MAX - 1))
+        .id((id.clone(), key))
         .aria_label("More tabs")
         .flex()
         .flex_none()
@@ -876,8 +935,7 @@ fn more_tab(id: &SharedString, hidden: usize, theme: &Theme) -> Stateful<Div> {
 
 fn shut_list(state: &Entity<Motion>, cx: &mut App) {
     state.update(cx, |motion, cx| {
-        if motion.listing {
-            motion.listing = false;
+        if motion.listing.take().is_some() {
             cx.notify();
         }
     });
@@ -917,7 +975,7 @@ fn hidden_row(
 }
 
 fn more_list(
-    id: &SharedString,
+    (id, group): (&SharedString, Group),
     trigger: Stateful<Div>,
     hidden: &[(usize, &Tab)],
     (theme, backdrop): (&Theme, Rgba),
@@ -929,12 +987,12 @@ fn more_list(
         list_focus,
         ..
     } = state.read(cx);
-    let (listing, list_focus) = (*listing, list_focus.clone());
+    let (listing, list_focus) = (*listing == Some(group), list_focus.clone());
     let (toggler, focus) = (state.clone(), list_focus.clone());
     let trigger = pressed(
         trigger.on_click(move |_, window, cx| {
             toggler.update(cx, |motion, cx| {
-                motion.listing = !listing;
+                motion.listing = (!listing).then_some(group);
                 cx.notify();
             });
             if !listing {
@@ -944,7 +1002,11 @@ fn more_list(
         backdrop,
     );
     let (outside, escaper) = (state.clone(), state.clone());
-    Popover::new(ElementId::Name(format!("{id}-more-list").into()), trigger)
+    let key = match group {
+        Group::Workspaces => format!("{id}-more-list"),
+        Group::Screens => format!("{id}-more-screens"),
+    };
+    Popover::new(ElementId::Name(key.into()), trigger)
         .open(listing)
         .fit(MORE_LIST_MIN)
         .child(
@@ -1219,6 +1281,18 @@ impl RenderOnce for TabStrip {
                 Motion::new(cx.focus_handle(), cx.focus_handle().tab_stop(true))
             });
         let focus = focus.unwrap_or_else(|| state.read(cx).strip_focus.clone());
+        let menued = state.read(cx).menued;
+        let hushed = |menu: Press| -> Press {
+            let hush = state.clone();
+            Rc::new(move |ix, position, window, cx| {
+                hush.update(cx, |motion, cx| {
+                    motion.menued = true;
+                    cx.notify();
+                });
+                menu(ix, position, window, cx)
+            })
+        };
+        let menu = menu.map(hushed);
         let ringed = focus.is_focused(window) && window.last_input_was_keyboard();
         let focus_ring = theme.color(ColorToken::FocusRing);
         let count = tabs.len()
@@ -1237,18 +1311,25 @@ impl RenderOnce for TabStrip {
             Shape::Connected { room } => (tabs.len().min(*room), 0.0, FONT_TAB),
             Shape::Header { .. } => (tabs.len(), HEADER_GAP, FONT_BODY),
         };
-        let fit = state.read(cx).fitting(
-            tabs.get(..cap).unwrap_or_default(),
+        let all_screens: &[Tab] = match &shape {
+            Shape::Connected { .. } => &[],
+            Shape::Header { screens } => screens,
+        };
+        let (fit, screen_fit) = state.read(cx).fitting(
+            (tabs.get(..cap).unwrap_or_default(), all_screens),
             width.get(cx),
             (font, gap),
             window,
         );
         let visible = shown(tabs.len(), cap.min(fit), active);
         let hidden = tabs.len().saturating_sub(visible.len());
+        let screen_active = active.checked_sub(tabs.len()).unwrap_or(usize::MAX);
+        let seen_screens = shown(all_screens.len(), screen_fit, screen_active);
+        let hidden_screens = all_screens.len().saturating_sub(seen_screens.len());
         let flow = visible
             .iter()
             .filter_map(|ix| Some(slot(*ix, tabs.get(*ix)?)))
-            .chain((hidden > 0).then_some(Slot::More));
+            .chain((hidden > 0).then_some(Slot::More(Group::Workspaces)));
         let slots: Vec<Slot> = match &shape {
             Shape::Connected { .. } => flow
                 .chain(new_button.is_some().then_some(Slot::Button))
@@ -1256,17 +1337,19 @@ impl RenderOnce for TabStrip {
             Shape::Header { screens } => flow
                 .chain([Slot::Button, Slot::Inert])
                 .chain(
-                    screens
+                    seen_screens
                         .iter()
-                        .enumerate()
-                        .map(|(ix, tab)| slot(tabs.len() + ix, tab)),
+                        .filter_map(|ix| Some(slot(tabs.len() + ix, screens.get(*ix)?))),
                 )
+                .chain((hidden_screens > 0).then_some(Slot::More(Group::Screens)))
                 .collect(),
         };
         let slots = Rc::new(slots);
         let chosen = slots.iter().position(|slot| slot.holds(active));
         let room = width.get(cx);
-        let more = slots.iter().position(|slot| matches!(slot, Slot::More));
+        let more = slots
+            .iter()
+            .position(|slot| *slot == Slot::More(Group::Workspaces));
         let spans = (
             ms(&theme, NumberToken::MotionBase),
             ms(&theme, NumberToken::MotionFast),
@@ -1286,7 +1369,7 @@ impl RenderOnce for TabStrip {
             finished,
             busy,
         } = state.update(cx, |motion, _| {
-            motion.frame(&id, &slots, chosen, spans, now)
+            motion.frame(&id, &slots, chosen.filter(|_| ringed), spans, now)
         });
         if let Some(ix) = closing.filter(|_| finished).map(|closing| closing.ix) {
             let on = on.clone();
@@ -1296,6 +1379,10 @@ impl RenderOnce for TabStrip {
             window.request_animation_frame();
         }
         let shut = shutter(&state, &slots, &on, reduced);
+        let lit = match &shape {
+            Shape::Connected { .. } => theme.color(ColorToken::TabsFill),
+            Shape::Header { .. } => header_fill(active >= tabs.len(), &theme),
+        };
         let pick = |ix: usize, font: f32, dim: Rgba| Pick {
             ix,
             font,
@@ -1315,13 +1402,35 @@ impl RenderOnce for TabStrip {
             .enumerate()
             .filter(|(ix, _)| !visible.contains(ix))
             .collect();
-        if unseen.is_empty() {
+        let unseen_screens: Vec<(usize, &Tab)> = all_screens
+            .iter()
+            .enumerate()
+            .filter(|(ix, _)| !seen_screens.contains(ix))
+            .map(|(ix, tab)| (tabs.len() + ix, tab))
+            .collect();
+        let empty = match state.read(cx).listing {
+            Some(Group::Workspaces) => unseen.is_empty(),
+            Some(Group::Screens) => unseen_screens.is_empty(),
+            None => false,
+        };
+        if empty {
             shut_list(&state, cx);
         }
-        let overflow = |trigger: Stateful<Div>, cx: &App| {
-            more_list(&id, trigger, &unseen, (&theme, backdrop), (&state, &on), cx)
+        let overflow = |group: Group, trigger: Stateful<Div>, cx: &App| {
+            let hidden = match group {
+                Group::Workspaces => &unseen,
+                Group::Screens => &unseen_screens,
+            };
+            more_list(
+                (&id, group),
+                trigger,
+                hidden,
+                (&theme, backdrop),
+                (&state, &on),
+                cx,
+            )
         };
-        let (frame, children, marker_fill, corners) = match shape {
+        let (frame, children, corners) = match &shape {
             Shape::Connected { .. } => {
                 let top = Corners {
                     top_left: px(RADIUS_TAB),
@@ -1330,7 +1439,8 @@ impl RenderOnce for TabStrip {
                 };
                 let more = (hidden > 0).then(|| {
                     overflow(
-                        more_tab(&id, hidden, &theme)
+                        Group::Workspaces,
+                        more_tab(&id, Group::Workspaces, hidden, &theme)
                             .h_full()
                             .rounded_t(px(RADIUS_TAB))
                             .text_size(px(FONT_TAB)),
@@ -1351,7 +1461,13 @@ impl RenderOnce for TabStrip {
                     .when(ringed && ix == active, |tab| {
                         tab.shadow(vec![ring(focus_ring)])
                     });
-                    let item = flagged(pressed(item, backdrop), (&id, ix, tab), &theme, window, cx);
+                    let item = flagged(
+                        pressed(item, backdrop),
+                        (&id, ix, tab, menued),
+                        &theme,
+                        window,
+                        cx,
+                    );
                     children.push(item.into_any_element());
                 }
                 children.extend(more.into_iter().chain(new_button.map(|button| {
@@ -1364,15 +1480,15 @@ impl RenderOnce for TabStrip {
                         .into_any_element()
                 })));
                 let frame = div().flex().items_stretch().h(px(TAB_IN_HEADER)).min_w_0();
-                (frame, children, theme.color(ColorToken::TabsFill), top)
+                (frame, children, top)
             }
-            Shape::Header { screens } => {
+            Shape::Header { .. } => {
                 let screen = active >= tabs.len();
                 let (asker, first) = (focus.clone(), tabs.len());
-                let screen_menu: Press = Rc::new(move |ix, position, window, cx| {
+                let screen_menu = hushed(Rc::new(move |ix, position, window, cx| {
                     let at = ix.saturating_sub(first);
                     asker.dispatch_action(&ScreenTabMenu { at, position }, window, cx);
-                });
+                }));
                 let header = |at: (usize, &Tab, bool), window: &mut Window, cx: &mut App| {
                     let (ix, tab, screen) = at;
                     let opens = if screen {
@@ -1396,11 +1512,12 @@ impl RenderOnce for TabStrip {
                         tab.shadow(vec![ring(focus_ring)])
                     });
                     let item = pressed(item, backdrop).occlude();
-                    flagged(item, (&id, ix, tab), &theme, window, cx).into_any_element()
+                    flagged(item, (&id, ix, tab, menued), &theme, window, cx).into_any_element()
                 };
                 let more = (hidden > 0).then(|| {
                     overflow(
-                        more_tab(&id, hidden, &theme)
+                        Group::Workspaces,
+                        more_tab(&id, Group::Workspaces, hidden, &theme)
                             .occlude()
                             .h(px(TAB))
                             .rounded(px(RADIUS_ROW))
@@ -1426,15 +1543,29 @@ impl RenderOnce for TabStrip {
                 );
                 children.push(
                     separator(&theme)
-                        .when(screens.is_empty(), |line| line.invisible())
+                        .when(all_screens.is_empty(), |line| line.invisible())
                         .into_any_element(),
                 );
-                for (ix, tab) in screens.iter().enumerate() {
+                for (ix, tab) in seen_screens
+                    .iter()
+                    .filter_map(|ix| Some((*ix, all_screens.get(*ix)?)))
+                {
                     children.push(header((tabs.len() + ix, tab, true), window, cx));
                 }
+                children.extend((hidden_screens > 0).then(|| {
+                    overflow(
+                        Group::Screens,
+                        more_tab(&id, Group::Screens, hidden_screens, &theme)
+                            .occlude()
+                            .h(px(NEW_TAB))
+                            .rounded(px(RADIUS_TAB))
+                            .text_size(px(FONT_BODY)),
+                        cx,
+                    )
+                }));
                 let frame = div().flex().items_center().gap(px(HEADER_GAP)).min_w_0();
                 let corners = Corners::all(px(header_radius(screen)));
-                (frame, children, header_fill(screen, &theme), corners)
+                (frame, children, corners)
             }
         };
         let (painter, marker_id) = (state.clone(), id.clone());
@@ -1443,6 +1574,17 @@ impl RenderOnce for TabStrip {
             move |bounds, _, cx| width.record(bounds.size.width, cx),
             move |bounds, (), window, cx| {
                 let mask = window.content_mask().bounds.intersect(&bounds);
+                let quiet = mover.clone();
+                window.on_mouse_event(move |event: &MouseDownEvent, phase, _, cx| {
+                    if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
+                        quiet.update(cx, |motion, cx| {
+                            if motion.menued {
+                                motion.menued = false;
+                                cx.notify();
+                            }
+                        });
+                    }
+                });
                 window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
                     if phase != DispatchPhase::Bubble {
                         return;
@@ -1462,7 +1604,7 @@ impl RenderOnce for TabStrip {
                     motion.paint_marker(&marker_id, Instant::now())
                 });
                 if let Some(bounds) = marker {
-                    window.paint_quad(gpui::fill(bounds, marker_fill).corner_radii(corners));
+                    window.paint_quad(gpui::fill(bounds, lit).corner_radii(corners));
                 }
                 if moving {
                     window.request_animation_frame();
@@ -1486,9 +1628,10 @@ impl RenderOnce for TabStrip {
                     .map(|item| Bounds::new(item.origin + shift, item.size))
                     .collect();
                 let mouse = window.mouse_position();
+                let now = Instant::now();
                 let moved = measured.update(cx, |motion, _| {
-                    motion.learn(&items, &seen, flow, gap);
-                    motion.measure(items, &seen, chosen, reduced, mouse, Instant::now())
+                    motion.learn(&items, &seen, gap, now);
+                    motion.measure(items, &seen, chosen, reduced, mouse, now)
                 });
                 if moved {
                     window.request_animation_frame();
