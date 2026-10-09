@@ -7,7 +7,7 @@ use desk_core::query::Answer;
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::inner_card;
-use desk_ui::components::charts::legend;
+use desk_ui::components::charts::{ContextLine, DotGrid, GridPart, Said, cached, legend};
 use desk_ui::components::chip::mono;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::list::row;
@@ -29,7 +29,12 @@ const EMPTY_TRACK: f32 = 0.07;
 const WINDOW_LEAST: f32 = 300.0;
 const BANDS_LEAST: f32 = 300.0;
 const FIGURE: f32 = 34.0;
-const TRACK: f32 = 12.0;
+const PANEL_GAP: f32 = 10.0;
+const PER_DOT: i64 = 1000;
+const LINE_WIDE: f32 = 700.0;
+const LINE_FLOOR: f32 = 148.0;
+const LINE_RISE: f32 = 140.0;
+const NO_COMPACTION: f32 = -1.0;
 const FILL_TRACK: f32 = 4.0;
 const PERCENT_WIDTH: f32 = 44.0;
 
@@ -46,6 +51,8 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             answer: Answer::default(),
             open: None,
             live: None,
+            trail: Vec::new(),
+            charts: None,
         })
         .into())
 }
@@ -55,6 +62,13 @@ pub struct ContextScreen {
     answer: Answer<ContextReport>,
     open: Option<String>,
     live: Option<(i64, i64)>,
+    trail: Vec<i64>,
+    charts: Option<Charts>,
+}
+
+struct Charts {
+    grid: Entity<DotGrid>,
+    line: Entity<ContextLine>,
 }
 
 struct Source {
@@ -125,10 +139,81 @@ impl ContextScreen {
                 open.as_deref().unwrap_or("none")
             );
         }
+        let fresh = store.context.read != self.answer.read;
+        let moved = live != self.live;
         self.answer = store.context.clone();
         self.live = live;
         self.open = open;
+        if let Some(read) = self.answer.read.as_ref().filter(|_| fresh) {
+            self.trail = read
+                .value
+                .occupancy
+                .iter()
+                .map(|occupancy| occupancy.total)
+                .collect();
+        }
+        if let (Some((reading, _)), true) = (live, moved)
+            && self
+                .answer
+                .read
+                .as_ref()
+                .is_some_and(|read| self.elsewhere(&read.value).is_none())
+        {
+            self.trail.push(reading);
+        }
+        self.charts = self.draw(cx);
         cx.notify();
+    }
+
+    fn draw(&self, cx: &mut Context<Self>) -> Option<Charts> {
+        let report = &self.answer.read.as_ref()?.value;
+        let occupancy = report.occupancy.as_ref()?;
+        let theme = ActiveTheme::theme(cx);
+        let total = self.total(report, occupancy);
+        let parts = parts(occupancy, total.used, &theme)
+            .into_iter()
+            .map(|(name, color, tokens)| GridPart {
+                name,
+                tokens: dots(tokens.saturating_add(PER_DOT / 2)),
+                color,
+            })
+            .collect();
+        let capacity = dots(total.of.saturating_add(PER_DOT - 1)).max(1);
+        let fork_at = dots(occupancy.mark.saturating_add(PER_DOT / 2));
+        let height = |used: i64| LINE_FLOOR - share(used, total.of) * LINE_RISE;
+        let mut readings: Vec<(i64, &'static str)> = self
+            .trail
+            .iter()
+            .enumerate()
+            .map(|(at, &used)| {
+                (
+                    used,
+                    if at == 0 {
+                        "query.context read"
+                    } else {
+                        "context.updated"
+                    },
+                )
+            })
+            .collect();
+        if let [(used, _)] = readings[..] {
+            readings.push((used, "now"));
+        }
+        let last = readings.len().saturating_sub(1).max(1) as f32;
+        let points = readings
+            .iter()
+            .enumerate()
+            .map(|(at, &(used, _))| (at as f32 / last * LINE_WIDE, height(used)))
+            .collect();
+        let tips = readings
+            .iter()
+            .map(|&(used, said)| Said::new(format!("{}k", dots(used)), said))
+            .collect();
+        let threshold = height(occupancy.mark);
+        Some(Charts {
+            grid: cx.new(|_| DotGrid::new(parts, capacity, fork_at, None)),
+            line: cx.new(|_| ContextLine::new(points, tips, threshold, NO_COMPACTION, Vec::new())),
+        })
     }
 
     fn reread(&mut self, cx: &mut Context<Self>) {
@@ -250,7 +335,14 @@ impl ContextScreen {
         let report = &read.value;
         let shown = match &report.occupancy {
             Some(occupancy) => panes()
-                .child(self.window_panel(report, occupancy, theme))
+                .child(
+                    frame::fraction(div(), 1.2, WINDOW_LEAST)
+                        .flex()
+                        .flex_col()
+                        .gap(px(PANEL_GAP))
+                        .child(self.window_panel(report, occupancy, theme, cx))
+                        .child(self.growth_panel(theme, cx)),
+                )
                 .child(bands_panel(report, occupancy, theme))
                 .into_any_element(),
             None => empty_state(
@@ -291,83 +383,104 @@ impl ContextScreen {
         report: &ContextReport,
         occupancy: &ContextOccupancy,
         theme: &Theme,
+        cx: &App,
     ) -> Div {
         let total = self.total(report, occupancy);
-        let since = (total.used - occupancy.total).max(0);
         let danger = theme.color(ColorToken::StatusDanger);
-        let mut parts: Vec<(SharedString, Rgba, i64)> = occupancy
-            .bands()
+        let named = parts(occupancy, total.used, theme)
             .into_iter()
-            .zip(swatches(theme))
-            .map(|((name, band), color)| (name.into(), color, band.tokens))
-            .collect();
-        if since > 0 {
-            parts.push(("since the read".into(), ink(theme, SINCE_SWATCH), since));
-        }
-        let track = parts
-            .iter()
-            .fold(track(TRACK, theme), |track, (_, color, tokens)| {
-                track.child(
-                    div()
-                        .h_full()
-                        .w(relative(share(*tokens, total.of)))
-                        .bg(*color),
-                )
-            })
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .bottom_0()
-                    .left(relative(share(occupancy.mark, total.of)))
-                    .w(px(2.0))
-                    .bg(danger),
-            );
-        let named = parts
-            .iter()
-            .map(|(name, color, _)| (name.clone(), *color))
+            .map(|(name, color, _)| (name, color))
             .chain(std::iter::once((
                 format!("mark {}", grouped(occupancy.mark)).into(),
                 danger,
             )));
-        panel("The window", None, theme)
-            .map(|panel| frame::fraction(panel, 1.2, WINDOW_LEAST))
-            .child(
-                inner_card(theme)
-                    .px(px(16.0))
-                    .py(px(14.0))
-                    .gap(px(12.0))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .items_baseline()
-                            .gap(px(10.0))
-                            .child(
-                                div()
-                                    .text_size(px(FIGURE))
-                                    .line_height(relative(1.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(grouped(total.used)),
-                            )
-                            .child(
-                                div()
-                                    .text_color(ink(theme, T2))
-                                    .child(format!("of {} tokens", grouped(total.of))),
-                            ),
-                    )
-                    .child(track)
-                    .child(legend(named, theme))
-                    .child(note(
-                        format!(
-                            "{}, mark from query.context occupancy, {} bytes per thousand tokens",
-                            total.source,
-                            grouped(report.bytes_per_thousand_tokens.unwrap_or_default())
+        panel(
+            "The window",
+            Some(note("one dot = 1k tokens", theme).into_any_element()),
+            theme,
+        )
+        .child(
+            inner_card(theme)
+                .px(px(16.0))
+                .py(px(14.0))
+                .gap(px(12.0))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_baseline()
+                        .gap(px(10.0))
+                        .child(
+                            div()
+                                .text_size(px(FIGURE))
+                                .line_height(relative(1.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(grouped(total.used)),
+                        )
+                        .child(
+                            div()
+                                .text_color(ink(theme, T2))
+                                .child(format!("of {} tokens", grouped(total.of))),
                         ),
-                        theme,
-                    )),
-            )
+                )
+                .children(self.charts.as_ref().map(|charts| cached(&charts.grid, cx)))
+                .child(legend(named, theme))
+                .child(note(
+                    format!(
+                        "{}, mark from query.context occupancy, {} bytes per thousand tokens",
+                        total.source,
+                        grouped(report.bytes_per_thousand_tokens.unwrap_or_default())
+                    ),
+                    theme,
+                )),
+        )
     }
+
+    fn growth_panel(&self, theme: &Theme, cx: &App) -> Div {
+        let since = self.trail.len().saturating_sub(1);
+        panel(
+            "How it grew",
+            Some(note("per reading", theme).into_any_element()),
+            theme,
+        )
+        .child(
+            inner_card(theme)
+                .px(px(16.0))
+                .py(px(14.0))
+                .gap(px(10.0))
+                .children(self.charts.as_ref().map(|charts| cached(&charts.line, cx)))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .justify_between()
+                        .gap(px(10.0))
+                        .child(note("query.context read", theme))
+                        .child(note(
+                            format!("{since} context.updated since, dashed at the mark"),
+                            theme,
+                        )),
+                ),
+        )
+    }
+}
+
+fn parts(occupancy: &ContextOccupancy, used: i64, theme: &Theme) -> Vec<(SharedString, Rgba, i64)> {
+    let since = used.saturating_sub(occupancy.total).max(0);
+    let mut parts: Vec<(SharedString, Rgba, i64)> = occupancy
+        .bands()
+        .into_iter()
+        .zip(swatches(theme))
+        .map(|((name, band), color)| (name.into(), color, band.tokens))
+        .collect();
+    if since > 0 {
+        parts.push(("since the read".into(), ink(theme, SINCE_SWATCH), since));
+    }
+    parts
+}
+
+fn dots(tokens: i64) -> usize {
+    usize::try_from(tokens.max(0) / PER_DOT).unwrap_or(usize::MAX)
 }
 
 fn bands_panel(report: &ContextReport, occupancy: &ContextOccupancy, theme: &Theme) -> Div {

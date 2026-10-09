@@ -20,3 +20,4 @@ crates/desk/src/modules/editor/boards.rs:top(px(40.0))  popover anchored under i
 crates/desk/src/modules/editor/boards.rs:top(px(74.0))  popover anchored under its trigger
 crates/desk/src/modules/editor/parts.rs:left(px(17.0))  tree indent guide
 crates/desk/src/modules/git/history.rs:top(px(40.0))  popover anchored under its trigger
+crates/desk/src/screens/context/mod.rs:LINE_WIDE  ContextLine viewbox width, scaled to bounds by charts.rs
