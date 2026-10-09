@@ -16,9 +16,9 @@ joins next session, and a sub-agent gets only what the lead cites as `[memory#id
 A kind says what it is about: `person` (how you work), `project` (a fact
 the code does not say) or `reference` (where something outside lives).
 Memory is not for what a rule, `AGENTS.md` or `CLAUDE.md` already says,
-nor for the task in front of you. The conversation is kept too, as episodes:
-your words, the lead's answers and sub-agent reports, never tool output; their
-view follows memory through every fork, and the lead opens it with `zoom` and `recall`.
+nor for the task in front of you. The conversation is kept too, as episodes: your words, the lead's
+answers and sub-agent reports, never tool output; their view follows memory, sized to the room the context
+leaves, through every fork, and the lead opens it with `zoom` and `recall`. `tofu settings set episodes off` keeps none.
 
 ## Where it lives
 

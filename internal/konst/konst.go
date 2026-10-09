@@ -399,6 +399,8 @@ const (
 	MemtreeCompactionsAtOnce = 8
 	MemtreeViewBytes         = 32 << 10
 	MemtreeContextBytes      = 32 << 10
+
+	EpisodeViewPercentOfRoom = 50
 )
 
 const (

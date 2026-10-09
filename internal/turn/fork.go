@@ -27,10 +27,12 @@ const (
 	episodeOfReport   = "work"
 )
 
+type RecordedAsk func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error)
+
 type episodeKeeper interface {
-	Episodes() (string, error)
+	Episodes(budget int) (string, error)
 	Keep(kind, text string) error
-	Compact() error
+	Compact(ask RecordedAsk) error
 }
 
 func standsAtTheHead(message llm.Message) bool {
@@ -47,9 +49,12 @@ func episodeKind(source string) string {
 	return ""
 }
 
+func withoutEpisodes(messages []llm.Message) []llm.Message {
+	return slices.DeleteFunc(messages, func(message llm.Message) bool { return message.Origin.Source == sourceEpisodeView })
+}
+
 func withEpisodes(messages []llm.Message, view string) []llm.Message {
-	if held := slices.IndexFunc(messages, func(message llm.Message) bool { return message.Origin.Source == sourceEpisodeView }); held >= 0 {
-		messages[held].Content = view
+	if view == "" {
 		return messages
 	}
 	at := slices.IndexFunc(messages, func(message llm.Message) bool { return !standsAtTheHead(message) })

@@ -23,7 +23,7 @@ func memoryStores() []string {
 
 type Zoom struct {
 	Project   string
-	Compactor func() (memtree.Compact, func())
+	Compactor func(turn.RecordedAsk) (memtree.Compact, func())
 	held      sync.Mutex
 }
 
@@ -85,10 +85,10 @@ func (z *Zoom) open(log string, reading func(*memtree.Store) ([]string, error)) 
 	return lines, err
 }
 
-func (z *Zoom) Episodes() (string, error) {
+func (z *Zoom) Episodes(budget int) (string, error) {
 	z.held.Lock()
 	defer z.held.Unlock()
-	view, _, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, nil)
+	view, _, err := memory.EpisodeView(z.Project, budget, nil)
 	return view, err
 }
 
@@ -98,8 +98,8 @@ func (z *Zoom) Keep(kind, text string) error {
 	return memory.KeepEpisode(z.Project, memtree.Item{Kind: kind, Text: text})
 }
 
-func (z *Zoom) Compact() error {
-	compact, release := z.Compactor()
+func (z *Zoom) Compact(ask turn.RecordedAsk) error {
+	compact, release := z.Compactor(ask)
 	defer release()
 	z.held.Lock()
 	defer z.held.Unlock()

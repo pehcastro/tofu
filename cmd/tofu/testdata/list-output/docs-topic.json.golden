@@ -172,6 +172,14 @@ exit 0
         "description": "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on"
       },
       {
+        "key": "episodes",
+        "category": "Context",
+        "default": "on",
+        "takes": "one of on, off",
+        "restart": false,
+        "description": "on keeps the conversation in this project as episodes, sends their view after the memory and through every fork, and offers zoom and recall; off keeps none, sends none and offers neither, while the memory still goes. Needs memory on"
+      },
+      {
         "key": "memoryFromAllUsers",
         "category": "Context",
         "default": "off",

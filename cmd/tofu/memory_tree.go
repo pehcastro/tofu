@@ -94,7 +94,9 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	compact, slug, release := memoryCompactor(dir)
+	compact, slug, release := memoryCompactor(dir, func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
+		return model.Ask(ctx, request)
+	})
 	defer release()
 	built, err := store.Build(context.Background(), compact)
 	if err == nil {
@@ -113,7 +115,7 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	return exitOK
 }
 
-func memoryCompactor(dir string) (memtree.Compact, string, func()) {
+func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string, func()) {
 	slug := settingText(dir, settingspkg.MemoryModel, nil)
 	library, err := modelLibrary(dir)
 	var model models.Model
@@ -124,8 +126,10 @@ func memoryCompactor(dir string) (memtree.Compact, string, func()) {
 		err = fmt.Errorf("%s is reached through the OpenRouter key, which is for Jev only: set %s to a subscription model", slug, settingspkg.MemoryModel)
 	}
 	var opened appWire
+	wire := ""
 	if err == nil {
-		opts := runOpts{dir: dir, wire: library.WireOf(model), model: slug}
+		wire = library.WireOf(model)
+		opts := runOpts{dir: dir, wire: wire, model: slug}
 		if len(model.Efforts) > 0 {
 			opts.effort = defaultEffort(model.Efforts)
 		}
@@ -154,17 +158,20 @@ func memoryCompactor(dir string) (memtree.Compact, string, func()) {
 		}
 		asked := "<chat>\n" + before + "\n</chat>\n\nCompaction: " + task + " into one line of at most 512 bytes (about 70 words), the length of this ruler:\n" + ruler + "\n<input>\n" + input + "\n</input>"
 		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}, {Role: llm.RoleUser, Content: asked}}
-		line, err := compactionLine(ctx, account.Model, messages)
+		asking := func(why string, messages []llm.Message) (string, error) {
+			decision, err := ask(ctx, why, wire, account.Model, llm.Request{Messages: messages})
+			return compactionLine(decision, err)
+		}
+		line, err := asking("memory model: "+task, messages)
 		if err != nil || len(line) <= konst.MemtreeLineBytes {
 			return line, err
 		}
 		retry := fmt.Sprintf("Too long: your line is %d bytes, over the %d-byte limit. Write the whole line again for the same <input>, cutting just enough of the least valuable items to fit before this cut:\n%s| <- LIMIT", len(line), konst.MemtreeLineBytes, line[:konst.MemtreeLineBytes])
-		return compactionLine(ctx, account.Model, append(messages, llm.Message{Role: llm.RoleAssistant, Content: line}, llm.Message{Role: llm.RoleUser, Content: retry}))
+		return asking("memory model: the same line again, under the limit", append(messages, llm.Message{Role: llm.RoleAssistant, Content: line}, llm.Message{Role: llm.RoleUser, Content: retry}))
 	}, slug, release
 }
 
-func compactionLine(ctx context.Context, model turn.Model, messages []llm.Message) (string, error) {
-	decision, err := model.Ask(ctx, llm.Request{Messages: messages})
+func compactionLine(decision llm.Decision, err error) (string, error) {
 	if err != nil {
 		return "", err
 	}

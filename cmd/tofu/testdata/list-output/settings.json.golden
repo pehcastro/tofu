@@ -130,6 +130,12 @@ exit 0
         "source": "default"
       },
       {
+        "key": "episodes",
+        "category": "Context",
+        "value": "on",
+        "source": "default"
+      },
+      {
         "key": "memoryFromAllUsers",
         "category": "Context",
         "value": "off",

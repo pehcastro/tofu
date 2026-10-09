@@ -188,7 +188,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
 	messages := make([]llm.Message, 0, len(config.History)+2)
-	if system := config.Prefix.hold(config.SystemMessage(), NewRegistry(withLoopTools(source().tools)...).Definitions()); system != "" {
+	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
+	if system := config.Prefix.hold(config.SystemMessage(), headTools); system != "" {
 		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
 	}
 	afterSystem := len(messages)
@@ -206,24 +207,49 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			row.Warnings = append(row.Warnings, "the episode log did not keep this "+kind+" item: "+err.Error())
 		}
 	}
+	var recording sync.Mutex
+	compactionAsk := func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error) {
+		id, started := session.NewEventID(), time.Now()
+		tapped, tap := llm.Tapped(ctx)
+		decision, timing, err := askCountingAttempts(tapped, model, request)
+		recording.Lock()
+		defer recording.Unlock()
+		recorded.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
+		row.TotalCostUSD += decision.Usage.Cost
+		if err == nil {
+			spent := stepFrom(id, len(row.Steps), timing, decision)
+			spent.AssistantText = ""
+			recorded.step(spent)
+		}
+		return decision, err
+	}
 	answered := func(reply string) {
 		episode(episodeOfLead, reply)
 		if keeper == nil {
 			return
 		}
-		if err := keeper.Compact(); err != nil {
+		if err := keeper.Compact(compactionAsk); err != nil {
 			row.Warnings = append(row.Warnings, "the episode view was not summarized after this turn: "+err.Error())
 		}
 	}
-	messages = slices.Concat(messages, config.MemoryMessage(), config.History)
-	if keeper != nil && len(config.History) == 0 {
-		view, err := keeper.Episodes()
+	episodesCarried := konst.MemtreeViewBytes
+	episodesFor := func(sized recall.Budget, head []llm.Message) []llm.Message {
+		room := (sized.Bands.Target() - sized.Tokens(artifacts.preview, historyOf(head))) * artifacts.preview.BytesPerThousandTokens / 1000
+		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, episodesCarried)
+		if allowed < konst.MemtreeLineBytes {
+			episodesCarried = 0
+			return head
+		}
+		view, err := keeper.Episodes(allowed)
 		if err != nil {
-			row.Warnings = append(row.Warnings, "the episode view is not sent this session: "+err.Error())
+			row.Warnings = append(row.Warnings, "the episode view is not carried: "+err.Error())
 		}
-		if view != "" {
-			messages = withEpisodes(messages, view)
-		}
+		episodesCarried = len(view)
+		return withEpisodes(head, view)
+	}
+	messages = slices.Concat(messages, config.MemoryMessage(), config.History)
+	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
+		messages = episodesFor(budget.Sending(artifacts.preview, string(schemas)), messages)
 	}
 	concluding, taken := "", ""
 	for _, tool := range config.Tools.tools {
@@ -313,17 +339,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
 		if keeper != nil {
-			view, err := keeper.Episodes()
-			missing := ""
-			if err != nil {
-				missing = "the fork carries no episode view, because reading it failed: " + err.Error()
-			}
-			if view != "" {
-				begun = withEpisodes(begun, view)
-			}
+			begun = episodesFor(budget, withoutEpisodes(begun))
 			carryState(fork, begun, "", row.Session)
 			fork.TokensAfter = budget.Tokens(artifacts.preview, historyOf(begun))
-			return begun, missing
+			return begun, ""
 		}
 		asked := beforeFork
 		if sentTokens(asked) > budget.Ceiling() {

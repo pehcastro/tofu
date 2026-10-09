@@ -3,8 +3,10 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"tofu/internal/memtree"
 	"tofu/internal/sys"
@@ -14,6 +16,7 @@ const (
 	EpisodesStore = "episodes"
 	episodesDir   = "episodes"
 	episodesHead  = "the conversation in this project so far, oldest first. A line is id+n|kind: text, and an older line sums up n items: user is the person, lead is you, work is a sub-agent's report. zoom opens a line, recall searches the words:\n"
+	leftOut       = "(the %d oldest lines are left out to fit this context; recall finds their words)\n"
 )
 
 func episodesLog(project string) (string, error) {
@@ -59,11 +62,22 @@ func EpisodeView(project string, budget int, compact memtree.Compact) (string, m
 	if err == nil {
 		err = store.Advance(budget, budget/2)
 	}
-	view := store.View()
-	if view != "" {
-		view = episodesHead + view
+	return fitted(store.View(), budget), built, errors.Join(err, store.Close())
+}
+
+func fitted(view string, budget int) string {
+	lines := strings.SplitAfter(strings.TrimSuffix(view, "\n"), "\n")
+	kept := lines
+	for len(kept) > 0 && len(episodesHead)+len(leftOut)+len(strings.Join(kept, "")) > budget {
+		kept = kept[1:]
 	}
-	return view, built, errors.Join(err, store.Close())
+	switch {
+	case view == "" || len(kept) == 0:
+		return ""
+	case len(kept) < len(lines):
+		return episodesHead + fmt.Sprintf(leftOut, len(lines)-len(kept)) + strings.Join(kept, "") + "\n"
+	}
+	return episodesHead + view
 }
 
 func Trees(project string) (map[string]string, error) {

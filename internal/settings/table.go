@@ -59,6 +59,7 @@ const (
 	InstructionSources     = "instructionSources"
 	Memory                 = "memory"
 	AutoMemory             = "autoMemory"
+	Episodes               = "episodes"
 	MemoryModel            = "memoryModel"
 	MemoryFromAllUsers     = "memoryFromAllUsers"
 	Learn                  = "learn"
@@ -123,6 +124,11 @@ const (
 const (
 	AllUsersOn  = "on"
 	AllUsersOff = "off"
+)
+
+const (
+	EpisodesOn  = "on"
+	EpisodesOff = "off"
 )
 
 const (
@@ -249,6 +255,8 @@ func Default() []Spec {
 			Choices: []string{SkillsOn, SkillsOff}},
 		{Key: Memory, Label: "Memory", Description: "on sends what you asked tofu to remember to the lead on every request and lets the lead offer one short rule; off sends none and offers nothing. tofu memory lists the entries", Category: "Context", Kind: Bool, Default: 1},
 		{Key: AutoMemory, Label: "Auto memory", Description: "on keeps a rule the lead offers at once and prints the undo, instead of asking first; answering always on its card turns it on", Category: "Context", Kind: Bool},
+		{Key: Episodes, Label: "Episodes", Description: "on keeps the conversation in this project as episodes, sends their view after the memory and through every fork, and offers zoom and recall; off keeps none, sends none and offers neither, while the memory still goes. Needs memory on", Category: "Context", Kind: Text, DefaultText: EpisodesOn,
+			Choices: []string{EpisodesOn, EpisodesOff}},
 		{Key: MemoryFromAllUsers, Label: "Memory from all users", Description: "on applies the user local memory every author kept in this repository's .tofu folder; off applies only yours. Project local memory applies to everyone either way", Category: "Context", Kind: Text, DefaultText: AllUsersOff,
 			Choices: []string{AllUsersOn, AllUsersOff}},
 		{Key: MemoryModel, Label: "Memory model", Description: "the subscription model that writes memory summaries, one line of at most 512 bytes each, as source/model; never the OpenRouter key", Category: "Context", Kind: Text, DefaultText: "claude-sub/claude-haiku-4-5-20251001"},

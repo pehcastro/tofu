@@ -751,13 +751,13 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if run.sessions != nil && memoryOn(dir) {
 		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
-		if opts.agent == "" {
-			zoom := &tools.Zoom{Project: dir, Compactor: func() (memtree.Compact, func()) {
-				compact, _, release := memoryCompactor(dir)
-				return compact, release
-			}}
-			asking = append(asking, zoom, tools.Recall{Zoom: zoom})
-		}
+	}
+	if opts.agent == "" && episodesOn(dir) {
+		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, func()) {
+			compact, _, release := memoryCompactor(dir, ask)
+			return compact, release
+		}}
+		asking = append(asking, zoom, tools.Recall{Zoom: zoom})
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
@@ -866,7 +866,17 @@ func gateMode(arm string) turn.GateMode {
 
 func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) {
 	tools := config.Tools.Definitions()
-	messages := append(config.MemoryMessage(), llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
+	messages := config.MemoryMessage()
+	if dir := cmp.Or(opts.dir, "."); opts.agent == "" && episodesOn(dir) {
+		view, _, err := memory.EpisodeView(dir, konst.MemtreeViewBytes, nil)
+		if err != nil {
+			return nil, err
+		}
+		if view != "" {
+			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: view})
+		}
+	}
+	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
 	switch opts.wire {
 	case wireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)
@@ -1474,4 +1484,8 @@ func nextInt(args []string, i *int, flag string) (int, error) {
 func memoryOn(dir string) bool {
 	on, _ := appSetting(dir, settingspkg.Memory)
 	return on != 0
+}
+
+func episodesOn(dir string) bool {
+	return settingText(dir, settingspkg.Episodes, nil) == settingspkg.EpisodesOn && memoryOn(dir)
 }
