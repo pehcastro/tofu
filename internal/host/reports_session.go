@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"tofu/internal/hook"
+	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/turn"
 )
@@ -25,6 +26,7 @@ type ContextReport struct {
 	Skipped                []SessionSkip     `json:"skipped,omitempty"`
 	Ceiling                int               `json:"ceiling,omitempty"`
 	BytesPerThousandTokens int               `json:"bytes_per_thousand_tokens,omitempty"`
+	Items                  []recall.Item     `json:"items,omitempty"`
 }
 
 type ContextOccupancy struct {

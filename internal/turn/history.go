@@ -42,6 +42,22 @@ type Compaction struct {
 	Drops        []recall.Drop `json:"drops"`
 }
 
+func RecordedContext(events []session.Event) (recall.Conversation, error) {
+	messages, err := ConversationFrom(events)
+	if err != nil {
+		return recall.Conversation{}, err
+	}
+	reading, err := session.ReadEvents(events)
+	if err != nil {
+		return recall.Conversation{}, err
+	}
+	conversation := historyOf(messages)
+	if reading.Prompt != nil {
+		conversation.Instructions = reading.Prompt.System + conversation.Instructions
+	}
+	return conversation, nil
+}
+
 func historyOf(messages []llm.Message) recall.Conversation {
 	var conversation recall.Conversation
 	calls := make(map[string]llm.ToolCall)

@@ -11,9 +11,11 @@ const (
 	ruleMarkClose = "]"
 )
 
+type Week [daysInAWeek]int
+
 type RuleFires struct {
-	Fires int              `json:"fires"`
-	Week  [daysInAWeek]int `json:"fires_week"`
+	Fires int  `json:"fires"`
+	Week  Week `json:"fires_week"`
 }
 
 func (s *Store) RuleFires(now time.Time) (map[string]RuleFires, []Skip, error) {

@@ -25,13 +25,13 @@ const (
 )
 
 type Skill struct {
-	Name        string
-	Description string
-	Domain      string
-	Origin      Origin
-	File        string
-	Dir         string
-	Hidden      bool
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Domain      string `json:"domain,omitempty"`
+	Origin      Origin `json:"origin"`
+	File        string `json:"path"`
+	Dir         string `json:"dir"`
+	Hidden      bool   `json:"hidden"`
 }
 
 type Found struct {

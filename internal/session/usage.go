@@ -63,7 +63,7 @@ type UsageTotals struct {
 	SiftedBytes int     `json:"sifted_bytes"`
 }
 
-func (u *UsageTotals) add(more UsageTotals) {
+func (u *UsageTotals) Add(more UsageTotals) {
 	u.TokensIn, u.TokensOut, u.CacheRead, u.CacheWrite = u.TokensIn+more.TokensIn, u.TokensOut+more.TokensOut, u.CacheRead+more.CacheRead, u.CacheWrite+more.CacheWrite
 	u.Requests, u.TurnMS, u.CostUSD, u.SiftedBytes = u.Requests+more.Requests, u.TurnMS+more.TurnMS, u.CostUSD+more.CostUSD, u.SiftedBytes+more.SiftedBytes
 }
@@ -134,12 +134,12 @@ func (s *Store) UsageHistory(span UsageSpan, now time.Time, classifier []Classif
 		if at.Before(starts[0]) || at.After(now) || totals == (UsageTotals{}) {
 			return
 		}
-		history.Buckets[sort.Search(len(starts), func(i int) bool { return starts[i].After(at) })-1].add(totals)
-		history.Total.add(totals)
+		history.Buckets[sort.Search(len(starts), func(i int) bool { return starts[i].After(at) })-1].Add(totals)
+		history.Total.Add(totals)
 		if spent[spender] == nil {
 			spent[spender] = &UsageTotals{}
 		}
-		spent[spender].add(totals)
+		spent[spender].Add(totals)
 	}
 	sessionOf := map[string]string{}
 	for _, header := range listing.Sessions {

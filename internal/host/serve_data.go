@@ -69,7 +69,23 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 	case queryPrefix + "settings":
 		return typedVerb[SettingsReport](s, raw, "settings")
 	case queryPrefix + "rules":
-		return typedVerb[RuleListReport](s, raw, "rules", "list")
+		return handle(raw, func(NoParams) (any, error) {
+			report, err := verbAs[RuleListReport](s, "rules", "list")
+			if err != nil {
+				return nil, err
+			}
+			return s.withRuleText(report)
+		})
+	case queryPrefix + "session":
+		return handle(raw, s.sessionDetail)
+	case queryPrefix + "usage.history":
+		return handle(raw, s.usageHistory)
+	case queryPrefix + "limits":
+		return handle(raw, s.limits)
+	case queryPrefix + "skills":
+		return handle(raw, s.skills)
+	case queryPrefix + "ledger.summary":
+		return handle(raw, s.ledgerSummary)
 	case queryPrefix + "agents":
 		return typedVerb[roster.Found](s, raw, "agents")
 	case queryPrefix + "library":
@@ -139,7 +155,11 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		return typedVerb[DoctorReport](s, raw, "doctor")
 	case queryPrefix + "context":
 		return handle(raw, func(p SessionParams) (any, error) {
-			return verbAs[ContextReport](s, verbLine([]string{"context"}, nil, nil, p.Session)...)
+			report, err := verbAs[ContextReport](s, verbLine([]string{"context"}, nil, nil, p.Session)...)
+			if err != nil {
+				return nil, err
+			}
+			return s.withItems(report)
 		})
 	case "session.info":
 		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionInfo](s, "session", "info", p.Session) })

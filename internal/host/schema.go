@@ -90,6 +90,8 @@ func (defs schemaDefs) of(t reflect.Type) any {
 		return map[string]any{}
 	case reflect.Slice:
 		return map[string]any{"type": []string{"array", "null"}, "items": defs.of(t.Elem())}
+	case reflect.Array:
+		return map[string]any{"type": "array", "items": defs.of(t.Elem()), "minItems": t.Len(), "maxItems": t.Len()}
 	case reflect.Map:
 		return map[string]any{"type": []string{"object", "null"}, "additionalProperties": defs.of(t.Elem())}
 	case reflect.Struct:

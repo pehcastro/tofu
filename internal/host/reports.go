@@ -3,6 +3,7 @@ package host
 import (
 	"tofu/internal/hook"
 	"tofu/internal/memory"
+	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 )
 
@@ -96,13 +97,17 @@ type RuleListReport struct {
 }
 
 type RuleListing struct {
-	ID       string           `json:"id"`
-	Kind     string           `json:"kind"`
-	Origin   string           `json:"origin"`
-	Mode     string           `json:"mode,omitempty"`
-	File     string           `json:"file,omitempty"`
-	Switch   string           `json:"switch,omitempty"`
-	Override *OverrideListing `json:"override,omitempty"`
+	ID        string           `json:"id"`
+	Kind      string           `json:"kind"`
+	Origin    string           `json:"origin"`
+	Mode      string           `json:"mode,omitempty"`
+	File      string           `json:"file,omitempty"`
+	Switch    string           `json:"switch,omitempty"`
+	Override  *OverrideListing `json:"override,omitempty"`
+	Text      string           `json:"text,omitempty"`
+	Trigger   string           `json:"trigger,omitempty"`
+	Fires     int              `json:"fires,omitempty"`
+	FiresWeek session.Week     `json:"fires_week,omitzero"`
 }
 
 type OverrideListing struct {

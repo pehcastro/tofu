@@ -7,17 +7,14 @@ verbs: serve
 
 ## What it is
 
-Every request `tofu serve --stdio` answers, with what it takes and what it
-answers. `tofu docs serve` says what serve is and how to start it, and
-`tofu serve --schema` carries every field of every line. Reads, reloads,
-`session.list`, `session.history`, `session.info`, `session.find`,
-`session.trace`, `mention.resolve`, `shell.run`, `learn.scan`, `setup.check`
+Every request `tofu serve --stdio` answers; `tofu docs serve` says how to
+start it, `tofu serve --schema` carries every field. Reads, reloads, the
+`session.*` reads, `mention.resolve`, `shell.run`, `learn.scan`, `setup.check`
 and the logins answer out of order, so none of them holds `turn.stop`.
 
-A read, a reload, a write and `learn.*` answer the report the verb's `--json`
-prints under `data`, with no envelope; a verb that fails errs with its
-problems. Only `undo`, `label`, `settings.set` and `login.start` answer the
-envelope, `{tofu, verb, ok, at, data, problems}`.
+A read, a reload, a write and `learn.*` answer the verb's `--json` report with
+no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
+`settings.set` and `login.start` answer `{tofu, verb, ok, at, data, problems}`.
 
 ## Where it lives
 
@@ -25,29 +22,24 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `questions` says it answers `tofu/askPerson`; answers `protocol`, `tofu`,
   `project` and `capabilities`, one name a family of methods
 - `session.list`: takes `search` and `limit`; answers `head` and `sessions`,
-  a row each with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
-  `model`, `costUsd`, `outcome` as the session recorded it, `open` for the
-  one open here, `running` while a turn runs, and `heldBy` for another tofu's
+  each `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`, `model`,
+  `costUsd`, `outcome`, `open` (here), `running` and `heldBy` (another tofu)
 - `session.open`: takes `session` (none starts a fresh one), `asking` and
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
-- `session.state`: `running` and its `turn`, `asking`, the `pick` of wire,
-  model and effort, waiting approvals, open `questions`, sub-agents, the kept
-  shells with the fields `shell.started` carries, the context window and the
-  cron jobs; it is the answer to `resync`
+- `session.state`, the answer to `resync`: `running` and its `turn`, `asking`,
+  the `pick`, waiting approvals, open `questions`, sub-agents, the kept shells
+  as `shell.started` carries them, the context window and the cron jobs
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
   turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
-- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, and
-  `into` when anything shrank
-- `session.history`: takes `session`, `limit` and `before`; answers `lines`,
+- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`.
+  `session.history`: takes `session`, `limit` and `before`; answers `lines`,
   each `{method, params}` as `session.open` sends it, from `first` of `total`
-- `session.info`: takes `session`; answers the row `tofu session info` prints
-- `session.find`: takes `session` and any of `tool`, `command`, `file`,
-  `text`, `agent`, `since` and `until`, each a duration like `2h` or a time;
-  answers `handle`, `query` and `hits`
-- `session.trace`: takes `session`; answers what `tofu session trace` prints:
-  `requests`, `calls`, `hooks`, `failures`, `messages`, `agents` and `cache`
+- `session.info` and `session.trace` take `session` and answer what `tofu
+  session info` and `tofu session trace` print. `session.find` takes `session`
+  and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until` (a
+  duration like `2h` or a time); answers `handle`, `query` and `hits`
 - `turn.send`: takes `session`, `text`, `mentions` (each a `ref`, kept where
   `text` has it, else added at the end; a path gains `@`), `images` (png, jpg,
   gif or webp, or the send is refused), `wire`, `model` and `effort`; answers
@@ -62,16 +54,28 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
 - `shell.run`: takes `command`, runs it as `!` does, answers `output` and
   `stopped`. `shell.read` takes `shell` and `offset`; `shell.kill` `shell`
-- reads, `query.` and: `models` (the models, `wires` signed in and `stale`),
-  `settings`, `rules`, `agents`, `library`, `memory`, `hooks`, `changelog`
-  (every version, and `seen`, the newest you read), `update` (it never
-  installs), `usage` (each provider row names its `account`, the id
-  `quota.updated` uses, and its `name`; the last reading, at once, with `read_at` and
-  `age_ms`; the first is read when a session opens, and one past five
-  minutes is read again behind the answer), `doctor`, `accounts` (`subscriptions` with their
-  `accounts`, and `keys`), `cron`, `docs` (takes `topic`; answers `topics` and
-  `entries`, or `page`), `context` (takes `session`) and `ledger` (takes `id`,
-  or `last` and `point`; answers `rows`, each with its `precedents`)
+- reads, `query.` and: `models` (with `wires` signed in and `stale`),
+  `settings`, `rules` (each with `text`, `trigger`, `fires` and `fires_week`,
+  seven days, today last), `agents`, `library`, `memory`, `hooks`,
+  `changelog` (with `seen`), `update` (it never installs), `usage` (each
+  provider row's `account` and `name`; the last reading at once, with
+  `read_at` and `age_ms`, read again behind the answer past five minutes),
+  `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes
+  `session`; `items`, each `{band, kind, name, tokens, fate, step}`) and
+  `ledger` (takes `id`, or `last` and `point`; `rows` with `precedents` and
+  `subject`, `{tool, command, path, url}`)
+- boards (capability `boards`): `query.session` takes `session`; answers
+  `info` and `generations`, the fork tree, each with `forked_into`,
+  `fork_kind`, `tokens_before` and `tokens_after`. `query.usage.history`
+  takes `range` (`day` by hour, `week` or `month` by day) and `project`;
+  answers `buckets`, `total`, `sifted_tokens` and `spenders` by session, role,
+  agent, wire, spend, account and model. `query.limits` answers `burns` per
+  account and window since its last reset (`per_hour` null on one reading,
+  `full_at` null when the window resets first), `order`, each role's accounts
+  in turn, and `spend`, today's by account and agent. `query.skills` answers
+  the library's `skills` and the folders'. `query.ledger.summary` takes
+  `since`, a week back by default; answers `points`, each `count`, `week`,
+  `would_ask`, `labeled`, `agreed`, `mean_ms`, `cost_usd` and `thresholds`
 - memory: `memory.add` takes `text`, `scope` (`global` or `project`) and
   `kind`; `memory.edit` takes `scope`, `id` and `text`; `memory.remove` takes
   `scope` and `id`. Each answers the entry, `{id, scope, kind, text, said, at,
@@ -79,23 +83,19 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
 - rules: `rules.add` takes `id`, `text`, `reason`, `concern`, `global` and
   `replace`; `rules.off` takes `id`, `reason` and `global`; `rules.remove` and
   `rules.restore` take `id` and `global`
-- agents: `agents.add` takes `name`, `description`, `model`, `tools` and
-  `global`; `agents.set` takes `name`, `model` and `global`; `agents.remove`
-  takes `name` and `global`
-- every rules and agents write, and `learn.apply`, answers `changes`, each
-  `{change, what, file}` with `change` `added`, `changed` or `removed`, and
-  `undo`, the command that takes it back
-- learn: `learn.scan` answers the run; `learn.show` takes `id` and
-  `learn.reject` `id` and `reason`, each answering the finding;
-  `learn.apply` takes `id` and `project`
-- `reload` answers `project`, `first` and `parts`, each with `added`,
-  `removed` and `changed`; `models.reload` answers `sources` and `versions`
-- `hooks.trust` trusts every new project hook and answers `trusted`
+- agents: `agents.add` takes `name`, `description`, `model`, `tools`, `global`;
+  `agents.set` `name`, `model`, `global`; `agents.remove` `name`, `global`
+- each rules and agents write, and `learn.apply`, answers `changes`, each
+  `{change, what, file}` (`added`, `changed`, `removed`), and `undo`
+- learn: `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject`
+  `id` and `reason`, each the finding; `learn.apply` takes `id` and `project`
+- `reload` answers `project`, `first` and `parts` (`added`, `removed`,
+  `changed`); `models.reload` `sources` and `versions`; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one
-  with no `done` still blocks a turn. `login.key` takes `provider` and `key`
-  and checks the key with the provider; `login.logout` takes `role`,
-  `provider` and `number`; both answer `note`. `login.start` takes `role` and
-  `provider`. `settings.set` takes `key`, `value` and `scope`
+  with no `done` still blocks a turn. `login.key` takes `provider` and `key`,
+  checked with the provider, `login.logout` `role`, `provider` and `number`;
+  both answer `note`. `login.start` takes `role` and `provider`;
+  `settings.set` takes `key`, `value` and `scope`
 - `cron.command` takes the line you would type, such as `/loop 10m check the
   build`, or `/cron delete all`, and answers `note`. `label` takes `row` and `outcome`
 - `status.list` (capability `status`): takes nothing; answers `records`, every

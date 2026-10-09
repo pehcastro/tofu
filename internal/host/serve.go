@@ -193,7 +193,11 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 			if s.Ledger == nil {
 				return nil, &Refusal{Code: CodeRefused, Message: "this tofu reads no ledger"}
 			}
-			return s.Ledger(p)
+			report, err := s.Ledger(p)
+			if err != nil {
+				return nil, err
+			}
+			return s.withSubjects(report)
 		})
 	case "undo":
 		return handle(raw, s.undo)

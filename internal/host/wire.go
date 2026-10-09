@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
+	"tofu/internal/judge/state"
 	"tofu/internal/learn"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
@@ -790,6 +791,7 @@ type LedgerRow struct {
 	Chain      *ledger.Row       `json:"chain,omitempty"`
 	BlockedBy  string            `json:"blocked_by,omitempty"`
 	Precedents []LedgerPrecedent `json:"precedents"`
+	Subject    *state.Subject    `json:"subject,omitempty"`
 }
 
 type LedgerPrecedent struct {
@@ -941,6 +943,11 @@ func requests() []method {
 		{name: "session.trace", params: SessionParams{}, result: SessionTrace{}},
 		{name: "mention.resolve", params: MentionParams{}, result: MentionResolved{}},
 		{name: queryPrefix + "accounts", params: NoParams{}, result: Accounts{}},
+		{name: queryPrefix + "session", params: SessionParams{}, result: SessionDetail{}},
+		{name: queryPrefix + "usage.history", params: UsageHistoryParams{}, result: UsageHistoryReport{}},
+		{name: queryPrefix + "limits", params: NoParams{}, result: LimitsReport{}},
+		{name: queryPrefix + "skills", params: NoParams{}, result: SkillsReport{}},
+		{name: queryPrefix + "ledger.summary", params: LedgerSummaryParams{}, result: LedgerSummary{}},
 		{name: "learn.apply", params: LearnApplyParams{}, result: WriteReceipt{}},
 		{name: statusMethod + ".list", params: NoParams{}, result: StatusList{}},
 	}
@@ -955,7 +962,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards"}
 }
 
 const queryPrefix = "query."
