@@ -105,9 +105,9 @@ says what listed a catalog model. `--refresh` and `--discover` still run it for 
 
     tofu login --status
 
-prints a card per credential with a bar per quota window, then each key,
-`✓` by its last four characters or `○ not set`. `tofu usage` prints the
-quota windows and when they reset. Both take `--json`.
+prints a card per credential with a bar per quota window, then each key, `✓` by its last four characters or `○ not set`. The login line says when the account was last refreshed.
+A signed-in account stays signed in until the provider refuses it: while the app or `tofu serve` runs, it refreshes every account whose token expires within 10 minutes or that has gone 8 days without a refresh, used or not.
+Turns spread over accounts with equal room, least recently used first. "re-login by" shows only when the provider itself set an end date for the sign-in and it is under 7 days away. `tofu usage` prints the quota windows and when they reset. Both take `--json`.
 
 ## Undo it
 

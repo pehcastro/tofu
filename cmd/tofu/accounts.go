@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"sync"
 	"time"
 
 	"tofu/internal/judge/jev"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -19,6 +21,8 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
+
+const claudeBaseURLVariable = "TOFU_CLAUDE_BASE_URL"
 
 type accounts struct {
 	dir      string
@@ -118,6 +122,7 @@ func (a *accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.
 			ID:       row.ID,
 			Provider: quota.Provider(a.provider),
 			Report:   results[i].report,
+			LastUsed: row.LastUsed,
 		})
 	}
 	return candidates, rows, nil
@@ -138,6 +143,7 @@ func (a *accounts) account(choice quota.Choice, rows map[int64]cred.Row) (turn.A
 	if err != nil {
 		return turn.Account{}, err
 	}
+	_ = a.store.MarkUsed(choice.ID, a.now())
 	return turn.Account{
 		ID:       choice.ID,
 		Model:    wrapped,
@@ -174,7 +180,10 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		}
 		return codexTurn{wire: wire, effort: a.effort}, nil
 	}
+	stand := os.Getenv(claudeBaseURLVariable)
 	wire, err := anthropic.New(anthropic.Config{
+		BaseURL:   stand,
+		Proxy:     stand != "",
 		Model:     a.modelID,
 		Token:     token,
 		SessionID: session,
@@ -189,6 +198,37 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		return nil, err
 	}
 	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
+}
+
+func keepAccountsAlive(note func(string)) (stop func()) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		waiting := time.NewTicker(konst.CredSweepSeconds * time.Second)
+		defer waiting.Stop()
+		for {
+			store, err := openStoredCredentials()
+			if err != nil {
+				note("signed-in accounts are not kept alive: " + err.Error())
+				return
+			}
+			if store != nil {
+				cred.NewKeeper(store, note).Run(ctx)
+				_ = store.Close()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-waiting.C:
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 func clientVersion(versions settingspkg.Fingerprint, provider cred.Provider) string {

@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS refresh_leases (
 	owner TEXT NOT NULL,
 	expires_at_ms INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS credential_use (
+	credential_id INTEGER PRIMARY KEY,
+	used_at_ms INTEGER NOT NULL
+);
 `
 )
 
@@ -35,6 +39,7 @@ type Row struct {
 	ID            int64
 	Credential    Credential
 	DisabledCause string
+	LastUsed      time.Time
 }
 
 type Store struct {
@@ -163,7 +168,8 @@ func (s *Store) RowAt(provider Provider, now time.Time) (Row, bool, error) {
 }
 
 func (s *Store) selectRows(clause string, args ...any) ([]Row, error) {
-	query, err := s.db.Query(`SELECT id, data, COALESCE(disabled_cause, '') FROM credentials `+clause, args...)
+	query, err := s.db.Query(`SELECT id, data, COALESCE(disabled_cause, ''), COALESCE(used_at_ms, 0)
+		FROM credentials LEFT JOIN credential_use ON credential_id = id `+clause, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +178,12 @@ func (s *Store) selectRows(clause string, args ...any) ([]Row, error) {
 	for query.Next() {
 		var row Row
 		var data string
-		if err := query.Scan(&row.ID, &data, &row.DisabledCause); err != nil {
+		var used int64
+		if err := query.Scan(&row.ID, &data, &row.DisabledCause, &used); err != nil {
 			return nil, err
+		}
+		if used > 0 {
+			row.LastUsed = time.UnixMilli(used)
 		}
 		if err := json.Unmarshal([]byte(data), &row.Credential); err != nil {
 			return nil, err
@@ -229,6 +239,22 @@ func (s *Store) Disable(id int64, cause string, now time.Time) error {
 	return err
 }
 
+func (s *Store) DisableIfRefresh(id int64, refresh, cause string, now time.Time) error {
+	_, err := s.db.Exec(
+		`UPDATE credentials SET disabled_cause = ?, updated_at = ?
+		WHERE id = ? AND disabled_cause IS NULL AND json_extract(data, '$.refresh') = ?`,
+		cause, now.UnixMilli(), id, refresh)
+	return err
+}
+
+func (s *Store) MarkUsed(id int64, now time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT INTO credential_use (credential_id, used_at_ms) VALUES (?, ?)
+		ON CONFLICT(credential_id) DO UPDATE SET used_at_ms = excluded.used_at_ms`,
+		id, now.UnixMilli())
+	return err
+}
+
 func (s *Store) Enable(id int64, now time.Time) error {
 	_, err := s.db.Exec(
 		`UPDATE credentials SET disabled_cause = NULL, updated_at = ? WHERE id = ?`,
@@ -242,8 +268,10 @@ func (s *Store) Delete(id int64) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.Exec(`DELETE FROM refresh_leases WHERE credential_id = ?`, id); err != nil {
-		return err
+	for _, table := range []string{"refresh_leases", "credential_use"} {
+		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE credential_id = ?`, id); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(`DELETE FROM credentials WHERE id = ?`, id); err != nil {
 		return err

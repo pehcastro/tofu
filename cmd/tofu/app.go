@@ -236,7 +236,9 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	}
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota, reload: reloadAccounts}
 	launch := launchOf(dir, resumed, resumed.Session == "")
+	stopKeeping := keepAccountsAlive(func(string) {})
 	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
+	stopKeeping()
 	(*launch.release)()
 	for _, warning := range (*launch.endSession)() {
 		_, _ = fmt.Fprintln(errOut, "tofu: "+warning)

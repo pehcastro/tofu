@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"sync"
 	"time"
 
@@ -19,15 +18,8 @@ const (
 	leasePollMax         = 250 * time.Millisecond
 	refreshTimeout       = konst.CredRefreshTimeoutMillis * time.Millisecond
 	leaseOutlivesRefresh = uint(leaseTTL - refreshTimeout - 1)
+	writeRetry           = konst.CredWriteRetryMillis * time.Millisecond
 	ownerBytes           = 16
-)
-
-const (
-	definitivePattern = `(?i)invalid_grant|invalid_token|unauthorized_client|\brevoked\b|refresh[\s_]?token.*expired`
-	transientPattern  = `(?i)timeout|network|fetch failed|ECONN(REFUSED|RESET)|ETIMEDOUT|EAI_AGAIN|socket hang up|` +
-		`\b(408|425|429|5\d{2})\b|rate.?limit|too many requests|temporar|unavailable|forbidden|permission_denied|` +
-		`cloudflare|captcha`
-	authStatusPattern = `\b401\b`
 )
 
 type flight struct {
@@ -36,14 +28,22 @@ type flight struct {
 	err    error
 }
 
+type unwritten struct {
+	credential Credential
+	replaces   string
+}
+
 type Manager struct {
 	store    *Store
 	spec     Spec
 	find     func(time.Time) (Row, bool, error)
 	client   *http.Client
 	now      func() time.Time
+	save     func(int64, Credential, string, time.Time) (bool, error)
+	note     func(string)
 	mu       sync.Mutex
 	inflight map[int64]*flight
+	held     map[int64]unwritten
 }
 
 func NewManager(store *Store, spec Spec) *Manager {
@@ -65,7 +65,10 @@ func newManager(store *Store, spec Spec, find func(time.Time) (Row, bool, error)
 		find:     find,
 		client:   &http.Client{},
 		now:      time.Now,
+		save:     store.UpdateIfRefreshMatches,
+		note:     func(string) {},
 		inflight: make(map[int64]*flight),
+		held:     make(map[int64]unwritten),
 	}
 }
 
@@ -84,10 +87,10 @@ func (m *Manager) Token(ctx context.Context, rejected string) (string, error) {
 	if cause := row.Unusable(m.now()); cause != "" {
 		return "", fmt.Errorf("cred: the %s credential is %s", m.spec.Provider, cause)
 	}
-	if m.usable(row.Credential, rejected) {
-		return row.Credential.Access, nil
+	if current, _ := m.flush(row); m.usable(current, rejected) {
+		return current.Access, nil
 	}
-	return m.refreshOnce(ctx, row, rejected)
+	return m.refreshOnce(ctx, row, func(credential Credential) bool { return !m.usable(credential, rejected) })
 }
 
 func (m *Manager) usable(credential Credential, rejected string) bool {
@@ -98,7 +101,29 @@ func (m *Manager) fresh(credential Credential) bool {
 	return m.now().Add(refreshSkew).Before(credential.Expires)
 }
 
-func (m *Manager) refreshOnce(ctx context.Context, row Row, rejected string) (string, error) {
+func (m *Manager) flush(row Row) (Credential, string) {
+	m.mu.Lock()
+	held, holding := m.held[row.ID]
+	m.mu.Unlock()
+	if !holding {
+		return row.Credential, row.Credential.Refresh
+	}
+	replaced, err := m.save(row.ID, held.credential, held.replaces, m.now())
+	if err != nil {
+		return held.credential, held.replaces
+	}
+	m.mu.Lock()
+	if m.held[row.ID].credential.Refresh == held.credential.Refresh {
+		delete(m.held, row.ID)
+	}
+	m.mu.Unlock()
+	if !replaced {
+		return row.Credential, row.Credential.Refresh
+	}
+	return held.credential, held.credential.Refresh
+}
+
+func (m *Manager) refreshOnce(ctx context.Context, row Row, stale func(Credential) bool) (string, error) {
 	m.mu.Lock()
 	running, joined := m.inflight[row.ID]
 	if !joined {
@@ -107,7 +132,7 @@ func (m *Manager) refreshOnce(ctx context.Context, row Row, rejected string) (st
 		go func() {
 			detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
 			defer cancel()
-			running.access, running.err = m.refreshLeased(detached, row, rejected)
+			running.access, running.err = m.refreshLeased(detached, row, stale)
 			m.mu.Lock()
 			delete(m.inflight, row.ID)
 			m.mu.Unlock()
@@ -123,7 +148,7 @@ func (m *Manager) refreshOnce(ctx context.Context, row Row, rejected string) (st
 	}
 }
 
-func (m *Manager) refreshLeased(ctx context.Context, row Row, rejected string) (string, error) {
+func (m *Manager) refreshLeased(ctx context.Context, row Row, stale func(Credential) bool) (string, error) {
 	owner, err := randomURLSafe(ownerBytes)
 	if err != nil {
 		return "", err
@@ -150,10 +175,11 @@ func (m *Manager) refreshLeased(ctx context.Context, row Row, rejected string) (
 	if !found {
 		return "", fmt.Errorf("cred: the %s credential vanished while refreshing it", m.spec.Provider)
 	}
-	if m.usable(current.Credential, rejected) {
-		return current.Credential.Access, nil
+	credential, stored := m.flush(current)
+	if !stale(credential) {
+		return credential.Access, nil
 	}
-	return m.mint(ctx, current)
+	return m.mint(ctx, current.ID, credential, stored, stale, konst.CredReloadRetries)
 }
 
 func (m *Manager) waitForLease(ctx context.Context, id int64) error {
@@ -171,41 +197,51 @@ func (m *Manager) waitForLease(ctx context.Context, id int64) error {
 	}
 }
 
-func (m *Manager) mint(ctx context.Context, row Row) (string, error) {
-	minted, err := refreshGrant(ctx, m.client, m.spec, row.Credential, m.now())
-	if err != nil {
-		var refusal tokenRefusal
-		if errors.As(err, &refusal) && definitiveFailure(string(refusal)) {
-			if disableErr := m.store.Disable(row.ID, "oauth refresh failed: "+err.Error(), m.now()); disableErr != nil {
-				return "", disableErr
-			}
-		}
-		return "", err
-	}
-	replaced, err := m.store.UpdateIfRefreshMatches(row.ID, minted, row.Credential.Refresh, m.now())
-	if err != nil {
-		return "", err
-	}
-	if !replaced {
-		peer, found, err := m.find(m.now())
+func (m *Manager) mint(ctx context.Context, id int64, credential Credential, stored string, stale func(Credential) bool, reloads int) (string, error) {
+	minted, err := refreshGrant(ctx, m.client, m.spec, credential, m.now())
+	var refusal tokenRefusal
+	if !errors.As(err, &refusal) || refusal.reason() == "" {
 		if err != nil {
 			return "", err
 		}
-		if found && m.fresh(peer.Credential) {
-			return peer.Credential.Access, nil
+		return m.keep(id, minted, stored)
+	}
+	latest, found, err := m.find(m.now())
+	if err != nil {
+		return "", err
+	}
+	if found && latest.ID == id && latest.Credential.Refresh != stored && reloads > 0 {
+		if !stale(latest.Credential) {
+			return latest.Credential.Access, nil
+		}
+		return m.mint(ctx, id, latest.Credential, latest.Credential.Refresh, stale, reloads-1)
+	}
+	if err := m.store.DisableIfRefresh(id, stored, "oauth refresh failed: "+refusal.reason(), m.now()); err != nil {
+		return "", err
+	}
+	return "", refusal
+}
+
+func (m *Manager) keep(id int64, minted Credential, stored string) (string, error) {
+	for try := 1; try <= konst.CredWriteTries; try++ {
+		replaced, err := m.save(id, minted, stored, m.now())
+		switch {
+		case err == nil && replaced:
+			return minted.Access, nil
+		case err == nil:
+			if peer, found, err := m.find(m.now()); err == nil && found && m.fresh(peer.Credential) {
+				return peer.Credential.Access, nil
+			}
+			return minted.Access, nil
+		}
+		m.note(fmt.Sprintf("%s #%d: writing the new token failed, try %d of %d: %v", m.spec.Provider, id, try, konst.CredWriteTries, err))
+		if try < konst.CredWriteTries {
+			time.Sleep(writeRetry)
 		}
 	}
+	m.mu.Lock()
+	m.held[id] = unwritten{credential: minted, replaces: stored}
+	m.mu.Unlock()
+	m.note(fmt.Sprintf("%s #%d: the new token is held in memory and written on the next use or sweep", m.spec.Provider, id))
 	return minted.Access, nil
-}
-
-func definitiveFailure(message string) bool {
-	if matches(definitivePattern, message) {
-		return true
-	}
-	return matches(authStatusPattern, message) && !matches(transientPattern, message)
-}
-
-func matches(pattern, text string) bool {
-	found, _ := regexp.MatchString(pattern, text)
-	return found
 }

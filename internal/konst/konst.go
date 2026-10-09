@@ -78,6 +78,13 @@ const (
 
 	CredLeaseTTLMillis       = 45000
 	CredRefreshTimeoutMillis = 40000
+	CredSweepSeconds         = 60
+	CredRefreshAheadMinutes  = 10
+	CredRefreshAfterDays     = 8
+	CredWriteTries           = 3
+	CredWriteRetryMillis     = 1000
+	CredReloadRetries        = 1
+	CredReloginWarnDays      = 7
 
 	WhyStateBytes      = 2048
 	MeterBarWidthChars = 12

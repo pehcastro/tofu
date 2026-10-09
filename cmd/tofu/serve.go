@@ -105,9 +105,11 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	open, polled, wires := openAppWire, serveQuota(kept), signedInWires
+	open, polled, wires, stopKeeping := openAppWire, serveQuota(kept), signedInWires, func() {}
 	if deck != nil {
 		open, polled, wires = driveWire(deck), nil, func() []string { return append(runWires(), wireMeta) }
+	} else {
+		stopKeeping = keepAccountsAlive(func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) })
 	}
 	launch := launchOf(dir, sessionResume{}, true)
 	engine := &appEngine{dir: dir, open: open, tabs: launch.tabs}
@@ -123,6 +125,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},
 		Stale: func() bool { return catalogStale(time.Now()) }, Setup: serveSetup, SaveKey: serveKey, Logout: serveLogout})
+	stopKeeping()
 	engine.warm.Close()
 	live.Close()
 	for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {

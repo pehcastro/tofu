@@ -1,8 +1,10 @@
 package cred
 
 import (
+	"cmp"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -56,6 +58,11 @@ const (
 const KindOAuth = "oauth"
 
 const (
+	ClaudeTokenURLVariable = "TOFU_CLAUDE_TOKEN_URL"
+	CodexTokenURLVariable  = "TOFU_CODEX_TOKEN_URL"
+)
+
+const (
 	anthropicClientIDBase64 = "OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl"
 	codexClientID           = "app_EMoamEEZ73f0CkXaXp7hrann"
 	codexAuthClaim          = "https://api.openai.com/auth"
@@ -76,7 +83,6 @@ type Spec struct {
 	SendStateOnExchange bool
 	RefreshHeaders      map[string]string
 	ExpirySkew          time.Duration
-	GrantLife           time.Duration
 	IdentityTokenField  string
 	AccountIDPath       string
 	EmailPath           string
@@ -117,7 +123,7 @@ func claudeSubSpec() Spec {
 		CallbackPort:        54545,
 		CallbackPath:        "/callback",
 		PortFallback:        true,
-		TokenURL:            "https://api.anthropic.com/v1/oauth/token",
+		TokenURL:            cmp.Or(os.Getenv(ClaudeTokenURLVariable), "https://api.anthropic.com/v1/oauth/token"),
 		TokenBody:           BodyJSON,
 		SendStateOnExchange: true,
 		RefreshHeaders: map[string]string{
@@ -125,7 +131,6 @@ func claudeSubSpec() Spec {
 			"User-Agent":     "anthropic-sdk-typescript/" + claudeCodeSDKVersion + " userOAuthProvider",
 		},
 		ExpirySkew:    5 * time.Minute,
-		GrantLife:     30 * 24 * time.Hour,
 		AccountIDPath: "account.uuid",
 		EmailPath:     "account.email_address",
 		OrgIDPath:     "organization.uuid",
@@ -149,7 +154,7 @@ func codexSubSpec() Spec {
 		CallbackPort:       1455,
 		CallbackPath:       "/auth/callback",
 		PortFallback:       false,
-		TokenURL:           "https://auth.openai.com/oauth/token",
+		TokenURL:           cmp.Or(os.Getenv(CodexTokenURLVariable), "https://auth.openai.com/oauth/token"),
 		TokenBody:          BodyForm,
 		IdentityTokenField: "id_token",
 		AccountIDPath:      codexAuthClaim + ".chatgpt_account_id",

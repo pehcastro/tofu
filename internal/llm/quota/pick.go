@@ -16,6 +16,7 @@ type Candidate struct {
 	ID       int64
 	Provider Provider
 	Report   Report
+	LastUsed time.Time
 }
 
 type Choice struct {
@@ -52,22 +53,26 @@ func Spent(report Report, spends []string, now time.Time) bool {
 }
 
 func Pick(candidates []Candidate, provider Provider, spends []string, now time.Time) (Choice, bool) {
-	ranked := make([]Choice, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate.Provider != provider {
-			continue
-		}
-		ranked = append(ranked, Choice{ID: candidate.ID, Headroom: Left(candidate.Report, spends, now)})
+	type ranked struct {
+		Choice
+		used time.Time
 	}
-	if len(ranked) == 0 {
+	var ranks []ranked
+	for _, candidate := range candidates {
+		if candidate.Provider == provider {
+			ranks = append(ranks, ranked{Choice{ID: candidate.ID, Headroom: Left(candidate.Report, spends, now)}, candidate.LastUsed})
+		}
+	}
+	if len(ranks) == 0 {
 		return Choice{}, false
 	}
-	return slices.MinFunc(ranked, func(a, b Choice) int {
+	return slices.MinFunc(ranks, func(a, b ranked) int {
 		return cmp.Or(
 			cmp.Compare(b.Headroom.Fraction, a.Headroom.Fraction),
 			soonerReset(a.Headroom.ResetsAt, b.Headroom.ResetsAt),
+			a.used.Compare(b.used),
 			cmp.Compare(a.ID, b.ID))
-	}), true
+	}).Choice, true
 }
 
 func soonerReset(a, b time.Time) int {

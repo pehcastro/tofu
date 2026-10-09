@@ -4,10 +4,14 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
-const dayStamp = "2006-01-02"
+const (
+	dayStamp       = "2006-01-02"
+	reloginWarning = konst.CredReloginWarnDays * 24 * time.Hour
+)
 
 func DoctorState(now time.Time) string {
 	path, err := Path()
@@ -48,20 +52,20 @@ func (r Row) Unusable(now time.Time) string {
 	if r.DisabledCause != "" {
 		return "disabled: " + strings.ReplaceAll(r.DisabledCause, "\n", " ")
 	}
-	deadline, dated := r.ReloginBy()
-	if !dated || now.Before(deadline) {
+	ends := r.Credential.RefreshExpires
+	if ends.IsZero() || now.Before(ends) {
 		return ""
 	}
-	return "the login expired on " + deadline.UTC().Format(dayStamp) +
+	return "the server's refresh token expired on " + ends.UTC().Format(dayStamp) +
 		", run tofu login llm " + string(r.Credential.Provider)
 }
 
-func (r Row) ReloginBy() (time.Time, bool) {
-	spec, err := Lookup(string(r.Credential.Provider))
-	if err != nil || spec.GrantLife == 0 || r.Credential.Authorized.IsZero() {
+func (r Row) ReloginBy(now time.Time) (time.Time, bool) {
+	ends := r.Credential.RefreshExpires
+	if ends.IsZero() || now.Add(reloginWarning).Before(ends) {
 		return time.Time{}, false
 	}
-	return r.Credential.Authorized.Add(spec.GrantLife), true
+	return ends, true
 }
 
 func (r Row) State(now time.Time) string {
@@ -70,9 +74,8 @@ func (r Row) State(now time.Time) string {
 		return line + ", " + cause
 	}
 	line += ", expires " + r.Credential.Expires.UTC().Format(time.RFC3339)
-	deadline, dated := r.ReloginBy()
-	if !dated {
-		return line
+	if deadline, near := r.ReloginBy(now); near {
+		line += ", re-login by " + deadline.UTC().Format(dayStamp)
 	}
-	return line + ", re-login by " + deadline.UTC().Format(dayStamp)
+	return line
 }

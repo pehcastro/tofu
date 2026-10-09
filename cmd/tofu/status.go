@@ -168,21 +168,25 @@ func statusCandidates(provider cred.Provider, rows []cred.Row, results []pollRes
 	candidates := make([]quota.Candidate, 0, len(rows))
 	for index, row := range rows {
 		if row.Credential.Provider == provider && row.Unusable(now) == "" {
-			candidates = append(candidates, quota.Candidate{ID: row.ID, Provider: quota.Provider(provider), Report: results[index].report})
+			candidates = append(candidates, quota.Candidate{ID: row.ID, Provider: quota.Provider(provider), Report: results[index].report, LastUsed: row.LastUsed})
 		}
 	}
 	return candidates
 }
 
 func accountOf(row cred.Row, result pollResult, chosen, redact bool, library models.Library, now time.Time) accountStatus {
+	refreshed := "not refreshed yet"
+	if !row.Credential.Refreshed.IsZero() {
+		refreshed = "refreshed " + widget.Until(now.Sub(row.Credential.Refreshed)) + " ago"
+	}
 	account := accountStatus{
 		ID:      row.ID,
 		Account: accountName(row.Credential.Identity, redact),
 		State:   stateOf(row, result, chosen, now),
-		Login:   row.Credential.Kind,
+		Login:   row.Credential.Kind + " · " + refreshed + ", kept alive while tofu runs",
 		Plan:    result.report.Plan,
 	}
-	account.ReloginBy, _ = row.ReloginBy()
+	account.ReloginBy, _ = row.ReloginBy(now)
 	for _, window := range result.report.Windows {
 		if !window.Used.Reported {
 			continue

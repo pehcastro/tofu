@@ -13,8 +13,7 @@
             "id": 1,
             "account": "ada@example.com",
             "state": "unchecked",
-            "login": "oauth",
-            "relogin_by": "2026-10-29T12:00:00Z"
+            "login": "oauth · not refreshed yet, kept alive while tofu runs"
           }
         ]
       }

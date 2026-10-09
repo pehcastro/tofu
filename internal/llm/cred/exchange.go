@@ -2,6 +2,7 @@ package cred
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -31,18 +32,40 @@ type Identity struct {
 }
 
 type Credential struct {
-	Provider   Provider  `json:"provider"`
-	Kind       string    `json:"kind"`
-	Access     string    `json:"access"`
-	Refresh    string    `json:"refresh"`
-	Expires    time.Time `json:"expires"`
-	Identity   Identity  `json:"identity"`
-	Authorized time.Time `json:"authorized"`
+	Provider       Provider  `json:"provider"`
+	Kind           string    `json:"kind"`
+	Access         string    `json:"access"`
+	Refresh        string    `json:"refresh"`
+	Expires        time.Time `json:"expires"`
+	Identity       Identity  `json:"identity"`
+	Authorized     time.Time `json:"authorized"`
+	Refreshed      time.Time `json:"refreshed,omitzero"`
+	RefreshExpires time.Time `json:"refresh_expires,omitzero"`
 }
 
-type tokenRefusal string
+type tokenRefusal struct {
+	status int
+	code   string
+	body   string
+}
 
-func (r tokenRefusal) Error() string { return string(r) }
+func (r tokenRefusal) Error() string {
+	return fmt.Sprintf("token endpoint answered %d: %s", r.status, r.body)
+}
+
+func (r tokenRefusal) reason() string {
+	switch {
+	case r.code == "refresh_token_expired":
+		return "the server says the refresh token expired"
+	case r.code == "refresh_token_reused":
+		return "the server says the refresh token was already used"
+	case r.code == "refresh_token_invalidated":
+		return "the server says the refresh token was revoked"
+	case r.code == "invalid_grant" && r.status == http.StatusBadRequest:
+		return "the server refused the refresh token (invalid_grant)"
+	}
+	return ""
+}
 
 func randomURLSafe(n int) (string, error) {
 	raw := make([]byte, n)
@@ -141,8 +164,10 @@ func postToken(ctx context.Context, client *http.Client, spec Spec, params, head
 		return nil, err
 	}
 	if response.StatusCode >= http.StatusBadRequest {
-		return nil, tokenRefusal(fmt.Sprintf("token endpoint answered %d: %s",
-			response.StatusCode, raw[:min(len(raw), errorExcerptBytes)]))
+		var detail map[string]any
+		_ = json.Unmarshal(raw, &detail)
+		code := cmp.Or(jsonPath(detail, "error.code"), jsonPath(detail, "error"), jsonPath(detail, "code"))
+		return nil, tokenRefusal{status: response.StatusCode, code: strings.ToLower(code), body: string(raw[:min(len(raw), errorExcerptBytes)])}
 	}
 	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {
@@ -167,10 +192,15 @@ func mapCredential(spec Spec, body map[string]any, previous *Credential, now tim
 		Refresh:    jsonPath(body, "refresh_token"),
 		Expires:    now.Add(time.Duration(seconds)*time.Second - spec.ExpirySkew),
 		Authorized: now,
+		Refreshed:  now,
+	}
+	if seconds, given := body["refresh_token_expires_in"].(float64); given {
+		credential.RefreshExpires = now.Add(time.Duration(seconds) * time.Second)
 	}
 	if previous != nil {
 		if credential.Refresh == "" {
 			credential.Refresh = previous.Refresh
+			credential.RefreshExpires = cmp.Or(credential.RefreshExpires, previous.RefreshExpires)
 		}
 		credential.Identity = previous.Identity
 		credential.Authorized = previous.Authorized
