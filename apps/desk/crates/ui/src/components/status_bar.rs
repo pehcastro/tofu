@@ -1,4 +1,3 @@
-use std::cmp::Reverse;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -28,6 +27,7 @@ use crate::theme::{ColorToken, Theme};
 
 const NO_ACCOUNT: &str = "no account";
 const NO_ACCOUNT_CONNECTED: &str = "No account connected";
+const NO_PICK: &str = "No model picked yet, so no account is predicted";
 const READING_QUOTA: &str = "Reading quota";
 const UNREAD: &str = "quota unread";
 const UNREAD_TITLE: &str = "Quota could not be read";
@@ -111,6 +111,18 @@ pub enum Accounts {
 }
 
 #[derive(Clone, Default)]
+pub enum Serving {
+    #[default]
+    Unpicked,
+    Key(SharedString),
+    Account {
+        at: usize,
+        why: SharedString,
+        spent: bool,
+    },
+}
+
+#[derive(Clone, Default)]
 pub struct SessionGroup {
     pub context: Option<ContextUse>,
     pub classifier: usize,
@@ -123,6 +135,7 @@ pub struct Status {
     pub session: Option<SharedString>,
     pub session_group: Option<SessionGroup>,
     pub accounts: Accounts,
+    pub serving: Serving,
     pub problem: Option<SharedString>,
 }
 
@@ -212,16 +225,26 @@ impl StatusBar {
                 item.child(NO_ACCOUNT),
                 vec![notice(lock(), NO_ACCOUNT_CONNECTED, None, theme)],
             ),
-            Accounts::Read(accounts) => (
-                fullest_item(item, accounts, theme),
-                accounts
-                    .iter()
-                    .enumerate()
-                    .map(|(at, account)| {
-                        account_block(at, account, &self.on_pick, theme, window, cx)
-                    })
-                    .collect(),
-            ),
+            Accounts::Read(accounts) => {
+                let chosen = match &self.status.serving {
+                    Serving::Account { at, .. } => Some(*at),
+                    Serving::Unpicked | Serving::Key(_) => None,
+                };
+                (
+                    serving_item(item, accounts, &self.status.serving, theme, window, cx),
+                    accounts
+                        .iter()
+                        .enumerate()
+                        .map(|(at, account)| {
+                            let block =
+                                account_block(at, account, &self.on_pick, theme, window, cx);
+                            block.when(chosen == Some(at), |block| {
+                                block.bg(theme.color(ColorToken::StateHover))
+                            })
+                        })
+                        .collect(),
+                )
+            }
         };
         let hover = theme.color(ColorToken::StateHover);
         let (escaper, outside, picker) = (state.clone(), state.clone(), state);
@@ -353,37 +376,73 @@ impl Level {
     }
 }
 
-fn fullest_item(item: Stateful<Div>, accounts: &[Account], theme: &Theme) -> Stateful<Div> {
-    let fullest = accounts
-        .iter()
-        .flat_map(|account| {
-            account
-                .windows
-                .iter()
-                .map(move |window| (account, window, window.percent))
-        })
-        .min_by_key(|(_, _, percent)| Reverse(*percent));
-    match (fullest, accounts.first()) {
-        (Some((account, window, percent)), _) => {
-            let level = Level::of(percent);
-            item.child(account.provider.clone())
-                .child(dim(window.label.clone(), theme))
-                .child(
-                    div()
-                        .font_features(tabular())
-                        .when(level != Level::Normal, |text| {
-                            text.text_color(level.text(theme))
-                        })
-                        .child(format!("{percent}%")),
-                )
+fn serving_item(
+    item: Stateful<Div>,
+    accounts: &[Account],
+    serving: &Serving,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Stateful<Div> {
+    let picked = match serving {
+        Serving::Account { at, why, spent } => {
+            accounts.get(*at).map(|account| (account, why, *spent))
         }
-        (None, Some(account)) => item.child(account.provider.clone()).child(icon(
-            Icon::Unreported,
-            ICON_SMALL,
-            ink(theme, T3),
-        )),
-        (None, None) => item.child(NO_ACCOUNT),
-    }
+        Serving::Unpicked | Serving::Key(_) => None,
+    };
+    let (item, why) = match (serving, picked) {
+        (Serving::Key(name), _) => (
+            item.child(name.clone()),
+            format!("{name}, paid by an API key with no quota window").into(),
+        ),
+        (_, Some((account, why, spent))) => {
+            let login = account
+                .email
+                .as_ref()
+                .and_then(|email| email.split('@').next())
+                .map(|login| dim(login.to_owned(), theme));
+            let tightest = account.windows.iter().max_by_key(|window| window.percent);
+            let item = item.child(account.provider.clone()).children(login);
+            let item = match tightest {
+                Some(usage) => {
+                    let level = if spent {
+                        Level::NearLimit
+                    } else {
+                        Level::of(usage.percent)
+                    };
+                    item.child(dim(usage.label.clone(), theme)).child(
+                        div()
+                            .font_features(tabular())
+                            .when(level != Level::Normal, |text| {
+                                text.text_color(level.text(theme))
+                            })
+                            .child(format!("{}%", usage.percent)),
+                    )
+                }
+                None => item.child(icon(Icon::Unreported, ICON_SMALL, ink(theme, T3))),
+            };
+            (item, why.clone())
+        }
+        (Serving::Unpicked | Serving::Account { .. }, None) => match accounts.first() {
+            Some(account) => (
+                item.child(account.provider.clone()),
+                SharedString::from(NO_PICK),
+            ),
+            None => (
+                item.child(NO_ACCOUNT),
+                SharedString::from(NO_ACCOUNT_CONNECTED),
+            ),
+        },
+    };
+    tooltip(
+        "status-quota-tip",
+        item,
+        Edge::Frame,
+        why,
+        theme,
+        window,
+        cx,
+    )
 }
 
 fn tile(theme: &Theme) -> Div {

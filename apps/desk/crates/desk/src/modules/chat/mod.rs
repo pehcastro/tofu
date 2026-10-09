@@ -14,19 +14,21 @@ use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalDecision, ApprovalRequest, ContextReport, CredentialReport,
-    CronCommandParams, InitializeResult, NoParams, Notification, PROTOCOL, Request, RequestId,
-    SessionAsking, SessionInfo, SessionListParams, SessionOpenParams, SessionParams,
-    SessionRenameParams, SessionTrace, ShellParams, TurnCompleted, TurnParams, TurnSendParams,
-    TurnSteerParams, request, subagent,
+    CronCommandParams, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams,
+    Notification, PROTOCOL, Request, RequestId, SessionAsking, SessionInfo, SessionListParams,
+    SessionOpenParams, SessionParams, SessionRenameParams, SessionSetParams, SessionTrace,
+    ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
 };
-use desk_core::query::{Answer, FilledEmails, QueryError, Read};
+use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
 use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
 use desk_ui::components::composer::{Composer, picker};
 use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
+use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
 use desk_ui::components::transcript::{Transcript, transcript};
+use desk_ui::components::tree::EditedFile;
 use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyView, App, AppContext, ClickEvent, Context, Entity, EventEmitter, FocusHandle, Focusable,
@@ -45,6 +47,7 @@ const SIGN_IN_POLL: Duration = Duration::from_millis(500);
 const ANCHOR_HOLD: Duration = Duration::from_millis(1600);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+const MODEL: &str = "Model";
 const PLACEHOLDER: &str = "Ask tofu to build, inspect, or delegate";
 const FIELD_LINES: usize = 8;
 const ROW_INSET: f32 = 24.0;
@@ -111,6 +114,11 @@ pub struct Chat {
     rows: Vec<SessionRow>,
     accounts: Answer<Accounts>,
     told_accounts: Option<Accounts>,
+    pick: ModelPick,
+    defaults: Vec<String>,
+    choices: Vec<Option<(String, String)>>,
+    models: Entity<MenuButton>,
+    ledger: Option<(String, Option<usize>)>,
     emails: Result<FilledEmails, String>,
     signing: Option<SigningIn>,
     _signed: Option<Task<()>>,
@@ -272,6 +280,20 @@ impl Chat {
             chat.found(query, *current, cx);
         });
         let closed = cx.listener(|chat, _: &(), _, cx| chat.closed(cx));
+        let models = MenuButton::new(MODEL.into(), Vec::new(), cx);
+        let chosen = cx.weak_entity();
+        models.update(cx, |button, _| {
+            button.placement(Placement {
+                side: Side::Top,
+                align: Align::Start,
+                ..Placement::below()
+            });
+            button.on_pick(move |at, _, cx| {
+                if let Err(error) = chosen.update(cx, |chat, cx| chat.choose(*at, cx)) {
+                    eprintln!("desk: the model picker outlived the chat: {error}");
+                }
+            });
+        });
         find.update(cx, |bar, _| {
             bar.on_change(move |query, current, window, cx| {
                 changed(&(query.to_owned(), current), window, cx);
@@ -302,6 +324,11 @@ impl Chat {
             rows: Vec::new(),
             accounts: Answer::default(),
             told_accounts: None,
+            pick: ModelPick::default(),
+            defaults: Vec::new(),
+            choices: Vec::new(),
+            models,
+            ledger: None,
             emails: load_emails(),
             signing: None,
             _signed: None,
@@ -396,6 +423,7 @@ impl Chat {
         self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
             eprintln!("desk: session {} opened", opened.session);
             chat.ask_cron(opened.session.clone(), cx);
+            chat.ask_ledger(opened.session.clone(), cx);
             chat.set_opening(Opening::Open(opened.session), cx);
             chat.refresh(cx);
             chat.relist(cx);
@@ -507,6 +535,7 @@ impl Chat {
         self.project = hello.project;
         self.link = Link::Ready(bridge);
         self.relist(cx);
+        self.ask_models(cx);
         self.ask_due(cx);
         cx.notify();
         Some(events)
@@ -635,7 +664,19 @@ impl Chat {
                     exited.session, exited.shell, exited.exit_code, exited.killed
                 );
             }
-            Event::Notification(Notification::FileEdit(_)) => return cx.emit(Touched),
+            Event::Notification(Notification::FileEdit(edit)) => {
+                cx.set_global(EditedFile(PathBuf::from(&edit.path)));
+                return cx.emit(Touched);
+            }
+            Event::Notification(Notification::SessionSettings(settings)) => {
+                eprintln!(
+                    "desk: session.settings pick wire {} model {}",
+                    settings.pick.wire.as_deref().unwrap_or("none"),
+                    settings.pick.model.as_deref().unwrap_or("none")
+                );
+                self.pick = settings.pick.clone();
+                return self.fill_models(cx);
+            }
             Event::Notification(notification @ Notification::QuotaUpdated(_)) => {
                 self.accounts.notified();
                 return eprintln!("desk: tofu sent {notification:?}");
@@ -807,6 +848,149 @@ impl Chat {
             })
         })
         .detach();
+    }
+
+    fn ask_models(&mut self, cx: &mut Context<Self>) {
+        self.call::<request::QueryModels>(&NoParams {}, cx, |chat, models, cx| {
+            chat.call::<request::SessionState>(&NoParams {}, cx, move |chat, state, cx| {
+                eprintln!(
+                    "desk: session.state pick wire {} model {}, query.models {} rows",
+                    state.pick.wire.as_deref().unwrap_or("none"),
+                    state.pick.model.as_deref().unwrap_or("none"),
+                    models.models.len()
+                );
+                chat.pick = state.pick;
+                chat.listed(&models, cx);
+            });
+        });
+    }
+
+    fn listed(&mut self, models: &ModelsQuery, cx: &mut Context<Self>) {
+        self.defaults.clone_from(&models.defaults);
+        let mut items = Vec::new();
+        self.choices.clear();
+        for source in &models.subscriptions {
+            items.push(MenuItem::Caption(source.clone().into()));
+            self.choices.push(None);
+            for model in models.models.iter().filter(|model| {
+                model.kind == "llm" && model.r#use != "excluded" && model.subscription == *source
+            }) {
+                items.push(MenuItem::action(model.id.clone()));
+                self.choices.push(Some((source.clone(), model.id.clone())));
+            }
+        }
+        self.models.update(cx, |button, cx| button.items(items, cx));
+        self.fill_models(cx);
+    }
+
+    fn fill_models(&mut self, cx: &mut Context<Self>) {
+        let label = self.pick.model.clone().unwrap_or_else(|| MODEL.to_owned());
+        self.models.update(cx, |button, cx| {
+            button.trigger(move |_, theme| picker("chat-model", label.clone(), theme));
+            cx.notify();
+        });
+        self.store.update(cx, |_, cx| cx.notify());
+        cx.notify();
+    }
+
+    fn choose(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(Some((wire, model))) = self.choices.get(at).cloned() else {
+            return;
+        };
+        let chosen = ModelPick {
+            wire: Some(wire.clone()),
+            model: Some(model.clone()),
+            effort: self.pick.effort.clone(),
+        };
+        let was = std::mem::replace(&mut self.pick, chosen);
+        self.fill_models(cx);
+        eprintln!("desk: session.set asked wire {wire} model {model}");
+        let params = SessionSetParams {
+            wire: Some(wire.clone()),
+            model: Some(model.clone()),
+            ..SessionSetParams::default()
+        };
+        self.request::<request::SessionSet>(&params, cx, move |chat, reply, cx| match reply {
+            Ok(ack) => eprintln!(
+                "desk: session.set wire {wire} model {model} answered ok {}",
+                ack.ok
+            ),
+            Err(error) => {
+                chat.pick = was;
+                chat.fill_models(cx);
+                chat.fail(format!("session.set {wire}/{model}: {error}"), cx);
+            }
+        });
+    }
+
+    pub fn source(&self, cx: &App) -> Option<String> {
+        let open = self.open_id().and_then(|id| {
+            self.store
+                .read(cx)
+                .sessions
+                .get(id)?
+                .pick
+                .as_ref()?
+                .wire
+                .clone()
+        });
+        open.or_else(|| self.pick.wire.clone()).or_else(|| {
+            self.defaults
+                .first()
+                .and_then(|slug| slug.split('/').next())
+                .map(str::to_owned)
+        })
+    }
+
+    pub fn decisions_shown(&self, cx: &App) -> usize {
+        let Some(open) = self.open_id() else {
+            return 0;
+        };
+        let live = self
+            .store
+            .read(cx)
+            .sessions
+            .get(open)
+            .map_or(0, |session| session.decisions.len());
+        let past = match &self.ledger {
+            Some((session, Some(rows))) if session == open => *rows,
+            Some(_) | None => 0,
+        };
+        live + past
+    }
+
+    fn ask_ledger(&mut self, session: String, cx: &mut Context<Self>) {
+        self.ledger = Some((session.clone(), None));
+        let params = LedgerParams {
+            last: Some(LEDGER_READ_LAST),
+            ..LedgerParams::default()
+        };
+        self.call::<request::QueryLedger>(&params, cx, move |chat, ledger, cx| {
+            let traced = SessionParams {
+                session: Some(session.clone()),
+            };
+            chat.call::<request::SessionTrace>(&traced, cx, move |chat, trace, cx| {
+                let mut turns: Vec<&str> = trace
+                    .calls
+                    .iter()
+                    .map(|call| call.turn.as_str())
+                    .chain(trace.requests.iter().map(|asked| asked.turn.as_str()))
+                    .chain(trace.messages.iter().map(|message| message.turn.as_str()))
+                    .collect();
+                turns.sort_unstable();
+                turns.dedup();
+                let rows = session_ledger(&ledger.rows, &session, &turns).len();
+                eprintln!("desk: status bar classifier reads {rows} ledger rows for {session}");
+                if chat
+                    .ledger
+                    .as_ref()
+                    .is_some_and(|(asked, _)| *asked == session)
+                {
+                    chat.ledger = Some((session, Some(rows)));
+                    chat.store.update(cx, |_, cx| cx.notify());
+                }
+            });
+        });
     }
 
     pub fn want_usage(&mut self, cx: &mut Context<Self>) {
@@ -1112,6 +1296,7 @@ impl Chat {
                         String::from(chat.asking.clone())
                     );
                     chat.ask_cron(opened.session.clone(), cx);
+                    chat.ask_ledger(opened.session.clone(), cx);
                     chat.set_opening(Opening::Open(opened.session), cx);
                     chat.relist(cx);
                     chat.send(&text, cx);
@@ -1362,6 +1547,7 @@ impl Render for Chat {
             .content_width(px(CONTENT_WIDTH))
             .busy(self.running(cx).is_some())
             .phase(if waiting { "waiting on you" } else { "working" })
+            .model(self.models.clone())
             .effort(mode)
             .on_send(cx.listener(|chat, text: &str, _, cx| chat.send(text, cx)))
             .on_stop(move |window, cx| stop(&(), window, cx));

@@ -4,8 +4,8 @@ use desk_ui::components::sidebar::{
     Project, SIDEBAR_COLUMN, Session, SessionAt, SessionState, Sidebar, SidebarPick,
 };
 use desk_ui::components::status_bar::{
-    Account, Accounts, Branch, ContextUse, Reset, SessionGroup, Standing, Status, StatusBar,
-    StatusPick, UsageWindow,
+    Account, Accounts, Branch, ContextUse, Reset, Serving, SessionGroup, Standing, Status,
+    StatusBar, StatusPick, UsageWindow,
 };
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
@@ -21,6 +21,15 @@ use super::kit::named;
 const BOARD_WIDTH: f32 = 960.0;
 const NARROW_WIDTH: f32 = 720.0;
 const WORKSPACES: [&str; 3] = ["work", "editor", "data"];
+const CROWDED: [&str; 7] = [
+    "my working tab",
+    "release",
+    "editor",
+    "data studio",
+    "notes",
+    "billing",
+    "docs",
+];
 const POP_ROOM: f32 = 250.0;
 const SESSIONS_HEIGHT: f32 = 300.0;
 
@@ -190,6 +199,34 @@ fn narrow(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
     )
 }
 
+fn crowded(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
+    let tab = |name: &str, mark| Tab {
+        label: name.to_owned().into(),
+        icon: None,
+        count: None,
+        mark,
+        flag: None,
+    };
+    let tabs: Vec<Tab> = CROWDED
+        .iter()
+        .enumerate()
+        .map(|(at, name)| match at {
+            1 => tab(name, TabMark::Locked),
+            _ => tab(name, TabMark::Close),
+        })
+        .collect();
+    header_tabs(
+        "chrome-workspaces-crowded",
+        &tabs,
+        0,
+        &[tab("usage", TabMark::Close)],
+        theme,
+        cx.listener(|book, event: &TabEvent, _, cx| {
+            book.tell(format!("Workspace tabs: {event:?}"), cx)
+        }),
+    )
+}
+
 fn plus_menu(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
     let items: Vec<MenuItem> = [MenuItem::Action {
         label: "New workspace".into(),
@@ -285,6 +322,11 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         Standing::Serving,
         Vec::new(),
     );
+    let serving = |why: &str| Serving::Account {
+        at: 0,
+        why: why.to_owned().into(),
+        spent: false,
+    };
     let board = Status {
         branch: Some(Branch {
             name: "main".into(),
@@ -300,11 +342,13 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             cron: 1,
         }),
         accounts: Accounts::Read(vec![claude.clone()]),
+        serving: serving("pehcastro, the only Claude Sub account"),
         problem: None,
     };
     let no_session = Status {
         branch: board.branch.clone(),
         accounts: Accounts::Read(vec![claude.clone()]),
+        serving: serving("pehcastro, the only Claude Sub account"),
         ..Status::default()
     };
     let quota_states = [
@@ -318,16 +362,37 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         ),
         ("Status bar, one account two windows", board.clone()),
         (
-            "Status bar, two providers",
+            "Status bar, two providers, the chat picked Codex Sub",
             Status {
-                accounts: Accounts::Read(vec![claude.clone(), codex.clone()]),
+                accounts: Accounts::Read(vec![codex.clone(), claude.clone()]),
+                serving: serving("the only Codex Sub account"),
                 ..board.clone()
             },
         ),
         (
-            "Status bar, two accounts one provider, told apart by email",
+            "Status bar, two accounts one provider, the pill names the one with room",
             Status {
-                accounts: Accounts::Read(vec![claude.clone(), second]),
+                accounts: Accounts::Read(vec![claude.clone(), second.clone()]),
+                serving: serving("pehcastro, most room of 2 Claude Sub accounts"),
+                ..board.clone()
+            },
+        ),
+        (
+            "Status bar, every Claude Sub account spent, the soonest reset tinted",
+            Status {
+                accounts: Accounts::Read(vec![second, claude.clone()]),
+                serving: Serving::Account {
+                    at: 0,
+                    why: "every Claude Sub account is spent or rate limited, trophosai resets soonest".into(),
+                    spent: true,
+                },
+                ..board.clone()
+            },
+        ),
+        (
+            "Status bar, a key source shows its name and no percentage",
+            Status {
+                serving: Serving::Key("Openrouter".into()),
                 ..board.clone()
             },
         ),
@@ -335,6 +400,7 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
             "Status bar, re-auth needed with Sign in, and a rate limited account",
             Status {
                 accounts: Accounts::Read(vec![codex, limited, reauth]),
+                serving: serving("the only Codex Sub account"),
                 ..no_session.clone()
             },
         ),
@@ -437,6 +503,16 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
                 "chrome-title-narrow",
                 board_title(None),
                 Some(narrow(theme, cx).into_any_element()),
+                picked_title(cx),
+            )),
+        ))
+        .child(named(
+            "Title bar, 720 wide, a locked tab, the rest past Ctrl K in N more, hover a tab for its close",
+            theme,
+            div().w(px(NARROW_WIDTH)).child(TitleBar::new(
+                "chrome-title-crowded",
+                board_title(None),
+                Some(crowded(theme, cx).into_any_element()),
                 picked_title(cx),
             )),
         ))

@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use super::ModelError;
 use crate::protocol::{
-    AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, Notification,
-    Origin, OriginKind, PlanStep, QuotaWindow, RequestId, SessionForked, TurnCompletedStatus,
-    UsageUpdated,
+    AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, ModelPick,
+    Notification, Origin, OriginKind, PlanStep, QuotaWindow, RequestId, SessionForked,
+    TurnCompletedStatus, UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +97,7 @@ pub struct Session {
     pub context: Option<(i64, i64)>,
     pub usage: Vec<UsageUpdated>,
     pub cron: Option<CronState>,
+    pub pick: Option<ModelPick>,
     pub dropped: i64,
 }
 
@@ -398,7 +399,8 @@ impl Session {
                 });
             }
             N::Resync(e) => self.dropped = self.dropped.saturating_add(e.dropped),
-            N::ItemPersisted(_) | N::SessionListed(_) | N::SessionSettings(_) => {}
+            N::SessionSettings(e) => self.pick = Some(e.pick.clone()),
+            N::ItemPersisted(_) | N::SessionListed(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }

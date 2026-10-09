@@ -27,7 +27,7 @@ use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
 use desk_core::protocol::{
-    AccountStatusState, Accounts as AccountList, CronJob, QuotaWindow, Role,
+    AccountStatusState, Accounts as AccountList, CronJob, QuotaWindow, Role, WindowStatus,
 };
 #[cfg(feature = "screen-work")]
 use desk_core::query::Answer;
@@ -49,7 +49,7 @@ use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick
 use desk_ui::components::sidebar::{SessionAt, unnamed};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::status_bar::{
-    Account, Branch, ContextUse, Reset, SessionGroup, Standing, UsageWindow, cron_trigger,
+    Account, Branch, ContextUse, Reset, Serving, SessionGroup, Standing, UsageWindow, cron_trigger,
 };
 use desk_ui::components::status_bar::{Accounts, Status};
 #[cfg(feature = "screen-work")]
@@ -57,6 +57,8 @@ use desk_ui::components::tabs::{ScreenTabMenu, Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
 use desk_ui::components::title_bar::{Github, TitleBar};
+#[cfg(feature = "screen-work")]
+use desk_ui::components::tree::OpenProject;
 #[cfg(feature = "screen-work")]
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -330,48 +332,192 @@ fn thousands(tokens: i64) -> String {
 }
 
 #[cfg(feature = "screen-work")]
-fn accounts(answer: &Answer<AccountList>, quota: &[QuotaWindow], active: Option<&str>) -> Accounts {
+struct Room {
+    left: f64,
+    resets: Option<chrono::DateTime<chrono::FixedOffset>>,
+    out: bool,
+    id: i64,
+}
+
+#[cfg(feature = "screen-work")]
+fn room(
+    state: &AccountStatusState,
+    id: i64,
+    windows: &[WindowStatus],
+    now: chrono::DateTime<chrono::Local>,
+) -> Room {
+    let tightest = windows
+        .iter()
+        .map(|window| {
+            let resets = window
+                .resets_at
+                .as_deref()
+                .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok());
+            let left = match resets {
+                Some(at) if at <= now => 1.0,
+                _ => 1.0 - window.used,
+            };
+            (left, resets)
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| sooner(a.1, b.1)));
+    let (left, resets) = tightest.unwrap_or((1.0, None));
+    Room {
+        left,
+        resets,
+        out: matches!(
+            state,
+            AccountStatusState::Spent | AccountStatusState::RateLimited
+        ) || left <= 0.0,
+        id,
+    }
+}
+
+#[cfg(feature = "screen-work")]
+fn sooner(
+    a: Option<chrono::DateTime<chrono::FixedOffset>>,
+    b: Option<chrono::DateTime<chrono::FixedOffset>>,
+) -> std::cmp::Ordering {
+    match (a, b) {
+        (Some(a), Some(b)) => a.cmp(&b),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
+}
+
+#[cfg(feature = "screen-work")]
+fn predicted_account(accounts: &[(Account, Room)], source: Option<&str>) -> Serving {
+    let candidates: Vec<(usize, &Account, &Room)> = accounts
+        .iter()
+        .enumerate()
+        .filter(|(_, (account, _))| source.is_none_or(|source| *account.source == *source))
+        .map(|(at, (account, room))| (at, account, room))
+        .collect();
+    let name = |account: &Account| {
+        account
+            .email
+            .as_ref()
+            .and_then(|email| email.split('@').next())
+            .map_or_else(|| account.provider.to_string(), str::to_owned)
+    };
+    let (Some(first), Some(_)) = (candidates.first(), source) else {
+        return match source {
+            Some(source) => Serving::Key(display_name(source).into()),
+            None => candidates
+                .iter()
+                .filter(|(_, _, room)| !room.out)
+                .min_by(|a, b| ranked(a.2, b.2))
+                .map_or(Serving::Unpicked, |(at, account, _)| Serving::Account {
+                    at: *at,
+                    why: format!(
+                        "{}, most room of every subscription, no model picked yet",
+                        name(account)
+                    )
+                    .into(),
+                    spent: false,
+                }),
+        };
+    };
+    let provider = first.1.provider.clone();
+    let count = candidates.len();
+    let open = candidates
+        .iter()
+        .filter(|(_, _, room)| !room.out)
+        .min_by(|a, b| ranked(a.2, b.2));
+    match open {
+        Some((at, account, _)) => Serving::Account {
+            at: *at,
+            why: match count {
+                1 => format!("{}, the only {provider} account", name(account)),
+                _ => format!(
+                    "{}, most room of {count} {provider} accounts",
+                    name(account)
+                ),
+            }
+            .into(),
+            spent: false,
+        },
+        None => {
+            let (at, account, _) = candidates
+                .iter()
+                .min_by(|a, b| sooner(a.2.resets, b.2.resets).then(a.2.id.cmp(&b.2.id)))
+                .unwrap_or(first);
+            Serving::Account {
+                at: *at,
+                why: format!(
+                    "every {provider} account is spent or rate limited, {} resets soonest",
+                    name(account)
+                )
+                .into(),
+                spent: true,
+            }
+        }
+    }
+}
+
+#[cfg(feature = "screen-work")]
+fn ranked(a: &Room, b: &Room) -> std::cmp::Ordering {
+    b.left
+        .total_cmp(&a.left)
+        .then_with(|| sooner(a.resets, b.resets))
+        .then(a.id.cmp(&b.id))
+}
+
+#[cfg(feature = "screen-work")]
+fn accounts(
+    answer: &Answer<AccountList>,
+    quota: &[QuotaWindow],
+    source: Option<&str>,
+) -> (Accounts, Serving) {
     let Some(read) = &answer.read else {
-        return match &answer.failed {
+        let accounts = match &answer.failed {
             Some(error) => Accounts::Unread(error.to_string().into()),
             None => Accounts::Reading,
         };
+        return (accounts, Serving::Unpicked);
     };
     let now = chrono::Local::now();
-    let mut accounts: Vec<Account> = read
+    let mut accounts: Vec<(Account, Room)> = read
         .value
         .subscriptions
         .iter()
         .filter(|source| source.role == Role::Llm)
         .flat_map(|source| {
-            source.accounts.iter().map(|account| Account {
-                provider: display_name(&source.source).into(),
-                email: account.email().map(|email| email.to_owned().into()),
-                source: source.source.clone().into(),
-                plan: account.plan.clone().map(Into::into),
-                standing: standing(&account.state),
-                windows: account
-                    .live(&source.source, quota)
-                    .iter()
-                    .map(|window| UsageWindow {
-                        label: window.id.clone().into(),
-                        percent: (window.used * 100.0).round().clamp(0.0, 100.0) as u8,
-                        reset: window
-                            .resets_at
-                            .as_deref()
-                            .and_then(|stamp| resets(stamp, now)),
-                    })
-                    .collect(),
+            source.accounts.iter().map(|account| {
+                let live = account.live(&source.source, quota);
+                let shown = Account {
+                    provider: display_name(&source.source).into(),
+                    email: account.email().map(|email| email.to_owned().into()),
+                    source: source.source.clone().into(),
+                    plan: account.plan.clone().map(Into::into),
+                    standing: standing(&account.state),
+                    windows: live
+                        .iter()
+                        .map(|window| UsageWindow {
+                            label: window.id.clone().into(),
+                            percent: (window.used * 100.0).round().clamp(0.0, 100.0) as u8,
+                            reset: window
+                                .resets_at
+                                .as_deref()
+                                .and_then(|stamp| resets(stamp, now)),
+                        })
+                        .collect(),
+                };
+                (shown, room(&account.state, account.id, &live, now))
             })
         })
         .collect();
-    accounts.sort_by_key(|account| {
+    accounts.sort_by_key(|(account, _)| {
         (
-            Some(&*account.source) != active,
+            Some(&*account.source) != source,
             !matches!(account.standing, Standing::Serving),
         )
     });
-    Accounts::Read(accounts)
+    let serving = predicted_account(&accounts, source);
+    (
+        Accounts::Read(accounts.into_iter().map(|(account, _)| account).collect()),
+        serving,
+    )
 }
 
 #[cfg(feature = "screen-work")]
@@ -1162,6 +1308,7 @@ impl Desk {
             Ok(recents) => self.projects.recents = recents,
             Err(error) => eprintln!("desk: recents: {error}"),
         }
+        cx.set_global(OpenProject(folder.clone()));
         self.projects.head = Some(Head::empty(folder));
         self.reread_head(cx);
         #[cfg(any(
@@ -1387,14 +1534,13 @@ impl Desk {
         let open = chat
             .open_id()
             .and_then(|id| Some((id, store.sessions.get(id)?)));
-        let active = open
-            .and_then(|(_, session)| session.quota.first())
-            .and_then(|window| window.window.split(' ').next());
-        let accounts = accounts(chat.accounts(), &store.quota, active);
+        let source = chat.source(cx);
+        let (accounts, serving) = accounts(chat.accounts(), &store.quota, source.as_deref());
         let Some((id, session)) = open else {
             return Status {
                 branch,
                 accounts,
+                serving,
                 ..Status::default()
             };
         };
@@ -1427,13 +1573,14 @@ impl Desk {
                             0.0
                         },
                     }),
-                classifier: session.decisions.len(),
+                classifier: chat.decisions_shown(cx),
                 cron: session
                     .cron
                     .as_ref()
                     .map_or(0, |cron| usize::try_from(cron.live).unwrap_or(0)),
             }),
             accounts,
+            serving,
             problem: None,
         }
     }
