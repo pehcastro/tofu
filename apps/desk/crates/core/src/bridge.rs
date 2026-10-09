@@ -51,28 +51,61 @@ pub enum BridgeError {
 impl fmt::Display for BridgeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BridgeError::Io(error) => write!(f, "tofu could not be run: {error}"),
-            BridgeError::Closed => write!(f, "tofu closed its output before it answered"),
+            BridgeError::Io(error) => write!(
+                f,
+                "tofu could not be started. Check that tofu is installed and on your PATH. ({error})"
+            ),
+            BridgeError::Closed => write!(
+                f,
+                "tofu stopped before it answered. Reopen the session; if it keeps happening, run tofu doctor."
+            ),
             BridgeError::Refused(refusal) => {
-                write!(
-                    f,
-                    "tofu refused the request: {} ({})",
-                    refusal.message, refusal.code
-                )
+                let code = refusal.code.unsigned_abs();
+                match refusal_sentence(refusal.code) {
+                    Some(sentence) => write!(f, "{sentence} ({code})"),
+                    None => write!(f, "{} ({code})", sentence_case(&refusal.message)),
+                }
             }
-            BridgeError::Shape(error) => {
-                write!(
-                    f,
-                    "a message does not match the pinned tofu.host schema: {error}"
-                )
-            }
-            BridgeError::Protocol { needed, detail } => {
-                write!(
-                    f,
-                    "this desk needs the protocol {needed}, and this tofu does not speak it: {detail}"
-                )
-            }
+            BridgeError::Shape(error) => write!(
+                f,
+                "tofu sent an answer this desk cannot read. Update the desk and tofu to the same version. ({error})"
+            ),
+            BridgeError::Protocol { needed, detail } => write!(
+                f,
+                "This tofu does not speak {needed}, which this desk needs. Update tofu to match the desk. ({detail})"
+            ),
         }
+    }
+}
+
+const REFUSAL_SENTENCES: [(i64, &str); 3] = [
+    (
+        -32001,
+        "This session is busy. Make sure it is not open in another tofu window or command line.",
+    ),
+    (
+        -32700,
+        "tofu could not read what the desk sent. Restart the desk; if it keeps happening, update the desk and tofu to the same version.",
+    ),
+    (
+        -32601,
+        "This tofu does not know that request. Update tofu to match the desk.",
+    ),
+];
+
+fn refusal_sentence(code: i64) -> Option<&'static str> {
+    REFUSAL_SENTENCES
+        .iter()
+        .find(|(known, _)| *known == code)
+        .map(|(_, sentence)| *sentence)
+}
+
+fn sentence_case(message: &str) -> String {
+    let message = message.trim().trim_end_matches('.');
+    let mut chars = message.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}.", first.to_uppercase(), chars.as_str()),
+        None => "tofu could not do that.".to_owned(),
     }
 }
 

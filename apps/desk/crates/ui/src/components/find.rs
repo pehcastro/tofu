@@ -12,6 +12,7 @@ use crate::components::chip::{kbd, tabular};
 use crate::components::form::TextArea;
 use crate::components::overlay::menu_surface;
 use crate::components::paint::{ink, tint};
+use crate::components::scroll::ScrollArea;
 use crate::components::size::{
     FIELD, FONT_SMALL, HOVER, MENU_GAP, MENU_PAD, RADIUS_POP, ROW_ON, ROW_PAD_X, T1, T2, T3,
 };
@@ -22,6 +23,7 @@ use crate::theme::{ColorToken, Theme};
 const FIND_FIELD: f32 = 180.0;
 const COUNT_WIDTH: f32 = 72.0;
 const RESULTS_HEIGHT: f32 = 360.0;
+const RESULTS_WIDTH: f32 = 640.0;
 const MATCH_TINT: f32 = 0.22;
 const CURRENT_TINT: f32 = 0.6;
 const PLACEHOLDER: &str = "Find";
@@ -116,7 +118,8 @@ pub fn find_results(
                     .rounded(px(RADIUS_POP))
                     .text_size(px(FONT_SMALL))
                     .text_color(ink(theme, T2))
-                    .child(div().min_w_0().truncate().child(hit.clone()))
+                    .overflow_hidden()
+                    .child(div().flex_1().min_w_0().truncate().child(hit.clone()))
                     .when(at == current, |row| row.bg(lit).text_color(ink(theme, T1)))
                     .hover(move |style| style.bg(hover));
                 match on_pick.clone() {
@@ -303,10 +306,8 @@ impl Render for FindBar {
                 .unwrap_or_else(|_| eprintln!("find: the bar is gone"));
         });
         let results = (!self.groups.is_empty() && !self.query.is_empty()).then(|| {
-            div()
-                .id("find-results")
-                .max_h(px(RESULTS_HEIGHT))
-                .overflow_y_scroll()
+            ScrollArea::new("find-results")
+                .max_h(RESULTS_HEIGHT)
                 .child(find_results(
                     &self.groups,
                     self.current,
@@ -364,6 +365,7 @@ impl Render for FindBar {
             .p(px(MENU_PAD))
             .rounded(px(RADIUS_POP))
             .capture_key_down(cx.listener(Self::key))
+            .when(results.is_some(), |bar| bar.w(px(RESULTS_WIDTH)))
             .child(row)
             .children(results)
             .into_any_element()

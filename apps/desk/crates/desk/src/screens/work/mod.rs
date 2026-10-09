@@ -195,6 +195,7 @@ fn build(
             replay,
             find,
             found: Vec::new(),
+            query: String::new(),
             _watched: watched,
         }
     }))
@@ -202,7 +203,8 @@ fn build(
 
 pub struct Work {
     find: Entity<FindBar>,
-    found: Vec<Module>,
+    found: Vec<Anchor>,
+    query: String,
     board: TilingBoard<Work>,
     nudge: Option<f32>,
     plus: Entity<MenuButton>,
@@ -301,7 +303,27 @@ fn excerpt(text: &str, range: Range<usize>) -> SharedString {
     format!("{lead}{}", text.get(range.start..end).unwrap_or_default()).into()
 }
 
-fn find_groups(store: &Store, open: &[Module], query: &str) -> (Vec<FindGroup>, Vec<Module>) {
+#[derive(Clone)]
+enum Anchor {
+    Chat(usize),
+    Row(Module),
+}
+
+impl Anchor {
+    fn module(&self) -> Module {
+        match self {
+            Anchor::Chat(_) => Module::Chat,
+            Anchor::Row(module) => module.clone(),
+        }
+    }
+}
+
+fn find_groups(
+    store: &Store,
+    open: &[Module],
+    query: &str,
+    chat_hits: &[(String, Range<usize>)],
+) -> (Vec<FindGroup>, Vec<Anchor>) {
     let sessions = &store.sessions;
     let Some(session) = store
         .open
@@ -315,7 +337,20 @@ fn find_groups(store: &Store, open: &[Module], query: &str) -> (Vec<FindGroup>, 
     let mut found = Vec::new();
     for module in OPENABLE.iter().filter(|module| open.contains(module)) {
         let texts: Vec<&str> = match module {
-            Module::Chat => session.messages.iter().map(|m| m.text.as_str()).collect(),
+            Module::Chat => {
+                found.extend((0..chat_hits.len()).map(Anchor::Chat));
+                let hits: Vec<SharedString> = chat_hits
+                    .iter()
+                    .map(|(text, range)| excerpt(text, range.clone()))
+                    .collect();
+                if !hits.is_empty() {
+                    groups.push(FindGroup {
+                        label: module.name().to_owned().into(),
+                        hits,
+                    });
+                }
+                continue;
+            }
             Module::SubAgents => session.agents.values().map(|a| a.task.as_str()).collect(),
             Module::FileEdits => session.files.keys().map(String::as_str).collect(),
             Module::Shells => session
@@ -340,7 +375,7 @@ fn find_groups(store: &Store, open: &[Module], query: &str) -> (Vec<FindGroup>, 
         if hits.is_empty() {
             continue;
         }
-        found.extend(hits.iter().map(|_| module.clone()));
+        found.extend(hits.iter().map(|_| Anchor::Row(module.clone())));
         groups.push(FindGroup {
             label: module.name().to_owned().into(),
             hits,
@@ -532,7 +567,9 @@ impl Work {
                     .collect()
             })
             .unwrap_or_default();
-        let (groups, found) = find_groups(self.mounted.store.read(cx), &open, query);
+        let chat_hits = self.mounted.chat.read(cx).search_hits(query);
+        let (groups, found) = find_groups(self.mounted.store.read(cx), &open, query, &chat_hits);
+        query.clone_into(&mut self.query);
         eprintln!(
             "desk: work: find {query:?}: {}",
             groups
@@ -546,9 +583,10 @@ impl Work {
     }
 
     fn jump(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(module) = self.found.get(at).cloned() else {
+        let Some(anchor) = self.found.get(at).cloned() else {
             return;
         };
+        let module = anchor.module();
         self.board.apply(true, |workspace, area| {
             let (tile, index) = workspace
                 .tiles(area)
@@ -562,6 +600,12 @@ impl Work {
         });
         eprintln!("desk: work: find jumped to {}", module.name());
         self.focus.focus(window, cx);
+        if let Anchor::Chat(hit) = anchor {
+            let query = &self.query;
+            self.mounted
+                .chat
+                .update(cx, |chat, cx| chat.anchor(query, hit, cx));
+        }
         cx.notify();
     }
 
@@ -941,6 +985,13 @@ impl Focusable for Work {
 impl Render for Work {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
+        let above = window
+            .focused(cx)
+            .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));
+        if above {
+            eprintln!("desk: work: focus was above the workspace, so the workspace takes it");
+            self.focus.focus(window, cx);
+        }
         let theme = ActiveTheme::theme(cx);
         let board = self.board.board(&theme, window, cx);
         let edge = px(-WORKSPACE_EDGE);

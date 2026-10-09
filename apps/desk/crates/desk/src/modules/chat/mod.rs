@@ -3,6 +3,7 @@ mod items;
 
 use std::collections::BTreeMap;
 use std::io::ErrorKind;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::rc::Rc;
@@ -41,6 +42,7 @@ const TOFU_VARIABLE: &str = "DESK_TOFU";
 const DESK_FOLDER: &str = "tofu-desk";
 const EMAILS_FILE: &str = "emails.json";
 const SIGN_IN_POLL: Duration = Duration::from_millis(500);
+const ANCHOR_HOLD: Duration = Duration::from_millis(1600);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const PLACEHOLDER: &str = "Ask tofu to build, inspect, or delegate";
@@ -113,6 +115,7 @@ pub struct Chat {
     signing: Option<SigningIn>,
     _signed: Option<Task<()>>,
     _drain: Option<Task<()>>,
+    _flash: Option<Task<()>>,
 }
 
 struct SigningIn(Child);
@@ -303,6 +306,7 @@ impl Chat {
             signing: None,
             _signed: None,
             _drain: None,
+            _flash: None,
         }
     }
 
@@ -437,6 +441,29 @@ impl Chat {
             }
         }
         cx.notify();
+    }
+
+    pub fn search_hits(&self, query: &str) -> Vec<(String, Range<usize>)> {
+        let pieces: Vec<Vec<String>> = self.items.iter().map(items::pieces).collect();
+        find_hits(pieces.iter().cloned(), query)
+            .into_iter()
+            .filter_map(|hit| Some((pieces.get(hit.item)?.get(hit.piece)?.clone(), hit.range)))
+            .collect()
+    }
+
+    pub fn anchor(&mut self, query: &str, at: usize, cx: &mut Context<Self>) {
+        eprintln!("desk: find chat anchored on hit {} of {query:?}", at + 1);
+        self.found(query, at, cx);
+        self._flash = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(ANCHOR_HOLD).await;
+            if let Err(error) = this.update(cx, |chat, cx| {
+                if !chat.finding {
+                    chat.closed(cx);
+                }
+            }) {
+                eprintln!("desk: find chat: the anchor outlived the chat: {error}");
+            }
+        }));
     }
 
     fn search(&mut self, cx: &mut Context<Self>) {
@@ -750,7 +777,7 @@ impl Chat {
         });
     }
 
-    fn request<R: Request>(
+    pub(crate) fn request<R: Request>(
         &mut self,
         params: &R::Params,
         cx: &mut Context<Self>,
@@ -772,11 +799,11 @@ impl Chat {
         cx.spawn(async move |this, cx| {
             let reply = pending.reply().await;
             this.update(cx, |chat, cx| {
-                then(
-                    chat,
-                    reply.map_err(|error| format!("{}: {error}", R::METHOD)),
-                    cx,
-                )
+                let reply = reply.map_err(|error| {
+                    eprintln!("desk: {} failed: {error:?}", R::METHOD);
+                    error.to_string()
+                });
+                then(chat, reply, cx)
             })
         })
         .detach();
