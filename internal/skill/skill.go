@@ -3,7 +3,9 @@ package skill
 import (
 	"cmp"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,9 +16,19 @@ import (
 
 const heading = "If a skill matches the task, load it first.\n"
 
+type Origin string
+
+const (
+	OriginProject Origin = "project"
+	OriginHome    Origin = "home"
+	OriginLibrary Origin = "library"
+)
+
 type Skill struct {
 	Name        string
 	Description string
+	Domain      string
+	Origin      Origin
 	File        string
 	Dir         string
 	Hidden      bool
@@ -27,26 +39,31 @@ type Found struct {
 	Warnings []string
 }
 
+type folder struct {
+	dir    string
+	origin Origin
+}
+
 func Discover(project, home string) Found {
-	var folders []string
+	var folders []folder
 	projectFolders := ProjectFolders(project, home)
 	for _, kind := range []string{".tofu", ".agents", ".claude"} {
 		for _, dir := range projectFolders {
-			folders = append(folders, filepath.Join(dir, kind, "skills"))
+			folders = append(folders, folder{filepath.Join(dir, kind, "skills"), OriginProject})
 		}
 	}
 	if home != "" {
-		folders = append(folders, filepath.Join(home, ".tofu", "skills"))
+		folders = append(folders, folder{filepath.Join(home, ".tofu", "skills"), OriginHome})
 	}
 	var found Found
 	seen, fileNamed := map[string]bool{}, map[string]string{}
 	for _, folder := range folders {
-		entries, _ := os.ReadDir(folder)
+		entries, _ := os.ReadDir(folder.dir)
 		for _, entry := range entries {
 			if strings.HasPrefix(entry.Name(), ".") || (!entry.IsDir() && entry.Type()&os.ModeSymlink == 0) {
 				continue
 			}
-			file := filepath.Join(folder, entry.Name(), "SKILL.md")
+			file := filepath.Join(folder.dir, entry.Name(), "SKILL.md")
 			data, err := os.ReadFile(file)
 			if err != nil {
 				continue
@@ -63,6 +80,7 @@ func Discover(project, home string) Found {
 			one := Skill{
 				Name:        cmp.Or(strings.Join(fields["name"], " "), entry.Name()),
 				Description: strings.Join(fields["description"], " "),
+				Origin:      folder.origin,
 				File:        file,
 				Dir:         filepath.Dir(file),
 				Hidden:      strings.Join(fields["hide"], "") == "true" || strings.Join(fields["disable-model-invocation"], "") == "true",
@@ -81,6 +99,26 @@ func Discover(project, home string) Found {
 	}
 	slices.SortFunc(found.Skills, func(a, b Skill) int { return strings.Compare(a.Name, b.Name) })
 	return found
+}
+
+func Shipped(library fs.FS, root string) ([]Skill, error) {
+	var shipped []Skill
+	err := fs.WalkDir(library, ".", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || path.Base(path.Dir(name)) != "skills" || path.Ext(name) != ".md" {
+			return err
+		}
+		data, err := fs.ReadFile(library, name)
+		if err != nil {
+			return err
+		}
+		fields, _ := frontMatter(string(data))
+		file := path.Join(root, name)
+		shipped = append(shipped, Skill{Name: cmp.Or(strings.Join(fields["name"], " "), strings.TrimSuffix(path.Base(name), ".md")),
+			Description: strings.Join(fields["description"], " "), Domain: strings.Join(fields["domain"], " "), Origin: OriginLibrary, File: file, Dir: path.Dir(file)})
+		return nil
+	})
+	slices.SortFunc(shipped, func(a, b Skill) int { return strings.Compare(a.Name, b.Name) })
+	return shipped, err
 }
 
 func ProjectFolders(project, home string) []string {

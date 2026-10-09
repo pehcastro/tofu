@@ -108,6 +108,34 @@ func (t Trigger) AlwaysOn() bool {
 	return t.condition == nil && t.touches == nil && t.scope == "" && t.languages == nil && t.frameworks == nil && t.verb == VerbNone && t.role == RoleAny
 }
 
+func (t Trigger) String() string {
+	if t.AlwaysOn() {
+		return "always on"
+	}
+	var declared []string
+	for _, field := range []struct{ key, value string }{
+		{"role", string(t.role)},
+		{"condition", regexpText(t.condition)},
+		{"touches", regexpText(t.touches)},
+		{"scope", t.scope},
+		{"language", strings.Join(t.languages, ", ")},
+		{"framework", strings.Join(t.frameworks, ", ")},
+		{"task", string(t.verb)},
+	} {
+		if field.value != "" {
+			declared = append(declared, field.key+" "+field.value)
+		}
+	}
+	return strings.Join(declared, "; ")
+}
+
+func regexpText(pattern *regexp.Regexp) string {
+	if pattern == nil {
+		return ""
+	}
+	return pattern.String()
+}
+
 func anyOf(declared string, known []string, field, file, id string) ([]string, error) {
 	if declared == "" {
 		return nil, nil
