@@ -15,8 +15,8 @@ use serde_json::Value;
 
 use crate::limits;
 use crate::protocol::{
-    ApprovalAnswer, InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId,
-    ServerRequest, request,
+    InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId, ServerRequest,
+    request,
 };
 
 #[cfg(windows)]
@@ -154,10 +154,10 @@ struct Outgoing<'a, P> {
 }
 
 #[derive(Serialize)]
-struct Answer<'a> {
+struct Answer<'a, A> {
     jsonrpc: &'static str,
     id: &'a RequestId,
-    result: &'a ApprovalAnswer,
+    result: &'a A,
 }
 
 #[derive(Deserialize)]
@@ -241,7 +241,7 @@ impl Bridge {
             .request::<request::Initialize>(&InitializeParams {
                 client: client.to_owned(),
                 versions: vec![needed.to_owned()],
-                capabilities: Vec::new(),
+                capabilities: vec!["questions".to_owned()],
             })?
             .wait();
         let refused = |detail: String| BridgeError::Protocol {
@@ -286,7 +286,7 @@ impl Bridge {
         })
     }
 
-    pub fn answer(&self, id: &RequestId, answer: &ApprovalAnswer) -> Result<(), BridgeError> {
+    pub fn answer<A: Serialize>(&self, id: &RequestId, answer: &A) -> Result<(), BridgeError> {
         let line = serde_json::to_string(&Answer {
             jsonrpc: "2.0",
             id,

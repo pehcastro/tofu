@@ -198,6 +198,12 @@ impl Asking {
         self.moved
     }
 
+    pub fn said(&self) -> impl Iterator<Item = (&[usize], &str)> {
+        self.said
+            .iter()
+            .map(|said| (said.picked.as_slice(), said.typed.as_str()))
+    }
+
     fn question(&self) -> Option<&Question> {
         self.questions.get(self.said.len())
     }

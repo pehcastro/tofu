@@ -12,7 +12,7 @@ use crate::protocol::{
 };
 use crate::query::Answer;
 
-pub use session::{Agent, Message, Role, Session, Shell, Tool, Turn};
+pub use session::{Agent, Message, PersonAsk, PersonKind, Role, Session, Shell, Tool, Turn};
 pub use status::{Change, Status, StatusState, Statuses};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,9 +136,11 @@ impl Store {
                 Ok(())
             }
             Event::Request {
-                request: ServerRequest::TofuAskPerson(_),
-                ..
-            } => Err(ModelError::UnknownEvent("tofu/askPerson".to_owned())),
+                id,
+                request: ServerRequest::TofuAskPerson(asked),
+            } => self
+                .session(&asked.session)
+                .question(id.clone(), (**asked).clone()),
             Event::Request {
                 request: ServerRequest::Unknown { method, .. },
                 ..

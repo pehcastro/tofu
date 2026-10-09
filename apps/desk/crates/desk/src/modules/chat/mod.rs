@@ -12,17 +12,19 @@ use std::time::{Duration, Instant};
 use std::{env, fs, iter, slice, thread};
 
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
-use desk_core::model::{Role, Statuses, Store};
+use desk_core::model::{PersonAsk, PersonKind, Role, Statuses, Store};
+use desk_core::protocol::turn::{PersonQuestion, PersonReply};
 use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
     Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
-    PROTOCOL, Request, RequestId, SessionAsking, SessionInfo, SessionListParams, SessionOpenParams,
-    SessionParams, SessionRenameParams, SessionSetParams, SessionState, SessionTrace, ShellParams,
-    TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
+    PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionInfo,
+    SessionListParams, SessionOpenParams, SessionOpenResult, SessionParams, SessionRenameParams,
+    SessionSetParams, SessionState, SessionTrace, ShellParams, TurnCompleted, TurnParams,
+    TurnSendParams, TurnSteerParams, request, subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
-use desk_ui::components::ask::{Act, Ask, Asking, Question, Shape, ask_bar};
+use desk_ui::components::ask::{Act, Ask, Asking, Choice, Pick, Question, Shape, ask_bar};
 use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
 use desk_ui::components::composer::{Composer, picker};
 use desk_ui::components::find::FindBar;
@@ -58,6 +60,8 @@ const CONTENT_WIDTH: f32 = 672.0;
 const COLUMN_TOP: f32 = 16.0;
 const DOCK_GAP: f32 = 8.0;
 const DOCK_INSET: f32 = 16.0;
+const OTHER: &str = "Type your own answer";
+const YES_NO: [&str; 2] = ["yes", "no"];
 const DECISIONS: [Decision; 3] = [
     Decision::AllowOnce,
     Decision::RejectOnce,
@@ -87,10 +91,16 @@ struct Slot {
     settled: bool,
 }
 
-struct Approval {
+enum Asked {
+    Approval,
+    Question(Box<PersonAsk>),
+}
+
+struct Card {
     key: String,
     id: RequestId,
     asking: Asking,
+    asked: Asked,
 }
 
 pub struct Chat {
@@ -102,7 +112,8 @@ pub struct Chat {
     items: Rc<Vec<Item>>,
     transcript: Transcript,
     area: Entity<TextArea>,
-    approval: Option<Approval>,
+    card: Option<Card>,
+    own_answer: Entity<TextArea>,
     asking: SessionAsking,
     project: String,
     problem: Option<SharedString>,
@@ -248,8 +259,91 @@ pub fn live(
     chat
 }
 
-impl Approval {
-    fn new(id: RequestId, asked: &ApprovalRequest, project: &str) -> Self {
+fn person_question(asked: &PersonQuestion, kind: PersonKind) -> Question {
+    let labels = match kind {
+        PersonKind::YesNo => YES_NO
+            .map(|label| (label.to_owned(), String::new()))
+            .to_vec(),
+        PersonKind::Choice | PersonKind::Multi | PersonKind::Text => asked
+            .options
+            .iter()
+            .map(|option| (option.label.clone(), option.description.clone()))
+            .collect(),
+    };
+    let pick = |many, other: Option<&str>| {
+        Shape::Pick(Pick {
+            choices: labels
+                .into_iter()
+                .map(|(label, about)| Choice {
+                    label: label.into(),
+                    about: (!about.is_empty()).then(|| about.into()),
+                })
+                .collect(),
+            many,
+            other: other.map(SharedString::from),
+        })
+    };
+    Question {
+        header: asked.header.clone().into(),
+        text: asked.question.clone().into(),
+        shape: match kind {
+            PersonKind::Choice => pick(false, Some(OTHER)),
+            PersonKind::Multi => pick(true, Some(OTHER)),
+            PersonKind::YesNo => pick(false, None),
+            PersonKind::Text => Shape::Typed(OTHER.into()),
+        },
+    }
+}
+
+fn person_reply(
+    asked: &PersonQuestion,
+    kind: PersonKind,
+    picked: &[usize],
+    typed: &str,
+) -> PersonReply {
+    let typed = (!typed.is_empty()).then(|| typed.to_owned());
+    let (chosen, text) = match kind {
+        PersonKind::YesNo => (
+            Vec::new(),
+            picked
+                .first()
+                .and_then(|at| YES_NO.get(*at))
+                .map(|said| (*said).to_owned()),
+        ),
+        PersonKind::Choice | PersonKind::Multi | PersonKind::Text => (
+            picked
+                .iter()
+                .filter_map(|at| asked.options.get(*at))
+                .map(|option| option.label.clone())
+                .collect(),
+            typed,
+        ),
+    };
+    PersonReply {
+        id: asked.id.clone(),
+        chosen,
+        text,
+    }
+}
+
+impl Card {
+    fn question(ask: &PersonAsk) -> Self {
+        Card {
+            key: ask.request.question.clone(),
+            id: ask.id.clone(),
+            asking: Asking::new(
+                ask.request
+                    .questions
+                    .iter()
+                    .zip(&ask.kinds)
+                    .map(|(asked, kind)| person_question(asked, *kind))
+                    .collect(),
+            ),
+            asked: Asked::Question(Box::new(ask.clone())),
+        }
+    }
+
+    fn approval(id: RequestId, asked: &ApprovalRequest, project: &str) -> Self {
         let hint = asked
             .judged
             .as_ref()
@@ -260,9 +354,10 @@ impl Approval {
             .get("command")
             .and_then(|command| command.as_str())
             .unwrap_or(&asked.target);
-        Approval {
+        Card {
             key: asked.approval.clone(),
             id,
+            asked: Asked::Approval,
             asking: Asking::new(vec![Question {
                 header: SharedString::default(),
                 text: SharedString::default(),
@@ -285,6 +380,13 @@ impl Chat {
                 .bare()
                 .max_lines(FIELD_LINES)
                 .on_submit(submit)
+        });
+        let reply = cx.listener(|chat, _: &str, window, cx| chat.act(Act::Send, window, cx));
+        let own_answer = cx.new(|cx| {
+            TextArea::new(OTHER.into(), window, cx)
+                .bare()
+                .max_lines(FIELD_LINES)
+                .on_submit(reply)
         });
         cx.observe_in(&area, window, |chat, _, window, cx| {
             chat.typed(window, cx);
@@ -325,7 +427,8 @@ impl Chat {
             items: Rc::default(),
             transcript: Transcript::new(0).content_width(px(CONTENT_WIDTH)),
             area,
-            approval: None,
+            card: None,
+            own_answer,
             asking: SessionAsking::Auto,
             project: String::new(),
             problem: None,
@@ -392,16 +495,32 @@ impl Chat {
         let opened = open.is_some();
         self.store.update(cx, |store, cx| {
             store.open = open;
-            if opened {
-                store.trace.want();
-                store.trace.again();
-            }
             cx.notify();
         });
         self.opening = opening;
         if opened {
             self.ask_due(cx);
         }
+    }
+
+    fn opened(&mut self, opened: SessionOpenResult, cx: &mut Context<Self>) {
+        self.store
+            .update(cx, |store, _| store.trace = Answer::default());
+        if opened.fresh {
+            self.ledger = Some((opened.session.clone(), Some(0)));
+        } else {
+            self.ask_ledger(opened.session.clone(), cx);
+            self.want_trace(cx);
+        }
+        self.ask_cron(opened.session.clone(), cx);
+        self.set_opening(Opening::Open(opened.session), cx);
+    }
+
+    fn want_trace(&mut self, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| {
+            store.trace.want();
+            store.trace.again();
+        });
     }
 
     pub fn open_id(&self) -> Option<&str> {
@@ -442,11 +561,12 @@ impl Chat {
             ..SessionOpenParams::default()
         };
         self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
-            eprintln!("desk: session {} opened", opened.session);
+            eprintln!(
+                "desk: session {} opened, fresh {}",
+                opened.session, opened.fresh
+            );
             chat.ask_shells(cx);
-            chat.ask_cron(opened.session.clone(), cx);
-            chat.ask_ledger(opened.session.clone(), cx);
-            chat.set_opening(Opening::Open(opened.session), cx);
+            chat.opened(opened, cx);
             chat.refresh(cx);
             chat.relist(cx);
             chat.reread_context(cx);
@@ -586,6 +706,7 @@ impl Chat {
         if let (Link::Recorded(_) | Link::Fed, Opening::Closed) = (&self.link, &self.opening)
             && let Some(id) = self.store.read(cx).sessions.keys().next().cloned()
         {
+            self.want_trace(cx);
             self.set_opening(Opening::Open(id), cx);
         }
         self.refresh(cx);
@@ -675,6 +796,9 @@ impl Chat {
                 if self.open_id() == Some(completed.session.as_str()) {
                     self.reread_context(cx);
                     self.reread_info(cx);
+                    if self.store.read(cx).trace.read.is_none() {
+                        self.want_trace(cx);
+                    }
                 }
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
@@ -817,18 +941,18 @@ impl Chat {
                 }
             }
         }
-        let kept = self
-            .approval
-            .as_ref()
-            .is_some_and(|shown| session.approvals.contains_key(&shown.key));
+        let kept = self.card.as_ref().is_some_and(|shown| {
+            session.approvals.contains_key(&shown.key) || session.questions.contains_key(&shown.key)
+        });
         if !kept {
-            let shown = self.approval.take().is_some();
-            self.approval = session
+            let shown = self.card.take().is_some();
+            self.card = session
                 .approvals
                 .values()
                 .next()
-                .map(|(asked_id, asked)| Approval::new(asked_id.clone(), asked, &self.project));
-            self.refocus |= shown || self.approval.is_some();
+                .map(|(asked_id, asked)| Card::approval(asked_id.clone(), asked, &self.project))
+                .or_else(|| session.questions.values().next().map(Card::question));
+            self.refocus |= shown || self.card.is_some();
         }
         if changed && !self.query.is_empty() {
             self.search(cx);
@@ -1367,13 +1491,12 @@ impl Chat {
                 };
                 self.call::<request::SessionOpen>(&params, cx, move |chat, opened, cx| {
                     eprintln!(
-                        "desk: session {} opened, asking {}",
+                        "desk: session {} opened, fresh {}, asking {}",
                         opened.session,
+                        opened.fresh,
                         String::from(chat.asking.clone())
                     );
-                    chat.ask_cron(opened.session.clone(), cx);
-                    chat.ask_ledger(opened.session.clone(), cx);
-                    chat.set_opening(Opening::Open(opened.session), cx);
+                    chat.opened(opened, cx);
                     chat.relist(cx);
                     chat.send(&text, cx);
                 });
@@ -1412,36 +1535,84 @@ impl Chat {
         cx.notify();
     }
 
-    fn act(&mut self, act: Act, cx: &mut Context<Self>) {
-        let Some(shown) = &mut self.approval else {
+    fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
+        let typed = self.own_answer.read(cx).text();
+        let Some(shown) = &mut self.card else {
             return;
         };
-        let answered = shown.asking.act(act, "", Instant::now());
+        let was_typing = shown.asking.typing();
+        let answered = shown.asking.act(act, &typed, Instant::now());
+        let typing = shown.asking.typing();
+        if answered || !typing {
+            self.own_answer.update(cx, TextArea::clear);
+        }
+        if typing && !was_typing {
+            self.own_answer.focus_handle(cx).focus(window, cx);
+        }
         cx.notify();
-        let (true, Act::Pick(at)) = (answered, act) else {
-            return;
-        };
-        let Some(decision) = DECISIONS.get(at).cloned() else {
+        let Some(shown) = self
+            .card
+            .as_ref()
+            .filter(|shown| answered && !shown.asking.waiting())
+        else {
             return;
         };
         let Link::Ready(bridge) = &self.link else {
             return self.fail("tofu is not running, so the answer was lost".to_owned(), cx);
         };
-        let said = String::from(decision.clone());
-        match bridge.answer(&shown.id, &ApprovalAnswer { decision }) {
-            Ok(()) => eprintln!("desk: approval {} answered {said}", shown.key),
+        let sent = match &shown.asked {
+            Asked::Approval => {
+                let Some(decision) = shown
+                    .asking
+                    .said()
+                    .next()
+                    .and_then(|(picked, _)| picked.first())
+                    .and_then(|at| DECISIONS.get(*at))
+                    .cloned()
+                else {
+                    return;
+                };
+                let said = String::from(decision.clone());
+                bridge
+                    .answer(&shown.id, &ApprovalAnswer { decision })
+                    .map(|()| format!("approval {} answered {said}", shown.key))
+            }
+            Asked::Question(ask) => {
+                let answers = ask
+                    .request
+                    .questions
+                    .iter()
+                    .zip(&ask.kinds)
+                    .zip(shown.asking.said())
+                    .map(|((asked, kind), (picked, typed))| {
+                        person_reply(asked, *kind, picked, typed)
+                    })
+                    .collect();
+                bridge
+                    .answer(
+                        &shown.id,
+                        &QuestionAnswer {
+                            outcome: QuestionOutcome::Submitted,
+                            answers,
+                        },
+                    )
+                    .map(|()| format!("question {} answered", shown.key))
+            }
+        };
+        match sent {
+            Ok(said) => eprintln!("desk: {said}"),
             Err(error) => self.fail(error.to_string(), cx),
         }
         self.refocus = true;
     }
 
-    fn key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+    fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let act = self
-            .approval
+            .card
             .as_ref()
             .and_then(|shown| shown.asking.key(&event.keystroke.key));
         if let Some(act) = act {
-            self.act(act, cx);
+            self.act(act, window, cx);
         }
     }
 
@@ -1583,13 +1754,12 @@ impl Render for Chat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
         if !self.finding && std::mem::take(&mut self.refocus) {
-            match self
-                .approval
-                .as_ref()
-                .is_some_and(|shown| shown.asking.waiting())
-            {
-                true => self.focus.focus(window, cx),
-                false => self.area.focus_handle(cx).focus(window, cx),
+            match self.card.as_ref().filter(|shown| shown.asking.waiting()) {
+                Some(shown) if shown.asking.typing() => {
+                    self.own_answer.focus_handle(cx).focus(window, cx);
+                }
+                Some(_) => self.focus.focus(window, cx),
+                None => self.area.focus_handle(cx).focus(window, cx),
             }
         }
         let theme = ActiveTheme::theme(cx);
@@ -1613,7 +1783,7 @@ impl Render for Chat {
             },
         );
         let waiting = self
-            .approval
+            .card
             .as_ref()
             .is_some_and(|shown| shown.asking.waiting());
         let mode = picker("chat-asking", String::from(self.asking.clone()), &theme)
@@ -1635,12 +1805,15 @@ impl Render for Chat {
             .on_send(cx.listener(|chat, text: &str, _, cx| chat.send(text, cx)))
             .on_stop(move |window, cx| stop(&(), window, cx))
             .on_remove_trace(move |at, window, cx| unmention(&at, window, cx));
-        let answer = cx.listener(|chat, act: &Act, _, cx| chat.act(*act, cx));
-        let ask = self.approval.as_ref().map(|shown| {
+        let answer = cx.listener(|chat, act: &Act, window, cx| chat.act(*act, window, cx));
+        let ask = self.card.as_ref().map(|shown| {
             ask_bar(
                 "chat-ask",
                 &shown.asking,
-                None,
+                shown
+                    .asking
+                    .typing()
+                    .then(|| self.own_answer.clone().into_any_element()),
                 1.0,
                 true,
                 move |act, window, cx| answer(&act, window, cx),
@@ -1660,7 +1833,9 @@ impl Render for Chat {
             .capture_key_down(cx.listener(|chat, event: &KeyDownEvent, window, cx| {
                 chat.mention_key(event, window, cx)
             }))
-            .on_key_down(cx.listener(|chat, event: &KeyDownEvent, _, cx| chat.key(event, cx)))
+            .on_key_down(
+                cx.listener(|chat, event: &KeyDownEvent, window, cx| chat.key(event, window, cx)),
+            )
             .on_action(cx.listener(Self::open_find))
             .capture_any_mouse_down(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = true))
             .on_mouse_down_out(cx.listener(|chat, _: &MouseDownEvent, _, _| chat.aimed = false))

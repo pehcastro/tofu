@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 use super::ModelError;
 use crate::protocol::{
     AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, ModelPick,
-    Notification, Origin, OriginKind, PlanStep, QuotaWindow, RequestId, SessionForked, ShellKept,
-    ShellNow, ShellNowState, ShellReady, TurnCompletedStatus, UsageUpdated,
+    Notification, Origin, OriginKind, PlanStep, QuestionRequest, QuotaWindow, RequestId,
+    SessionForked, ShellKept, ShellNow, ShellNowState, ShellReady, TurnCompletedStatus,
+    UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +87,21 @@ pub struct Shell {
     pub mention: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersonKind {
+    Choice,
+    Multi,
+    Text,
+    YesNo,
+}
+
+#[derive(Debug, Clone)]
+pub struct PersonAsk {
+    pub id: RequestId,
+    pub request: QuestionRequest,
+    pub kinds: Vec<PersonKind>,
+}
+
 #[derive(Debug, Default)]
 pub struct Session {
     pub name: String,
@@ -100,6 +116,7 @@ pub struct Session {
     pub shells: BTreeMap<String, Shell>,
     pub decisions: Vec<DecisionMade>,
     pub approvals: BTreeMap<String, (RequestId, ApprovalRequest)>,
+    pub questions: BTreeMap<String, PersonAsk>,
     pub plan: Vec<PlanStep>,
     pub quota: Vec<QuotaWindow>,
     pub context: Option<(i64, i64)>,
@@ -150,6 +167,30 @@ fn orphan(event: &'static str, id: &str) -> ModelError {
 impl Session {
     pub(super) fn ask(&mut self, id: RequestId, asked: ApprovalRequest) {
         self.approvals.insert(asked.approval.clone(), (id, asked));
+    }
+
+    pub(super) fn question(
+        &mut self,
+        id: RequestId,
+        request: QuestionRequest,
+    ) -> Result<(), ModelError> {
+        let kinds = request
+            .questions
+            .iter()
+            .map(|asked| match asked.r#type.as_str() {
+                "choice" => Ok(PersonKind::Choice),
+                "multi" => Ok(PersonKind::Multi),
+                "text" => Ok(PersonKind::Text),
+                "yesno" => Ok(PersonKind::YesNo),
+                other => Err(ModelError::UnknownValue {
+                    field: "question type",
+                    value: other.to_owned(),
+                }),
+            })
+            .collect::<Result<_, _>>()?;
+        let ask = PersonAsk { id, request, kinds };
+        self.questions.insert(ask.request.question.clone(), ask);
+        Ok(())
     }
 
     pub(super) fn shells_now(&mut self, now: &[ShellNow]) -> Result<(), ModelError> {
@@ -466,11 +507,12 @@ impl Session {
             }
             N::Resync(e) => self.dropped = self.dropped.saturating_add(e.dropped),
             N::SessionSettings(e) => self.pick = Some(e.pick.clone()),
-            N::ItemPersisted(_)
-            | N::SessionListed(_)
-            | N::Status(_)
-            | N::MemoryScoped(_)
-            | N::QuestionResolved(_) => {}
+            N::QuestionResolved(e) => {
+                self.questions
+                    .remove(&e.question)
+                    .ok_or_else(|| orphan("question.resolved", &e.question))?;
+            }
+            N::ItemPersisted(_) | N::SessionListed(_) | N::Status(_) | N::MemoryScoped(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }
