@@ -11,8 +11,8 @@ Every request `tofu serve --stdio` answers, with what it takes and what it
 answers. `tofu docs serve` says what serve is and how to start it, and
 `tofu serve --schema` carries every field of every line. Reads, reloads,
 `session.list`, `session.history`, `session.info`, `session.find`,
-`session.trace`, `shell.run`, `learn.scan`, `setup.check` and the logins
-answer out of order, so none of them holds `turn.stop`.
+`session.trace`, `mention.resolve`, `shell.run`, `learn.scan`, `setup.check`
+and the logins answer out of order, so none of them holds `turn.stop`.
 
 A read, a reload, a write and `learn.*` answer the report the verb's `--json`
 prints under `data`, with no envelope; a verb that fails errs with its
@@ -27,8 +27,7 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
 - `session.list`: takes `search` and `limit`; answers `head` and `sessions`,
   a row each with `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
   `model`, `costUsd`, `outcome` as the session recorded it, `open` for the
-  one open here, `running` while a turn
-  runs, and `heldBy` when another tofu holds it
+  one open here, `running` while a turn runs, and `heldBy` for another tofu's
 - `session.open`: takes `session` (none starts a fresh one), `asking` and
   `replay`, how many of the newest lines it sends; answers `session` and
   `fresh`. A session another tofu holds errs `session.busy`, naming the process
@@ -49,17 +48,18 @@ envelope, `{tofu, verb, ok, at, data, problems}`.
   answers `handle`, `query` and `hits`
 - `session.trace`: takes `session`; answers what `tofu session trace` prints:
   `requests`, `calls`, `hooks`, `failures`, `messages`, `agents` and `cache`
-- `turn.send`: takes `session`, `text`, `mentions`, `images`, `wire`, `model`
-  and `effort`; answers `turn`. One path in `images` that is not a png, jpg,
-  gif or webp refuses the whole send. `turn.steer` takes `session`,
-  `expectedTurnId` and `text`; answers `turn` and `id`, the queued message.
-  `turn.sendNow` (capability `sendNow`) takes `id`, or none for every queued
-  message; answers `ok`, and errs `-32000` when no turn runs or that id is not
-  queued. `turn.steered` follows each message the lead reads: `item` is its
-  `id`, with `text`, `step` and `readAt`; messages read together share a
-  `step`. `turn.unsteer` takes `text`, answers `removed`.
-  `turn.stop` takes `turn`, and `lead: true` stops the lead alone. `undo` takes
-  `session` and `turns`
+- `turn.send`: takes `session`, `text`, `mentions` (each a `ref`, kept where
+  `text` has it, else added at the end; a path gains `@`), `images` (png, jpg,
+  gif or webp, or the send is refused), `wire`, `model` and `effort`; answers
+  `turn`. `turn.steer` takes `session`, `expectedTurnId` and `text`; answers
+  `turn` and `id`. `turn.sendNow` (capability `sendNow`) takes `id`, or none
+  for every queued message; answers `ok`, errs `-32000` when no turn runs or
+  the id is not queued. `turn.steered` follows each message the lead reads:
+  `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a
+  `step`. `turn.unsteer` takes `text`, answers `removed`. `turn.stop` takes
+  `turn`, `lead: true` stops the lead alone. `undo` takes `session`, `turns`
+- `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`,
+  `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
 - `shell.run`: takes `command`, runs it as `!` does, answers `output` and
   `stopped`. `shell.read` takes `shell` and `offset`; `shell.kill` `shell`
 - reads, `query.` and: `models` (the models, `wires` signed in and `stale`),

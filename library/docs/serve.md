@@ -13,11 +13,11 @@ writes responses and events on standard output, one JSON object a line, in
 the protocol `tofu.host/1`. Standard error carries logs and nothing else.
 There is no port and no daemon: the program that starts tofu owns it.
 
-Every event names its `session`, `turn`, `item` and `seq`, and `agent` when a
-sub-agent produced it. Events carry data, not sentences: a turn ends with
-`status` `finished`, `stopped` or `failed`, a tool reports its exit code,
-bytes, lines and duration as numbers, and a file edit carries its hunks with
-three lines of context.
+Every event names its `session`, `turn`, `item`, `seq`, `agent` for a
+sub-agent's, and `ref`, the token ctrl+r types for its item. Events carry
+data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool
+reports exit code, bytes, lines and duration as numbers, and a file edit
+carries its hunks with three lines of context.
 
 `tofu docs serve-methods` lists every request, what it takes and what it
 answers. This page is what serve sends without being asked.

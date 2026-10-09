@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,6 +33,8 @@ const (
 	QuoteNotFound  QuoteOutcome = "not_found"
 	QuoteAmbiguous QuoteOutcome = "ambiguous"
 )
+
+var ErrQuoteNoID = errors.New("quote: id is required, and it is the reference the person wrote or the short id inside it")
 
 type Quoted struct {
 	Outcome QuoteOutcome
@@ -121,12 +124,15 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	hash := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(ref), quoteOpenMark), quoteCloseMark)
 	if strings.Trim(hash, "#") == "" {
-		return Quoted{}, errors.New("quote: id is required, and it is the reference the person wrote or the short id inside it")
+		return Quoted{}, ErrQuoteNoID
 	}
 	if store == nil || recorded == "" {
 		return Quoted{}, errors.New("quote: this turn is recording no session, so there is nothing to quote")
 	}
 	newest, err := store.Header(recorded)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
+	}
 	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
 		newest, err = store.Header(newest.ForkedInto)
 	}

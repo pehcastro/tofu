@@ -27,6 +27,9 @@ type outgoing struct {
 }
 
 func notify(method string, params any) outgoing {
+	if identified, numbered := params.(stamped); numbered {
+		identified.refer()
+	}
 	return outgoing{msg: message{JSONRPC: rpcVersion, Method: method, Params: params}}
 }
 
@@ -44,6 +47,7 @@ func merged(method, key string, params any) outgoing {
 
 type stamped interface {
 	stamp(seq int64)
+	refer()
 	about() Identity
 }
 

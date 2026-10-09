@@ -143,6 +143,8 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		})
 	case "session.info":
 		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionInfo](s, "session", "info", p.Session) })
+	case "mention.resolve":
+		return handle(raw, s.resolveMention)
 	case "session.trace":
 		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionTrace](s, "session", "trace", p.Session) })
 	case queryPrefix + "accounts":

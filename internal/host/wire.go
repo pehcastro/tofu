@@ -12,6 +12,7 @@ import (
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 const (
@@ -44,10 +45,18 @@ type Identity struct {
 	Turn    string `json:"turn"`
 	Agent   string `json:"agent,omitempty"`
 	Item    string `json:"item"`
+	Ref     string `json:"ref,omitempty"`
 	Seq     int64  `json:"seq"`
 }
 
 func (i *Identity) stamp(seq int64) { i.Seq = seq }
+
+func (i *Identity) refer() {
+	i.Ref = tools.QuoteRef(i.Item)
+	if i.Item != "" && i.Item == i.Agent {
+		i.Ref = "[&" + i.Agent + "]"
+	}
+}
 
 type enumerated interface{ enum() []string }
 
@@ -930,6 +939,7 @@ func requests() []method {
 		{name: "session.info", params: SessionParams{}, result: SessionInfo{}},
 		{name: "session.find", params: SessionFindParams{}, result: SessionFind{}},
 		{name: "session.trace", params: SessionParams{}, result: SessionTrace{}},
+		{name: "mention.resolve", params: MentionParams{}, result: MentionResolved{}},
 		{name: queryPrefix + "accounts", params: NoParams{}, result: Accounts{}},
 		{name: "learn.apply", params: LearnApplyParams{}, result: WriteReceipt{}},
 		{name: statusMethod + ".list", params: NoParams{}, result: StatusList{}},
@@ -945,7 +955,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention"}
 }
 
 const queryPrefix = "query."

@@ -104,7 +104,7 @@ func (s *server) receive(line []byte) {
 	case in.Method == "" && in.ID != nil:
 		s.answered(in.ID, in.Result)
 	case in.ID == nil:
-	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "shell.run", "session.list", "session.history", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
+	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "mention.resolve", "shell.run", "session.list", "session.history", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
 		go func() {
 			result, err := s.call(in.Method, in.Params)
 			s.respond(in.ID, result, err)
@@ -366,7 +366,12 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	}
 	task := p.Text
 	for _, mention := range p.Mentions {
-		task += " @" + mention
+		if !strings.HasPrefix(mention, "[") {
+			mention = "@" + mention
+		}
+		if !strings.Contains(task, mention) {
+			task += " " + mention
+		}
 	}
 	tokens, err := s.attach(p.Images)
 	if err != nil {
