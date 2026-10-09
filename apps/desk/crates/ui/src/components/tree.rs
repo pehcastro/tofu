@@ -345,6 +345,10 @@ impl IconTheme {
         &self.file(name).id
     }
 
+    pub fn file_image(&self, name: &str) -> Arc<Image> {
+        self.file(name).image.clone()
+    }
+
     pub fn folder_icon(&self, name: &str, open: bool) -> &str {
         &self.folder(name, open).id
     }

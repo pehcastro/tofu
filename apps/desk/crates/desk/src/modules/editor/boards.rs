@@ -502,21 +502,34 @@ impl Editor {
             })
             .into_iter()
             .collect();
+        let image = match (&self.source, disk) {
+            (
+                Source::Disk {
+                    folder: Some(folder),
+                    ..
+                },
+                Some(disk),
+            ) => Some(folder.icons.file_image(&disk.name)),
+            _ => None,
+        };
         let editor = cx.weak_entity();
-        div().flex_1().min_w_0().child(connected_tabs(
-            "editor-file-tabs",
-            &tabs,
-            0,
-            1,
-            &ActiveTheme::theme(cx),
-            move |event, _, cx| {
-                if let TabEvent::Close(_) = event
-                    && let Err(error) = editor.update(cx, |editor, cx| editor.shut_file(cx))
-                {
-                    eprintln!("desk: editor is gone before its tab closed: {error}");
-                }
-            },
-        ))
+        div().flex_1().min_w_0().child(
+            connected_tabs(
+                "editor-file-tabs",
+                &tabs,
+                0,
+                1,
+                &ActiveTheme::theme(cx),
+                move |event, _, cx| {
+                    if let TabEvent::Close(_) = event
+                        && let Err(error) = editor.update(cx, |editor, cx| editor.shut_file(cx))
+                    {
+                        eprintln!("desk: editor is gone before its tab closed: {error}");
+                    }
+                },
+            )
+            .images(vec![image]),
+        )
     }
 
     fn fixture_tabs(&self, header: Div, notes: bool, scale: f32, cx: &mut Context<Self>) -> Div {

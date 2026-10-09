@@ -1,14 +1,15 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use desk_motion::tokens::{EASE_OUT, PANEL_OUT_MS};
 use desk_motion::{Glide, GlideKind, reduced_motion};
 use gpui::{
-    AnyElement, App, Bounds, Corners, Div, ElementId, Entity, FocusHandle, MouseButton, Pixels,
-    Point, Rgba, ScrollHandle, SharedString, Stateful, Window, canvas, div, point, prelude::*, px,
-    size,
+    AnyElement, App, Bounds, Corners, Div, ElementId, Entity, FocusHandle, Image, MouseButton,
+    Pixels, Point, Rgba, ScrollHandle, SharedString, Stateful, Window, canvas, div, img, point,
+    prelude::*, px, size,
 };
 
 use crate::component::icon;
@@ -740,7 +741,18 @@ fn mark(tab: &Tab, ix: usize, look: Look, theme: &Theme, shut: &Shut) -> Div {
     }
 }
 
-fn link(tab: &Tab, font: f32, theme: &Theme, color: Rgba) -> Div {
+fn link(tab: &Tab, image: Option<&Arc<Image>>, font: f32, theme: &Theme, color: Rgba) -> Div {
+    let lead = match image {
+        Some(image) => Some(
+            img(image.clone())
+                .flex_none()
+                .size(px(ICON_SMALL))
+                .into_any_element(),
+        ),
+        None => tab
+            .icon
+            .map(|lead| glyph(lead, ICON_SMALL, color).into_any_element()),
+    };
     div()
         .flex()
         .items_center()
@@ -755,14 +767,14 @@ fn link(tab: &Tab, font: f32, theme: &Theme, color: Rgba) -> Div {
                 .as_ref()
                 .map(|flag| icon(flag.icon, ICON_SMALL, color)),
         )
-        .children(tab.icon.map(|lead| glyph(lead, ICON_SMALL, color)))
+        .children(lead)
         .child(div().min_w_0().truncate().child(tab.label.clone()))
         .children(tab.count.map(|count| badge(count.to_string(), theme)))
 }
 
 fn tab_frame(
     id: &SharedString,
-    tab: &Tab,
+    (tab, image): (&Tab, Option<&Arc<Image>>),
     pick: Pick,
     theme: &Theme,
     (on, shut, press, menu): (&OnTab, &Shut, Option<&Press>, Option<&Press>),
@@ -786,7 +798,7 @@ fn tab_frame(
         .items_center()
         .min_w_0()
         .pr(px(TAB_PAD_TAIL))
-        .child(link(tab, font, theme, text))
+        .child(link(tab, image, font, theme, text))
         .child(mark(tab, ix, look, theme, shut))
         .when_some(fold, |content, fold| content.w(fold.width).flex_none());
     let (press, menu) = (press.cloned(), menu.cloned());
@@ -1035,6 +1047,7 @@ pub struct TabStrip {
     pointed: Option<Pointed>,
     focus: Option<FocusHandle>,
     new_button: Option<AnyElement>,
+    images: Vec<Option<Arc<Image>>>,
 }
 
 impl TabStrip {
@@ -1095,7 +1108,13 @@ impl TabStrip {
             pointed: None,
             focus: None,
             new_button: None,
+            images: Vec::new(),
         }
+    }
+
+    pub fn images(mut self, images: Vec<Option<Arc<Image>>>) -> Self {
+        self.images = images;
+        self
     }
 
     pub fn new_button(mut self, button: impl IntoElement) -> Self {
@@ -1184,7 +1203,9 @@ impl RenderOnce for TabStrip {
             pointed,
             focus,
             new_button,
+            images,
         } = self;
+        let image = |ix: usize| images.get(ix).and_then(Option::as_ref);
         let reduced = reduced_motion(cx);
         let state =
             window.use_keyed_state(SharedString::from(format!("{id}-motion")), cx, |_, cx| {
@@ -1313,7 +1334,7 @@ impl RenderOnce for TabStrip {
                 for (ix, tab) in visible.iter().filter_map(|ix| Some((*ix, tabs.get(*ix)?))) {
                     let item = tab_frame(
                         &id,
-                        tab,
+                        (tab, image(ix)),
                         pick(ix, FONT_TAB, ink(&theme, DIM_TEXT)),
                         &theme,
                         (&on, &shut, press.as_ref(), menu.as_ref()),
@@ -1344,7 +1365,7 @@ impl RenderOnce for TabStrip {
                     let (ix, tab, screen) = at;
                     let item = tab_frame(
                         &id,
-                        tab,
+                        (tab, image(ix)),
                         pick(ix, FONT_BODY, ink(&theme, SHELL_TEXT)),
                         &theme,
                         (&on, &shut, press.as_ref(), menu.as_ref()),
