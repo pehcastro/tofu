@@ -136,7 +136,16 @@ func (p *Prefix) toolsOr(tools []llm.Tool) []llm.Tool {
 }
 
 func (c Config) SystemMessage() string {
-	return strings.TrimSpace(c.System + "\n\n" + c.Instructions + "\n\n" + c.Memory)
+	return strings.TrimSpace(c.System + "\n\n" + c.Instructions)
+}
+
+const sourceMemoryView = "memory view"
+
+func (c Config) MemoryMessage() []llm.Message {
+	if strings.TrimSpace(c.Memory) == "" || len(c.History) > 0 {
+		return nil
+	}
+	return []llm.Message{{Role: llm.RoleUser, Content: c.Memory, Origin: llm.Origin{Source: sourceMemoryView}}}
 }
 
 func TaskIn(first string) (string, bool) {

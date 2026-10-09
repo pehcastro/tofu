@@ -760,6 +760,16 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	spawner := turn.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
 	spawner.SubAgents.Open = run.subAgentOpener(opts)
+	if opts.agent == "" && memoryOn(dir) {
+		spawner.Remembered = func() (map[string]string, error) {
+			shelves, err := memory.Open(dir)
+			lines := map[string]string{}
+			for _, entry := range shelves.All() {
+				lines[entry.ID] = entry.Line()
+			}
+			return lines, err
+		}
+	}
 	learn := learnBrowserRecipe(run.notify)
 	spawner.SubAgents.Brief = browserRecipeBrief(run.notify)
 	spawner.SubAgents.Ended = func(definition subagent.Definition, task string, rounds []turn.Row, report turn.SubAgentReport, finished bool) {
@@ -848,7 +858,7 @@ func gateMode(arm string) turn.GateMode {
 
 func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) {
 	tools := config.Tools.Definitions()
-	messages := []llm.Message{{Role: llm.RoleUser, Content: config.FirstUserMessage()}}
+	messages := append(config.MemoryMessage(), llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
 	switch opts.wire {
 	case wireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)

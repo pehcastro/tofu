@@ -44,6 +44,9 @@ func showPrompt(opts runOpts, out, errOut io.Writer) int {
 	}
 
 	_, _ = fmt.Fprintf(out, "\nsystem message, %d bytes\n%s\n", len(system), system)
+	for _, view := range sent.MemoryMessage() {
+		_, _ = fmt.Fprintf(out, "\nmemory, a user message before the first, %d bytes\n%s\n", len(view.Content), view.Content)
+	}
 	_, _ = fmt.Fprintf(out, "\nfirst user message, %d bytes\n%s\n", len(firstUser), firstUser)
 	_, _ = fmt.Fprintf(out, "\ncomposed system prompt %d bytes against %d uncomposed, %+d bytes\n",
 		len(sent.System), uncomposed, len(sent.System)-uncomposed)

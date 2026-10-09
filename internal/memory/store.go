@@ -93,7 +93,7 @@ func project(store *memtree.Store, entries, log string) error {
 		return err
 	}
 	for _, r := range records[min(bytes.Count(projected, []byte{'\n'}), len(records)):] {
-		item := memtree.Item{Kind: string(r.Kind), Text: "[memory#" + r.ID + "] " + r.Text}
+		item := memtree.Item{Kind: string(r.Kind), Text: Entry{ID: r.ID, Text: r.Text}.Line()}
 		if r.Removed {
 			item.Kind = removedKind
 		}
@@ -202,6 +202,10 @@ func (m Memory) Block() (string, error) {
 	for _, shelf := range m.all() {
 		precedence = append(precedence, string(shelf.Scope))
 	}
+	mine, err := m.author(m.repo, false)
+	if err != nil {
+		return "", err
+	}
 	var block strings.Builder
 	for _, shelf := range []Shelf{m.Global, m.Project, m.UserLocal, m.ProjectLocal} {
 		for _, store := range shelf.stores {
@@ -210,7 +214,7 @@ func (m Memory) Block() (string, error) {
 				return "", err
 			}
 			head := string(shelf.Scope)
-			if shelf.Scope == UserLocal && filepath.Base(store) != m.who.authors[m.repo] {
+			if shelf.Scope == UserLocal && filepath.Base(store) != mine {
 				head += ", another author"
 			}
 			if view != "" {

@@ -147,6 +147,14 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 
 	system := systemBlocks(r.System, oauth, BillingSystemBlock(firstUserText(r.Messages), cmp.Or(r.ClaudeCodeVersion, PinnedClaudeCodeVersion)), r.CacheTTL)
 	head := applyHeadCaching(system, tools, r.CacheTTL)
+	if opensOnStandingContext(messages) {
+		markPrefixEnd(messages[0].Content, r.CacheTTL)
+		head++
+		if head == cacheBreakpointsPerRequest && !r.HistoryCacheOff && historyChars(messages) >= historyCacheMinPrefixChars {
+			tools[len(tools)-1].CacheControl = nil
+			head--
+		}
+	}
 	if !r.HistoryCacheOff {
 		applyHistoryCaching(messages, r.CacheTTL, cacheBreakpointsPerRequest-head)
 	}
@@ -269,6 +277,10 @@ func lastStableSystemBlock(system []systemBlock) int {
 		}
 	}
 	return -1
+}
+
+func opensOnStandingContext(messages []wireMessage) bool {
+	return len(messages) > 1 && messages[0].Role == "user" && messages[1].Role == "user"
 }
 
 func applyHistoryCaching(messages []wireMessage, ttl string, budget int) {

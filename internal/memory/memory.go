@@ -95,12 +95,14 @@ type Entry struct {
 
 func (e Entry) Ref() string { return "[memory#" + e.ID + "]" }
 
-func (e Entry) viewed() string { return string(e.Kind) + ": " + e.Ref() + " " + e.Text }
+func (e Entry) Line() string { return e.Ref() + " " + e.Text }
+
+func (e Entry) viewed() string { return string(e.Kind) + ": " + e.Line() }
 
 func (e Entry) Undo() string { return "tofu memory remove --scope " + string(e.Scope) + " " + e.ID }
 
 func (e Entry) Saved() string {
-	return fmt.Sprintf("%s saved to memory, %s, by %s: %s. The words it came from: %q. It is in the system message from the next turn, so the person does not need to save it again. Undo: %s",
+	return fmt.Sprintf("%s saved to memory, %s, by %s: %s. The words it came from: %q. This session holds it in this note, and the memory that opens every later session carries it, so the person does not need to save it again. Undo: %s",
 		e.Ref(), e.Scope, e.By, strings.TrimSuffix(e.Text, "."), e.Said, e.Undo())
 }
 

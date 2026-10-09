@@ -167,6 +167,7 @@ type SpawnTool struct {
 	ChecksWork     bool
 	Project        string
 	Inbox          *Inbox
+	Remembered     func() (map[string]string, error)
 	orchestratorID string
 	depth          int
 	writesNothing  bool
@@ -252,6 +253,10 @@ func (t *SpawnTool) Definition() llm.Tool {
 	if t.ChecksWork {
 		duties = "you plan, spawn and verify"
 	}
+	cite := ""
+	if t.Remembered != nil {
+		cite = "a sub-agent sees none of your memory: cite each entry it needs as [memory#id] in the task, and that line is copied above the brief word for word. "
+	}
 	if t.SettingsTool {
 		raise = "the person can raise either in the settings menu, and you can ask to with the settings tool, which the person answers."
 	}
@@ -275,7 +280,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 		Description: duties + ", and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
 			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. " +
 			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start, so spawn every piece you know in that one reply. " +
-			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " +
+			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + cite +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
 		Parameters: map[string]any{
@@ -317,6 +322,10 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	defer naming.passed(site.call)
 	if strings.TrimSpace(args.Task) == "" {
 		return Result{}, errors.New("spawn: task is required")
+	}
+	cited, err := t.citedMemory(args.Task)
+	if err != nil {
+		return Result{}, err
 	}
 	if t.writesNothing && len(args.Owns) > 0 {
 		return Result{}, ReadOnlyError{Tool: t.Name()}
@@ -410,7 +419,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	t.tree.mu.Lock()
 	t.tree.ran = append(t.tree.ran, Spawned{ID: subAgentID, Call: site.call, Agent: definition.Name, Slug: opened.Slug, Windows: opened.Windows, Effort: opened.Effort})
 	t.tree.mu.Unlock()
-	task := args.Task
+	task := cited + args.Task
 	if t.SubAgents.Brief != nil {
 		task += t.SubAgents.Brief(definition, args.Task)
 	}
@@ -500,10 +509,11 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		owned = append(owned, watchedTool{tool: tool, held: held})
 	}
 	if offered(t.Name()) {
-		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox,
+		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
+	subAgent.Memory = ""
 	subAgent.Tools = NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)

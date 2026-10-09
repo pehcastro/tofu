@@ -81,6 +81,33 @@ func scratchWords(scratch string) string {
 		"write, edit and bash write and delete inside it with no owns and with no ask; spell it as this relative path, with no variable."
 }
 
+var memoryCitation = regexp.MustCompile(`\[memory#([\w-]+)\]`)
+
+func (t *SpawnTool) citedMemory(brief string) (string, error) {
+	cited := memoryCitation.FindAllStringSubmatch(brief, -1)
+	if len(cited) == 0 {
+		return "", nil
+	}
+	var remembered map[string]string
+	if t.Remembered != nil {
+		var err error
+		if remembered, err = t.Remembered(); err != nil {
+			return "", fmt.Errorf("spawn refused: the brief cites memory and the memory did not open: %w", err)
+		}
+	}
+	var lines []string
+	for _, citation := range cited {
+		line, known := remembered[citation[1]]
+		if !known {
+			return "", fmt.Errorf("spawn refused: %s is no memory entry of yours; cite an id from your memory, or write what the sub-agent needs into the task", citation[0])
+		}
+		if !slices.Contains(lines, line) {
+			lines = append(lines, line)
+		}
+	}
+	return "memory the lead cited for you, each line as it is saved:\n" + strings.Join(lines, "\n") + "\n\n", nil
+}
+
 var briefPath = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z0-9]+`)
 
 type briefCandidate struct {

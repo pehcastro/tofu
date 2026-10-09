@@ -9,9 +9,9 @@ verbs: memory
 
 Memory is a short list of things you told tofu to keep, so you do not
 have to say them again. Each entry is one line, like `never run cargo
-with more than 2 jobs`, with your own words beside it. It is sent to the
-lead in its system message on every request in its scope and survives a
-fork; sub-agents get only what the lead writes into their brief.
+with more than 2 jobs`, with your own words beside it. It opens each session as its own message
+after the system message, kept through a fork and a resume; a new entry
+joins next session, and a sub-agent gets only what the lead cites as `[memory#id]`.
 
 A kind says what it is about: `person` (how you work), `project` (a fact
 the code does not say) or `reference` (where something outside lives).

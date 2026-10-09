@@ -188,7 +188,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: system})
 	}
 	afterSystem := len(messages)
-	messages = append(messages, config.History...)
+	messages = slices.Concat(messages, config.MemoryMessage(), config.History)
 	concluding, taken := "", ""
 	for _, tool := range config.Tools.tools {
 		if spawner, spawning := tool.(*SpawnTool); spawning && !spawner.ChecksWork {
