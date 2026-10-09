@@ -102,15 +102,11 @@ func ProjectConfigDir() (string, error) {
 func ProjectStateDir() (string, error) { return ProjectStateDirAt(".") }
 
 func ProjectStateDirAt(dir string) (string, error) {
-	full, err := filepath.Abs(dir)
-	if err != nil {
-		return "", err
-	}
 	home, err := HomeConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ProjectsDirName, ProjectKey(full)), nil
+	return projectStateIn(home, dir)
 }
 
 func OwnerProjectStateDir(project string) string {
@@ -118,7 +114,11 @@ func OwnerProjectStateDir(project string) string {
 	if home == "" {
 		return ""
 	}
-	return filepath.Join(home, ProjectsDirName, ProjectKey(project))
+	state, err := projectStateIn(home, project)
+	if err != nil {
+		return ""
+	}
+	return state
 }
 
 func RecordedStateDir(elem ...string) string {
@@ -127,17 +127,6 @@ func RecordedStateDir(elem ...string) string {
 		return ""
 	}
 	return filepath.Join(append([]string{owner}, elem...)...)
-}
-
-func ProjectKey(path string) string {
-	volume := filepath.VolumeName(path)
-	path = strings.ToUpper(volume) + path[len(volume):]
-	return strings.Map(func(r rune) rune {
-		if 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' {
-			return r
-		}
-		return '-'
-	}, path)
 }
 
 func MovedStateNames() []string {

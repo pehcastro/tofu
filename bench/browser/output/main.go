@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 var rowOrder = []string{"act navigate", "act back", "act wait", "act click", "act fill", "act other", "observe interactive", "observe text", "observe from", "read"}
@@ -90,7 +91,7 @@ func run() error {
 	}
 	projects := flag.String("projects", filepath.Join(home, ".tofu", "projects"), "the recorded sessions, read only")
 	flag.Parse()
-	paths, err := filepath.Glob(filepath.Join(*projects, "*", "sessions", "*", "events.jsonl"))
+	paths, err := sys.ProjectGlob(*projects, "*", "sessions", "*", "events.jsonl")
 	if err != nil {
 		return err
 	}

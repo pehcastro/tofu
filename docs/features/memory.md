@@ -140,7 +140,7 @@ Memory · 2 entries · where two disagree the first wins: user-local,
     ~/shop/.tofu/memory/project
   project-global  1 · 55 bytes of a 12288 byte view · promotes to
     project-local
-    ~/.tofu/projects/C--code-shop/memory
+    ~/.tofu/projects/shop-7cd21bfb/memory
   user-global     1 · 40 bytes of a 8192 byte view · promotes to none
     ~/.tofu/memory/user
 

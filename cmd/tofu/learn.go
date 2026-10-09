@@ -166,7 +166,7 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	states, err := filepath.Glob(filepath.Join(home, sys.ProjectsDirName, "*"))
+	states, err := sys.ProjectGlob(filepath.Join(home, sys.ProjectsDirName), "*")
 	var sources []learn.Source
 	for _, state := range states {
 		store := session.OpenAt(state)

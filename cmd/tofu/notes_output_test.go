@@ -110,7 +110,7 @@ func TestTheNotesVerbsMatchTheirTextAndJSONGoldensWhateverTheVersionLength(t *te
 					args = append(append([]string{}, args...), jsonFlag)
 				}
 				code, out, errOut := runNote(args)
-				key := sys.ProjectKey(filepath.Join(home, "project"))
+				key := projectFolder(t, home)
 				out, errOut = strings.ReplaceAll(strings.ReplaceAll(out, key, "KEY"), home, "HOME"), strings.ReplaceAll(errOut, home, "HOME")
 				if code != c.code {
 					t.Errorf("%s exited %d, want %d\nstdout %s\nstderr %s", c.name, code, c.code, out, errOut)
@@ -152,9 +152,18 @@ func TestTheStartUpNotesMatchTheirGolden(t *testing.T) {
 	var notes string
 	t.Run("in the project", func(t *testing.T) {
 		home := notesProject(t)
-		notes = strings.ReplaceAll(startUpNotes(t, home), sys.ProjectKey(filepath.Join(home, "project")), "KEY")
+		notes = strings.ReplaceAll(startUpNotes(t, home), projectFolder(t, home), "KEY")
 	})
 	golden.Assert(t, "notes-output/start-up.golden", notes)
+}
+
+func projectFolder(t *testing.T, home string) string {
+	t.Helper()
+	state, err := sys.ProjectStateDirAt(filepath.Join(home, "project"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Base(state)
 }
 
 func TestNoColourWritesNoEscapeInTheNotesOrTheirVerbs(t *testing.T) {

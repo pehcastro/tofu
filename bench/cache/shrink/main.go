@@ -15,6 +15,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -61,7 +62,7 @@ func run() (err error) {
 	}
 	projects := flag.String("projects", filepath.Join(home, ".tofu", "projects"), "the recorded sessions, read only")
 	flag.Parse()
-	paths, err := filepath.Glob(filepath.Join(*projects, "*", "sessions", "*", "events.jsonl"))
+	paths, err := sys.ProjectGlob(*projects, "*", "sessions", "*", "events.jsonl")
 	if err != nil {
 		return err
 	}

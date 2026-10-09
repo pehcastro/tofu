@@ -8,7 +8,7 @@ type Reader struct {
 
 func SessionReaders() []Reader {
 	return []Reader{
-		{Package: "bench/corpus", Dir: "~/.tofu/projects/<key>/sessions",
+		{Package: "bench/corpus", Dir: "~/.tofu/projects/<folder>-<hash8>/sessions",
 			Differs: "the shared one. ReadTurn, ReadTurnDir and WalkSessions read every turn and every sub-agent run through internal/session.Store, whether it sits in a session folder or in the single-file or header-plus-body.jsonl layout before it, into RecordedTurn. 19 other bench packages import it."},
 		{Package: "bench/schemas", Dir: ".tofu/sessions",
 			Differs: "reimplements the same header.json plus body.jsonl walk from scratch, in ReadSessions, to reach StepUsage.PromptTokens/CacheReadTokens/CacheWriteTokens/CompletionTokens, fields RecordedStep does not carry."},

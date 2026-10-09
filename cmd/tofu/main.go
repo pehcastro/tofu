@@ -73,7 +73,8 @@ Verbs:
   reload    re-read settings, rules, skills, sub-agents, models, roles, tiers,
             instruction files and keys, and print what changed since the last reload
   migrate   move what tofu wrote out of this project's .tofu and into ~/.tofu,
-            or --dry-run to list what would move
+            or --dry-run to list what would move, or --relink to give a moved
+            repository back its sessions
   browser   list the Chrome tabs tofu can reach, install or uninstall the extension,
             or open and close a background tab tofu owns
 
@@ -84,6 +85,9 @@ func main() {
 	opensTheApp := len(os.Args) < 2 || os.Args[1] == "--continue"
 	if opensTheApp || os.Args[1] == "migrate" {
 		copyLegacyStateDirs(os.Stderr)
+	}
+	if dir, opens := openedProject(os.Args[1:]); opens {
+		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr))
 	}
 	if wd, err := os.Getwd(); err == nil && opensTheApp {
 		moveProjectState(os.Stderr, wd)

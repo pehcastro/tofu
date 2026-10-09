@@ -2,4 +2,4 @@ exit 2
 --- stdout
 --- stderr
 ✗ tofu migrate: unknown argument "--nope"
-  → tofu migrate [--dry-run] [--json]
+  → tofu migrate [--dry-run | --relink] [--json]

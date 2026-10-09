@@ -32,10 +32,15 @@ after tofu exits, until you stop it, and the next launch lists it.
 ## Where it lives
 
 Each project has its own folder in your home,
-`~/.tofu/projects/<project>/`, where `<project>` is the project's path
-with every character that is not a letter or a digit turned into `-`, so
-`C:\code\shop` becomes `C--code-shop`. In it:
+`~/.tofu/projects/<folder>-<hash>/`: the project folder's own name and
+eight characters of a hash of its full path, so `C:\code\shop` becomes
+`shop-7cd21bfb`. The path is read after links and Windows junctions are
+followed, and without case on Windows and macOS, so two ways to reach one
+folder share one record and `C:\a-b` and `C:\a b` never do.
+`~/.tofu/projects.json` lists which paths own which folder. In it:
 
+- `project.toml`: the project's paths, git remote, root commit and when
+  tofu first opened it
 - `sessions/<id>/`: one folder per generation, holding `session.json`
   and `events.jsonl`
 - `log/`: the decision ledger
@@ -43,6 +48,17 @@ with every character that is not a letter or a digit turned into `-`, so
 
 None of this is written into the project, and tofu never deletes a
 session. `tofu migrate` moves what older versions kept in `.tofu`.
+
+A folder from before this layout, named after the whole path
+(`C--code-shop`), is copied to the new name the first time `tofu`,
+`tofu serve` or `tofu run` opens the project, and is kept. Close older
+tofu sessions first: what they write after the copy stays in the old
+folder.
+
+Move or rename a git repository and open it in its new place: tofu
+finds its folder by the git remote or the first commit, and offers to
+relink it. The app asks; `tofu serve` and `tofu run` print the offer, and
+`tofu migrate --relink` in the new place accepts it.
 
 ## Change it
 

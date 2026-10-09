@@ -71,7 +71,7 @@ func TestAProjectsStateLivesUnderTheHomeAndNotInTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(home, StateDirName, ProjectsDirName, ProjectKey(project)); dir != want {
+	if want := filepath.Join(home, StateDirName, ProjectsDirName, projectKey(project)); dir != want {
 		t.Fatalf("the state of %s is %s, want %s", project, dir, want)
 	}
 	if inside(project, dir) {
@@ -79,7 +79,7 @@ func TestAProjectsStateLivesUnderTheHomeAndNotInTheProject(t *testing.T) {
 	}
 }
 
-func TestAProjectKeyIsThePathWithEveryOtherCharacterADash(t *testing.T) {
+func TestAnOldProjectKeyIsThePathWithEveryOtherCharacterADash(t *testing.T) {
 	cases := map[string]string{
 		`Q:\code\ephem-sh\bob`:                  "Q--code-ephem-sh-bob",
 		`Q:\code\ephem-sh\bob\.local\sources\x`: "Q--code-ephem-sh-bob--local-sources-x",
@@ -89,8 +89,8 @@ func TestAProjectKeyIsThePathWithEveryOtherCharacterADash(t *testing.T) {
 		cases[`q:\code\bob`] = "Q--code-bob"
 	}
 	for path, want := range cases {
-		if got := ProjectKey(path); got != want {
-			t.Fatalf("ProjectKey(%q) is %q, want %q", path, got, want)
+		if got := legacyProjectKey(path); got != want {
+			t.Fatalf("legacyProjectKey(%q) is %q, want %q", path, got, want)
 		}
 	}
 }

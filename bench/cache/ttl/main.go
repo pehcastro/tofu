@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 const (
@@ -72,7 +73,7 @@ func run() error {
 	projects := flag.String("projects", filepath.Join(home, ".tofu", "projects"), "the recorded sessions, read only")
 	project := flag.String("project", "*", "a glob over the project directory names")
 	flag.Parse()
-	paths, err := filepath.Glob(filepath.Join(*projects, *project, "sessions", "*", "events.jsonl"))
+	paths, err := sys.ProjectGlob(*projects, *project, "sessions", "*", "events.jsonl")
 	if err != nil {
 		return err
 	}

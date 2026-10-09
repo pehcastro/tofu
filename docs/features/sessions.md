@@ -7,7 +7,7 @@ updated: 2026-10-09
 
 A session is one conversation with tofu: every message, tool call and
 sub-agent, appended to disk as it happens. It lives in your home, under
-`~/.tofu/projects/<project>/sessions/<id>/`, as `session.json` (the header:
+`~/.tofu/projects/<folder>-<hash>/sessions/<id>/`, as `session.json` (the header:
 task, model, outcome, tokens, cost, sub-agents) and `events.jsonl` (one line
 per event). A new conversation gets a three-word name and a family tag,
 like `brisk-amber-heron#4mhr1.1`, and keeps both for its whole life.
@@ -85,6 +85,16 @@ chats; `tofu session list --all` shows them. A frontend opens one over
 - **Delete one**: remove its folder under `sessions/`.
 - **Move sessions an older tofu left in the project**: `tofu migrate --dry-run`,
   then `tofu migrate`.
+- **Move or rename a repository**: open it in the new place. tofu knows it by
+  its git remote or first commit and offers to relink its sessions; the app
+  asks, and `tofu migrate --relink` accepts from the command line.
+
+`<folder>-<hash>` is the project folder's name and eight characters of a hash
+of its full path, read after links and Windows junctions, so `C:\code\shop`
+is `shop-7cd21bfb` and two folders never share a record. A folder from an
+older tofu, named after the whole path, is copied to the new name the first
+time the project opens and is kept; close older tofu sessions before that
+first run.
 
 ## Commands
 

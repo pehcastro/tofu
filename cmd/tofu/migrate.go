@@ -16,7 +16,7 @@ import (
 	"tofu/internal/widget"
 )
 
-const migrateUsage = "tofu migrate [--dry-run] [--json]"
+const migrateUsage = "tofu migrate [--dry-run | --relink] [--json]"
 
 type stateMove struct {
 	Name    string `json:"name"`
@@ -119,6 +119,9 @@ func moveProjectState(out io.Writer, project string) []stateMove {
 
 func migrateVerb(args []string, out, errOut io.Writer) int {
 	o := verbOutput{verb: "migrate", usageLine: migrateUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
+	if slices.Contains(args, "--relink") {
+		return relinkVerb(o)
+	}
 	report := migrateReport{Moves: []stateMove{}, Sessions: []migratedSession{}, Skipped: []skippedSession{}}
 	for _, arg := range args {
 		switch arg {
