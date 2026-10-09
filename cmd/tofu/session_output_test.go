@@ -160,9 +160,12 @@ func TestSessionContextAndShellsWriteNoEscapeUnderNoColour(t *testing.T) {
 		sessionOutputProject(t)
 		t.Setenv("CLICOLOR_FORCE", "1")
 		t.Setenv("NO_COLOR", map[bool]string{true: "1"}[noColour])
-		escaped := 0
+		escaped, printed := 0, 0
 		for _, c := range sessionOutputCases() {
 			_, out, errOut := runOutput(c.args)
+			if out != "" || !strings.Contains(errOut, noTerminal) {
+				printed++
+			}
 			if strings.ContainsRune(out+errOut, 0x1b) {
 				escaped++
 			}
@@ -170,8 +173,8 @@ func TestSessionContextAndShellsWriteNoEscapeUnderNoColour(t *testing.T) {
 		if noColour && escaped > 0 {
 			t.Errorf("with NO_COLOR, %d verbs wrote an ESC byte", escaped)
 		}
-		if !noColour && escaped != len(sessionOutputCases()) {
-			t.Errorf("with colour forced, %d of %d verbs wrote an ESC byte, so the NO_COLOR run proves nothing", escaped, len(sessionOutputCases()))
+		if !noColour && escaped != printed {
+			t.Errorf("with colour forced, %d of %d printing verbs wrote an ESC byte, so the NO_COLOR run proves nothing", escaped, printed)
 		}
 	}
 }

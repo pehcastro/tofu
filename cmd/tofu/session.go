@@ -223,8 +223,8 @@ func verbArgs(args []string) ([]string, bool, error) {
 }
 
 func startResumed(o verbOutput, carry sessionResume, in io.Reader) int {
-	if code := o.done(carry.Busy == nil, carry, func(page cli.Page) []string { return resumeLines(page, carry) }); code != exitOK || o.asJSON {
-		return code
+	if o.asJSON || carry.Busy != nil {
+		return o.done(carry.Busy == nil, carry, func(page cli.Page) []string { return busyResumeLines(page, carry) })
 	}
 	return appVerb(in, o.out, o.errOut, carry)
 }
@@ -557,29 +557,21 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 	return append(append(lines, ""), cli.Indent(page.Hint(hint))...)
 }
 
-func resumeLines(page cli.Page, carry sessionResume) []string {
-	if carry.Fresh != "" {
-		lines := append(page.Title("Resume", nil, cli.Verdict{Mark: cli.Idle, Text: "starts fresh"}), "")
-		return append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "reason", Text: carry.Fresh}})...)...)
-	}
-	carried, head, writer := "none, starts over", "", ""
-	verdict := cli.Verdict{Mark: cli.Active, Text: cmp.Or(carry.Outcome, "open")}
+func busyResumeLines(page cli.Page, carry sessionResume) []string {
+	carried, head := "none, starts over", ""
 	if carry.Carried > 0 {
 		carried = countOf(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
 	}
 	if carry.HeadDerived {
 		head = "none written, took the newest"
 	}
-	if carry.Busy != nil {
-		verdict, writer = cli.Verdict{Mark: cli.Warn, Text: "busy, read only"}, carry.Busy.Error()
-	}
-	lines := append(page.Title("Resume", []string{carry.Handle}, verdict), "")
+	lines := append(page.Title("Resume", []string{carry.Handle}, cli.Verdict{Mark: cli.Warn, Text: "busy, read only"}), "")
 	return append(lines, cli.Indent(page.Facts([]cli.Fact{
 		{Label: "id", Text: carry.Session},
 		{Label: "task", Text: oneLine(carry.Task)},
 		{Label: "carried", Text: carried},
 		{Label: "head", Text: head},
-		{Label: "writer", Text: writer},
+		{Label: "writer", Text: carry.Busy.Error()},
 	})...)...)
 }
 

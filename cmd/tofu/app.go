@@ -110,6 +110,9 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	settingsStore, _ := openSettings(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
 	opening := live.Opening(launch.resumed.hosted())
+	if note := resumeNote(launch.resumed); note != "" {
+		opening = append(opening, tui.Event{Kind: tui.EventNote, Text: note})
+	}
 	if memoryOn(dir) {
 		shelves, err := memory.Open(dir)
 		if err != nil {
@@ -223,9 +226,13 @@ func modelsReload(dir string, reload func(context.Context, io.Writer) int) func(
 	}
 }
 
+func isTerminal(stream any) bool {
+	file, isFile := stream.(*os.File)
+	return isFile && term.IsTerminal(file.Fd())
+}
+
 func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
-	file, isFile := in.(*os.File)
-	if !isFile || !term.IsTerminal(file.Fd()) {
+	if !isTerminal(in) {
 		_, _ = fmt.Fprintln(errOut, noTerminal)
 		return exitUsage
 	}
@@ -234,10 +241,13 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		_, _ = fmt.Fprintf(errOut, "tofu: the working directory is unreadable: %v\n", err)
 		return exitVerdict
 	}
+	stopRestoring := restoring(out, resumed)
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota, reload: reloadAccounts}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	stopKeeping := keepAccountsAlive(func(string) {})
-	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
+	options := appOptions(dir, runOpts{}, live, launch)
+	stopRestoring()
+	err = tui.Run(options)
 	stopKeeping()
 	(*launch.release)()
 	for _, warning := range (*launch.endSession)() {

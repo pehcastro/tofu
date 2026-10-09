@@ -295,11 +295,11 @@ func TestResumingATurnInterruptedMidToolCallSendsAListBothWiresAccept(t *testing
 	}
 }
 
-func TestContinueWithNoSessionRecordedSaysSoAndStartsFresh(t *testing.T) {
+func TestContinueWithNoSessionRecordedPrintsNothingBeforeTheApp(t *testing.T) {
 	scratchProject(t)
 	out, errOut, _ := sessionRun(t, "--continue")
-	if !strings.Contains(out, sessionFresh) {
-		t.Errorf("tofu --continue with nothing recorded does not say it starts fresh:\n%s", out)
+	if out != "" {
+		t.Errorf("tofu --continue with nothing recorded printed before the app, and the app says it starts fresh:\n%s", out)
 	}
 	if !strings.Contains(errOut, noTerminal) {
 		t.Errorf("tofu --continue stopped for a reason other than the missing terminal:\n%s", errOut)
@@ -315,12 +315,14 @@ func TestContinueTakesTheHeadWithNoListAndNoQuestion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, _, _ := sessionRun(t, "--continue")
-	if !strings.Contains(out, "turn-head") {
-		t.Errorf("tofu --continue does not name the head it took:\n%s", out)
+	if out, _, _ := sessionRun(t, "--continue"); out != "" {
+		t.Errorf("tofu --continue printed before the app, and the app carries the resume note:\n%s", out)
 	}
-	if strings.Contains(out, "turn-old") {
-		t.Errorf("tofu --continue printed the other sessions, and it takes the head with no list:\n%s", out)
+	asJSON, _, _ := sessionRun(t, "--continue", jsonFlag)
+	var took sessionResume
+	envelopeData(t, asJSON, &took)
+	if took.Session != "turn-head" {
+		t.Errorf("tofu --continue --json took %q, want the head turn-head:\n%s", took.Session, asJSON)
 	}
 }
 
