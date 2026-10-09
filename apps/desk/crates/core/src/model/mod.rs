@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use crate::bridge::Event;
 use crate::protocol::{
     ContextReport, CronState, Notification, QuotaWindow, RuleListReport, ServerRequest,
-    SessionInfo, UsageReport, subagent,
+    SessionInfo, SessionTrace, UsageReport, session::AgentRun, subagent,
 };
 use crate::query::Answer;
 
@@ -49,6 +49,7 @@ pub struct Store {
     pub context: Answer<ContextReport>,
     pub info: Answer<SessionInfo>,
     pub lineage: BTreeMap<String, Answer<SessionInfo>>,
+    pub trace: Answer<SessionTrace>,
     pub quota: Vec<QuotaWindow>,
 }
 
@@ -64,6 +65,7 @@ impl Default for Store {
             context: Answer::default(),
             info: Answer::default(),
             lineage: BTreeMap::new(),
+            trace: Answer::default(),
             quota: Vec::new(),
         }
     }
@@ -72,6 +74,14 @@ impl Default for Store {
 impl Store {
     pub fn open_session(&self) -> Option<&Session> {
         self.sessions.get(self.open.as_ref()?)
+    }
+
+    pub fn agent_runs(&self) -> &[AgentRun] {
+        self.trace
+            .read
+            .as_ref()
+            .filter(|read| self.open.as_ref() == Some(&read.value.session))
+            .map_or(&[], |read| &read.value.agents)
     }
 
     pub fn apply_batch(&mut self, batch: &[Event]) -> Result<(), ModelError> {

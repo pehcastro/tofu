@@ -42,6 +42,9 @@ const FEW_MINUTES: f32 = 8.0;
 const TWENTY_MINUTES: f32 = 20.0;
 const MINUTES_PER_HOUR: f32 = 60.0;
 const SECONDS_PER_MINUTE: f32 = 60.0;
+pub const UNKNOWN_TIME: &str = "--";
+const UNKNOWN_TIME_WHY: &str =
+    "no end time: agent.ended carries no endedAt and this agent recorded no tool after it started";
 
 const TILE_PAD_TOP: f32 = 2.0;
 const TILE_PAD_BOTTOM: f32 = 8.0;
@@ -958,6 +961,8 @@ fn tile_row(
     line: &AgentLine,
     (picked, fit): (bool, Fit),
     theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
 ) -> Stateful<Div> {
     let agent = &line.agent;
     let t3 = ink(theme, T3);
@@ -1022,13 +1027,27 @@ fn tile_row(
         })
         .when(fit.files, |row| row.child(count(line.files)))
         .when(fit.tools, |row| row.child(count(line.tools)))
-        .child(
-            when(fit)
+        .child({
+            let time = when(fit)
+                .id(("tile-time", ix))
                 .text_size(px(FONT_WHO))
                 .font_features(tabular())
                 .text_color(t3)
-                .child(line.time.clone()),
-        )
+                .child(line.time.clone());
+            if line.time == UNKNOWN_TIME {
+                tooltip(
+                    ("tile-time-tip", ix),
+                    time,
+                    Edge::Frame,
+                    UNKNOWN_TIME_WHY,
+                    theme,
+                    window,
+                    cx,
+                )
+            } else {
+                time
+            }
+        })
 }
 
 fn columns(fit: Fit, theme: &Theme) -> Stateful<Div> {
@@ -1287,10 +1306,10 @@ impl Render for AgentTile {
                 let Some(line) = self.board.lines.get(ix) else {
                     continue;
                 };
-                let row = tile_row(ix, line, (self.open && self.shown == ix, fit), &theme)
-                    .on_click(cx.listener(move |tile, _: &ClickEvent, window, cx| {
-                        tile.show(ix, window, cx)
-                    }));
+                let picked = self.open && self.shown == ix;
+                let row = tile_row(ix, line, (picked, fit), &theme, window, cx).on_click(
+                    cx.listener(move |tile, _: &ClickEvent, window, cx| tile.show(ix, window, cx)),
+                );
                 table = table.child(glide.row(slot, row));
                 slot += 1;
             }
@@ -1620,6 +1639,7 @@ fn screen_row(
     let mission = line.task.lines().next().unwrap_or_default().to_owned();
     let place = line.owns.split(", ").next().unwrap_or_default().to_owned();
     let tip: SharedString = match agent.status {
+        AgentStatus::Finished if line.time == UNKNOWN_TIME => UNKNOWN_TIME_WHY.into(),
         AgentStatus::Finished => format!("worked {}", line.time).into(),
         AgentStatus::Working => format!("running for {}", line.time).into(),
         AgentStatus::Asking | AgentStatus::Failed => line.time.clone(),

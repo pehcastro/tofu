@@ -71,8 +71,9 @@ pub fn mount(store: Entity<Store>, cx: &mut App) -> Entity<Subagents> {
             _watch: cx.observe(&store, |module, _, cx| {
                 module.rebuild(cx);
                 eprintln!(
-                    "desk: tile sub-agents rebuilt {} rows",
-                    module.board.lines.len()
+                    "desk: tile sub-agents rebuilt {} rows, {} ends from session.trace",
+                    module.board.lines.len(),
+                    module.store.read(cx).agent_runs().len()
                 );
                 cx.notify();
             }),
@@ -118,7 +119,10 @@ impl Subagents {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        self.board = Rc::new(session(self.store.read(cx)).map_or_else(empty, board::board));
+        let store = self.store.read(cx);
+        self.board = Rc::new(
+            session(store).map_or_else(empty, |open| board::board(open, store.agent_runs())),
+        );
         let board = self.board.clone();
         self.tile
             .update(cx, |tile, cx| tile.set_board(board.clone(), cx));

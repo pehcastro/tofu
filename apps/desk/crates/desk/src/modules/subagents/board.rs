@@ -1,7 +1,7 @@
 use desk_core::model::{Agent as Member, Session, Tool};
-use desk_core::protocol::{AgentState, FileEdit, HunkLineKind};
+use desk_core::protocol::{AgentState, FileEdit, HunkLineKind, session::AgentRun};
 use desk_ui::components::agents::{
-    AgentBoard, AgentEvent, AgentLine, AgentStep, DiffLine, DiffSign, ago, lasted,
+    AgentBoard, AgentEvent, AgentLine, AgentStep, DiffLine, DiffSign, UNKNOWN_TIME, ago, lasted,
 };
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
 use gpui::SharedString;
@@ -30,8 +30,8 @@ pub fn shown(member: &Member) -> Option<Agent> {
     })
 }
 
-pub fn board(session: &Session) -> AgentBoard {
-    let now = latest(session);
+pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
+    let now = latest(session, runs);
     let since = |at: &Option<String>| {
         let at = at.as_deref().and_then(seconds).unwrap_or(now);
         now.saturating_sub(at) as f32 / SECONDS_PER_MINUTE
@@ -72,6 +72,11 @@ pub fn board(session: &Session) -> AgentBoard {
                 .filter(|line| line.kind == kind)
                 .count()
         };
+        let ended_at = runs
+            .iter()
+            .find(|run| &run.agent == id)
+            .and_then(|run| run.ended_at.clone())
+            .or_else(|| member.ended_at.clone());
         let report = member.report.clone().unwrap_or_default();
         let (now_doing, time) = match agent.status {
             AgentStatus::Working => (
@@ -83,14 +88,16 @@ pub fn board(session: &Session) -> AgentBoard {
             ),
             AgentStatus::Asking => (
                 format!("asked: {}", asked.clone().unwrap_or_default()),
-                ago(since(
-                    &member.ended_at.clone().or(member.started_at.clone()),
-                )),
+                ago(since(&ended_at.clone().or(member.started_at.clone()))),
             ),
-            AgentStatus::Failed => (report.clone(), ago(since(&member.ended_at))),
+            AgentStatus::Failed => (report.clone(), ago(since(&ended_at))),
             AgentStatus::Finished => (
                 report.clone(),
-                lasted(since(&member.started_at) - since(&member.ended_at)),
+                if ended_at.is_none() || ended_at == member.started_at {
+                    UNKNOWN_TIME.into()
+                } else {
+                    lasted(since(&member.started_at) - since(&ended_at))
+                },
             ),
         };
         let mut steps = vec![(
@@ -117,7 +124,7 @@ pub fn board(session: &Session) -> AgentBoard {
                 worked: format!("worked {time}").into(),
             }),
         };
-        steps.extend(last.map(|last| (since(&member.ended_at), last)));
+        steps.extend(last.map(|last| (since(&ended_at), last)));
         events.extend(steps.into_iter().map(|(minutes, step)| AgentEvent {
             agent,
             minutes,
@@ -256,7 +263,7 @@ fn argument(args: &Value) -> String {
         .map_or_else(|| args.to_string(), str::to_owned)
 }
 
-fn latest(session: &Session) -> i64 {
+fn latest(session: &Session, runs: &[AgentRun]) -> i64 {
     let agents = session
         .agents
         .values()
@@ -267,6 +274,7 @@ fn latest(session: &Session) -> i64 {
         .flat_map(|tool| [&tool.started_at, &tool.ended_at]);
     agents
         .chain(tools)
+        .chain(runs.iter().map(|run| &run.ended_at))
         .filter_map(|at| seconds(at.as_deref()?))
         .max()
         .unwrap_or_default()

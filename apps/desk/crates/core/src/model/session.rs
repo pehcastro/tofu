@@ -165,6 +165,27 @@ impl Session {
         &mut self.messages[index]
     }
 
+    fn last_seen(&mut self, instance: &str) {
+        let Some(agent) = self.agents.get_mut(instance) else {
+            return;
+        };
+        if agent.report.is_none() {
+            return;
+        }
+        let tools = self
+            .tools
+            .values()
+            .filter(|tool| tool.agent.as_deref() == Some(instance))
+            .flat_map(|tool| tool.started_at.iter().chain(&tool.ended_at));
+        agent.ended_at = agent
+            .started_at
+            .iter()
+            .chain(tools)
+            .filter_map(|at| Some((chrono::DateTime::parse_from_rfc3339(at).ok()?, at)))
+            .max_by_key(|(parsed, _)| *parsed)
+            .map(|(_, at)| at.clone());
+    }
+
     pub(super) fn apply(&mut self, notification: &Notification) -> Result<(), ModelError> {
         use Notification as N;
         match notification {
@@ -241,6 +262,9 @@ impl Session {
                         ended_at: None,
                     },
                 );
+                if let Some(agent) = &e.agent {
+                    self.last_seen(agent);
+                }
             }
             N::ToolCompleted(e) => {
                 let tool = self
@@ -257,6 +281,9 @@ impl Session {
                         at.checked_add_signed(chrono::TimeDelta::milliseconds(e.duration_ms))
                     })
                     .map(|at| stamp(&at));
+                if let Some(agent) = tool.agent.clone() {
+                    self.last_seen(&agent);
+                }
             }
             N::AgentStarted(e) => {
                 self.agents.insert(
@@ -304,19 +331,7 @@ impl Session {
                     .ok_or_else(|| orphan("agent.ended", &e.instance))?;
                 agent.state = known(&e.state)?;
                 agent.report = Some(e.report.clone());
-                let last_seen = agent
-                    .started_at
-                    .iter()
-                    .chain(
-                        self.tools
-                            .values()
-                            .filter(|tool| tool.agent.as_deref() == Some(e.instance.as_str()))
-                            .flat_map(|tool| tool.started_at.iter().chain(&tool.ended_at)),
-                    )
-                    .filter_map(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
-                    .max();
-                agent.ended_at =
-                    Some(last_seen.map_or_else(|| stamp(&chrono::Local::now()), |at| stamp(&at)));
+                self.last_seen(&e.instance);
             }
             N::FileEdit(e) => {
                 if let FileEditOp::Unknown(value) = &e.op {
