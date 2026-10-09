@@ -29,6 +29,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
+	"tofu/internal/memory"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/shell"
@@ -108,6 +109,16 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 	*launch.endSession = func() []string { return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) }
 	settingsStore, _ := openSettings(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
+	opening := live.Opening(launch.resumed.hosted())
+	if memoryOn(dir) {
+		shelves, err := memory.Open(dir)
+		if err != nil {
+			shelves.Copied = append(shelves.Copied, "your memory is unreadable: "+err.Error())
+		}
+		for _, line := range shelves.Copied {
+			opening = append(opening, tui.Event{Kind: tui.EventNote, Text: line})
+		}
+	}
 	return tui.Options{
 		Repo:         filepath.Base(dir),
 		Root:         dir,
@@ -141,7 +152,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 			return live.Ran(command, output, stopped), stopped
 		},
 		Fresh:   launch.fresh,
-		Resumed: live.Opening(launch.resumed.hosted()),
+		Resumed: opening,
 		Keymap:  shortcuts,
 		Agents:  func() roster.Found { found, _ := discoverAgents(); return found },
 	}

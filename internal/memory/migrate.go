@@ -2,6 +2,7 @@ package memory
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,18 +10,42 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
-const shelfSuffix = ".yaml"
+const (
+	shelfSuffix   = ".yaml"
+	copiedShelves = "copied-shelves"
+)
 
 func (m *Memory) migrate(oldGlobal, oldProject string) error {
-	var moving []Entry
+	var copying []Entry
+	markers := map[string][]string{}
 	for _, dir := range []string{oldGlobal, oldProject} {
+		marker := filepath.Join(dir, copiedShelves)
+		done, err := os.ReadFile(marker)
+		listed := strings.Fields(string(done))
+		if errors.Is(err, os.ErrNotExist) {
+			markers[marker] = listed
+			store := m.Global.Dir
+			if dir == oldProject {
+				store = m.Project.Dir
+			}
+			if _, err := os.Stat(filepath.Join(store, entriesFile)); err == nil {
+				m.Copied = append(m.Copied, "the memory shelves in "+dir+" were moved by an earlier build, so "+store+" is the only copy and tofu 0.5.8 no longer sees it")
+			}
+		} else if err != nil {
+			return err
+		}
 		names, err := filepath.Glob(filepath.Join(dir, "*"+shelfSuffix))
 		if err != nil {
 			return err
 		}
 		for _, name := range names {
+			if slices.Contains(listed, filepath.Base(name)) {
+				continue
+			}
 			e, err := readShelfEntry(name)
 			if err != nil {
 				return err
@@ -29,20 +54,30 @@ func (m *Memory) migrate(oldGlobal, oldProject string) error {
 			if dir == oldGlobal || e.Kind == KindPerson {
 				e.Scope = Global
 			}
-			moving = append(moving, e)
+			copying = append(copying, e)
+			listed = append(listed, filepath.Base(name))
+			markers[marker] = listed
 		}
 	}
-	slices.SortStableFunc(moving, func(a, b Entry) int { return cmp.Compare(a.number(), b.number()) })
-	for _, e := range moving {
-		from := e.File
+	slices.SortStableFunc(copying, func(a, b Entry) int { return cmp.Compare(a.number(), b.number()) })
+	var said []string
+	for _, e := range copying {
 		e.File = ""
 		if _, err := m.keep(e, false); err != nil {
 			return err
 		}
-		if err := os.Remove(from); err != nil {
+		said = append(said, e.ID+" to "+string(e.Scope))
+	}
+	for marker, names := range markers {
+		if err := sys.WriteFile(marker, []byte(strings.Join(names, "\n")+"\n"), 0o644); err != nil {
 			return err
 		}
-		m.Notices = append(m.Notices, "moved memory "+e.ID+", a "+string(e.Kind)+" entry, from "+from+" to "+string(e.Scope))
+	}
+	if len(said) > 0 {
+		m.Copied = append(m.Copied, "copied memory "+strings.Join(said, ", ")+" from the 0.5.8 shelves, which stay for an older tofu; nothing is copied twice")
+	}
+	for _, line := range m.Copied {
+		fmt.Fprintln(os.Stderr, line)
 	}
 	return nil
 }

@@ -100,11 +100,15 @@ local one.
 
 ## Moving from the old shelves
 
-Up to 0.5.8 memory was `<id>.yaml` files in your home. The first
-`tofu memory` after the update moves them and prints each move: the
-global shelf and the project shelf's `person` entries to `user-global`,
-its `project` and `reference` entries to `project-global`. Nothing moves
-into a repository.
+Up to 0.5.8 memory was `<id>.yaml` files in your home. The first use
+after the update copies them and says which entry went where, on stderr
+and in the app's chat: the global shelf and the project shelf's
+`person` entries to `user-global`, the rest to `project-global`, none
+to a repository. The yaml stays for 0.5.8, and `copied-shelves` beside
+it lists what was copied, so nothing is copied twice or brought back
+after you remove it. A later 0.5.8 entry is copied next time; a 0.5.8
+edit or removal of a copied one is not. A home an earlier build moved
+says once that the new store is the only copy.
 
 ## Undo it
 

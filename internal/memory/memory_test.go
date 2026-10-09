@@ -143,7 +143,43 @@ func TestFourScopesKeepTheIdentityOutOfTheRepositoryAndShowAnotherAuthorOnlyWhen
 	}
 }
 
-func TestOldShelvesMoveIntoTheHomeScopesOnceAndNothingIntoTheRepository(t *testing.T) {
+func stderrOf(t *testing.T, open func()) string {
+	t.Helper()
+	captured, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	real := os.Stderr
+	os.Stderr = captured
+	t.Cleanup(func() { os.Stderr = real })
+	open()
+	os.Stderr = real
+	said, err := os.ReadFile(captured.Name())
+	if err = errors.Join(err, captured.Close()); err != nil {
+		t.Fatal(err)
+	}
+	return string(said)
+}
+
+func writeShelf(t *testing.T, file, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func ids(entries []Entry) string {
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.ID)
+	}
+	return strings.Join(got, ",")
+}
+
+func TestOldShelvesAreCopiedOnceSayingSoAndStayForAnOlderTofu(t *testing.T) {
 	freshHome(t)
 	repo := t.TempDir()
 	gitAs(t, repo, firstAuthor)
@@ -151,50 +187,91 @@ func TestOldShelvesMoveIntoTheHomeScopesOnceAndNothingIntoTheRepository(t *testi
 	state, _ := sys.ProjectStateDirAt(repo)
 	old := map[string]string{
 		filepath.Join(home, "memory", "m1.yaml"):  "id: m1\nkind: person\ntext: replies stay short\nsaid: \"keep it short\"\nat: 2026-09-01T10:00:00Z\nby: person\n",
-		filepath.Join(state, "memory", "m2.yaml"): "id: m2\nkind: person\ntext: one ticket at a time\nat: 2026-09-02T10:00:00Z\nby: lead\n",
+		filepath.Join(state, "memory", "m2.yaml"): "id: m2\r\nkind: person\r\ntext: one ticket at a time\r\nat: 2026-09-02T10:00:00Z\r\nby: lead\r\n",
 		filepath.Join(state, "memory", "m3.yaml"): "id: m3\nkind: project\ntext: the canvas uses gpui\nat: 2026-09-03T10:00:00Z\nby: person\n",
 		filepath.Join(state, "memory", "m4.yaml"): "id: m4\nkind: reference\ntext: the bench lives in bench\nat: 2026-09-04T10:00:00Z\nby: person\n",
 	}
 	for file, body := range old {
-		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		writeShelf(t, file, body)
+	}
+	said := stderrOf(t, func() {
+		if _, err := Block(repo); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
+	})
+	if strings.Count(said, "\n") != 1 || !regexp.MustCompile(`m1 .*m2 .*m3 .*m4 `).MatchString(said) {
+		t.Fatalf("the first open, reached through the block, said %q on stderr, want one line naming m1 to m4", said)
+	}
+	var copied Memory
+	if again := stderrOf(t, func() { copied = opened(t, repo) }); again != "" {
+		t.Errorf("the second open said %q, want nothing copied twice", again)
+	}
+	if got := ids(copied.Global.Entries) + "|" + ids(copied.Project.Entries); got != "m1,m2|m3,m4" {
+		t.Errorf("user-global|project-global hold %s, want m1,m2|m3,m4", got)
+	}
+	if first := copied.Global.Entries[0]; first.Said != "keep it short" || first.At.Day() != 1 || first.Kind != KindPerson {
+		t.Errorf("m1 copied as %+v, want its words, date and kind kept", first)
+	}
+	for file, body := range old {
+		if kept, err := os.ReadFile(file); err != nil || string(kept) != body {
+			t.Errorf("%s reads %q (%v) after the copy, want it untouched for tofu 0.5.8", file, kept, err)
 		}
 	}
-	moved := opened(t, repo)
-	if len(moved.Notices) != 4 {
-		t.Fatalf("the first open said %q, want one line per moved entry", moved.Notices)
-	}
-	want := map[Scope][]string{Global: {"m1", "m2"}, Project: {"m3", "m4"}}
-	for scope, ids := range want {
-		var got []string
-		for _, e := range moved.shelf(scope).Entries {
-			got = append(got, e.ID)
-		}
-		if strings.Join(got, ",") != strings.Join(ids, ",") {
-			t.Errorf("%s holds %v after the move, want %v", scope, got, ids)
-		}
-	}
-	if first := moved.Global.Entries[0]; first.Said != "keep it short" || first.At.Day() != 1 || first.Kind != KindPerson {
-		t.Errorf("m1 moved as %+v, want its words, date and kind kept", first)
-	}
-	for file := range old {
-		if _, err := os.Stat(file); err == nil {
-			t.Errorf("%s is still there after the move", file)
+	for _, dir := range []string{filepath.Join(home, "memory"), filepath.Join(state, "memory")} {
+		shelves, _ := filepath.Glob(filepath.Join(dir, "*.yaml"))
+		for _, file := range shelves {
+			if _, ok := old[file]; !ok {
+				t.Errorf("%s is new, and tofu 0.5.8 reads every yaml file there as an entry", file)
+			}
 		}
 	}
 	if _, err := os.Stat(filepath.Join(repo, sys.StateDirName)); err == nil {
-		t.Errorf("the move wrote into the repository")
+		t.Errorf("the copy wrote into the repository")
 	}
-	second := opened(t, repo)
-	if len(second.Notices) != 0 || len(second.Global.Entries) != 2 || len(second.Project.Entries) != 2 {
-		t.Errorf("the second open said %q with %d and %d entries, want nothing moved again", second.Notices, len(second.Global.Entries), len(second.Project.Entries))
+	if _, err := copied.Remove(Project, "m3"); err != nil {
+		t.Fatal(err)
 	}
-	added, err := second.Add(Entry{Scope: Project, Kind: KindProject, Text: "a new one", At: time.Now(), By: ByPerson}, "")
-	if err != nil || added.ID != "m5" {
-		t.Errorf("the next entry is %q (%v), want m5 after the moved m4", added.ID, err)
+	writeShelf(t, filepath.Join(home, "memory", "m5.yaml"), "id: m5\nkind: person\ntext: written by 0.5.8 after the copy\nat: 2026-10-08T10:00:00Z\nby: person\n")
+	var third Memory
+	said = stderrOf(t, func() { third = opened(t, repo) })
+	if got := ids(third.Global.Entries) + "|" + ids(third.Project.Entries); got != "m1,m2,m5|m4" || !strings.Contains(said, "m5 ") || strings.Contains(said, "m3") {
+		t.Errorf("after removing m3 and 0.5.8 writing m5 the open said %q and holds %s, want only m5 copied and m1,m2,m5|m4", said, got)
+	}
+	added, err := third.Add(Entry{Scope: Project, Kind: KindProject, Text: "a new one", At: time.Now(), By: ByPerson}, "")
+	if err != nil || added.ID != "m6" {
+		t.Errorf("the next entry is %q (%v), want m6 after the copied m5", added.ID, err)
+	}
+}
+
+func TestAHomeAnEarlierBuildMovedSaysSoOnceAndAFreshHomeSaysNothing(t *testing.T) {
+	freshHome(t)
+	repo := t.TempDir()
+	gitAs(t, repo, firstAuthor)
+	said := stderrOf(t, func() {
+		m := opened(t, repo)
+		for _, scope := range []Scope{Global, Project} {
+			if _, err := m.Add(Entry{Scope: scope, Kind: KindProject, Text: "written by the new build", At: time.Now(), By: ByPerson}, ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+		opened(t, repo)
+	})
+	if said != "" {
+		t.Fatalf("a fresh home said %q, want nothing, since it never had shelves", said)
+	}
+	home, _ := sys.HomeConfigDir()
+	state, _ := sys.ProjectStateDirAt(repo)
+	for _, dir := range []string{filepath.Join(home, "memory"), filepath.Join(state, "memory")} {
+		if err := os.Remove(filepath.Join(dir, copiedShelves)); err != nil {
+			t.Fatalf("no marker beside %s, so a home with nothing to copy would say it was moved earlier: %v", dir, err)
+		}
+	}
+	said = stderrOf(t, func() { opened(t, repo) })
+	if strings.Count(said, "\n") != 2 || strings.Count(said, "only copy") != 2 {
+		t.Errorf("a home an earlier build moved said %q, want one line per scope saying the new store is the only copy", said)
+	}
+	if again := stderrOf(t, func() { opened(t, repo) }); again != "" {
+		t.Errorf("the next open said %q again, want it said once", again)
 	}
 }
 

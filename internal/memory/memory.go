@@ -129,6 +129,7 @@ func (s Shelf) Bytes() int {
 type Memory struct {
 	Global, Project, UserLocal, ProjectLocal Shelf
 	Notices                                  []string
+	Copied                                   []string
 	home, state, repo, project               string
 	allUsers                                 bool
 	who                                      *who
