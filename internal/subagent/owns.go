@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	gopath "path"
@@ -47,7 +48,11 @@ func (e DeniedError) Error() string {
 var globCharset = regexp.MustCompile(`^[A-Za-z0-9_./*$@+()-]+$`)
 
 func normalizePath(path string) string {
-	return strings.ToLower(strings.ReplaceAll(path, `\`, "/"))
+	slashed := strings.ReplaceAll(path, `\`, "/")
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.ToLower(slashed)
+	}
+	return slashed
 }
 
 func validGlob(glob string) error {

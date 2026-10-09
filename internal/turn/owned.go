@@ -58,9 +58,24 @@ func (t ownedShell) Name() string { return t.tool.Name() }
 
 func (t ownedShell) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += ", and every file the command writes, through a redirect, tee, cp or mv, has to be inside the paths your first message says you hold, or your scratch folder. " +
-		"A command writing outside them is refused before it runs, and that work goes back to the orchestrator. A source file changes with edit or write, never through the shell. Reading anything is fine."
+	if t.boundary.HoldsTheTree() {
+		definition.Description += ", and you hold the whole tree, so a command may write anywhere in it. A source file still changes with edit or write, never through a redirect, tee, cp, mv or sed -i, and a tree-wide check is the orchestrator's."
+		return definition
+	}
+	definition.Description += ", and you hold only part of this project or none of it, so a command runs only when every step reads, lists, searches or inspects " +
+		"(ls, cat, head, grep, rg, find without -exec or -delete, sed without w or e, git status, log, diff, show or blame) " +
+		"or runs the project's own checks (go vet and go test, cargo test, check and clippy, npm, pnpm, yarn or bun test or a test, check, lint, typecheck or vet script, " +
+		"make targets named the same way, pytest, mypy, ruff check, and rtk or uv run around any of these). " +
+		"A redirect, tee, cp, mv, rm, mkdir, touch or sed -i lands only inside the paths your first message says you hold, your scratch folder or the temp folder, and a source file changes with edit or write. " +
+		"An interpreter (python -c, node -e, bash -c, powershell -Command, eval), a variable set before a command, $(...) or backticks, a program named by its path, and anything not listed are refused before they run, with the reason: put that work in your report."
 	return definition
+}
+
+func (t ownedShell) grammars() []subagent.Grammar {
+	if bash, found := t.tool.(*BashTool); found {
+		return []subagent.Grammar{subagent.GrammarOf(bash.choice.Path)}
+	}
+	return []subagent.Grammar{subagent.POSIX, subagent.PowerShell}
 }
 
 func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
@@ -68,8 +83,10 @@ func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
-	if err := t.boundary.Shell(args.Command); err != nil {
-		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
+	for _, grammar := range t.grammars() {
+		if err := t.boundary.Bash(args.Command, grammar); err != nil {
+			return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
+		}
 	}
 	return t.tool.Run(ctx, raw)
 }

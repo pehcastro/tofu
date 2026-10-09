@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -13,6 +14,7 @@ import (
 type shellWord struct {
 	text    string
 	expands bool
+	runs    bool
 }
 
 type shellToken int
@@ -109,8 +111,11 @@ func (l *shellLexer) redirect() shellToken {
 			l.at++
 		}
 		return tokenNothing
+	case strings.HasPrefix(operator, "<>"):
+		l.at += 2
+		return tokenWritesTo
 	case operator[0] == '<':
-		l.at += len(operator) - len(strings.TrimLeft(operator, "<>"))
+		l.at++
 		return tokenReadsFrom
 	}
 	l.at += len(operator) - len(strings.TrimLeft(operator, "&>|"))
@@ -135,12 +140,17 @@ func (l *shellLexer) skipHeredocs() {
 
 func (l *shellLexer) word() shellWord {
 	var text strings.Builder
-	expands := false
+	expands, runs := false, false
+	expand := func() {
+		expansion := l.expansion()
+		expands, runs = true, runs || substitutes(expansion)
+		text.WriteString(expansion)
+	}
 	for l.at < len(l.src) {
 		c := l.src[l.at]
 		switch {
 		case strings.IndexByte(" \t\r\n;|&()<>", c) >= 0:
-			return shellWord{text: text.String(), expands: expands}
+			return shellWord{text: text.String(), expands: expands, runs: runs}
 		case c == '\'':
 			end := strings.IndexByte(l.src[l.at+1:], '\'')
 			if end < 0 {
@@ -152,8 +162,7 @@ func (l *shellLexer) word() shellWord {
 			l.at++
 			for l.at < len(l.src) && l.src[l.at] != '"' {
 				if l.src[l.at] == '$' || l.src[l.at] == '`' {
-					expands = true
-					text.WriteString(l.expansion())
+					expand()
 					continue
 				}
 				if l.src[l.at] == '\\' && strings.IndexByte("$`\"\\\n", l.peek(1)) >= 0 {
@@ -167,14 +176,22 @@ func (l *shellLexer) word() shellWord {
 			text.WriteByte(l.peek(1))
 			l.at += 2
 		case c == '$' || c == '`':
-			expands = true
-			text.WriteString(l.expansion())
+			expand()
 		default:
 			text.WriteByte(c)
 			l.at++
 		}
 	}
-	return shellWord{text: text.String(), expands: expands}
+	return shellWord{text: text.String(), expands: expands, runs: runs}
+}
+
+var shellName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
+func substitutes(expansion string) bool {
+	if inner, braced := strings.CutPrefix(expansion, "${"); braced {
+		return !shellName.MatchString(strings.TrimSuffix(inner, "}"))
+	}
+	return strings.HasPrefix(expansion, "$(") || strings.HasPrefix(expansion, "`")
 }
 
 const shellParameterBytes = "_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ?@#*!$-"
@@ -404,7 +421,7 @@ func within(dir, target string) string {
 	return dir + "/" + target
 }
 
-func writesOf(commands []simpleCommand) ([]string, error) {
+func writesOf(commands []simpleCommand, changed func(simpleCommand) []shellWord, devices []string) ([]string, error) {
 	var paths []string
 	var outer [][]string
 	dirs, after, runs := []string{""}, "", true
@@ -412,9 +429,9 @@ func writesOf(commands []simpleCommand) ([]string, error) {
 		if len(command.words)+len(command.writes) == 0 && command.then == "\n" {
 			continue
 		}
-		for _, target := range command.targets() {
+		for _, target := range changed(command) {
 			switch {
-			case slices.Contains([]string{"/dev/null", "nul", "/dev/stdout", "/dev/stderr"}, strings.ToLower(target.text)):
+			case slices.Contains(devices, strings.ToLower(target.text)):
 			case target.expands:
 				return nil, UnparseablePathError{Path: target.text}
 			default:
@@ -439,8 +456,10 @@ func writesOf(commands []simpleCommand) ([]string, error) {
 	return paths, nil
 }
 
+func anyShellDevice() []string { return []string{"/dev/null", "nul", "/dev/stdout", "/dev/stderr"} }
+
 func ShellWrites(command string) ([]string, error) {
-	return writesOf(shellCommands(command))
+	return writesOf(shellCommands(command), simpleCommand.targets, anyShellDevice())
 }
 
 func (b *Boundary) Shell(command string) error {
@@ -450,7 +469,11 @@ func (b *Boundary) Shell(command string) error {
 			return err
 		}
 	}
-	paths, err := writesOf(commands)
+	return b.writes(commands, simpleCommand.targets, anyShellDevice())
+}
+
+func (b *Boundary) writes(commands []simpleCommand, changed func(simpleCommand) []shellWord, devices []string) error {
+	paths, err := writesOf(commands, changed, devices)
 	if err != nil {
 		return err
 	}
@@ -470,7 +493,35 @@ func (b *Boundary) Shell(command string) error {
 }
 
 func inTempDirectory(written string) bool {
-	return under("/tmp", written) || under(os.TempDir(), written)
+	tree, err := os.Getwd()
+	if err != nil || under(tree, written) {
+		return false
+	}
+	for _, root := range []string{"/tmp", os.TempDir()} {
+		if under(root, written) {
+			return !linkBelow(root, written)
+		}
+	}
+	return false
+}
+
+func linkBelow(root, written string) bool {
+	reached := root
+	if root == "/tmp" && runtime.GOOS == "windows" {
+		reached = os.TempDir()
+	}
+	below := strings.TrimPrefix(path.Clean(normalizePath(written)), path.Clean(normalizePath(root)))
+	for _, segment := range strings.FieldsFunc(below, func(r rune) bool { return r == '/' }) {
+		reached = filepath.Join(reached, segment)
+		info, err := os.Lstat(reached)
+		if err != nil {
+			return false
+		}
+		if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func under(root, written string) bool {
@@ -485,18 +536,14 @@ func (b *Boundary) Scratched(written string) bool {
 func (b *Boundary) KeepsToScratch(command string) bool {
 	touched := 0
 	for _, step := range shellCommands(command) {
-		tool, args := step.named()
-		changed := step.targets()
+		tool, _ := step.named()
 		switch {
 		case len(step.words)+len(step.writes) == 0:
 			continue
-		case slices.Contains([]string{"rm", "rmdir", "mkdir", "touch", "unlink"}, tool):
-			changed = append(changed, operands(args)...)
-		case tool == "mv":
-			changed = append(changed, step.relinks()...)
-		case !slices.Contains([]string{"", "cp", "tee", "echo", "printf", "cat", "ls"}, tool):
+		case !slices.Contains([]string{"", "cp", "tee", "echo", "printf", "cat", "ls", "rm", "rmdir", "mkdir", "touch", "unlink", "mv"}, tool):
 			return false
 		}
+		changed := POSIX.changes(step)
 		for _, word := range changed {
 			if word.expands || !b.Scratched(word.text) {
 				return false
