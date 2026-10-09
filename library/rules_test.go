@@ -107,7 +107,7 @@ func TestTheQuoteRuleFiresOnlyOnATaskCarryingAReference(t *testing.T) {
 
 func TestTheQuoteRuleSaysWhatEveryOutcomeOfResolvingAnIDIs(t *testing.T) {
 	quote := shippedRule(t, "quote")
-	for _, said := range []string{"read that turn before answering", "matching no turn, or more than one", "before event ids existed is quotable"} {
+	for _, said := range []string{"read that item before answering", "matching no item, or more than one", "before event ids existed is quotable"} {
 		if !strings.Contains(quote.Text, said) {
 			t.Fatalf("the rule text does not say %q: %q", said, quote.Text)
 		}

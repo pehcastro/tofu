@@ -361,11 +361,19 @@
       "called_by": "cmd/tofu/sift.go"
     },
     {
+      "point": "memory_scope",
+      "on": true,
+      "switched_on": "yes, through the judged method",
+      "costs": "not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency",
+      "why": "in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run",
+      "called_by": "cmd/tofu/judge_ledger.go"
+    },
+    {
       "point": "ask",
       "on": false,
       "switched_on": "not wired",
       "costs": "nothing, and no call is made",
-      "why": "jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, and no cost a session can be produced. the recorded ledger carries no ask row and nothing measures moments of doubt per session"
+      "why": "jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, measured on the wording before it named the lead, and no cost a session can be produced. ask_person now writes an ask row in shadow for every question the lead puts to the person, and the code asks now until those rows are labelled"
     },
     {
       "point": "file_shortlist",
@@ -1854,6 +1862,11 @@
       "note": "TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: memory on now keeps the correction with /remember, and memory off keeps nothing."
     },
     {
+      "package": "memtree",
+      "kind": "measurement with no dated report",
+      "note": "TOFU-1218, 2026-10-08, at b5859988, owing its dated report because an agent may not write a report file. 10000 synthetic items with a fake compaction function: prefix stability 97.84% batched against 79.39% merging at every append, 1.47 line-inputs per item against 13.30, 1.149 model calls per item."
+    },
+    {
       "package": "orchestrator",
       "kind": "runner",
       "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
@@ -1872,7 +1885,7 @@
   "counts": {
     "reports": 64,
     "packages_with_a_dated_report": 39,
-    "packages_with_no_dated_report": 8,
+    "packages_with_no_dated_report": 9,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2

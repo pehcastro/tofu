@@ -42,7 +42,7 @@ Read from `bench/harness/report-2026-09-22.md`.
 
 ## What decides what today
 
-4 of 11 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
+5 of 12 decision points decide anything when you run tofu today, read from `library/decisions/methods@1.yaml`.
 
 | What decides | Switched on | What it costs | Why | Called by | Measured |
 |---|---|---|---|---|---|
@@ -51,7 +51,8 @@ Read from `bench/harness/report-2026-09-22.md`.
 | `stop_check` | yes, through the judged method | a median $0.000067 a session over the 20 recorded sessions that ran it, worst $0.004574, $0.0089 over the whole recorded ledger, and the call is already made in shadow | jev agrees with 71 of 78 hand labels against the repeat check's 68, 1.04x, and makes a false stop a third as often | cmd/tofu/run_done.go | not stated |
 | `page_sift` | not wired | nothing, and no call is made | web.Reduce strips the same link-only rows at fetch time, so the link stripper elides 0 further bytes on all 24 recorded pages, 0.00 percent, where Reduce itself takes 11.69 percent of the extracted bytes. a second pass of one rule is not a decision point | not stated | not stated |
 | `read_worth` | yes, through the cheap method | nothing, and no call is made | a fifteen word floor agrees with 87.1 percent of the labels, the same as jev, and saves 12.6 percent of bytes against 9.3. a tie goes to the method that costs nothing | cmd/tofu/sift.go | not stated |
-| `ask` | not wired | nothing, and no call is made | jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, and no cost a session can be produced. the recorded ledger carries no ask row and nothing measures moments of doubt per session | not stated | not stated |
+| `memory_scope` | yes, through the judged method | not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency | in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run | cmd/tofu/judge_ledger.go | not stated |
+| `ask` | not wired | nothing, and no call is made | jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, measured on the wording before it named the lead, and no cost a session can be produced. ask_person now writes an ask row in shadow for every question the lead puts to the person, and the code asks now until those rows are labelled | not stated | not stated |
 | `file_shortlist` | not wired | nothing, and no call is made | the point is parked because three of its four questions name their own answer in their own prompt, so nothing measured there separates a ranking arm from a regular expression pulling a filename out of the task. 8 recordable turns carry 2 distinct tasks in the recorded sessions, against the floor of 12 questions this shape needs. a later join attempt cleared that floor at 13 distinct-task rows, but all 13 name their own answer too, so the corpus is still not built and the point is parked harder than before | not stated | not stated |
 | `tool_gate` | not wired | nothing, and no call is made | the 178 case set carries no free arm, and the 6 of 6 a regular expression scored was over six cases written by something that could see all six | not stated | not stated |
 | `instruction_trust` | not wired | nothing, and no call is made | jev beats a regular expression 25 of 27 against 24 of 27, but the corpus cannot decide it, a rerun minutes later tied both arms at 24 of 27, and 27 cases is a quarter of the few hundred a two-arm gap this size needs | not stated | not stated |
@@ -79,7 +80,7 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-64 dated reports over 39 benches. 8 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+64 dated reports over 39 benches. 9 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State |
 |---|---|---|---|---|---|
@@ -179,6 +180,7 @@ Why the rest are not compared:
 - `bench/corpus`, library: the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here.
 - `bench/learn`, measurement with no dated report: TOFU-1176, 2026-10-07, owing a run. labels.txt holds 50 made-up example labels since TOFU-1185, so a run names its own chain with --chain and its own labels with --labels, and needs Jev and claude. No measured number is committed.
 - `bench/memory`, measurement with no dated report: TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: memory on now keeps the correction with /remember, and memory off keeps nothing.
+- `bench/memtree`, measurement with no dated report: TOFU-1218, 2026-10-08, at b5859988, owing its dated report because an agent may not write a report file. 10000 synthetic items with a fake compaction function: prefix stability 97.84% batched against 79.39% merging at every append, 1.47 line-inputs per item against 13.30, 1.149 model calls per item.
 - `bench/orchestrator`, runner: reads 1 session folder and prints where its time went, with 0 dated reports of its own.
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own.
 - `bench/stat`, library: median, p95 and p99 over a slice of floats, called by every bench that reports a spread.
