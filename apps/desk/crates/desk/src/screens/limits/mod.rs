@@ -1,11 +1,12 @@
 use super::frame;
 
-use crate::modules::chat::{Chat, windows_said};
+use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{
-    CredentialReport, QuotaWindow, UsageReport, UsageReportState, WindowReport,
+    AccountStatus, AccountStatusState, Accounts, QuotaWindow, UsageReport, UsageReportState,
+    WindowStatus,
 };
-use desk_core::query::{Answer, SERVING};
+use desk_core::query::Answer;
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{caption, inner_card};
@@ -61,11 +62,25 @@ struct Source {
 #[derive(Default, PartialEq)]
 struct Seen {
     usage: Answer<UsageReport>,
+    accounts: Answer<Accounts>,
     quota: Vec<QuotaWindow>,
 }
 
+#[derive(Clone, PartialEq, Eq)]
+struct MeterKey {
+    source: String,
+    account: i64,
+    window: String,
+}
+
+struct Block {
+    source: String,
+    account: AccountStatus,
+    windows: Vec<WindowStatus>,
+}
+
 struct Meter {
-    key: (usize, String),
+    key: MeterKey,
     percent: Option<u32>,
     reset: SharedString,
     view: Entity<DotMeter>,
@@ -87,41 +102,74 @@ impl Limits {
             id: chat.entity_id(),
             _watch: watch,
         });
-        chat.update(cx, |chat, cx| chat.want_usage(cx));
+        chat.update(cx, |chat, cx| {
+            chat.want_usage(cx);
+            chat.want_accounts(cx);
+        });
         self.saw(&store, cx);
     }
 
     fn saw(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        let accounts = self
+            .source
+            .as_ref()
+            .and_then(|source| source.chat.upgrade())
+            .map(|chat| chat.read(cx).accounts().clone())
+            .unwrap_or_default();
         let store = store.read(cx);
         let seen = Seen {
             usage: store.usage.clone(),
+            accounts,
             quota: store.quota.clone(),
         };
         if seen == self.seen {
             return;
         }
         self.seen = seen;
-        if let Some(read) = &self.seen.usage.read {
+        if let Some(read) = &self.seen.accounts.read {
+            let said: Vec<String> = self
+                .blocks()
+                .iter()
+                .map(|block| {
+                    let windows: Vec<String> = block
+                        .windows
+                        .iter()
+                        .map(|window| format!("{} {:.0}%", window.id, window.used * 100.0))
+                        .collect();
+                    format!(
+                        "{} #{} {} [{}]",
+                        block.source,
+                        block.account.id,
+                        block.account.account,
+                        windows.join(", ")
+                    )
+                })
+                .collect();
             eprintln!(
-                "desk: limits shows {} from query.usage at {}{}",
-                windows_said(&self.providers()),
+                "desk: limits shows {} from query.accounts at {} and {} quota.updated windows",
+                said.join("; "),
                 read.at,
-                if self.seen.usage.stale {
-                    " and quota.updated after it"
-                } else {
-                    ""
-                }
+                self.seen.quota.len()
             );
         }
         cx.notify();
     }
 
-    fn providers(&self) -> Vec<CredentialReport> {
-        match &self.seen.usage.read {
-            None => Vec::new(),
-            Some(read) if self.seen.usage.stale => read.value.live(&self.seen.quota),
-            Some(read) => read.value.providers.clone(),
-        }
+    fn blocks(&self) -> Vec<Block> {
+        let Some(read) = &self.seen.accounts.read else {
+            return Vec::new();
+        };
+        read.value
+            .subscriptions
+            .iter()
+            .flat_map(|subscription| {
+                subscription.accounts.iter().map(|account| Block {
+                    source: subscription.source.clone(),
+                    account: account.clone(),
+                    windows: account.live(&subscription.source, &self.seen.quota),
+                })
+            })
+            .collect()
     }
 
     fn reread(&mut self, cx: &mut Context<Self>) {
@@ -138,17 +186,14 @@ impl Limits {
 
     fn meter(
         &mut self,
-        key: (usize, String),
-        quota: &WindowReport,
+        key: MeterKey,
+        quota: &WindowStatus,
         read_at: &str,
         cx: &mut Context<Self>,
     ) -> Entity<DotMeter> {
-        let percent = quota
-            .used_reported
-            .then(|| (quota.used_fraction * 100.0).round().clamp(0.0, 100.0) as u32);
+        let percent = Some((quota.used * 100.0).round().clamp(0.0, 100.0) as u32);
         let reset: SharedString = match &quota.resets_at {
-            None if quota.used_reported => "no reset reported".into(),
-            None => "not reported".into(),
+            None => "no reset reported".into(),
             Some(stamp) => format!("resets {}", clock(stamp, read_at)).into(),
         };
         if let Some(kept) = self
@@ -222,16 +267,23 @@ impl Limits {
 
     fn account(
         &mut self,
-        at: usize,
-        provider: &CredentialReport,
+        block: &Block,
         read_at: &str,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Div {
-        let state = if provider.state == SERVING {
-            Mark::Dim
-        } else {
-            Mark::Warn
+        let (said, state) = match &block.account.state {
+            AccountStatusState::InUse => ("in use", Mark::Dim),
+            AccountStatusState::Standby => ("standby", Mark::Dim),
+            AccountStatusState::SetAside => ("set aside", Mark::Dim),
+            AccountStatusState::Unread => ("not read yet", Mark::Dim),
+            AccountStatusState::Unchecked => ("not checked", Mark::Dim),
+            AccountStatusState::RefreshFailed => ("refresh failed", Mark::Warn),
+            AccountStatusState::Expired => ("expired", Mark::Warn),
+            AccountStatusState::Refused => ("refused", Mark::Warn),
+            AccountStatusState::Spent => ("spent", Mark::Warn),
+            AccountStatusState::RateLimited => ("rate limited", Mark::Warn),
+            AccountStatusState::Unknown(raw) => (raw.as_str(), Mark::Warn),
         };
         let label = fraction(div(), 1.0, ACCOUNT_LEAST)
             .flex()
@@ -245,19 +297,30 @@ impl Limits {
                     .items_center()
                     .gap(px(6.0))
                     .text_size(px(13.5))
-                    .child(rich(&[(&provider.provider, Mark::Strong)], theme))
-                    .children(provider.plan.clone().map(|plan| badge(plan, theme))),
+                    .w_full()
+                    .child(rich(&[(&block.source, Mark::Strong)], theme))
+                    .child(
+                        ellipsis(div())
+                            .text_color(ink(theme, T3))
+                            .child(block.account.account.clone()),
+                    )
+                    .children(block.account.plan.clone().map(|plan| badge(plan, theme))),
             )
             .child(
                 div()
                     .text_size(px(12.0))
-                    .child(rich(&[(&provider.state, state)], theme)),
+                    .child(rich(&[(said, state)], theme)),
             );
-        let windows: Vec<AnyElement> = provider
+        let windows: Vec<AnyElement> = block
             .windows
             .iter()
             .map(|quota| {
-                let meter = self.meter((at, quota.id.clone()), quota, read_at, cx);
+                let key = MeterKey {
+                    source: block.source.clone(),
+                    account: block.account.id,
+                    window: quota.id.clone(),
+                };
+                let meter = self.meter(key, quota, read_at, cx);
                 fraction(div(), 1.0, WINDOW_LEAST)
                     .flex()
                     .flex_col()
@@ -274,6 +337,13 @@ impl Limits {
             .gap(px(14.0))
             .p(px(10.0))
             .child(label)
+            .when(windows.is_empty(), |row| {
+                row.child(fraction(
+                    note("no window reported for this account", theme),
+                    1.0,
+                    WINDOW_LEAST,
+                ))
+            })
             .children(windows)
     }
 
@@ -299,8 +369,10 @@ impl Limits {
             note(format!("the last read failed: {error}"), theme)
                 .text_color(theme.color(ColorToken::StatusWarn))
         });
-        let providers = self.providers();
-        let body = if providers.is_empty() {
+        let blocks = self.blocks();
+        let body = if self.seen.accounts.read.is_none() {
+            note("reading query.accounts", theme).into_any_element()
+        } else if blocks.is_empty() {
             let line = usage
                 .missing
                 .iter()
@@ -323,10 +395,17 @@ impl Limits {
             )
             .into_any_element()
         } else {
-            let rows: Vec<Div> = providers
+            let rows: Vec<Div> = blocks
                 .iter()
-                .enumerate()
-                .map(|(at, provider)| self.account(at, provider, &read.at, theme, cx))
+                .map(|block| self.account(block, &read.at, theme, cx))
+                .collect();
+            let keys: Vec<String> = self
+                .seen
+                .accounts
+                .read
+                .iter()
+                .flat_map(|read| &read.value.keys)
+                .map(|key| format!("{} {}", key.provider, String::from(key.role.clone())))
                 .collect();
             let trailing = usage
                 .fullest_window
@@ -340,9 +419,15 @@ impl Limits {
                         .children(rows)
                         .child(
                             div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_x(px(14.0))
                                 .p(px(10.0))
                                 .text_size(px(12.0))
                                 .text_color(ink(theme, T3))
+                                .when(!keys.is_empty(), |line| {
+                                    line.child(caption("Keys", theme)).child(keys.join(" · "))
+                                })
                                 .child(usage.spend_limit.clone()),
                         ),
                 )
