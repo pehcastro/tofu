@@ -825,9 +825,7 @@ pub fn cached<T: Chart>(chart: &Entity<T>, cx: &App) -> Div {
     };
     let mut frame = div().relative();
     frame.style().refine(&style);
-    frame
-        .child(chart.clone().cached(style))
-        .children(read.tip().view.get().cloned())
+    frame.child(chart.clone().cached(style))
 }
 
 fn hovered<T: Chart>(frame: Stateful<Div>, cx: &Context<T>) -> Stateful<Div> {

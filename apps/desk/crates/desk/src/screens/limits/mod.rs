@@ -76,6 +76,7 @@ struct MeterKey {
 struct Block {
     source: String,
     account: AccountStatus,
+    email: Option<String>,
     windows: Vec<WindowStatus>,
 }
 
@@ -166,6 +167,7 @@ impl Limits {
                 subscription.accounts.iter().map(|account| Block {
                     source: subscription.source.clone(),
                     account: account.clone(),
+                    email: account.email().map(str::to_owned),
                     windows: account.live(&subscription.source, &self.seen.quota),
                 })
             })
@@ -299,10 +301,11 @@ impl Limits {
                     .text_size(px(13.5))
                     .w_full()
                     .child(rich(&[(&block.source, Mark::Strong)], theme))
-                    .child(
-                        ellipsis(div())
-                            .text_color(ink(theme, T3))
-                            .child(block.account.account.clone()),
+                    .children(
+                        block
+                            .email
+                            .clone()
+                            .map(|email| ellipsis(div()).text_color(ink(theme, T3)).child(email)),
                     )
                     .children(block.account.plan.clone().map(|plan| badge(plan, theme))),
             )
