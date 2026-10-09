@@ -8,10 +8,10 @@ import (
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/jev"
-	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	"tofu/internal/judge/state"
+	"tofu/internal/llm/models"
 	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
 	"tofu/library/questions"
@@ -58,6 +58,9 @@ func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 	classifier, err := boundClassifier()
 	if err != nil {
 		return ledger.Row{}, err
+	}
+	if in.decision != nil {
+		classifier.Provider = models.Provider(in.decision.Wire)
 	}
 	return ledger.Row{
 		Point:        set.SetName,
@@ -179,12 +182,28 @@ func runJudge(ctx context.Context, client *jev.Client, req jev.Request, set batt
 	if err != nil {
 		return judgeOutcome{}, err
 	}
-	ledgerReq := ledger.Request{State: req.State, Questions: set.SetName, Model: openrouter.Alias, Version: set.QuestionsVersion}
-	entry, hit, err := ledger.NewCache(cacheDir).Resolve(ctx, ledgerReq, asker)
+	cache := ledger.NewCache(cacheDir)
+	ledgerReq := ledger.Request{State: req.State, Questions: set.SetName, Model: client.Model(), Version: set.QuestionsVersion}
+	key, err := cache.Key(ledgerReq)
+	if err != nil {
+		return judgeOutcome{}, err
+	}
+	entry, hit, err := cache.Load(key)
 	if err != nil {
 		return judgeOutcome{}, err
 	}
 	if !hit {
+		entry, err = asker.Ask(ctx, ledgerReq)
+		if err != nil {
+			return judgeOutcome{}, err
+		}
+		ledgerReq.Model = asker.decision.Alias
+		if key, err = cache.Key(ledgerReq); err != nil {
+			return judgeOutcome{}, err
+		}
+		if err := cache.Store(key, ledgerReq, entry); err != nil {
+			return judgeOutcome{}, err
+		}
 		return judgeOutcome{answers: entry.Answers, fresh: true, decision: asker.decision, verdict: asker.verdict, mode: set.Mode}, nil
 	}
 	dir, err := sys.LogDir()

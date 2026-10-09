@@ -225,9 +225,13 @@ func gateSource(located jev.Located) string {
 }
 
 func doctorCredentials(now time.Time) []credentialReport {
+	var reports []credentialReport
+	if failover := jevFailoverLine(now); failover != "" {
+		reports = append(reports, credentialReport{Provider: jevName, State: failover})
+	}
 	results, err := pollCredentials(context.Background(), time.Now, nil)
 	if err != nil {
-		return []credentialReport{{Provider: "credentials", State: doctorUnreadable + err.Error()}}
+		return append(reports, credentialReport{Provider: "credentials", State: doctorUnreadable + err.Error()})
 	}
-	return credentialReports(results, now)
+	return append(reports, credentialReports(results, now)...)
 }

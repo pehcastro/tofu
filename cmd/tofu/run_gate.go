@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
+	"tofu/internal/widget"
 )
 
 const oneCallAtATime = 1
@@ -129,11 +131,22 @@ func boundClassifier() (models.Model, error) {
 	if err != nil && !errors.As(err, &broken) {
 		return models.Model{}, err
 	}
-	stored, err := sys.StoredKeys()
-	if err != nil {
-		return models.Model{}, err
+	return loaded.Classifier(jevKeys())
+}
+
+func jevKeys() map[string]string {
+	keys := map[string]string{}
+	for _, provider := range []models.Provider{models.OpenRouter, models.TypeSafe} {
+		keys[provider.KeyName()], _ = jev.KeyFor(sys.CredentialFileName, provider.KeyName())
 	}
-	return loaded.Classifier(stored)
+	return keys
+}
+
+func failoverOf(provider models.Provider) models.Provider {
+	if provider == models.OpenRouter {
+		return models.TypeSafe
+	}
+	return models.OpenRouter
 }
 
 func jevClientOn(key string, concurrency int) (*jev.Client, error) {
@@ -141,10 +154,29 @@ func jevClientOn(key string, concurrency int) (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jevClientFor(classifier.Provider, key, concurrency)
+	primary, err := jevWire(classifier.Provider, key, concurrency)
+	if err != nil {
+		return nil, err
+	}
+	config := jev.Config{Wire: primary, OnFailover: recordFailover}
+	other := failoverOf(classifier.Provider)
+	if otherKey, keyErr := jev.KeyFor(sys.CredentialFileName, other.KeyName()); keyErr == nil {
+		if config.Fallback, err = jevWire(other, otherKey, concurrency); err != nil {
+			return nil, err
+		}
+	}
+	return jev.NewClient(config)
 }
 
 func jevClientFor(provider models.Provider, key string, concurrency int) (*jev.Client, error) {
+	wire, err := jevWire(provider, key, concurrency)
+	if err != nil {
+		return nil, err
+	}
+	return jev.NewClient(jev.Config{Wire: wire})
+}
+
+func jevWire(provider models.Provider, key string, concurrency int) (*jevwire.Wire, error) {
 	config := jevwire.Config{
 		Key:      key,
 		Endpoint: os.Getenv(judgeEndpointEnvar),
@@ -155,22 +187,15 @@ func jevClientFor(provider models.Provider, key string, concurrency int) (*jev.C
 			Concurrency:    concurrency,
 		},
 	}
-	var wire *jevwire.Wire
-	var err error
 	switch provider {
 	case models.OpenRouter:
-		wire, err = jevwire.New(config)
+		return jevwire.New(config)
 	case models.TypeSafe:
-		wire, err = typesafewire.New(config)
-	case models.Anthropic, models.OpenAI:
+		return typesafewire.New(config)
+	case models.Anthropic, models.OpenAI, models.Meta:
 		return nil, fmt.Errorf("the classifier is served by %s, and jev is reached through %s or %s", provider, models.OpenRouter, models.TypeSafe)
-	default:
-		panic("tofu: unknown provider " + string(provider))
 	}
-	if err != nil {
-		return nil, err
-	}
-	return jev.NewClient(jev.Config{Wire: wire})
+	panic("tofu: unknown provider " + string(provider))
 }
 
 func gateKey() (string, error) {
@@ -179,6 +204,45 @@ func gateKey() (string, error) {
 		return "", err
 	}
 	return jev.KeyFor(sys.CredentialFileName, classifier.Provider.KeyName())
+}
+
+const jevFailoverFile = "jev-failover.json"
+
+type lastFailover struct {
+	At    time.Time `json:"at"`
+	From  string    `json:"from"`
+	To    string    `json:"to"`
+	Cause string    `json:"cause"`
+}
+
+func jevFailoverPath() (string, error) {
+	home, err := sys.HomeConfigDir()
+	return filepath.Join(home, jevFailoverFile), err
+}
+
+func recordFailover(failover jev.Failover) {
+	path, err := jevFailoverPath()
+	if err != nil {
+		return
+	}
+	body, _ := json.Marshal(lastFailover{At: time.Now().UTC(), From: failover.From, To: failover.To, Cause: failover.Cause.Error()})
+	_ = sys.WriteFile(path, body, 0o600)
+}
+
+func jevFailoverLine(now time.Time) string {
+	path, err := jevFailoverPath()
+	if err != nil {
+		return ""
+	}
+	body, err := sys.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var last lastFailover
+	if json.Unmarshal(body, &last) != nil {
+		return "the last failover record at " + path + " is unreadable"
+	}
+	return "last failover " + widget.Until(now.Sub(last.At)) + " ago, " + last.From + " to " + last.To + ": " + last.Cause
 }
 
 func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {

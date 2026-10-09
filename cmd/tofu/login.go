@@ -508,7 +508,11 @@ func reachesJev(ctx context.Context, provider models.Provider, key string) error
 }
 
 func locateGateKey() (jev.Located, error) {
-	return jev.Locate(sys.CredentialFileName)
+	classifier, err := boundClassifier()
+	if err != nil {
+		return jev.Located{}, err
+	}
+	return jev.LocateFor(sys.CredentialFileName, classifier.Provider.KeyName())
 }
 
 func promptPaste(in io.Reader, prompts io.Writer) (string, error) {

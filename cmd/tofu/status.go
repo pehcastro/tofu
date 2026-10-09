@@ -49,11 +49,27 @@ const (
 
 type keyFacts struct{ provider, variable, name, use, hint string }
 
+func jevKeyUse(provider models.Provider) string {
+	serving, err := boundClassifier()
+	switch {
+	case err != nil:
+		return "jev, the classifier is unreadable: " + err.Error()
+	case serving.Provider == provider:
+		if failover := jevFailoverLine(time.Now()); failover != "" {
+			return "judges tool calls with jev-latest; " + failover
+		}
+		return "judges tool calls with jev-latest"
+	case serving.Provider == failoverOf(provider):
+		return "answers for jev when " + serving.Provider.Display() + " cannot"
+	}
+	return "unused, the classifier is " + serving.Slug()
+}
+
 func keyTable() []keyFacts {
 	return []keyFacts{
 		{metaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models", loginHint(metaName)},
-		{openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "judges tool calls with jev-latest", loginHint(openRouterName)},
-		{typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), "used only without OpenRouter", ""},
+		{openRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), jevKeyUse(models.OpenRouter), loginHint(openRouterName)},
+		{typeSafeName, sys.TypeSafeKeyName, models.TypeSafe.Display(), jevKeyUse(models.TypeSafe), ""},
 		{braveName, sys.BraveSearchKeyName, braveDisplay, "backs the web search tool", loginHint(braveName)},
 	}
 }

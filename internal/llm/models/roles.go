@@ -71,20 +71,20 @@ func (r RoleID) Unbound() string {
 	case RoleOrchestrator:
 		return "nothing is bound, so it runs on the subscription default"
 	case RoleClassifier:
-		return "nothing is bound, so it runs " + openRouterClassifier + " when an OpenRouter key is stored, else " + typeSafeClassifier + " when a TypeSafe key is stored"
+		return "nothing is bound, so it runs " + openRouterClassifier + " when an OpenRouter key is set, else " + typeSafeClassifier + ", and with both keys set either one answers when the other's account cannot"
 	case RoleSubAgent:
 		return "nothing is bound, so it runs on the orchestrator's model"
 	}
 	panic("models: unknown role " + string(r))
 }
 
-func (c Library) Classifier(stored map[string]string) (Model, error) {
+func (c Library) Classifier(keys map[string]string) (Model, error) {
 	for _, role := range c.Roles {
 		if role.ID == RoleClassifier {
 			return role.Model, nil
 		}
 	}
-	if stored[sys.OpenRouterKeyName] == "" && stored[sys.TypeSafeKeyName] != "" {
+	if keys[sys.OpenRouterKeyName] == "" && keys[sys.TypeSafeKeyName] != "" {
 		return c.Select(typeSafeClassifier)
 	}
 	return c.Select(openRouterClassifier)

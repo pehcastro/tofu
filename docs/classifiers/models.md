@@ -15,7 +15,13 @@ from two providers:
 | `openrouter/jev-latest` | OpenRouter's decisions endpoint | `OPENROUTER_KEY` |
 | `typesafe/jev-latest` | TypeSafe directly | `TYPESAFE_API_KEY` |
 
-Unbound, the role runs OpenRouter when that key is stored, else TypeSafe.
+Unbound, the role runs OpenRouter when that key is set, else TypeSafe. A key
+counts whether it is stored, in the environment or in `.env`. With both keys
+set, the other provider answers when the serving one cannot: a 402, a 429, a
+spent key, an auth failure or a provider outage. A request the provider
+refuses as malformed does not move, and fails closed. The decision's row
+names the provider that answered, and `tofu doctor` and `tofu login
+--status` show the last failover.
 
 ## Why the classifier is a role
 

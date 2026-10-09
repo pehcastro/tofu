@@ -40,7 +40,11 @@ func KeyFor(envPath, variable string) (string, error) {
 }
 
 func Locate(envPath string) (Located, error) {
-	value, located, err := find(envPath, OpenRouterVariable)
+	return LocateFor(envPath, OpenRouterVariable)
+}
+
+func LocateFor(envPath, variable string) (Located, error) {
+	value, located, err := find(envPath, variable)
 	located.Length = len(value)
 	return located, err
 }

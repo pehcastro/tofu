@@ -30,7 +30,7 @@ language model
 
 classifier · jev, required
   ✓ OpenRouter  ····3498  judges tool calls with jev-latest
-  ○ TypeSafe    not set   used only without OpenRouter
+  ○ TypeSafe    not set   answers for jev when OpenRouter cannot
 
 search
   ○ Brave  not set  → tofu login search brave
