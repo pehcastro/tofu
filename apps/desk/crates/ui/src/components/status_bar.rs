@@ -1,12 +1,15 @@
 use std::cmp::Reverse;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui::{
-    AnyView, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, Rgba, SharedString,
-    Stateful, Window, div, prelude::*, px, relative,
+    AnyElement, AnyView, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, Rgba,
+    SharedString, Stateful, Window, div, prelude::*, px, relative,
 };
 
 use crate::component::{icon, status_item};
+use crate::components::avatar::spinner;
+use crate::components::button::{ButtonKind, button};
 use crate::components::card::caption;
 use crate::components::chip::tabular;
 use crate::components::glyph::Glyph;
@@ -17,6 +20,7 @@ use crate::components::size::{
     CAPTION_TEXT, CHIP_FILL, FONT_BODY, FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
     RADIUS_CHIP_SMALL, ROW_GAP, ROW_PAD_X, T1, T2, T3,
 };
+use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON_SMALL, STATUS_BAR_HEIGHT, STATUS_ITEM_HEIGHT, TEXT_SMALL};
@@ -24,12 +28,14 @@ use crate::theme::{ColorToken, Theme};
 
 const NO_ACCOUNT: &str = "no account";
 const NO_ACCOUNT_CONNECTED: &str = "No account connected";
-const READING: &str = "reading";
 const READING_QUOTA: &str = "Reading quota";
 const UNREAD: &str = "quota unread";
 const UNREAD_TITLE: &str = "Quota could not be read";
-const NOT_REPORTED: &str = "not reported";
-const ALL_PROVIDERS: &str = "View all providers";
+const NOT_REPORTED: &str = "Quota not reported";
+const NEEDS_REAUTH: &str = "Needs re-authentication";
+const SIGN_IN: &str = "Sign in";
+const NEW_SESSION: &str = "New session";
+const ALL_PROVIDERS: &str = "All providers";
 const POP_OFFSET: f32 = 4.0;
 const QUOTA_POP_WIDTH: f32 = 300.0;
 const BLOCK_Y: f32 = 8.0;
@@ -41,7 +47,9 @@ const WINDOW_ROW: f32 = 18.0;
 const WINDOW_GAP: f32 = 8.0;
 const LABEL_WIDTH: f32 = 58.0;
 const PERCENT_WIDTH: f32 = 32.0;
-const RESET_WIDTH: f32 = 100.0;
+const RESET_WIDTH: f32 = 76.0;
+const XS_BUTTON: f32 = 22.0;
+const LOADING_DOT: f32 = 6.0;
 const DIVIDER_HEIGHT: f32 = 14.0;
 const DIVIDER_INK: f32 = 0.18;
 const WARN_FROM: u8 = 70;
@@ -65,17 +73,32 @@ pub struct ContextUse {
 }
 
 #[derive(Clone)]
+pub struct Reset {
+    pub left: SharedString,
+    pub at: SharedString,
+}
+
+#[derive(Clone)]
 pub struct UsageWindow {
     pub label: SharedString,
-    pub percent: Option<u8>,
-    pub reset: Option<SharedString>,
+    pub percent: u8,
+    pub reset: Option<Reset>,
+}
+
+#[derive(Clone)]
+pub enum Standing {
+    Serving,
+    Reauth(SharedString),
+    Trouble(SharedString),
 }
 
 #[derive(Clone)]
 pub struct Account {
-    pub name: SharedString,
+    pub provider: SharedString,
+    pub email: Option<SharedString>,
+    pub source: SharedString,
     pub plan: Option<SharedString>,
-    pub trouble: Option<SharedString>,
+    pub standing: Standing,
     pub windows: Vec<UsageWindow>,
 }
 
@@ -103,12 +126,13 @@ pub struct Status {
     pub problem: Option<SharedString>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StatusPick {
     Branch,
     Session,
     Context,
     AllProviders,
+    SignIn(SharedString),
     Classifier,
     Cron,
 }
@@ -169,29 +193,33 @@ impl StatusBar {
             }
         };
         let item = status_item("Limits", "Limits", theme).on_click(toggle);
+        let lock = || tile(theme).child(glyph(Glyph::Lock, EMPTY_GLYPH, ink(theme, T3)));
         let (trigger, sections): (_, Vec<Div>) = match &self.status.accounts {
             Accounts::Reading => (
-                item.child(dim(READING, theme)),
-                vec![notice(Glyph::Cron, READING_QUOTA, None, theme)],
-            ),
-            Accounts::Unread(reason) => (
-                item.child(UNREAD),
+                item.child(loading("status-quota-spin", theme, cx)),
                 vec![notice(
-                    Glyph::Lock,
-                    UNREAD_TITLE,
-                    Some(reason.clone()),
+                    tile(theme).child(loading("status-quota-pop-spin", theme, cx)),
+                    READING_QUOTA,
+                    None,
                     theme,
                 )],
             ),
+            Accounts::Unread(reason) => (
+                item.child(UNREAD),
+                vec![notice(lock(), UNREAD_TITLE, Some(reason.clone()), theme)],
+            ),
             Accounts::Read(accounts) if accounts.is_empty() => (
                 item.child(NO_ACCOUNT),
-                vec![notice(Glyph::Lock, NO_ACCOUNT_CONNECTED, None, theme)],
+                vec![notice(lock(), NO_ACCOUNT_CONNECTED, None, theme)],
             ),
             Accounts::Read(accounts) => (
                 fullest_item(item, accounts, theme),
                 accounts
                     .iter()
-                    .map(|account| account_block(account, theme))
+                    .enumerate()
+                    .map(|(at, account)| {
+                        account_block(at, account, &self.on_pick, theme, window, cx)
+                    })
                     .collect(),
             ),
         };
@@ -332,13 +360,13 @@ fn fullest_item(item: Stateful<Div>, accounts: &[Account], theme: &Theme) -> Sta
             account
                 .windows
                 .iter()
-                .filter_map(move |window| Some((account, window, window.percent?)))
+                .map(move |window| (account, window, window.percent))
         })
         .min_by_key(|(_, _, percent)| Reverse(*percent));
     match (fullest, accounts.first()) {
         (Some((account, window, percent)), _) => {
             let level = Level::of(percent);
-            item.child(account.name.clone())
+            item.child(account.source.clone())
                 .child(dim(window.label.clone(), theme))
                 .child(
                     div()
@@ -349,9 +377,11 @@ fn fullest_item(item: Stateful<Div>, accounts: &[Account], theme: &Theme) -> Sta
                         .child(format!("{percent}%")),
                 )
         }
-        (None, Some(account)) => item
-            .child(account.name.clone())
-            .child(dim(NOT_REPORTED, theme)),
+        (None, Some(account)) => item.child(account.source.clone()).child(icon(
+            Icon::Unreported,
+            ICON_SMALL,
+            ink(theme, T3),
+        )),
         (None, None) => item.child(NO_ACCOUNT),
     }
 }
@@ -378,13 +408,105 @@ fn block(theme: &Theme) -> Div {
         .text_color(ink(theme, T3))
 }
 
-fn account_block(account: &Account, theme: &Theme) -> Div {
+fn loading(id: &'static str, theme: &Theme, cx: &App) -> AnyElement {
+    if cx.reduce_motion() {
+        return div()
+            .size(px(LOADING_DOT))
+            .rounded_full()
+            .bg(theme.color(ColorToken::StatusLive))
+            .into_any_element();
+    }
+    spinner(id, theme).into_any_element()
+}
+
+fn tipped(
+    key: &dyn Fn(&str) -> ElementId,
+    part: &str,
+    target: Stateful<Div>,
+    text: impl Into<SharedString>,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Stateful<Div> {
+    tooltip(
+        key(&format!("{part}-tip")),
+        target,
+        Edge::Frame,
+        text,
+        theme,
+        window,
+        cx,
+    )
+}
+
+fn account_block(
+    at: usize,
+    account: &Account,
+    on_pick: &OnPick,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Div {
+    let key = |part: &str| -> ElementId {
+        ElementId::NamedChild(Arc::new(("status-account", at).into()), part.into())
+    };
     let letter: String = account
-        .name
+        .provider
         .chars()
         .filter(|c| c.is_alphanumeric())
         .take(1)
         .flat_map(char::to_uppercase)
+        .collect();
+    let mark = |glyph: Icon, color: Rgba| {
+        div()
+            .id(key("alert"))
+            .flex_none()
+            .child(icon(glyph, ICON_SMALL, color))
+    };
+    let alert = match &account.standing {
+        Standing::Serving => None,
+        Standing::Reauth(state) => Some(tipped(
+            &key,
+            "alert",
+            mark(Icon::Warning, theme.color(ColorToken::StatusWarn)),
+            format!("{NEEDS_REAUTH}: {state}"),
+            theme,
+            window,
+            cx,
+        )),
+        Standing::Trouble(state) => Some(tipped(
+            &key,
+            "alert",
+            mark(Icon::Notice, ink(theme, T2)),
+            state.clone(),
+            theme,
+            window,
+            cx,
+        )),
+    };
+    let sign_in = matches!(account.standing, Standing::Reauth(_)).then(|| {
+        let (on_pick, source) = (on_pick.clone(), account.source.clone());
+        button(key("sign-in"), SIGN_IN, None, ButtonKind::Text, theme)
+            .h(px(XS_BUTTON))
+            .px_2()
+            .text_size(px(FONT_SMALL))
+            .on_click(move |_, window, cx| on_pick(&StatusPick::SignIn(source.clone()), window, cx))
+    });
+    let unreported = (account.windows.is_empty() && matches!(account.standing, Standing::Serving))
+        .then(|| {
+            let target = div()
+                .id(key("unreported"))
+                .flex()
+                .items_center()
+                .h(px(WINDOW_ROW))
+                .child(icon(Icon::Unreported, ICON_SMALL, ink(theme, T3)));
+            tipped(&key, "unreported", target, NOT_REPORTED, theme, window, cx)
+        });
+    let windows: Vec<Div> = account
+        .windows
+        .iter()
+        .enumerate()
+        .map(|(ix, usage)| window_row(&key, ix, usage, theme, window, cx))
         .collect();
     block(theme)
         .child(
@@ -403,56 +525,66 @@ fn account_block(account: &Account, theme: &Theme) -> Div {
                     div()
                         .flex_1()
                         .min_w_0()
-                        .truncate()
-                        .text_size(px(FONT_BODY))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(ink(theme, T1))
-                        .child(account.name.clone()),
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(WINDOW_GAP))
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(FONT_BODY))
+                                        .text_color(ink(theme, T1))
+                                        .child(account.provider.clone()),
+                                )
+                                .children(account.plan.clone().map(|plan| {
+                                    div().flex_none().text_color(ink(theme, T3)).child(plan)
+                                })),
+                        )
+                        .children(account.email.clone().map(|email| {
+                            div()
+                                .truncate()
+                                .text_size(px(FONT_SMALL))
+                                .text_color(ink(theme, T3))
+                                .child(email)
+                        })),
                 )
-                .children(
-                    account
-                        .plan
-                        .clone()
-                        .map(|plan| div().flex_none().child(plan)),
-                ),
+                .children(alert)
+                .children(sign_in),
         )
-        .children(
-            account
-                .trouble
-                .clone()
-                .map(|trouble| div().w_full().truncate().child(trouble)),
-        )
-        .children(
-            account
-                .windows
-                .iter()
-                .map(|window| window_row(window, theme)),
-        )
+        .children(windows)
+        .children(unreported)
 }
 
-fn window_row(window: &UsageWindow, theme: &Theme) -> Div {
-    let reading = match window.percent {
-        None => div().flex_1().child(NOT_REPORTED),
-        Some(percent) => {
-            let level = Level::of(percent);
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .gap(px(WINDOW_GAP))
-                .child(meter_bar(f32::from(percent) / 100.0, level.fill(theme), theme).flex_1())
-                .child(
-                    div()
-                        .flex_none()
-                        .w(px(PERCENT_WIDTH))
-                        .text_right()
-                        .font_weight(FontWeight::MEDIUM)
-                        .font_features(tabular())
-                        .text_color(level.text(theme))
-                        .child(format!("{percent}%")),
-                )
-        }
-    };
+fn window_row(
+    key: &dyn Fn(&str) -> ElementId,
+    ix: usize,
+    usage: &UsageWindow,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> Div {
+    let level = Level::of(usage.percent);
+    let reset = usage.reset.as_ref().map(|reset| {
+        let part = format!("reset-{ix}");
+        let target = div()
+            .id(key(&part))
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_end()
+            .gap_1()
+            .w(px(RESET_WIDTH))
+            .font_features(tabular())
+            .child(icon(Icon::Reset, ICON_SMALL, ink(theme, T3)))
+            .child(div().flex_none().child(reset.left.clone()));
+        tipped(key, &part, target, reset.at.clone(), theme, window, cx)
+    });
     div()
         .flex()
         .items_center()
@@ -463,28 +595,30 @@ fn window_row(window: &UsageWindow, theme: &Theme) -> Div {
                 .flex_none()
                 .w(px(LABEL_WIDTH))
                 .truncate()
-                .child(caption(window.label.clone(), theme)),
+                .child(caption(usage.label.clone(), theme)),
         )
-        .child(reading)
+        .child(meter_bar(f32::from(usage.percent) / 100.0, level.fill(theme), theme).flex_1())
         .child(
             div()
                 .flex_none()
-                .w(px(RESET_WIDTH))
-                .truncate()
+                .w(px(PERCENT_WIDTH))
                 .text_right()
+                .font_weight(FontWeight::MEDIUM)
                 .font_features(tabular())
-                .children(window.reset.clone()),
+                .text_color(level.text(theme))
+                .child(format!("{}%", usage.percent)),
         )
+        .children(reset)
 }
 
-fn notice(icon: Glyph, title: &str, detail: Option<SharedString>, theme: &Theme) -> Div {
+fn notice(mark: Div, title: &str, detail: Option<SharedString>, theme: &Theme) -> Div {
     block(theme)
         .child(
             div()
                 .flex()
                 .items_center()
                 .gap(px(ROW_GAP))
-                .child(tile(theme).child(glyph(icon, EMPTY_GLYPH, ink(theme, T3))))
+                .child(mark)
                 .child(
                     div()
                         .text_size(px(FONT_BODY))
@@ -525,7 +659,11 @@ impl RenderOnce for StatusBar {
             });
         let session = self
             .item(StatusPick::Session, "Session", &theme)
-            .child(status.session.clone().unwrap_or("no session".into()));
+            .map(|item| match &status.session {
+                None => item.child("no session"),
+                Some(name) if name.is_empty() => item.child(dim(NEW_SESSION, &theme)),
+                Some(name) => item.child(name.clone()),
+            });
         let group = status.session_group.clone().map(|group| {
             let share = group.context.as_ref().map_or(0.0, |context| context.share);
             let context = self

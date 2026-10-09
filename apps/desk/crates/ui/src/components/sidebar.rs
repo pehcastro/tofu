@@ -37,6 +37,20 @@ const SESSION_GAP: f32 = 9.0;
 const SESSION_DOT: f32 = 4.0;
 const INACTIVE_GAP: f32 = 6.0;
 const INACTIVE_INDENT: f32 = 8.0;
+const NEW_SESSION_NAME: &str = "New session";
+const UUID_LENGTH: usize = 36;
+const UUID_DASHES: [usize; 4] = [8, 13, 18, 23];
+
+pub fn unnamed(name: &str) -> bool {
+    name.is_empty()
+        || (name.len() == UUID_LENGTH
+            && name
+                .char_indices()
+                .all(|(at, c)| match UUID_DASHES.contains(&at) {
+                    true => c == '-',
+                    false => c.is_ascii_hexdigit(),
+                }))
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionState {
@@ -220,7 +234,10 @@ impl Sidebar {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .child(session.name.clone()),
+                    .child(match unnamed(&session.name) {
+                        true => div().text_color(ink(theme, T3)).child(NEW_SESSION_NAME),
+                        false => div().child(session.name.clone()),
+                    }),
             })
             .when(!session.age.is_empty(), |row| {
                 row.child(

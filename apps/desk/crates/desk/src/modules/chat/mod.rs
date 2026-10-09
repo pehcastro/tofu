@@ -3,18 +3,19 @@ mod items;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{env, iter, slice, thread};
 
 use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
 use desk_core::model::{Role, Store};
 use desk_core::protocol::{
-    ApprovalAnswer, ApprovalDecision, ApprovalRequest, ContextReport, CredentialReport,
+    Accounts, ApprovalAnswer, ApprovalDecision, ApprovalRequest, ContextReport, CredentialReport,
     CronCommandParams, InitializeResult, NoParams, Notification, PROTOCOL, Request, RequestId,
     SessionAsking, SessionInfo, SessionListParams, SessionOpenParams, SessionParams,
-    SessionRenameParams, ShellParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams,
-    request, subagent,
+    SessionRenameParams, SessionTrace, ShellParams, TurnCompleted, TurnParams, TurnSendParams,
+    TurnSteerParams, request, subagent,
 };
 use desk_core::query::{Answer, QueryError, Read};
 use desk_core::sessions::SessionRow;
@@ -36,6 +37,9 @@ use items::{Entry, Item};
 
 const CLIENT: &str = "tofu-desk";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
+const SIGN_IN_POLL: Duration = Duration::from_millis(500);
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const PLACEHOLDER: &str = "Ask tofu to build, inspect, or delegate";
 const FIELD_LINES: usize = 8;
 const ROW_INSET: f32 = 24.0;
@@ -100,7 +104,20 @@ pub struct Chat {
     finding: bool,
     aimed: bool,
     rows: Vec<SessionRow>,
+    accounts: Answer<Accounts>,
+    signing: Option<SigningIn>,
+    _signed: Option<Task<()>>,
     _drain: Option<Task<()>>,
+}
+
+struct SigningIn(Child);
+
+impl Drop for SigningIn {
+    fn drop(&mut self) {
+        if let Err(error) = self.0.kill() {
+            eprintln!("desk: sign in pid {} was not stopped: {error}", self.0.id());
+        }
+    }
 }
 
 pub struct Listed;
@@ -131,6 +148,10 @@ pub fn fed(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Ch
     cx.new(|cx| Chat::new(Link::Fed, store, window, cx))
 }
 
+fn tofu() -> PathBuf {
+    env::var_os(TOFU_VARIABLE).map_or_else(|| PathBuf::from("tofu"), PathBuf::from)
+}
+
 pub fn live(
     project: PathBuf,
     store: Entity<Store>,
@@ -140,9 +161,7 @@ pub fn live(
     cx.new(|cx| {
         let (sender, opened) = flume::bounded::<Opened>(1);
         thread::spawn(move || {
-            let tofu =
-                env::var_os(TOFU_VARIABLE).map_or_else(|| PathBuf::from("tofu"), PathBuf::from);
-            let bridge = Bridge::open(serve_command(&tofu, &project), CLIENT, PROTOCOL);
+            let bridge = Bridge::open(serve_command(&tofu(), &project), CLIENT, PROTOCOL);
             sender.send(bridge).ok();
         });
         let mut chat = Chat::new(Link::Starting, store, window, cx);
@@ -241,6 +260,9 @@ impl Chat {
             finding: false,
             aimed: true,
             rows: Vec::new(),
+            accounts: Answer::default(),
+            signing: None,
+            _signed: None,
             _drain: None,
         }
     }
@@ -276,11 +298,19 @@ impl Chat {
             Opening::Open(id) => Some(id.clone()),
             Opening::Closed | Opening::Pending => None,
         };
+        let opened = open.is_some();
         self.store.update(cx, |store, cx| {
             store.open = open;
+            if opened {
+                store.trace.want();
+                store.trace.again();
+            }
             cx.notify();
         });
         self.opening = opening;
+        if opened {
+            self.ask_due(cx);
+        }
     }
 
     pub fn open_id(&self) -> Option<&str> {
@@ -540,9 +570,12 @@ impl Chat {
                 );
             }
             Event::Notification(Notification::FileEdit(_)) => return cx.emit(Touched),
+            Event::Notification(notification @ Notification::QuotaUpdated(_)) => {
+                self.accounts.notified();
+                return eprintln!("desk: tofu sent {notification:?}");
+            }
             Event::Notification(
-                notification @ (Notification::QuotaUpdated(_)
-                | Notification::ContextUpdated(_)
+                notification @ (Notification::ContextUpdated(_)
                 | Notification::Decision(_)
                 | Notification::CronUpdated(_)
                 | Notification::AgentEnded(_)
@@ -720,6 +753,96 @@ impl Chat {
         self.ask_due(cx);
     }
 
+    pub fn accounts(&self) -> &Answer<Accounts> {
+        &self.accounts
+    }
+
+    pub fn want_accounts(&mut self, cx: &mut Context<Self>) {
+        self.accounts.want();
+        self.ask_due(cx);
+    }
+
+    fn ask_accounts(&mut self, cx: &mut Context<Self>) {
+        if !self.accounts.take_due() {
+            return;
+        }
+        eprintln!("desk: query.accounts asked");
+        self.request::<request::QueryAccounts>(&NoParams {}, cx, |chat, reply, cx| {
+            let answer = reply.map(Read::now).map_err(|reason| QueryError {
+                method: request::QueryAccounts::METHOD,
+                reason,
+            });
+            match &answer {
+                Ok(read) => eprintln!(
+                    "desk: query.accounts read at {}: {}",
+                    read.at,
+                    accounts_said(&read.value)
+                ),
+                Err(error) => eprintln!("desk: {error}"),
+            }
+            chat.accounts.answered(answer);
+            chat.store.update(cx, |_, cx| cx.notify());
+            chat.ask_due(cx);
+        });
+    }
+
+    pub fn sign_in(&mut self, source: &str, cx: &mut Context<Self>) {
+        if self.signing.is_some() {
+            return eprintln!("desk: sign in {source}: one sign in already runs");
+        }
+        let tofu = tofu();
+        eprintln!(
+            "desk: sign in spawns {} login llm {source} in {}",
+            tofu.display(),
+            self.project
+        );
+        let mut command = Command::new(tofu);
+        command
+            .args(["login", "llm", source])
+            .current_dir(&self.project)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+        let child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                return self.fail(
+                    format!("tofu login llm {source} did not start: {error}"),
+                    cx,
+                );
+            }
+        };
+        eprintln!("desk: sign in {source} pid {}", child.id());
+        self.signing = Some(SigningIn(child));
+        self._signed = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(SIGN_IN_POLL).await;
+                match this.update(cx, |chat, cx| chat.signed(cx)) {
+                    Ok(false) => {}
+                    Ok(true) | Err(_) => return,
+                }
+            }
+        }));
+    }
+
+    fn signed(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(SigningIn(child)) = &mut self.signing else {
+            return true;
+        };
+        let exited = match child.try_wait() {
+            Ok(None) => return false,
+            Ok(Some(status)) => status.to_string(),
+            Err(error) => error.to_string(),
+        };
+        eprintln!("desk: sign in pid {} ended: {exited}", child.id());
+        self.signing = None;
+        self.accounts.again();
+        self.reread_usage(cx);
+        true
+    }
+
     pub fn want_library(&mut self, cx: &mut Context<Self>) {
         self.store.update(cx, |store, _| {
             store.agents.want();
@@ -783,6 +906,9 @@ impl Chat {
         };
         self.ask::<request::QueryContext>(&open, |store| &mut store.context, context_said, cx);
         self.ask::<request::SessionInfo>(&open, |store| &mut store.info, info_said, cx);
+        if open.session.is_some() {
+            self.ask::<request::SessionTrace>(&open, |store| &mut store.trace, trace_said, cx);
+        }
         let lineage: Vec<String> = self.store.read(cx).lineage.keys().cloned().collect();
         for session in lineage {
             let params = SessionParams {
@@ -795,6 +921,7 @@ impl Chat {
                 cx,
             );
         }
+        self.ask_accounts(cx);
         self.ask::<request::QueryUsage>(
             &NoParams {},
             |store| &mut store.usage,
@@ -1008,6 +1135,47 @@ pub fn windows_said(providers: &[CredentialReport]) -> String {
                 .map(|window| format!("{} {:.0}%", window.id, window.used_fraction * 100.0))
                 .collect();
             format!("{} [{}]", provider.provider, windows.join(", "))
+        })
+        .collect();
+    said.join("; ")
+}
+
+fn trace_said(trace: &SessionTrace) -> String {
+    let agents: Vec<String> = trace
+        .agents
+        .iter()
+        .map(|run| {
+            format!(
+                "{} {}..{}",
+                run.agent,
+                run.started_at,
+                run.ended_at.as_deref().unwrap_or("running")
+            )
+        })
+        .collect();
+    format!("{} agents [{}]", agents.len(), agents.join(", "))
+}
+
+fn accounts_said(accounts: &Accounts) -> String {
+    let said: Vec<String> = accounts
+        .subscriptions
+        .iter()
+        .flat_map(|source| {
+            source.accounts.iter().map(|account| {
+                let windows: Vec<String> = account
+                    .windows
+                    .iter()
+                    .map(|window| format!("{} {:.0}%", window.id, window.used * 100.0))
+                    .collect();
+                format!(
+                    "{} #{} {} {} [{}]",
+                    source.source,
+                    account.id,
+                    account.account,
+                    String::from(account.state.clone()),
+                    windows.join(", ")
+                )
+            })
         })
         .collect();
     said.join("; ")

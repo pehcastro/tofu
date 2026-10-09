@@ -15,10 +15,14 @@ pub enum Icon {
     Branch,
     Arrow,
     Expand,
+    Reset,
+    Warning,
+    Notice,
+    Unreported,
 }
 
 impl Icon {
-    const ALL: [Icon; 11] = [
+    const ALL: [Icon; 15] = [
         Icon::Sidebar,
         Icon::Plus,
         Icon::Search,
@@ -30,6 +34,10 @@ impl Icon {
         Icon::Branch,
         Icon::Arrow,
         Icon::Expand,
+        Icon::Reset,
+        Icon::Warning,
+        Icon::Notice,
+        Icon::Unreported,
     ];
 
     pub fn path(self) -> &'static str {
@@ -45,6 +53,10 @@ impl Icon {
             Icon::Branch => "icons/branch.svg",
             Icon::Arrow => "icons/arrow.svg",
             Icon::Expand => "icons/expand.svg",
+            Icon::Reset => "icons/reset.svg",
+            Icon::Warning => "icons/warning.svg",
+            Icon::Notice => "icons/notice.svg",
+            Icon::Unreported => "icons/unreported.svg",
         }
     }
 
@@ -61,6 +73,10 @@ impl Icon {
             Icon::Branch => include_str!("../assets/icons/branch.svg"),
             Icon::Arrow => include_str!("../assets/icons/arrow-right.svg"),
             Icon::Expand => include_str!("../assets/icons/full-screen-maximize.svg"),
+            Icon::Reset => include_str!("../assets/icons/arrow-clockwise.svg"),
+            Icon::Warning => include_str!("../assets/icons/alert-triangle.svg"),
+            Icon::Notice => include_str!("../assets/icons/alert-circle.svg"),
+            Icon::Unreported => include_str!("../assets/icons/eye-off.svg"),
         }
     }
 

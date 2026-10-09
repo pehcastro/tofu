@@ -4,7 +4,8 @@ use desk_ui::components::sidebar::{
     Project, SIDEBAR_COLUMN, Session, SessionAt, SessionState, Sidebar, SidebarPick,
 };
 use desk_ui::components::status_bar::{
-    Account, Accounts, Branch, ContextUse, SessionGroup, Status, StatusBar, StatusPick, UsageWindow,
+    Account, Accounts, Branch, ContextUse, Reset, SessionGroup, Standing, Status, StatusBar,
+    StatusPick, UsageWindow,
 };
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, header_tabs};
 use desk_ui::components::title_bar::{
@@ -83,7 +84,7 @@ fn each_state() -> Project {
         "clear-sable-eagle",
         "bold-teal-otter",
         "quiet-amber-heron",
-        "fond-sandy-mink",
+        "35672da8-faa2-4bbd-a7b9-6ec14c3a2e0f",
         "tidy-ochre-wren",
     ];
     let mut sessions = SessionState::ALL
@@ -219,35 +220,71 @@ fn frame(bar: impl IntoElement) -> Div {
 }
 
 pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
-    let window = |label: &str, percent: Option<u8>, reset: Option<&str>| UsageWindow {
+    let window = |label: &str, percent: u8, left: &str, at: &str| UsageWindow {
         label: label.to_owned().into(),
         percent,
-        reset: reset.map(|reset| reset.to_owned().into()),
+        reset: Some(Reset {
+            left: left.to_owned().into(),
+            at: at.to_owned().into(),
+        }),
     };
-    let claude = Account {
-        name: "claude-sub".into(),
-        plan: Some("max".into()),
-        trouble: None,
-        windows: vec![
-            window("5h", Some(34), Some("resets in 2h 14m")),
-            window("7d", Some(72), Some("resets Thu 09:00")),
+    let account =
+        |email: Option<&str>, source: &str, plan: Option<&str>, standing, windows| Account {
+            provider: match source {
+                "codex-sub" => "Codex Sub".into(),
+                _ => "Claude Sub".into(),
+            },
+            email: email.map(|email| email.to_owned().into()),
+            source: source.to_owned().into(),
+            plan: plan.map(|plan| plan.to_owned().into()),
+            standing,
+            windows,
+        };
+    let claude = account(
+        Some("pehcastro@gmail.com"),
+        "claude-sub",
+        Some("max"),
+        Standing::Serving,
+        vec![
+            window("5h", 34, "in 2h 14m", "Resets Thu 9 Oct, 02:00"),
+            window("7d", 72, "in 3d", "Resets Wed 14 Oct, 03:00"),
         ],
-    };
-    let codex = Account {
-        name: "codex-sub".into(),
-        plan: Some("pro".into()),
-        trouble: None,
-        windows: vec![window("7d", Some(3), Some("resets Wed 04:23"))],
-    };
-    let unreported = Account {
-        name: "claude-sub".into(),
-        plan: None,
-        trouble: None,
-        windows: vec![
-            window("5h", Some(31), Some("resets in 8m")),
-            window("7d opus", None, None),
-        ],
-    };
+    );
+    let second = account(
+        Some("trophosai@gmail.com"),
+        "claude-sub",
+        Some("pro"),
+        Standing::Serving,
+        vec![window("5h", 91, "in 14m", "Resets Thu 9 Oct, 00:14")],
+    );
+    let codex = account(
+        None,
+        "codex-sub",
+        Some("pro"),
+        Standing::Serving,
+        vec![window("7d", 3, "in 5d", "Resets Wed 14 Oct, 01:23")],
+    );
+    let reauth = account(
+        Some("trophosai@gmail.com"),
+        "claude-sub",
+        None,
+        Standing::Reauth("refresh failed".into()),
+        Vec::new(),
+    );
+    let limited = account(
+        Some("pehcastro@gmail.com"),
+        "claude-sub",
+        None,
+        Standing::Trouble("rate limited".into()),
+        Vec::new(),
+    );
+    let unreported = account(
+        Some("pehcastro@gmail.com"),
+        "claude-sub",
+        Some("max"),
+        Standing::Serving,
+        Vec::new(),
+    );
     let board = Status {
         branch: Some(Branch {
             name: "main".into(),
@@ -281,17 +318,39 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
         ),
         ("Status bar, one account two windows", board.clone()),
         (
-            "Status bar, two accounts",
+            "Status bar, two providers",
             Status {
-                accounts: Accounts::Read(vec![claude, codex]),
+                accounts: Accounts::Read(vec![claude.clone(), codex.clone()]),
                 ..board.clone()
             },
         ),
         (
-            "Status bar, a window not reported",
+            "Status bar, two accounts one provider, told apart by email",
+            Status {
+                accounts: Accounts::Read(vec![claude.clone(), second]),
+                ..board.clone()
+            },
+        ),
+        (
+            "Status bar, re-auth needed with Sign in, and a rate limited account",
+            Status {
+                accounts: Accounts::Read(vec![codex, limited, reauth]),
+                ..no_session.clone()
+            },
+        ),
+        (
+            "Status bar, quota not reported",
             Status {
                 accounts: Accounts::Read(vec![unreported]),
-                ..no_session
+                ..no_session.clone()
+            },
+        ),
+        (
+            "Status bar, a session tofu has not named yet",
+            Status {
+                session: Some("".into()),
+                accounts: Accounts::Read(vec![claude]),
+                ..board.clone()
             },
         ),
     ];

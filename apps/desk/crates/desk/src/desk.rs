@@ -24,9 +24,11 @@ use crate::title_bar::{Bell, ask_github, github, title_bar};
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
-use desk_core::protocol::{CronJob, QuotaWindow, UsageReport};
+use desk_core::protocol::{
+    AccountStatusState, Accounts as AccountList, CronJob, QuotaWindow, Role,
+};
 #[cfg(feature = "screen-work")]
-use desk_core::query::{Answer, SERVING};
+use desk_core::query::Answer;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
@@ -41,12 +43,12 @@ use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
-#[cfg(feature = "screen-work")]
-use desk_ui::components::sidebar::SessionAt;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
 #[cfg(feature = "screen-work")]
+use desk_ui::components::sidebar::{SessionAt, unnamed};
+#[cfg(feature = "screen-work")]
 use desk_ui::components::status_bar::{
-    Account, Branch, ContextUse, SessionGroup, UsageWindow, cron_trigger,
+    Account, Branch, ContextUse, Reset, SessionGroup, Standing, UsageWindow, cron_trigger,
 };
 use desk_ui::components::status_bar::{Accounts, Status};
 #[cfg(feature = "screen-work")]
@@ -86,7 +88,7 @@ const TILE_BOTTOM: f32 = 8.0;
 const WINDOW_RADIUS: f32 = 8.0;
 const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
-const USAGE_SCREEN: &str = "usage";
+const LIMITS_SCREEN: &str = "limits";
 const WHOLE_SCREENS: [&str; 2] = ["intro", "onboarding"];
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
@@ -275,67 +277,101 @@ fn thousands(tokens: i64) -> String {
 }
 
 #[cfg(feature = "screen-work")]
-fn accounts(usage: &Answer<UsageReport>, quota: &[QuotaWindow], active: Option<&str>) -> Accounts {
-    let Some(read) = &usage.read else {
-        return match &usage.failed {
+fn accounts(answer: &Answer<AccountList>, quota: &[QuotaWindow], active: Option<&str>) -> Accounts {
+    let Some(read) = &answer.read else {
+        return match &answer.failed {
             Some(error) => Accounts::Unread(error.to_string().into()),
             None => Accounts::Reading,
         };
     };
-    let mut providers = if usage.stale {
-        read.value.live(quota)
-    } else {
-        read.value.providers.clone()
-    };
-    providers.sort_by_key(|provider| {
-        (
-            Some(provider.provider.as_str()) != active,
-            provider.state != SERVING,
-        )
-    });
     let now = chrono::Local::now();
-    Accounts::Read(
-        providers
-            .into_iter()
-            .map(|provider| Account {
-                trouble: (provider.state != SERVING).then(|| provider.state.into()),
-                windows: provider
-                    .windows
+    let mut accounts: Vec<Account> = read
+        .value
+        .subscriptions
+        .iter()
+        .filter(|source| source.role == Role::Llm)
+        .flat_map(|source| {
+            source.accounts.iter().map(|account| Account {
+                provider: display_name(&source.source).into(),
+                email: account.email().map(|email| email.to_owned().into()),
+                source: source.source.clone().into(),
+                plan: account.plan.clone().map(Into::into),
+                standing: standing(&account.state),
+                windows: account
+                    .live(&source.source, quota)
                     .iter()
                     .map(|window| UsageWindow {
                         label: window.id.clone().into(),
-                        percent: window.used_reported.then(|| {
-                            (window.used_fraction * 100.0).round().clamp(0.0, 100.0) as u8
-                        }),
+                        percent: (window.used * 100.0).round().clamp(0.0, 100.0) as u8,
                         reset: window
                             .resets_at
                             .as_deref()
-                            .map(|stamp| resets(stamp, now).into()),
+                            .and_then(|stamp| resets(stamp, now)),
                     })
                     .collect(),
-                name: provider.provider.into(),
-                plan: provider.plan.map(Into::into),
             })
-            .collect(),
-    )
+        })
+        .collect();
+    accounts.sort_by_key(|account| {
+        (
+            Some(&*account.source) != active,
+            !matches!(account.standing, Standing::Serving),
+        )
+    });
+    Accounts::Read(accounts)
 }
 
 #[cfg(feature = "screen-work")]
-fn resets(stamp: &str, now: chrono::DateTime<chrono::Local>) -> String {
-    let Ok(at) = chrono::DateTime::parse_from_rfc3339(stamp) else {
-        return stamp.to_owned();
-    };
-    let at = at.with_timezone(&chrono::Local);
-    match (at - now).num_minutes() {
-        ..=0 => "resets now".to_owned(),
-        left @ ..MINUTES_PER_HOUR => format!("resets in {left}m"),
+fn display_name(source: &str) -> String {
+    let words: Vec<String> = source
+        .split('-')
+        .map(|word| {
+            let mut chars = word.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().chain(chars).collect())
+                .unwrap_or_default()
+        })
+        .collect();
+    words.join(" ")
+}
+
+#[cfg(feature = "screen-work")]
+fn standing(state: &AccountStatusState) -> Standing {
+    let word = || String::from(state.clone()).replace('_', " ").into();
+    match state {
+        AccountStatusState::InUse | AccountStatusState::Standby => Standing::Serving,
+        AccountStatusState::RefreshFailed
+        | AccountStatusState::Expired
+        | AccountStatusState::Refused => Standing::Reauth(word()),
+        AccountStatusState::SetAside
+        | AccountStatusState::Spent
+        | AccountStatusState::RateLimited
+        | AccountStatusState::Unread
+        | AccountStatusState::Unchecked
+        | AccountStatusState::Unknown(_) => Standing::Trouble(word()),
+    }
+}
+
+#[cfg(feature = "screen-work")]
+fn resets(stamp: &str, now: chrono::DateTime<chrono::Local>) -> Option<Reset> {
+    let at = chrono::DateTime::parse_from_rfc3339(stamp)
+        .ok()?
+        .with_timezone(&chrono::Local);
+    let left = match (at - now).num_minutes() {
+        ..=0 => "now".to_owned(),
+        left @ ..MINUTES_PER_HOUR => format!("in {left}m"),
         left @ ..MINUTES_PER_DAY => format!(
-            "resets in {}h {}m",
+            "in {}h {}m",
             left / MINUTES_PER_HOUR,
             left % MINUTES_PER_HOUR
         ),
-        _ => format!("resets {}", at.format("%a %H:%M")),
-    }
+        left => format!("in {}d", left / MINUTES_PER_DAY),
+    };
+    Some(Reset {
+        left: left.into(),
+        at: format!("Resets {}", at.format("%a %-d %b, %H:%M")).into(),
+    })
 }
 
 fn commands(screens: &[Screen]) -> Vec<PaletteItem> {
@@ -425,8 +461,8 @@ impl Desk {
         desk
     }
 
-    pub fn open_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.show(USAGE_SCREEN, window, cx);
+    pub fn open_limits(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show(LIMITS_SCREEN, window, cx);
     }
 
     pub fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -851,6 +887,11 @@ impl Desk {
     }
 
     #[cfg(not(feature = "screen-work"))]
+    pub fn sign_in(&mut self, source: &str, _: &mut Context<Self>) {
+        eprintln!("desk: sign in {source}: this build has no work screen to run tofu");
+    }
+
+    #[cfg(not(feature = "screen-work"))]
     fn cron_menu(&self, _: usize, _: &mut Context<Self>) -> Option<AnyView> {
         None
     }
@@ -870,6 +911,13 @@ impl Desk {
                 Body::Work(work) => Some(work),
                 Body::View(_) | Body::Whole(_) => None,
             })
+    }
+
+    pub fn sign_in(&mut self, source: &str, cx: &mut Context<Self>) {
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return eprintln!("desk: sign in {source}: no work screen runs tofu");
+        };
+        chat.update(cx, |chat, cx| chat.sign_in(source, cx));
     }
 
     pub fn open_notice(&mut self, ix: usize, cx: &mut Context<Self>) {
@@ -906,7 +954,11 @@ impl Desk {
     ) {
         eprintln!("desk: project {}", folder.display());
         let chat = work.read(cx).chat().clone();
-        chat.update(cx, |chat, cx| chat.want_usage(cx));
+        chat.update(cx, |chat, cx| {
+            chat.want_accounts(cx);
+            chat.want_usage(cx);
+            chat.want_context(cx);
+        });
         let store = chat.read(cx).store().clone();
         self.projects.active.clear();
         self.projects.renaming = None;
@@ -1160,7 +1212,7 @@ impl Desk {
         let active = open
             .and_then(|(_, session)| session.quota.first())
             .and_then(|window| window.window.split(' ').next());
-        let accounts = accounts(&store.usage, &store.quota, active);
+        let accounts = accounts(chat.accounts(), &store.quota, active);
         let Some((id, session)) = open else {
             return Status {
                 branch,
@@ -1168,23 +1220,35 @@ impl Desk {
                 ..Status::default()
             };
         };
-        let name = if session.name.is_empty() {
-            id
-        } else {
-            &session.name
-        };
+        let name = chat
+            .rows()
+            .iter()
+            .find(|row| row.id == id)
+            .and_then(|row| row.name.clone())
+            .filter(|name| !unnamed(name))
+            .or_else(|| Some(session.name.clone()).filter(|name| !unnamed(name)))
+            .unwrap_or_default();
+        let replayed = store
+            .context
+            .read
+            .as_ref()
+            .filter(|read| read.value.session.as_deref() == Some(id))
+            .and_then(|read| Some((read.value.occupancy.as_ref()?.total, read.value.ceiling?)));
         Status {
             branch,
-            session: Some(name.to_owned().into()),
+            session: Some(name.into()),
             session_group: Some(SessionGroup {
-                context: session.context.map(|(used, budget)| ContextUse {
-                    tokens: format!("{} / {}", thousands(used), thousands(budget)).into(),
-                    share: if budget > 0 {
-                        used as f32 / budget as f32
-                    } else {
-                        0.0
-                    },
-                }),
+                context: session
+                    .context
+                    .or(replayed)
+                    .map(|(used, budget)| ContextUse {
+                        tokens: format!("{} / {}", thousands(used), thousands(budget)).into(),
+                        share: if budget > 0 {
+                            used as f32 / budget as f32
+                        } else {
+                            0.0
+                        },
+                    }),
                 classifier: session.decisions.len(),
                 cron: session
                     .cron
@@ -1234,7 +1298,9 @@ impl Desk {
                     .rows()
                     .iter()
                     .find(|row| row.id == id)
-                    .map_or(id.clone(), |row| row.title().to_owned());
+                    .and_then(|row| row.name.clone())
+                    .filter(|name| !unnamed(name))
+                    .unwrap_or_default();
                 let input = TextInput::new("Session name".into(), window, cx);
                 input.update(cx, |input, cx| {
                     input.replace_text_in_range(None, &name, window, cx)

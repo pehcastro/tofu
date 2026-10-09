@@ -21,7 +21,8 @@ pub fn status_bar(problems: &[ThemeError], status: Status, cx: &mut Context<Desk
         "status-bar",
         status,
         cx.listener(|desk, pick: &StatusPick, window, cx| match pick {
-            StatusPick::AllProviders => desk.open_usage(window, cx),
+            StatusPick::AllProviders => desk.open_limits(window, cx),
+            StatusPick::SignIn(source) => desk.sign_in(source, cx),
             StatusPick::Branch
             | StatusPick::Session
             | StatusPick::Context

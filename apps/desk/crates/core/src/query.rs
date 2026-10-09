@@ -2,7 +2,8 @@ use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::protocol::{
-    ContextBand, ContextOccupancy, CredentialReport, QuotaWindow, UsageReport, WindowReport,
+    AccountStatus, ContextBand, ContextOccupancy, CredentialReport, QuotaWindow, UsageReport,
+    WindowReport, WindowStatus,
 };
 
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -146,6 +147,35 @@ impl UsageReport {
                 provider
             })
             .collect()
+    }
+}
+
+impl AccountStatus {
+    pub fn email(&self) -> Option<&str> {
+        let (local, domain) = self.account.split_once('@')?;
+        (!local.is_empty() && domain.contains('.')).then_some(self.account.as_str())
+    }
+
+    pub fn live(&self, source: &str, quota: &[QuotaWindow]) -> Vec<WindowStatus> {
+        let account = format!("#{}", self.id);
+        let prefix = format!("{source} ");
+        let live: Vec<WindowStatus> = quota
+            .iter()
+            .filter(|window| window.account == account && window.reported)
+            .filter_map(|window| {
+                Some(WindowStatus {
+                    id: window.window.strip_prefix(&prefix)?.to_owned(),
+                    only: Vec::new(),
+                    resets_at: window.resets_at.clone(),
+                    used: window.percent / 100.0,
+                })
+            })
+            .collect();
+        if live.is_empty() {
+            self.windows.clone()
+        } else {
+            live
+        }
     }
 }
 
