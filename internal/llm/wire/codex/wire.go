@@ -25,6 +25,7 @@ type Config struct {
 	InstallationID string
 	SessionID      string
 	ClientVersion  string
+	OnHeaders      func(http.Header)
 }
 
 type Wire struct {
@@ -159,6 +160,9 @@ func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Re
 		return Result{}, transport.Fail("codex.Ask", transport.KindProvider, err, "posting the request")
 	}
 	defer func() { _ = response.Body.Close() }()
+	if w.config.OnHeaders != nil {
+		w.config.OnHeaders(response.Header)
+	}
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))

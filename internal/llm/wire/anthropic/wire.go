@@ -41,6 +41,7 @@ type Config struct {
 
 	ClaudeCodeVersion string
 	AdoptVersion      func(version string) error
+	OnHeaders         func(http.Header)
 }
 
 type Wire struct {
@@ -225,6 +226,9 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta, onThink
 		return Result{}, transport.Fail("anthropic.Ask", transport.KindProvider, err, "posting the request")
 	}
 	defer func() { _ = response.Body.Close() }()
+	if w.config.OnHeaders != nil {
+		w.config.OnHeaders(response.Header)
+	}
 
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return Result{}, &transport.Error{

@@ -73,6 +73,12 @@ func windowsOf(report quota.Report) []windowReport {
 
 func credentialState(result pollResult, now time.Time) string {
 	state := quotaState(result, now)
+	if result.report.Stale {
+		state += ", showing the stale reading from " + result.report.FetchedAt.UTC().Format(time.RFC3339)
+	}
+	if !result.report.RetryAt.IsZero() {
+		state += ", the usage endpoint is asked again at " + result.report.RetryAt.UTC().Format(time.RFC3339)
+	}
 	if result.recordErr == nil {
 		return state
 	}

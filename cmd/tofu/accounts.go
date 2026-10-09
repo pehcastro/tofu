@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"slices"
 	"sync"
 	"time"
@@ -101,11 +102,11 @@ func (a *accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.
 			mine = append(mine, row)
 		}
 	}
-	a.polling.Do(func() { a.poller, a.pollerErr = quota.NewPoller(nil, a.now, a.urls, recordQuotaReading) })
-	if a.pollerErr != nil {
-		return nil, nil, a.pollerErr
+	poller, err := a.quota()
+	if err != nil {
+		return nil, nil, err
 	}
-	results, err := pollRowsOn(ctx, a.store, mine, a.now, a.urls, a.poller)
+	results, err := pollRowsOn(ctx, a.store, mine, a.now, a.urls, poller)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -120,6 +121,11 @@ func (a *accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.
 		})
 	}
 	return candidates, rows, nil
+}
+
+func (a *accounts) quota() (*quota.Poller, error) {
+	a.polling.Do(func() { a.poller, a.pollerErr = quota.NewPoller(nil, a.now, a.urls, recordQuotaReading) })
+	return a.poller, a.pollerErr
 }
 
 func (a *accounts) account(choice quota.Choice, rows map[int64]cred.Row) (turn.Account, error) {
@@ -147,6 +153,12 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		return nil, err
 	}
 	versions, adopt := subFingerprint(a.dir)
+	poller, err := a.quota()
+	if err != nil {
+		return nil, err
+	}
+	heard := quota.Account{Provider: quota.Provider(a.provider), AccountID: row.Credential.Identity.AccountID, Row: row.ID}
+	onHeaders := func(header http.Header) { _ = poller.Heard(heard, header) }
 	if a.provider == cred.CodexSub {
 		wire, err := codex.New(codex.Config{
 			Model:          a.modelID,
@@ -155,6 +167,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 			SessionID:      session,
 			Transport:      turnTransportConfig(),
 			ClientVersion:  versions.Codex,
+			OnHeaders:      onHeaders,
 		})
 		if err != nil {
 			return nil, err
@@ -170,6 +183,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 
 		ClaudeCodeVersion: versions.ClaudeCode,
 		AdoptVersion:      adopt,
+		OnHeaders:         onHeaders,
 	})
 	if err != nil {
 		return nil, err

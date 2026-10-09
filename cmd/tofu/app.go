@@ -539,9 +539,6 @@ func quotaFrames(results []pollResult, err error) []frame.Quota {
 	}
 	var quotas []frame.Quota
 	for _, result := range results {
-		if result.err != nil {
-			continue
-		}
 		for _, window := range result.report.Windows {
 			quotas = append(quotas, frame.Quota{
 				Label:    string(result.report.Provider) + " " + window.ID,

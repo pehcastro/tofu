@@ -59,6 +59,14 @@ func (w Window) State() State {
 	return StateServing
 }
 
+type Source string
+
+const (
+	SourceEndpoint Source = "usage endpoint"
+	SourceHeaders  Source = "reply headers"
+	SourceLog      Source = "readings log"
+)
+
 type Report struct {
 	Provider      Provider
 	Plan          string
@@ -66,6 +74,9 @@ type Report struct {
 	LimitReached  bool
 	CreditOverage bool
 	FetchedAt     time.Time
+	Source        Source
+	Stale         bool
+	RetryAt       time.Time
 }
 
 func (r Report) binding(spends []string) []Window {
