@@ -9,8 +9,9 @@ verbs: serve
 
 Every request `tofu serve --stdio` answers; `tofu docs serve` says how to
 start it, `tofu serve --schema` carries every field. Reads, reloads, the
-`session.*` reads, `mention.resolve`, `shell.run`, `learn.scan`, `setup.check`
-and the logins answer out of order, so none of them holds `turn.stop`.
+`session.*` and `memory.*` reads, `mention.resolve`, `shell.run`,
+`learn.scan`, `setup.check` and the logins answer out of order, so none of
+them holds `turn.stop`.
 
 A read, a reload, a write and `learn.*` answer the verb's `--json` report with
 no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
@@ -81,28 +82,28 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   the library's `skills` and the folders'. `query.ledger.summary` takes
   `since`, a week back by default; answers `points`, each `count`, `week`,
   `would_ask`, `labeled`, `agreed`, `mean_ms`, `cost_usd` and `thresholds`
-- memory: `memory.add` takes `text`, `scope` (`global`, `project`), `kind`;
-  `memory.edit` `scope`, `id`, `text`; `memory.remove` `scope`, `id`. Each answers
-  `{id, scope, kind, text, said, at, by, file}`; the running lead hears it
-- rules: `rules.add` takes `id`, `text`, `reason`, `concern`, `global` and
-  `replace`; `rules.off` takes `id`, `reason` and `global`; `rules.remove` and
-  `rules.restore` take `id` and `global`
-- agents: `agents.add` takes `name`, `description`, `model`, `tools`, `global`;
-  `agents.set` `name`, `model`, `global`; `agents.remove` `name`, `global`
-- each rules and agents write, and `learn.apply`, answers `changes`, each
-  `{change, what, file}` (`added`, `changed`, `removed`), and `undo`
+- memory: `memory.add` takes `text`, `scope` (`user-local`, `project-local`,
+  `project-global`, `user-global`), `kind`; `memory.edit` `scope`, `id`, `text`;
+  `memory.remove` `scope`, `id`; each answers the entry, which the lead hears.
+  `memory.view` takes `scope` or `episodes`, `memory.zoom` `store`, `id`, `n`,
+  `memory.recall` `store`, `regex`; each answers `store`, `lines` `{id, n, text}`
+- `rules.add` takes `id`, `text`, `reason`, `concern`, `global`, `replace`;
+  `rules.off` `id`, `reason`, `global`; `rules.remove`, `rules.restore` `id`,
+  `global`. `agents.add` takes `name`, `description`, `model`, `tools`,
+  `global`; `agents.set` `name`, `model`, `global`; `agents.remove` `name`,
+  `global`. Each, and `learn.apply`, answers `changes` `{change, what, file}`
+  (`added`, `changed`, `removed`) and `undo`
 - `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject` `id`,
   `reason`, each the finding; `learn.apply` takes `id`, `project`
 - `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`);
   `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one
   with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
-  `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role` and `provider`;
-  `settings.set` takes `key`, `value` and `scope`
-- `cron.command` takes the line you would type, such as `/cron delete all`,
-  and answers `note`. `label` takes `row` and `outcome`
-- `status.list` (capability `status`): takes nothing; answers `records`, every
-  `status` record as it stands, each `id`, `state`, `kind`, `progress`, `msg`
+  `login.logout` `role`, `provider`, `number`; both answer `note`.
+  `login.start` takes `role`, `provider`; `settings.set` `key`, `value`, `scope`
+- `cron.command` takes the line you would type (`/cron delete all`), answers
+  `note`. `label` takes `row` and `outcome`
+- `status.list` (`status`) answers `records`: `id`, `state`, `kind`, `progress`, `msg`
 
 ## Change it
 
@@ -116,5 +117,4 @@ A `remember` ask (`tofu/requestApproval`, `scope` is Jev's pick) answers
 
 ## Undo it
 
-Every write answers `undo`, the command that takes it back; `memory.remove`
-takes back a `memory.add`.
+Every write answers `undo`; `memory.remove` takes back a `memory.add`.

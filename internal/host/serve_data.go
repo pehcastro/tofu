@@ -13,6 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/learn"
 	"tofu/internal/memory"
+	"tofu/internal/memtree"
 	roster "tofu/internal/subagent"
 )
 
@@ -113,6 +114,16 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 	case "learn.reject":
 		return handle(raw, func(p LearnParams) (any, error) {
 			return verbAs[learn.Finding](s, "learn", "reject", strconv.Itoa(p.ID), "--reason", p.Reason)
+		})
+	case "memory.view":
+		return handle(raw, func(p MemoryViewParams) (any, error) { return s.memoryRead(p.Scope, nil) })
+	case "memory.zoom":
+		return handle(raw, func(p MemoryZoomParams) (any, error) {
+			return s.memoryRead(p.Store, func(store *memtree.Store) ([]string, error) { return store.Zoom(p.ID, p.N) })
+		})
+	case "memory.recall":
+		return handle(raw, func(p MemoryRecallParams) (any, error) {
+			return s.memoryRead(p.Store, func(store *memtree.Store) ([]string, error) { return store.Recall(p.Regex) })
 		})
 	case "memory.add":
 		return handle(raw, s.memoryAdd)
@@ -246,10 +257,14 @@ func (s *server) docs(p DocsParams) (any, error) {
 }
 
 func (s *server) shelves(scope memory.Scope) (memory.Memory, error) {
-	if scope != memory.Global && scope != memory.Project {
-		return memory.Memory{}, &Refusal{Code: CodeBadParams, Message: "scope is global or project, not " + strconv.Quote(string(scope))}
+	if scope == "" {
+		return memory.Memory{}, &Refusal{Code: CodeBadParams, Message: "which scope? " + strings.Join(scopeNames(), ", ")}
 	}
 	return memory.Open(s.Dir)
+}
+
+func scopeNames() []string {
+	return []string{string(memory.UserLocal), string(memory.ProjectLocal), string(memory.Project), string(memory.Global)}
 }
 
 func (s *server) memoryAdd(p MemoryAddParams) (any, error) {
@@ -260,7 +275,7 @@ func (s *server) memoryAdd(p MemoryAddParams) (any, error) {
 	kind := p.Kind
 	switch {
 	case kind != "":
-	case p.Scope == memory.Global:
+	case p.Scope == memory.Global || p.Scope == memory.UserLocal:
 		kind = memory.KindPerson
 	default:
 		kind = memory.KindProject

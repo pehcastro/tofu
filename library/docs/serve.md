@@ -42,13 +42,15 @@ answers. This page is what serve sends without being asked.
   turn shows in its `origin` alone, one joining a running turn sends a `note`
 - `tool.started`, `tool.completed` and `file.edit` by a sub-agent carry its
   `agent` and `instance`, live and replayed, with their real `turn` and item
-- `agent.ended`: `endedAt`, `durationMs` and the `turn` that spawned it
-- `turn.steered`: the lead read a message sent mid-turn, until then queued
+- `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
+  `turn.steered`: the lead read a message sent mid-turn, until then queued
 - `quota.updated`: on open, after each turn and every five minutes, each
   window's `percent`; `windows: []`, none answered
 - `item.persisted`: every line of `events.jsonl` with its `logSeq`, so history
   after a seq is a read of the log; a tool call's names its `tool.started`
 - `decision`: every gate, with `at` and `call`, the `tool.started` it judged
+- `memory.scoped`: a `remember` kept or answered: `statement`, `offered` (Jev's
+  pick, else the lead's), `picked` (`none` for no), `by` (`person`, `auto`)
 - `tofu/askPerson`, a request, when the lead asks a question with options,
   only to a client whose `initialize` declared `questions`; any other is
   `undelivered` at once. Answer `{"outcome":"submitted","answers":[{"id":
@@ -61,8 +63,7 @@ answers. This page is what serve sends without being asked.
   OSC 7501 records; `status.list` answers them all. `tofu docs status`
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never
   waits; `session.state` answers it
-- `tofu serve --schema`: the JSON Schema of every line out, and in under
-  `$defs.clientMessage`
+- `tofu serve --schema`: the JSON Schema of every line out, in under `$defs.clientMessage`
 
 ## Change it
 
@@ -91,8 +92,7 @@ session alone. Every gate sends a `decision` event either way:
 turn and cron fire. A `wire` is the source that pays: `claude-sub`,
 `codex-sub`, `openrouter` or `meta`. One nobody is signed in on is refused;
 a new `wire` with no `model` takes its default. `turn.send` takes the same
-three, and `images`, png, jpg, gif or webp `{"path": ...}`, kept as
-`[Image #N]`.
+three, and `images` `{"path": ...}`, kept as `[Image #N]`.
 
 A `turn.steer` message waits for the lead's next step. `turn.sendNow` sends
 it now: tofu drops the model request in flight and asks that step again with

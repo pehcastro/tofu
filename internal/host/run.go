@@ -91,7 +91,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
-	person, asking := awaitPerson(emit, h.asks), turn.WithQuestionsBlock(turn.WithShellRegistry(ctx, h.shells), h.questionsBlock)
+	person, asking := awaitPerson(emit, h.asks), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(ctx, keptMemory(emit)), h.shells), h.questionsBlock)
 	if live.Origin.Kind == OriginCron {
 		person = unattended
 	} else {

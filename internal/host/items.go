@@ -170,6 +170,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			id.Item = session.EventIDFor(cmp.Or(event.Agent, s.turn), event.Logged.Call)
 		}
 		return append(out, notify("item.persisted", &Persisted{Identity: id, LogSeq: event.Logged.Seq, LogID: event.ID, Kind: string(event.Logged.Kind)}))
+	case EventMemoryScoped:
+		id.Item = event.ID
+		return append(out, kept("memory.scoped", &MemoryScopedEvent{Identity: id, MemoryScoped: *event.Scoped}))
 	case EventForkStart, EventResumed, EventRequesting:
 		return out
 	}

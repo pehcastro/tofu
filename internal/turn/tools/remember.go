@@ -115,6 +115,18 @@ func WithMemoryPick(ctx context.Context, pick MemoryPick) context.Context {
 	return context.WithValue(ctx, memoryPickKey{}, pick)
 }
 
+type MemoryKept struct {
+	Statement string
+	Offered   memory.Scope
+	Kept      memory.Scope
+}
+
+type memoryKeptKey struct{}
+
+func WithMemoryKept(ctx context.Context, told func(MemoryKept)) context.Context {
+	return context.WithValue(ctx, memoryKeptKey{}, told)
+}
+
 type Remember struct {
 	Store   *session.Store
 	Session string
@@ -219,6 +231,9 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	if entry, err = shelves.Add(entry, ""); err != nil {
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
+	}
+	if told, telling := ctx.Value(memoryKeptKey{}).(func(MemoryKept)); telling && !asks {
+		told(MemoryKept{Statement: entry.Text, Offered: cmp.Or(judged.pick, entry.Scope), Kept: entry.Scope})
 	}
 	r.Inbox.Remembered(entry.Saved())
 	return turn.Result{Content: entry.Saved(), Command: entry.Ref()}, nil

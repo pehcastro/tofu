@@ -144,10 +144,15 @@ func TestRememberKeepsNothingOnANoOrWithNobodyToAsk(t *testing.T) {
 func TestRememberWritesWithoutAskingOnceAutoMemoryIsOn(t *testing.T) {
 	c := rememberChain(t, "")
 	c.tool.Auto = func() bool { return true }
+	var told []tools.MemoryKept
+	c.picking = tools.WithMemoryKept(c.picking, func(kept tools.MemoryKept) { told = append(told, kept) })
 	if _, err := c.remembered(t, "cargo runs with 2 jobs", "never run cargo", "person"); err != nil || len(c.offered) != 0 {
 		t.Fatalf("auto memory asked %d times, err %v", len(c.offered), err)
 	}
 	if shelves := c.kept(t); len(shelves.Global.Entries) != 1 {
 		t.Errorf("auto memory kept %d entries", len(shelves.Global.Entries))
+	}
+	if len(told) != 1 || told[0] != (tools.MemoryKept{Statement: "cargo runs with 2 jobs", Offered: memory.Global, Kept: memory.Global}) {
+		t.Errorf("auto memory told the host %+v, want one keep of user-global offered and kept", told)
 	}
 }
