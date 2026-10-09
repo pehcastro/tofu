@@ -81,7 +81,8 @@ session alone. Every gate sends a `decision` event either way:
   turn), or for `remember` where to keep it. Any other answer, or one to an
   id nothing waits on, gets an error reply. The first answer wins, and
   `approval.resolved` names it and who sent it
-- `allow_always` and `reject_always` stand for that target until tofu exits:
+- `allow_always` and `reject_always` stand for that target in that session,
+  read back after a restart or `--continue`, never in another session:
   `approval.resolved` says `standing`, `session.state` lists them, and each
   call one decides unasked is a `standing` row in `tofu why`
 - a turn a cron job started has nobody to ask: what would ask is refused,
@@ -116,5 +117,4 @@ the rest, and ends with `turn.completed` carrying `status: finished`.
 
 ## Undo it
 
-Close standard input: tofu stops the running turn, writes what it still
-holds, and exits. The session stays on disk; `tofu session list` shows it.
+Close standard input: tofu stops the turn, keeps the session, and exits.

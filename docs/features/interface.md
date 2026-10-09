@@ -2,7 +2,7 @@
 title: The interface
 description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 Run `tofu` in a project to open the app. Four tabs hold the work:
@@ -58,8 +58,19 @@ inside the 16.7 ms of a 60 Hz frame.
   next step while sub-agents run, and after a fork.
 - **Drop a screenshot on the terminal**: a dragged or pasted path to a png,
   jpg, gif or webp file attaches the image. Any other path stays text.
-- **Answer the gate** when `gatePrompt` is `ask`: `1` allows once, `2`
-  refuses, `3` always allows that tool on that file this session.
+- **Answer the gate** when a call waits for you: `1` allows once, `2`
+  denies, `3` always allows it here, `4` never allows it here, and `5`
+  cancels the turn. See [Asking you](/docs/features/asking).
+- **Answer the lead's question**: when the lead asks with options, a form
+  opens above the composer with its recommended option marked. A digit or
+  `Enter` chooses, **other** takes your own words, and in auto the work
+  keeps going while you decide.
+- **See the quota**: the footer shows the fullest subscription window, and
+  `read 12m ago` beside a stale reading. See [Subscription
+  quota](/docs/llms/quota).
+- **Leave it in another tab**: tofu reports working, waiting on you, done or
+  failed to the terminal over OSC 7501, so a terminal that shows it tells
+  you when a turn needs you. See [Program status](/docs/features/status).
 - **See what each sub-agent is doing**: under the turn line, a sub-agent
   waiting on the lead, or with a call open longer than
   `subAgentWatchSeconds` (600), says what it is doing: `waiting for the

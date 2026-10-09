@@ -2,7 +2,7 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
@@ -39,10 +39,15 @@ session trace say `bash: hit the deadline after 3 s`, and the killed row
 stays on the **shells** tab ending `tofu: hit the deadline after 3 s and
 was killed`.
 
-Every command is on the **shells** tab from its first second, with its
-output as it prints, and the chat shows its last line under the working
-line while the turn runs. The tab reads four times a second while any
-shell runs, turn or no turn. `shell wait` and `shell logs` say how long it
+The **shells** tab lists only the shells tofu keeps: a server or watcher
+started with `background: true`, and a command that moved to the
+background after 30 s. A one-shot command, such as a test or a version
+check that ends inside its wait, is never a shell, so the tab and `tofu
+shells` stay a list of what is still yours to watch or stop. While a turn
+runs, the chat shows each running command's last line under the working
+line. The tab reads four times a second while any shell runs, turn or no
+turn, and a kept shell keeps one name for good, so `bash-3` in a
+sub-agent's report is the one the tab shows. `shell wait` and `shell logs` say how long it
 ran and when it last printed, such as `ran 1m 1s, last output 2s ago`.
 
 When a command names its own log file, such as `-Log target/build.log`,
@@ -131,4 +136,8 @@ Shells                                                         ○ none register
 `tofu shells log|stop|restart <name>` act on one process, and every
 subcommand takes `--json`. A finished shell stays on the list for 72 hours.
 A new shell is numbered past every name still listed, so `bash-3` names one
-command, also across `tofu --continue`.
+command, also across `tofu --continue`. With `--json`, each shell says why
+it was kept, `"kept": "background"` or `"moved"`, its folder, the port its
+command names, and its exit code once it ends. Each kept shell is also a
+[program status](/docs/features/status) record, `shells/<name>`, so a
+terminal that reads OSC 7501 shows it working, done or failed.

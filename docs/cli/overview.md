@@ -2,7 +2,7 @@
 title: Reference
 description: Every tofu verb and its usage line, as tofu help and each verb print them.
 order: 1
-updated: 2026-10-06
+updated: 2026-10-09
 ---
 
 `tofu` with no arguments opens the app in the current directory. `tofu <verb>`
@@ -36,10 +36,25 @@ from tofu itself.
 ```
 tofu run --dir <path> [arguments] <task>
 tofu --continue [--json]
-tofu session list|info|trace|reads|resume|rename <name|id> [--json]
+tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|reads|resume|rename|request|find|branch <name|id> [--json]
+tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--json]
 tofu context [<name|id>] [--json]
 tofu shells list|log|stop|restart <name> [--json]
 ```
+
+### Memory
+
+```
+tofu memory [list] [--json]
+tofu memory add [--scope user-local|project-local|project-global|user-global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>"
+tofu memory remove [--scope <scope>] <id>
+tofu memory tree <log.jsonl> [--budget BYTES]
+tofu memory zoom <log.jsonl> <id> <n>
+tofu memory recall <log.jsonl> <regex>
+```
+
+`add` and `remove` each take `[--dir project]`. See
+[Memory](/docs/features/memory).
 
 ### Accounts and models
 
@@ -106,7 +121,8 @@ tofu serve --schema
 `tofu serve --stdio` speaks `tofu.host/1`, JSON-RPC 2.0 one object a line on
 standard input and output, for the desk app or any program that starts tofu.
 `tofu serve --schema` prints the JSON Schema of every line, and `tofu docs serve`
-explains the requests, the events and the approvals.
+explains the requests, the events and the approvals. See [Serving tofu to
+another program](/docs/cli/serve).
 
 `tofu migrate` has no undo; run `--dry-run` first.
 

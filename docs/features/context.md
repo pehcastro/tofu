@@ -1,8 +1,8 @@
 ---
 title: Context
-description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry the working state and point back at every call.
+description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry the conversation and point back at every call.
 order: 5
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -18,7 +18,7 @@ judgment:
 | **Memo of repeated calls** | A read, glob, search or fetch repeated in a turn, with nothing written since, is answered from memory |
 | **Browser pages** | Past 4 whole page snapshots in a conversation, older ones shrink to a 600 byte summary and a handle, keeping 2 whole |
 | **Trim before fork** | When the conversation crosses the target, results the model has already read are shrunk to a handle, pictures first and then oldest first, down to 80% of the target, and the fork comes only if that is not enough |
-| **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task once, the working state the model wrote at the fork, every message you typed, word for word, and a list of what was read, each naming the call that holds it |
+| **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task once, the episode view of the conversation, every message you typed, word for word, and a list of what was read, each naming the call that holds it |
 | **Recall** | `lookup` returns any call the carry names, with its result, from any session of the line; `artifact_fetch` reads any range of any handle |
 | **Pictures** | A picture a tool read counts as 1,600 tokens, only the newest 20 are sent, and a shrink drops pictures, oldest first, before any text |
 
@@ -54,10 +54,14 @@ the result bytes the model read by 88.4%.
 repeat answers with `cached:` and the earlier result. Any write, edit or shell
 call clears the memo, so a cached answer is never stale.
 
-**Forks carry the working state, and point back for the rest.** At a fork
-the model writes, on your own subscription, where the work stands: the goal,
-what was decided, what is done and half done, what comes next and what is
-still open. The carry holds that, and a list of what was read, each line
+**Forks carry the conversation, and point back for the rest.** A fork
+carries the [episode view](/docs/features/memory): the whole conversation
+of the project as summary lines, recent ones whole, that the lead opens
+with `zoom` down to the original message. It is already built, so a fork
+makes no model call. With `episodes` off, the model writes at the fork, on
+your own subscription, where the work stands instead: the goal, what was
+decided, what is done and half done, and what comes next. The carry holds
+that, and a list of what was read, each line
 naming the call that holds it; `lookup` brings back exactly that call and its
 result, from this session or any earlier one of the line, so a file or a
 script is pointed at rather than copied. The task is sent once, and the
@@ -108,7 +112,7 @@ tofu context
 ```
 
 ```text
-Context · clear-sable-eagle · 5 steps                                   ✓ step 5
+Context · brisk-amber-heron · 5 steps                                   ✓ step 5
 
   task         explain this repository to me
   identity     ▓▓░░░░░░░░░░  16%  1920 / 12000
@@ -122,7 +126,7 @@ Context · clear-sable-eagle · 5 steps                                   ✓ st
 ```
 
 ```sh
-tofu session trace clear-sable-eagle --json
+tofu session trace brisk-amber-heron --json
 ```
 
 ```text

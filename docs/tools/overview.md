@@ -2,7 +2,7 @@
 title: Tools overview
 description: What a tool is in tofu, which ones are tofu's own Go code and which wrap a program, and what tofu does to every result.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-09
 ---
 
 A tool is a function the model can call during a turn. The model only asks:
@@ -21,7 +21,7 @@ shell, `typecheck` wraps `tsc`, `test` wraps Vitest, `github_pr_diff` wraps
 | [Shell](/docs/tools/shell) | bash, shell |
 | [Checks](/docs/tools/checks) | typecheck, test |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
-| [Work](/docs/tools/work) | plan, settings, artifact_fetch, quote, skill, tofu verbs |
+| [Work](/docs/tools/work) | plan, settings, artifact_fetch, quote, ask_person, zoom, recall, skill, tofu verbs |
 | [Sub-agents](/docs/tools/sub-agents) | spawn, message, subagents, ask |
 | [Browser](/docs/automation/browser-tools) | browser_tabs, browser_observe, browser_act, browser_read, browser_do, browser_motion |
 

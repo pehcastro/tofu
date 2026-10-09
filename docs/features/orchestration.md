@@ -2,7 +2,7 @@
 title: Sub-agents
 description: You talk to one lead. It plans, splits the work, and checks it. Sub-agents write the code in the background, each in its own paths and with the rules for its language.
 order: 2
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 You talk to one model, the **lead**. The lead does not write the code. It
@@ -99,8 +99,11 @@ next step. When idle, a new message or report starts a turn.
   no reply in 30 seconds, the default stands, and the report says so.
 - **A sub-agent's call the gate asks about**: it goes to the lead, never to
   you, with the call, jev's verdict and its risk. The lead answers with
-  `message` and `answer` allow or deny, and the sub-agent waits up to 5
-  minutes. With no answer the call is refused. The call's arguments are cut
+  `message` and `answer` allow, deny or `allow_here`, which stands for that
+  kind of call from that sub-agent until its run ends, so the lead is asked
+  once rather than at every call. A lead turn that only answers asks ends
+  without a chat message. The sub-agent waits up to 5 minutes, and with no
+  answer the call is refused. The call's arguments are cut
   to 4 KB, and `lookup` with the call id shown returns it whole. A call that
   stays inside the sub-agent's scratch folder runs without asking the lead. A PreToolUse hook's ask goes
   to the lead the same way. A sub-agent's own sub-agent
@@ -124,6 +127,11 @@ A sub-agent that only runs a command, reads or researches is spawned with
 no `owns`. It starts at once, and every `write` or `edit` it tries is
 refused with the reason, so it reports what it found instead of inventing a
 file to hold. A sub-agent it spawns holds no paths either.
+
+Outside its paths, a sub-agent's `bash` only reads: it reads, lists,
+searches, inspects and runs the project's own checks, and a command that
+would write, delete or run other code is refused with the reason. See
+[Ownership](/docs/features/ownership).
 
 Every sub-agent also gets a scratch folder, `.tofu/scratch/<name>-<n>/` in
 the project, for its logs, captures and probes. It writes and deletes there

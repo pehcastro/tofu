@@ -1,8 +1,8 @@
 ---
 title: Work
-description: plan, settings, artifact_fetch, quote, skill and the tofu verbs, tools that organize the work rather than change files.
+description: plan, settings, artifact_fetch, quote, ask_person, zoom, recall, skill and the tofu verbs, tools that organize the work rather than change files.
 order: 6
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 Tools that change no project file. All are tofu's own Go code, except the
@@ -44,6 +44,27 @@ is found. An id it cannot find is an error, never the nearest message.
 
 A paraphrase of what was said is a new claim. A quote is a citation.
 Parameter: `id`.
+
+## ask_person
+
+`ask_person` puts one to four questions to you, each with up to four
+options, the one the lead recommends, and room for your own words. In auto
+the lead keeps working while you decide, and the recommended option stands
+after `askPersonWaitSeconds`. It exists only in a turn you started, never
+in `tofu run`, a cron turn or a sub-agent. See [Asking
+you](/docs/features/asking). Parameter: `questions`.
+
+## zoom and recall
+
+`zoom` opens one line of a memory view into the two lines it sums up, down
+to the original message, word for word. `recall` searches the raw items of
+a store with a regular expression. The store is `episodes` for the
+conversation, or one of the four memory scopes.
+
+A summary line is a pointer, not the thing, so the lead zooms until it has
+the part it needs whole before it acts on it. See
+[Memory](/docs/features/memory). Parameters: `store`, `id`, `n` for `zoom`;
+`regex` and an optional `store` for `recall`.
 
 ## skill
 

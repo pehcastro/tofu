@@ -2,13 +2,13 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
 `subAgentsPerTurn`. You write only the ones you change, in
 `~/.tofu/settings.json` for every project or `.tofu/settings.json` for one.
-The project wins over yours, and yours over the default. 47 settings sit in
+The project wins over yours, and yours over the default. 53 settings sit in
 seven groups: Appearance, Interaction, Context, Files, Shell, Turn and
 Browser.
 
@@ -32,11 +32,16 @@ nothing is written.
 every gate, and only a call it denies is refused. A call it would ask about
 runs and shows in the chat with its verdict, and every decision is a row
 `tofu why` reads, so nothing happens out of sight. The model changing a
-setting always waits for you, so it can never turn its own gate off.
+setting always waits for you, so it can never turn its own gate off. When
+Jev can't answer, the call is refused with the reason rather than run on a
+guess. A question the lead asks you with options doesn't stop the work
+either: its recommended option stands after `askPersonWaitSeconds`. See
+[Asking you](/docs/features/asking).
 
 **Asking is one setting away.** `tofu settings set gatePrompt ask` makes a
-call Jev would ask about wait for you: allow once, deny, or allow here from
-now on.
+call Jev would ask about wait for you: allow once, deny, always here, never
+here, or cancel. Always here and never here stand for that session, also
+after a restart or `tofu --continue`.
 
 ## Changing a setting
 
@@ -59,11 +64,13 @@ Turn
     decisionCap             0                                default
     turnMaySpawn            true                             default
     oneTurnPerProject       true                             default
+    sideChatAccess          read                             default
     subAgentsPerTurn        10                               default
     subAgentDepth           2                                default
     subAgentCache           1h                               default
     subAgentCheckSeconds    1800                             default
     subAgentWatchSeconds    600                              default
+    verifySubAgents         true                             default
     agentSources            tofu,agents,claude               default
 ```
 

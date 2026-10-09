@@ -2,7 +2,7 @@
 title: What a classifier is
 description: A small model that answers typed questions at a decision point, how its answers become allow, ask or deny, and why most points stay in shadow.
 order: 1
-updated: 2026-10-04
+updated: 2026-10-09
 ---
 
 A classifier is a small model that answers a fixed set of typed questions
@@ -45,8 +45,10 @@ So a point runs in one of two modes:
 ## Acting on verdicts
 
 - Make the tool gate act: in `/settings`, **Interaction**, set `gatePrompt`
-  to `ask`. Under `ask` you answer **1** to allow once, **2** to refuse, **3**
-  to allow the same call for the session.
+  to `ask`. Under `ask` you answer **1** to allow once, **2** to deny, **3**
+  always here, **4** never here, or **5** to cancel the turn. Always here
+  and never here stand for that session, also after a restart or
+  `tofu --continue`. See [Asking you](/docs/features/asking).
 - Turn a point off for one run: `--no-gate`, `--sift free`.
 - Correct a verdict: `tofu label --last allow`.
 - Try other thresholds on past verdicts, with no network: `tofu replay`.

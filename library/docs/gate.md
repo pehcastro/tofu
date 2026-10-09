@@ -19,18 +19,24 @@ The `gatePrompt` setting says what a verdict does:
 
 - `auto`, the default: an allow or an ask runs and is recorded, a deny is
   refused. `tofu session trace` marks such an ask `allowed by gatePrompt auto`.
-- `ask`: an ask waits for you. Press 1 to allow it once, 2 to refuse it,
-  or 3 to allow it here for the rest of the session. When jev cannot
-  answer, the call is refused. The trace marks it `allowed by the person`.
+- `ask`: an ask waits for you: 1 allow once, 2 deny, 3 always here, 4
+  never here, 5 cancel, which also stops the turn. When jev cannot answer
+  you are asked; in auto the call is refused. The trace marks it `allowed
+  by the person`. Always here and never here decide each later call on that
+  target unasked, as a `standing` ledger row. They are kept beside the
+  session and read back after a restart or `--continue`, never in another.
 
 A call that changes tofu's settings, hooks or hook trust files waits for
 you in both modes unless jev denies it: through `settings`, `write`,
 `edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
 
 A sub-agent never asks you. Its ask goes to the lead that started it, with
-the call, the verdict and the risk; the lead answers allow or deny within 5
-minutes, or the call is refused. A PreToolUse hook's ask goes to the lead
-too. A call that would wait for you is refused, and the lead is not asked.
+the call, the verdict and the risk; the lead answers allow, deny or
+`allow_here` within 5 minutes, or the call is refused. `allow_here` allows
+every later call of that kind from that sub-agent until its run ends, and a
+lead turn that only answers asks ends with no chat message. A PreToolUse
+hook's ask goes to the lead too. A call that would wait for you is refused,
+and the lead is not asked.
 `tofu session trace` shows the ask, `allowed by the orchestrator` when the
 lead let it run, `relaxed by` and the answer that lowered a verdict, and a
 verdict a GateVerdict hook changed. Every verdict is a ledger row.
@@ -44,10 +50,9 @@ jev is reached through OpenRouter, with a key tofu reads from, in order:
 - an `.env` file in the working directory, as an `OPENROUTER_KEY` line
 
 tofu never prints more of the key than its last four characters. With no
-key the gate is off: no tool call is judged, and the app says so.
-
-An older `~/.tofu/.env` is moved into the credential store on the next
-start. `tofu login search brave` stores the web search key the same way.
+key the gate is off: no tool call is judged, and the app says so. An older
+`~/.tofu/.env` is moved into the credential store on the next start, and
+`tofu login search brave` stores the web search key the same way.
 
 A key a tool prints never reaches the model or the session, and a key in
 a judged call never reaches the ledger. Every stored key, and the value
@@ -79,11 +84,10 @@ Run one task with the gate off, or forced to wait:
     tofu run --dir . --no-gate "fix the failing test"
     tofu run --dir . --gate enforce "fix the failing test"
 
-Judge one shell command without running it, and log the verdict:
+Judge one shell command without running it; it prints the verdict, the
+command and the ledger row:
 
     tofu check "git push --force"
-
-It prints the verdict, the command and the ledger row.
 
 ## Check it
 
@@ -92,10 +96,7 @@ It prints the verdict, the command and the ledger row.
 explains the last verdict: each answer, the threshold it crossed, and
 the mode it ran under. `tofu why --last 5` shows five, `--point tool_gate`
 keeps to one decision point, and `tofu why <id>` explains one row.
-
-    tofu doctor
-
-says where the key came from, and whether the gate is ready.
+`tofu doctor` says where the key came from, and whether the gate is ready.
 
     tofu replay --point tool_gate --set risk_ask_at=1.5 --since 7d
 
@@ -114,7 +115,6 @@ what it should have been onto its row in the ledger:
     tofu label --last allow
     tofu label <id> deny
 
-To take away a key set in the environment or an `.env`, delete the
-`OPENROUTER_KEY` line that holds it. A key in the credential store is
-replaced by `tofu login classifier openrouter` and removed by
-`tofu logout classifier openrouter`.
+To take away a key set in the environment or an `.env`, delete its
+`OPENROUTER_KEY` line; `tofu logout classifier openrouter` removes a stored
+one.

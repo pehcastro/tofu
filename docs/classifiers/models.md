@@ -2,7 +2,7 @@
 title: Models and providers
 description: The classifier models tofu can use, the providers that serve them, how each is paid for, and how a build is pinned.
 order: 3
-updated: 2026-10-05
+updated: 2026-10-09
 ---
 
 The classifier is a role, `classifier`, bound to one model the way the lead
@@ -19,7 +19,10 @@ Unbound, the role runs OpenRouter when that key is set, else TypeSafe. A key
 counts whether it is stored, in the environment or in `.env`. With both keys
 set, the other provider answers when the serving one cannot: a 402, a 429, a
 spent key, an auth failure or a provider outage. A request the provider
-refuses as malformed does not move, and fails closed. The decision's row
+refuses as malformed does not move, and fails closed. When neither provider
+can answer, a tool call Jev would have judged is never run on a guess: under
+`gatePrompt auto` it is refused with the reason, and under `ask` it is put
+to you. The decision's row
 names the provider that answered, and `tofu doctor` and `tofu login
 --status` show the last failover.
 

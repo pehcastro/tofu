@@ -2,7 +2,7 @@
 title: Changelog
 description: What changed for you in each minor version of tofu, from 0.1 to 0.5, grouped by area.
 order: 7
-updated: 2026-10-04
+updated: 2026-10-09
 ---
 
 What changed for you in each minor version, grouped by area. Every change is
@@ -46,8 +46,15 @@ per language.
   `tofu models reload`, `tofu docs` answers how-to questions, and tofu reads
   its own `.tofu` setup, not another harness's.
 - **Memory and learning**: `/remember` or the lead keeps a short rule for
-  every later session, and `tofu learn` reads your sessions for the
+  every later session, in four scopes from you everywhere to the team in
+  one repository; the episode log keeps a project's whole conversation as a
+  tree the lead zooms into; and `tofu learn` reads your sessions for the
   correction you keep repeating and proposes a fix.
+- **Asking and status**: the lead asks you with options and a recommended
+  one without stopping the work, a sub-agent's ask costs the lead one quiet
+  answer, and tofu reports its state to the terminal over OSC 7501.
+- **Frontends**: `tofu serve` carries the boards, side chats, memory,
+  approvals, questions and quota the desk app draws.
 - **Sub-agents under control**: the lead can read, diagnose, stop, kill,
   release and back up any sub-agent, and a sub-agent's row says what it is
   doing.

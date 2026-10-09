@@ -2,7 +2,7 @@
 title: Ownership
 description: Every sub-agent holds the paths it may write, tofu checks every write against them, and sub-agents with different paths run side by side.
 order: 4
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 Every sub-agent that can write holds a list of paths, its `owns`: a file, a
@@ -12,9 +12,13 @@ folder, or a glob such as `internal/turn/*.go`. The lead gives it in the
 ![The file edits tab: each changed file and the sub-agent that changed it](./media/tui-file-edits.png)
 
 - `write` and `edit` outside `owns` fail.
-- A `bash` command is read before it runs. A redirect, `tee`, `cp`, `mv`,
-  `sed -i` or `perl -i` that writes outside `owns` refuses the whole command.
-  The system's temporary folder is always allowed.
+- A `bash` command is read before it runs, step by step. Outside `owns` it
+  runs only when every step reads: reading, listing, searching, inspecting,
+  `git` reads, and the project's own checks such as `go test`, `cargo
+  test` or `npm test`. `rm`, `mv`, a redirect, `sed -i`, `python -c`, `bash
+  -c`, PowerShell's `Set-Content` and anything the check can't read are
+  refused with the reason. The system's temporary folder is always allowed.
+  The same check runs on Git Bash, PowerShell, Linux and macOS.
 - A source file, such as `.go` or `.ts`, changes only through `edit` or
   `write`, never the shell.
 - Commands over the whole tree, such as `go test ./...`, are refused; they
@@ -32,6 +36,11 @@ resumes it and nobody else holds them.
 each other. Because paths can't overlap, spawns in one answer start together:
 3 of 3 ran at once and the turn took 3 s, where the same shape ran 0 of 4 at
 once before.
+
+**The shell is not a way around it.** A list of paths means little if
+`bash` can write anywhere. Across 79 commands that try to change the project
+from outside a sub-agent's paths, on Git Bash for Windows, PowerShell 5.1
+and Linux bash, none changed a file.
 
 **Every change shows in the diff.** A source edit through the shell skips the
 read check, the diagnostics and the **file edits** tab. Routing it through

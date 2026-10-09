@@ -2,7 +2,7 @@
 title: Claude subscription
 description: The claude-sub source, how tofu signs in to your Claude plan, and how its prompt is cached.
 order: 2
-updated: 2026-10-05
+updated: 2026-10-09
 ---
 
 `claude-sub` is the source for Claude models on your Claude plan. tofu signs
@@ -44,4 +44,5 @@ tofu usage [--history]
 ```
 
 `tofu doctor` shows the windows used, such as
-`✓ claude-sub  5h 5% · 7d 10% · 7d:fable 0%`.
+`✓ claude-sub  5h 5% · 7d 10% · 7d:fable 0%`. How each reading is taken and
+shared is on [Subscription quota](/docs/llms/quota).
