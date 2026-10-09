@@ -1335,7 +1335,11 @@ impl ChartsPage {
             AGENT_BARS,
             plotted(
                 cached(&charts.agents, cx).into_any_element(),
-                vec![("tokens by agent".into(), rgb(AMBER))],
+                AGENTS
+                    .iter()
+                    .map(|&(name, _)| SharedString::from(name))
+                    .zip(hues(AGENTS.iter().map(|&(name, _)| name)))
+                    .collect(),
             ),
         ));
         let [pie, donut] = &charts.donuts;

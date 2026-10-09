@@ -1,5 +1,6 @@
 use super::frame;
 
+use crate::desk::resets;
 use crate::modules::chat::Chat;
 use desk_core::model::Store;
 use desk_core::protocol::{
@@ -15,6 +16,7 @@ use desk_ui::components::chip::badge;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::T3;
+use desk_ui::components::status_bar::Reset;
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -248,7 +250,6 @@ impl Limits {
     fn account(
         &mut self,
         block: &Block,
-        read_at: &str,
         theme: &Theme,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -313,7 +314,10 @@ impl Limits {
                 };
                 let meter = self.meter(key, quota, cx);
                 let reset = quota.resets_at.as_deref().map(|stamp| {
-                    let at = clock(stamp, read_at);
+                    let reset = resets(stamp, chrono::Local::now()).unwrap_or_else(|| Reset {
+                        left: stamp.to_owned().into(),
+                        at: stamp.to_owned().into(),
+                    });
                     tooltip(
                         SharedString::from(format!("limits-reset-tip-{tag}-{}", quota.id)),
                         div()
@@ -327,9 +331,9 @@ impl Limits {
                             .text_size(px(12.0))
                             .text_color(ink(theme, T3))
                             .child(icon(Icon::Reset, ICON_SMALL, ink(theme, T3)))
-                            .child(at.clone()),
+                            .child(reset.left),
                         Edge::Frame,
-                        format!("Resets {at}"),
+                        reset.at,
                         theme,
                         window,
                         cx,
@@ -446,7 +450,7 @@ impl Limits {
         } else {
             let cards: Vec<Div> = blocks
                 .iter()
-                .map(|block| self.account(block, &read.at, theme, window, cx))
+                .map(|block| self.account(block, theme, window, cx))
                 .collect();
             panes().children(cards).into_any_element()
         };
@@ -477,18 +481,6 @@ impl Limits {
         )
         .into_any_element()
     }
-}
-
-fn clock(stamp: &str, read_at: &str) -> String {
-    let local = |at: &str| {
-        chrono::DateTime::parse_from_rfc3339(at).map(|at| at.with_timezone(&chrono::Local))
-    };
-    let Ok(at) = local(stamp) else {
-        return stamp.to_owned();
-    };
-    let today = local(read_at).is_ok_and(|read| read.date_naive() == at.date_naive());
-    at.format(if today { "%H:%M" } else { "%m-%d %H:%M" })
-        .to_string()
 }
 
 impl Render for Limits {
