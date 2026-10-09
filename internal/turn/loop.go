@@ -700,7 +700,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					}
 					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments, Call: call.ID}
 					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, thrift: thrifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre)}
-					if gated.refusal = hookRefusal(ctx, config, request, pre); gated.refusal != "" {
+					if gated.refusal = boundaryRefusal(stepTools, call); gated.refusal == "" {
+						gated.refusal = hookRefusal(ctx, config, request, pre)
+					}
+					if gated.refusal != "" {
 						wave = append(wave, gated)
 						continue
 					}
@@ -815,6 +818,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				refuse(&stepRow, pending, stopped)
 				keep(stepRow)
 				return endAt(OutcomeLoopGuard, stopped, messages), nil
+			}
+			if config.TaskOrigin.Source == sourceGateAsk && answeredAsksOnly(stepRow.ToolCalls) {
+				keep(stepRow)
+				answered(decision.Content)
+				return finish(OutcomeStopped), nil
 			}
 			if started := startedSpawnsOnly(stepTools, stepRow.ToolCalls); config.SpawnedFrom == "" && len(started) > 0 {
 				if strings.TrimSpace(decision.Content) == "" {

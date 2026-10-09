@@ -29,6 +29,12 @@ type messageArgs struct {
 }
 
 const (
+	answerAllow     = "allow"
+	answerAllowHere = "allow_here"
+	answerDeny      = "deny"
+)
+
+const (
 	doStop    = "stop"
 	doKill    = "kill"
 	doRelease = "release"
@@ -49,6 +55,8 @@ func (messageTool) Definition() llm.Tool {
 			"so use it rather than spawning a new sub-agent for those paths. either way its answer comes to you later as a report, as spawn's does. " +
 			"to is the sub-agent's name as its report gives it, such as ts-dev-1. " +
 			"answer allow or deny answers a sub-agent's call that waits on you because the gate asked; any text goes to the sub-agent with it. " +
+			"allow_here allows it and every later call of the same kind from that sub-agent until its run ends, so it does not ask you again; a revoke or replace of its paths ends that too. " +
+			"a turn that only answers asks ends after the message calls, with nothing to write. " +
 			"do acts on the sub-agent instead of sending text. stop: a running one ends after the call it is in, keeping its paths and its conversation; one that is not running is released. " +
 			"kill: it ends now, every shell it or its own sub-agents started is killed, and its paths are freed. " +
 			"release: one that is not running frees its paths with no run. " +
@@ -61,7 +69,7 @@ func (messageTool) Definition() llm.Tool {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{"to": text, "text": text, "from": text,
-				"answer": map[string]any{"type": "string", "enum": []string{"allow", "deny"}},
+				"answer": map[string]any{"type": "string", "enum": []string{answerAllow, answerAllowHere, answerDeny}},
 				"do":     map[string]any{"type": "string", "enum": []string{doStop, doKill, doRelease, doBackup, doGrant, doRevoke, doReplace}},
 				"owns":   map[string]any{"type": "array", "items": text}},
 			"required": []string{"to"},
@@ -97,10 +105,21 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		return Result{}, fmt.Errorf("message refused: do is %s, %s, %s, %s, %s, %s or %s, not %q", doStop, doKill, doRelease, doBackup, doGrant, doRevoke, doReplace, args.Do)
 	}
 	if args.Answer != "" {
-		if args.Answer != "allow" && args.Answer != "deny" {
-			return Result{}, fmt.Errorf("message refused: answer is allow or deny, not %q", args.Answer)
+		var held *heldSubAgent
+		var waiting bool
+		stands, answered := "", args.To+"'s call is answered "+args.Answer+", and it goes on."
+		switch args.Answer {
+		case answerAllow, answerDeny:
+			held, waiting = t.Inbox.answer(args.To, args.Answer == answerAllow)
+		case answerAllowHere:
+			held, stands, waiting = t.Inbox.allowHere(args.To)
+			answered = args.To + "'s call is allowed once, and it goes on: a hook's ask or a gate that could not answer never stands."
+			if stands != "" {
+				answered = args.To + "'s call is allowed, and every later call of this kind (" + stands + ") from it runs without asking you until its run ends."
+			}
+		default:
+			return Result{}, fmt.Errorf("message refused: answer is %s, %s or %s, not %q", answerAllow, answerAllowHere, answerDeny, args.Answer)
 		}
-		held, waiting := t.Inbox.answer(args.To, args.Answer == "allow")
 		switch {
 		case held == nil:
 			return Result{}, t.unknown(args.To)
@@ -111,12 +130,22 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		if strings.TrimSpace(args.Text) != "" {
 			held.inbox.post(args.Text)
 		}
-		return Result{Content: args.To + "'s call is answered " + args.Answer + ", and it goes on.", Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
+		return Result{Content: answered, Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
 	}
 	if strings.TrimSpace(args.Text) == "" {
 		return Result{}, errors.New("message: text is required unless do or answer is given")
 	}
 	return t.send(ctx, args.To, args.Text, args.From)
+}
+
+func answeredAsksOnly(calls []ToolCallRow) bool {
+	for _, call := range calls {
+		var args messageArgs
+		if call.Tool != (messageTool{}).Name() || call.Error != "" || json.Unmarshal(call.Args, &args) != nil || args.Answer == "" {
+			return false
+		}
+	}
+	return len(calls) > 0
 }
 
 func (t *SpawnTool) send(ctx context.Context, to, text, from string) (Result, error) {
@@ -201,6 +230,9 @@ func (t *SpawnTool) regrant(ctx context.Context, args messageArgs) (Result, erro
 		return Result{}, fmt.Errorf("message refused: %w", err)
 	}
 	held.boundary.Regrant(after)
+	if args.Do != doGrant {
+		t.Inbox.unstand(held)
+	}
 	held.kept.Lock()
 	held.environment = strings.Replace(held.environment, holdingWords(before), holdingWords(after), 1)
 	held.kept.Unlock()

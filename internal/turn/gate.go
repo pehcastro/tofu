@@ -212,17 +212,25 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 			site.notice(id, id+"'s "+request.Tool+" call keeps to its own scratch folder, so it runs without asking the orchestrator")
 			return PersonNotAskedOwnScratch, nil
 		}
-		because := "the gate's verdict is ask" + standing(decision.Reason)
+		because, place, answers := "the gate's verdict is ask"+standing(decision.Reason), CallPlace(request), ""
 		switch {
 		case decision.HookAsk != "":
-			because = "a PreToolUse hook asks first: " + decision.HookAsk
+			because, place = "a PreToolUse hook asks first: "+decision.HookAsk, ""
 		case decision.Failure != "":
-			because = "the gate could not answer: " + decision.Failure
+			because, place = "the gate could not answer: "+decision.Failure, ""
+		}
+		if t.Inbox.stood(held, place) {
+			site.notice(id, id+"'s "+request.Tool+" call is "+place+", which the orchestrator allowed here for the rest of its run, so it runs without asking again")
+			return PersonAllowedOnce, nil
+		}
+		if place != "" {
+			answers = ", or allow_here to allow every call of this kind (" + place + ") from " + id + " until its run ends"
 		}
 		wait := konst.SubAgentGateAnswerMillis * time.Millisecond
 		shown := cutOnRuneBoundary(string(request.Args), konst.GateAskArgsBytes, "\n...(%s of this call cut here: lookup with call "+request.Call+" returns it whole)...\n")
-		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s of the time you can answer: call message with to %s and answer allow or deny. with no answer the call is refused.",
-			id, request.Tool, shown, because, wait, id)
+		asked := fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s of the time you can answer: call message with to %s and answer allow or deny%s. "+
+			"the message call alone answers it, and the turn ends after it with nothing to write. with no answer the call is refused.",
+			id, request.Tool, shown, because, wait, id, answers)
 		t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
 		defer t.roster.Reached(id, subagent.Working, "")
 		site.notice(id, asked)
@@ -281,6 +289,32 @@ func number(value float64) string {
 }
 
 const SettingsToolName = "settings"
+
+const callPlaceWords = 2
+
+func CallPlace(request GateRequest) string {
+	var args struct{ Path, Command string }
+	if json.Unmarshal(request.Args, &args) != nil {
+		return request.Tool + " " + string(request.Args)
+	}
+	switch {
+	case args.Path != "":
+		return request.Tool + " " + args.Path
+	case args.Command != "":
+		words, named := make([]string, 0, callPlaceWords), 0
+		for _, word := range strings.Fields(args.Command) {
+			flag := strings.HasPrefix(word, "-")
+			if !flag {
+				named++
+			}
+			if flag || named <= callPlaceWords {
+				words = append(words, word)
+			}
+		}
+		return request.Tool + " " + strings.Join(words, " ")
+	}
+	return request.Tool + " " + string(request.Args)
+}
 
 func PersonOnly(project string, request GateRequest) bool {
 	var args struct{ Path, Command string }

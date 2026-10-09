@@ -468,6 +468,31 @@ func (b *Inbox) answer(to string, allowed bool) (*heldSubAgent, bool) {
 	return held, true
 }
 
+func (b *Inbox) stood(held *heldSubAgent, place string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	held.askedPlace = place
+	return place != "" && slices.Contains(held.allowedHere, place)
+}
+
+func (b *Inbox) allowHere(to string) (*heldSubAgent, string, bool) {
+	b.mu.Lock()
+	held, place := b.held[to], ""
+	if held != nil && held.answer != nil && held.askedPlace != "" {
+		place = held.askedPlace
+		held.allowedHere = append(held.allowedHere, place)
+	}
+	b.mu.Unlock()
+	held, waiting := b.answer(to, true)
+	return held, place, waiting
+}
+
+func (b *Inbox) unstand(held *heldSubAgent) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	held.allowedHere = nil
+}
+
 func (b *Inbox) withdraw(held *heldSubAgent, answer chan bool, asked string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -486,7 +511,7 @@ func (b *Inbox) ended(held *heldSubAgent, report string, stopping bool, log *ses
 	if next := held.inbox.takeItems(); len(next) > 0 && !stopping {
 		return next
 	}
-	held.running, held.check = false, nil
+	held.running, held.check, held.allowedHere = false, nil, nil
 	b.running--
 	if report != "" {
 		b.items = append(b.items, inboxItem{text: report, source: sourceReport, posted: time.Now()})

@@ -22,18 +22,38 @@ func (t ownedTool) Definition() llm.Tool {
 	return definition
 }
 
-func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+type bounded interface {
+	refusal(raw json.RawMessage) error
+}
+
+func boundaryRefusal(tools Registry, call llm.ToolCall) string {
+	if checked, checks := tools.byName[call.Name].(bounded); checks {
+		if err := checked.refusal(call.Arguments); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
+}
+
+func (t ownedTool) refusal(raw json.RawMessage) error {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
+		return fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
 	if len(t.boundary.Owns()) == 0 && !t.boundary.Scratched(args.Path) {
-		return Result{}, ReadOnlyError{Tool: t.Name()}
+		return ReadOnlyError{Tool: t.Name()}
 	}
 	if err := t.boundary.Write(args.Path); err != nil {
-		return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
+		return fmt.Errorf("%s: %w", t.Name(), err)
+	}
+	return nil
+}
+
+func (t ownedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	if err := t.refusal(raw); err != nil {
+		return Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }
@@ -78,15 +98,22 @@ func (t ownedShell) grammars() []subagent.Grammar {
 	return []subagent.Grammar{subagent.POSIX, subagent.PowerShell}
 }
 
-func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+func (t ownedShell) refusal(raw json.RawMessage) error {
 	var args bashArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
-		return Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
+		return fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
 	}
 	for _, grammar := range t.grammars() {
 		if err := t.boundary.Bash(args.Command, grammar); err != nil {
-			return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
+			return fmt.Errorf("%s: %w", t.Name(), err)
 		}
+	}
+	return nil
+}
+
+func (t ownedShell) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	if err := t.refusal(raw); err != nil {
+		return Result{}, err
 	}
 	return t.tool.Run(ctx, raw)
 }

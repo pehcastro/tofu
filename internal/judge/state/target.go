@@ -1,6 +1,7 @@
 package state
 
 import (
+	"os"
 	"path"
 	"strings"
 )
@@ -21,6 +22,7 @@ type TargetLocation string
 const (
 	LocationSessionScratch TargetLocation = "session_scratch"
 	LocationInsideProject  TargetLocation = "inside_project"
+	LocationTemp           TargetLocation = "temp_directory"
 	LocationOutsideProject TargetLocation = "outside_project"
 	LocationUnknown        TargetLocation = "unknown_location"
 )
@@ -139,6 +141,8 @@ func locationOf(full string, where roots) TargetLocation {
 		return LocationSessionScratch
 	case under(full, where.Project):
 		return LocationInsideProject
+	case under(full, "/tmp"), under(full, os.TempDir()):
+		return LocationTemp
 	case where.Project == "":
 		return LocationUnknown
 	}

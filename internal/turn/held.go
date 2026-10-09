@@ -34,6 +34,8 @@ type heldSubAgent struct {
 	check       *checkIn
 	cancel      context.CancelFunc
 	answer      chan bool
+	askedPlace  string
+	allowedHere []string
 	forking     sync.Mutex
 	forked      []Row
 	calls       sync.Mutex
@@ -112,6 +114,13 @@ type watchedTool struct {
 func (w watchedTool) Name() string { return w.tool.Name() }
 
 func (w watchedTool) Definition() llm.Tool { return w.tool.Definition() }
+
+func (w watchedTool) refusal(raw json.RawMessage) error {
+	if checked, checks := w.tool.(bounded); checks {
+		return checked.refusal(raw)
+	}
+	return nil
+}
 
 func (w watchedTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	call := w.held.opened(w.tool.Name(), raw)
