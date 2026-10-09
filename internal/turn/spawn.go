@@ -363,6 +363,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 			args.Owns = spawning.Owns
 		}
 	}
+	if err := sideHeldOwns(t.Name(), t.base.Sessions, t.base.Session, args.Owns); err != nil {
+		return Result{}, err
+	}
 	system, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
 	if err != nil {
 		return Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
@@ -514,7 +517,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	subAgent := t.base
 	subAgent.Memory = ""
-	subAgent.Tools = NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...)
+	subAgent.Tools = claimedTools(NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...), t.base.Sessions, t.base.Session)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	held.kept.Lock()

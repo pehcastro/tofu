@@ -210,6 +210,9 @@ func (t *SpawnTool) regrant(ctx context.Context, args messageArgs) (Result, erro
 	switch args.Do {
 	case doGrant:
 		did = "granted you "
+		if err := sideHeldOwns("message", t.base.Sessions, t.base.Session, args.Owns); err != nil {
+			return Result{}, err
+		}
 	case doRevoke:
 		did = "took back "
 		for _, glob := range args.Owns {
