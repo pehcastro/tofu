@@ -1,0 +1,6 @@
+Base query: highlights.scm shipped by tree-sitter-html 0.23.2,
+https://github.com/tree-sitter/tree-sitter-html, MIT licence, loaded from the crate unchanged.
+
+highlights.scm and injections.scm in this folder are copied unchanged from Zed's HTML extension,
+extensions/html/languages/html/ in https://github.com/zed-industries/zed, Apache License 2.0,
+Copyright 2022 - 2025 Zed Industries, Inc. The licence text is LICENSE-APACHE in this folder.

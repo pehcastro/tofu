@@ -1,0 +1,3 @@
+Base query: highlights.scm shipped by tree-sitter-yaml 0.7.2,
+https://github.com/tree-sitter-grammars/tree-sitter-yaml, MIT licence, loaded from the crate unchanged.
+highlights.scm here extends it and was written for desk; nothing is copied from Zed's GPL-3.0 grammars crate.

@@ -63,6 +63,37 @@ tokens!(ColorToken {
     SyntaxConstant => "syntax.constant",
     SyntaxOperator => "syntax.operator",
     SyntaxPunctuation => "syntax.punctuation",
+    SyntaxAttribute => "syntax.attribute",
+    SyntaxBoolean => "syntax.boolean",
+    SyntaxCommentDoc => "syntax.comment_doc",
+    SyntaxConstructor => "syntax.constructor",
+    SyntaxEmbedded => "syntax.embedded",
+    SyntaxEmphasis => "syntax.emphasis",
+    SyntaxEmphasisStrong => "syntax.emphasis_strong",
+    SyntaxEnum => "syntax.enum",
+    SyntaxLabel => "syntax.label",
+    SyntaxLinkText => "syntax.link_text",
+    SyntaxLinkUri => "syntax.link_uri",
+    SyntaxNamespace => "syntax.namespace",
+    SyntaxPreproc => "syntax.preproc",
+    SyntaxProperty => "syntax.property",
+    SyntaxPunctuationBracket => "syntax.punctuation_bracket",
+    SyntaxPunctuationDelimiter => "syntax.punctuation_delimiter",
+    SyntaxPunctuationListMarker => "syntax.punctuation_list_marker",
+    SyntaxPunctuationMarkup => "syntax.punctuation_markup",
+    SyntaxPunctuationSpecial => "syntax.punctuation_special",
+    SyntaxTag => "syntax.tag",
+    SyntaxSelector => "syntax.selector",
+    SyntaxSelectorPseudo => "syntax.selector_pseudo",
+    SyntaxStringEscape => "syntax.string_escape",
+    SyntaxStringRegex => "syntax.string_regex",
+    SyntaxStringSpecial => "syntax.string_special",
+    SyntaxStringSpecialSymbol => "syntax.string_special_symbol",
+    SyntaxTextLiteral => "syntax.text_literal",
+    SyntaxTitle => "syntax.title",
+    SyntaxVariableParameter => "syntax.variable_parameter",
+    SyntaxVariableSpecial => "syntax.variable_special",
+    SyntaxVariant => "syntax.variant",
     AnsiBlack => "terminal.ansi.normal.black",
     AnsiRed => "terminal.ansi.normal.red",
     AnsiGreen => "terminal.ansi.normal.green",
@@ -151,6 +182,37 @@ tokens!(ChoiceToken {
     ShapeDensity => "shape.density",
     TabsActive => "tabs.active",
 });
+
+impl ColorToken {
+    fn fallback(self) -> Option<ColorToken> {
+        use ColorToken::*;
+        let fallback = match self {
+            SyntaxAttribute | SyntaxConstructor | SyntaxEnum | SyntaxLinkUri | SyntaxVariant => {
+                SyntaxType
+            }
+            SyntaxBoolean | SyntaxEmphasisStrong | SyntaxVariableSpecial => SyntaxConstant,
+            SyntaxCommentDoc => SyntaxComment,
+            SyntaxEmbedded | SyntaxNamespace | SyntaxProperty | SyntaxVariableParameter => {
+                SyntaxVariable
+            }
+            SyntaxEmphasis | SyntaxLabel | SyntaxLinkText | SyntaxTag => SyntaxFunction,
+            SyntaxPreproc | SyntaxTitle => SyntaxKeyword,
+            SyntaxPunctuationBracket
+            | SyntaxPunctuationDelimiter
+            | SyntaxPunctuationListMarker
+            | SyntaxPunctuationMarkup
+            | SyntaxPunctuationSpecial => SyntaxPunctuation,
+            SyntaxSelector => SyntaxTag,
+            SyntaxSelectorPseudo => SyntaxSelector,
+            SyntaxStringEscape => SyntaxOperator,
+            SyntaxStringRegex | SyntaxStringSpecial => SyntaxNumber,
+            SyntaxStringSpecialSymbol => SyntaxStringSpecial,
+            SyntaxTextLiteral => SyntaxString,
+            _ => return None,
+        };
+        Some(fallback)
+    }
+}
 
 impl ChoiceToken {
     fn options(self) -> &'static [&'static str] {
@@ -408,13 +470,22 @@ pub fn build_mode(
         .map(|token| chain.resolve(token.path(), |value| choice(*token, value), problems))
         .collect::<Result<_, _>>()?;
     choices[ChoiceToken::Mode as usize] = mode.label();
+    let mut colors: Vec<Rgba> = Vec::with_capacity(ColorToken::ALL.len());
+    for token in ColorToken::ALL {
+        let inherited = token
+            .fallback()
+            .filter(|_| !chain.sets(token.path()))
+            .and_then(|fallback| colors.get(fallback as usize).copied());
+        let resolved = match inherited {
+            Some(inherited) => inherited,
+            None => chain.resolve(token.path(), color, problems)?,
+        };
+        colors.push(resolved);
+    }
     Ok(Theme {
         mode,
         choices,
-        colors: ColorToken::ALL
-            .iter()
-            .map(|token| chain.resolve(token.path(), color, problems))
-            .collect::<Result<_, _>>()?,
+        colors,
         borders: BorderToken::ALL
             .iter()
             .map(|token| chain.resolve(token.path(), border, problems))
@@ -443,6 +514,12 @@ impl<'a> Chain<'a> {
     fn get(&self, layer: &'a Layer, path: &str) -> Option<&'a Value> {
         let moded = format!("{}.{path}", self.mode.label());
         layer.tokens.get(&moded).or_else(|| layer.tokens.get(path))
+    }
+
+    fn sets(&self, path: &str) -> bool {
+        self.layers
+            .iter()
+            .any(|layer| self.get(layer, path).is_some())
     }
 
     fn resolve<T>(

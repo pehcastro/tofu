@@ -1,0 +1,3 @@
+Base queries: highlights.scm and injections.scm of the block grammar shipped by tree-sitter-md 0.5.3,
+https://github.com/tree-sitter-grammars/tree-sitter-markdown, MIT licence, loaded from the crate unchanged.
+highlights.scm here extends it and was written for desk; nothing is copied from Zed's GPL-3.0 grammars crate.

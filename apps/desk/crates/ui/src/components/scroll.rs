@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use desk_motion::tokens::{EASE_OUT, HOVER_MS, PANEL_OUT_MS};
 use gpui::{
-    AnyElement, App, Bounds, Context, DispatchPhase, ElementId, Entity, ListState, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Result, ScrollHandle, Task, Window,
-    canvas, div, fill, millis, point, prelude::*, px, size,
+    Along, AnyElement, App, Axis, Bounds, Context, DispatchPhase, ElementId, Entity, ListState,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Result, ScrollHandle, Task,
+    Window, canvas, div, fill, millis, point, prelude::*, px, size,
 };
 
 use crate::components::paint::tint;
@@ -55,37 +55,47 @@ impl Fade {
 }
 
 #[derive(Clone)]
-enum Track {
+enum Source {
     Handle(ScrollHandle),
     List(ListState),
 }
 
+#[derive(Clone)]
+struct Track {
+    source: Source,
+    axis: Axis,
+}
+
 impl Track {
     fn bounds(&self) -> Bounds<Pixels> {
-        match self {
-            Track::Handle(handle) => handle.bounds(),
-            Track::List(list) => list.viewport_bounds(),
+        match &self.source {
+            Source::Handle(handle) => handle.bounds(),
+            Source::List(list) => list.viewport_bounds(),
         }
     }
 
     fn offset(&self) -> Pixels {
-        match self {
-            Track::Handle(handle) => handle.offset().y,
-            Track::List(list) => list.scroll_px_offset_for_scrollbar().y,
+        match &self.source {
+            Source::Handle(handle) => handle.offset().along(self.axis),
+            Source::List(list) => list.scroll_px_offset_for_scrollbar().along(self.axis),
         }
     }
 
     fn max(&self) -> Pixels {
-        match self {
-            Track::Handle(handle) => handle.max_offset().y,
-            Track::List(list) => list.max_offset_for_scrollbar().y,
+        match &self.source {
+            Source::Handle(handle) => handle.max_offset().along(self.axis),
+            Source::List(list) => list.max_offset_for_scrollbar().along(self.axis),
         }
     }
 
     fn set(&self, offset: Pixels) {
-        match self {
-            Track::Handle(handle) => handle.set_offset(point(handle.offset().x, offset)),
-            Track::List(list) => list.set_offset_from_scrollbar(point(px(0.0), offset)),
+        match &self.source {
+            Source::Handle(handle) => {
+                handle.set_offset(handle.offset().apply_along(self.axis, |_| offset))
+            }
+            Source::List(list) => list.set_offset_from_scrollbar(
+                point(px(0.0), px(0.0)).apply_along(self.axis, |_| offset),
+            ),
         }
     }
 }
@@ -160,37 +170,59 @@ impl ParentElement for ScrollArea {
     }
 }
 
-fn thumb(view: Bounds<Pixels>, offset: Pixels, max: Pixels) -> Bounds<Pixels> {
-    let height = view.size.height;
-    let track = height - px(2.0 * THUMB_INSET);
-    let length = (track * (height / (height + max)))
+fn lay(axis: Axis, along: Pixels, across: Pixels, length: Pixels, thick: Pixels) -> Bounds<Pixels> {
+    match axis {
+        Axis::Vertical => Bounds::new(point(across, along), size(thick, length)),
+        Axis::Horizontal => Bounds::new(point(along, across), size(length, thick)),
+    }
+}
+
+fn far_edge(view: Bounds<Pixels>, axis: Axis) -> Pixels {
+    view.origin.along(axis.invert()) + view.size.along(axis.invert())
+}
+
+fn track_length(view: Bounds<Pixels>, axis: Axis) -> Pixels {
+    let corner = match axis {
+        Axis::Vertical => px(0.0),
+        Axis::Horizontal => px(THUMB_HOT + THUMB_INSET),
+    };
+    view.size.along(axis) - px(2.0 * THUMB_INSET) - corner
+}
+
+fn thumb(view: Bounds<Pixels>, axis: Axis, offset: Pixels, max: Pixels) -> Bounds<Pixels> {
+    let extent = view.size.along(axis);
+    let track = track_length(view, axis);
+    let length = (track * (extent / (extent + max)))
         .max(px(THUMB_MIN))
         .min(track);
-    let travel = track - length;
     let progress = (-offset / max).clamp(0.0, 1.0);
-    Bounds::new(
-        point(
-            view.right() - px(THUMB_INSET + THUMB_WIDTH),
-            view.top() + px(THUMB_INSET) + travel * progress,
-        ),
-        size(px(THUMB_WIDTH), length),
+    lay(
+        axis,
+        view.origin.along(axis) + px(THUMB_INSET) + (track - length) * progress,
+        far_edge(view, axis) - px(THUMB_INSET + THUMB_WIDTH),
+        length,
+        px(THUMB_WIDTH),
     )
 }
 
-fn rail(view: Bounds<Pixels>) -> Bounds<Pixels> {
-    Bounds::new(
-        point(view.right() - px(THUMB_HOT + THUMB_INSET), view.top()),
-        size(px(THUMB_HOT + THUMB_INSET), view.size.height),
+fn rail(view: Bounds<Pixels>, axis: Axis) -> Bounds<Pixels> {
+    let thick = px(THUMB_HOT + THUMB_INSET);
+    lay(
+        axis,
+        view.origin.along(axis),
+        far_edge(view, axis) - thick,
+        view.size.along(axis),
+        thick,
     )
 }
 
-fn offset_at(view: Bounds<Pixels>, thumb_top: Pixels, max: Pixels) -> Pixels {
-    let bar = thumb(view, px(0.0), max);
-    let travel = view.size.height - px(2.0 * THUMB_INSET) - bar.size.height;
+fn offset_at(view: Bounds<Pixels>, axis: Axis, thumb_start: Pixels, max: Pixels) -> Pixels {
+    let bar = thumb(view, axis, px(0.0), max);
+    let travel = track_length(view, axis) - bar.size.along(axis);
     if travel <= px(0.0) {
         return px(0.0);
     }
-    let progress = ((thumb_top - bar.top()) / travel).clamp(0.0, 1.0);
+    let progress = ((thumb_start - bar.origin.along(axis)) / travel).clamp(0.0, 1.0);
     -max * progress
 }
 
@@ -207,9 +239,10 @@ fn listen(window: &mut Window, state: &Entity<Viewport>, track: &Track) {
     let down_track = track.clone();
     window.on_mouse_event(move |event: &MouseDownEvent, phase, _, cx| {
         let view = down_track.bounds();
+        let axis = down_track.axis;
         if phase != DispatchPhase::Bubble
             || event.button != MouseButton::Left
-            || !rail(view).contains(&event.position)
+            || !rail(view, axis).contains(&event.position)
         {
             return;
         }
@@ -217,14 +250,16 @@ fn listen(window: &mut Window, state: &Entity<Viewport>, track: &Track) {
         down_state.update(cx, |viewport, cx| {
             let max = viewport.track.max();
             let offset = viewport.track.offset();
-            let bar = thumb(view, offset, max);
-            let y = event.position.y;
-            if y < bar.top() {
-                settle(viewport, offset + view.size.height, cx);
-            } else if y > bar.bottom() {
-                settle(viewport, offset - view.size.height, cx);
+            let bar = thumb(view, axis, offset, max);
+            let at = event.position.along(axis);
+            let start = bar.origin.along(axis);
+            let page = view.size.along(axis);
+            if at < start {
+                settle(viewport, offset + page, cx);
+            } else if at > start + bar.size.along(axis) {
+                settle(viewport, offset - page, cx);
             } else {
-                viewport.grab = Some(y - bar.top());
+                viewport.grab = Some(at - start);
                 viewport.wake(cx);
             }
         });
@@ -236,13 +271,15 @@ fn listen(window: &mut Window, state: &Entity<Viewport>, track: &Track) {
             return;
         }
         let view = move_track.bounds();
+        let axis = move_track.axis;
         let grab = move_state.read(cx).grab;
         match grab {
             Some(grab) if event.dragging() => {
                 cx.stop_propagation();
                 move_state.update(cx, |viewport, cx| {
                     let max = viewport.track.max();
-                    settle(viewport, offset_at(view, event.position.y - grab, max), cx);
+                    let start = event.position.along(axis) - grab;
+                    settle(viewport, offset_at(view, axis, start, max), cx);
                 });
             }
             Some(_) => move_state.update(cx, |viewport, cx| {
@@ -250,7 +287,7 @@ fn listen(window: &mut Window, state: &Entity<Viewport>, track: &Track) {
                 viewport.wake(cx);
             }),
             None => {
-                let over = rail(view).contains(&event.position);
+                let over = rail(view, axis).contains(&event.position);
                 move_state.update(cx, |viewport, cx| {
                     if viewport.thumb_hovered != over {
                         viewport.thumb_hovered = over;
@@ -311,15 +348,17 @@ fn bar(state: Entity<Viewport>, window: &mut Window, cx: &App) -> impl IntoEleme
             if opacity <= 0.0 {
                 return;
             }
-            let bounds = thumb(track.bounds(), track.offset(), max);
-            let grow = if hot { THUMB_HOT - THUMB_WIDTH } else { 0.0 };
+            let axis = track.axis;
+            let resting = thumb(track.bounds(), axis, track.offset(), max);
+            let grow = px(if hot { THUMB_HOT - THUMB_WIDTH } else { 0.0 });
+            let across = axis.invert();
             let bounds = Bounds::new(
-                point(bounds.left() - px(grow), bounds.top()),
-                size(bounds.size.width + px(grow), bounds.size.height),
+                resting.origin.apply_along(across, |at| at - grow),
+                resting.size.apply_along(across, |thick| thick + grow),
             );
             window.paint_quad(
                 fill(bounds, tint(color, color.alpha * opacity))
-                    .corner_radii(bounds.size.width / 2.0),
+                    .corner_radii(bounds.size.along(across) / 2.0),
             );
         },
     )
@@ -338,19 +377,33 @@ pub struct Scrollbar {
 pub fn scrollbar(id: impl Into<ElementId>, handle: &ScrollHandle) -> Scrollbar {
     Scrollbar {
         id: id.into(),
-        track: Track::Handle(handle.clone()),
+        track: Track {
+            source: Source::Handle(handle.clone()),
+            axis: Axis::Vertical,
+        },
     }
 }
 
 pub fn list_scrollbar(id: impl Into<ElementId>, list: &ListState) -> Scrollbar {
     Scrollbar {
         id: id.into(),
-        track: Track::List(list.clone()),
+        track: Track {
+            source: Source::List(list.clone()),
+            axis: Axis::Vertical,
+        },
+    }
+}
+
+impl Scrollbar {
+    pub fn axis(mut self, axis: Axis) -> Self {
+        self.track.axis = axis;
+        self
     }
 }
 
 impl RenderOnce for Scrollbar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let axis = self.track.axis;
         let state = viewport(self.id.clone(), self.track, window, cx);
         let wheel_state = state.clone();
         let hover_state = state.clone();
@@ -366,8 +419,11 @@ impl RenderOnce for Scrollbar {
                     viewport.wake(cx);
                 })
             })
-            .on_scroll_wheel(move |_, _, cx| {
-                wheel_state.update(cx, |viewport, cx| viewport.wake(cx))
+            .on_scroll_wheel(move |event, window, cx| {
+                let delta = event.delta.pixel_delta(window.line_height());
+                if delta.along(axis) != px(0.0) {
+                    wheel_state.update(cx, |viewport, cx| viewport.wake(cx))
+                }
             })
             .child(bar(state, window, cx))
     }
@@ -384,7 +440,11 @@ impl RenderOnce for ScrollArea {
                 .read(cx)
                 .clone(),
         };
-        let state = viewport(self.id.clone(), Track::Handle(handle.clone()), window, cx);
+        let track = Track {
+            source: Source::Handle(handle.clone()),
+            axis: Axis::Vertical,
+        };
+        let state = viewport(self.id.clone(), track, window, cx);
         let pinned = state.read(cx).pinned;
         if self.follow_tail && pinned {
             handle.scroll_to_bottom();

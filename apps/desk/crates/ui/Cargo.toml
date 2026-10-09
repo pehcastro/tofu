@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 desk_core.workspace = true
+desk_markdown = { path = "../markdown" }
 desk_motion = { workspace = true }
 desk_tiling.workspace = true
 flume = { version = "0.11.1", default-features = false, features = ["async"] }

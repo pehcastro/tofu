@@ -1,0 +1,3 @@
+Base queries: highlights.scm, highlights-jsx.scm and injections.scm shipped by tree-sitter-javascript 0.25.0,
+https://github.com/tree-sitter/tree-sitter-javascript, MIT licence, loaded from the crate unchanged.
+highlights.scm and injections.scm here extend them and were written for desk; nothing is copied from Zed's GPL-3.0 grammars crate.

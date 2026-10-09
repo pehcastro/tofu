@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use desk_core::buffer::Buffer;
-use desk_core::syntax::{Kind, Language, Span, Syntax};
+use desk_core::syntax::{Kind, Span, Syntax};
 use gpui::{
     App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity, EntityInputHandler,
     FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
@@ -16,7 +16,9 @@ use gpui::{
 };
 
 use crate::components::chat::fail;
-use crate::components::code::{CodeLine, Marks, code_origin, code_place, code_shape, code_view};
+use crate::components::code::{
+    CodeLine, Marks, Wrap, code_origin, code_place, code_shape, code_view, wrap_width,
+};
 use crate::components::find::{FindBar, find_ranges};
 use crate::components::form::{blinker, caret_shown};
 use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN};
@@ -28,9 +30,9 @@ const FAILURE_INSET: f32 = 12.0;
 pub const READ_ONLY_BYTES: u64 = 1024 * 1024;
 const REFUSED_BYTES: u64 = 64 * 1024 * 1024;
 const LONG_LINE_BYTES: usize = 64 * 1024;
-const DRAWN_LINE_BYTES: usize = 1024;
 const SNIFF_BYTES: usize = 8192;
 const CONTROL_SHARE: f32 = 0.3;
+const PROSE: [&str; 4] = ["md", "mdx", "txt", "rst"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileKind {
@@ -81,32 +83,121 @@ pub fn syntax_token(kind: Kind) -> ColorToken {
         Kind::Constant => ColorToken::SyntaxConstant,
         Kind::Operator => ColorToken::SyntaxOperator,
         Kind::Punctuation => ColorToken::SyntaxPunctuation,
+        Kind::Attribute => ColorToken::SyntaxAttribute,
+        Kind::Boolean => ColorToken::SyntaxBoolean,
+        Kind::CommentDoc => ColorToken::SyntaxCommentDoc,
+        Kind::Constructor => ColorToken::SyntaxConstructor,
+        Kind::Embedded => ColorToken::SyntaxEmbedded,
+        Kind::Emphasis => ColorToken::SyntaxEmphasis,
+        Kind::EmphasisStrong => ColorToken::SyntaxEmphasisStrong,
+        Kind::Enum => ColorToken::SyntaxEnum,
+        Kind::Label => ColorToken::SyntaxLabel,
+        Kind::LinkText => ColorToken::SyntaxLinkText,
+        Kind::LinkUri => ColorToken::SyntaxLinkUri,
+        Kind::Namespace => ColorToken::SyntaxNamespace,
+        Kind::Preproc => ColorToken::SyntaxPreproc,
+        Kind::Property => ColorToken::SyntaxProperty,
+        Kind::PunctuationBracket => ColorToken::SyntaxPunctuationBracket,
+        Kind::PunctuationDelimiter => ColorToken::SyntaxPunctuationDelimiter,
+        Kind::PunctuationListMarker => ColorToken::SyntaxPunctuationListMarker,
+        Kind::PunctuationMarkup => ColorToken::SyntaxPunctuationMarkup,
+        Kind::PunctuationSpecial => ColorToken::SyntaxPunctuationSpecial,
+        Kind::Selector => ColorToken::SyntaxSelector,
+        Kind::SelectorPseudo => ColorToken::SyntaxSelectorPseudo,
+        Kind::StringEscape => ColorToken::SyntaxStringEscape,
+        Kind::StringRegex => ColorToken::SyntaxStringRegex,
+        Kind::StringSpecial => ColorToken::SyntaxStringSpecial,
+        Kind::StringSpecialSymbol => ColorToken::SyntaxStringSpecialSymbol,
+        Kind::Tag => ColorToken::SyntaxTag,
+        Kind::TextLiteral => ColorToken::SyntaxTextLiteral,
+        Kind::Title => ColorToken::SyntaxTitle,
+        Kind::VariableParameter => ColorToken::SyntaxVariableParameter,
+        Kind::VariableSpecial => ColorToken::SyntaxVariableSpecial,
+        Kind::Variant => ColorToken::SyntaxVariant,
     }
 }
 
 pub fn code_lines(buffer: &Buffer, syntax: &Syntax, rows: Range<usize>) -> Vec<CodeLine> {
     coloured_lines(buffer, syntax.spans(rows.clone()), rows)
+        .into_iter()
+        .map(|(line, _)| line)
+        .collect()
 }
 
-fn coloured_lines(buffer: &Buffer, spans: Vec<Span>, rows: Range<usize>) -> Vec<CodeLine> {
+fn prose(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_none_or(|extension| {
+            PROSE
+                .iter()
+                .any(|prose| extension.eq_ignore_ascii_case(prose))
+        })
+}
+
+struct Drawn {
+    text: String,
+    starts: Vec<usize>,
+}
+
+impl Drawn {
+    fn new(line: &str) -> Self {
+        let mut text = String::new();
+        let mut starts = Vec::new();
+        let mut columns = 0;
+        for ch in cut(line, LONG_LINE_BYTES).chars() {
+            starts.push(text.len());
+            let width = match ch {
+                '\t' => TAB.len() - columns % TAB.len(),
+                _ => 1,
+            };
+            match ch {
+                '\t' => text.extend(std::iter::repeat_n(' ', width)),
+                _ => text.push(ch),
+            }
+            columns += width;
+        }
+        starts.push(text.len());
+        Self { text, starts }
+    }
+
+    fn columns(&self) -> usize {
+        self.starts.len().saturating_sub(1)
+    }
+
+    fn byte(&self, column: usize) -> usize {
+        self.starts.get(column).copied().unwrap_or(self.text.len())
+    }
+
+    fn column(&self, byte: usize) -> usize {
+        let after = self.starts.partition_point(|start| *start < byte);
+        match after.checked_sub(1) {
+            Some(before) if byte - self.byte(before) < self.byte(after).saturating_sub(byte) => {
+                before
+            }
+            _ => after.min(self.columns()),
+        }
+    }
+}
+
+fn coloured_lines(buffer: &Buffer, spans: Vec<Span>, rows: Range<usize>) -> Vec<(CodeLine, Drawn)> {
     let rope = buffer.rope();
     let mut long = Vec::new();
-    let mut lines: Vec<CodeLine> = rows
+    let mut lines: Vec<(CodeLine, Drawn)> = rows
         .clone()
         .map(|row| {
             let full = buffer.line(row).unwrap_or_default();
             long.push(full.len() > LONG_LINE_BYTES);
-            CodeLine {
-                text: cut(&full, DRAWN_LINE_BYTES).to_owned().into(),
+            let drawn = Drawn::new(&full);
+            let line = CodeLine {
+                text: drawn.text.clone().into(),
                 ..CodeLine::default()
-            }
+            };
+            (line, drawn)
         })
         .collect();
     let last_row = rows.end.saturating_sub(1);
     for span in spans {
-        let (Ok(start), Ok(end), Ok(first), Ok(last)) = (
-            rope.try_char_to_byte(span.chars.start),
-            rope.try_char_to_byte(span.chars.end),
+        let (Ok(first), Ok(last)) = (
             buffer.char_to_line(span.chars.start),
             buffer.char_to_line(span.chars.end),
         ) else {
@@ -114,12 +205,13 @@ fn coloured_lines(buffer: &Buffer, spans: Vec<Span>, rows: Range<usize>) -> Vec<
         };
         for row in first.max(rows.start)..=last.min(last_row) {
             let at = row - rows.start;
-            let (Some(line), Ok(base), Some(false)) =
-                (lines.get_mut(at), rope.try_line_to_byte(row), long.get(at))
+            let (Some((line, drawn)), Ok(base), Some(false)) =
+                (lines.get_mut(at), rope.try_line_to_char(row), long.get(at))
             else {
                 continue;
             };
-            let bytes = start.saturating_sub(base)..end.saturating_sub(base).min(line.text.len());
+            let bytes = drawn.byte(span.chars.start.saturating_sub(base))
+                ..drawn.byte(span.chars.end.saturating_sub(base));
             if !bytes.is_empty() {
                 line.runs.push((bytes, syntax_token(span.kind)));
             }
@@ -177,12 +269,6 @@ fn chars_within(text: &str, units: usize) -> usize {
         .count()
 }
 
-fn byte_of(text: &str, column: usize) -> usize {
-    text.char_indices()
-        .nth(column)
-        .map_or(text.len(), |(byte, _)| byte)
-}
-
 fn follow(marks: &Marks, line: usize, line_start: bool, removed: &str, inserted: &str) -> Marks {
     let whole_lines = |text: &str| text.is_empty() || text.ends_with('\n');
     let whole = line_start && whole_lines(removed) && whole_lines(inserted);
@@ -225,6 +311,9 @@ pub struct CodeEditor {
     found: Vec<Range<usize>>,
     current: usize,
     edited_since_found: bool,
+    wrapping: bool,
+    wrap: Rc<Wrap>,
+    wrap_stale: bool,
 }
 
 impl CodeEditor {
@@ -254,6 +343,9 @@ impl CodeEditor {
             found: Vec::new(),
             current: 0,
             edited_since_found: false,
+            wrapping: false,
+            wrap: Rc::default(),
+            wrap_stale: true,
         };
         editor.widest = editor.widest_line();
         editor
@@ -291,13 +383,17 @@ impl CodeEditor {
                 cx,
             ));
         }
-        let syntax = match Language::from_path(path) {
-            Some(language) => {
-                Highlight::Tree(Syntax::new(language, &buffer).map_err(|error| error.to_string())?)
+        let syntax = match Syntax::for_path(path, &buffer) {
+            Some(syntax) => {
+                let syntax = syntax.map_err(|error| error.to_string())?;
+                eprintln!("desk: syntax {shown} {}", syntax.report());
+                Highlight::Tree(syntax)
             }
             None => Highlight::Plain,
         };
-        Ok(Self::shown(buffer, syntax, FileKind::Text, cx))
+        let mut editor = Self::shown(buffer, syntax, FileKind::Text, cx);
+        editor.wrapping = prose(path);
+        Ok(editor)
     }
 
     pub fn kind(&self) -> FileKind {
@@ -468,10 +564,78 @@ impl CodeEditor {
             .unwrap_or(0)
     }
 
+    fn drawn(&self, line: usize) -> Drawn {
+        Drawn::new(&self.buffer.line(line).unwrap_or_default())
+    }
+
+    fn wrapped(&self) -> Option<&Wrap> {
+        (self.wrapping && self.wrap.rows() > 0).then_some(&*self.wrap)
+    }
+
+    fn rewrap(&mut self, cx: &App) {
+        let width = wrap_width(self.bounds.get());
+        let fresh = !self.wrap_stale && width == self.wrap.width();
+        if !self.wrapping || width <= px(0.0) || fresh {
+            return;
+        }
+        let texts = (0..self.buffer.line_count()).map(|line| self.drawn(line).text);
+        let theme = ActiveTheme::theme(cx);
+        self.wrap = Rc::new(Wrap::new(&self.wrap, texts, width, &theme, cx));
+        self.wrap_stale = false;
+    }
+
+    fn toggle_wrap(&mut self) {
+        self.wrapping = !self.wrapping;
+        self.wrap_stale = true;
+        for caret in &mut self.carets {
+            caret.goal = None;
+        }
+        let base = self.scroll.0.borrow().base_handle.clone();
+        base.set_offset(point(px(0.0), base.offset().y));
+        let state = if self.wrapping { "on" } else { "off" };
+        eprintln!("desk: editor wrap {state}");
+    }
+
+    fn visual(&self, at: usize, wrap: &Wrap) -> Option<(usize, usize)> {
+        let line = self.buffer.char_to_line(at).ok()?;
+        let drawn = self.drawn(line);
+        let byte = drawn.byte(at - self.buffer.line_to_char(line).ok()?);
+        let row = wrap.row_of(line, byte);
+        let within = wrap.piece(line, wrap.locate(row).1, drawn.text.len());
+        Some((row, drawn.column(byte) - drawn.column(within.start)))
+    }
+
+    fn visual_step(&self, caret: Caret, up: bool, wrap: &Wrap) -> Option<(usize, Option<usize>)> {
+        let (row, column) = self.visual(caret.head, wrap)?;
+        let goal = caret.goal.unwrap_or(column);
+        let next = match up {
+            true => row.checked_sub(1),
+            false => Some(row + 1).filter(|next| *next < wrap.rows()),
+        };
+        let Some(next) = next else {
+            let edge = if up { 0 } else { self.buffer.len_chars() };
+            return Some((edge, Some(goal)));
+        };
+        let (line, piece) = wrap.locate(next);
+        let drawn = self.drawn(line);
+        let within = wrap.piece(line, piece, drawn.text.len());
+        let before = drawn.column(within.start);
+        let chars = drawn.column(within.end) - before;
+        let most = match piece + 1 == wrap.pieces(line) {
+            true => chars,
+            false => chars.saturating_sub(1),
+        };
+        let start = self.buffer.line_to_char(line).ok()?;
+        Some((start + before + goal.min(most), Some(goal)))
+    }
+
     fn moved(&self, caret: Caret, key: &str, word: bool) -> Option<(usize, Option<usize>)> {
         let head = caret.head;
         let row = self.buffer.char_to_line(head).ok()?;
         let start = self.buffer.line_to_char(row).ok()?;
+        if let ("up" | "down", Some(wrap)) = (key, self.wrapped()) {
+            return self.visual_step(caret, key == "up", wrap);
+        }
         Some(match (key, word) {
             ("left", false) => (self.before(head), None),
             ("right", false) => (self.after(head), None),
@@ -562,6 +726,7 @@ impl CodeEditor {
     }
 
     fn settle(&mut self, lines: usize) {
+        self.wrap_stale = true;
         if let Highlight::Tree(syntax) = &mut self.syntax {
             let synced = syntax.sync(&mut self.buffer);
             self.report("Could not colour", synced);
@@ -722,6 +887,10 @@ impl CodeEditor {
         if let Some(caret) = self.carets.last()
             && let Ok(row) = self.buffer.char_to_line(caret.head)
         {
+            let row = match self.wrapped() {
+                Some(wrap) => self.visual(caret.head, wrap).map_or(row, |(row, _)| row),
+                None => row,
+            };
             self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
         }
     }
@@ -748,6 +917,7 @@ impl CodeEditor {
                     .into_iter()
                     .collect();
             }
+            (false, "z") if held.alt && !held.shift => self.toggle_wrap(),
             (true, "z") => self.history(!held.shift),
             (true, "y") => self.history(false),
             (true, "a") => {
@@ -778,11 +948,31 @@ impl CodeEditor {
 
     fn char_at_point(&self, position: Point<Pixels>, window: &Window, cx: &App) -> Option<usize> {
         let (row, x) = code_place(self.bounds.get(), &self.scroll, position);
-        let row = row.min(self.buffer.line_count().saturating_sub(1));
-        let text: SharedString = self.buffer.line(row)?.into();
-        let byte = code_shape(text.clone(), window, &ActiveTheme::theme(cx)).closest_index_for_x(x);
-        let column = text.get(..byte).map_or(0, |before| before.chars().count());
-        Some(self.buffer.line_to_char(row).ok()? + column)
+        let wrap = self.wrapped();
+        let (line, piece) = match wrap {
+            Some(wrap) => wrap.locate(row.min(wrap.rows().saturating_sub(1))),
+            None => (row.min(self.buffer.line_count().saturating_sub(1)), 0),
+        };
+        let drawn = self.drawn(line);
+        let text = &drawn.text;
+        let (within, last) = match wrap {
+            Some(wrap) => (
+                wrap.piece(line, piece, text.len()),
+                piece + 1 == wrap.pieces(line),
+            ),
+            None => (0..text.len(), true),
+        };
+        let shown: SharedString = text.get(within.clone())?.to_owned().into();
+        let theme = ActiveTheme::theme(cx);
+        let mut byte = within.start + code_shape(shown, window, &theme).closest_index_for_x(x);
+        if !last && byte >= within.end {
+            byte = text
+                .get(..within.end)?
+                .char_indices()
+                .last()
+                .map_or(within.start, |(at, _)| at.max(within.start));
+        }
+        Some(self.buffer.line_to_char(line).ok()? + drawn.column(byte))
     }
 
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -829,12 +1019,12 @@ impl CodeEditor {
     fn rows(&self, rows: Range<usize>, caret_on: bool) -> Vec<CodeLine> {
         let mut lines = coloured_lines(&self.buffer, self.syntax.spans(rows.clone()), rows.clone());
         let current = self.found.get(self.current);
-        for (row, line) in rows.zip(lines.iter_mut()) {
+        for (row, (line, drawn)) in rows.zip(lines.iter_mut()) {
             let Ok(start) = self.buffer.line_to_char(row) else {
                 continue;
             };
-            let text = line.text.clone();
-            let end = start + text.chars().count();
+            let end = start + drawn.columns();
+            let byte_of = |at: usize| drawn.byte(at - start);
             let first = self.found.partition_point(|found| found.end <= start);
             for found in self.found.iter().skip(first) {
                 let (from, to) = (found.start.max(start), found.end.min(end));
@@ -844,22 +1034,20 @@ impl CodeEditor {
                 if Some(found) == current {
                     line.current_match = Some(line.matches.len());
                 }
-                line.matches
-                    .push(byte_of(&text, from - start)..byte_of(&text, to - start));
+                line.matches.push(byte_of(from)..byte_of(to));
             }
             for caret in &self.carets {
                 if caret_on && (start..=end).contains(&caret.head) {
-                    line.carets.push(byte_of(&text, caret.head - start));
+                    line.carets.push(byte_of(caret.head));
                 }
                 let range = caret.range();
                 let (from, to) = (range.start.max(start), range.end.min(end));
                 if from < to && Some(&range) != current {
-                    line.selected
-                        .push(byte_of(&text, from - start)..byte_of(&text, to - start));
+                    line.selected.push(byte_of(from)..byte_of(to));
                 }
             }
         }
-        lines
+        lines.into_iter().map(|(line, _)| line).collect()
     }
 
     fn chars(&self, units: Range<usize>) -> Range<usize> {
@@ -974,11 +1162,21 @@ impl EntityInputHandler for CodeEditor {
         cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let at = self.chars(units).start;
-        let row = self.buffer.char_to_line(at).ok()?;
-        let column = at - self.buffer.line_to_char(row).ok()?;
-        let text: SharedString = self.buffer.line(row)?.into();
-        let byte = byte_of(&text, column);
-        let x = code_shape(text, window, &ActiveTheme::theme(cx)).x_for_index(byte);
+        let line = self.buffer.char_to_line(at).ok()?;
+        let column = at - self.buffer.line_to_char(line).ok()?;
+        let drawn = self.drawn(line);
+        let text = drawn.text.as_str();
+        let byte = drawn.byte(column);
+        let (row, within) = match self.wrapped() {
+            Some(wrap) => {
+                let row = wrap.row_of(line, byte);
+                (row, wrap.piece(line, wrap.locate(row).1, text.len()))
+            }
+            None => (line, 0..text.len()),
+        };
+        let piece: SharedString = text.get(within.clone())?.to_owned().into();
+        let x = code_shape(piece, window, &ActiveTheme::theme(cx))
+            .x_for_index(byte.saturating_sub(within.start));
         let origin = code_origin(element, &self.scroll, row);
         Some(Bounds::new(
             point(origin.x + x, origin.y),
@@ -1006,10 +1204,12 @@ impl Render for CodeEditor {
             _ => {}
         }
         let shown = focused && caret_shown(self.since);
+        self.rewrap(cx);
         let entity = cx.entity();
         let source = entity.clone();
         let bounds = self.bounds.clone();
         let focus = self.focus.clone();
+        let wrapped_at = self.wrapping.then(|| self.wrap.width());
         let rows = code_view(
             "code-editor-rows",
             self.buffer.line_count(),
@@ -1017,6 +1217,7 @@ impl Render for CodeEditor {
             move |rows, cx| source.update(cx, |editor, _| editor.rows(rows, shown)),
         )
         .widest(self.widest)
+        .wrap(self.wrapped().map(|_| self.wrap.clone()))
         .marks(self.marks.clone());
         let failure = self.failure.clone().map(|(what, error)| {
             div()
@@ -1043,6 +1244,9 @@ impl Render for CodeEditor {
                     |_, _, _| {},
                     move |area, _, window, cx| {
                         bounds.set(area);
+                        if wrapped_at.is_some_and(|width| width != wrap_width(area)) {
+                            cx.notify(entity.entity_id());
+                        }
                         window.handle_input(&focus, ElementInputHandler::new(area, entity), cx);
                     },
                 )

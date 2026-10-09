@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Bounds, ContentMask, Div, ElementId, Font, HighlightStyle,
+    AnyElement, App, Axis, Bounds, ContentMask, Div, ElementId, Font, HighlightStyle, LineFragment,
     ListHorizontalSizingBehavior, PathBuilder, Pixels, Point, ScrollHandle, ShapedLine,
     SharedString, StyledText, TextAlign, TextRun, UniformListScrollHandle, Window, canvas,
     combine_highlights, div, fill, font, point, prelude::*, px, rgb_to_hsla, size, uniform_list,
@@ -28,6 +29,7 @@ const MARK_RADIUS: f32 = 2.0;
 const MARK_TOP: f32 = 3.0;
 const REMOVED_SIZE: f32 = 6.0;
 const EDGE_WIDTH: f32 = 2.0;
+const WRAP_MARGIN: f32 = 12.0;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CodeLine {
@@ -59,6 +61,161 @@ pub type Marks = BTreeMap<usize, LineMarks>;
 
 type LineSource = Rc<dyn Fn(Range<usize>, &mut App) -> Vec<CodeLine>>;
 
+#[derive(Clone)]
+struct WrappedLine {
+    key: u64,
+    breaks: Rc<[usize]>,
+}
+
+#[derive(Clone, Default)]
+pub struct Wrap {
+    width: Pixels,
+    lines: Vec<WrappedLine>,
+    starts: Vec<usize>,
+}
+
+fn line_key(text: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub fn wrap_width(bounds: Bounds<Pixels>) -> Pixels {
+    bounds.size.width - px(NUMBER_COLUMN + WRAP_MARGIN)
+}
+
+impl Wrap {
+    pub fn new(
+        previous: &Wrap,
+        texts: impl Iterator<Item = String>,
+        width: Pixels,
+        theme: &Theme,
+        cx: &App,
+    ) -> Self {
+        let known: HashMap<u64, Rc<[usize]>> = match previous.width == width {
+            true => previous
+                .lines
+                .iter()
+                .map(|line| (line.key, line.breaks.clone()))
+                .collect(),
+            false => HashMap::new(),
+        };
+        let mut wrapper = cx
+            .text_system()
+            .line_wrapper(font(mono(theme)), px(FONT_BODY));
+        let mut starts = vec![0];
+        let mut next = 0;
+        let lines = texts
+            .map(|text| {
+                let key = line_key(&text);
+                let breaks = known.get(&key).cloned().unwrap_or_else(|| {
+                    wrapper
+                        .wrap_line(&[LineFragment::text(&text)], width)
+                        .map(|boundary| boundary.ix)
+                        .collect()
+                });
+                next += breaks.len() + 1;
+                starts.push(next);
+                WrappedLine { key, breaks }
+            })
+            .collect();
+        Wrap {
+            width,
+            lines,
+            starts,
+        }
+    }
+
+    pub fn width(&self) -> Pixels {
+        self.width
+    }
+
+    pub fn rows(&self) -> usize {
+        self.starts.last().copied().unwrap_or(0)
+    }
+
+    pub fn locate(&self, row: usize) -> (usize, usize) {
+        let line = self
+            .starts
+            .partition_point(|start| *start <= row)
+            .saturating_sub(1);
+        let first = self.starts.get(line).copied().unwrap_or(0);
+        (line, row.saturating_sub(first))
+    }
+
+    pub fn pieces(&self, line: usize) -> usize {
+        self.lines
+            .get(line)
+            .map_or(1, |wrapped| wrapped.breaks.len() + 1)
+    }
+
+    pub fn piece(&self, line: usize, piece: usize, len: usize) -> Range<usize> {
+        let Some(breaks) = self.lines.get(line).map(|wrapped| &wrapped.breaks) else {
+            return 0..len;
+        };
+        let start = piece
+            .checked_sub(1)
+            .and_then(|before| breaks.get(before))
+            .copied()
+            .unwrap_or(0);
+        let end = breaks.get(piece).copied().unwrap_or(len);
+        start.min(len)..end.clamp(start.min(len), len)
+    }
+
+    pub fn row_of(&self, line: usize, byte: usize) -> usize {
+        let first = self.starts.get(line).copied().unwrap_or(0);
+        let within = self.lines.get(line).map_or(0, |wrapped| {
+            wrapped.breaks.partition_point(|at| *at <= byte)
+        });
+        first + within
+    }
+}
+
+fn line_at(wrap: Option<&Wrap>, row: usize) -> (usize, bool) {
+    match wrap {
+        Some(wrap) => {
+            let (line, piece) = wrap.locate(row);
+            (line, piece == 0)
+        }
+        None => (row, true),
+    }
+}
+
+fn clip(range: &Range<usize>, within: &Range<usize>) -> Option<Range<usize>> {
+    let (start, end) = (range.start.max(within.start), range.end.min(within.end));
+    (start < end).then(|| start - within.start..end - within.start)
+}
+
+fn piece_of(line: &CodeLine, within: Range<usize>, last: bool) -> CodeLine {
+    let inside = |range: &Range<usize>| clip(range, &within);
+    let current_match = line
+        .current_match
+        .filter(|current| line.matches.get(*current).and_then(inside).is_some())
+        .map(|current| line.matches.iter().take(current).filter_map(inside).count());
+    CodeLine {
+        text: line
+            .text
+            .get(within.clone())
+            .unwrap_or_default()
+            .to_owned()
+            .into(),
+        runs: line
+            .runs
+            .iter()
+            .filter_map(|(range, token)| Some((inside(range)?, *token)))
+            .collect(),
+        selected: line.selected.iter().filter_map(inside).collect(),
+        carets: line
+            .carets
+            .iter()
+            .filter(|at| within.contains(at) || (last && **at == within.end))
+            .map(|at| at - within.start)
+            .collect(),
+        matches: line.matches.iter().filter_map(inside).collect(),
+        current_match,
+    }
+}
+
 #[derive(IntoElement)]
 pub struct CodeView {
     id: ElementId,
@@ -67,6 +224,7 @@ pub struct CodeView {
     scroll: UniformListScrollHandle,
     lines: LineSource,
     marks: Rc<Marks>,
+    wrap: Option<Rc<Wrap>>,
 }
 
 pub fn code_view(
@@ -82,12 +240,18 @@ pub fn code_view(
         scroll: scroll.clone(),
         lines: Rc::new(lines),
         marks: Rc::default(),
+        wrap: None,
     }
 }
 
 impl CodeView {
     pub fn widest(mut self, line: usize) -> Self {
         self.widest = line;
+        self
+    }
+
+    pub fn wrap(mut self, wrap: Option<Rc<Wrap>>) -> Self {
+        self.wrap = wrap;
         self
     }
 
@@ -107,16 +271,22 @@ fn row_top(bounds: Bounds<Pixels>, top: Pixels, row: usize) -> Pixels {
     bounds.origin.y + top + px(CODE_LINE) * row as f32
 }
 
-fn backgrounds(marks: Rc<Marks>, count: usize, base: ScrollHandle) -> impl IntoElement {
+fn backgrounds(
+    marks: Rc<Marks>,
+    count: usize,
+    wrap: Option<Rc<Wrap>>,
+    base: ScrollHandle,
+) -> impl IntoElement {
     canvas(
         |_, _, _| {},
         move |bounds, _, window, cx| {
             let theme = ActiveTheme::theme(cx);
             let top = px(CODE_PAD_TOP) + base.offset().y;
-            for (row, mark) in marks.range(shown_rows(bounds, top, count)) {
-                if let Some(token) = mark.background {
+            for row in shown_rows(bounds, top, count) {
+                let (line, _) = line_at(wrap.as_deref(), row);
+                if let Some(token) = marks.get(&line).and_then(|mark| mark.background) {
                     let area = Bounds::new(
-                        point(bounds.origin.x, row_top(bounds, top, *row)),
+                        point(bounds.origin.x, row_top(bounds, top, row)),
                         size(bounds.size.width, px(CODE_LINE)),
                     );
                     window.paint_quad(fill(area, theme.color(token)));
@@ -130,12 +300,19 @@ fn backgrounds(marks: Rc<Marks>, count: usize, base: ScrollHandle) -> impl IntoE
     .size_full()
 }
 
-fn paint_marks(mark: &LineMarks, left: Pixels, y: Pixels, theme: &Theme, window: &mut Window) {
+fn paint_marks(
+    mark: &LineMarks,
+    first: bool,
+    left: Pixels,
+    y: Pixels,
+    theme: &Theme,
+    window: &mut Window,
+) {
     if let Some(token) = mark.edge {
         let edge = Bounds::new(point(left, y), size(px(EDGE_WIDTH), px(CODE_LINE)));
         window.paint_quad(fill(edge, theme.color(token)));
     }
-    match mark.gutter {
+    match mark.gutter.filter(|_| first) {
         Some(GutterMark::Changed(token)) => {
             let x = left + px(NUMBER_COLUMN - MARK_INSET - MARK_WIDTH);
             let bar = Bounds::new(
@@ -261,12 +438,46 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, theme: &Theme) -> Div 
         .children(trailing.map(|build| build(theme)))
 }
 
+fn wrapped_rows(
+    lines: &LineSource,
+    wrap: &Wrap,
+    marks: &Marks,
+    rows: Range<usize>,
+    theme: &Theme,
+    cx: &mut App,
+) -> Vec<Div> {
+    let (Some(first), Some(last)) = (
+        rows.clone().next().map(|row| wrap.locate(row).0),
+        rows.clone().last().map(|row| wrap.locate(row).0),
+    ) else {
+        return Vec::new();
+    };
+    let drawn = lines(first..last + 1, cx);
+    rows.filter_map(|row| {
+        let (line, piece) = wrap.locate(row);
+        let code = drawn.get(line.checked_sub(first)?)?;
+        let last = piece + 1 == wrap.pieces(line);
+        let within = wrap.piece(line, piece, code.text.len());
+        let trailing = marks
+            .get(&line)
+            .and_then(|mark| mark.trailing.as_ref())
+            .filter(|_| last);
+        Some(code_row(&piece_of(code, within, last), trailing, theme))
+    })
+    .collect()
+}
+
 impl RenderOnce for CodeView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let lines = self.lines;
         let marks = self.marks.clone();
-        let list = uniform_list(self.id.clone(), self.count, move |range, _, cx| {
+        let wrap = self.wrap.clone();
+        let count = wrap.as_ref().map_or(self.count, |wrap| wrap.rows());
+        let list = uniform_list(self.id.clone(), count, move |range, _, cx| {
             let theme = ActiveTheme::theme(cx);
+            if let Some(wrap) = &wrap {
+                return wrapped_rows(&lines, wrap, &marks, range, &theme, cx);
+            }
             lines(range.clone(), cx)
                 .iter()
                 .zip(range)
@@ -276,28 +487,50 @@ impl RenderOnce for CodeView {
                 })
                 .collect::<Vec<_>>()
         })
-        .with_width_from_item(Some(self.widest))
-        .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained)
+        .map(|list| match self.wrap {
+            Some(_) => list.with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::FitList),
+            None => list
+                .with_width_from_item(Some(self.widest))
+                .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained),
+        })
         .size_full()
         .pt(px(CODE_PAD_TOP))
         .track_scroll(&self.scroll);
         let base = self.scroll.0.borrow().base_handle.clone();
-        let bar = scrollbar(SharedString::from(format!("{}-bar", self.id)), &base);
+        let bar = |axis: Axis| {
+            scrollbar(SharedString::from(format!("{}-{axis:?}", self.id)), &base).axis(axis)
+        };
         div()
             .relative()
             .size_full()
             .when(!self.marks.is_empty(), |view| {
-                view.child(backgrounds(self.marks.clone(), self.count, base.clone()))
+                view.child(backgrounds(
+                    self.marks.clone(),
+                    count,
+                    self.wrap.clone(),
+                    base.clone(),
+                ))
             })
             .child(div().size_full().pl(px(NUMBER_COLUMN)).child(list))
-            .child(gutter(self.count, self.marks, base, window, cx))
-            .child(bar)
+            .child(gutter(
+                count,
+                self.marks.clone(),
+                self.wrap.clone(),
+                base.clone(),
+                window,
+                cx,
+            ))
+            .child(bar(Axis::Vertical))
+            .when(self.wrap.is_none(), |view| {
+                view.child(bar(Axis::Horizontal))
+            })
     }
 }
 
 fn gutter(
     count: usize,
     marks: Rc<Marks>,
+    wrap: Option<Rc<Wrap>>,
     base: ScrollHandle,
     window: &mut Window,
     cx: &mut App,
@@ -322,15 +555,18 @@ fn gutter(
             let top = px(CODE_PAD_TOP) + base.offset().y;
             shown_rows(bounds, top, count)
                 .map(|row| {
-                    let text = SharedString::from((row + 1).to_string());
-                    let run = TextRun {
-                        len: text.len(),
-                        ..run.clone()
-                    };
-                    let shaped = window
-                        .text_system()
-                        .shape_line(text, px(FONT_BODY), &[run], None);
-                    (row, row_top(bounds, top, row), shaped)
+                    let (line, first) = line_at(wrap.as_deref(), row);
+                    let shaped = first.then(|| {
+                        let text = SharedString::from((line + 1).to_string());
+                        let run = TextRun {
+                            len: text.len(),
+                            ..run.clone()
+                        };
+                        window
+                            .text_system()
+                            .shape_line(text, px(FONT_BODY), &[run], None)
+                    });
+                    (line, first, row_top(bounds, top, row), shaped)
                 })
                 .collect::<Vec<_>>()
         },
@@ -342,10 +578,13 @@ fn gutter(
                     ..ContentMask::default()
                 }),
                 |window| {
-                    for (row, y, shaped) in rows {
-                        if let Some(mark) = marks.get(&row) {
-                            paint_marks(mark, bounds.origin.x, y, &theme, window);
+                    for (line, first, y, shaped) in rows {
+                        if let Some(mark) = marks.get(&line) {
+                            paint_marks(mark, first, bounds.origin.x, y, &theme, window);
                         }
+                        let Some(shaped) = shaped else {
+                            continue;
+                        };
                         let origin = point(bounds.origin.x, y);
                         let painted = shaped.paint(
                             origin,
@@ -373,9 +612,10 @@ fn gutter(
         .on_scroll_wheel(move |event, window, cx| {
             let delta = event.delta.pixel_delta(window.line_height());
             let offset = wheel.offset();
+            let x = (offset.x + delta.x).max(-wheel.max_offset().x).min(px(0.0));
             let y = (offset.y + delta.y).min(px(0.0));
-            if y != offset.y {
-                wheel.set_offset(point(offset.x, y));
+            if point(x, y) != offset {
+                wheel.set_offset(point(x, y));
                 cx.notify(view);
             }
         })
