@@ -507,10 +507,10 @@ impl Page {
                 "shells",
                 "Shells",
                 Group::Content,
-                "Shells as tabs under the module tabs: a status dot, a mono name, a close on hover, N more with every shell, and the selected shell's output.",
+                "Kept shells only, dev servers and watchers: a status dot, a mono name, state, dir and ready under the command, kill asked before it runs, N more with every shell.",
                 "IWY-4 IWY-9 S-WORK-7",
                 "components/shells.rs, components/width.rs, components/tabs.rs, components/term.rs",
-                "running, failed, waiting; N more closed and open; hidden shell picked; pid, starter, port and run time shown wide and hidden under 560 px; Kill calls on_kill; board width and 320 px",
+                "running, left over, exited 1, exited 0, killed; kill confirm open; N more closed and open; pid, starter, port shown wide; board width and 320 px",
                 "",
             ),
             Page::Terminal => sheet(

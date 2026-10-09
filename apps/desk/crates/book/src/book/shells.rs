@@ -1,8 +1,7 @@
 use std::time::{Duration, Instant};
 
 use desk_ui::components::card::{Header, inner_card, shell};
-use desk_ui::components::shells::{Shell, ShellEvent, ShellState, Shells};
-use desk_ui::components::term::TermStatus;
+use desk_ui::components::shells::{Runtime, Shell, ShellEvent, ShellState, Shells};
 use desk_ui::theme::Theme;
 use gpui::{Context, Div, SharedString, Window, div, prelude::*, px};
 
@@ -12,121 +11,100 @@ use super::lists::Strip;
 
 const BOARD_WIDTH: f32 = 640.0;
 const NARROW_WIDTH: f32 = 320.0;
-const HIDDEN_PICK: usize = 4;
-const PORT_PICK: usize = 3;
-const EXITED_PICK: usize = 6;
+const LEFT_OVER_PICK: usize = 1;
+const FAILED_PICK: usize = 2;
+const EXITED_PICK: usize = 3;
+const KILLED_PICK: usize = 4;
 
-type Sample = (
-    &'static str,
-    ShellState,
-    &'static str,
-    i64,
-    &'static str,
-    &'static str,
-    Option<u16>,
-);
+#[derive(Clone, Copy)]
+enum Kept {
+    Running,
+    LeftOver,
+    Exited(i32),
+    Killed,
+}
 
-const SAMPLES: [Sample; 7] = [
+type Sample = (&'static str, Kept, &'static str, i64, Option<u16>, u64);
+
+const SAMPLES: [Sample; 5] = [
     (
         "shell-1",
-        ShellState::Running,
-        "npm run dev",
+        Kept::Running,
+        "bun run dev",
         48213,
-        "lead",
-        "12m",
-        Some(5173),
+        Some(3000),
+        724,
     ),
     (
         "shell-2",
-        ShellState::Failed,
-        "go test ./notes/ -run TestDelete",
-        48377,
-        "builder",
-        "4m",
-        None,
+        Kept::LeftOver,
+        "npx serve dist -l 5000",
+        47920,
+        Some(5000),
+        1870,
     ),
     (
         "shell-3",
-        ShellState::Waiting,
-        "npm run build",
-        48402,
-        "scout",
-        "1m",
+        Kept::Exited(1),
+        "bun run build --watch",
+        48377,
         None,
+        20,
     ),
     (
         "shell-4",
-        ShellState::Running,
-        "npx serve dist -l 3000",
-        47920,
-        "lead",
-        "31m",
-        Some(3000),
+        Kept::Exited(0),
+        "bun test --watch",
+        48511,
+        None,
+        66,
     ),
     (
         "shell-5",
-        ShellState::Running,
+        Kept::Killed,
         "python -m http.server 8765",
         47811,
-        "judge",
-        "44m",
         Some(8765),
-    ),
-    (
-        "shell-6",
-        ShellState::Failed,
-        "make lint",
-        48450,
-        "builder",
-        "20s",
-        None,
-    ),
-    (
-        "shell-7",
-        ShellState::Exited,
-        "go build ./...",
-        48511,
-        "lead",
-        "6s",
-        None,
+        243,
     ),
 ];
 
-fn output(state: ShellState) -> (Vec<SharedString>, TermStatus) {
-    match state {
-        ShellState::Running => (
+fn shown(kept: Kept, secs: u64) -> (ShellState, Option<SharedString>, Vec<SharedString>, Runtime) {
+    let took = Duration::from_secs(secs);
+    let since = Instant::now()
+        .checked_sub(took)
+        .unwrap_or_else(Instant::now);
+    match kept {
+        Kept::Running => (
+            ShellState::Running,
+            Some("ready: it printed a ready line".into()),
             vec![
-                "\x1b[36mVITE\x1b[0m v6.2.0  ready in \x1b[1m412\x1b[0m ms".into(),
-                "  \x1b[32m\u{279c}\x1b[0m  Local:   http://localhost:5173/".into(),
-                "  \x1b[2m\u{279c}  press h + enter to show help\x1b[0m".into(),
+                "$ bun run --hot src/index.ts".into(),
+                "Started development server: http://localhost:3000".into(),
             ],
-            TermStatus::Running {
-                since: Instant::now(),
-            },
+            Runtime::Live(since),
         ),
-        ShellState::Failed => (
-            vec![
-                "\x1b[36m=== RUN\x1b[0m   TestDelete".into(),
-                "    notes_test.go:41: exit 1, want \x1b[32m2\x1b[0m, got \x1b[31m3\x1b[0m".into(),
-                "\x1b[1;31mFAIL\x1b[0m notes \x1b[2m0.208s\x1b[0m".into(),
-            ],
-            TermStatus::Exited {
-                code: 1,
-                took: Duration::from_millis(208),
-            },
+        Kept::LeftOver => (
+            ShellState::LeftOver,
+            Some("ready: its port opened".into()),
+            vec![" \x1b[32mServing!\x1b[0m  Local: http://localhost:5000".into()],
+            Runtime::Live(since),
         ),
-        ShellState::Waiting => (
-            vec!["\x1b[33mwaiting on you\x1b[0m: approve npm run build".into()],
-            TermStatus::Running {
-                since: Instant::now(),
-            },
+        Kept::Exited(code) => (
+            ShellState::Exited(Some(code)),
+            None,
+            vec![if code == 0 {
+                "\x1b[2m3 pass, 0 fail\x1b[0m".into()
+            } else {
+                "\x1b[1;31merror\x1b[0m: Could not resolve \"hono/jsx\"".into()
+            }],
+            Runtime::Ended(took),
         ),
-        ShellState::Exited => (
-            vec!["\x1b[2mok\x1b[0m  notes  built in 5.8s".into()],
-            TermStatus::Exited {
-                code: 0,
-                took: Duration::from_millis(5800),
-            },
+        Kept::Killed => (
+            ShellState::Killed,
+            Some("the wait ran out".into()),
+            vec!["Serving HTTP on :: port 8765 (http://[::]:8765/) ...".into()],
+            Runtime::Ended(took),
         ),
     }
 }
@@ -134,18 +112,19 @@ fn output(state: ShellState) -> (Vec<SharedString>, TermStatus) {
 fn samples() -> Vec<Shell> {
     SAMPLES
         .iter()
-        .map(|(name, state, command, pid, starter, run_time, port)| {
-            let (lines, status) = output(*state);
+        .map(|(name, kept, command, pid, port, secs)| {
+            let (state, ready, lines, runtime) = shown(*kept, *secs);
             Shell {
                 name: (*name).into(),
-                state: *state,
+                state,
                 command: (*command).into(),
+                dir: "\u{2026}\\sandbox\\hono-starter".into(),
                 pid: Some(*pid),
-                starter: Some((*starter).into()),
+                starter: None,
                 port: *port,
-                run_time: Some((*run_time).into()),
+                ready,
+                runtime,
                 lines,
-                status,
             }
         })
         .collect()
@@ -155,6 +134,7 @@ struct Tile {
     shells: Vec<Shell>,
     active: usize,
     listing: bool,
+    asking: Option<usize>,
     modules: Strip,
 }
 
@@ -164,6 +144,7 @@ impl Tile {
             shells: samples(),
             active,
             listing,
+            asking: None,
             modules: Strip::modules(),
         }
     }
@@ -178,7 +159,16 @@ impl Tile {
             ShellEvent::Pick(at) => {
                 self.active = at;
                 self.listing = false;
+                self.asking = None;
                 None
+            }
+            ShellEvent::AskKill(at) => {
+                self.asking = Some(at);
+                None
+            }
+            ShellEvent::Keep => {
+                self.asking = None;
+                Some("kept, nothing was killed".to_owned())
             }
             ShellEvent::Close(at) if at < self.shells.len() => {
                 let closed = name(at);
@@ -205,7 +195,7 @@ impl Tile {
 }
 
 pub(super) struct ShellsPage {
-    tiles: [Tile; 7],
+    tiles: [Tile; 6],
     killed: SharedString,
 }
 
@@ -213,13 +203,15 @@ impl ShellsPage {
     pub(super) fn new(_: &mut Context<Book>) -> Self {
         ShellsPage {
             tiles: [
-                Tile::new(0, false),
-                Tile::new(PORT_PICK, false),
-                Tile::new(HIDDEN_PICK, false),
-                Tile::new(0, false),
-                Tile::new(HIDDEN_PICK, false),
+                Tile {
+                    asking: Some(0),
+                    ..Tile::new(0, false)
+                },
+                Tile::new(LEFT_OVER_PICK, false),
+                Tile::new(FAILED_PICK, false),
                 Tile::new(EXITED_PICK, false),
-                Tile::new(1, true),
+                Tile::new(KILLED_PICK, false),
+                Tile::new(0, true),
             ],
             killed: "on_kill: not called yet".into(),
         }
@@ -238,7 +230,6 @@ impl ShellsPage {
                 "shells-tabs-3",
                 "shells-tabs-4",
                 "shells-tabs-5",
-                "shells-tabs-6",
             ]
             .get(at)
             .copied()
@@ -265,13 +256,16 @@ impl ShellsPage {
                     cx.notify();
                 }),
             )
+            .asking(tile.asking)
             .on_kill(cx.listener(move |this, picked: &usize, _, cx| {
-                let name = this
-                    .shells
-                    .tiles
-                    .get(at)
+                let tile = this.shells.tiles.get_mut(at);
+                let name = tile
+                    .as_ref()
                     .and_then(|tile| tile.shells.get(*picked))
                     .map_or_else(SharedString::default, |shell| shell.name.clone());
+                if let Some(tile) = tile {
+                    tile.asking = None;
+                }
                 this.shells.killed = format!("on_kill({picked}) from tile {at}: {name}").into();
                 cx.notify();
             }));
@@ -295,43 +289,37 @@ impl ShellsPage {
             .child(tile(
                 0,
                 BOARD_WIDTH,
-                "board width: 6 shells, 3 visible, 3 more; pid, by, run time and port shown",
+                "running: a dev server on :3000, its runtime ticking, kill asked before it runs",
                 cx,
             ))
             .child(tile(
                 1,
                 BOARD_WIDTH,
-                "board width: shell-4 picked, a server on :3000",
+                "left over: still running, the tofu that kept it is gone, kill offered",
                 cx,
             ))
             .child(tile(
                 2,
                 BOARD_WIDTH,
-                "board width: shell-5 picked, a server on :8765",
+                "exited 1: a watcher that died, its runtime frozen, no kill",
                 cx,
             ))
             .child(tile(
                 3,
-                NARROW_WIDTH,
-                "320 px: module tabs and shell tabs fold into N more; pid, by and age hidden",
+                BOARD_WIDTH,
+                "exited 0: a watcher that ended on its own, no kill",
                 cx,
             ))
             .child(tile(
                 4,
-                NARROW_WIDTH,
-                "320 px: a hidden shell picked from the list takes the last visible slot",
+                BOARD_WIDTH,
+                "killed: stopped through shell.kill, its runtime frozen, no kill",
                 cx,
             ))
             .child(tile(
                 5,
-                BOARD_WIDTH,
-                "board width: shell-7 picked, exited 0, its dot muted",
-                cx,
-            ))
-            .child(tile(
-                6,
-                BOARD_WIDTH,
-                "board width: N more open, listing every shell",
+                NARROW_WIDTH,
+                "320 px: every kept shell listed under N more",
                 cx,
             ))
     }

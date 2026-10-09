@@ -16,8 +16,8 @@ use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
     Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
     PROTOCOL, Request, RequestId, SessionAsking, SessionInfo, SessionListParams, SessionOpenParams,
-    SessionParams, SessionRenameParams, SessionSetParams, SessionTrace, ShellParams, TurnCompleted,
-    TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
+    SessionParams, SessionRenameParams, SessionSetParams, SessionState, SessionTrace, ShellParams,
+    TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
@@ -422,6 +422,7 @@ impl Chat {
         };
         self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
             eprintln!("desk: session {} opened", opened.session);
+            chat.ask_shells(cx);
             chat.ask_cron(opened.session.clone(), cx);
             chat.ask_ledger(opened.session.clone(), cx);
             chat.set_opening(Opening::Open(opened.session), cx);
@@ -859,13 +860,31 @@ impl Chat {
                     state.pick.model.as_deref().unwrap_or("none"),
                     models.models.len()
                 );
-                if let Err(error) = chat.store.update(cx, |store, _| store.shells_now(&state)) {
-                    eprintln!("desk: the store refused session.state from tofu: {error}");
-                }
+                chat.shells_now(&state, cx);
                 chat.pick = state.pick;
                 chat.listed(&models, cx);
             });
         });
+    }
+
+    fn ask_shells(&mut self, cx: &mut Context<Self>) {
+        self.call::<request::SessionState>(&NoParams {}, cx, |chat, state, cx| {
+            eprintln!(
+                "desk: session.state for {} lists {} shells",
+                state.session,
+                state.shells.len()
+            );
+            chat.shells_now(&state, cx);
+        });
+    }
+
+    fn shells_now(&mut self, state: &SessionState, cx: &mut Context<Self>) {
+        if let Err(error) = self.store.update(cx, |store, cx| {
+            cx.notify();
+            store.shells_now(state)
+        }) {
+            eprintln!("desk: the store refused session.state from tofu: {error}");
+        }
     }
 
     fn listed(&mut self, models: &ModelsQuery, cx: &mut Context<Self>) {

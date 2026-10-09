@@ -154,9 +154,27 @@ impl Session {
 
     pub(super) fn shells_now(&mut self, now: &[ShellNow]) -> Result<(), ModelError> {
         for later in now {
-            let Some(shell) = self.shells.get_mut(&later.shell) else {
-                continue;
-            };
+            let shell = self
+                .shells
+                .entry(later.shell.clone())
+                .or_insert_with(|| Shell {
+                    command: later.command.clone(),
+                    agent: None,
+                    output: String::new(),
+                    exit_code: None,
+                    killed: false,
+                    exited: false,
+                    pid: Some(later.pid),
+                    started_at: Some(later.started_at.clone()),
+                    ended_at: None,
+                    first_seen: std::time::Instant::now(),
+                    port: None,
+                    dir: String::new(),
+                    kept: None,
+                    ready: None,
+                    left_over: false,
+                    mention: None,
+                });
             match &later.state {
                 ShellNowState::Running => {}
                 ShellNowState::Exited => shell.exited = true,

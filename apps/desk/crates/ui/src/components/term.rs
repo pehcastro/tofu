@@ -62,10 +62,33 @@ pub fn exit_color(code: i32, theme: &Theme) -> Rgba {
     })
 }
 
+fn dot(color: Rgba) -> AnyElement {
+    div()
+        .size(px(SPINNER / 2.0))
+        .rounded_full()
+        .bg(color)
+        .into_any_element()
+}
+
+fn faded(mark: AnyElement) -> AnyElement {
+    div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(mark)
+        .with_animation(
+            "term-done",
+            Animation::new(HOVER_MS).with_easing(EASE_OUT),
+            |mark, t| mark.opacity(t),
+        )
+        .into_any_element()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TermStatus {
     Running { since: Instant },
     Exited { code: i32, took: Duration },
+    Ended { took: Duration },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -274,28 +297,11 @@ impl RenderOnce for TermCard {
                 let done = if code == 0 {
                     glyph(Glyph::Check, SPINNER, color).into_any_element()
                 } else {
-                    div()
-                        .size(px(SPINNER / 2.0))
-                        .rounded_full()
-                        .bg(color)
-                        .into_any_element()
+                    dot(color)
                 };
-                (
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(done)
-                        .with_animation(
-                            "term-done",
-                            Animation::new(HOVER_MS).with_easing(EASE_OUT),
-                            |mark, t| mark.opacity(t),
-                        )
-                        .into_any_element(),
-                    took,
-                    Some((code, color)),
-                )
+                (faded(done), took, Some((code, color)))
             }
+            TermStatus::Ended { took } => (faded(dot(ink(&theme, CAPTION_TEXT))), took, None),
         };
         let copy = {
             let text = plain_text(&self.lines);
@@ -469,7 +475,7 @@ impl TermReplay {
                     took: since.elapsed(),
                 }
             }
-            (None, TermStatus::Exited { .. }) => {}
+            (None, TermStatus::Exited { .. } | TermStatus::Ended { .. }) => {}
         }
         cx.notify();
     }

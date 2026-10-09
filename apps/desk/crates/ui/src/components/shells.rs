@@ -1,8 +1,10 @@
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
+use desk_motion::tokens::{EASE_OUT, HOVER_MS};
 use gpui::{
-    AnyElement, App, Div, ElementId, FontWeight, MouseButton, Rgba, SharedString, Stateful, Window,
-    div, prelude::*, px,
+    Animation, AnimationExt, AnyElement, App, Div, ElementId, FontWeight, MouseButton, Rgba,
+    SharedString, Stateful, Window, div, prelude::*, px,
 };
 
 use crate::component::icon;
@@ -39,18 +41,49 @@ const META_GAP: f32 = 10.0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShellState {
     Running,
-    Failed,
-    Waiting,
-    Exited,
+    LeftOver,
+    Exited(Option<i32>),
+    Killed,
 }
 
 impl ShellState {
     fn color(self, theme: &Theme) -> Rgba {
         match self {
             ShellState::Running => theme.color(ColorToken::GitAdded),
-            ShellState::Failed => theme.color(ColorToken::StatusDanger),
-            ShellState::Waiting => theme.color(ColorToken::StatusWarn),
-            ShellState::Exited => ink(theme, CAPTION_TEXT),
+            ShellState::LeftOver => theme.color(ColorToken::StatusWarn),
+            ShellState::Exited(Some(code)) if code != 0 => theme.color(ColorToken::StatusDanger),
+            ShellState::Exited(_) | ShellState::Killed => ink(theme, CAPTION_TEXT),
+        }
+    }
+
+    pub fn endable(self) -> bool {
+        matches!(self, ShellState::Running | ShellState::LeftOver)
+    }
+
+    pub fn word(self) -> SharedString {
+        match self {
+            ShellState::Running => "running".into(),
+            ShellState::LeftOver => "left over".into(),
+            ShellState::Exited(Some(code)) => format!("exited {code}").into(),
+            ShellState::Exited(None) => "exited".into(),
+            ShellState::Killed => "killed".into(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Runtime {
+    Live(Instant),
+    Ended(Duration),
+    Unknown,
+}
+
+impl Runtime {
+    fn spent(self) -> Option<Duration> {
+        match self {
+            Runtime::Live(since) => Some(since.elapsed()),
+            Runtime::Ended(took) => Some(took),
+            Runtime::Unknown => None,
         }
     }
 }
@@ -60,12 +93,36 @@ pub struct Shell {
     pub name: SharedString,
     pub state: ShellState,
     pub command: SharedString,
+    pub dir: SharedString,
     pub pid: Option<i64>,
     pub starter: Option<SharedString>,
     pub port: Option<u16>,
-    pub run_time: Option<SharedString>,
+    pub ready: Option<SharedString>,
+    pub runtime: Runtime,
     pub lines: Vec<SharedString>,
-    pub status: TermStatus,
+}
+
+impl Shell {
+    fn status(&self) -> TermStatus {
+        match (self.state, self.runtime) {
+            (ShellState::Running | ShellState::LeftOver, Runtime::Live(since)) => {
+                TermStatus::Running { since }
+            }
+            (ShellState::Exited(Some(code)), runtime) => TermStatus::Exited {
+                code,
+                took: runtime.spent().unwrap_or_default(),
+            },
+            (
+                ShellState::Running
+                | ShellState::LeftOver
+                | ShellState::Exited(None)
+                | ShellState::Killed,
+                runtime,
+            ) => TermStatus::Ended {
+                took: runtime.spent().unwrap_or_default(),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,10 +133,19 @@ pub enum ShellEvent {
     Dismiss,
     Open(usize),
     Trace(usize),
+    AskKill(usize),
+    Keep,
 }
 
 type OnShell = Rc<dyn Fn(&ShellEvent, &mut Window, &mut App)>;
 type OnKill = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
+
+#[derive(Clone, Copy)]
+enum Ending<'a> {
+    Hidden,
+    Offered,
+    Asking(&'a OnKill),
+}
 
 #[derive(IntoElement)]
 pub struct Shells {
@@ -89,6 +155,7 @@ pub struct Shells {
     listing: bool,
     on: OnShell,
     kill: Option<OnKill>,
+    asking: Option<usize>,
 }
 
 impl Shells {
@@ -106,11 +173,17 @@ impl Shells {
             listing,
             on: Rc::new(on),
             kill: None,
+            asking: None,
         }
     }
 
     pub fn on_kill(mut self, kill: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
         self.kill = Some(Rc::new(kill));
+        self
+    }
+
+    pub fn asking(mut self, asking: Option<usize>) -> Self {
+        self.asking = asking;
         self
     }
 }
@@ -292,8 +365,13 @@ fn panel(
     fit: Fit,
     theme: &Theme,
     on: &OnShell,
-    kill: Option<&OnKill>,
+    ending: Ending<'_>,
 ) -> Div {
+    let (offered, asked) = match ending {
+        Ending::Hidden => (false, None),
+        Ending::Offered => (shell.state.endable(), None),
+        Ending::Asking(kill) => (false, Some(kill.clone())),
+    };
     let wide = fit == Fit::Wide;
     let header = div()
         .flex()
@@ -322,7 +400,6 @@ fn panel(
                         .as_ref()
                         .map(|starter| meta(format!("by {starter}"), theme)),
                 )
-                .children(shell.run_time.clone().map(|run_time| meta(run_time, theme)))
         })
         .children(shell.port.map(|port| meta(format!(":{port}"), theme)))
         .child(action(
@@ -331,15 +408,12 @@ fn panel(
             theme,
             emit(on, ShellEvent::Open(ix)),
         ))
-        .children(kill.cloned().map(|kill| {
+        .children(offered.then(|| {
             action(
                 format!("{id}-kill").into(),
                 "kill",
                 theme,
-                move |_, window, cx| {
-                    cx.stop_propagation();
-                    kill(&ix, window, cx)
-                },
+                emit(on, ShellEvent::AskKill(ix)),
             )
         }))
         .child(
@@ -351,6 +425,67 @@ fn panel(
             .flex_none()
             .on_click(emit(on, ShellEvent::Trace(ix))),
         );
+    let facts = div()
+        .flex()
+        .items_center()
+        .gap(px(META_GAP))
+        .min_w_0()
+        .px(px(PANEL_PAD_X))
+        .pb(px(PANEL_PAD_BOTTOM))
+        .font_family(mono(theme))
+        .text_size(px(FONT_SMALL))
+        .child(meta(shell.state.word(), theme).text_color(shell.state.color(theme)))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_color(ink(theme, CAPTION_TEXT))
+                .child(shell.dir.clone()),
+        )
+        .children(shell.ready.clone().map(|ready| meta(ready, theme)));
+    let confirm = asked.map(|kill| {
+        let pid = shell
+            .pid
+            .map_or_else(String::new, |pid| format!(", pid {pid}"));
+        div()
+            .flex()
+            .items_center()
+            .gap(px(META_GAP))
+            .min_w_0()
+            .px(px(PANEL_PAD_X))
+            .pb(px(PANEL_PAD_BOTTOM))
+            .font_family(mono(theme))
+            .text_size(px(FONT_SMALL))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(ink(theme, T2))
+                    .child(format!("kill {}{pid}?", shell.name)),
+            )
+            .child(action(
+                format!("{id}-kill-yes").into(),
+                "kill",
+                theme,
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    kill(&ix, window, cx)
+                },
+            ))
+            .child(action(
+                format!("{id}-kill-keep").into(),
+                "keep",
+                theme,
+                emit(on, ShellEvent::Keep),
+            ))
+            .with_animation(
+                ElementId::Name(format!("{id}-kill-ask-{ix}").into()),
+                Animation::new(HOVER_MS).with_easing(EASE_OUT),
+                |confirm, t| confirm.opacity(t),
+            )
+    });
     div()
         .flex()
         .flex_col()
@@ -358,11 +493,13 @@ fn panel(
         .rounded(px(RADIUS_TAB))
         .bg(ink(theme, PANEL_FILL))
         .child(header)
+        .child(facts)
+        .children(confirm)
         .child(div().p(px(BADGE_PAD_X)).child(TermCard::new(
             ElementId::Name(format!("{id}-term-{ix}").into()),
             shell.command.clone(),
             shell.lines.clone(),
-            shell.status,
+            shell.status(),
         )))
 }
 
@@ -375,6 +512,7 @@ impl RenderOnce for Shells {
             listing,
             on,
             kill,
+            asking,
         } = self;
         let theme = ActiveTheme::theme(cx);
         let width = Width::of(format!("{id}-width"), window, cx);
@@ -440,9 +578,14 @@ impl RenderOnce for Shells {
                         })),
                 )
         });
+        let ending = match (kill.as_ref(), asking == Some(active)) {
+            (None, _) => Ending::Hidden,
+            (Some(_), false) => Ending::Offered,
+            (Some(kill), true) => Ending::Asking(kill),
+        };
         let body = shells
             .get(active)
-            .map(|shell| panel(&id, active, shell, fit, &theme, &on, kill.as_ref()));
+            .map(|shell| panel(&id, active, shell, fit, &theme, &on, ending));
         div()
             .relative()
             .flex()
