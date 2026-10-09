@@ -1,16 +1,20 @@
 use crate::palette::Palette;
+use alacritty_terminal::term::RenderableContent;
 use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::point_to_viewport;
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui::{
     App, BorderStyle, Bounds, Font, FontFeatures, FontStyle, FontWeight, Hsla, PaintQuad, Pixels,
-    Point, ShapedLine, Size, TextAlign, TextRun, UnderlineStyle, Window, fill, font, outline,
-    point, px, size,
+    Point, ShapedLine, SharedString, Size, StrikethroughStyle, TextAlign, TextRun, UnderlineStyle,
+    Window, fill, font, outline, point, px, size,
 };
+use std::mem;
 
 const FONT_SIZE: f32 = 14.;
 const LINE_HEIGHT: f32 = 1.3;
 const FALLBACK_ADVANCE: f32 = 0.6;
 const BAR_WIDTH: f32 = 2.;
+const DECORATION: f32 = 1.;
 const FAMILY: &str = if cfg!(target_os = "windows") {
     "Consolas"
 } else if cfg!(target_os = "macos") {
@@ -19,13 +23,6 @@ const FAMILY: &str = if cfg!(target_os = "windows") {
     "DejaVu Sans Mono"
 };
 
-pub(crate) struct Glyph {
-    pub ch: char,
-    pub fg: Hsla,
-    pub bg: Option<Hsla>,
-    pub flags: Flags,
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct Cursor {
     pub row: usize,
@@ -33,9 +30,25 @@ pub(crate) struct Cursor {
     pub shape: CursorShape,
 }
 
+struct Block {
+    row: usize,
+    col: usize,
+    rows: usize,
+    cols: usize,
+    color: Hsla,
+}
+
+struct Span {
+    row: usize,
+    col: usize,
+    text: SharedString,
+    runs: Vec<TextRun>,
+}
+
 pub(crate) struct Frame {
-    pub rows: Vec<Vec<Glyph>>,
-    pub cursor: Option<Cursor>,
+    blocks: Vec<Block>,
+    spans: Vec<Span>,
+    cursor: Option<Cursor>,
 }
 
 pub(crate) struct Painted {
@@ -59,6 +72,213 @@ pub(crate) fn cell_size(window: &Window) -> Size<Pixels> {
     size(width, px((FONT_SIZE * LINE_HEIGHT).round()))
 }
 
+struct Layout {
+    mono: Font,
+    blocks: Vec<Block>,
+    above: Vec<usize>,
+    here: Vec<usize>,
+    spans: Vec<Span>,
+    row: usize,
+    back: Option<(usize, Hsla)>,
+    text: String,
+    runs: Vec<TextRun>,
+    start: usize,
+    ink: usize,
+}
+
+impl Layout {
+    fn close_back(&mut self, end: usize) {
+        let Some((col, color)) = self.back.take() else {
+            return;
+        };
+        let cols = end.saturating_sub(col);
+        let row = self.row;
+        let merged = self.above.iter().copied().find(|at| {
+            self.blocks.get(*at).is_some_and(|block| {
+                block.col == col
+                    && block.cols == cols
+                    && block.color == color
+                    && block.row + block.rows == row
+            })
+        });
+        match merged.and_then(|at| self.blocks.get_mut(at).map(|block| (at, block))) {
+            Some((at, block)) => {
+                block.rows += 1;
+                self.here.push(at);
+            }
+            None => {
+                self.here.push(self.blocks.len());
+                self.blocks.push(Block {
+                    row,
+                    col,
+                    rows: 1,
+                    cols,
+                    color,
+                });
+            }
+        }
+    }
+
+    fn back(&mut self, col: usize, color: Option<Hsla>) {
+        if self.back.map(|(_, open)| open) == color {
+            return;
+        }
+        self.close_back(col);
+        self.back = color.map(|color| (col, color));
+    }
+
+    fn close_span(&mut self) {
+        let mut text = mem::take(&mut self.text);
+        let mut runs = mem::take(&mut self.runs);
+        if self.ink == 0 {
+            return;
+        }
+        text.truncate(self.ink);
+        let mut left = self.ink;
+        runs.retain_mut(|run| {
+            run.len = run.len.min(left);
+            left -= run.len;
+            run.len > 0
+        });
+        self.ink = 0;
+        self.spans.push(Span {
+            row: self.row,
+            col: self.start,
+            text: text.into(),
+            runs,
+        });
+    }
+
+    fn end_row(&mut self, end: usize) {
+        self.close_back(end);
+        self.close_span();
+        self.above = mem::take(&mut self.here);
+    }
+
+    fn glyph(&mut self, col: usize, ch: char, extra: Option<&[char]>, color: Hsla, flags: Flags) {
+        if self.text.is_empty() {
+            self.start = col;
+        }
+        let weight = if flags.contains(Flags::BOLD) {
+            FontWeight::BOLD
+        } else {
+            FontWeight::NORMAL
+        };
+        let style = if flags.contains(Flags::ITALIC) {
+            FontStyle::Italic
+        } else {
+            FontStyle::Normal
+        };
+        let underline = flags
+            .intersects(Flags::ALL_UNDERLINES)
+            .then_some(UnderlineStyle {
+                thickness: px(DECORATION),
+                color: None,
+                wavy: flags.contains(Flags::UNDERCURL),
+            });
+        let strikethrough = flags
+            .contains(Flags::STRIKEOUT)
+            .then_some(StrikethroughStyle {
+                thickness: px(DECORATION),
+                color: None,
+            });
+        let before = self.text.len();
+        self.text.push(if ch == '\t' { ' ' } else { ch });
+        self.text.extend(extra.into_iter().flatten());
+        let len = self.text.len() - before;
+        if ch != ' ' || underline.is_some() || strikethrough.is_some() {
+            self.ink = self.text.len();
+        }
+        match self.runs.last_mut() {
+            Some(last)
+                if last.color == color
+                    && last.font.weight == weight
+                    && last.font.style == style
+                    && last.underline == underline
+                    && last.strikethrough == strikethrough =>
+            {
+                last.len += len;
+            }
+            _ => self.runs.push(TextRun {
+                len,
+                font: Font {
+                    weight,
+                    style,
+                    ..self.mono.clone()
+                },
+                color,
+                background_color: None,
+                underline,
+                strikethrough,
+                letter_spacing: None,
+            }),
+        }
+        if flags.contains(Flags::WIDE_CHAR) {
+            self.close_span();
+        }
+    }
+}
+
+pub(crate) fn frame(content: RenderableContent<'_>, palette: &Palette, focused: bool) -> Frame {
+    let offset = content.display_offset;
+    let cursor = point_to_viewport(offset, content.cursor.point).map(|at| Cursor {
+        row: at.line,
+        col: at.column.0,
+        shape: content.cursor.shape,
+    });
+    let solid = cursor.filter(|cursor| focused && cursor.shape == CursorShape::Block);
+    let mut layout = Layout {
+        mono: mono(),
+        blocks: Vec::new(),
+        above: Vec::new(),
+        here: Vec::new(),
+        spans: Vec::new(),
+        row: 0,
+        back: None,
+        text: String::new(),
+        runs: Vec::new(),
+        start: 0,
+        ink: 0,
+    };
+    let mut end = 0;
+    for indexed in content.display_iter {
+        let Some(at) = point_to_viewport(offset, indexed.point) else {
+            continue;
+        };
+        let col = at.column.0;
+        if at.line != layout.row {
+            layout.end_row(end);
+            layout.row = at.line;
+        }
+        end = col + 1;
+        let selected = content.selection.is_some_and(|selection| {
+            selection.contains_cell(&indexed, content.cursor.point, content.cursor.shape)
+        });
+        let (fg, bg) = palette.cell_colors(indexed.cell);
+        layout.back(col, selected.then_some(palette.selection).or(bg));
+        if indexed.cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+            continue;
+        }
+        let color = match solid {
+            Some(cursor) if cursor.row == at.line && cursor.col == col => palette.background,
+            _ => fg,
+        };
+        layout.glyph(
+            col,
+            indexed.cell.c,
+            indexed.cell.zerowidth(),
+            color,
+            indexed.cell.flags,
+        );
+    }
+    layout.end_row(end);
+    Frame {
+        blocks: layout.blocks,
+        spans: layout.spans,
+        cursor,
+    }
+}
+
 pub(crate) fn prepare(
     frame: &Frame,
     origin: Point<Pixels>,
@@ -73,12 +293,22 @@ pub(crate) fn prepare(
             origin.y + cell.height * row as f32,
         )
     };
-    let span = |row: usize, start: usize, end: usize| {
-        Bounds::new(
-            at(row, start),
-            size(cell.width * end.saturating_sub(start) as f32, cell.height),
-        )
-    };
+    let backgrounds = frame
+        .blocks
+        .iter()
+        .map(|block| {
+            fill(
+                Bounds::new(
+                    at(block.row, block.col),
+                    size(
+                        cell.width * block.cols as f32,
+                        cell.height * block.rows as f32,
+                    ),
+                ),
+                block.color,
+            )
+        })
+        .collect();
     let cursor = frame.cursor.and_then(|cursor| {
         cursor_quad(
             cursor,
@@ -87,100 +317,19 @@ pub(crate) fn prepare(
             palette.cursor,
         )
     });
-    let solid = frame
-        .cursor
-        .filter(|cursor| focused && cursor.shape == CursorShape::Block);
-    let mono = mono();
-    let mut backgrounds = Vec::new();
-    let mut lines = Vec::new();
-    for (row, glyphs) in frame.rows.iter().enumerate() {
-        let mut run: Option<(usize, Hsla)> = None;
-        for (col, bg) in glyphs
-            .iter()
-            .map(|glyph| glyph.bg)
-            .chain([None])
-            .enumerate()
-        {
-            match run {
-                Some((start, color)) if bg != Some(color) => {
-                    backgrounds.push(fill(span(row, start, col), color));
-                    run = bg.map(|bg| (col, bg));
-                }
-                None => run = bg.map(|bg| (col, bg)),
-                Some(_) => {}
-            }
-        }
-        let mut text = String::new();
-        let mut runs: Vec<TextRun> = Vec::new();
-        let mut start = 0;
-        for (col, glyph) in glyphs.iter().enumerate() {
-            if glyph.flags.contains(Flags::WIDE_CHAR_SPACER) {
-                continue;
-            }
-            if text.is_empty() {
-                start = col;
-            }
-            let color = match solid {
-                Some(cursor) if cursor.row == row && cursor.col == col => palette.background,
-                _ => glyph.fg,
-            };
-            let weight = if glyph.flags.contains(Flags::BOLD) {
-                FontWeight::BOLD
-            } else {
-                FontWeight::NORMAL
-            };
-            let style = if glyph.flags.contains(Flags::ITALIC) {
-                FontStyle::Italic
-            } else {
-                FontStyle::Normal
-            };
-            let underline =
-                glyph
-                    .flags
-                    .intersects(Flags::ALL_UNDERLINES)
-                    .then_some(UnderlineStyle {
-                        thickness: px(1.),
-                        color: None,
-                        wavy: false,
-                    });
-            text.push(glyph.ch);
-            match runs.last_mut() {
-                Some(last)
-                    if last.color == color
-                        && last.font.weight == weight
-                        && last.font.style == style
-                        && last.underline == underline =>
-                {
-                    last.len += glyph.ch.len_utf8();
-                }
-                _ => runs.push(TextRun {
-                    len: glyph.ch.len_utf8(),
-                    font: Font {
-                        weight,
-                        style,
-                        ..mono.clone()
-                    },
-                    color,
-                    background_color: None,
-                    underline,
-                    strikethrough: None,
-                    letter_spacing: None,
-                }),
-            }
-            if glyph.flags.contains(Flags::WIDE_CHAR) {
-                lines.push((
-                    at(row, start),
-                    shape(&mut text, &mut runs, cell.width, window),
-                ));
-            }
-        }
-        if !text.is_empty() {
-            lines.push((
-                at(row, start),
-                shape(&mut text, &mut runs, cell.width, window),
-            ));
-        }
-    }
+    let lines = frame
+        .spans
+        .iter()
+        .map(|span| {
+            let shaped = window.text_system().shape_line(
+                span.text.clone(),
+                px(FONT_SIZE),
+                &span.runs,
+                Some(cell.width),
+            );
+            (at(span.row, span.col), shaped)
+        })
+        .collect();
     Painted {
         backgrounds,
         cursor,
@@ -214,20 +363,6 @@ fn cursor_quad(
             color,
         )),
     }
-}
-
-fn shape(
-    text: &mut String,
-    runs: &mut Vec<TextRun>,
-    advance: Pixels,
-    window: &Window,
-) -> ShapedLine {
-    window.text_system().shape_line(
-        std::mem::take(text).into(),
-        px(FONT_SIZE),
-        &std::mem::take(runs),
-        Some(advance),
-    )
 }
 
 impl Painted {

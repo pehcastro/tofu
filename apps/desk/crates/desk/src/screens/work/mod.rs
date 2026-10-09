@@ -14,7 +14,7 @@ use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::find::{FindBar, FindGroup, find_ranges};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
-use desk_ui::components::tabs::{Tab, TabEvent, header_tabs, new_tab_glyph};
+use desk_ui::components::tabs::{Tab, TabEvent, TabFlag, header_tabs, new_tab_glyph};
 use desk_ui::components::tiling_board::{Host, Reopened, Settled, TilingBoard};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -32,7 +32,7 @@ use crate::modules::file_edits::{self, FileEdits};
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
 use crate::modules::subagents::{self, ExpandAgent, Subagents};
-use crate::modules::terminal::{self, TerminalModule};
+use crate::modules::terminal::{self, TabChanged, TerminalModule};
 use crate::project;
 
 const BOARD: &str = "36-agents";
@@ -169,12 +169,25 @@ fn build(
                         None => empty_tile(stack.id, theme, cx),
                     },
                 ),
-                title: Box::new(move |module, mark, cx| Tab {
-                    label: module.name().to_owned().into(),
-                    icon: glyph(module),
-                    count: count(&titles, module, cx),
-                    mark,
-                    flag: None,
+                title: Box::new(move |module, mark, cx| {
+                    let terminal = (*module == Module::Terminal)
+                        .then(|| titles.terminal.0.borrow().clone())
+                        .flatten();
+                    let terminal = terminal.as_ref().map(|terminal| terminal.read(cx));
+                    Tab {
+                        label: terminal
+                            .and_then(|terminal| terminal.label(cx))
+                            .unwrap_or_else(|| module.name().to_owned().into()),
+                        icon: glyph(module),
+                        count: count(&titles, module, cx),
+                        mark,
+                        flag: terminal
+                            .filter(|terminal| terminal.ringing())
+                            .map(|_| TabFlag {
+                                icon: Icon::Bell,
+                                tip: "the shell rang its bell".into(),
+                            }),
+                    }
                 }),
                 subtitle: Box::new(move |module, cx| {
                     (*module == Module::Chat)
@@ -222,6 +235,7 @@ fn build(
             find,
             found: Vec::new(),
             query: String::new(),
+            _terminal_tab: None,
             _watched: watched,
         }
     }))
@@ -239,6 +253,7 @@ pub struct Work {
     focus: FocusHandle,
     mounted: Mounted,
     replay: Option<Replay>,
+    _terminal_tab: Option<Subscription>,
     _watched: [Subscription; 2],
 }
 
@@ -629,9 +644,13 @@ impl Work {
         let held = self.mounted.terminal.0.borrow().is_some();
         if open && !held {
             let mounted = terminal::mount(&self.mounted.project, cx);
+            self._terminal_tab = Some(cx.subscribe(&mounted, |_, _, _: &TabChanged, cx| {
+                cx.notify();
+            }));
             self.mounted.terminal.0.replace(Some(mounted));
         } else if !open && held {
             eprintln!("desk: terminal: its tile closed, so its shell ends");
+            self._terminal_tab = None;
             self.mounted.terminal.0.replace(None);
         }
     }

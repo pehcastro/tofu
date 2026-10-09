@@ -1,6 +1,6 @@
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
-use gpui::{ColorExt, Hsla, rgb, rgb_to_hsla};
+use gpui::{ColorExt, Hsla, hsla_to_rgba, rgb, rgb_to_hsla};
 
 const ANSI: [u32; 16] = [
     0x1d1f21, 0xcc6666, 0xb5bd68, 0xf0c674, 0x81a2be, 0xb294bb, 0x8abeb7, 0xc5c8c6, 0x666666,
@@ -9,6 +9,8 @@ const ANSI: [u32; 16] = [
 const FOREGROUND: u32 = 0xd8dadb;
 const BACKGROUND: u32 = 0x161719;
 const CURSOR: u32 = 0xd8dadb;
+const SELECTION: u32 = 0x81a2be;
+const SELECTION_ALPHA: f32 = 0.35;
 const DIM_ALPHA: f32 = 0.66;
 const CUBE_FIRST: u8 = 16;
 const GREY_FIRST: u8 = 232;
@@ -22,6 +24,7 @@ pub struct Palette {
     pub foreground: Hsla,
     pub background: Hsla,
     pub cursor: Hsla,
+    pub selection: Hsla,
     pub ansi: [Hsla; 16],
 }
 
@@ -31,12 +34,29 @@ impl Default for Palette {
             foreground: hex(FOREGROUND),
             background: hex(BACKGROUND),
             cursor: hex(CURSOR),
+            selection: hex(SELECTION).opacity(SELECTION_ALPHA),
             ansi: ANSI.map(hex),
         }
     }
 }
 
 impl Palette {
+    pub(crate) fn rgb(&self, index: usize) -> Rgb {
+        let color = match u8::try_from(index) {
+            Ok(index) => self.indexed(index),
+            Err(_) if index == NamedColor::Background as usize => self.background,
+            Err(_) if index == NamedColor::Cursor as usize => self.cursor,
+            Err(_) => self.foreground,
+        };
+        let channels = hsla_to_rgba(color);
+        let byte = |channel: f32| (channel.clamp(0., 1.) * f32::from(u8::MAX)).round() as u8;
+        Rgb {
+            r: byte(channels.red),
+            g: byte(channels.green),
+            b: byte(channels.blue),
+        }
+    }
+
     pub(crate) fn cell_colors(&self, cell: &Cell) -> (Hsla, Option<Hsla>) {
         let (front, back) = if cell.flags.contains(Flags::INVERSE) {
             (cell.bg, cell.fg)

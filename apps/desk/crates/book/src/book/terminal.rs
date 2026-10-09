@@ -57,6 +57,7 @@ fn palette(theme: &Theme) -> Palette {
         foreground: color(ColorToken::TextBase),
         background: color(ColorToken::CardsInnerFill),
         cursor: color(ColorToken::TextStrong),
+        selection: color(ColorToken::Selection),
         ansi: ANSI.map(color),
     }
 }
@@ -152,7 +153,17 @@ impl TerminalPage {
     }
 
     fn exited(&mut self, index: usize, event: TerminalEvent, cx: &mut Context<Book>) {
-        let TerminalEvent::Exited(code) = event;
+        let code = match event {
+            TerminalEvent::Exited(code) => code,
+            TerminalEvent::Started => {
+                if let Some(shell) = self.shell(index) {
+                    shell.state = TerminalState::Running;
+                    cx.notify();
+                }
+                return;
+            }
+            TerminalEvent::Retitled | TerminalEvent::Bell => return,
+        };
         let code = code
             .and_then(|code| i32::try_from(code).ok())
             .unwrap_or(UNKNOWN_EXIT);

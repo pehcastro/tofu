@@ -2,15 +2,16 @@ use std::env;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use desk_terminal::{Palette, Terminal};
+use desk_terminal::{Palette, Terminal, TerminalEvent};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, Render, Subscription, Window, div, prelude::*,
-    rgb_to_hsla,
+    App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, SharedString,
+    Subscription, Task, Window, div, prelude::*, rgb_to_hsla,
 };
 
 const FRAME_LOG: &str = "DESK_FRAME_LOG";
+const BELL: Duration = Duration::from_millis(450);
 const QUIET: Duration = Duration::from_millis(2000);
 const SLOW_FRAME_MS: f64 = 16.7;
 const ANSI: [ColorToken; 16] = [
@@ -38,19 +39,73 @@ struct FrameLog {
     _output: Subscription,
 }
 
+pub struct TabChanged;
+
 pub struct TerminalModule {
     terminal: Entity<Terminal>,
     frame_log: Option<FrameLog>,
+    ringing: Option<Task<()>>,
+    _events: Subscription,
+}
+
+impl EventEmitter<TabChanged> for TerminalModule {}
+
+fn log_pid(terminal: &Terminal) {
+    match terminal.pid() {
+        Some(pid) => eprintln!("desk: terminal pid {pid}"),
+        None => eprintln!("desk: terminal: the shell has no pid, it did not start"),
+    }
+}
+
+impl TerminalModule {
+    pub fn label(&self, cx: &App) -> Option<SharedString> {
+        self.terminal.read(cx).title()
+    }
+
+    pub fn ringing(&self) -> bool {
+        self.ringing.is_some()
+    }
+
+    fn heard(&mut self, terminal: Entity<Terminal>, event: &TerminalEvent, cx: &mut Context<Self>) {
+        match event {
+            TerminalEvent::Started => log_pid(terminal.read(cx)),
+            TerminalEvent::Exited(code) => {
+                eprintln!("desk: terminal: the shell exited with {code:?}, Enter starts a new one");
+            }
+            TerminalEvent::Retitled => {
+                eprintln!("desk: terminal title {:?}", terminal.read(cx).title());
+                cx.emit(TabChanged);
+            }
+            TerminalEvent::Bell => {
+                if self.ringing.is_some() {
+                    return;
+                }
+                eprintln!("desk: terminal bell");
+                self.ringing = Some(cx.spawn(async move |module, cx| {
+                    cx.background_executor().timer(BELL).await;
+                    module
+                        .update(cx, |module, cx| {
+                            module.ringing = None;
+                            cx.emit(TabChanged);
+                        })
+                        .unwrap_or_else(|_| eprintln!("desk: terminal: the module is gone"));
+                }));
+                cx.emit(TabChanged);
+            }
+        }
+    }
 }
 
 pub fn mount(project: &Path, cx: &mut App) -> Entity<TerminalModule> {
     eprintln!("desk: terminal: a shell starts in {}", project.display());
     cx.new(|cx| {
         let terminal = cx.new(|cx| Terminal::new(project, cx));
-        match terminal.read(cx).pid() {
-            Some(pid) => eprintln!("desk: terminal pid {pid}"),
-            None => eprintln!("desk: terminal: the shell has no pid, it did not start"),
-        }
+        eprintln!(
+            "desk: terminal shell {}",
+            terminal.read(cx).shell().display()
+        );
+        log_pid(terminal.read(cx));
+        let events = cx.subscribe(&terminal, TerminalModule::heard);
         let frame_log = env::var_os(FRAME_LOG).map(|_| FrameLog {
             output_at: None,
             frames: Vec::new(),
@@ -64,6 +119,8 @@ pub fn mount(project: &Path, cx: &mut App) -> Entity<TerminalModule> {
         TerminalModule {
             terminal,
             frame_log,
+            ringing: None,
+            _events: events,
         }
     })
 }
@@ -74,6 +131,7 @@ fn palette(theme: &Theme) -> Palette {
         foreground: color(ColorToken::TextBase),
         background: color(ColorToken::CardsInnerFill),
         cursor: color(ColorToken::TextStrong),
+        selection: color(ColorToken::Selection),
         ansi: ANSI.map(color),
     }
 }
