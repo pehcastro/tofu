@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/boardy"
 	"tofu/internal/host"
 	"tofu/internal/rule"
 	settingspkg "tofu/internal/settings"
@@ -64,11 +65,26 @@ type ruleStack struct {
 	overrides  []layerOverride
 }
 
+const (
+	boardLeadRule     = "board_lead"
+	boardSubAgentRule = "board_sub_agent"
+)
+
 func ruleSetting(id string) string {
-	if id == verifySubAgentsRule {
+	switch id {
+	case verifySubAgentsRule:
 		return settingspkg.VerifySubAgents
+	case boardLeadRule, boardSubAgentRule:
+		return boardy.ManagementSetting
 	}
 	return ""
+}
+
+func ruleSettingOnValue(key string) string {
+	if key == boardy.ManagementSetting {
+		return string(boardy.ManagementBoardy)
+	}
+	return "true"
 }
 
 func (o layerOverride) listing() *overrideListing {
@@ -110,8 +126,12 @@ func stackRules(library, project string) (ruleStack, error) {
 		if key == "" {
 			continue
 		}
+		on := settingInt(project, key, nil) != 0
+		if key == boardy.ManagementSetting {
+			on = settingText(project, key, nil) == string(boardy.ManagementBoardy)
+		}
 		mode := rule.ModeOff
-		if settingInt(project, key, nil) != 0 {
+		if on {
 			mode = rule.ModeShadow
 		}
 		if (one.Mode == rule.ModeOff) != (mode == rule.ModeOff) {
@@ -267,9 +287,9 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 	for _, off := range stack.shippedOff {
 		switchOn := "ships off: tofu rules restore " + off.ID
 		if key := ruleSetting(off.ID); slices.Contains(stack.bySetting, off.ID) {
-			switchOn = "off by the setting " + key + ": tofu settings set " + key + " true"
+			switchOn = "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
 		} else if key != "" {
-			switchOn += ", or tofu settings set " + key + " true"
+			switchOn += ", or tofu settings set " + key + " " + ruleSettingOnValue(key)
 		}
 		listing = append(listing, ruleListing{ID: off.ID, Kind: string(off.Kind), Origin: shippedFrom, Mode: string(rule.ModeOff), Switch: switchOn})
 	}

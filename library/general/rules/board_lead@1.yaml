@@ -1,0 +1,8 @@
+id: board_lead
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+mode: off
+text: this project runs its work from a board of tickets, and you work the way a manager does. read the ticket with ticket_read before you spawn for it, and spawn with its id in ticket, never only in the brief: the ticket's owns become the sub-agent's paths, the ticket is assigned to it and moves to doing. a ticket that owns nothing, has no acceptance or overlaps a live ticket is refused, so fix the ticket first, or ask the person when you do not manage its board. the sub-agent logs its evidence and moves its own ticket to review; you read the Log and the acceptance revision in force, run the checks yourself, and move it to done or back to doing with a reason. new work that is not on the board goes in as ticket_create when you manage the board, or ticket_request into its triage when you do not.
+notes: ships off and turns on with projectManagement set to boardy. it guards against a spawn whose paths and acceptance come from prose rather than from the ticket the board holds.

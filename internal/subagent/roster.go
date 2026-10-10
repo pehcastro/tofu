@@ -60,6 +60,7 @@ func (s State) settled() bool {
 
 type SubAgent struct {
 	ID           string
+	Ticket       string
 	Agent        string
 	Model        string
 	Mission      string
@@ -246,7 +247,7 @@ func (r *Roster) Reopen(id, reason string) (int, error) {
 			continue
 		}
 		if agent.Round >= konst.SubAgentMaxRounds {
-			return 0, RoundCapError{Ticket: TicketID(agent.Brief), Cap: konst.SubAgentMaxRounds}
+			return 0, RoundCapError{Ticket: cmp.Or(agent.Ticket, TicketID(agent.Brief)), Cap: konst.SubAgentMaxRounds}
 		}
 		agent.Round++
 		agent.State, agent.Report = Reopened, reason

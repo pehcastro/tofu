@@ -89,6 +89,7 @@ type ResultBody struct {
 
 type SpawnBody struct {
 	Agent      string   `json:"agent"`
+	Ticket     string   `json:"ticket,omitempty"`
 	Definition string   `json:"definition,omitempty"`
 	Model      string   `json:"model,omitempty"`
 	Mission    string   `json:"mission,omitempty"`

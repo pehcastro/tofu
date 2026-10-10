@@ -79,6 +79,10 @@ func AcceptanceLines(task string) []string {
 	if start < 0 {
 		return nil
 	}
+	return acceptanceBullets(lines[start:])
+}
+
+func acceptanceBullets(lines []string) []string {
 	var found []string
 	var current strings.Builder
 	flush := func() {
@@ -87,7 +91,7 @@ func AcceptanceLines(task string) []string {
 			current.Reset()
 		}
 	}
-	for _, line := range lines[start:] {
+	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(trimmed, "## "):
@@ -139,8 +143,10 @@ func capped(text string) (string, bool) {
 }
 
 func BuildContract(task, report string, stopped bool) Contract {
-	lines := AcceptanceLines(task)
-	ticket := TicketID(task)
+	return contractOf(TicketID(task), AcceptanceLines(task), report, stopped)
+}
+
+func contractOf(ticket string, lines []string, report string, stopped bool) Contract {
 	if ticket == "" || len(lines) == 0 {
 		return Contract{NoTicket: true}
 	}

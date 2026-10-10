@@ -19,6 +19,7 @@ type GateFacts struct {
 
 type SpawnFacts struct {
 	Definition string   `json:"definition"`
+	Ticket     string   `json:"ticket,omitempty"`
 	Mission    string   `json:"mission"`
 	Task       string   `json:"task"`
 	Owns       []string `json:"owns"`

@@ -28,6 +28,10 @@ A message can carry more than one fenced json block, such as a sub-agent pasting
 
 A sub-agent given no ticket, or a ticket whose brief carries no `## Acceptance` section, sends no block at all and is marked as having no contract rather than an empty one. A sub-agent stopped mid-run by a cap is marked partial, and every line it never reached counts as neither met nor omitted, because it was never given the chance to answer.
 
+## A board ticket is read by its id
+
+With `projectManagement` set to `boardy`, a spawn names its ticket by id, such as `DEMO-2`, and the contract reads that ticket from the board rather than searching the brief. The brief may mention `UTF-8`, `ISO-8601` or another ticket, and none of them becomes the contract's ticket. The acceptance lines are the revision in force, the last `## Acceptance` section of the ticket file: a ticket sent back from review to doing gets `## Acceptance 2`, and only that list is matched. With the setting `off` the contract reads the brief as before: the first ticket-shaped id in it and its `## Acceptance` section.
+
 ## What it does not check
 
 A clean block, with a real command and real output behind every claim, is evidence that something ran. It is not a verdict that the command's output actually satisfies the line: nothing here checks an exit code or the intent behind an acceptance line against what came back. That reading is done by whoever evaluates the contract, not by the shape of the contract itself.

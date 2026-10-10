@@ -1,0 +1,64 @@
+name: ask
+domain: general
+questions_version: 2
+
+state:
+  - asker
+  - question
+  - options
+  - recommended
+  - path
+  - in_owns
+  - answered_by_spec_or_ticket
+  - precedent_exists
+  - reversibility
+
+questions:
+  action:
+    type: choice
+    instructions: >-
+      Someone doing work hit a moment of doubt. `asker` says who: the lead,
+      who would put `question` to the person, or a sub-agent, who would put
+      it to the orchestrator, or to a manager of its board when its work is
+      a board ticket. `options` are the ways out the asker sees and
+      `recommended` is the one it would take. Where the doubt is about a
+      file, `path` names it and `in_owns` says whether the asker may write
+      it; for a board ticket, owns is the ticket's own owns.
+      `answered_by_spec_or_ticket` says whether a spec or a ticket already
+      settles it, and a board ticket settles only through its Scope and the
+      acceptance revision in force, the last one, never an earlier revision.
+      `precedent_exists` says whether an earlier decision does, including an
+      answer a manager wrote in the ticket's Log, and `reversibility` what a
+      wrong guess costs. Each is empty or false when nothing on hand says.
+      Choose the one action the asker should take right now.
+    escape: ask_now
+    options:
+      - name: proceed
+        criteria: >-
+          Enough is already known: take the recommended option or the
+          reading the state already points to, say so, and keep working,
+          with nothing left to settle.
+      - name: ask_now
+        criteria: >-
+          The doubt blocks real work, and a wrong guess would be costly or
+          hard to reverse: put the question to whoever answers the asker
+          before doing anything the answer touches.
+      - name: defer_to_end
+        criteria: >-
+          The doubt does not block the rest of the work: finish everything
+          the answer does not touch, and carry the question to the report.
+
+  determined:
+    type: noul
+    instructions: >-
+      Judge whether the doubt in `question` is already settled by
+      `answered_by_spec_or_ticket` or `precedent_exists`, without asking
+      anyone.
+    criteria:
+      true: >-
+        The spec, the ticket's Scope or its acceptance revision in force, an
+        answer in the ticket's Log, or a recorded precedent already answers
+        this: nothing needs to be asked.
+      false: >-
+        Nothing already on hand answers this: the asker is genuinely
+        guessing.
