@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"cmp"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -103,7 +105,12 @@ func (s *server) turns(p SessionParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sessionTurns(store, cmp.Or(p.Session, s.focus().host.ID()))
+	asked := cmp.Or(p.Session, s.focus().host.ID())
+	answer, err := sessionTurns(store, asked)
+	if errors.Is(err, fs.ErrNotExist) && slices.ContainsFunc(s.tracked(), func(l *lane) bool { return l.host.ID() == asked }) {
+		return SessionTurns{Session: asked, Turns: []TurnDigest{}}, nil
+	}
+	return answer, err
 }
 
 func (s *server) turnEnded(l *lane, id string) {
