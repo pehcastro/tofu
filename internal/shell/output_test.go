@@ -6,9 +6,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"tofu/internal/konst"
 )
 
 func startKept(t *testing.T, dir, command string) *Registry {
@@ -300,5 +303,117 @@ func TestOutputAForegroundCommandIsListedWhileItRuns(t *testing.T) {
 	}
 	if left, _ := os.ReadDir(dir); len(left) != 1 || left[0].Name() != highestClaimedFile {
 		t.Fatalf("a command that ended inside the wait left %v in the registry, want only the highest name ever claimed", left)
+	}
+}
+
+func TestOutputTailsMatchAFreshReadThroughEveryChange(t *testing.T) {
+	registry, dir := OpenAt(t.TempDir()), t.TempDir()
+	ended := time.Now()
+	entry := Shell{Name: "kept", Command: "npm run dev > run.out", Dir: dir, State: Exited, Started: ended.Add(-time.Minute), Ended: &ended}
+	own, named := registry.logPath("kept"), filepath.Join(dir, "run.out")
+	appendTo := func(path, text string) {
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = file.WriteString(text)
+		_ = file.Close()
+	}
+	numbered := func(from, count int) string {
+		var lines strings.Builder
+		for at := from; at < from+count; at++ {
+			lines.WriteString("line " + strconv.Itoa(at) + strings.Repeat(".", at%90) + "\n")
+		}
+		return lines.String()
+	}
+	lines := DefaultTail
+	steps := []struct {
+		what   string
+		change func()
+	}{
+		{"a first poll of a thousand lines", func() { appendTo(own, numbered(0, 1000)) }},
+		{"nothing changed", func() {}},
+		{"three lines appended", func() { appendTo(own, numbered(1000, 3)) }},
+		{"half a line appended", func() { appendTo(own, "half a li") }},
+		{"the half line finished", func() { appendTo(own, "ne\n") }},
+		{"a named log appearing", func() { appendTo(named, numbered(0, 50)) }},
+		{"a burst wider than the window", func() { appendTo(own, numbered(2000, 5000)) }},
+		{"the log truncated to a few lines", func() { _ = os.WriteFile(own, []byte(numbered(9000, 4)), 0o644) }},
+		{"the log rewritten longer from a new start", func() { _ = os.WriteFile(own, []byte("a new start\n"+numbered(9100, 40)), 0o644) }},
+		{"a letter split across two appends", func() { appendTo(own, "caf\xc3") }},
+		{"the letter finished", func() { appendTo(own, "\xa9\n") }},
+		{"the named log removed", func() { _ = os.Remove(named) }},
+		{"the command restarted writing elsewhere", func() {
+			entry.Command = "npm run dev > other.out"
+			appendTo(filepath.Join(dir, "other.out"), numbered(0, 7))
+		}},
+		{"fewer lines asked for", func() { lines = 5 }},
+		{"a named log older than the start", func() {
+			entry.Started = time.Now().Add(time.Hour)
+		}},
+	}
+	var tails Tails
+	for _, step := range steps {
+		step.change()
+		if err := registry.writeLocked(entry); err != nil {
+			t.Fatal(err)
+		}
+		want, err := registry.Tail("kept", lines)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := tails.Tail(registry, "kept", lines)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("after %s the kept tail ends %q, a fresh read ends %q", step.what, got[max(0, len(got)-120):], want[max(0, len(want)-120):])
+		}
+	}
+}
+
+func TestOutputTailsFollowALiveWriter(t *testing.T) {
+	registry := startKept(t, t.TempDir(), "for i in $(seq 1 40); do echo line $i; sleep 0.05; done; sleep 30")
+	var tails Tails
+	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		got, err := tails.Tail(registry, "watched", DefaultTail)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(got, "line 40") {
+			if want, _ := registry.Tail("watched", DefaultTail); got != want {
+				t.Fatalf("the kept tail reads %q, a fresh read %q", got, want)
+			}
+			return
+		}
+	}
+	got, _ := tails.Tail(registry, "watched", DefaultTail)
+	want, _ := registry.Tail("watched", DefaultTail)
+	t.Fatalf("a log written by a live process never reached line 40 through the kept tail: %q, a fresh read %q", got[max(0, len(got)-80):], want[max(0, len(want)-80):])
+}
+
+func BenchmarkOutputPollOfFortyKeptShells(b *testing.B) {
+	registry, dir := OpenAt(b.TempDir()), b.TempDir()
+	line := strings.Repeat("x", 72) + "\n"
+	for at := range 40 {
+		name := "kept-" + strconv.Itoa(at)
+		entry := Shell{Name: name, Command: "npm run dev > " + name + ".out", Dir: dir, Owner: "go-dev-" + strconv.Itoa(at%8), PID: os.Getpid(), TofuPID: os.Getpid(), State: Running, Started: time.Now().Add(-time.Minute), Kept: KeptBackground}
+		if err := registry.writeLocked(entry); err != nil {
+			b.Fatal(err)
+		}
+		for _, path := range []string{registry.logPath(name), filepath.Join(dir, name+".out")} {
+			if err := os.WriteFile(path, []byte(strings.Repeat(line, 200*1024/len(line))), 0o644); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+	var tails Tails
+	b.ReportAllocs()
+	for b.Loop() {
+		found, _ := registry.List()
+		for _, one := range found {
+			_, _ = tails.Tail(registry, one.Name, konst.ShellLogTailLinesDefault)
+		}
+		tails.Forget(found)
 	}
 }

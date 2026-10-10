@@ -2,12 +2,14 @@ package shell
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -15,23 +17,132 @@ import (
 	"tofu/internal/widget"
 )
 
+var (
+	commandStep = regexp.MustCompile(`&&|\|\||;`)
+	changedDir  = regexp.MustCompile(`(?i)^\s*(?:cd|pushd|set-location)\s+(?:/d\s+)?["']?([^"']+?)["']?\s*$`)
+	logTarget   = regexp.MustCompile(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`)
+	msysDrive   = regexp.MustCompile(`^/([a-zA-Z])(?:/|$)`)
+)
+
+type Tails struct {
+	mu     sync.Mutex
+	shells map[string]*tailed
+}
+
+type tailed struct {
+	key  tailKey
+	logs []logEnd
+	text string
+}
+
+type tailKey struct {
+	command, dir      string
+	terminal          bool
+	started, deadline int64
+	lines             int
+}
+
+type logEnd struct {
+	path   string
+	since  time.Time
+	limit  int64
+	size   int64
+	at     time.Time
+	window []byte
+}
+
 func (r *Registry) Tail(name string, lines int) (string, error) {
+	return new(Tails).Tail(r, name, lines)
+}
+
+func (t *Tails) Tail(r *Registry, name string, lines int) (string, error) {
 	entry, err := r.Read(name)
 	if err != nil {
 		return "", err
 	}
-	own, _ := readEnd(r.logPath(name), time.Time{}, konst.ShellTailBytes)
-	parts := []string{heldBy(entry.Command, entry.Terminal), lastLines(own, lines)}
-	for _, path := range namedLogs(entry.Dir, entry.Command) {
-		written, _ := readEnd(path, entry.Started, konst.ShellNamedLogBytes)
-		if named := lastLines(written, lines); named != "" {
-			parts = append(parts, path+", which the command writes to, ends:\n"+named)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.shells == nil {
+		t.shells = map[string]*tailed{}
+	}
+	key := tailKey{command: entry.Command, dir: entry.Dir, terminal: entry.Terminal, started: entry.Started.UnixNano(), deadline: entry.Deadline, lines: lines}
+	held := t.shells[name]
+	moved := held == nil || held.key != key
+	if moved {
+		held = &tailed{key: key, logs: []logEnd{{path: r.logPath(name), limit: konst.ShellTailBytes}}}
+		for _, path := range namedLogs(entry.Dir, entry.Command) {
+			held.logs = append(held.logs, logEnd{path: path, since: entry.Started, limit: konst.ShellNamedLogBytes})
+		}
+		t.shells[name] = held
+	}
+	for at := range held.logs {
+		moved = held.logs[at].refresh() || moved
+	}
+	if !moved {
+		return held.text, nil
+	}
+	parts := []string{heldBy(entry.Command, entry.Terminal), lastLines(held.logs[0].tail(), lines)}
+	for _, log := range held.logs[1:] {
+		if named := lastLines(log.tail(), lines); named != "" {
+			parts = append(parts, log.path+", which the command writes to, ends:\n"+named)
 		}
 	}
 	if entry.Deadline > 0 {
 		parts = append(parts, "tofu: "+HitDeadline(time.Duration(entry.Deadline)*time.Millisecond)+" and was killed")
 	}
-	return strings.TrimLeft(strings.Join(slices.DeleteFunc(parts, func(part string) bool { return part == "" }), "\n\n"), "\n"), nil
+	held.text = strings.TrimLeft(strings.Join(slices.DeleteFunc(parts, func(part string) bool { return part == "" }), "\n\n"), "\n")
+	return held.text, nil
+}
+
+func (t *Tails) Forget(listed []Shell) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	maps.DeleteFunc(t.shells, func(name string, _ *tailed) bool {
+		return !slices.ContainsFunc(listed, func(one Shell) bool { return one.Name == name })
+	})
+}
+
+func (l *logEnd) refresh() bool {
+	info, err := os.Stat(l.path)
+	if err != nil || !written(info, l.since) {
+		moved := l.size > 0
+		l.size, l.at, l.window = 0, time.Time{}, nil
+		return moved
+	}
+	if info.Size() == l.size && info.ModTime().Equal(l.at) {
+		return false
+	}
+	file, err := os.Open(l.path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = file.Close() }()
+	overlap := int64(min(len(l.window), konst.ShellRewriteHeadBytes))
+	from := l.size - overlap
+	if l.size == 0 || info.Size() < l.size || info.Size()-l.size > l.limit {
+		from, overlap, l.window = max(0, info.Size()-l.limit), 0, nil
+	}
+	raw := make([]byte, info.Size()-from)
+	n, _ := file.ReadAt(raw, from)
+	if int64(n) < overlap || !bytes.Equal(raw[:overlap], l.window[int64(len(l.window))-overlap:]) {
+		l.size, l.window = 0, nil
+		return l.refresh()
+	}
+	l.window = append(l.window, raw[overlap:n]...)
+	l.window = l.window[max(0, int64(len(l.window))-l.limit):]
+	l.size, l.at = from+int64(n), info.ModTime()
+	return true
+}
+
+func (l *logEnd) tail() []byte {
+	if int64(len(l.window)) < l.size {
+		return l.window[bytes.IndexByte(l.window, '\n')+1:]
+	}
+	return l.window
+}
+
+func written(info os.FileInfo, since time.Time) bool {
+	return !info.IsDir() && info.Size() > 0 && !info.ModTime().Before(since.Add(-konst.ShellLogClockSlackMillis*time.Millisecond))
 }
 
 type Timing struct {
@@ -47,8 +158,8 @@ func (r *Registry) Timing(entry Shell, now time.Time) Timing {
 	}
 	timing.Ran = now.Sub(entry.Started)
 	for _, path := range append(namedLogs(entry.Dir, entry.Command), r.logPath(entry.Name)) {
-		if _, at := readEnd(path, entry.Started, 0); at.After(timing.Last) {
-			timing.Last = at
+		if info, err := os.Stat(path); err == nil && written(info, entry.Started) && info.ModTime().After(timing.Last) {
+			timing.Last = info.ModTime()
 		}
 	}
 	return timing
@@ -167,33 +278,14 @@ func lastLines(raw []byte, lines int) string {
 	return strings.Join(all[max(0, len(all)-lines):], "\n")
 }
 
-func readEnd(path string, since time.Time, limit int64) ([]byte, time.Time) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, time.Time{}
-	}
-	defer func() { _ = file.Close() }()
-	info, err := file.Stat()
-	if err != nil || info.IsDir() || info.Size() == 0 || info.ModTime().Before(since.Add(-konst.ShellLogClockSlackMillis*time.Millisecond)) {
-		return nil, time.Time{}
-	}
-	raw := make([]byte, min(info.Size(), limit))
-	n, _ := file.ReadAt(raw, info.Size()-int64(len(raw)))
-	raw = raw[:n]
-	if int64(n) < info.Size() {
-		raw = raw[bytes.IndexByte(raw, '\n')+1:]
-	}
-	return raw, info.ModTime()
-}
-
 func namedLogs(dir, command string) []string {
 	var paths []string
-	for _, step := range regexp.MustCompile(`&&|\|\||;`).Split(command, -1) {
-		if moved := regexp.MustCompile(`(?i)^\s*(?:cd|pushd|set-location)\s+(?:/d\s+)?["']?([^"']+?)["']?\s*$`).FindStringSubmatch(step); moved != nil {
+	for _, step := range commandStep.Split(command, -1) {
+		if moved := changedDir.FindStringSubmatch(step); moved != nil {
 			dir = within(dir, moved[1])
 			continue
 		}
-		for _, match := range regexp.MustCompile(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`).FindAllStringSubmatch(step, -1) {
+		for _, match := range logTarget.FindAllStringSubmatch(step, -1) {
 			if slices.Contains([]string{"/dev/null", "$null", "nul"}, strings.ToLower(match[1])) {
 				continue
 			}
@@ -206,7 +298,7 @@ func namedLogs(dir, command string) []string {
 }
 
 func within(dir, path string) string {
-	if drive := regexp.MustCompile(`^/([a-zA-Z])(?:/|$)`).FindStringSubmatch(path); drive != nil && runtime.GOOS == "windows" {
+	if drive := msysDrive.FindStringSubmatch(path); drive != nil && runtime.GOOS == "windows" {
 		path = strings.ToUpper(drive[1]) + ":/" + path[len(drive[0]):]
 	}
 	if filepath.IsAbs(path) {

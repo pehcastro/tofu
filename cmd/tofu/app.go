@@ -489,6 +489,7 @@ func branchOf(dir string) string {
 }
 
 func appShells(dir string, registry *shell.Registry, openErr error) func() []shells.Entry {
+	var tails shell.Tails
 	return func() []shells.Entry {
 		if openErr != nil {
 			return nil
@@ -515,9 +516,10 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 			case shell.Killed:
 				entry.State = shells.Killed
 			}
-			entry.Log, _ = registry.Tail(one.Name, tail)
+			entry.Log, _ = tails.Tail(registry, one.Name, tail)
 			entries = append(entries, entry)
 		}
+		tails.Forget(found)
 		return entries
 	}
 }

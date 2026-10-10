@@ -24,7 +24,7 @@ type progressMark struct{ steps, calls, answered int }
 
 type movement struct {
 	mark   progressMark
-	output string
+	output []string
 	moved  time.Time
 }
 
@@ -45,16 +45,16 @@ func (a *App) stepped(row subagent.Row) {
 
 func (a *App) printed(entries []shells.Entry) {
 	a.liveShells = slices.DeleteFunc(slices.Clone(entries), func(entry shells.Entry) bool { return entry.State != shells.Running })
-	outputs := map[string]string{}
+	outputs := map[string][]string{}
 	for _, entry := range a.liveShells {
-		outputs[entry.Owner] += entry.Name + "\n" + entry.Log + "\n"
+		outputs[entry.Owner] = append(outputs[entry.Owner], entry.Name, entry.Log)
 	}
 	for owner, output := range outputs {
 		held, seen := a.moves[owner]
-		if !seen || held.output == output {
+		if !seen || slices.Equal(held.output, output) {
 			continue
 		}
-		if held.output != "" {
+		if len(held.output) > 0 {
 			held.moved = a.options.Now()
 		}
 		held.output = output

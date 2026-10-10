@@ -2,13 +2,16 @@ package host
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"tofu/internal/cron"
+	roster "tofu/internal/subagent"
 )
 
 type wireLine struct {
@@ -101,6 +104,53 @@ func servingHost(t *testing.T, h *Host, project string, cfg ServeConfig) *wireCl
 		_ = serveOut.Close()
 	})
 	return c
+}
+
+func hundredSubAgents() []SubAgentRow {
+	states := []roster.State{roster.Working, roster.WaitingAnswer, roster.Finished, roster.Parked, roster.Errored, roster.InReview, roster.Reopened}
+	rows := make([]SubAgentRow, 100)
+	for at := range rows {
+		rows[at] = SubAgentRow{Name: "go-dev-" + strconv.Itoa(at), State: states[at%len(states)], Doing: "step " + strconv.Itoa(at)}
+		if at > 0 {
+			rows[at].Parent = rows[(at-1)/4].Name
+		}
+	}
+	rows[98].Parent, rows[99].Parent = rows[99].Name, rows[98].Name
+	return rows
+}
+
+func TestServeStatusOfAHundredSubAgents(t *testing.T) {
+	rows := hundredSubAgents()
+	release := make(chan struct{})
+	play := func(_ context.Context, _ Pick, _ string, live Live) {
+		live.Emit(Event{Kind: EventSubAgent, SubAgents: rows})
+		<-release
+	}
+	c, _, _ := serving(t, play, ServeConfig{})
+	defer close(release)
+	c.ask("1", "initialize", `{"client":"desk"}`)
+	c.ask("2", "session.open", `{}`)
+	var opened SessionOpenResult
+	c.answer("2", &opened)
+	c.ask("3", "turn.send", `{"session":"`+opened.Session+`","text":"go"}`)
+	c.until(func(line wireLine) bool {
+		return line.Method == statusMethod && strings.Contains(string(line.Params), `"title":"go-dev-99"`)
+	}, "the hundredth sub-agent's status")
+	var listed StatusList
+	c.ask("4", "status.list", `{}`)
+	c.answer("4", &listed)
+	for _, record := range listed.Records {
+		line, _ := json.Marshal(record)
+		t.Log(string(line))
+	}
+}
+
+func BenchmarkStatusRecordsOfAHundredSubAgents(b *testing.B) {
+	feed := statusFeed{agents: hundredSubAgents()}
+	b.ReportAllocs()
+	for b.Loop() {
+		feed.records(nil)
+	}
 }
 
 func TestServeTellsCronJobsAndQuotaWithoutATurn(t *testing.T) {
