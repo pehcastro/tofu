@@ -88,6 +88,9 @@ const (
 	minFeedWidth   = 24
 	headerRows     = 3
 	wheelRows      = 3
+	railCacheCap   = 1024
+	spinnerCell    = "\xe2\xa0\x80"
+	measureBatch   = 32
 	compactGap     = 0
 	comfortableGap = 1
 	spaciousGap    = 2
@@ -133,6 +136,7 @@ type Model struct {
 	selected           string
 	expanded           map[string]bool
 	scroll, frame, gap int
+	version            int
 	retention          Retention
 	thinkingHidden     bool
 	cards              *cardCache
@@ -186,22 +190,22 @@ func (m Model) retained() []Event {
 
 func (m *Model) SetEvents(events []Event) {
 	if m.scroll == 0 {
-		m.events = events
+		m.events, m.version = events, m.version+1
 		return
 	}
-	cards, starts, rows := m.layout("")
-	top, anchor := fromTop(rows, m.pageHeight(), m.scroll), len(cards)-1
-	for anchor > 0 && starts[anchor] > top {
+	s := m.laid(m.depth(), "")
+	top, anchor := fromTop(s.rows, m.pageHeight(), m.scroll), len(s.drafts)-1
+	for anchor > 0 && s.starts[anchor] > top {
 		anchor--
 	}
-	m.events = events
+	m.events, m.version = events, m.version+1
 	if anchor < 0 {
 		return
 	}
-	id, into := cards[anchor].id, top-starts[anchor]
-	cards, starts, rows = m.layout("")
-	if at := slices.IndexFunc(cards, func(c card) bool { return c.id == id }); at >= 0 {
-		m.scroll = max(0, rows-m.pageHeight()-starts[at]-into)
+	id, into := s.drafts[anchor].event.ID, top-s.starts[anchor]
+	s = m.laid(m.depth(), id)
+	if at := s.index(id); at >= 0 {
+		m.scroll = max(0, s.rows-m.pageHeight()-s.starts[at]-into)
 	}
 }
 
@@ -224,15 +228,13 @@ func (m Model) feedWidth() int {
 func (m Model) pageHeight() int { return max(1, m.height-headerRows) }
 
 func (m Model) Track() pointer.Track {
-	_, _, rows := m.layout("")
-	height := m.pageHeight()
+	rows, height := m.laid(m.depth(), "").rows, m.pageHeight()
 	return pointer.Track{Total: rows, Visible: height, FromTop: fromTop(rows, height, m.scroll)}
 }
 
 func (m Model) View() string {
 	if m.retention == RailOnly {
-		rail, _ := m.railView()
-		return m.rail.Surface(m.width, m.height, look.Panel, panePadding, rail)
+		return m.railPane(m.width)
 	}
 	width := m.feedWidth()
 	p := m.page()
@@ -249,8 +251,14 @@ func (m Model) View() string {
 	if split == 0 {
 		return feedPane
 	}
-	rail, _ := m.railView()
-	return look.JoinFixedPanes(m.rail.Surface(split, m.height, look.Panel, panePadding, rail), feedPane)
+	return look.JoinFixedPanes(m.railPane(split), feedPane)
+}
+
+func (m Model) railPane(width int) string {
+	rows, _ := m.railView()
+	shown := strings.SplitAfterN(rows, "\n", m.height+1)
+	rail := strings.Join(shown[:min(len(shown), m.height)], "")
+	return strings.ReplaceAll(m.rail.Surface(width, m.height, look.Panel, panePadding, rail), spinnerCell, progress.Work(m.frame))
 }
 
 func (m Model) visible() []Event {
@@ -267,8 +275,11 @@ func (m Model) visible() []Event {
 }
 
 func (m Model) shows(e Event) bool {
+	if m.filter == (identity{}) || actor(e) == m.filter {
+		return true
+	}
 	with, _, talking := talk(e)
-	return m.filter == (identity{}) || actor(e) == m.filter || talking && with == m.filter
+	return talking && with == m.filter
 }
 
 func talk(e Event) (with identity, said []string, talking bool) {
@@ -300,53 +311,31 @@ func fromTop(rows, height, scroll int) int {
 	return max(0, rows-height-min(scroll, max(0, rows-height)))
 }
 
-func (m Model) layout(through string) (cards []card, starts []int, rows int) {
-	drafts, width, height := m.drafts(), m.feedWidth(), m.pageHeight()
-	cards = make([]card, len(drafts))
-	for i := range drafts {
-		cards[i] = m.sized(width, drafts[i])
-	}
-	starts = make([]int, len(cards))
-	for i, c := range cards {
-		if i > 0 {
-			rows += m.gap
-		}
-		starts[i] = rows
-		rows += c.height
-	}
-	top := fromTop(rows, height, m.scroll)
-	for i, c := range cards {
-		if c.id == through || starts[i] < top+2*height && starts[i]+c.height > top-height {
-			cards[i] = m.card(width, drafts[i])
-		}
-	}
-	return cards, starts, rows
-}
-
 func (m Model) page() page {
-	cards, starts, rows := m.layout("")
-	height := m.pageHeight()
-	p := page{total: len(cards)}
-	if len(cards) == 0 {
+	s, height := m.laid(m.depth(), ""), m.pageHeight()
+	p := page{total: len(s.drafts)}
+	if len(s.drafts) == 0 {
 		p.view = look.Muted("No events in this feed")
 		return p
 	}
-	top := fromTop(rows, height, m.scroll)
+	top := fromTop(s.rows, height, m.scroll)
 	bottom := top + height
 	shown := make([]string, 0, height)
-	for i, c := range cards {
-		end := starts[i] + c.height
-		if starts[i] < bottom && end > top {
+	after, _ := slices.BinarySearch(s.starts, top+1)
+	for i := max(0, after-1); i < len(s.drafts) && s.starts[i] < bottom; i++ {
+		end := s.starts[i] + s.heights[i]
+		if end > top {
+			c := m.card(s.key.width, s.drafts[i])
 			if p.first == 0 {
 				p.first = i + 1
 			}
 			p.last = i + 1
-			p.hits = append(p.hits, hit{c.id, max(0, starts[i]-top), min(height, end-top)})
+			p.hits = append(p.hits, hit{c.id, max(0, s.starts[i]-top), min(height, end-top)})
 			lines := strings.Split(c.view, "\n")
-			shown = append(shown, lines[max(0, top-starts[i]):min(len(lines), bottom-starts[i])]...)
+			shown = append(shown, lines[max(0, top-s.starts[i]):min(len(lines), bottom-s.starts[i])]...)
 		}
-		if i+1 < len(cards) {
-			for row := max(end, top); row < min(starts[i+1], bottom); row++ {
+		if i+1 < len(s.drafts) {
+			for row := max(end, top); row < min(s.starts[i+1], bottom); row++ {
 				shown = append(shown, "")
 			}
 		}
@@ -402,7 +391,7 @@ type entry struct {
 func (m Model) glyph(g group) string {
 	switch g {
 	case active:
-		return look.Accent(progress.Work(m.frame))
+		return look.Accent(spinnerCell)
 	case waiting:
 		return "."
 	}
@@ -437,22 +426,44 @@ type railTarget struct {
 	who identity
 }
 
+type railRow struct {
+	width               int
+	selected            bool
+	label, glyph, doing string
+}
+
+func (c *cardCache) railEntry(row railRow) string {
+	if drawn, ok := c.railRows[row]; ok {
+		return drawn
+	}
+	if len(c.railRows) >= railCacheCap || c.railRows == nil {
+		c.railRows = make(map[railRow]string)
+	}
+	drawn := look.SidebarEntry(row.width, row.selected, row.label, row.glyph, row.doing)
+	c.railRows[row] = drawn
+	return drawn
+}
+
 func (m Model) railView() (string, []railTarget) {
 	width := m.Split() - 2*panePadding
 	var b strings.Builder
-	target := func(who identity) railTarget { return railTarget{strings.Count(b.String(), "\n"), who} }
-	b.WriteString("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(fmt.Sprintf("%d agents · live activity", len(m.agents)), width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
-	targets := []railTarget{target(identity{})}
-	b.WriteString(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(len(m.retained()))) + "\n")
+	rows := 0
+	write := func(text string) {
+		b.WriteString(text)
+		rows += strings.Count(text, "\n")
+	}
+	write("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(fmt.Sprintf("%d agents · live activity", len(m.agents)), width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
+	targets := []railTarget{{rows, identity{}}}
+	write(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(m.sheet().kept)) + "\n")
 	entries := m.entries()
 	for g, name := range [...]string{"Active", "Waiting", "Dead"} {
 		members := slices.DeleteFunc(slices.Clone(entries), func(e entry) bool { return e.group != group(g) })
-		b.WriteString("\n" + look.SectionLabel(name) + look.Faint("  "+strconv.Itoa(len(members))) + "\n")
+		write("\n" + look.SectionLabel(name) + look.Faint("  "+strconv.Itoa(len(members))) + "\n")
 		for _, e := range members {
-			targets = append(targets, target(e.who))
-			b.WriteString(look.SidebarEntry(width, m.filter == e.who, e.who.label(), e.glyph, e.doing) + "\n")
+			targets = append(targets, railTarget{rows, e.who})
+			write(m.cards.railEntry(railRow{width, m.filter == e.who, e.who.label(), e.glyph, e.doing}) + "\n")
 			if e.who.name == orchestrator && m.plan != "" {
-				b.WriteString("  " + look.Faint(widget.Fit(m.plan, width-2)) + "\n")
+				write("  " + look.Faint(widget.Fit(m.plan, width-2)) + "\n")
 			}
 		}
 	}

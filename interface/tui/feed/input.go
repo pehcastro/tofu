@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ func (m *Model) Key(key string) bool {
 	case key == "down" || key == "j":
 		m.step(1, false)
 	case (key == "enter" || key == "space") && !m.railFocused && m.selected != "":
-		m.expanded[m.selected] = !m.expanded[m.selected]
+		m.expanded[m.selected], m.version = !m.expanded[m.selected], m.version+1
 	default:
 		return false
 	}
@@ -42,11 +43,17 @@ func (m *Model) Wheel(delta int) {
 	m.scrollBy(-delta * wheelRows)
 }
 
-func (m *Model) SetScroll(behindNewest int) { m.scrollBy(behindNewest - m.scroll) }
+func (m *Model) SetScroll(behindNewest int) {
+	if behindNewest >= m.laid(m.depth(), "").rows-m.pageHeight() {
+		behindNewest = math.MaxInt32
+	}
+	m.scrollBy(behindNewest - m.scroll)
+}
 
 func (m *Model) scrollBy(rows int) {
-	_, _, total := m.layout("")
-	m.scroll = max(0, min(total-m.pageHeight(), m.scroll+rows))
+	target := max(0, m.scroll+rows)
+	total := m.laid(target+2*m.pageHeight(), "").rows
+	m.scroll = max(0, min(total-m.pageHeight(), target))
 	m.railFocused = false
 }
 
@@ -133,10 +140,8 @@ func (m *Model) step(delta int, wrap bool) {
 
 func (m *Model) reveal(id string) {
 	m.selected, m.railFocused = id, false
-	cards, starts, rows := m.layout(id)
-	for i, c := range cards {
-		if c.id == id {
-			m.scroll = max(0, min(rows-m.pageHeight(), rows-starts[i]-c.height))
-		}
+	s := m.laid(m.depth(), id)
+	if i := s.index(id); i >= 0 {
+		m.scroll = max(0, min(s.rows-m.pageHeight(), s.rows-s.starts[i]-s.heights[i]))
 	}
 }

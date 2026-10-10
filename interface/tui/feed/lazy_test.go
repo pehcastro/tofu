@@ -22,7 +22,7 @@ func manyEvents() []Event {
 
 func everyCardDrawn(m Model) string {
 	var rows []string
-	for index, d := range m.drafts() {
+	for index, d := range m.sheet().drafts {
 		if index > 0 {
 			rows = append(rows, make([]string, m.gap)...)
 		}

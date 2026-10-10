@@ -71,10 +71,14 @@ type heldHeight struct {
 }
 
 type cardCache struct {
-	cards   map[string]cachedCard
-	order   []string
-	heights map[string]heldHeight
-	prose   markdown.Renderer
+	cards    map[string]cachedCard
+	order    []string
+	heights  map[string]heldHeight
+	prose    markdown.Renderer
+	sheet    *sheet
+	owners   []Agent
+	owned    map[identity][]string
+	railRows map[railRow]string
 }
 
 func sameEvent(a, b Event) bool {
@@ -89,26 +93,21 @@ type draft struct {
 	lines func(*cardCache, Event, cardKey) []string
 }
 
-func (m Model) drafts() []draft {
-	events := m.visible()
-	drafts := make([]draft, 0, len(events)+3)
+func (m Model) aboutCards() (about []Event, lead int) {
 	agent, picked := m.filteredAgent()
-	if picked && agent.Model != "" {
-		runs := m.aboutFilter(runsTitle, cmp.Or(agent.Definition, unnamedAgent)+" on "+agent.Model, nil)
-		drafts = append(drafts, draft{&runs, agentCardLines})
+	if !picked {
+		return nil, 0
 	}
-	if picked && len(agent.Owns) > 0 {
-		owns := m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns))
-		drafts = append(drafts, draft{&owns, agentCardLines})
+	if agent.Model != "" {
+		about = append(about, m.aboutFilter(runsTitle, cmp.Or(agent.Definition, unnamedAgent)+" on "+agent.Model, nil))
 	}
-	for index := range events {
-		drafts = append(drafts, draft{&events[index], (*cardCache).cardLines})
+	if len(agent.Owns) > 0 {
+		about = append(about, m.aboutFilter(ownsTitle, "", m.ownership(agent.Owns)))
 	}
-	if picked && agent.Report != "" {
-		report := m.aboutFilter(reportTitle, agent.Report, nil)
-		drafts = append(drafts, draft{&report, agentCardLines})
+	if agent.Report != "" {
+		return append(about, m.aboutFilter(reportTitle, agent.Report, nil)), len(about)
 	}
-	return drafts
+	return about, len(about)
 }
 
 func (m Model) filteredAgent() (Agent, bool) {
@@ -123,7 +122,21 @@ func (m Model) aboutFilter(title, body string, detail []string) Event {
 	return Event{ID: m.filter.label() + " " + title, Actor: m.filter.name, Instance: m.filter.instance, Title: title, Body: body, Detail: detail}
 }
 
+func sameOwners(a, b Agent) bool {
+	return a.Name == b.Name && a.Instance == b.Instance && slices.Equal(a.Owns, b.Owns)
+}
+
 func (m Model) ownership(owns []string) []string {
+	c := m.cards
+	if !slices.EqualFunc(c.owners, m.agents, sameOwners) {
+		c.owned, c.owners = map[identity][]string{}, make([]Agent, len(m.agents))
+		for index, a := range m.agents {
+			c.owners[index] = Agent{Name: a.Name, Instance: a.Instance, Owns: slices.Clone(a.Owns)}
+		}
+	}
+	if lines, ok := c.owned[m.filter]; ok {
+		return lines
+	}
 	lines := make([]string, 0, len(owns))
 	for _, glob := range owns {
 		var holders []string
@@ -139,6 +152,7 @@ func (m Model) ownership(owns []string) []string {
 		}
 		lines = append(lines, look.Style(look.Amber).Render(glob+overlapWord+strings.Join(holders, " ")))
 	}
+	c.owned[m.filter] = lines
 	return lines
 }
 
@@ -156,15 +170,22 @@ func textWidth(width int) int {
 	return max(cardMinWidth, width-2) - 2*cardPadX - cardBorderSides
 }
 
-func (m Model) sized(width int, d draft) card {
-	e, key, c := *d.event, m.cardKey(width, d.event), m.cards
-	if held, ok := c.heights[e.ID]; ok && held.width == width && held.expanded == key.expanded && sameEvent(held.event, e) {
-		return card{id: e.ID, height: held.height}
+func (m Model) sized(width int, d draft) (height int, wrapped bool) {
+	e, c := *d.event, m.cards
+	if held, ok := c.heights[e.ID]; ok && held.width == width && held.expanded == m.expanded[e.ID] && sameEvent(held.event, e) {
+		return held.height, false
 	}
-	wrapped := lipgloss.Wrap(strings.ReplaceAll(strings.Join(d.lines(c, e, key), "\n"), "\t", tabSpaces), textWidth(width), "")
-	height := cardBorderRows + 2*cardPadY + lipgloss.Height(wrapped)
+	key, limit := m.cardKey(width, d.event), textWidth(width)
+	height = cardBorderRows + 2*cardPadY
+	for line := range strings.SplitSeq(strings.ReplaceAll(strings.Join(d.lines(c, e, key), "\n"), "\t", tabSpaces), "\n") {
+		if lipgloss.Width(line) <= limit {
+			height++
+			continue
+		}
+		height += lipgloss.Height(lipgloss.Wrap(line, limit, ""))
+	}
 	c.hold(heldHeight{width, key.expanded, e, height})
-	return card{id: e.ID, height: height}
+	return height, true
 }
 
 func (c *cardCache) hold(held heldHeight) {
