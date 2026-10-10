@@ -10,7 +10,6 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/sys"
-	"tofu/internal/widget"
 )
 
 const relinkCommand = "tofu migrate --relink"
@@ -30,7 +29,7 @@ func openedProject(args []string) (string, bool) {
 	if len(args) > 0 {
 		verb = args[0]
 	}
-	opens := verb == "" || verb == "--continue" || verb == "run" || verb == "serve" && slices.Contains(args, "--stdio")
+	opens := verb == "" || verb == "--continue" || verb == "run" || verb == "session" || verb == "serve" && slices.Contains(args, "--stdio")
 	if at := slices.Index(args, "--dir"); opens && at >= 0 && at+1 < len(args) {
 		return args[at+1], true
 	}
@@ -50,22 +49,25 @@ func openProject(out io.Writer, in io.Reader, dir string, mayAsk bool) {
 	if project.Registered || project.Moved != nil && offerRelink(page, out, in, project, mayAsk) {
 		return
 	}
-	var copied string
+	var moved []string
 	if project.Legacy != "" {
-		files, size, err := copyTreeInto(os.DirFS(project.Legacy), ".", project.State)
+		replaced, err := project.MoveLegacy()
 		if err != nil {
-			_ = page.Print(out, page.ErrorLine(filepath.Base(project.Legacy)+" not copied to "+page.Path(project.State)+", still read from there: "+err.Error(), ""))
+			_ = page.Print(out, page.ErrorLine(filepath.Base(project.Legacy)+" not moved to "+page.Path(project.State)+", still read from there: "+err.Error(), ""))
 			return
 		}
-		copied = strings.Join([]string{filepath.Base(project.Legacy) + " copied to " + filepath.Base(project.State), plural(countSessions(project.State), "session"),
-			plural(files, "file"), widget.Size(int(size)), "old folder kept"}, " · ")
+		moved = []string{filepath.Base(project.Legacy) + " moved to " + filepath.Base(project.State)}
+		if replaced {
+			moved = append(moved, "an unregistered half copy there replaced")
+		}
 	}
 	if err := project.Register(); err != nil {
 		_ = page.Print(out, page.ErrorLine("the project folder of "+page.Path(project.Path)+" was not registered: "+err.Error(), ""))
 		return
 	}
-	if copied != "" {
-		_ = page.Print(out, []string{page.Receipt(cli.Added, copied, project.State)})
+	if moved != nil {
+		moved = append(moved, plural(countSessions(project.State), "session"))
+		_ = page.Print(out, []string{page.Receipt(cli.Added, strings.Join(moved, " · "), project.State)})
 	}
 }
 

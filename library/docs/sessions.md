@@ -41,9 +41,9 @@ never do. `~/.tofu/projects.json` lists which paths own which folder. In it:
 None of this is written into the project, and tofu never deletes a session. `tofu migrate` moves
 what older versions kept in `.tofu`.
 
-A folder from before this layout, named after the whole path (`C--code-shop`), is copied to the new
-name the first time `tofu`, `tofu serve` or `tofu run` opens the project, and is kept. Close older
-tofu sessions first: what they write after the copy stays in the old folder.
+A folder from before this layout, named after the whole path (`C--code-shop`), is renamed to the new
+name, instantly, the first time `tofu`, `tofu session`, `tofu serve` or `tofu run` opens the project.
+If an older tofu holds a file in it, tofu says so in one line, reads the old folder, and retries.
 
 Move or rename a git repository and open it in its new place: tofu finds its folder by the git
 remote or the first commit, and offers to relink it. The app asks; `tofu serve` and `tofu run` print

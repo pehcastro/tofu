@@ -287,6 +287,54 @@ func TestProjectStateReadsTheOldKeyFolderUntilTheOpenerCopiesIt(t *testing.T) {
 	}
 }
 
+func TestProjectMoveTakesTheOldKeyFolderOverAHalfCopy(t *testing.T) {
+	home := freshHome(t)
+	project := filepath.Join(t.TempDir(), "proj")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	abs, _ := filepath.Abs(project)
+	legacy := filepath.Join(home, StateDirName, ProjectsDirName, legacyProjectKey(abs))
+	if err := WriteFile(filepath.Join(legacy, "sessions", "a", "session.json"), []byte("whole"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opening, err := OpenProject(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFile(filepath.Join(opening.State, "sessions", "a", "session.json"), []byte("half"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFile(filepath.Join(opening.State, "sessions", "b", "session.json"), []byte("stray"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if replaced, err := opening.MoveLegacy(); err != nil || !replaced {
+		t.Fatalf("the move over a half copy says replaced %v, %v", replaced, err)
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatalf("the old-key folder %s is still there after the move: %v", legacy, err)
+	}
+	if body, err := os.ReadFile(filepath.Join(opening.State, "sessions", "a", "session.json")); err != nil || string(body) != "whole" {
+		t.Fatalf("the moved session reads %q, %v, want the old-key bytes and not the half copy", body, err)
+	}
+	if _, err := os.Stat(filepath.Join(opening.State, "sessions", "b")); !os.IsNotExist(err) {
+		t.Fatalf("the half copy survived the move: %v", err)
+	}
+	if state, err := ProjectStateDirAt(project); err != nil || state != opening.State {
+		t.Fatalf("killed before the registry, the state of %s is %s, %v, want %s", project, state, err, opening.State)
+	}
+	again, err := OpenProject(project)
+	if err != nil || again.Legacy != "" || again.State != opening.State {
+		t.Fatalf("the open after a killed move is %+v, %v, want the moved folder and nothing to move", again, err)
+	}
+	if err := again.Register(); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := ProjectStateDirAt(project); err != nil || state != opening.State {
+		t.Fatalf("after the registry the state of %s is %s, %v, want %s", project, state, err, opening.State)
+	}
+}
+
 func quoteJSON(s string) string {
 	return `"` + strings.ReplaceAll(s, `\`, `\\`) + `"`
 }

@@ -92,9 +92,11 @@ chats; `tofu session list --all` shows them. A frontend opens one over
 `<folder>-<hash>` is the project folder's name and eight characters of a hash
 of its full path, read after links and Windows junctions, so `C:\code\shop`
 is `shop-7cd21bfb` and two folders never share a record. A folder from an
-older tofu, named after the whole path, is copied to the new name the first
-time the project opens and is kept; close older tofu sessions before that
-first run.
+older tofu, named after the whole path, is renamed to the new name the first
+time the project opens, instantly whatever its size, and nothing is left under
+the old name. If an older tofu still holds a file in it, the open says so in
+one line, keeps reading the old folder and tries again next time; close older
+tofu sessions before that first run.
 
 ## Commands
 

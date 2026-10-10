@@ -240,6 +240,14 @@ func (p Project) Register() error {
 	})
 }
 
+func (p Project) MoveLegacy() (replacedHalfCopy bool, err error) {
+	replacedHalfCopy = pathExists(p.State)
+	if err := os.RemoveAll(p.State); err != nil {
+		return false, err
+	}
+	return replacedHalfCopy, os.Rename(p.Legacy, p.State)
+}
+
 func (p Project) Relink() (string, error) {
 	if p.Moved == nil {
 		return "", fmt.Errorf("%s is not a moved copy of a project tofu knows", p.Path)
