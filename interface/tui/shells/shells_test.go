@@ -1,6 +1,7 @@
 package shells
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -55,8 +56,11 @@ func TestALeftOverShellIsMarkedAndOfferedForEnding(t *testing.T) {
 }
 
 func TestStyledShellSurfaceMatchesLipgloss(t *testing.T) {
-	logLines := strings.Split((&cache{}).styledLog(testModel().Entries[0].Log), "\n")
-	content := "\n" + strings.Join(logLines[:min(20, len(logLines))], "\n")
+	logLines := strings.Split(testModel().Entries[0].Log, "\n")[:20]
+	for index, line := range logLines {
+		logLines[index] = look.OutputLine(line)
+	}
+	content := "\n" + strings.Join(logLines, "\n")
 	for _, width := range []int{60, 90, 120} {
 		got := (&look.PaneCache{}).Surface(width, 24, "", panePadding, content)
 		if want := look.Surface(width, 24, "", panePadding, content); got != want {
@@ -137,6 +141,26 @@ func BenchmarkSteadyScreenRender(b *testing.B) {
 			_ = m.View()
 		}
 	})
+}
+
+func BenchmarkPollOfFortyKeptShells(b *testing.B) {
+	tail := strings.Repeat(strings.Repeat("x", 72)+"\n", 500)
+	entries := make([]Entry, 0, 40)
+	for index := range 40 {
+		name := "kept-" + strconv.Itoa(index)
+		entries = append(entries, Entry{Name: name, Command: "npm run dev > " + name + ".out", State: Running, Started: testNow.Add(-time.Minute), PID: 4100, Dir: "C:/project", Owner: "go-dev-" + strconv.Itoa(index%8), Log: tail + "\nC:/project/" + name + ".out, which the command writes to, ends:\n" + tail})
+	}
+	m := New(func() time.Time { return testNow })
+	m.SetSize(100, 26)
+	m.Set(entries)
+	_ = m.View()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		m.Set(slices.Clone(entries))
+		_ = m.Track()
+		_ = m.View()
+	}
 }
 
 func BenchmarkWheelEventFrame(b *testing.B) {

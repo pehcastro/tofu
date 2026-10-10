@@ -2,6 +2,7 @@ package shells
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ const (
 	pageMinimum    = 4
 	processMaximum = 70
 	processHeight  = 6
-	processRows    = 5
+	processRows    = 4
 	processPadding = 1
 	factLabel      = 10
 	title          = "Shells"
@@ -74,9 +75,29 @@ type Entry struct {
 	OneShot  bool
 }
 
+type row struct {
+	name, label     string
+	pid             int
+	running, picked bool
+}
+
+type listing struct {
+	width   int
+	summary string
+	rows    []row
+	text    string
+}
+
+type window struct {
+	log                   string
+	width, height, scroll int
+}
+
 type cache struct {
 	sidebar, main, process look.PaneCache
-	log, styled            string
+	listing                listing
+	window                 window
+	output                 string
 }
 
 type Model struct {
@@ -227,12 +248,12 @@ func (m Model) View() string {
 	}
 	split := m.Split()
 	return look.JoinFixedPanes(
-		c.sidebar.Surface(split, m.height, look.Panel, panePadding, "\n"+m.sidebar(split-2*panePadding)),
+		c.sidebar.Surface(split, m.height, look.Panel, panePadding, "\n"+m.sidebar(c, split-2*panePadding)),
 		c.main.Surface(m.width-split, m.height, "", panePadding, "\n"+m.detail(c, m.width-split-2*panePadding-trackGap)),
 	)
 }
 
-func (m Model) sidebar(width int) string {
+func (m Model) sidebar(c *cache, width int) string {
 	running, leftOver := 0, 0
 	for _, entry := range m.Entries {
 		switch entry.State {
@@ -247,13 +268,21 @@ func (m Model) sidebar(width int) string {
 	if leftOver > 0 {
 		summary = strconv.Itoa(running) + " running  ·  " + strconv.Itoa(leftOver) + " left over"
 	}
+	start, end := m.sidebarWindow()
+	rows := make([]row, 0, end-start)
+	for index, entry := range m.Entries[start:end] {
+		rows = append(rows, row{entry.Name, label(entry), entry.PID, entry.State == Running, start+index == m.pick})
+	}
+	if c.listing.width == width && c.listing.summary == summary && slices.Equal(c.listing.rows, rows) {
+		return c.listing.text
+	}
 	var out strings.Builder
 	out.WriteString(look.PaneTitle(title, true) + "\n" + look.Faint(summary) + "\n\n")
-	start, end := m.sidebarWindow()
-	for index, entry := range m.Entries[start:end] {
-		out.WriteString(look.SidebarEntry(width, start+index == m.pick, entry.Name, badge(entry), "pid "+strconv.Itoa(entry.PID)) + "\n")
+	for _, row := range rows {
+		out.WriteString(look.SidebarEntry(width, row.picked, row.name, look.StateBadge(row.label, row.running), "pid "+strconv.Itoa(row.pid)) + "\n")
 	}
-	return out.String()
+	c.listing = listing{width, summary, rows, out.String()}
+	return c.listing.text
 }
 
 func (m Model) detail(c *cache, width int) string {
@@ -263,17 +292,13 @@ func (m Model) detail(c *cache, width int) string {
 		owner = look.AgentRef(entry.Owner)
 	}
 	facts := m.facts(entry, width)
-	log := c.styledLog(entry.Log)
-	if strings.TrimSpace(entry.Log) == "" {
-		log = look.Faint(silentEnded)
-		if entry.State.Endable() {
-			log = look.Faint(silentRunning)
-		}
+	process := look.SectionLabel("Process")
+	for _, fact := range facts {
+		process += "\n" + look.Muted(fact)
 	}
-	output, _, _ := look.Window(log, width, m.outputHeight(), m.scroll)
 	view := look.Sides(look.Title(entry.Name), badge(entry), width) + "\n" + look.Muted("Owned by ") + owner + "\n\n" +
-		c.process.Surface(processWidth(width), processHeight+len(facts)-processRows, look.PanelLight, processPadding, strings.Join(facts, "\n")) + "\n\n" +
-		look.SectionLabel("Output") + look.Faint(outputHint) + "\n" + output + "\n"
+		c.process.Surface(processWidth(width), processHeight+len(facts)-processRows, look.PanelLight, processPadding, process) + "\n\n" +
+		look.SectionLabel("Output") + look.Faint(outputHint) + "\n" + m.output(c, entry, width) + "\n"
 	if !entry.State.Endable() {
 		return view
 	}
@@ -288,12 +313,12 @@ func processWidth(detail int) int { return min(detail-2, processMaximum) }
 
 func (m Model) facts(entry Entry, detail int) []string {
 	room := max(1, processWidth(detail)-2*processPadding-factLabel)
-	lines := []string{look.SectionLabel("Process")}
+	var lines []string
 	for _, fact := range [][2]string{{"PID", strconv.Itoa(entry.PID)}, {"Runtime", m.runtime(entry)}, {"CWD", entry.Dir}, {"Command", entry.Command}} {
-		label := widget.Pad(fact[0], factLabel)
+		name := widget.Pad(fact[0], factLabel)
 		for _, part := range widget.Wrap(fact[1], room) {
-			lines = append(lines, look.Muted(label+part))
-			label = strings.Repeat(" ", factLabel)
+			lines = append(lines, name+part)
+			name = strings.Repeat(" ", factLabel)
 		}
 	}
 	return lines
@@ -308,16 +333,18 @@ func (m Model) extraFactRows() int {
 }
 
 func badge(entry Entry) string {
+	return look.StateBadge(label(entry), entry.State == Running)
+}
+
+func label(entry Entry) string {
 	switch entry.State {
-	case Running:
-		return look.StateBadge(string(entry.State), true)
 	case Exited:
 		if entry.ExitCode != nil {
-			return look.StateBadge(string(entry.State)+" "+strconv.Itoa(*entry.ExitCode), false)
+			return string(entry.State) + " " + strconv.Itoa(*entry.ExitCode)
 		}
-		return look.StateBadge(string(entry.State), false)
-	case Killed, LeftOver:
-		return look.StateBadge(string(entry.State), false)
+		return string(entry.State)
+	case Running, Killed, LeftOver:
+		return string(entry.State)
 	}
 	panic("shells: unknown state " + string(entry.State))
 }
@@ -338,14 +365,26 @@ func (m Model) runtime(entry Entry) string {
 	return fmt.Sprintf("%dm %02ds", seconds/60, seconds%60)
 }
 
-func (c *cache) styledLog(log string) string {
-	if c.log == log {
-		return c.styled
+func (m Model) output(c *cache, entry Entry, width int) string {
+	shown := window{entry.Log, width, m.outputHeight(), m.scroll}
+	if strings.TrimSpace(entry.Log) == "" {
+		silent := silentEnded
+		if entry.State.Endable() {
+			silent = silentRunning
+		}
+		view, _, _ := look.Window(look.Faint(silent), shown.width, shown.height, shown.scroll)
+		return view
 	}
-	lines := strings.Split(strings.TrimSuffix(log, "\n"), "\n")
-	for index, line := range lines {
-		lines[index] = look.OutputLine(line)
+	if c.window == shown {
+		return c.output
 	}
-	c.log, c.styled = log, strings.Join(lines, "\n")
-	return c.styled
+	lines := strings.Split(strings.TrimSuffix(shown.log, "\n"), "\n")
+	fromTop := max(0, len(lines)-shown.height-shown.scroll)
+	visible := lines[fromTop:min(len(lines), fromTop+shown.height)]
+	for index, line := range visible {
+		visible[index] = look.OutputLine(line)
+	}
+	c.window = shown
+	c.output, _, _ = look.Window(strings.Join(visible, "\n"), shown.width, shown.height, 0)
+	return c.output
 }

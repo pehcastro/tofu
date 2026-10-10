@@ -4,10 +4,10 @@
   [1;38;2;225;225;230mShells[m[48;2;25;22;34m                                                                        
   [38;2;164;170;181mNo background processes in this session yet.[m[48;2;25;22;34m                                  
                                                                                 
-  [38;2;105;107;119mOnly long work lands here: a dev server, a watcher, a long script.[m[48;2;25;22;34m            
-[38;2;105;107;119m  Never a test, a build or a one-shot command: those end and never show.[m[48;2;25;22;34m        
-                                                                                
-                                                                                
+  [38;2;105;107;119mOnly a process kept past its bash call shows here: a server or[m[48;2;25;22;34m                
+[38;2;105;107;119m  watcher started in the background, or a command still running when[m[48;2;25;22;34m            
+[38;2;105;107;119m  its call stops waiting, such as a long build or test run. A command[m[48;2;25;22;34m           
+[38;2;105;107;119m  that ends inside its wait never shows.[m[48;2;25;22;34m                                        
                                                                                 
                                                                                 
                                                                                 
