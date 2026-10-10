@@ -21,9 +21,9 @@ func boardyViewUsageOf(subcommand string) string {
 	case "report":
 		return "tofu boardy report [--board KEY] [--since YYYY-MM-DD|Nd] [--json]"
 	case "epic":
-		return "tofu boardy epic list|new <ID> <title> [--milestone M]|milestone <ID> <title> [--due YYYY-MM-DD]|done <ID> [--board KEY] [--json]"
+		return "tofu boardy epic list|new <ID> <title> [--milestone M]|milestone <ID> <title> [--due YYYY-MM-DD|Nd]|done <ID> [--board KEY] [--json]"
 	case "sprint":
-		return "tofu boardy sprint list|new <ID> <title> [--start YYYY-MM-DD] [--end YYYY-MM-DD]|start <ID>|close <ID> [--board KEY] [--json]"
+		return "tofu boardy sprint list|new <ID> <title> [--start YYYY-MM-DD|Nd] [--end YYYY-MM-DD|Nd]|start <ID>|close <ID> [--board KEY] [--json]"
 	}
 	return ""
 }
@@ -71,13 +71,20 @@ func (c boardyCall) view() int {
 	})
 }
 
-func boardySince(raw string, now time.Time) (time.Time, error) {
+type boardyDays int
+
+const (
+	daysAgo   boardyDays = -1
+	daysAhead boardyDays = 1
+)
+
+func boardyDate(raw string, toward boardyDays) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, nil
 	}
 	if days, isDays := strings.CutSuffix(raw, "d"); isDays {
 		count, err := strconv.Atoi(days)
-		return now.AddDate(0, 0, -count), err
+		return time.Now().AddDate(0, 0, int(toward)*count), err
 	}
 	return time.ParseInLocation(time.DateOnly, raw, time.Local)
 }
@@ -86,7 +93,7 @@ func (c boardyCall) report() int {
 	if len(c.args) > 0 {
 		return c.o.usage(fmt.Errorf("unexpected %q", c.args[0]))
 	}
-	since, err := boardySince(c.flags["since"], time.Now())
+	since, err := boardyDate(c.flags["since"], daysAgo)
 	if err != nil {
 		return c.o.usage(fmt.Errorf("--since %q is not a date or a number of days like 7d", c.flags["since"]))
 	}
@@ -192,7 +199,7 @@ func (c boardyCall) epic() int {
 		return c.planSaved(key, words.Epic+" "+epic.ID, epic, func() error { return c.store.SaveEpic(key, epic) })
 	case len(c.args) >= 3 && c.args[0] == "milestone":
 		milestone := boardy.Milestone{ID: c.args[1], Title: strings.Join(c.args[2:], " ")}
-		if milestone.Due, err = boardySince(c.flags["due"], time.Now()); err != nil {
+		if milestone.Due, err = boardyDate(c.flags["due"], daysAhead); err != nil {
 			return c.o.usage(err)
 		}
 		return c.planSaved(key, "milestone "+milestone.ID, milestone, func() error { return c.store.SaveMilestone(key, milestone) })
@@ -232,8 +239,8 @@ func (c boardyCall) sprint() int {
 	case len(c.args) >= 3 && c.args[0] == "new":
 		sprint := boardy.Sprint{ID: c.args[1], Title: strings.Join(c.args[2:], " "), State: boardy.Planned}
 		var startErr, endErr error
-		sprint.Start, startErr = boardySince(c.flags["start"], time.Now())
-		sprint.End, endErr = boardySince(c.flags["end"], time.Now())
+		sprint.Start, startErr = boardyDate(c.flags["start"], daysAhead)
+		sprint.End, endErr = boardyDate(c.flags["end"], daysAhead)
 		if err := errors.Join(startErr, endErr); err != nil {
 			return c.o.usage(err)
 		}
