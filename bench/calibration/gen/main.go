@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"tofu/bench/calibration"
 	"tofu/bench/report"
@@ -11,7 +12,7 @@ import (
 
 func main() {
 	err := report.Generate("calibration count report", func(machine, date string) (string, error) {
-		counts, err := calibration.Count(sys.RecordedStateDir("log"))
+		counts, err := calibration.Count(sys.RecordedStateDir("log"), time.Now())
 		if err != nil {
 			return "", err
 		}

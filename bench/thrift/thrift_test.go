@@ -3,6 +3,7 @@ package thrift
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/bench/corpus"
 	"tofu/internal/sys"
@@ -14,11 +15,15 @@ func artifactsDir() string { return sys.RecordedStateDir("artifacts") }
 
 const turnsGainedFromSplitRestarts = 7
 
+var splitRestartsCountedAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
+
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
-	walked, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
 		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
 	}
+	walked := live.RecordedBy(splitRestartsCountedAt)
+	t.Logf("%d entries, %d turns and %d skips recorded by %s; %d turns after it, not read", walked.EntryCount, len(walked.Turns), len(walked.Skipped), splitRestartsCountedAt.Format(time.RFC3339), walked.Later)
 	if len(walked.Turns) == 0 {
 		t.Fatal("no session was read: the path is wrong or the corpus is empty")
 	}

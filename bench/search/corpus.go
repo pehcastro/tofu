@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"tofu/bench/corpus"
 )
@@ -19,6 +20,7 @@ type Recorded struct {
 type Corpus struct {
 	Dir     string
 	Turns   int
+	Later   int
 	Rows    []Recorded
 	Skipped []string
 }
@@ -29,12 +31,13 @@ type recordedArgs struct {
 	MaxTokens int    `json:"max_tokens"`
 }
 
-func Load(dir string) (Corpus, error) {
-	walked, err := corpus.WalkSessions(dir)
+func Load(dir string, recordedBy time.Time) (Corpus, error) {
+	live, err := corpus.WalkSessions(dir)
 	if err != nil {
 		return Corpus{}, err
 	}
-	loaded := Corpus{Dir: dir, Turns: len(walked.Turns)}
+	walked := live.RecordedBy(recordedBy)
+	loaded := Corpus{Dir: dir, Turns: len(walked.Turns), Later: walked.Later}
 	for _, skipped := range walked.Skipped {
 		loaded.Skipped = append(loaded.Skipped, skipped.Path+": "+skipped.Reason)
 	}

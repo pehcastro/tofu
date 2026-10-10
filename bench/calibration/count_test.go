@@ -2,18 +2,22 @@ package calibration
 
 import (
 	"testing"
+	"time"
 
 	"tofu/internal/sys"
 )
 
+var reportGeneratedAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
+
 func TestTheLedgerHasBeenCounted(t *testing.T) {
-	counts, err := Count(sys.RecordedStateDir("log"))
+	counts, err := Count(sys.RecordedStateDir("log"), reportGeneratedAt)
 	if err != nil {
 		t.Fatalf("Count: %v", err)
 	}
+	t.Logf("%d rows recorded by %s, %d after it and not counted, outcomes %v", counts.TotalRows, reportGeneratedAt.Format(time.RFC3339), counts.LaterRows, counts.OutcomeByKind)
 
-	if counts.TotalRows < 2785 {
-		t.Fatalf("total rows = %d, want at least 2785; the ledger shrank", counts.TotalRows)
+	if counts.TotalRows != 2785 {
+		t.Fatalf("total rows recorded by the report = %d, want the report's 2785", counts.TotalRows)
 	}
 	if counts.OutcomeByKind["hand-labeled"] != 20 {
 		t.Fatalf("hand-labeled outcomes = %d, want 20", counts.OutcomeByKind["hand-labeled"])

@@ -15,6 +15,7 @@ type PointCounts struct {
 
 type Counts struct {
 	TotalRows     int
+	LaterRows     int
 	OutcomeByKind map[string]int
 	OutcomeTimes  []time.Time
 	Points        map[string]*PointCounts
@@ -24,7 +25,7 @@ func newPointCounts() *PointCounts {
 	return &PointCounts{LabelledByKind: map[string]int{}, NearThreshold: map[string]int{}}
 }
 
-func Count(dir string) (Counts, error) {
+func Count(dir string, recordedBy time.Time) (Counts, error) {
 	catalog := map[string]Point{}
 	for _, point := range Points() {
 		catalog[point.Name] = point
@@ -32,6 +33,10 @@ func Count(dir string) (Counts, error) {
 	counts := Counts{OutcomeByKind: map[string]int{}, Points: map[string]*PointCounts{}}
 	reader := ledger.NewReader(dir)
 	_, err := reader.Each(ledger.Filter{}, func(row ledger.Row) error {
+		if row.At.After(recordedBy) {
+			counts.LaterRows++
+			return nil
+		}
 		counts.TotalRows++
 		pc, ok := counts.Points[row.Point]
 		if !ok {
@@ -39,7 +44,7 @@ func Count(dir string) (Counts, error) {
 			counts.Points[row.Point] = pc
 		}
 		pc.Rows++
-		if row.Outcome == nil {
+		if row.Outcome == nil || row.Outcome.At.After(recordedBy) {
 			return nil
 		}
 		counts.OutcomeByKind[row.Outcome.Kind]++

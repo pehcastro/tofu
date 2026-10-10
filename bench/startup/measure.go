@@ -89,22 +89,16 @@ func Measure(runs int) (Rounds, error) {
 }
 
 func timeToolchainCacheHit(dir string) (cold, warm time.Duration, err error) {
-	cache := turn.NewToolchainCache()
-
-	coldStart := time.Now()
-	first, err := turn.NewBashToolCached(dir, cache)
+	shell, err := turn.ResolveRunShell("")
 	if err != nil {
 		return 0, 0, err
 	}
-	first.Definition()
+	coldStart := time.Now()
+	turn.EnvironmentFromShell(dir, coldStart, shell)
 	cold = time.Since(coldStart)
 
 	warmStart := time.Now()
-	second, err := turn.NewBashToolCached(dir, cache)
-	if err != nil {
-		return 0, 0, err
-	}
-	second.Definition()
+	turn.EnvironmentFromShell(dir, warmStart, shell)
 	warm = time.Since(warmStart)
 	return cold, warm, nil
 }

@@ -112,11 +112,12 @@ type Result struct {
 	Shapes        []Shape
 }
 
-func Run(sessionsDir string) (Result, error) {
-	walked, err := corpus.WalkSessions(sessionsDir)
+func Run(sessionsDir string, recordedBy time.Time) (Result, error) {
+	live, err := corpus.WalkSessions(sessionsDir)
 	if err != nil {
 		return Result{}, err
 	}
+	walked := live.RecordedBy(recordedBy)
 	result := Result{
 		SessionsDir: sessionsDir,
 		ReadAt:      time.Now(),

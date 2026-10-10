@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	tool "tofu/internal/search"
 	"tofu/internal/sys"
@@ -11,16 +12,19 @@ import (
 
 const treeRoot = "../.."
 
+var reportGeneratedAt = time.Date(2026, time.September, 23, 8, 38, 15, 0, time.FixedZone("-03", -3*60*60))
+
 func loadOrSkip(t *testing.T) Corpus {
 	t.Helper()
 	sessionsDir := sys.RecordedStateDir("sessions")
 	if _, err := os.Stat(sessionsDir); err != nil {
 		t.Skipf("skipped: %s is not on this machine, so there is no recorded search to replay", sessionsDir)
 	}
-	loaded, err := Load(sessionsDir)
+	loaded, err := Load(sessionsDir, reportGeneratedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("%d turns recorded after %s, not read", loaded.Later, reportGeneratedAt.Format(time.RFC3339))
 	if len(loaded.Rows) == 0 {
 		t.Skipf("skipped: %d recorded turns hold no search call", loaded.Turns)
 	}

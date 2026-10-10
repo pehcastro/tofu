@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/internal/konst"
 	rc "tofu/internal/recall"
@@ -64,7 +65,7 @@ func fillOf(t *testing.T, header session.Header, events []session.Event) recorde
 	return fill
 }
 
-func recordedFills(t *testing.T) ([]recordedFill, []string) {
+func recordedFills(t *testing.T, recordedBy time.Time) ([]recordedFill, []string, int) {
 	t.Helper()
 	store := session.NewStore(sys.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
@@ -76,7 +77,12 @@ func recordedFills(t *testing.T) ([]recordedFill, []string) {
 	for _, skip := range listing.Skipped {
 		unbilled = append(unbilled, skip.ID+": "+skip.Reason.Error())
 	}
+	later := 0
 	for _, header := range listing.Sessions {
+		if header.At.After(recordedBy) {
+			later++
+			continue
+		}
 		events, err := store.Body(header.ID)
 		if err != nil {
 			unbilled = append(unbilled, header.ID+": no readable body")
@@ -90,11 +96,12 @@ func recordedFills(t *testing.T) ([]recordedFill, []string) {
 		billed = append(billed, fill)
 	}
 	sort.Slice(billed, func(i, j int) bool { return billed[i].PeakRequest > billed[j].PeakRequest })
-	return billed, unbilled
+	return billed, unbilled, later
 }
 
 func TestHowFullTheRecordedTurnsEverGotAgainstTheOperatingCeilingAndAgainstTheModelWindow(t *testing.T) {
-	billed, unbilled := recordedFills(t)
+	billed, unbilled, later := recordedFills(t, reachReportGeneratedAt)
+	t.Logf("%d sessions recorded after %s, not read", later, reachReportGeneratedAt.Format(time.RFC3339))
 	if len(billed)+len(unbilled) < sessionsExpected {
 		t.Fatalf("%d sessions read under %s and %d are on disk: the measurement is over a corpus that is not there",
 			len(billed)+len(unbilled), sys.RecordedStateDir("sessions"), sessionsExpected)

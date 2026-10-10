@@ -1,12 +1,15 @@
 package search
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	tool "tofu/internal/search"
@@ -50,6 +53,9 @@ func TrackedFiles(root, under string) ([]string, error) {
 	if _, err := os.Stat(base); err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrPathGone, under)
 	}
+	if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
+		return filesGitKeeps(root, under)
+	}
 	var files []string
 	walk := func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -70,6 +76,25 @@ func TrackedFiles(root, under string) ([]string, error) {
 	}
 	if err := filepath.WalkDir(base, walk); err != nil {
 		return nil, err
+	}
+	return files, nil
+}
+
+func filesGitKeeps(root, under string) ([]string, error) {
+	listed, err := exec.Command("git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", cmp.Or(filepath.ToSlash(under), ".")).Output()
+	if err != nil {
+		return nil, fmt.Errorf("bench/search: git ls-files under %s: %w", root, err)
+	}
+	var files []string
+	for rel := range strings.SplitSeq(strings.TrimSuffix(string(listed), "\x00"), "\x00") {
+		dirs := strings.Split(rel, "/")
+		if rel == "" || slices.ContainsFunc(dirs[:len(dirs)-1], ignoredDir) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+			continue
+		}
+		files = append(files, rel)
 	}
 	return files, nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/bench/corpus"
 	"tofu/internal/sys"
@@ -98,8 +99,10 @@ func TestMeasureOverAKnownSeries(t *testing.T) {
 
 const turnsGainedFromSplitRestarts = 7
 
+var splitRestartsCountedAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
+
 func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
-	result, err := Run(sessionsDir())
+	result, err := Run(sessionsDir(), splitRestartsCountedAt)
 	if err != nil {
 		t.Fatalf("Run(%q): %v", sessionsDir(), err)
 	}
@@ -117,7 +120,7 @@ func TestEveryCorpusEntryIsEitherASessionOrANamedSkip(t *testing.T) {
 }
 
 func TestNoStrictVariantExceedsItsLooseOne(t *testing.T) {
-	result, err := Run(sessionsDir())
+	result, err := Run(sessionsDir(), time.Now())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -135,7 +138,7 @@ func TestNoStrictVariantExceedsItsLooseOne(t *testing.T) {
 }
 
 func TestReportOverTheRealCorpus(t *testing.T) {
-	result, err := Run(sessionsDir())
+	result, err := Run(sessionsDir(), time.Now())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

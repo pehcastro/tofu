@@ -32,3 +32,7 @@ The 100 ms line was written against `NewBashTool` timed directly, so `NodeProbe`
 
 `cmd/tofu/run.go` is untouched by this ticket: it still builds the bash tool and the environment block through two independent calls, so today they still pay for two separate probes rather than sharing the one this ticket makes overlappable. Wiring them together is a separate ticket, flagged the same way TOFU-543 flagged the same file for the same reason.
 
+## 2026-10-10, the probe left `Definition()`
+
+At 6fad62ad (2026-10-05) `Definition()` stopped carrying the toolchain, so it no longer waits on the probe, and `NodeCold` and `NodeWarm` as described above both timed shell resolution alone: 55.0 ms cold against 56.0 ms warm, and the cache test failed. Both now time `turn.EnvironmentFromShell` on one `turn.RunShell`, the block a turn builds and the place it waits. On 2026-10-10, 5 rounds: cold median 332.3 ms, worst 343.5 ms; warm median 0 s, worst 0.5 ms. The figures above are not rerun.
+

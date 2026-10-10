@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/bench/corpus"
 	"tofu/internal/sys"
@@ -161,11 +162,15 @@ func TestByWireAndByShapeGroupSamples(t *testing.T) {
 	}
 }
 
+var wireCheckWrittenAt = time.Date(2026, time.September, 24, 2, 3, 59, 0, time.FixedZone("-03", -3*60*60))
+
 func TestReadWireReadsBothStorageSchemasFromTheRealCorpus(t *testing.T) {
-	walked, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}
+	walked := live.RecordedBy(wireCheckWrittenAt)
+	t.Logf("%d turns recorded after %s, not read", walked.Later, wireCheckWrittenAt.Format(time.RFC3339))
 	sawSingleFile, sawHeaderJSONL := false, false
 	for _, turn := range walked.Turns {
 		switch turn.Schema {

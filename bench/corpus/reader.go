@@ -238,6 +238,7 @@ func (t *RecordedTurn) UnmarshalJSON(data []byte) error {
 
 type Turn struct {
 	RecordedTurn
+	Entry             string
 	Schema            Schema
 	WallClockRecorded bool
 }
@@ -252,7 +253,26 @@ type Walked struct {
 	EntryCount  int
 	Turns       []Turn
 	Skipped     []SkippedTurn
+	Later       int
 	WalkElapsed time.Duration
+}
+
+func (w Walked) RecordedBy(cut time.Time) Walked {
+	held := Walked{Dir: w.Dir, Skipped: w.Skipped, WalkElapsed: w.WalkElapsed}
+	entries := map[string]bool{}
+	for _, skip := range w.Skipped {
+		entries[skip.Path] = true
+	}
+	for _, turn := range w.Turns {
+		if turn.At.After(cut) {
+			held.Later++
+			continue
+		}
+		held.Turns = append(held.Turns, turn)
+		entries[turn.Entry] = true
+	}
+	held.EntryCount = len(entries)
+	return held
 }
 
 func scrubTurn(identities secret.Identities, recorded RecordedTurn) RecordedTurn {
@@ -383,7 +403,7 @@ func WalkSessions(dir string) (Walked, error) {
 				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 				continue
 			}
-			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: SchemaSingleFile, WallClockRecorded: err == nil})
+			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Entry: name, Schema: SchemaSingleFile, WallClockRecorded: err == nil})
 			continue
 		}
 		segments, err := ReadTurnDirSegments(filepath.Join(dir, name))
@@ -401,7 +421,7 @@ func WalkSessions(dir string) (Walked, error) {
 				walked.Skipped = append(walked.Skipped, SkippedTurn{Path: name, Reason: err.Error()})
 				continue
 			}
-			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Schema: schema, WallClockRecorded: err == nil})
+			walked.Turns = append(walked.Turns, Turn{RecordedTurn: recorded, Entry: name, Schema: schema, WallClockRecorded: err == nil})
 		}
 	}
 	sort.Slice(walked.Turns, func(i, j int) bool { return walked.Turns[i].ID < walked.Turns[j].ID })

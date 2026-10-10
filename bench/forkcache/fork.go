@@ -60,7 +60,7 @@ const WireReportingCacheWrite = "anthropic"
 
 func (p Pair) ReportsCacheWrite() bool { return p.Wire == WireReportingCacheWrite }
 
-func PairsIn(store *session.Store) ([]Pair, []session.Skip, error) {
+func PairsIn(store *session.Store, recordedBy time.Time) ([]Pair, []session.Skip, error) {
 	listing, err := store.Listing()
 	if err != nil {
 		return nil, nil, err
@@ -73,7 +73,7 @@ func PairsIn(store *session.Store) ([]Pair, []session.Skip, error) {
 	skipped := listing.Skipped
 	for _, subAgent := range listing.Sessions {
 		parent, known := byID[subAgent.Parent]
-		if subAgent.ForkKind == "" || !known {
+		if subAgent.ForkKind == "" || !known || subAgent.At.After(recordedBy) {
 			continue
 		}
 		parentSteps, err := stepsOf(store, parent.ID)

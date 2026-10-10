@@ -4,6 +4,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"tofu/bench/forkcache"
 	"tofu/internal/session"
@@ -15,6 +16,8 @@ const (
 	pinWriter       = "TOFU_PIN_FORK_CACHE"
 	pinnedPairsMin  = 2
 )
+
+var pinnedAt = time.Date(2026, time.September, 23, 5, 12, 20, 0, time.FixedZone("-03", -3*60*60))
 
 func pinned(t *testing.T) []forkcache.Pair {
 	t.Helper()
@@ -82,7 +85,7 @@ func TestAnAccountForkIsNotInTheRecordedCorpus(t *testing.T) {
 
 func TestThePinnedForkPairsStillMatchTheLiveSessions(t *testing.T) {
 	store := session.NewStore(sys.RecordedStateDir("sessions"))
-	live, skipped, err := forkcache.PairsIn(store)
+	live, skipped, err := forkcache.PairsIn(store, pinnedAt)
 	if err != nil {
 		t.Skipf("the live sessions are not readable from here, so the pin cannot be checked against them: %v", err)
 	}

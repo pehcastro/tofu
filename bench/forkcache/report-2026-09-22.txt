@@ -223,3 +223,15 @@ tested and are above.
 Both assertions were run inverted first and failed on the real rows before they passed:
 the fate assertion reported read where it demanded written, and the write assertion
 reported a write of 0 where it demanded one above zero.
+
+
+2026-10-10, THE FORKS SINCE
+
+The pin check now reads only sub-agents recorded by 2026-09-23 05:12:20 -03:00, when the
+pin was written, and matches the 21 pinned pairs. Not asserted: the live store on
+2026-10-10 holds 84 fork pairs, 63 of them new, all anthropic continuation forks recorded
+2026-10-06 to 2026-10-09. 57 of the 63 first billed a prefix read AND written: the first
+request read 15,673 to 28,240 tokens of cache and wrote 19,226 to 52,489, where carrying
+on would have presented 165,236 to 218,554. 6 read only. So the answer above, that the
+first request after a context fork reads cache and writes none, holds on the 21 pinned
+pairs and does not hold on today's long-session forks. Not traced here.

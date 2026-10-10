@@ -3,6 +3,7 @@ package recall
 import (
 	"encoding/json"
 	"sort"
+	"time"
 
 	"tofu/bench/corpus"
 	rc "tofu/internal/recall"
@@ -33,6 +34,7 @@ type CorpusReach struct {
 	Skipped     []corpus.SkippedTurn
 	Forks       []ForkEvent
 	Compactions int
+	Later       int
 }
 
 const (
@@ -41,7 +43,7 @@ const (
 	ReasonPreOccupancySchema = "the single-file schema this session predates: the occupancy field did not exist yet"
 )
 
-func WalkCorpusReach(sessionsDir string) (CorpusReach, error) {
+func WalkCorpusReach(sessionsDir string, recordedBy time.Time) (CorpusReach, error) {
 	store := session.NewStore(sessionsDir)
 	listing, err := store.Listing()
 	if err != nil {
@@ -52,6 +54,10 @@ func WalkCorpusReach(sessionsDir string) (CorpusReach, error) {
 		reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: skip.ID, Reason: skip.Reason.Error()})
 	}
 	for _, header := range listing.Sessions {
+		if header.At.After(recordedBy) {
+			reach.Later++
+			continue
+		}
 		steps, err := readSteps(store, header.ID)
 		if err != nil {
 			reach.Skipped = append(reach.Skipped, corpus.SkippedTurn{Path: header.ID, Reason: err.Error()})

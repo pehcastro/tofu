@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"tofu/bench/corpus"
 	"tofu/internal/sys"
@@ -13,6 +14,8 @@ import (
 func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 
 var questionsAShortlistFigureNeeds = NeededQuestions(4, 4, 1, 4)
+
+var populationReportGeneratedAt = time.Date(2026, time.September, 23, 10, 25, 52, 0, time.FixedZone("-03", -3*60*60))
 
 type population struct {
 	turns      int
@@ -75,11 +78,13 @@ func TestHowManyShortlistQuestionsTheRecordedSessionsCouldYield(t *testing.T) {
 	if _, err := os.Stat(sessionsDir()); err != nil {
 		t.Skipf("no recorded sessions at %s on this machine, so the population cannot be counted here: %v", sessionsDir(), err)
 	}
-	walked, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
 		t.Fatalf("WalkSessions: %v", err)
 	}
+	walked := live.RecordedBy(populationReportGeneratedAt)
 	counted := countPopulation(walked.Turns)
+	t.Logf("%d turns recorded after %s, not read", walked.Later, populationReportGeneratedAt.Format(time.RFC3339))
 	t.Logf("%d entries, %d turns read, %d unreadable: %d carry no task, %d change no file, %d only create files that did not exist, %d are recordable, %d of those carry a distinct task",
 		walked.EntryCount, counted.turns, len(walked.Skipped), counted.noTask, counted.noChange, counted.creation, counted.recordable, counted.distinct)
 	if counted.distinct >= questionsAShortlistFigureNeeds {

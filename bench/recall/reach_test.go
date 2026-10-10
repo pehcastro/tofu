@@ -2,9 +2,12 @@ package recall
 
 import (
 	"testing"
+	"time"
 
 	"tofu/internal/sys"
 )
+
+var reachReportGeneratedAt = time.Date(2026, time.September, 23, 14, 19, 12, 0, time.FixedZone("-03", -3*60*60))
 
 func realSessionsDir(t *testing.T) string {
 	t.Helper()
@@ -12,7 +15,7 @@ func realSessionsDir(t *testing.T) string {
 }
 
 func TestNoRecordedSessionHasEverCrossedTheCeiling(t *testing.T) {
-	reach, err := WalkCorpusReach(realSessionsDir(t))
+	reach, err := WalkCorpusReach(realSessionsDir(t), time.Now())
 	if err != nil {
 		t.Fatalf("WalkCorpusReach: %v", err)
 	}
@@ -28,10 +31,11 @@ func TestNoRecordedSessionHasEverCrossedTheCeiling(t *testing.T) {
 }
 
 func TestEverySessionThatCrossedTheCompactionTargetForkedRatherThanRewrote(t *testing.T) {
-	reach, err := WalkCorpusReach(realSessionsDir(t))
+	reach, err := WalkCorpusReach(realSessionsDir(t), reachReportGeneratedAt)
 	if err != nil {
 		t.Fatalf("WalkCorpusReach: %v", err)
 	}
+	t.Logf("%d sessions recorded after %s, not read", reach.Later, reachReportGeneratedAt.Format(time.RFC3339))
 	crossed := reach.Crossed()
 	if len(crossed) != len(reach.Forks) {
 		t.Fatalf("%d sessions crossed the compaction target recorded for them but %d forks are on record: a crossing that neither forked nor rewrote is unaccounted for",
@@ -50,7 +54,7 @@ func TestEverySessionThatCrossedTheCompactionTargetForkedRatherThanRewrote(t *te
 }
 
 func TestEverySkippedSessionNamesWhyItCouldNotBeMeasured(t *testing.T) {
-	reach, err := WalkCorpusReach(realSessionsDir(t))
+	reach, err := WalkCorpusReach(realSessionsDir(t), time.Now())
 	if err != nil {
 		t.Fatalf("WalkCorpusReach: %v", err)
 	}
@@ -72,7 +76,7 @@ func TestEverySkippedSessionNamesWhyItCouldNotBeMeasured(t *testing.T) {
 }
 
 func TestMeasuredPlusSkippedAccountsForEverySession(t *testing.T) {
-	reach, err := WalkCorpusReach(realSessionsDir(t))
+	reach, err := WalkCorpusReach(realSessionsDir(t), time.Now())
 	if err != nil {
 		t.Fatalf("WalkCorpusReach: %v", err)
 	}

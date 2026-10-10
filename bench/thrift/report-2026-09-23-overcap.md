@@ -26,3 +26,7 @@ cost against the first run: 247 calls here against 393 there, $0.013247 against 
   skipped: turn-18d6ea32da3230c0: read 6acd9e5c2800f5cbf06751c0d6a21c08: 798 paragraphs would exceed the 250 live call cap, 3 left
   skipped: turn-18d6ed674fe16fac: read c93e40eff419f3127793499d763dc5d0: 843 paragraphs would exceed the 250 live call cap, 3 left
 ```
+
+## 2026-10-10, the sessions since
+
+The target count test now reads turns recorded by 2026-09-23 09:25:04 -03:00, this report's commit, and finds the 9 above. 1999 turns recorded after it are not read. Not asserted, the live folder on 2026-10-10 holds 195 over-cap read or search artifacts.

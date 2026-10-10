@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"tofu/bench/recall"
 	"tofu/bench/report"
@@ -11,7 +12,7 @@ import (
 
 func main() {
 	err := report.Generate("recall reach report", func(machine, date string) (string, error) {
-		reach, err := recall.WalkCorpusReach(sys.RecordedStateDir("sessions"))
+		reach, err := recall.WalkCorpusReach(sys.RecordedStateDir("sessions"), time.Now())
 		if err != nil {
 			return "", err
 		}

@@ -2,15 +2,20 @@ package thrift
 
 import (
 	"testing"
+	"time"
 
 	"tofu/bench/corpus"
 )
 
+var overCapReportGeneratedAt = time.Date(2026, time.September, 23, 9, 25, 4, 0, time.FixedZone("-03", -3*60*60))
+
 func TestOverCapTargetsMatchTheNineIdentifiedInSectionFour(t *testing.T) {
-	walked, err := corpus.WalkSessions(sessionsDir())
+	live, err := corpus.WalkSessions(sessionsDir())
 	if err != nil {
 		t.Fatalf("WalkSessions(%q): %v", sessionsDir(), err)
 	}
+	walked := live.RecordedBy(overCapReportGeneratedAt)
+	t.Logf("%d turns recorded after %s, not read", walked.Later, overCapReportGeneratedAt.Format(time.RFC3339))
 	targets, idSkips := OverCapReadAndSearchTargets(artifactsDir(), walked.Turns)
 	if len(targets)+len(idSkips) != 9 {
 		t.Fatalf("%d over-cap read or search artifacts found, want 9 as report-2026-09-23.md section 4 counts", len(targets)+len(idSkips))
