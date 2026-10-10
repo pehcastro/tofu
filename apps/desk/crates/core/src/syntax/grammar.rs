@@ -54,11 +54,12 @@ pub(super) struct Highlights {
 
 impl Highlights {
     fn new(
+        owner: Source,
         language: &tree_sitter::Language,
         source: &str,
         precedence: Precedence,
     ) -> Result<Self, SyntaxError> {
-        let query = Query::new(language, source).map_err(SyntaxError::Query)?;
+        let query = compile(owner, language, source)?;
         let captures = query
             .capture_names()
             .iter()
@@ -106,18 +107,29 @@ impl Grammar {
         } = parts(source);
         let injections = match injections.join("\n") {
             text if text.is_empty() => None,
-            text => Some(Query::new(&language, &text).map_err(SyntaxError::Query)?),
+            text => Some(compile(source, &language, &text)?),
         };
         Ok(Self {
             source,
             highlights: [
-                Highlights::new(&language, &stock.join("\n"), precedence)?,
-                Highlights::new(&language, extension, Precedence::Last)?,
+                Highlights::new(source, &language, &stock.join("\n"), precedence)?,
+                Highlights::new(source, &language, extension, Precedence::Last)?,
             ],
             language,
             injections,
         })
     }
+}
+
+fn compile(
+    owner: Source,
+    language: &tree_sitter::Language,
+    text: &str,
+) -> Result<Query, SyntaxError> {
+    Query::new(language, text).or_else(|error| {
+        eprintln!("desk: query error {owner:?}, opening plain: {error}");
+        Query::new(language, "").map_err(SyntaxError::Query)
+    })
 }
 
 impl Source {

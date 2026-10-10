@@ -21,7 +21,7 @@
 (shorthand_property_identifier_pattern) @variable
 
 (class_declaration
-  name: (identifier) @type)
+  name: (_) @type)
 
 (new_expression
   constructor: (identifier) @type)

@@ -50,17 +50,21 @@ fn noreply_login(email: &str) -> Option<&str> {
 }
 
 impl Me<'_> {
-    fn owns(&self, email: &str) -> bool {
-        let noreply = self.login.is_some_and(|login| {
-            noreply_login(email).is_some_and(|local| local.eq_ignore_ascii_case(login))
-        });
-        noreply || self.email == Some(email)
+    fn owns(&self, line: &git::BlameLine) -> bool {
+        let named = |login: &str| {
+            noreply_login(&line.email).is_some_and(|local| local.eq_ignore_ascii_case(login))
+                || line.author.trim().eq_ignore_ascii_case(login)
+        };
+        self.login.is_some_and(named)
+            || self
+                .email
+                .is_some_and(|email| email.eq_ignore_ascii_case(&line.email))
     }
 
-    fn user(&self, email: &str) -> Option<SharedString> {
+    fn user(&self, line: &git::BlameLine) -> Option<SharedString> {
         self.login
-            .filter(|_| self.owns(email))
-            .or_else(|| noreply_login(email))
+            .filter(|_| self.owns(line))
+            .or_else(|| noreply_login(&line.email))
             .map(|login| login.to_owned().into())
     }
 }
@@ -101,9 +105,9 @@ pub fn inline(blamed: &Blamed, row: usize, me: &Me) -> Option<Inline> {
         },
         Some(_) => Inline {
             row,
-            user: me.user(&line.email),
+            user: me.user(line),
             author: line.author.clone().into(),
-            mine: me.owns(&line.email),
+            mine: me.owns(line),
             email,
             when: age(now().saturating_sub(line.time)).into(),
         },
