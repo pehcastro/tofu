@@ -98,7 +98,7 @@ func undoLines(page cli.Page, report rewind.Report) []string {
 	if report.DryRun {
 		restored, removed = "would restore", "would remove"
 	}
-	lines := page.Title("Undo", []string{countOf(len(report.Turns), "turn"), strings.Join(report.Turns, ", ")}, cli.Verdict{})
+	lines := page.Title("Undo", []string{plural(len(report.Turns), "turn"), strings.Join(report.Turns, ", ")}, cli.Verdict{})
 	for _, path := range report.Restored {
 		lines = append(lines, page.Glyph(cli.Changed)+" "+restored+" "+path)
 	}

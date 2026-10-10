@@ -95,7 +95,7 @@ files  every path tofu uses in your home and in a project, and which one wins
     → tofu docs files
 
 gate  what jev judges before a tool call runs, when tofu asks you first, and
-  where the OpenRouter key lives
+  where the OpenRouter and TypeSafe keys live
   store the openrouter key the gate needs
     → tofu login classifier openrouter
   why was a tool call refused or asked about

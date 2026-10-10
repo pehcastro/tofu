@@ -9,8 +9,8 @@ verbs: serve
 
 Every request `tofu serve --stdio` answers; `tofu docs serve` says how to start it, `tofu serve --schema`
 carries every field. Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.run`,
-`learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`. Every request but
-`scratch.clean` answers a typed result with no envelope, and a verb that fails errs with its problems.
+`learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`. Every request
+answers a typed result with no envelope, and a verb that fails errs with its problems.
 
 ## Where it lives
 
@@ -96,10 +96,10 @@ carries every field. Reads, reloads, the `session.*` and `memory.*` reads, `ment
   `classifier`, `search`), `provider`; answers the account signed in, `id`, `source`, `account`, `change`. `settings.set` takes `key`,
   `value`, `scope` (`global` or `project`); answers `key`, `value`, `scope`, and `source`, where the
   value now resolves from, and `settings.changed` tells every client
-- `cron.command` takes the line you would type (`/cron delete all`), answers
-  `note`. `label` takes `row` and `outcome`; answers `id`, `outcome`, `kind`, `verdict`.
-  `scratch.list` (`scratch`) answers `root`, `folders`;
-  `scratch.clean` takes `session`, `cache`, `dryRun`. `boardy.*` (`boardy`): `tofu docs boardy-views`
+- `cron.command` takes the line you would type (`/cron delete all`), answers `note`. `label` takes `row`
+  and `outcome`; answers `id`, `outcome`, `kind`, `verdict`. `scratch.list` (`scratch`) answers `root`, `folders`;
+  `scratch.clean` takes `session`, `cache`, `dryRun`; answers `root`, `dry_run`, `removed`, the folders
+  `tofu scratch clean --json` prints. `boardy.*` (`boardy`): `tofu docs boardy-views`
 - `status.list` (`status`) takes `session`, none or the open one, and errs on any other; answers
   `records`: `id`, `state`, `kind`, `progress`, `msg`, `ask` (the approval or question a blocked
   record waits on) and `at`, when it entered its state. `status.ack` takes a `done` or `error`

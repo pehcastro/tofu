@@ -119,7 +119,7 @@ func shellsLines(page cli.Page, shells []shellReading, now time.Time) []string {
 		}
 		rows[i] = cli.Row{Mark: mark, Cells: []string{one.Name, state, "pid " + strconv.Itoa(one.PID), ownerName(one.Owner)}, Detail: one.Command + " · " + page.Path(one.Dir) + " · " + one.timing.Words(now)}
 	}
-	facts := []string{countOf(len(shells), "shell")}
+	facts := []string{plural(len(shells), "shell")}
 	if running > 0 {
 		facts = append(facts, strconv.Itoa(running)+" running")
 	}
@@ -145,7 +145,7 @@ func shellsLog(o verbOutput, registry *shell.Registry, name string) int {
 		shellReading
 		Lines []string `json:"lines"`
 	}{reading, lines}, func(page cli.Page) []string {
-		printed := append(page.Title("Log", []string{name, string(entry.State), reading.timing.Words(now), countOf(len(lines), "line")}, cli.Verdict{}), "")
+		printed := append(page.Title("Log", []string{name, string(entry.State), reading.timing.Words(now), plural(len(lines), "line")}, cli.Verdict{}), "")
 		if len(lines) == 0 {
 			return append(printed, cli.Indent(page.Label("empty"))...)
 		}

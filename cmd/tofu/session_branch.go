@@ -121,7 +121,7 @@ func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
 		{Label: "id", Text: report.Session},
 		{Label: "parent", Text: strings.TrimSuffix(report.parentHandle+" at "+report.Parent.Event, " at ")},
 		{Label: "access", Text: access},
-		{Label: "seed", Text: string(report.Seed) + ", " + countOf(report.Carried, "message")},
+		{Label: "seed", Text: string(report.Seed) + ", " + plural(report.Carried, "message")},
 	}
 	if report.Model != "" {
 		facts = append(facts, cli.Fact{Label: "model", Text: report.Model})

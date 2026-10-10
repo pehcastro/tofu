@@ -163,7 +163,7 @@ func sessionFamilyOf(store *session.Store, handle string) (sessionFamilyReport, 
 
 func sessionFamilyLines(page cli.Page, report sessionFamilyReport, now time.Time) []string {
 	head := report.Generations[len(report.Generations)-1]
-	facts := []string{countOf(len(report.Generations), "generation"), "started " + sessionWhen(report.Started, now),
+	facts := []string{plural(len(report.Generations), "generation"), "started " + sessionWhen(report.Started, now),
 		"active " + widget.Until(time.Duration(report.ActiveMS)*time.Millisecond)}
 	lines := append(page.Title(report.Handle, facts, cli.Verdict{Mark: cli.Active, Text: cmp.Or(head.Outcome, "open")}), "")
 	rows := make([]cli.Row, len(report.Generations))
@@ -193,7 +193,7 @@ func sessionFamilyLines(page cli.Page, report sessionFamilyReport, now time.Time
 	if len(report.SubAgents) > 0 {
 		agents := make([]cli.Row, len(report.SubAgents))
 		for i, agent := range report.SubAgents {
-			agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{agent.Agent, agent.Definition, countOf(agent.Runs, "run"), agent.Status}}
+			agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{agent.Agent, agent.Definition, plural(agent.Runs, "run"), agent.Status}}
 		}
 		lines = append(append(lines, "", page.Section("sub-agents", cli.Verdict{})), cli.Indent(page.Rows(agents)...)...)
 	}
@@ -251,7 +251,7 @@ func sessionFind(store *session.Store, handle string, query session.Query) (sess
 }
 
 func sessionFindLines(page cli.Page, report sessionFindReport, now time.Time) []string {
-	lines := append(page.Title("Found", []string{report.Handle, countOf(len(report.Hits), "hit")}, cli.Verdict{}), "")
+	lines := append(page.Title("Found", []string{report.Handle, plural(len(report.Hits), "hit")}, cli.Verdict{}), "")
 	if len(report.Hits) == 0 {
 		return append(lines, cli.Indent(page.Label("nothing matched"))...)
 	}

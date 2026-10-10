@@ -575,8 +575,6 @@ func busyResumeLines(page cli.Page, carry sessionResume) []string {
 	})...)...)
 }
 
-func countOf(n int, noun string) string { return plural(n, noun) }
-
 func sessionSteps(steps int) string { return plural(steps, "step") }
 
 func dollars(usd float64) string { return fmt.Sprintf("$%.6f", usd) }

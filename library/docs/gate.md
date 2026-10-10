@@ -1,7 +1,7 @@
 ---
 topic: gate
 title: The gate
-summary: what jev judges before a tool call runs, when tofu asks you first, and where the OpenRouter key lives
+summary: what jev judges before a tool call runs, when tofu asks you first, and where the OpenRouter and TypeSafe keys live
 verbs: check, why, label, replay, judge, login, logout
 ---
 
