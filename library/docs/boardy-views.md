@@ -29,17 +29,26 @@ and points per status, per epic and in the active sprint, then moves,
 finished tickets, rounds (moves into review) and time in doing within the
 window, and the oldest tickets in review and blocked, five of each.
 
+## Where it lives
+
+- `boards/<KEY>/views.toml`: the board's saved views.
+- `boards/<KEY>/epics/`, `milestones/` and `sprints/`: one markdown file each.
+- `boards/<KEY>/events.jsonl`: what a report counts moves and rounds from.
+
+The `boards` folder is under the project's folder in the tofu home.
+
 ## Change it
 
     tofu boardy epic new E1 Accounts
-    tofu boardy epic milestone M1 Public beta --due 2026-11-01
+    tofu boardy epic milestone M1 Public beta --due YYYY-MM-DD
     tofu boardy epic new E2 Billing --milestone M1
     tofu boardy epic done E1
-    tofu boardy sprint new S1 First cut --start 2026-10-09 --end 2026-10-22
+    tofu boardy sprint new S1 First cut --start YYYY-MM-DD --end YYYY-MM-DD
     tofu boardy sprint start S1
     tofu boardy sprint close S1
 
-Starting a sprint closes the one that was active.
+Starting a sprint closes the one that was active. Only a manager of the
+board changes its epics, milestones and sprints.
 
 ## Check it
 

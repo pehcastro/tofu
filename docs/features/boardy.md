@@ -33,7 +33,7 @@ Make a board and three tickets:
 
 ```
 tofu boardy init --key DEMO
-tofu boardy new --priority P1 --owns "internal/a/**" parse the config
+tofu boardy new --priority P1 --owns "internal/a/**" --acceptance "tofu reads every key" parse the config
 tofu boardy new --type bug the list drops a row
 tofu boardy new --owns docs/x.md write the page
 ```
@@ -90,12 +90,49 @@ doing gets an `Acceptance 2` section, a copy of the last list, so each round
 keeps its own acceptance. `events.jsonl` beside the tickets records every
 create, move and log line.
 
+## Agents work from the board
+
+Set `projectManagement` to `boardy` and tofu's own lead and sub-agents work
+from tickets, the way a team works from a board:
+
+```
+tofu settings set projectManagement boardy
+tofu boardy manager add <lead session id>
+```
+
+- The lead spawns a sub-agent for a ticket by its id. The ticket's owns
+  become the paths the sub-agent may write, the ticket is assigned to the
+  sub-agent and moves to doing.
+- The sub-agent reads the ticket, logs its evidence and moves its own ticket
+  to review, and nothing further. A manager moves it to done or back to
+  doing.
+- The sub-agent's report is checked against the ticket by its exact id and
+  its acceptance revision in force, so a brief that mentions `UTF-8` is
+  still read as `DEMO-2`.
+- A resumed session keeps the ticket on the sub-agent's row.
+- Two board rules, `board_lead` and `board_sub_agent`, reach the prompt only
+  while the setting is `boardy`.
+
+| Tool | Who gets it | Does |
+|---|---|---|
+| `ticket_read` | every agent | reads any ticket of the project by id |
+| `ticket_log` | every agent | appends evidence to its own ticket's Log |
+| `ticket_ask` | every agent | writes a question for a manager into its own ticket's Log |
+| `ticket_request` | every agent | writes a request into a board's triage |
+| `ticket_move` | every agent | an agent moves its own ticket from doing to review; a manager moves any ticket |
+| `ticket_create` | managers | creates a numbered ticket |
+| `ticket_assign` | managers | assigns a ticket |
+
+With the setting `off`, the default, nothing changes: no board file is
+written, no board rule reaches a prompt, and a spawn's owns are the paths
+the lead gives it.
+
 ## API
 
 | Command | Does |
 |---|---|
 | `tofu boardy init --key KEY [--name text]` | makes a board |
-| `tofu boardy new [--board KEY] [--type t] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--as name] <title>` | makes a ticket with the next number |
+| `tofu boardy new [--board KEY] [--type t] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--acceptance text] [--as name] <title>` | makes a ticket with the next number |
 | `tofu boardy list [--board KEY] [--status s] [--all]` | lists live tickets |
 | `tofu boardy show <ticket>` | prints one ticket |
 | `tofu boardy move <ticket> <status> [--reason text]` | changes its status |

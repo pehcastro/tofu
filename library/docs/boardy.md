@@ -43,7 +43,7 @@ there, not as a file outside the project.
 ## Change it
 
     tofu boardy init --key DEMO
-    tofu boardy new --priority P1 --owns "internal/a/**" parse the config
+    tofu boardy new --priority P1 --owns "internal/a/**" --acceptance "tofu reads every key" parse the config
     tofu boardy move DEMO-1 doing
     tofu boardy move DEMO-1 blocked --reason "waits on DEMO-2"
     tofu boardy log DEMO-1 parsed every key, the test passes
@@ -51,6 +51,27 @@ there, not as a file outside the project.
 
 With more than one board, `new` and `list` take `--board KEY`. Every
 subcommand takes `--json`.
+
+## Agents on the board
+
+With `projectManagement` set to `boardy`, every agent gets `ticket_read`,
+`ticket_log`, `ticket_ask`, `ticket_request` and `ticket_move`; a session
+that manages a board also gets `ticket_create` and `ticket_assign`. An
+agent's `ticket_move` offers only review, and only for its own ticket.
+
+A spawn names a ticket by id. Its owns become the sub-agent's paths, the
+ticket is assigned to the sub-agent and moves to doing, and the ticket id
+rides on the sub-agent's row, so `--continue` keeps it. The contract reads
+the ticket by that id and its last acceptance revision, never the first
+ticket-shaped word in the brief.
+
+The lead's session must manage the board: `tofu boardy manager add
+<session>`. A session's `tofu boardy` calls act as the session named in
+`TOFU_SESSION`.
+
+The rules `board_lead` and `board_sub_agent` ship off and switch on with
+the setting. With it `off`, no board file is written and no board rule
+reaches a prompt.
 
 ## Check it
 

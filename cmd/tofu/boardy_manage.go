@@ -41,32 +41,30 @@ func boardyIdentity(as string) (actor, person string) {
 }
 
 func (c boardyCall) manage(subcommand string) int {
-	actor, person := boardyIdentity(c.flags["as"])
-	m := boardy.Managed{Local: boardy.Local{Store: c.store}, Person: person}
 	switch subcommand {
 	case "manager":
-		return c.managers(m, actor)
+		return c.managers()
 	case "triage":
-		return c.triage(m, actor)
+		return c.triage()
 	case "hand":
-		return c.hand(m, actor)
+		return c.hand()
 	case "assign":
 		if len(c.args) != 2 {
 			return c.o.usage(errors.New("name a " + c.words.Ticket + " and who it goes to"))
 		}
-		ticket, err := m.Assign(c.args[0], c.args[1], actor)
+		ticket, err := c.managed.Assign(c.args[0], c.args[1], c.actor)
 		return c.receipt(ticket, err, cli.Changed, ticket.ID+" is assigned to "+ticket.Assignee)
 	case "widen":
 		if len(c.args) != 2 {
 			return c.o.usage(errors.New("name a " + c.words.Ticket + " and the globs to add"))
 		}
-		ticket, err := m.Widen(c.args[0], splitList(c.args[1]), actor)
+		ticket, err := c.managed.Widen(c.args[0], splitList(c.args[1]), c.actor)
 		return c.receipt(ticket, err, cli.Changed, ticket.ID+" owns "+strings.Join(ticket.Owns, ", "))
 	}
-	return c.check(actor, person)
+	return c.check()
 }
 
-func (c boardyCall) managers(m boardy.Managed, actor string) int {
+func (c boardyCall) managers() int {
 	key, err := c.board()
 	if err != nil {
 		return c.o.fail(err)
@@ -80,9 +78,9 @@ func (c boardyCall) managers(m boardy.Managed, actor string) int {
 	case len(c.args) != 2:
 		return c.o.usage(errors.New("name one session id or the person's name"))
 	case c.args[0] == "add":
-		board, err = m.AddManager(key, c.args[1], actor)
+		board, err = c.managed.AddManager(key, c.args[1], c.actor)
 	case c.args[0] == "remove":
-		board, err = m.RemoveManager(key, c.args[1], actor)
+		board, err = c.managed.RemoveManager(key, c.args[1], c.actor)
 	default:
 		return c.o.usage(fmt.Errorf("%q is not add, remove or list", c.args[0]))
 	}
@@ -90,7 +88,7 @@ func (c boardyCall) managers(m boardy.Managed, actor string) int {
 		return c.o.fail(err)
 	}
 	return c.o.done(true, board, func(page cli.Page) []string {
-		facts := []string{fmt.Sprintf("%d managers", len(board.Managers))}
+		facts := []string{plural(len(board.Managers), "manager")}
 		if len(board.Managers) == 0 {
 			facts = []string{"no managers, so the person manages it"}
 		}
@@ -102,7 +100,7 @@ func (c boardyCall) managers(m boardy.Managed, actor string) int {
 	})
 }
 
-func (c boardyCall) triage(m boardy.Managed, actor string) int {
+func (c boardyCall) triage() int {
 	key, err := c.board()
 	if err != nil {
 		return c.o.fail(err)
@@ -114,23 +112,17 @@ func (c boardyCall) triage(m boardy.Managed, actor string) int {
 			return c.o.fail(err)
 		}
 		return c.o.done(true, requests, func(page cli.Page) []string {
-			lines := page.Title(key+" triage", []string{fmt.Sprintf("%d requests", len(requests))}, cli.Verdict{})
+			lines := page.Title(key+" triage", []string{plural(len(requests), "request")}, cli.Verdict{})
 			for _, req := range requests {
 				lines = append(lines, page.Rows([]cli.Row{{Mark: cli.Idle, Cells: []string{req.ID, req.By, req.Ticket.Title}}})...)
 			}
 			return lines
 		})
 	case len(c.args) == 2 && c.args[0] == "accept":
-		ticket, err := m.Accept(key, c.args[1], actor)
-		if err != nil {
-			return c.o.fail(err)
-		}
-		path, _ := c.store.TicketPath(ticket.ID)
-		return c.o.done(true, ticket, func(page cli.Page) []string {
-			return []string{page.Receipt(cli.Added, c.args[1]+" is "+ticket.ID+" "+ticket.Title, path)}
-		})
+		ticket, err := c.managed.Accept(key, c.args[1], c.actor)
+		return c.receipt(ticket, err, cli.Added, c.args[1]+" is "+ticket.ID+" "+ticket.Title)
 	case len(c.args) == 2 && c.args[0] == "drop":
-		if err := m.Drop(key, c.args[1], c.flags["reason"], actor); err != nil {
+		if err := c.managed.Drop(key, c.args[1], c.flags["reason"], c.actor); err != nil {
 			return c.o.fail(err)
 		}
 		return c.o.done(true, map[string]string{"dropped": c.args[1]}, func(page cli.Page) []string {
@@ -140,7 +132,7 @@ func (c boardyCall) triage(m boardy.Managed, actor string) int {
 	return c.o.usage(errors.New("list, accept <request> or drop <request>"))
 }
 
-func (c boardyCall) hand(m boardy.Managed, actor string) int {
+func (c boardyCall) hand() int {
 	if len(c.args) != 2 {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the " + c.words.Board + " it goes to"))
 	}
@@ -151,7 +143,7 @@ func (c boardyCall) hand(m boardy.Managed, actor string) int {
 			return c.o.fail(err)
 		}
 	}
-	landed, err := m.Hand(c.args[0], c.args[1], to, actor)
+	landed, err := c.managed.Hand(c.args[0], c.args[1], to, c.actor)
 	if err != nil {
 		return c.o.fail(err)
 	}
@@ -164,7 +156,7 @@ func (c boardyCall) hand(m boardy.Managed, actor string) int {
 	})
 }
 
-func (c boardyCall) check(actor, person string) int {
+func (c boardyCall) check() int {
 	if len(c.args) != 2 {
 		return c.o.usage(errors.New("name an event and a " + c.words.Ticket))
 	}
@@ -178,7 +170,7 @@ func (c boardyCall) check(actor, person string) int {
 	}
 	path, _ := c.store.TicketPath(ticket.ID)
 	fired, err := c.store.Check(ticket.Board(), rule.BoardEvent{Event: event, Ticket: ticket.ID, Path: path, From: string(ticket.Status),
-		To: cmp.Or(c.flags["to"], string(ticket.Status)), Actor: actor, ByPerson: person != "" && actor == person})
+		To: cmp.Or(c.flags["to"], string(ticket.Status)), Actor: c.actor, ByPerson: c.managed.Person != "" && c.actor == c.managed.Person})
 	if err != nil {
 		return c.o.fail(err)
 	}

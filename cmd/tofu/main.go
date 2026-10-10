@@ -60,6 +60,10 @@ Verbs:
   library   resolve a library entry and show the origin of each field
   lint      run a house-rule check over the tree
   rules     list the rule library, run it, read back what fired, or index a task
+  boardy    keep this project's tickets as files: boards, tickets, managers,
+            triage, views, reports, epics and sprints; tofu boardy lists each
+  scratch   list this project's scratch folders and their sizes, clean the ones
+            no tofu runs, or print the scratch root with open
   memory    list what you asked tofu to remember, global and for this project,
             or add or remove an entry
   learn     read your sessions for the correction you keep repeating,
@@ -185,6 +189,10 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return lintVerb(args[1:], out, errOut)
 	case "rules":
 		return rulesVerb(args[1:], out, errOut)
+	case "boardy":
+		return boardyVerb(args[1:], out, errOut)
+	case "scratch":
+		return runScratch(args[1:], out, errOut)
 	case "memory":
 		return memoryVerb(args[1:], out, errOut)
 	case "learn":

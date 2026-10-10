@@ -29,7 +29,7 @@ func boardyViewUsageOf(subcommand string) string {
 }
 
 func (c boardyCall) api() boardy.API {
-	return boardy.API{Board: boardy.Managed{Local: boardy.Local{Store: c.store}}, Actor: c.actor(), Words: c.words}
+	return boardy.API{Board: c.managed, Actor: c.actor, Words: c.words}
 }
 
 func (c boardyCall) view() int {
@@ -53,7 +53,7 @@ func (c boardyCall) view() int {
 		if answer.Sprint != "" {
 			sprint = c.words.Sprint + " " + answer.Sprint
 		}
-		lines := page.Title(answer.Board+" "+answer.View.Name, []string{sprint, countOf(count, c.words.Ticket)}, cli.Verdict{})
+		lines := page.Title(answer.Board+" "+answer.View.Name, []string{sprint, plural(count, c.words.Ticket)}, cli.Verdict{})
 		if count == 0 {
 			return append(lines, page.Label("no "+c.words.Ticket+" in this view: tofu boardy view all"))
 		}
@@ -106,7 +106,7 @@ func (c boardyCall) reportLines(page cli.Page, report boardy.Report) []string {
 	for _, status := range report.Statuses {
 		total += status.Tickets
 	}
-	lines := page.Title(report.Board+" report", []string{window, countOf(total, c.words.Ticket)}, cli.Verdict{})
+	lines := page.Title(report.Board+" report", []string{window, plural(total, c.words.Ticket)}, cli.Verdict{})
 	points := func(tally boardy.Tally) string {
 		return fmt.Sprintf("%d of %d done, %d of %d %s", tally.Done, tally.Tickets, tally.Settled, tally.Points, c.words.Points)
 	}
@@ -117,14 +117,14 @@ func (c boardyCall) reportLines(page cli.Page, report boardy.Report) []string {
 	lines = append(lines, page.Facts([]cli.Fact{
 		sprint,
 		{Label: "moves", Text: strconv.Itoa(report.Moves)},
-		{Label: "finished", Text: countOf(len(report.Finished), c.words.Ticket)},
+		{Label: "finished", Text: plural(len(report.Finished), c.words.Ticket)},
 		{Label: "rounds", Text: strconv.Itoa(report.Rounds)},
 		{Label: "in doing", Text: (time.Duration(report.Minutes) * time.Minute).String()},
 	})...)
 	var statuses []cli.Row
 	for _, status := range report.Statuses {
 		if status.Tickets > 0 {
-			statuses = append(statuses, cli.Row{Mark: statusMark(boardy.Status(status.Name)), Cells: []string{status.Name, countOf(status.Tickets, c.words.Ticket), strconv.Itoa(status.Points) + " " + c.words.Points}})
+			statuses = append(statuses, cli.Row{Mark: statusMark(boardy.Status(status.Name)), Cells: []string{status.Name, plural(status.Tickets, c.words.Ticket), strconv.Itoa(status.Points) + " " + c.words.Points}})
 		}
 	}
 	lines = append(append(lines, "", page.Subject("status")), cli.Indent(page.Rows(statuses)...)...)
@@ -189,19 +189,19 @@ func (c boardyCall) epic() int {
 		})
 	case len(c.args) >= 3 && c.args[0] == "new":
 		epic := boardy.Epic{ID: c.args[1], Title: strings.Join(c.args[2:], " "), Milestone: c.flags["milestone"]}
-		return c.planSaved(key, words.Epic+" "+epic.ID, epic, c.store.SaveEpic(key, epic))
+		return c.planSaved(key, words.Epic+" "+epic.ID, epic, func() error { return c.store.SaveEpic(key, epic) })
 	case len(c.args) >= 3 && c.args[0] == "milestone":
 		milestone := boardy.Milestone{ID: c.args[1], Title: strings.Join(c.args[2:], " ")}
 		if milestone.Due, err = boardySince(c.flags["due"], time.Now()); err != nil {
 			return c.o.usage(err)
 		}
-		return c.planSaved(key, "milestone "+milestone.ID, milestone, c.store.SaveMilestone(key, milestone))
+		return c.planSaved(key, "milestone "+milestone.ID, milestone, func() error { return c.store.SaveMilestone(key, milestone) })
 	case len(c.args) == 2 && c.args[0] == "done":
 		epics, err := c.store.Epics(key)
 		for _, epic := range epics {
 			if epic.ID == c.args[1] {
 				epic.Done = true
-				return c.planSaved(key, words.Epic+" "+epic.ID+" done", epic, errors.Join(err, c.store.SaveEpic(key, epic)))
+				return c.planSaved(key, words.Epic+" "+epic.ID+" done", epic, func() error { return errors.Join(err, c.store.SaveEpic(key, epic)) })
 			}
 		}
 		return c.o.fail(errors.Join(err, fmt.Errorf("the %s %s has no %s %s", words.Board, key, words.Epic, c.args[1])))
@@ -237,11 +237,11 @@ func (c boardyCall) sprint() int {
 		if err := errors.Join(startErr, endErr); err != nil {
 			return c.o.usage(err)
 		}
-		return c.planSaved(key, words.Sprint+" "+sprint.ID, sprint, c.store.SaveSprint(key, sprint))
+		return c.planSaved(key, words.Sprint+" "+sprint.ID, sprint, func() error { return c.store.SaveSprint(key, sprint) })
 	case len(c.args) == 2 && c.args[0] == "start":
-		return c.planSaved(key, words.Sprint+" "+c.args[1]+" active", c.args[1], c.store.SetSprint(key, c.args[1], boardy.Active))
+		return c.planSaved(key, words.Sprint+" "+c.args[1]+" active", c.args[1], func() error { return c.store.SetSprint(key, c.args[1], boardy.Active) })
 	case len(c.args) == 2 && c.args[0] == "close":
-		return c.planSaved(key, words.Sprint+" "+c.args[1]+" closed", c.args[1], c.store.SetSprint(key, c.args[1], boardy.Closed))
+		return c.planSaved(key, words.Sprint+" "+c.args[1]+" closed", c.args[1], func() error { return c.store.SetSprint(key, c.args[1], boardy.Closed) })
 	}
 	return c.o.usage(errors.New("name list, new, start or close"))
 }
@@ -257,7 +257,11 @@ func sprintDays(sprint boardy.Sprint) string {
 	return text
 }
 
-func (c boardyCall) planSaved(key, what string, data any, err error) int {
+func (c boardyCall) planSaved(key, what string, data any, write func() error) int {
+	err := c.managed.Manages(key, c.actor, "change its "+c.words.Epic+"s and "+c.words.Sprint+"s")
+	if err == nil {
+		err = write()
+	}
 	if err != nil {
 		return c.o.fail(err)
 	}

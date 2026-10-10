@@ -32,7 +32,7 @@ func (m Managed) Assign(id, assignee, actor string) (Ticket, error) {
 	if err != nil {
 		return Ticket{}, err
 	}
-	if _, err := m.manages(key, actor, "assign a ticket"); err != nil {
+	if err := m.Manages(key, actor, "assign a ticket"); err != nil {
 		return Ticket{}, err
 	}
 	assigned, err := m.Store.Edit(id, func(t *Ticket) error {

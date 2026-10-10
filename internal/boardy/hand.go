@@ -11,7 +11,7 @@ func (m Managed) Hand(id, toKey string, to Store, actor string) (Ticket, error) 
 	if err != nil {
 		return ticket, err
 	}
-	if _, err := m.manages(board.Key, actor, "hand a ticket to another board"); err != nil {
+	if err := m.Manages(board.Key, actor, "hand a ticket to another board"); err != nil {
 		return ticket, err
 	}
 	if !ticket.Status.Live() {

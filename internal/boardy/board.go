@@ -148,6 +148,11 @@ func (s Store) Get(id string) (Ticket, error) {
 
 func ReadTicket(path string) (Ticket, error) {
 	raw, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		id := strings.TrimSuffix(filepath.Base(path), ".md")
+		key, _, _ := SplitID(id)
+		return Ticket{}, fmt.Errorf("no ticket %s on %s", id, key)
+	}
 	if err != nil {
 		return Ticket{}, err
 	}

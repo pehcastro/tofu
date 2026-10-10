@@ -91,14 +91,26 @@ tofu settings [get <key> | set [--scope global|project] <key> <value>] [--json]
 
 ```
 tofu boardy init --key KEY [--name text] [--json]
-tofu boardy new [--board KEY] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--as name] <title> [--json]
+tofu boardy new [--board KEY] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--acceptance text] [--as name] <title> [--json]
 tofu boardy list [--board KEY] [--status s] [--all] [--json]
 tofu boardy show <ticket> [--json]
 tofu boardy move <ticket> <status> [--reason text] [--as name] [--json]
 tofu boardy log <ticket> <text> [--as name] [--json]
 tofu boardy lint [--board KEY] [--json]
 tofu boardy boards [--json]
+tofu boardy manager add|remove|list [name] [--board KEY] [--as name] [--json]
+tofu boardy triage list|accept|drop [request] [--board KEY] [--reason text] [--as name] [--json]
+tofu boardy assign <ticket> <session or name> [--as name] [--json]
+tofu boardy hand <ticket> <board> [--project dir] [--as name] [--json]
+tofu boardy widen <ticket> <glob,glob> [--as name] [--json]
+tofu boardy check create|move|widen|close <ticket> [--to status] [--as name] [--json]
+tofu boardy view [name] [--board KEY] [--epic E] [--label l] [--assignee name] [--as name] [--json]
+tofu boardy report [--board KEY] [--since YYYY-MM-DD|Nd] [--json]
+tofu boardy epic list|new|milestone|done [--board KEY] [--json]
+tofu boardy sprint list|new|start|close [--board KEY] [--json]
 ```
+
+`tofu boardy` with no subcommand names every subcommand.
 
 See [Boardy](/docs/features/boardy).
 

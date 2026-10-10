@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -14,14 +15,14 @@ import (
 	"tofu/internal/boardy"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|lint|boards [--json]"
+const boardyUsage = "tofu boardy init|new|list|show|move|log|lint|boards|manager|triage|assign|hand|widen|check|view|report|epic|sprint [--json]"
 
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--owns a,b] [--acceptance text] [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--json]"
 	case "show":
@@ -35,16 +36,17 @@ func boardyUsageOf(subcommand string) string {
 	case "boards":
 		return "tofu boardy boards [--json]"
 	}
-	return ""
+	return cmp.Or(boardyManageUsage(subcommand), boardyViewUsageOf(subcommand))
 }
 
 type boardyCall struct {
-	o          verbOutput
-	controller boardy.Controller
-	store      boardy.Store
-	words      boardy.Words
-	flags      map[string]string
-	args       []string
+	o       verbOutput
+	managed boardy.Managed
+	actor   string
+	store   boardy.Store
+	words   boardy.Words
+	flags   map[string]string
+	args    []string
 }
 
 type boardyBoard struct {
@@ -79,8 +81,19 @@ func boardyVerb(args []string, out, errOut io.Writer) int {
 	if err = errors.Join(err, flowErr); err != nil {
 		return o.fail(err)
 	}
-	call := boardyCall{o: o, controller: boardy.Local{Store: store}, store: store, words: flow.Words(), flags: flags, args: rest}
+	actor, person := boardyIdentity(flags["as"])
+	call := boardyCall{o: o, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: person}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	switch args[0] {
+	case "manager", "triage", "hand", "assign", "widen", "check":
+		return call.manage(args[0])
+	case "view":
+		return call.view()
+	case "report":
+		return call.report()
+	case "epic":
+		return call.epic()
+	case "sprint":
+		return call.sprint()
 	case "init":
 		return call.init()
 	case "new":
@@ -116,13 +129,6 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 		}
 	}
 	return flags, rest, nil
-}
-
-func (c boardyCall) actor() string {
-	if as := c.flags["as"]; as != "" {
-		return as
-	}
-	return "person"
 }
 
 func (c boardyCall) board() (string, error) {
@@ -164,6 +170,9 @@ func (c boardyCall) create() int {
 		return c.o.fail(err)
 	}
 	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"])}}
+	if acceptance := c.flags["acceptance"]; acceptance != "" {
+		ticket.Acceptance = []string{acceptance}
+	}
 	var parseErrs []error
 	if raw := c.flags["type"]; raw != "" {
 		ticket.Type, err = boardy.ParseKind(raw)
@@ -184,7 +193,10 @@ func (c boardyCall) create() int {
 	if err := errors.Join(parseErrs...); err != nil {
 		return c.o.usage(err)
 	}
-	ticket, err = c.controller.Create(key, ticket, c.actor())
+	ticket, err = c.managed.Create(key, ticket, c.actor)
+	if ticket.ID == "" {
+		return c.receipt(ticket, err, cli.Added, ticket.Reason+": "+ticket.Title)
+	}
 	return c.receipt(ticket, err, cli.Added, ticket.ID+" "+ticket.Title)
 }
 
@@ -192,7 +204,10 @@ func (c boardyCall) receipt(ticket boardy.Ticket, err error, mark cli.Mark, text
 	if err != nil {
 		return c.o.fail(err)
 	}
-	path, _ := c.store.TicketPath(ticket.ID)
+	path := ""
+	if ticket.ID != "" {
+		path, _ = c.store.TicketPath(ticket.ID)
+	}
 	return c.o.done(true, ticket, func(page cli.Page) []string { return []string{page.Receipt(mark, text, path)} })
 }
 
@@ -210,7 +225,7 @@ func (c boardyCall) list() int {
 	key, err := c.board()
 	var tickets []boardy.Ticket
 	if err == nil {
-		tickets, err = c.controller.List(key)
+		tickets, err = c.managed.List(key)
 	}
 	if err != nil {
 		return c.o.fail(err)
@@ -258,7 +273,7 @@ func (c boardyCall) show() int {
 	if len(c.args) != 1 {
 		return c.o.usage(errors.New("name one " + c.words.Ticket))
 	}
-	ticket, err := c.controller.Get(c.args[0])
+	ticket, err := c.managed.Get(c.args[0])
 	if err != nil {
 		return c.o.fail(err)
 	}
@@ -302,7 +317,7 @@ func (c boardyCall) move() int {
 	if err != nil {
 		return c.o.usage(err)
 	}
-	ticket, err := c.controller.Move(c.args[0], to, c.flags["reason"], c.actor())
+	ticket, err := c.managed.Move(c.args[0], to, c.flags["reason"], c.actor)
 	return c.receipt(ticket, err, cli.Changed, ticket.ID+" is "+string(ticket.Status))
 }
 
@@ -310,7 +325,7 @@ func (c boardyCall) log() int {
 	if len(c.args) < 2 {
 		return c.o.usage(errors.New("name a " + c.words.Ticket + " and the text to log"))
 	}
-	ticket, err := c.controller.Comment(c.args[0], strings.Join(c.args[1:], " "), c.actor())
+	ticket, err := c.managed.Comment(c.args[0], strings.Join(c.args[1:], " "), c.actor)
 	return c.receipt(ticket, err, cli.Changed, "logged on "+ticket.ID)
 }
 

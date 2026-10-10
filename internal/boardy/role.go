@@ -54,13 +54,13 @@ func (m Managed) role(board Board, actor string) Role {
 	return RoleAgent
 }
 
-func (m Managed) manages(key, actor, doing string) (Board, error) {
+func (m Managed) Manages(key, actor, doing string) error {
 	board, err := m.Store.Board(key)
 	if err != nil {
-		return board, err
+		return err
 	}
 	if m.role(board, actor) != RoleManager {
-		return board, RefusedError{Why: fmt.Sprintf("%s is not a manager of %s, and only a manager may %s", actor, key, doing)}
+		return RefusedError{Why: fmt.Sprintf("%s is not a manager of %s, and only a manager may %s", actor, key, doing)}
 	}
-	return board, nil
+	return nil
 }

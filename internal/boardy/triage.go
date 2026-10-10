@@ -97,7 +97,7 @@ func (s Store) readRequest(key, id string) (Request, error) {
 }
 
 func (m Managed) Accept(key, id, actor string) (Ticket, error) {
-	if _, err := m.manages(key, actor, "accept a triage request"); err != nil {
+	if err := m.Manages(key, actor, "accept a triage request"); err != nil {
 		return Ticket{}, err
 	}
 	var accepted Ticket
@@ -121,7 +121,7 @@ func (m Managed) Accept(key, id, actor string) (Ticket, error) {
 }
 
 func (m Managed) Drop(key, id, reason, actor string) error {
-	if _, err := m.manages(key, actor, "drop a triage request"); err != nil {
+	if err := m.Manages(key, actor, "drop a triage request"); err != nil {
 		return err
 	}
 	err := m.Store.locked(key, "triage-"+id, func() error {

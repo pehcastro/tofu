@@ -83,7 +83,7 @@ func (m Managed) Widen(id string, owns []string, actor string) (Ticket, error) {
 	if err != nil {
 		return ticket, err
 	}
-	if _, err := m.manages(board.Key, actor, "widen owns"); err != nil {
+	if err := m.Manages(board.Key, actor, "widen owns"); err != nil {
 		return ticket, err
 	}
 	added := slices.DeleteFunc(slices.Clone(owns), func(glob string) bool { return slices.Contains(ticket.Owns, glob) })
