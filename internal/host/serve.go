@@ -44,7 +44,7 @@ type ServeConfig struct {
 	Sources  map[string]string
 	Ledger   func(LedgerParams) (LedgerReport, error)
 	Run      func(ctx context.Context, command string) (output string, stopped bool)
-	Compact  func() (Compaction, error)
+	Compact  func(*Host) (Compaction, error)
 	Stale    func() bool
 	Setup    func() []Requirement
 	SaveKey  func(provider, key string) (note string, err error)
@@ -304,17 +304,18 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	return page, nil
 }
 
-func (s *server) compact(NoParams) (any, error) {
-	focus := s.focus()
-	switch {
-	case s.Compact == nil:
+func (s *server) compact(p SessionParams) (any, error) {
+	if s.Compact == nil {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu compacts no sessions"}
-	case focus.host != s.Host:
-		return nil, &Refusal{Code: CodeRefused, Message: "session.compact compacts the session this tofu serve opened first, and " + strconv.Quote(focus.host.ID()) + " opened beside it"}
-	case focus.running():
+	}
+	named, err := s.lane(p.Session)
+	switch {
+	case err != nil:
+		return nil, err
+	case named.running():
 		return nil, errTurnRunning
 	}
-	compacted, err := s.Compact()
+	compacted, err := s.Compact(named.host)
 	if err != nil || compacted.Into == "" {
 		return compacted, err
 	}
@@ -323,10 +324,10 @@ func (s *server) compact(NoParams) (any, error) {
 		labelled = labelledAs(store, labelled)
 	}
 	s.mu.Lock()
-	focus.items.session = compacted.Into
-	s.box.push(sessionUpdated(focus.items.identity("", compacted.Into), labelled))
+	named.items.session = compacted.Into
+	s.box.push(sessionUpdated(named.items.identity("", compacted.Into), labelled))
 	s.mu.Unlock()
-	go s.listed(focus)
+	go s.listed(named)
 	return compacted, nil
 }
 

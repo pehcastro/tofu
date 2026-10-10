@@ -43,10 +43,13 @@ func (e TurnBusyError) Error() string {
 
 func (s *Store) lock(id string) (*os.File, error) {
 	file, busy, err := takeLock(filepath.Join(s.Dir(id), lockName))
-	if busy != nil {
-		return nil, BusyError{ID: id, PID: busy.PID, Since: busy.Since}
+	switch {
+	case busy == nil:
+		return file, err
+	case busy.PID == os.Getpid():
+		return nil, nil
 	}
-	return file, err
+	return nil, BusyError{ID: id, PID: busy.PID, Since: busy.Since}
 }
 
 func (s *Store) Hold(id string) (func() error, error) {
@@ -95,10 +98,7 @@ func takeLock(path string) (*os.File, *lockHolder, error) {
 			return file, nil, nil
 		}
 		holder := holderOf(path)
-		switch {
-		case holder.PID == os.Getpid():
-			return nil, nil, nil
-		case holder.PID > 0 && alive(holder.PID), time.Now().After(deadline):
+		if holder.PID == os.Getpid() || holder.PID > 0 && alive(holder.PID) || time.Now().After(deadline) {
 			return nil, &holder, nil
 		}
 	}

@@ -145,7 +145,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	live, release := spawn()
 	err = host.Serve(host.ServeConfig{Host: live, Release: release, Spawn: spawn, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled, Accounts: accounts,
-		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
+		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: compactCarried,
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},

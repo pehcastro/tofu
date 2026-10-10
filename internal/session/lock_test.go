@@ -81,3 +81,36 @@ func TestASecondProcessIsRefusedAndAKilledHolderLeavesNothingHeld(t *testing.T) 
 		t.Errorf("the lock is still there after the only writer closed: %v", err)
 	}
 }
+
+func TestTwoHoldersInOneProcessShareNoProjectTurn(t *testing.T) {
+	dir := t.TempDir()
+	first, second := NewStore(dir), NewStore(dir)
+	release, err := first.HoldTurn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var busy TurnBusyError
+	if again, err := second.HoldTurn(); !errors.As(err, &busy) || busy.PID != os.Getpid() {
+		if again != nil {
+			_ = again()
+		}
+		t.Fatalf("a second holder in the process holding the project turn got %v, want TurnBusyError naming pid %d", err, os.Getpid())
+	}
+	lock := filepath.Join(first.State(), turnLockName)
+	if _, err := os.Stat(lock); err != nil {
+		t.Fatalf("the refused second holder took the first one's lock with it: %v", err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(lock); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the lock is still there after the only holder released: %v", err)
+	}
+	next, err := second.HoldTurn()
+	if err != nil {
+		t.Fatalf("the project turn after the holder released was refused: %v", err)
+	}
+	if err := next(); err != nil {
+		t.Fatal(err)
+	}
+}

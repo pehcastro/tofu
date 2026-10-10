@@ -61,7 +61,7 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 			{Role: llm.RoleUser, Content: "second task"}, {Role: llm.RoleAssistant, Content: "second answer"},
 		}}, nil
 	}
-	c, live, project := serving(t, play, ServeConfig{Ledger: ledger, Run: run, Carry: carry, Compact: func() (Compaction, error) { return compacted, nil }})
+	c, live, project := serving(t, play, ServeConfig{Ledger: ledger, Run: run, Carry: carry, Compact: func(*Host) (Compaction, error) { return compacted, nil }})
 	h = live
 	store, err := session.OpenIn(project)
 	if err != nil {

@@ -1097,7 +1097,7 @@ func requests() []method {
 		{name: "turn.sendNow", params: SendNowParams{}, result: Ack{}},
 		{name: "turn.stop", params: TurnParams{}, result: Ack{}},
 		{name: "turn.unsteer", params: UnsteerParams{}, result: UnsteerResult{}},
-		{name: "session.compact", params: NoParams{}, result: Compaction{}},
+		{name: "session.compact", params: SessionParams{}, result: Compaction{}},
 		{name: "session.history", params: SessionHistoryParams{}, result: SessionHistory{}},
 		{name: "session.turns", params: SessionParams{}, result: SessionTurns{}},
 		{name: "shell.run", params: ShellRunParams{}, result: ShellRunResult{}},
