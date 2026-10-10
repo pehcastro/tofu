@@ -246,6 +246,7 @@ type Header struct {
 	Task             string     `json:"task,omitempty"`
 	Wire             string     `json:"wire,omitempty"`
 	Model            string     `json:"model,omitempty"`
+	Effort           string     `json:"effort,omitempty"`
 	Models           []string   `json:"models,omitempty"`
 	Outcome          string     `json:"outcome,omitempty"`
 	Error            string     `json:"error,omitempty"`

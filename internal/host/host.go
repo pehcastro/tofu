@@ -376,7 +376,15 @@ func (h *Host) carry(resumed Carry) error {
 	if err != nil {
 		return fmt.Errorf("the sub-agents of %s were not all read back: %w", resumed.Session, err)
 	}
-	return nil
+	side, found, err := store.Side(resumed.Session)
+	if err != nil || !found || side.Effort == "" {
+		return err
+	}
+	effort, err := llm.ParseEffort(side.Effort)
+	if err == nil {
+		h.pick.Effort = effort
+	}
+	return err
 }
 
 func (c Carry) reading(dir string) (*session.Store, error) {

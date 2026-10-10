@@ -25,6 +25,11 @@ const (
 	attachmentsName = "attachments"
 )
 
+const (
+	settleWait  time.Duration = 500 * time.Millisecond
+	settleRetry time.Duration = 2 * time.Millisecond
+)
+
 type Store struct {
 	dir      string
 	project  string
@@ -162,12 +167,31 @@ func (s *Store) writeWhole(path string, body []byte) error {
 	_, err = tmp.Write(body)
 	err = cmp.Or(err, tmp.Close())
 	if err == nil {
-		err = s.rename(name, path)
+		err = settled(func() error { return s.rename(name, path) })
 	}
 	if err != nil {
 		_ = os.Remove(name)
 	}
 	return err
+}
+
+func settled(try func() error) error {
+	deadline := time.Now().Add(settleWait)
+	for {
+		err := try()
+		if err == nil || errors.Is(err, fs.ErrNotExist) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(settleRetry)
+	}
+}
+
+func (s *Store) readSettled(path string) (raw []byte, err error) {
+	err = settled(func() error {
+		raw, err = s.readFile(path)
+		return err
+	})
+	return raw, err
 }
 
 func (s *Store) edit(id string, change func(*Header)) (Header, error) {
@@ -385,7 +409,7 @@ func (s *Store) Listing() (Listing, error) {
 }
 
 func (s *Store) Head() (Head, error) {
-	raw, err := s.readFile(filepath.Join(s.dir, headName))
+	raw, err := s.readSettled(filepath.Join(s.dir, headName))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Head{}, err
 	}
@@ -445,11 +469,15 @@ func (s *Store) SetAccess(id string, owns []string, preset string) (Header, erro
 	return s.edit(side.ID, func(header *Header) { header.Owns, header.Preset = owns, preset })
 }
 
+func (s *Store) SetEffort(id, effort string) (Header, error) {
+	return s.edit(id, func(header *Header) { header.Effort = effort })
+}
+
 func (s *Store) read(id string) (Header, error) {
 	if err := namesOneSession(id); err != nil {
 		return Header{}, err
 	}
-	raw, err := s.readFile(filepath.Join(s.Dir(id), headerName))
+	raw, err := s.readSettled(filepath.Join(s.Dir(id), headerName))
 	if err == nil {
 		var header Header
 		if err := json.Unmarshal(raw, &header); err != nil {

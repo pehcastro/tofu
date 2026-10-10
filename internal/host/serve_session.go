@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"tofu/internal/llm"
+	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
 	"tofu/internal/turn/tools"
@@ -49,7 +50,15 @@ func (s *server) branch(p SessionBranchParams) (any, error) {
 	case p.Kind != KindSide:
 		return nil, &Refusal{Code: CodeBadParams, Message: "kind " + p.Kind + " is not built: only " + KindSide + " is, and a full branch for the Forks screen is not"}
 	}
-	return s.Branch(p)
+	branched, err := s.Branch(p)
+	if err != nil || branched.Effort == "" {
+		return branched, err
+	}
+	store, err := session.OpenIn(s.Host.dir)
+	if err == nil {
+		_, err = store.SetEffort(branched.Session, string(branched.Effort))
+	}
+	return branched, err
 }
 
 func (s *server) access(p SessionAccessParams) (any, error) {
