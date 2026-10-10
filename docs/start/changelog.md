@@ -71,6 +71,10 @@ per language.
   board's tickets. See [Boardy](/docs/features/boardy).
 - **Project folders**: a project's state lives in `<name>-<hash>`, so two
   paths never share one, and a moved repository can be relinked.
+- **Long sessions**: the sub-agents screen opens in under 10 ms where it took
+  about 250, and the shells screen reads only the new end of each log.
+- **Frontends, more**: one `tofu serve` keeps several sessions running at
+  once, and sends account and settings changes as they happen.
 
 ## 0.4
 

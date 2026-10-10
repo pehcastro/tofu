@@ -10,6 +10,31 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.11 - 2026-10-10
+
+Long sessions stay fast on the sub-agents and shells screens, and one `tofu serve` holds several sessions at once.
+
+### Added
+
+- `tofu serve` sends `account.state` when an account becomes rate limited, spent, or serving again, and `settings.changed` when a setting changes, from the desk, the command line or another window. Quota windows carry `stale` and `read_at`, and a rate-limited reading is read again when its retry time passes.
+- One `tofu serve` keeps every session it opened: a turn in one session keeps running and reporting while another session is open, every notification and status record names its session, `status.list {}` answers for all of them, and `session.close` stops tracking one.
+- `session.branch` and `tofu session branch` take `--model`, `--effort` and `--at <event>`; a side chat keeps its model and effort when it is opened again.
+
+### Changed
+
+- The sub-agents screen stays fast in long sessions: the first frame after switching to it went from about 250 ms to under 10 ms, and a burst of streamed thinking from many sub-agents is drawn once per frame instead of once per chunk.
+- The shells screen and its polling read only the new end of each kept shell's log: 36 KB per poll instead of 10 MB with 40 shells.
+- On a board with `projectManagement` boardy, the lead manages its project's boards for you, so it can create, assign and spawn for tickets without being added as a manager first.
+- `undo`, `label`, `settings.set`, `login.start` and `scratch.clean` over serve answer typed results; `query.context` with no session answers the open session.
+- Every ref `tofu serve` hands out, including messages, turns and `[&agent]`, resolves through `mention.resolve`.
+
+### Fixed
+
+- With many sub-agents reporting at once on Windows, a report or spawn result no longer fails on `session.json` being held by another reader.
+- The chat no longer drops the lead's text while a sub-agent it started has not answered yet.
+- `login.start` over serve refuses a role tofu does not know.
+- Boardy dates are plain days, read the same in every time zone, and `boardy lint` catches two wildcard owns in one folder.
+
 ## 0.5.10-fix1 - 2026-10-09
 
 The first open of a project no longer copies its folder before drawing.
