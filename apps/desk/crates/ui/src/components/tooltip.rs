@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic::Location;
 use std::time::{Duration, Instant};
 
@@ -7,9 +7,9 @@ use desk_motion::{Glide, GlideKind};
 use gpui::{
     AnyElement, App, AppContext, AvailableSpace, Bounds, BoxShadow, Context, DispatchPhase, Div,
     Element, ElementId, Entity, EntityId, FontWeight, Global, GlobalElementId, InspectorElementId,
-    LayoutId, MouseMoveEvent, PathBuilder, Pixels, Point, Position, Rgba, SharedString, Stateful,
-    StrikethroughStyle, Style, Task, UnderlineStyle, Window, WindowId, canvas, deferred, div,
-    point, prelude::*, px, size,
+    LayoutId, MouseDownEvent, MouseMoveEvent, PathBuilder, Pixels, Point, Position, Rgba,
+    SharedString, Stateful, StrikethroughStyle, Style, Task, UnderlineStyle, Window, WindowId,
+    canvas, deferred, div, point, prelude::*, px, size,
 };
 
 use crate::components::paint::{drop, ink, tint};
@@ -91,6 +91,7 @@ enum Event {
     Leave(ElementId),
     Open(ElementId),
     Retarget(ElementId),
+    Mute(ElementId),
     Close,
 }
 
@@ -148,6 +149,8 @@ struct Floating {
     timer: Option<Task<gpui::Result<()>>>,
     log: VecDeque<(Instant, Event)>,
     watcher: Option<EntityId>,
+    muted: Option<ElementId>,
+    overlays: HashSet<ElementId>,
 }
 
 impl Floating {
@@ -172,6 +175,18 @@ impl Floating {
             timer: None,
             log: VecDeque::new(),
             watcher: None,
+            muted: None,
+            overlays: HashSet::new(),
+        }
+    }
+
+    fn press(&mut self, key: ElementId, cx: &mut Context<Self>) {
+        self.record(Event::Mute(key.clone()), cx);
+        self.timer = None;
+        let showing = self.shown && self.current.as_ref() == Some(&key);
+        self.muted = Some(key);
+        if showing {
+            self.close(cx);
         }
     }
 
@@ -203,6 +218,12 @@ impl Floating {
         self.timer = None;
         if !self.hosts.contains(&view) {
             self.hosts.push(view);
+        }
+        if self.overlays.is_empty() {
+            self.muted = None;
+        }
+        if self.muted.as_ref() == Some(&key) {
+            return;
         }
         if self.warm(Instant::now()) {
             self.show(key, cx);
@@ -393,6 +414,15 @@ fn floating(kind: Kind, window: &Window, cx: &mut App) -> Entity<Floating> {
     }
 }
 
+pub fn overlay_shown(overlay: ElementId, open: bool, window: &Window, cx: &mut App) {
+    for kind in [Kind::Tip, Kind::Card] {
+        floating(kind, window, cx).update(cx, |floating, _| match open {
+            true => floating.overlays.insert(overlay.clone()),
+            false => floating.overlays.remove(&overlay),
+        });
+    }
+}
+
 pub struct TooltipDebug {
     pub events: String,
     pub hovered: Vec<String>,
@@ -436,6 +466,7 @@ fn event_line(log: &VecDeque<(Instant, Event)>) -> String {
             Event::Leave(key) => format!("leave {key}"),
             Event::Open(key) => format!("open {key}"),
             Event::Retarget(key) => format!("retarget {key}"),
+            Event::Mute(key) => format!("mute {key}"),
             Event::Close => "close".to_string(),
         };
         line.push(format!("+{gap}ms {said}"));
@@ -580,10 +611,14 @@ fn float(
         let alpha = floating.alpha(Instant::now());
         (floating.current.as_ref() == Some(&key) && alpha > 0.0).then_some(alpha)
     });
-    let (hover, probe, place) = (state.clone(), state.clone(), state);
-    let (mine, placed_key) = (key.clone(), key.clone());
+    let (hover, probe, press) = (state.clone(), state.clone(), state.clone());
+    let (mine, placed_key, pressed) = (key.clone(), key.clone(), key.clone());
+    let place = state;
     let target = target
         .relative()
+        .capture_any_mouse_down(move |_: &MouseDownEvent, _, cx| {
+            press.update(cx, |floating, cx| floating.press(pressed.clone(), cx));
+        })
         .on_hover(move |inside, window, cx| {
             let exit = window.mouse_position();
             hover.update(cx, |floating, cx| match *inside {

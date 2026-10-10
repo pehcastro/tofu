@@ -5,7 +5,7 @@ mod watch;
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,21 +16,24 @@ use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::code_editor::{CodeEditor, Highlight};
 use desk_ui::components::empty::empty_state;
+use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::history::inline_blame;
+use desk_ui::components::overlay::{MenuItem, context_menu};
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::components::title_bar::Github;
 use desk_ui::components::tree::{
     EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
-    picked_pack,
+    TreeSpot, picked_pack,
 };
 use desk_ui::live::ActiveTheme;
 use desk_ui::motion::reduced_motion;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, Context, Entity, Focusable, KeyDownEvent, Render,
-    SharedString, Subscription, Task, Window, div, prelude::*, px, relative,
+    AnyElement, AnyView, App, AppContext, ClipboardItem, Context, Entity, Focusable, KeyDownEvent,
+    Pixels, Point, Render, SharedString, Subscription, Task, Window, canvas, div, prelude::*, px,
+    relative,
 };
 
 use crate::modules::chat::Find;
@@ -45,6 +48,7 @@ const SIDE_LEAST: f32 = 180.0;
 const SIDE_MOST: f32 = 320.0;
 const PATH_HEIGHT: f32 = 30.0;
 const BAR_GAP: f32 = 8.0;
+const NAMING_TEXT: f32 = 12.0;
 const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
@@ -159,6 +163,7 @@ pub struct Editor {
     find_logged: Option<(String, usize, usize)>,
     github: Github,
     alerted: SharedString,
+    menu: TreeMenu,
     _tree: Subscription,
     _pack: Subscription,
     _project: Subscription,
@@ -181,6 +186,15 @@ impl Editor {
             find_logged: None,
             github: Github::Asking,
             alerted: SharedString::default(),
+            menu: TreeMenu {
+                spot: TreeSpot::Empty,
+                open_at: None,
+                asked: None,
+                clip: None,
+                done: Vec::new(),
+                undone: Vec::new(),
+                naming: None,
+            },
             _pack: cx.observe_global::<PickedPack>(Self::repack),
             _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
@@ -489,7 +503,255 @@ impl Editor {
                 let target = self.folder.listing.root.join(path.as_str());
                 self.open_path(target, window, cx);
             }
+            TreeEvent::Menu(spot, at) => {
+                eprintln!("desk: editor tree menu on /{}", spot_path(spot));
+                self.menu.spot = spot.clone();
+                self.menu.open_at = Some(*at);
+                self.menu.asked = Some(Instant::now());
+                cx.notify();
+            }
         }
+    }
+
+    fn tree_items(&self) -> Vec<MenuItem> {
+        let picked = !matches!(self.menu.spot, TreeSpot::Empty);
+        TREE_MENU
+            .iter()
+            .map(|slot| match slot {
+                None => MenuItem::Separator,
+                Some(action) => MenuItem::action(action.label())
+                    .icon(action.glyph())
+                    .enabled(match action {
+                        TreeAction::Cut | TreeAction::Copy | TreeAction::Duplicate => picked,
+                        TreeAction::Paste => self.menu.clip.is_some(),
+                        TreeAction::Undo => !self.menu.done.is_empty(),
+                        TreeAction::Redo => !self.menu.undone.is_empty(),
+                        TreeAction::NewFile
+                        | TreeAction::NewFolder
+                        | TreeAction::Reveal
+                        | TreeAction::CopyPath
+                        | TreeAction::CopyRelative
+                        | TreeAction::ExpandAll
+                        | TreeAction::CollapseAll => true,
+                    }),
+            })
+            .collect()
+    }
+
+    fn full(&self, relative: &str) -> PathBuf {
+        relative
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .fold(self.folder.listing.root.clone(), |full, part| {
+                full.join(part)
+            })
+    }
+
+    fn tree_pick(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(Some(action)) = TREE_MENU.get(at) else {
+            return eprintln!("desk: editor tree menu has no item {at}");
+        };
+        let path = spot_path(&self.menu.spot).to_owned();
+        let folder = match &self.menu.spot {
+            TreeSpot::Folder(folder) => folder.to_string(),
+            TreeSpot::File(file) => parent_of(file).to_owned(),
+            TreeSpot::Empty => String::new(),
+        };
+        eprintln!("desk: editor tree: {} on /{path}", action.label());
+        let done = match action {
+            TreeAction::NewFile | TreeAction::NewFolder => {
+                let makes_folder = *action == TreeAction::NewFolder;
+                self.name_new(folder, makes_folder, window, cx);
+                Ok(())
+            }
+            TreeAction::Reveal => reveal(&self.full(&path)),
+            TreeAction::Cut | TreeAction::Copy => {
+                let held = match action {
+                    TreeAction::Cut => Held::Cut,
+                    _ => Held::Copied,
+                };
+                eprintln!("desk: editor tree: holds /{path} as {held:?}");
+                self.menu.clip = Some(Clip { held, path });
+                Ok(())
+            }
+            TreeAction::Duplicate => {
+                let from = self.full(&path);
+                let to = free_name(&self.full(parent_of(&path)), name_of(&path));
+                self.run(FileOp::Copied { from, to })
+            }
+            TreeAction::Paste => self.paste(&folder),
+            TreeAction::Undo => self.step_back(),
+            TreeAction::Redo => self.step_forward(),
+            TreeAction::CopyPath | TreeAction::CopyRelative => {
+                let copied = match action {
+                    TreeAction::CopyPath => self.full(&path).display().to_string(),
+                    _ => path,
+                };
+                eprintln!("desk: editor tree: clipboard holds {copied}");
+                cx.write_to_clipboard(ClipboardItem::new_string(copied));
+                Ok(())
+            }
+            TreeAction::ExpandAll => {
+                self.expand_all(folder, cx);
+                Ok(())
+            }
+            TreeAction::CollapseAll => {
+                self.folder
+                    .tree
+                    .update(cx, |tree, cx| tree.collapse_all(&folder, cx));
+                eprintln!("desk: editor tree: collapsed /{folder}");
+                Ok(())
+            }
+        };
+        if let Err(error) = done {
+            eprintln!("desk: editor tree: {} failed: {error}", action.label());
+        }
+        self.refresh(cx);
+        cx.notify();
+    }
+
+    fn run(&mut self, op: FileOp) -> std::io::Result<()> {
+        op.apply()?;
+        eprintln!("desk: editor tree: did {}", op.said());
+        self.menu.done.push(op);
+        self.menu.undone.clear();
+        Ok(())
+    }
+
+    fn step_back(&mut self) -> std::io::Result<()> {
+        let Some(op) = self.menu.done.pop() else {
+            return Ok(());
+        };
+        if let Err(error) = op.revert() {
+            self.menu.done.push(op);
+            return Err(error);
+        }
+        eprintln!("desk: editor tree: undid {}", op.said());
+        self.menu.undone.push(op);
+        Ok(())
+    }
+
+    fn step_forward(&mut self) -> std::io::Result<()> {
+        let Some(op) = self.menu.undone.pop() else {
+            return Ok(());
+        };
+        if let Err(error) = op.apply() {
+            self.menu.undone.push(op);
+            return Err(error);
+        }
+        eprintln!("desk: editor tree: redid {}", op.said());
+        self.menu.done.push(op);
+        Ok(())
+    }
+
+    fn paste(&mut self, folder: &str) -> std::io::Result<()> {
+        let Some(clip) = self.menu.clip.clone() else {
+            return Ok(());
+        };
+        let from = self.full(&clip.path);
+        let into = self.full(folder);
+        if clip.held == Held::Cut && from.parent() == Some(into.as_path()) {
+            self.menu.clip = None;
+            return Ok(());
+        }
+        let to = free_name(&into, name_of(&clip.path));
+        match clip.held {
+            Held::Copied => self.run(FileOp::Copied { from, to }),
+            Held::Cut => {
+                self.run(FileOp::Moved { from, to })?;
+                self.menu.clip = None;
+                Ok(())
+            }
+        }
+    }
+
+    fn name_new(
+        &mut self,
+        folder: String,
+        makes_folder: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let input = TextInput::new(
+            match makes_folder {
+                true => "Folder name",
+                false => "File name",
+            }
+            .into(),
+            window,
+            cx,
+        );
+        window.focus(&input.focus_handle(cx), cx);
+        if !folder.is_empty() {
+            let opened = SharedString::from(folder.clone());
+            self.folder
+                .tree
+                .update(cx, |tree, cx| tree.expand([opened], cx));
+        }
+        self.menu.naming = Some(Naming {
+            folder,
+            makes_folder,
+            input,
+        });
+    }
+
+    fn name_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let entered = match event.keystroke.key.as_str() {
+            "enter" => true,
+            "escape" => false,
+            _ => return,
+        };
+        cx.stop_propagation();
+        let Some(naming) = self.menu.naming.take() else {
+            return;
+        };
+        cx.notify();
+        let name = naming.input.read(cx).text().trim().to_owned();
+        let single = Path::new(&name).components().count() == 1
+            && Path::new(&name)
+                .components()
+                .all(|part| matches!(part, Component::Normal(_)));
+        if !entered || !single {
+            return eprintln!(
+                "desk: editor tree: new entry {name:?} in /{} dropped",
+                naming.folder
+            );
+        }
+        let path = self.full(&naming.folder).join(&name);
+        let made = self.run(FileOp::Made {
+            path: path.clone(),
+            folder: naming.makes_folder,
+        });
+        match made {
+            Ok(()) if !naming.makes_folder => self.open_path(path, window, cx),
+            Ok(()) => {}
+            Err(error) => eprintln!("desk: editor tree: new {name} failed: {error}"),
+        }
+        self.refresh(cx);
+    }
+
+    fn expand_all(&mut self, folder: String, cx: &mut Context<Self>) {
+        let listing = self.folder.listing.clone();
+        let found = cx
+            .background_executor()
+            .spawn(async move { listing.folders_under(&folder) });
+        self._unfolding.retain(|task| !task.is_ready());
+        self._unfolding.push(cx.spawn(async move |this, cx| {
+            let folders = found.await;
+            let done = this.update(cx, |editor, cx| {
+                eprintln!(
+                    "desk: editor tree: expand all opens {} folders",
+                    folders.len()
+                );
+                editor.folder.tree.update(cx, |tree, cx| {
+                    tree.expand(folders.into_iter().map(SharedString::from), cx)
+                });
+                editor.refresh(cx);
+            });
+            if let Err(error) = done {
+                eprintln!("desk: editor is gone before expand all: {error}");
+            }
+        }));
     }
 
     fn unfold(&mut self, path: String, cx: &mut Context<Self>) {
@@ -1063,6 +1325,54 @@ impl Editor {
 impl Render for Editor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
+        let asked = self.menu.asked.take();
+        let painted = canvas(
+            |_, _, _| {},
+            move |_, (), _, _| {
+                if let Some(asked) = asked {
+                    eprintln!(
+                        "desk: editor tree menu painted {:.2} ms after the right click",
+                        asked.elapsed().as_secs_f32() * 1000.0
+                    );
+                }
+            },
+        )
+        .absolute()
+        .size_0();
+        let naming = self.menu.naming.as_ref().map(|naming| {
+            let place = match naming.folder.as_str() {
+                "" => "the root".to_owned(),
+                folder => format!("/{folder}"),
+            };
+            let kind = if naming.makes_folder {
+                "folder"
+            } else {
+                "file"
+            };
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .px_2()
+                .py_1()
+                .text_size(px(NAMING_TEXT))
+                .text_color(theme.color(ColorToken::TextBase))
+                .on_key_down(cx.listener(Self::name_key))
+                .child(format!("New {kind} in {place}"))
+                .child(naming.input.clone())
+        });
+        let tree = context_menu(self.tree_items())
+            .id("editor-tree-menu")
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .open_at(self.menu.open_at.take())
+            .on_pick(
+                cx.listener(|editor, at: &usize, window, cx| editor.tree_pick(*at, window, cx)),
+            )
+            .child(painted)
+            .child(self.folder.tree.clone());
         let side = div()
             .flex()
             .flex_col()
@@ -1082,7 +1392,8 @@ impl Render for Editor {
                     .min_h_0()
                     .px_1()
                     .py_1()
-                    .child(self.folder.tree.clone()),
+                    .children(naming)
+                    .child(tree),
             );
         let main = div()
             .flex()
@@ -1137,6 +1448,227 @@ fn answered(
         }
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TreeAction {
+    NewFile,
+    NewFolder,
+    Reveal,
+    Cut,
+    Copy,
+    Duplicate,
+    Paste,
+    Undo,
+    Redo,
+    CopyPath,
+    CopyRelative,
+    ExpandAll,
+    CollapseAll,
+}
+
+const TREE_MENU: [Option<TreeAction>; 17] = [
+    Some(TreeAction::NewFile),
+    Some(TreeAction::NewFolder),
+    None,
+    Some(TreeAction::Reveal),
+    None,
+    Some(TreeAction::Cut),
+    Some(TreeAction::Copy),
+    Some(TreeAction::Duplicate),
+    Some(TreeAction::Paste),
+    Some(TreeAction::Undo),
+    Some(TreeAction::Redo),
+    None,
+    Some(TreeAction::CopyPath),
+    Some(TreeAction::CopyRelative),
+    None,
+    Some(TreeAction::ExpandAll),
+    Some(TreeAction::CollapseAll),
+];
+
+impl TreeAction {
+    fn label(self) -> &'static str {
+        match self {
+            TreeAction::NewFile => "New File",
+            TreeAction::NewFolder => "New Folder",
+            TreeAction::Reveal => "Reveal in File Explorer",
+            TreeAction::Cut => "Cut",
+            TreeAction::Copy => "Copy",
+            TreeAction::Duplicate => "Duplicate",
+            TreeAction::Paste => "Paste",
+            TreeAction::Undo => "Undo",
+            TreeAction::Redo => "Redo",
+            TreeAction::CopyPath => "Copy Path",
+            TreeAction::CopyRelative => "Copy Relative Path",
+            TreeAction::ExpandAll => "Expand All",
+            TreeAction::CollapseAll => "Collapse All",
+        }
+    }
+
+    fn glyph(self) -> Glyph {
+        match self {
+            TreeAction::NewFile => Glyph::FileAdd,
+            TreeAction::NewFolder => Glyph::FolderAdd,
+            TreeAction::Reveal => Glyph::Reveal,
+            TreeAction::Cut => Glyph::Cut,
+            TreeAction::Copy => Glyph::Copy,
+            TreeAction::Duplicate => Glyph::Duplicate,
+            TreeAction::Paste => Glyph::Paste,
+            TreeAction::Undo => Glyph::Undo,
+            TreeAction::Redo => Glyph::Redo,
+            TreeAction::CopyPath => Glyph::Link,
+            TreeAction::CopyRelative => Glyph::Relative,
+            TreeAction::ExpandAll => Glyph::ExpandAll,
+            TreeAction::CollapseAll => Glyph::CollapseAll,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Held {
+    Cut,
+    Copied,
+}
+
+#[derive(Clone)]
+struct Clip {
+    held: Held,
+    path: String,
+}
+
+struct Naming {
+    folder: String,
+    makes_folder: bool,
+    input: Entity<TextInput>,
+}
+
+enum FileOp {
+    Made { path: PathBuf, folder: bool },
+    Copied { from: PathBuf, to: PathBuf },
+    Moved { from: PathBuf, to: PathBuf },
+}
+
+impl FileOp {
+    fn apply(&self) -> std::io::Result<()> {
+        match self {
+            FileOp::Made { path, folder: true } => fs::create_dir(path),
+            FileOp::Made {
+                path,
+                folder: false,
+            } => fs::File::create_new(path).map(drop),
+            FileOp::Copied { from, to } if to.starts_with(from) => Err(std::io::Error::other(
+                format!("{} is inside {}", to.display(), from.display()),
+            )),
+            FileOp::Copied { from, to } => copy_tree(from, to),
+            FileOp::Moved { from, to } => fs::rename(from, to),
+        }
+    }
+
+    fn revert(&self) -> std::io::Result<()> {
+        match self {
+            FileOp::Made { path, .. } | FileOp::Copied { to: path, .. } if path.is_dir() => {
+                fs::remove_dir_all(path)
+            }
+            FileOp::Made { path, .. } | FileOp::Copied { to: path, .. } => fs::remove_file(path),
+            FileOp::Moved { from, to } => fs::rename(to, from),
+        }
+    }
+
+    fn said(&self) -> String {
+        match self {
+            FileOp::Made { path, folder } => {
+                let kind = if *folder { "folder" } else { "file" };
+                format!("new {kind} {}", path.display())
+            }
+            FileOp::Copied { from, to } => format!("copy {} -> {}", from.display(), to.display()),
+            FileOp::Moved { from, to } => format!("move {} -> {}", from.display(), to.display()),
+        }
+    }
+}
+
+struct TreeMenu {
+    spot: TreeSpot,
+    open_at: Option<Point<Pixels>>,
+    asked: Option<Instant>,
+    clip: Option<Clip>,
+    done: Vec<FileOp>,
+    undone: Vec<FileOp>,
+    naming: Option<Naming>,
+}
+
+fn spot_path(spot: &TreeSpot) -> &str {
+    match spot {
+        TreeSpot::Empty => "",
+        TreeSpot::File(path) | TreeSpot::Folder(path) => path,
+    }
+}
+
+fn parent_of(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(parent, _)| parent)
+}
+
+fn name_of(path: &str) -> &str {
+    path.rsplit_once('/').map_or(path, |(_, name)| name)
+}
+
+fn free_name(dir: &Path, name: &str) -> PathBuf {
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
+        _ => (name, String::new()),
+    };
+    let mut candidate = dir.join(name);
+    let mut copies = 0_u32;
+    while candidate.exists() {
+        copies = copies.saturating_add(1);
+        let tail = match copies {
+            1 => " copy".to_owned(),
+            count => format!(" copy {count}"),
+        };
+        candidate = dir.join(format!("{stem}{tail}{ext}"));
+    }
+    candidate
+}
+
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut pending = vec![(from.to_path_buf(), to.to_path_buf())];
+    while let Some((from, to)) = pending.pop() {
+        if !from.is_dir() {
+            fs::copy(&from, &to)?;
+            continue;
+        }
+        fs::create_dir(&to)?;
+        for entry in fs::read_dir(&from)? {
+            let entry = entry?;
+            pending.push((entry.path(), to.join(entry.file_name())));
+        }
+    }
+    Ok(())
+}
+
+fn reveal(path: &Path) -> std::io::Result<()> {
+    let mut command = std::process::Command::new(REVEALER);
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::raw_arg(
+        &mut command,
+        format!("/select,\"{}\"", path.display()),
+    );
+    #[cfg(not(windows))]
+    command.arg(path.parent().unwrap_or(path));
+    let child = command.spawn()?;
+    eprintln!(
+        "desk: editor tree: revealed {} with {REVEALER}, pid {}",
+        path.display(),
+        child.id()
+    );
+    Ok(())
+}
+
+#[cfg(windows)]
+const REVEALER: &str = "explorer";
+#[cfg(target_os = "macos")]
+const REVEALER: &str = "open";
+#[cfg(not(any(windows, target_os = "macos")))]
+const REVEALER: &str = "xdg-open";
 
 fn absolute(path: &Path) -> PathBuf {
     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())

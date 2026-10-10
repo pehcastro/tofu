@@ -10,8 +10,8 @@ use gpui::{
     Animation, AnimationExt, AnyElement, App, Bounds, ClickEvent, Context, Corners, DispatchPhase,
     Display, Div, Element, ElementId, Entity, FocusHandle, GlobalElementId, InspectorElementId,
     KeyDownEvent, LayoutId, MouseButton, MouseDownEvent, Pixels, Point, Position, Rgba,
-    SharedString, Size, SpringConfig, SpringState, Stateful, Style, Task, Window, canvas, deferred,
-    div, point, prelude::*, px, relative,
+    SharedString, Size, SpringConfig, SpringState, Stateful, Style, StyleRefinement, Task, Window,
+    canvas, deferred, div, point, prelude::*, px, relative,
 };
 
 use crate::component::{control, icon};
@@ -28,6 +28,7 @@ use crate::components::size::{
     ROW_PAD_Y, SHEET_HANDLE, SHEET_HANDLE_HEIGHT, SHEET_HANDLE_WIDTH, SHEET_INSET, SHEET_RING,
     SHEET_SHADOW_Y, SHEET_SHARE, T1, TOAST_BOTTOM, TOAST_RIGHT, TOAST_WIDTH,
 };
+use crate::components::tooltip::overlay_shown;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{ICON_SMALL, ICON_TINY, RADIUS_CONTROL, TOAST_DISMISS};
@@ -429,7 +430,8 @@ impl ParentElement for Popover {
 }
 
 impl RenderOnce for Popover {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        overlay_shown(self.id.clone(), self.open, window, cx);
         let theme = ActiveTheme::theme(cx);
         let panel = self.open.then(|| {
             let panel = popover(&theme);
@@ -469,6 +471,10 @@ pub enum MenuItem {
         keys: Option<SharedString>,
         icon: Option<MenuIcon>,
     },
+    Disabled {
+        label: SharedString,
+        icon: Option<MenuIcon>,
+    },
     Separator,
     Caption(SharedString),
     Submenu {
@@ -499,7 +505,18 @@ impl MenuItem {
                 icon: Some(leading.into()),
                 items,
             },
+            MenuItem::Disabled { label, .. } => MenuItem::Disabled {
+                label,
+                icon: Some(leading.into()),
+            },
             MenuItem::Separator | MenuItem::Caption(_) => self,
+        }
+    }
+
+    pub fn enabled(self, enabled: bool) -> Self {
+        match (self, enabled) {
+            (MenuItem::Action { label, icon, .. }, false) => MenuItem::Disabled { label, icon },
+            (item, _) => item,
         }
     }
 
@@ -510,7 +527,10 @@ impl MenuItem {
     fn span(&self) -> usize {
         match self {
             MenuItem::Submenu { items, .. } => 1 + items.iter().map(MenuItem::span).sum::<usize>(),
-            MenuItem::Action { .. } | MenuItem::Separator | MenuItem::Caption(_) => 1,
+            MenuItem::Action { .. }
+            | MenuItem::Disabled { .. }
+            | MenuItem::Separator
+            | MenuItem::Caption(_) => 1,
         }
     }
 }
@@ -526,7 +546,13 @@ fn preorder(items: &[MenuItem], top: usize) -> usize {
 fn children_of(items: &[MenuItem], at: usize) -> &[MenuItem] {
     match items.get(at) {
         Some(MenuItem::Submenu { items, .. }) => items,
-        Some(MenuItem::Action { .. } | MenuItem::Separator | MenuItem::Caption(_)) | None => &[],
+        Some(
+            MenuItem::Action { .. }
+            | MenuItem::Disabled { .. }
+            | MenuItem::Separator
+            | MenuItem::Caption(_),
+        )
+        | None => &[],
     }
 }
 
@@ -574,6 +600,16 @@ fn menu_entry(id: impl Into<ElementId>, item: &MenuItem, theme: &Theme) -> MenuR
                 .children(lead.map(|lead| leading(lead, theme)))
                 .child(div().flex_1().child(label.clone()))
                 .child(icon(Icon::Arrow, ICON_TINY, ink(theme, CAPTION_TEXT))),
+        ),
+        MenuItem::Disabled { label, icon: lead } => MenuRow::Inert(
+            div()
+                .flex()
+                .items_center()
+                .px(px(ROW_PAD_X))
+                .py(px(ROW_PAD_Y))
+                .text_color(ink(theme, CAPTION_TEXT))
+                .children(lead.map(|lead| leading(lead, theme)))
+                .child(div().flex_1().child(label.clone())),
         ),
         MenuItem::Caption(label) => MenuRow::Inert(
             div()
@@ -1276,8 +1312,11 @@ fn menu_panel(
     trigger: &Anchor,
     placement: Placement,
     on_pick: Option<OnPick>,
-    cx: &App,
+    window: &Window,
+    cx: &mut App,
 ) -> Vec<AnyElement> {
+    let open = !matches!(state.read(cx).opened, Opened::Closed);
+    overlay_shown(ElementId::View(state.entity_id()), open, window, cx);
     let theme = ActiveTheme::theme(cx);
     let menu = state.read(cx);
     let anchor = match menu.opened {
@@ -1491,7 +1530,7 @@ impl MenuButton {
 }
 
 impl Render for MenuButton {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let anchor = Anchor::default();
         let open = !matches!(self.menu.read(cx).opened, Opened::Closed);
@@ -1509,6 +1548,7 @@ impl Render for MenuButton {
                 &anchor,
                 self.placement,
                 self.on_pick.clone(),
+                window,
                 cx,
             ))
     }
@@ -1548,14 +1588,18 @@ impl Dropdown {
 }
 
 impl Render for Dropdown {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let menu = self.menu.read(cx);
         let label = match menu.items.get(menu.chosen) {
             Some(MenuItem::Action { label, .. }) => label.clone(),
-            Some(MenuItem::Separator | MenuItem::Caption(_) | MenuItem::Submenu { .. }) | None => {
-                SharedString::default()
-            }
+            Some(
+                MenuItem::Disabled { .. }
+                | MenuItem::Separator
+                | MenuItem::Caption(_)
+                | MenuItem::Submenu { .. },
+            )
+            | None => SharedString::default(),
         };
         let anchor = Anchor::default();
         let open = !matches!(menu.opened, Opened::Closed);
@@ -1573,6 +1617,7 @@ impl Render for Dropdown {
                 &anchor,
                 Placement::below(),
                 None,
+                window,
                 cx,
             ))
     }
@@ -1585,6 +1630,7 @@ pub fn context_menu(items: Vec<MenuItem>) -> ContextMenu {
         children: Vec::new(),
         on_pick: None,
         open_at: None,
+        style: StyleRefinement::default(),
     }
 }
 
@@ -1595,6 +1641,13 @@ pub struct ContextMenu {
     children: Vec<AnyElement>,
     on_pick: Option<OnPick>,
     open_at: Option<Point<Pixels>>,
+    style: StyleRefinement,
+}
+
+impl Styled for ContextMenu {
+    fn style(&mut self) -> &mut StyleRefinement {
+        &mut self.style
+    }
 }
 
 impl ContextMenu {
@@ -1630,8 +1683,9 @@ impl RenderOnce for ContextMenu {
             state.update(cx, |menu, cx| menu.open(Opened::At(at), window, cx));
         }
         let opener = state.clone();
-        div()
-            .id(self.id)
+        let mut root = div();
+        *root.style() = self.style;
+        root.id(self.id)
             .on_mouse_down(MouseButton::Right, move |event, window, cx| {
                 opener.update(cx, |menu, cx| {
                     menu.open(Opened::At(event.position), window, cx)
@@ -1643,6 +1697,7 @@ impl RenderOnce for ContextMenu {
                 &Anchor::default(),
                 Placement::below(),
                 self.on_pick,
+                window,
                 cx,
             ))
     }

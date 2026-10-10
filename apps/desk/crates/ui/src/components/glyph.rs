@@ -4,6 +4,16 @@ use gpui::SharedString;
 
 use crate::components::size::{RING_STROKE, SPIN_SIZES};
 
+macro_rules! stroked {
+    ($body:literal) => {
+        concat!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">"#,
+            $body,
+            "</svg>"
+        )
+    };
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Glyph {
     Pin,
@@ -38,10 +48,23 @@ pub enum Glyph {
     BarChart,
     Brain,
     Gauge,
+    FileAdd,
+    FolderAdd,
+    Reveal,
+    Cut,
+    Copy,
+    Duplicate,
+    Paste,
+    Undo,
+    Redo,
+    Link,
+    Relative,
+    ExpandAll,
+    CollapseAll,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 32] = [
+    const ALL: [Glyph; 45] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -74,6 +97,19 @@ impl Glyph {
         Glyph::BarChart,
         Glyph::Brain,
         Glyph::Gauge,
+        Glyph::FileAdd,
+        Glyph::FolderAdd,
+        Glyph::Reveal,
+        Glyph::Cut,
+        Glyph::Copy,
+        Glyph::Duplicate,
+        Glyph::Paste,
+        Glyph::Undo,
+        Glyph::Redo,
+        Glyph::Link,
+        Glyph::Relative,
+        Glyph::ExpandAll,
+        Glyph::CollapseAll,
     ];
 
     pub const WORKSPACE: [(&'static str, Glyph); 12] = [
@@ -132,6 +168,19 @@ impl Glyph {
             Glyph::BarChart => "glyphs/bar-chart.svg",
             Glyph::Brain => "glyphs/brain.svg",
             Glyph::Gauge => "glyphs/gauge.svg",
+            Glyph::FileAdd => "glyphs/file-add.svg",
+            Glyph::FolderAdd => "glyphs/folder-add.svg",
+            Glyph::Reveal => "glyphs/reveal.svg",
+            Glyph::Cut => "glyphs/cut.svg",
+            Glyph::Copy => "glyphs/copy.svg",
+            Glyph::Duplicate => "glyphs/duplicate.svg",
+            Glyph::Paste => "glyphs/paste.svg",
+            Glyph::Undo => "glyphs/undo.svg",
+            Glyph::Redo => "glyphs/redo.svg",
+            Glyph::Link => "glyphs/link.svg",
+            Glyph::Relative => "glyphs/relative.svg",
+            Glyph::ExpandAll => "glyphs/expand-all.svg",
+            Glyph::CollapseAll => "glyphs/collapse-all.svg",
         }
     }
 
@@ -169,6 +218,41 @@ impl Glyph {
             Glyph::BarChart => include_str!("../../assets/icons/bar-chart.svg"),
             Glyph::Brain => include_str!("../../assets/icons/brain.svg"),
             Glyph::Gauge => include_str!("../../assets/icons/gauge.svg"),
+            Glyph::FileAdd => stroked!(
+                r#"<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/>"#
+            ),
+            Glyph::FolderAdd => stroked!(
+                r#"<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.5h7.4A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 11v6M9 14h6"/>"#
+            ),
+            Glyph::Reveal => stroked!(
+                r#"<path d="M13 4h7v7M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>"#
+            ),
+            Glyph::Cut => stroked!(
+                r#"<circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.1 15.9 19 4M15.9 15.9 5 4"/>"#
+            ),
+            Glyph::Copy => stroked!(
+                r#"<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"/>"#
+            ),
+            Glyph::Duplicate => stroked!(
+                r#"<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8M14 11v6M11 14h6"/>"#
+            ),
+            Glyph::Paste => stroked!(
+                r#"<path d="M9 4.5H7.5A2.5 2.5 0 0 0 5 7v11.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V7a2.5 2.5 0 0 0-2.5-2.5H15"/><rect x="9" y="3" width="6" height="3.5" rx="1"/>"#
+            ),
+            Glyph::Undo => {
+                stroked!(r#"<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>"#)
+            }
+            Glyph::Redo => {
+                stroked!(r#"<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>"#)
+            }
+            Glyph::Link => stroked!(
+                r#"<path d="M10 13.5a4 4 0 0 0 5.7.3l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M14 10.5a4 4 0 0 0-5.7-.3l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6"/>"#
+            ),
+            Glyph::Relative => {
+                stroked!(r#"<path d="M5 4v7a4 4 0 0 0 4 4h11"/><path d="m15 10 5 5-5 5"/>"#)
+            }
+            Glyph::ExpandAll => stroked!(r#"<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>"#),
+            Glyph::CollapseAll => stroked!(r#"<path d="m7 20 5-5 5 5M7 4l5 5 5-5"/>"#),
         }
     }
 

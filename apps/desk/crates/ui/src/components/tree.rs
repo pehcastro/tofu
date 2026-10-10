@@ -11,8 +11,9 @@ use desk_motion::tokens::{EASE_OUT, HOVER_MS, TOGGLE_MS};
 use desk_tiling::{Store, StoreError};
 use gpui::{
     AnyElement, App, ClickEvent, Context, ElementId, EventEmitter, Global, Image, ImageFormat,
-    ListSizingBehavior, ScrollStrategy, ScrollWheelEvent, SharedString, UniformListScrollHandle,
-    Window, div, img, prelude::*, px, uniform_list,
+    ListSizingBehavior, MouseButton, MouseDownEvent, Pixels, Point, ScrollStrategy,
+    ScrollWheelEvent, SharedString, UniformListScrollHandle, Window, div, img, prelude::*, px,
+    uniform_list,
 };
 use serde_json::Value;
 
@@ -376,6 +377,14 @@ pub struct TreeNode {
 pub enum TreeEvent {
     Opened(SharedString),
     Unfolded(SharedString),
+    Menu(TreeSpot, Point<Pixels>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TreeSpot {
+    Empty,
+    File(SharedString),
+    Folder(SharedString),
 }
 
 impl TreeNode {
@@ -794,9 +803,21 @@ impl FileTree {
         cx.notify();
     }
 
-    pub fn collapse_all(&mut self, cx: &mut Context<Self>) {
-        self.expanded.clear();
-        self.folds.clear();
+    pub fn collapse_all(&mut self, folder: &str, cx: &mut Context<Self>) {
+        let under =
+            |path: &SharedString| folder.is_empty() || path == folder || inside(path, folder);
+        self.expanded.retain(|path| !under(path));
+        self.folds.retain(|path, _| !under(path));
+        self.reshow();
+        cx.notify();
+    }
+
+    pub fn expand(
+        &mut self,
+        folders: impl IntoIterator<Item = SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.expanded.extend(folders);
         self.reshow();
         cx.notify();
     }
@@ -916,6 +937,10 @@ impl FileTree {
         });
         let clicked = row.path.clone();
         let hovered = row.path.clone();
+        let spot = match folder {
+            true => TreeSpot::Folder(row.path.clone()),
+            false => TreeSpot::File(row.path.clone()),
+        };
         let body = div()
             .flex()
             .flex_1()
@@ -963,6 +988,13 @@ impl FileTree {
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 this.click(clicked.clone(), folder, unread, cx);
             }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |_, event: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    cx.emit(TreeEvent::Menu(spot.clone(), event.position));
+                }),
+            )
             .into_any_element()
     }
 
@@ -1003,6 +1035,13 @@ impl Render for FileTree {
         .w_full()
         .flex_1()
         .min_h_0()
+        .on_mouse_down(
+            MouseButton::Right,
+            cx.listener(|_, event: &MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                cx.emit(TreeEvent::Menu(TreeSpot::Empty, event.position));
+            }),
+        )
         .on_scroll_wheel(cx.listener(|tree, _: &ScrollWheelEvent, _, cx| {
             if !matches!(tree.frames, FrameLog::Off) {
                 tree.frames.watch("scroll".into());

@@ -168,6 +168,35 @@ impl Listing {
             .collect()
     }
 
+    pub fn folders_under(&self, folder: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut pending = vec![folder.to_owned()];
+        while let Some(at) = pending.pop() {
+            let read = match fs::read_dir(self.root.join(&at)) {
+                Ok(read) => read,
+                Err(error) => {
+                    eprintln!("desk: editor could not expand {at}: {error}");
+                    continue;
+                }
+            };
+            for entry in read.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let path = match at.as_str() {
+                    "" => name.clone(),
+                    at => format!("{at}/{name}"),
+                };
+                let folder = entry.file_type().is_ok_and(|kind| kind.is_dir());
+                if folder && name != SKIPPED && !self.ignore.ignored(&path) {
+                    pending.push(path);
+                }
+            }
+            found.push(at);
+        }
+        found.retain(|path| !path.is_empty());
+        found.sort();
+        found
+    }
+
     fn own(&self, path: &str, folder: bool) -> Option<GitStatus> {
         let key = match folder {
             true => format!("{path}/"),
