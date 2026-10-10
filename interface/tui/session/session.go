@@ -532,8 +532,6 @@ func (m *Model) Stop() {
 	m.Busy, m.Stopping, m.LettingToolsFinish = false, false, false
 	m.requested, m.answered = time.Time{}, time.Time{}
 	m.leadIdleSince, m.waitingOn, m.stopAskedUntil = time.Time{}, 0, time.Time{}
-	m.asks, m.waiting = nil, time.Time{}
-	m.markAsked()
 	m.seal()
 	m.revision++
 	for index := range m.entries {

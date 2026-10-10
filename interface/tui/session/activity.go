@@ -363,7 +363,7 @@ func (m *Model) markAsked() {
 }
 
 func (m *Model) Await(id, tool, place string, decision *Decision) {
-	if !m.Busy || slices.Contains(m.asks, id) {
+	if slices.Contains(m.asks, id) {
 		return
 	}
 	if id == "" {
