@@ -12,12 +12,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/host"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
+	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
 
@@ -33,7 +35,10 @@ reads under $defs.clientMessage.
 
 --cassette PATH answers every model call from a recorded cassette, as tofu
 drive does, so a frontend is built and tested with no model and no network.
-TOFU_DRIVE_CASSETTE names it when --cassette does not.
+TOFU_DRIVE_CASSETTE names it when --cassette does not. A cassette run reads
+no quota, unless TOFU_CLAUDE_USAGE_URL or TOFU_CODEX_USAGE_URL names a
+stand-in usage endpoint, which it then polls for quota.updated and
+account.state.
 `
 
 const percentOfOne = 100
@@ -105,9 +110,13 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	open, polled, wires, stopKeeping := openAppWire, serveQuota(kept), signedInWires, func() {}
+	polled, accounts := serveQuota(kept)
+	open, wires, stopKeeping := openAppWire, signedInWires, func() {}
 	if deck != nil {
-		open, polled, wires = driveWire(deck), nil, func() []string { return append(runWires(), wireMeta) }
+		open, wires = driveWire(deck), func() []string { return append(runWires(), wireMeta) }
+		if os.Getenv(quota.ClaudeUsageURLVariable) == "" && os.Getenv(quota.CodexUsageURLVariable) == "" {
+			polled = nil
+		}
 	} else {
 		stopKeeping = keepAccountsAlive(func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) })
 	}
@@ -119,7 +128,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintln(errOut, "tofu serve: "+line)
 		}
 	}
-	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled,
+	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled, Accounts: accounts,
 		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
@@ -185,12 +194,17 @@ func serveBranch(p host.SessionBranchParams) (host.SessionBranchResult, error) {
 	if err != nil {
 		return host.SessionBranchResult{}, err
 	}
-	report, err := sessionBranch(store, sessionBranchAsk{handle: p.Session, preset: p.Preset, owns: strings.Join(p.Owns, ","), seed: cmp.Or(p.Seed, string(turn.SeedSummary)), name: p.Name, side: true})
+	ask := sessionBranchAsk{handle: p.Session, preset: p.Preset, owns: strings.Join(p.Owns, ","), seed: cmp.Or(p.Seed, string(turn.SeedSummary)), name: p.Name,
+		model: p.Model, effort: string(p.Effort), side: true}
+	if p.At != nil {
+		ask.at = p.At.Item
+	}
+	report, err := sessionBranch(store, ask)
 	if err != nil {
 		return host.SessionBranchResult{}, err
 	}
 	return host.SessionBranchResult{Session: report.Session, Handle: report.Handle, Parent: host.SessionParent{Session: report.Parent.Session, Event: report.Parent.Event},
-		Owns: report.Owns, Preset: report.Preset, Carried: report.Carried}, nil
+		Owns: report.Owns, Preset: report.Preset, Carried: report.Carried, Model: report.Model, Effort: report.Effort}, nil
 }
 
 func serveAccess(p host.SessionAccessParams) (host.SessionAccess, error) {
@@ -343,17 +357,19 @@ func serveVerbs(errOut io.Writer) func([]string) (host.VerbResult, error) {
 	}
 }
 
-func serveQuota(kept *quota.Poller) func() []host.QuotaWindow {
-	return func() []host.QuotaWindow {
-		results, err := pollCredentials(context.Background(), time.Now, kept)
-		if err != nil {
-			return nil
-		}
+func serveQuota(kept *quota.Poller) (func() []host.QuotaWindow, func() []host.AccountNow) {
+	var mu sync.Mutex
+	var last []pollResult
+	windows := func() []host.QuotaWindow {
+		results, _ := pollCredentials(context.Background(), time.Now, kept)
+		mu.Lock()
+		last = results
+		mu.Unlock()
 		var windows []host.QuotaWindow
 		for _, result := range results {
 			for _, read := range quotaFrames([]pollResult{result}, nil) {
 				window := host.QuotaWindow{Account: read.Account, Window: read.Label, Percent: read.Fraction * percentOfOne, Reported: read.Reported,
-					Source: string(result.report.Provider), AccountID: result.row}
+					Source: string(result.report.Provider), AccountID: result.row, Stale: read.Stale, ReadAt: read.ReadAt.UTC()}
 				if !read.ResetsAt.IsZero() {
 					window.ResetsAt = &read.ResetsAt
 				}
@@ -362,4 +378,25 @@ func serveQuota(kept *quota.Poller) func() []host.QuotaWindow {
 		}
 		return windows
 	}
+	accounts := func() []host.AccountNow {
+		mu.Lock()
+		defer mu.Unlock()
+		var held []host.AccountNow
+		for _, result := range last {
+			now := host.AccountNow{Source: string(result.report.Provider), AccountID: result.row, RetryAt: result.report.RetryAt.UTC()}
+			switch condition := quota.Diagnose(result.report, result.err); {
+			case transport.KindOf(result.err) == transport.KindRateLimit:
+				now.State = host.ConditionRateLimited
+			case condition == quota.ConditionWindowSpent:
+				now.State = host.ConditionSpent
+			case condition == quota.ConditionServing:
+				now.State = host.ConditionServing
+			default:
+				continue
+			}
+			held = append(held, now)
+		}
+		return held
+	}
+	return windows, accounts
 }

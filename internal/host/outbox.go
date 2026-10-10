@@ -90,7 +90,10 @@ func (o *outbox) push(out outgoing) {
 		o.queue[at].msg.Params.(*Resync).Dropped++
 		return
 	}
-	lost := out.msg.Params.(stamped).about()
+	var lost Identity
+	if identified, numbered := out.msg.Params.(stamped); numbered {
+		lost = identified.about()
+	}
 	lost.Item, lost.Agent = resyncMethod, ""
 	o.queue = append(o.queue, kept(resyncMethod, &Resync{Identity: lost, Dropped: 1}))
 }

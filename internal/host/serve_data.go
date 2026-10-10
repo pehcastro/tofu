@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"maps"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"tofu/internal/learn"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
+	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 )
 
@@ -167,7 +169,17 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		return typedVerb[DoctorReport](s, raw, "doctor")
 	case queryPrefix + "context":
 		return handle(raw, func(p SessionParams) (any, error) {
-			report, err := verbAs[ContextReport](s, verbLine([]string{"context"}, nil, nil, p.Session)...)
+			asked := cmp.Or(p.Session, s.Host.ID())
+			if p.Session == "" {
+				store, err := session.OpenIn(s.Host.dir)
+				if err == nil {
+					_, err = store.Header(asked)
+				}
+				if err != nil {
+					return ContextReport{Session: asked, Unmeasured: "the session open here has recorded no turn yet"}, nil
+				}
+			}
+			report, err := verbAs[ContextReport](s, "context", asked)
 			if err != nil {
 				return nil, err
 			}

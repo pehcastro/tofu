@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"math/rand/v2"
 	"path/filepath"
 	"slices"
@@ -20,9 +21,11 @@ import (
 	"tofu/internal/llm/quota"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/snapshot"
 	"tofu/internal/status"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/internal/turn/tools"
 )
 
 type ServeConfig struct {
@@ -34,6 +37,7 @@ type ServeConfig struct {
 	Carry    func(handle string) (Carry, error)
 	Verb     func(args []string) (VerbResult, error)
 	Quota    func() []QuotaWindow
+	Accounts func() []AccountNow
 	Sessions func(open string) (SessionList, error)
 	Branch   func(SessionBranchParams) (SessionBranchResult, error)
 	Access   func(SessionAccessParams) (SessionAccess, error)
@@ -52,23 +56,28 @@ var errCommandRunning = errors.New("a shell.run command is still running: wait f
 
 type server struct {
 	ServeConfig
-	box     *outbox
-	mu      sync.Mutex
-	items   items
-	client  string
-	ready   bool
-	pending map[string]ApprovalRequest
-	asked   map[string]QuestionRequest
-	answers bool
-	shells  map[string]*watchedShell
-	command context.CancelFunc
-	status  statusFeed
-	probed  time.Time
+	box      *outbox
+	mu       sync.Mutex
+	items    items
+	client   string
+	ready    bool
+	pending  map[string]ApprovalRequest
+	asked    map[string]QuestionRequest
+	answers  bool
+	shells   map[string]*watchedShell
+	command  context.CancelFunc
+	status   statusFeed
+	probed   time.Time
+	retryAt  time.Time
+	requota  chan struct{}
+	accounts map[string]AccountCondition
+	seen     settingsSeen
 }
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
-		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}}
+		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}}
+	s.seen.files = readSettingsFiles(cfg.Dir)
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
 	quit := make(chan struct{})
@@ -77,6 +86,7 @@ func Serve(cfg ServeConfig) error {
 	workers.Go(func() { s.watchShells(quit) })
 	workers.Go(func() { s.pollQuota(quit) })
 	workers.Go(func() { s.watchBoardy(quit) })
+	workers.Go(func() { s.watchSettings(quit) })
 	err := s.read()
 	s.windDown()
 	close(quit)
@@ -220,13 +230,18 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "shell.kill":
 		return handle(raw, s.shellKill)
 	case "label":
-		return handle(raw, func(p LabelParams) (any, error) { return s.Verb([]string{"label", cmp.Or(p.Row, "--last"), p.Outcome}) })
-	case "settings.set":
-		return handle(raw, func(p SettingsSetParams) (any, error) {
-			return s.Verb([]string{"settings", "set", "--scope", cmp.Or(p.Scope, "global"), p.Key, p.Value})
+		return handle(raw, func(p LabelParams) (any, error) {
+			return verbAs[LabelResult](s, "label", cmp.Or(p.Row, "--last"), p.Outcome)
 		})
+	case "settings.set":
+		return handle(raw, s.setSetting)
 	case "login.start":
-		return handle(raw, func(p LoginParams) (any, error) { return s.Verb([]string{"login", p.Role, p.Provider}) })
+		return handle(raw, func(p LoginParams) (any, error) {
+			if !slices.Contains(AccountRole("").enum(), p.Role) {
+				return nil, &Refusal{Code: CodeBadParams, Message: "role " + strconv.Quote(p.Role) + " is none of " + strings.Join(AccountRole("").enum(), ", ")}
+			}
+			return verbAs[LoginStarted](s, "login", p.Role, p.Provider)
+		})
 	case statusMethod + ".list":
 		return handle(raw, s.statusList)
 	case statusMethod + ".ack":
@@ -279,6 +294,14 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 	if err != nil {
 		return nil, busy(err)
 	}
+	if store, err := session.OpenIn(s.Host.dir); err == nil {
+		if side, found, _ := store.Side(carry.Session); found && side.Model != "" {
+			asking, pick := s.Host.Settings()
+			pick.Wire, pick.Model = cmp.Or(side.Wire, pick.Wire), side.Model
+			s.Host.Choose(pick)
+			s.box.push(merged("session.settings", "", &SessionSettings{Identity: Identity{Session: carry.Session}, Asking: asking, Pick: s.shown(pick)}))
+		}
+	}
 	read := newItems(carry.Session)
 	lines := read.all(chat)
 	if p.Replay != nil {
@@ -286,6 +309,7 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	maps.Copy(read.logged, s.items.logged)
 	s.items = read
 	for _, line := range lines {
 		s.box.push(line)
@@ -392,6 +416,13 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	}
 	task := p.Text
 	for _, mention := range p.Mentions {
+		s.mu.Lock()
+		item, asked := s.items.loggedAs(mention)
+		s.mu.Unlock()
+		if item != "" {
+			quoted := tools.QuoteRef(strings.TrimPrefix(asked, "#"))
+			task, mention = strings.ReplaceAll(task, mention, quoted), quoted
+		}
 		if !strings.HasPrefix(mention, "[") {
 			mention = "@" + mention
 		}
@@ -479,7 +510,7 @@ func (s *server) undo(p UndoParams) (any, error) {
 	if _, running := s.Host.Turn(); running {
 		return nil, errTurnRunning
 	}
-	return s.Verb([]string{"undo", strconv.Itoa(max(p.Turns, 1)), "--session", p.Session})
+	return verbAs[snapshot.Report](s, "undo", strconv.Itoa(max(p.Turns, 1)), "--session", p.Session)
 }
 
 func (s *server) shellRead(p ShellParams) (any, error) {
@@ -616,6 +647,10 @@ func (s *server) publish(event Event) {
 		go s.turnEnded(s.items.turn)
 	case EventTurnStarted, EventForkEnd:
 		go s.listed()
+	case EventAccount:
+		if event.Account.Reason == AccountReason(turn.AccountMoved) {
+			go s.quota()
+		}
 	}
 	s.translated(event)
 	s.status.follow(event)
@@ -652,18 +687,44 @@ func (s *server) quota() {
 		return
 	}
 	windows := append([]QuotaWindow{}, s.Quota()...)
+	var held []AccountNow
+	if s.Accounts != nil {
+		held = s.Accounts()
+	}
 	s.mu.Lock()
-	id := s.items.identity("", s.items.turn)
-	s.mu.Unlock()
-	s.box.push(merged("quota.updated", "", &QuotaUpdated{Identity: id, Windows: windows}))
+	defer s.mu.Unlock()
+	s.box.push(merged("quota.updated", "", &QuotaUpdated{Identity: s.items.identity("", s.items.turn), Windows: windows}))
+	s.retryAt = time.Time{}
+	for _, account := range held {
+		if !account.RetryAt.IsZero() && (s.retryAt.IsZero() || account.RetryAt.Before(s.retryAt)) {
+			s.retryAt = account.RetryAt
+		}
+		key := account.Source + " " + strconv.FormatInt(account.AccountID, 10)
+		was, known := s.accounts[key]
+		s.accounts[key] = account.State
+		if was != account.State && (known || account.State != ConditionServing) {
+			s.box.push(merged("account.state", key, &AccountStateChanged{Identity: s.items.identity("", ""), AccountNow: account}))
+		}
+	}
+	select {
+	case s.requota <- struct{}{}:
+	default:
+	}
 }
 
 func (s *server) pollQuota(quit <-chan struct{}) {
 	for {
+		wait := quota.Jittered(konst.ServeQuotaPollMinutes*time.Minute, rand.Float64())
+		s.mu.Lock()
+		if !s.retryAt.IsZero() {
+			wait = min(wait, time.Until(s.retryAt))
+		}
+		s.mu.Unlock()
 		select {
 		case <-quit:
 			return
-		case <-time.After(quota.Jittered(konst.ServeQuotaPollMinutes*time.Minute, rand.Float64())):
+		case <-s.requota:
+		case <-time.After(wait):
 			s.quota()
 		}
 	}

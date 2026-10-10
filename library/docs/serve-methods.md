@@ -7,32 +7,26 @@ verbs: serve
 
 ## What it is
 
-Every request `tofu serve --stdio` answers; `tofu docs serve` says how to
-start it, `tofu serve --schema` carries every field. Reads, reloads, the
-`session.*` and `memory.*` reads, `mention.resolve`, `shell.run`,
-`learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`.
-
-A read, a reload, a write and `learn.*` answer the verb's `--json` report with
-no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
-`settings.set` and `login.start` answer `{tofu, verb, ok, at, data, problems}`.
+Every request `tofu serve --stdio` answers; `tofu docs serve` says how to start it, `tofu serve --schema`
+carries every field. Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.run`,
+`learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`. Every request but
+`scratch.clean` answers a typed result with no envelope, and a verb that fails errs with its problems.
 
 ## Where it lives
 
-- `initialize`: takes `client`, `versions` and `capabilities`, where
-  `questions` says it answers `tofu/askPerson`; answers `protocol`, `tofu`,
-  `project` and `capabilities`, one name a family of methods
-- `session.list`: takes `search`, `limit` and `kind`; answers `head` and
-  `sessions`, each `id`, `name`, `handle`, `task`, `turns`, `lastAt`, `wire`,
-  `model`, `costUsd`, `outcome`, `open` (here), `running`, `heldBy` (another
-  tofu) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`
-- side chats (capability `side`): `session.branch` takes `session`, `kind:
-  "side"`, `seed` (`summary` or `none`), `owns` or `preset`, and `name`;
-  answers `session`, `handle`, `parent` `{session, event}`, `owns`, `preset`
-  and `carried`. `session.access` takes `session` and `owns` or `preset`,
-  `read` with neither, and errs while that chat's turn runs
-- `session.open`: takes `session` (none starts a fresh one), `asking` and
-  `replay`, how many of the newest lines it sends; answers `session` and
-  `fresh`. A session another tofu holds errs `session.busy`, naming the process
+- `initialize`: takes `client`, `versions` and `capabilities`, where `questions` says it answers
+  `tofu/askPerson`; answers `protocol`, `tofu`, `project` and `capabilities`, one name a family of methods
+- `session.list`: takes `search`, `limit` and `kind`; answers `head` and `sessions`, each `id`, `name`,
+  `handle`, `task`, `turns`, `lastAt`, `wire`, `model`, `costUsd`, `outcome`, `open` (here), `running`,
+  `heldBy` (another tofu) and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`
+- side chats (capability `side`): `session.branch` takes `session`, `kind: "side"`, `seed` (`summary` or
+  `none`), `owns` or `preset`, `name`, `model`, `effort` and `at` `{item}`, the parent's event to branch from
+  (the `item` `mention.resolve` answers), whose summary stops there; answers `session`, `handle`, `parent`
+  `{session, event}`, `owns`, `preset`, `carried`, `model` and `effort`; `session.open` of the side chat
+  picks its `model`. `tofu session branch` takes `--model`, `--effort`, `--at`. `session.access` takes `session`
+  and `owns` or `preset`, `read` with neither, and errs while that chat's turn runs
+- `session.open`: takes `session` (none starts a fresh one), `asking` and `replay`, how many of the newest
+  lines it sends; answers `session` and `fresh`. A session another tofu holds errs `session.busy`
 - `session.state`, the answer to `resync`: `running` and its `turn`, `asking`, the `pick`, waiting approvals,
   `standing` answers (`target`, `decision`; kept beside the session, read back when it reopens, carried into
   its compaction and never into another session), open `questions`, sub-agents, kept shells (each with `port`
@@ -57,7 +51,8 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `turn.sendNow` (capability `sendNow`) takes `id`, or none for every queued message; answers `ok`, errs
   `-32000` when no turn runs or the id is not queued. `turn.steered` follows each message the lead reads:
   `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a `step`. `turn.unsteer` takes `text`,
-  answers `removed`. `turn.stop` takes `turn`, `lead: true` stops the lead alone. `undo` takes `session`, `turns`
+  answers `removed`. `turn.stop` takes `turn`, `lead: true` stops the lead alone. `undo` takes `session`,
+  `turns`; answers `turns`, `restored`, `removed`, `refused` (`path`, `why`) and `dry_run`
 - `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`,
   `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
 - `shell.run`: takes `command`, runs it as `!` does, answers `output` and
@@ -69,8 +64,9 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `rules` (each with `text`, `trigger`, `fires` and `fires_week`, seven days, today last), `agents`, `library`,
   `memory`, `hooks`, `changelog` (with `seen`), `update` (it never installs), `usage` (each provider row's
   `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its
-  oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`; `items`,
-  each `{band, kind, name, tokens, fate, step}`) and
+  oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
+  open one, which before its first turn answers `unmeasured`; `items`, each `{band, kind, name, tokens,
+  fate, step}`) and
   `ledger` (takes `id`, or `last`, `point` and `session`, which keeps that session's rows before
   `last` counts; `rows` with `precedents` and `subject`, `{tool, command, path, url}`)
 - boards (capability `boards`): `query.session` takes `session`; answers `info` and `generations`, the fork
@@ -96,9 +92,13 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one
   with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
-  `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role`, `provider`; `settings.set` `key`, `value`, `scope`
+  `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role` (`llm`,
+  `classifier`, `search`), `provider`; answers the account signed in, `id`, `source`, `account`, `change`. `settings.set` takes `key`,
+  `value`, `scope` (`global` or `project`); answers `key`, `value`, `scope`, and `source`, where the
+  value now resolves from, and `settings.changed` tells every client
 - `cron.command` takes the line you would type (`/cron delete all`), answers
-  `note`. `label` takes `row` and `outcome`. `scratch.list` (`scratch`) answers `root`, `folders`;
+  `note`. `label` takes `row` and `outcome`; answers `id`, `outcome`, `kind`, `verdict`.
+  `scratch.list` (`scratch`) answers `root`, `folders`;
   `scratch.clean` takes `session`, `cache`, `dryRun`. `boardy.*` (`boardy`): `tofu docs boardy-views`
 - `status.list` (`status`) takes `session`, none or the open one, and errs on any other; answers
   `records`: `id`, `state`, `kind`, `progress`, `msg`, `ask` (the approval or question a blocked

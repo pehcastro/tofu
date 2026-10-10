@@ -7,20 +7,15 @@ verbs: serve
 
 ## What it is
 
-`tofu serve --stdio` runs one project for another program, the desk app or
-a script of your own. It reads JSON-RPC 2.0 requests on standard input and
-writes responses and events on standard output, one JSON object a line, in
-the protocol `tofu.host/1`. Standard error carries logs and nothing else.
-There is no port and no daemon: the program that starts tofu owns it.
+`tofu serve --stdio` runs one project for another program, the desk app or a script of your own. It reads
+JSON-RPC 2.0 requests on standard input and writes responses and events on standard output, one JSON object
+a line, in the protocol `tofu.host/1`. Standard error carries logs and nothing else. There is no port and no
+daemon: the program that starts tofu owns it.
 
-Every event names its `session`, `turn`, `item`, `seq`, `agent` for a
-sub-agent's, and `ref`, the token ctrl+r types for its item. Events carry
-data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool
-reports exit code, bytes, lines and duration as numbers, and a file edit
-carries its hunks with three lines of context.
-
-`tofu docs serve-methods` lists every request, what it takes and what it
-answers. This page is what serve sends without being asked.
+Every event names its `session`, `turn`, `item`, `seq`, `agent` for a sub-agent's, and `ref`, the token ctrl+r
+types for its item. Events carry data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool
+reports exit code, bytes, lines and duration as numbers, and a file edit carries its hunks with three lines of
+context. `tofu docs serve-methods` lists every request; this page is what serve sends without being asked.
 
 ## Where it lives
 
@@ -44,8 +39,15 @@ answers. This page is what serve sends without being asked.
   `agent` and `instance`, live and replayed, with their real `turn` and item
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
   `turn.steered`: the lead read a message sent mid-turn, until then queued
-- `quota.updated`: on open, after each turn and every five minutes, each window's `percent`, `source` and
-  `account_id`, the id `query.accounts` uses; `windows: []`, none answered
+- `quota.updated`: on open, after each turn, when a turn moves account, every five minutes, and as soon as a
+  rate-limited account's `retry_at` passes; each window's `percent`, `source`, `account_id` (the id
+  `query.accounts` uses), `read_at` and `stale`, true for a last good reading kept through a failed poll;
+  `windows: []`, none answered
+- `account.state` `{source, account_id, state, retry_at}`: an account turned `rate_limited` or `spent`,
+  or back to `serving`; one serving from the start says nothing
+- `settings.changed` `{key, value, scope, source}`: a setting changed by `settings.set`, by `tofu settings
+  set` in another process or by hand; `scope` is the file that changed, `source` where the value now
+  resolves from, `default` once the key left both files
 - `item.persisted`: every line of `events.jsonl` with its `logSeq`, so history
   after a seq is a read of the log; a tool call's names its `tool.started`
 - `decision`: every gate, with `at` and `call`, the `tool.started` it judged
@@ -67,9 +69,8 @@ answers. This page is what serve sends without being asked.
 
 ## Change it
 
-Confirmations follow the setting `gatePrompt`, auto unless you changed it.
-`session.open` and `session.set` take `asking`, `ask` or `auto`, for that
-session alone. Every gate sends a `decision` event either way:
+Confirmations follow the setting `gatePrompt`, auto unless you changed it. `session.open` and `session.set`
+take `asking`, `ask` or `auto`, for that session alone. Every gate sends a `decision` event either way:
 
 - `auto`: a call jev would ask about runs unasked, and one the gate could
   not judge is refused. `tofu/requestApproval` still comes, and the turn
@@ -85,35 +86,34 @@ session alone. Every gate sends a `decision` event either way:
   read back after a restart or `--continue`, never in another session:
   `approval.resolved` says `standing`, `session.state` lists them, and each
   call one decides unasked is a `standing` row in `tofu why`
-- a turn a cron job started has nobody to ask: what would ask is refused,
-  saying no person, and nothing waits. `turn.stop` with `lead: true`
-  withdraws a waiting approval, which resolves `cancelled`
+- a turn a cron job started has nobody to ask: what would ask is refused, saying no person, and nothing
+  waits. `turn.stop` with `lead: true` withdraws a waiting approval, which resolves `cancelled`
 
-`session.set` also takes `wire`, `model` and `effort`, held for every later
-turn and cron fire. A `wire` is the source that pays: `claude-sub`,
-`codex-sub`, `openrouter` or `meta`. One nobody is signed in on is refused;
-a new `wire` with no `model` takes its default. `turn.send` takes the same
-three, and `images` `{"path": ...}`, kept as `[Image #N]`.
+`session.set` also takes `wire`, `model` and `effort`, held for every later turn and cron fire. A `wire` is
+the source that pays: `claude-sub`, `codex-sub`, `openrouter` or `meta`. One nobody is signed in on is
+refused; a new `wire` with no `model` takes its default. `turn.send` takes the same three, and `images`
+`{"path": ...}`, kept as `[Image #N]`. Opening a side chat picks the model it was branched with.
 
-A `turn.steer` message waits for the lead's next step. `turn.sendNow` sends
-it now: tofu drops the model request in flight and asks that step again with
-it, keeping every tool result, sub-agent and shell; Esc in the terminal,
-where Esc again is `turn.stop`. The lead says in one line what it changes
-before its next tool call, and `tofu session trace` warns on a skip.
+A `turn.steer` message waits for the lead's next step. `turn.sendNow` sends it now: tofu drops the model
+request in flight and asks that step again with it, keeping every tool result, sub-agent and shell; Esc in
+the terminal, where Esc again is `turn.stop`. The lead says in one line what it changes before its next
+tool call, and `tofu session trace` warns on a skip.
 
 ## Check it
 
     tofu serve --stdio --cassette hi.cassette
 
-`--cassette` answers every model call as `tofu drive` does, with no network;
-with `hi.cassette` holding `{"text":"hi"}`, type:
+`--cassette` answers every model call as `tofu drive` does, with no network; with `hi.cassette` holding
+`{"text":"hi"}`, type:
 
     {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"client":"me"}}
     {"jsonrpc":"2.0","id":2,"method":"session.open","params":{}}
     {"jsonrpc":"2.0","id":3,"method":"turn.send","params":{"session":"<the id it answered>","text":"say hi"}}
 
-tofu answers each request, then streams `turn.started`, `message.delta` and
-the rest, and ends with `turn.completed` carrying `status: finished`.
+tofu answers each request, then streams `turn.started`, `message.delta` and the rest, and ends with
+`turn.completed` carrying `status: finished`. A cassette run reads no quota: to see `quota.updated` and
+`account.state` with no vendor, set `TOFU_CLAUDE_USAGE_URL` or `TOFU_CODEX_USAGE_URL` to a usage endpoint of
+your own.
 
 ## Undo it
 

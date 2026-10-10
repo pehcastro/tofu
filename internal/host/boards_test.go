@@ -55,6 +55,10 @@ func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
 		}
 	}
 	started := now.Add(-30 * time.Minute)
+	firedOn := 6
+	if started.Day() != now.Day() {
+		firedOn = 5
+	}
 	record(session.Header{ID: "f", At: started, ForkedInto: "g", ForkTokensBefore: 900, ForkTokensAfter: 300},
 		session.Event{At: started, Turn: "t1", Kind: session.EventTurnStart, Body: json.RawMessage(`{"task":"t","wire":"anthropic","spend":"subscription","account":1}`)},
 		session.Event{At: started, Turn: "t1", Kind: session.EventPrompt, Body: json.RawMessage(`{"system":"[code_rules, from the rule comments]\nno comments"}`)},
@@ -134,7 +138,7 @@ func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
 	c.ask("7", "query.rules", `{}`)
 	var rules RuleListReport
 	c.answer("7", &rules)
-	if len(rules.Rules) != 2 || !strings.Contains(rules.Rules[0].Text, "comment") || rules.Rules[0].Trigger != "language go" || rules.Rules[0].Fires != 1 || rules.Rules[0].FiresWeek[6] != 1 || rules.Rules[1].Text != "say less" {
+	if len(rules.Rules) != 2 || !strings.Contains(rules.Rules[0].Text, "comment") || rules.Rules[0].Trigger != "language go" || rules.Rules[0].Fires != 1 || rules.Rules[0].FiresWeek[firedOn] != 1 || rules.Rules[1].Text != "say less" {
 		t.Errorf("query.rules answered %+v, want the shipped rule's text, trigger and fire, and the override's text", rules.Rules)
 	}
 

@@ -42,7 +42,7 @@ turn, settings and login methods, the families include:
 | `boards` | `query.session`, `query.usage.history`, `query.limits`, `query.skills`, `query.ledger.summary`, `session.turns` | the fork tree; usage by hour or day with who spent it; each account's burn rate and when a window fills; the skills; a week of decisions per point; one digest per turn with its origin, outcome, held calls, sub-agents, files with line counts, tokens and cost |
 | `commands` | `query.commands` | every slash command with its arguments, what it does, whether it runs in tofu or only in the interface, and what a client needs to offer it |
 | `memory` | `memory.add`, `memory.edit`, `memory.remove`, `memory.view`, `memory.zoom`, `memory.recall` | entries in the four scopes, and the episode and scope views opened line by line |
-| `side` | `session.branch`, `session.access` | a side chat beside the lead, and what it may write |
+| `side` | `session.branch`, `session.access` | a side chat beside the lead, from its latest point or one you name, with its own model and effort, and what it may write |
 | `status` | `status.list`, `status.ack` | every program status record as it stands, with when it entered its state and the approval or question a blocked one waits on; an acknowledged finished record clears |
 | `mention` | `mention.resolve` | the item a `ref` points at |
 | `boardy` | `boardy.boards`, `boardy.list`, `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
@@ -71,9 +71,17 @@ and a `ref` that `mention.resolve` turns back into the call that started it.
   `moved`, naming the account it left, when tofu moves off a spent one.
 - `session.turns.updated`: the digest of a turn that just ended, the same
   row `session.turns` answers, so a client updates one row.
-- `quota.updated` when a session opens, after each turn and every five
-  minutes, with each reading's age and the `source` and `account_id` it
-  belongs to. See [Subscription quota](/docs/llms/quota).
+- `quota.updated` when a session opens, after each turn, when a turn moves
+  to another account, every five minutes, and as soon as a rate-limited
+  account may be asked again. Each window says when it was read, whether
+  it is a last good reading kept through a failed poll (`stale`), and the
+  `source` and `account_id` it belongs to. See
+  [Subscription quota](/docs/llms/quota).
+- `account.state` when an account becomes rate limited or spent, and when
+  it serves again, so a quota pill changes without asking.
+- `settings.changed` when a setting changes, through `settings.set`, through
+  `tofu settings set` in another window, or by hand in the file, with the
+  new value, the file that changed and where the value now comes from.
 - `memory.scoped` when a remember card is answered: the rule, the scope
   offered, the scope picked and who picked it.
 - `approval.resolved` and `question.resolved`, naming the answer and who
@@ -98,6 +106,15 @@ tofu serve --stdio --cassette hi.cassette
 
 tofu answers each request, then streams `turn.started`, `message.delta`
 and the rest, and ends with `turn.completed` carrying `status: finished`.
+
+A cassette run reads no quota. To try `quota.updated` and `account.state`
+with no vendor, point `TOFU_CLAUDE_USAGE_URL` or `TOFU_CODEX_USAGE_URL` at a
+usage endpoint of your own, and tofu polls that one instead.
+
+Requests answer typed results, named under `x-requests` in
+`tofu serve --schema`: `undo` the files it put back, `label` the row it
+labelled, `login.start` the account signed in, and `settings.set` the
+value with where it now comes from.
 
 ## Commands
 

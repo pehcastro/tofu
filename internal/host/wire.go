@@ -13,6 +13,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/shell"
+	"tofu/internal/snapshot"
 	roster "tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -474,6 +475,32 @@ type QuotaWindow struct {
 	ResetsAt  *time.Time `json:"resetsAt,omitempty"`
 	Source    string     `json:"source,omitempty"`
 	AccountID int64      `json:"account_id,omitempty"`
+	Stale     bool       `json:"stale"`
+	ReadAt    time.Time  `json:"read_at,omitzero"`
+}
+
+type AccountCondition string
+
+const (
+	ConditionServing     AccountCondition = "serving"
+	ConditionRateLimited AccountCondition = "rate_limited"
+	ConditionSpent       AccountCondition = "spent"
+)
+
+func (AccountCondition) enum() []string {
+	return []string{string(ConditionServing), string(ConditionRateLimited), string(ConditionSpent)}
+}
+
+type AccountNow struct {
+	Source    string           `json:"source"`
+	AccountID int64            `json:"account_id"`
+	State     AccountCondition `json:"state"`
+	RetryAt   time.Time        `json:"retry_at,omitzero"`
+}
+
+type AccountStateChanged struct {
+	Identity
+	AccountNow
 }
 
 type CronState struct {
@@ -662,12 +689,19 @@ const (
 )
 
 type SessionBranchParams struct {
-	Session string   `json:"session"`
-	Kind    string   `json:"kind"`
-	Seed    string   `json:"seed,omitempty"`
-	Owns    []string `json:"owns,omitempty"`
-	Preset  string   `json:"preset,omitempty"`
-	Name    string   `json:"name,omitempty"`
+	Session string           `json:"session"`
+	Kind    string           `json:"kind"`
+	Seed    string           `json:"seed,omitempty"`
+	Owns    []string         `json:"owns,omitempty"`
+	Preset  string           `json:"preset,omitempty"`
+	Name    string           `json:"name,omitempty"`
+	Model   string           `json:"model,omitempty"`
+	Effort  llm.Effort       `json:"effort,omitempty"`
+	At      *SessionBranchAt `json:"at,omitempty"`
+}
+
+type SessionBranchAt struct {
+	Item string `json:"item"`
 }
 
 type SessionParent struct {
@@ -682,6 +716,8 @@ type SessionBranchResult struct {
 	Owns    []string      `json:"owns"`
 	Preset  string        `json:"preset,omitempty"`
 	Carried int           `json:"carried"`
+	Model   string        `json:"model,omitempty"`
+	Effort  llm.Effort    `json:"effort,omitempty"`
 }
 
 type SessionAccessParams struct {
@@ -925,15 +961,45 @@ type LabelParams struct {
 	Outcome string `json:"outcome"`
 }
 
+type LabelResult struct {
+	ID      string         `json:"id"`
+	Outcome ledger.Verdict `json:"outcome"`
+	Kind    string         `json:"kind"`
+	Verdict ledger.Verdict `json:"verdict"`
+}
+
+type SettingScope string
+
+const (
+	SettingGlobal  SettingScope = "global"
+	SettingProject SettingScope = "project"
+)
+
+func (SettingScope) enum() []string { return []string{string(SettingGlobal), string(SettingProject)} }
+
 type SettingsSetParams struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-	Scope string `json:"scope,omitempty"`
+	Key   string       `json:"key"`
+	Value string       `json:"value"`
+	Scope SettingScope `json:"scope,omitempty"`
+}
+
+type SettingsSet struct {
+	Key    string       `json:"key"`
+	Value  any          `json:"value"`
+	Scope  SettingScope `json:"scope"`
+	Source string       `json:"source"`
 }
 
 type LoginParams struct {
 	Role     string `json:"role"`
 	Provider string `json:"provider"`
+}
+
+type LoginStarted struct {
+	ID      int64  `json:"id"`
+	Source  string `json:"source"`
+	Account string `json:"account"`
+	Change  string `json:"change"`
 }
 
 type NoParams struct{}
@@ -991,12 +1057,14 @@ func notifications() []method {
 		{name: "context.updated", params: ContextUpdated{}},
 		{name: "usage.updated", params: UsageUpdated{}},
 		{name: "quota.updated", params: QuotaUpdated{}},
+		{name: "account.state", params: AccountStateChanged{}},
 		{name: "cron.updated", params: CronUpdated{}},
 		{name: "session.forked", params: SessionForked{}},
 		{name: "session.updated", params: SessionUpdated{}},
 		{name: "session.listed", params: SessionListed{}},
 		{name: "session.turns.updated", params: SessionTurnUpdated{}},
 		{name: "session.settings", params: SessionSettings{}},
+		{name: "settings.changed", params: SettingsChanged{}},
 		{name: "approval.resolved", params: ApprovalResolved{}},
 		{name: "question.resolved", params: QuestionResolved{}},
 		{name: "memory.scoped", params: MemoryScopedEvent{}},
@@ -1009,7 +1077,6 @@ func notifications() []method {
 }
 
 func requests() []method {
-	verb := VerbResult{}
 	methods := []method{
 		{name: "initialize", params: InitializeParams{}, result: InitializeResult{}},
 		{name: "session.list", params: SessionListParams{}, result: SessionList{}},
@@ -1028,12 +1095,12 @@ func requests() []method {
 		{name: "session.history", params: SessionHistoryParams{}, result: SessionHistory{}},
 		{name: "session.turns", params: SessionParams{}, result: SessionTurns{}},
 		{name: "shell.run", params: ShellRunParams{}, result: ShellRunResult{}},
-		{name: "undo", params: UndoParams{}, result: verb},
+		{name: "undo", params: UndoParams{}, result: snapshot.Report{}},
 		{name: "shell.read", params: ShellParams{}, result: ShellReadResult{}},
 		{name: "shell.kill", params: ShellParams{}, result: Ack{}},
-		{name: "label", params: LabelParams{}, result: verb},
-		{name: "settings.set", params: SettingsSetParams{}, result: verb},
-		{name: "login.start", params: LoginParams{}, result: verb},
+		{name: "label", params: LabelParams{}, result: LabelResult{}},
+		{name: "settings.set", params: SettingsSetParams{}, result: SettingsSet{}},
+		{name: "login.start", params: LoginParams{}, result: LoginStarted{}},
 		{name: "cron.command", params: CronCommandParams{}, result: CronCommandResult{}},
 		{name: queryPrefix + "cron", params: NoParams{}, result: CronState{}},
 		{name: queryPrefix + "ledger", params: LedgerParams{}, result: LedgerReport{}},

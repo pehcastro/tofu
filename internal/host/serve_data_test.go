@@ -101,13 +101,17 @@ func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
 	c.ask("12", "rules.add", `{"id":"r1","text":"say so","reason":"why","global":true}`)
 	c.until(func(line wireLine) bool { return string(line.ID) == `"12"` }, "the answer to 12")
 	c.ask("13", "query.context", `{}`)
-	c.until(func(line wireLine) bool { return string(line.ID) == `"13"` }, "the answer to 13")
+	var unrecorded ContextReport
+	c.answer("13", &unrecorded)
 	c.ask("14", "agents.set", `{"name":"go-dev","model":"claude-sub/opus"}`)
 	c.until(func(line wireLine) bool { return string(line.ID) == `"14"` }, "the answer to 14")
-	for _, want := range []string{"rules add --global --reason why r1 say so", "context", "agents set go-dev claude-sub/opus"} {
+	for _, want := range []string{"rules add --global --reason why r1 say so", "agents set go-dev claude-sub/opus"} {
 		if !slices.Contains(ran, want) {
 			t.Errorf("no verb ran as %q; ran %q", want, ran)
 		}
+	}
+	if slices.ContainsFunc(ran, func(line string) bool { return strings.HasPrefix(line, "context") }) || unrecorded.Unmeasured == "" {
+		t.Errorf("query.context with no session recorded here ran %q and answered %+v, want no verb, since a bare tofu context reads the newest session on disk", ran, unrecorded)
 	}
 
 	schema, err := Schema()

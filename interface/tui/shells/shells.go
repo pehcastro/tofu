@@ -31,7 +31,7 @@ const (
 	factLabel      = 10
 	title          = "Shells"
 	emptyBody      = "No background processes in this session yet."
-	emptyRule      = "Only long work lands here: a dev server, a watcher, a long script.\n  Never a test, a build or a one-shot command: those end and never show."
+	emptyRule      = "Only a process kept past its bash call shows here: a server or\n  watcher started in the background, or a command still running when\n  its call stops waiting, such as a long build or test run. A command\n  that ends inside its wait never shows."
 	outputHint     = "  ·  wheel / PgUp / PgDn"
 	silentRunning  = "nothing printed yet"
 	silentEnded    = "printed nothing"

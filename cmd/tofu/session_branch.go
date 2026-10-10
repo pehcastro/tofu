@@ -7,16 +7,17 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/llm"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
 )
 
-const sessionBranchUsage = "tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--json]"
+const sessionBranchUsage = "tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--model ID] [--effort LEVEL] [--at EVENT] [--json]"
 
 type sessionBranchAsk struct {
-	handle, preset, owns, seed, name string
-	side                             bool
+	handle, preset, owns, seed, name, model, effort, at string
+	side                                                bool
 }
 
 type sessionBranchReport struct {
@@ -28,13 +29,15 @@ type sessionBranchReport struct {
 	Preset  string          `json:"preset,omitempty"`
 	Seed    turn.Seed       `json:"seed"`
 	Carried int             `json:"carried_messages"`
+	Model   string          `json:"model,omitempty"`
+	Effort  llm.Effort      `json:"effort,omitempty"`
 
 	parentHandle string
 }
 
 func sessionBranchArgs(args []string) (sessionBranchAsk, error) {
 	ask := sessionBranchAsk{seed: string(turn.SeedSummary)}
-	valued := map[string]*string{"--preset": &ask.preset, "--owns": &ask.owns, "--seed": &ask.seed, "--name": &ask.name}
+	valued := map[string]*string{"--preset": &ask.preset, "--owns": &ask.owns, "--seed": &ask.seed, "--name": &ask.name, "--model": &ask.model, "--effort": &ask.effort, "--at": &ask.at}
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
 		switch target, takes := valued[arg]; {
@@ -86,7 +89,13 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
-	header, carried, err := turn.BranchSide(store, parent, access, turn.Seed(ask.seed), time.Now())
+	var effort llm.Effort
+	if ask.effort != "" {
+		if effort, err = llm.ParseEffort(ask.effort); err != nil {
+			return sessionBranchReport{}, err
+		}
+	}
+	header, carried, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Model: ask.model, From: ask.at}, time.Now())
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
@@ -96,7 +105,7 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 		}
 	}
 	return sessionBranchReport{Session: header.ID, Handle: handleOf(store, header.ID), Kind: header.Kind, Parent: *header.BranchedFrom, Owns: append([]string{}, header.Owns...),
-		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, parentHandle: handleOf(store, parent.ID)}, nil
+		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, Model: header.Model, Effort: effort, parentHandle: handleOf(store, parent.ID)}, nil
 }
 
 func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
@@ -108,11 +117,18 @@ func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
 		access = report.Preset + ": " + access
 	}
 	lines := append(page.Title("Side chat", []string{report.Handle}, cli.Verdict{Mark: cli.Changed, Text: "branched"}), "")
-	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{
+	facts := []cli.Fact{
 		{Label: "id", Text: report.Session},
-		{Label: "parent", Text: report.parentHandle},
+		{Label: "parent", Text: strings.TrimSuffix(report.parentHandle+" at "+report.Parent.Event, " at ")},
 		{Label: "access", Text: access},
 		{Label: "seed", Text: string(report.Seed) + ", " + countOf(report.Carried, "message")},
-	})...)...)
+	}
+	if report.Model != "" {
+		facts = append(facts, cli.Fact{Label: "model", Text: report.Model})
+	}
+	if report.Effort != "" {
+		facts = append(facts, cli.Fact{Label: "effort", Text: string(report.Effort)})
+	}
+	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(append(lines, ""), cli.Indent(page.Hint("tofu session resume "+report.Handle))...)
 }

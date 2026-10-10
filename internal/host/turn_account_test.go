@@ -3,7 +3,9 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -55,6 +57,86 @@ func (e twoAccounts) Prepare(start Turn, hooks Hooks) (Prepared, error) {
 func (twoAccounts) Renew() {}
 
 func (twoAccounts) OneTurnPerProject() bool { return false }
+
+func TestQuotaIsReadAgainWhenTheTurnMovesToAnotherAccount(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	h, _ := New(Config{Dir: project, Engine: twoAccounts{dir: project}})
+	t.Cleanup(h.Close)
+	reads := make(chan struct{}, 8)
+	c := servingHost(t, h, project, ServeConfig{Quota: func() []QuotaWindow {
+		reads <- struct{}{}
+		return nil
+	}})
+	c.ask("1", "initialize", `{"client":"scratch"}`)
+	c.answer("1", &InitializeResult{})
+	c.ask("2", "session.open", `{}`)
+	var opened SessionOpenResult
+	c.answer("2", &opened)
+	c.ask("3", "turn.send", `{"session":"`+opened.Session+`","text":"read the note"}`)
+	c.answer("3", &TurnResult{})
+	c.until(func(line wireLine) bool { return line.Method == "turn.completed" }, "turn.completed")
+	for read := range 3 {
+		select {
+		case <-reads:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("the quota was read %d times, want 3: at session.open, at the move to account 2, and at the end of the turn", read)
+		}
+	}
+}
+
+func TestAccountStateFollowsEachAccountAndAPassedRetryReadsTheQuotaAgain(t *testing.T) {
+	readAt := time.Date(2026, 10, 9, 5, 17, 12, 0, time.UTC)
+	retry := time.Now().Add(400 * time.Millisecond)
+	rounds := [][]AccountNow{
+		{{Source: "claude-sub", AccountID: 1, State: ConditionRateLimited, RetryAt: retry}, {Source: "codex-sub", AccountID: 2, State: ConditionServing}},
+		{{Source: "claude-sub", AccountID: 1, State: ConditionSpent}, {Source: "codex-sub", AccountID: 2, State: ConditionServing}},
+		{{Source: "claude-sub", AccountID: 1, State: ConditionServing}, {Source: "codex-sub", AccountID: 2, State: ConditionServing}},
+	}
+	var polls atomic.Int32
+	c, _, _ := serving(t, nil, ServeConfig{
+		Quota: func() []QuotaWindow {
+			stale := polls.Add(1) == 1
+			return []QuotaWindow{{Account: "#1", Window: "claude-sub 5h", Percent: 34, Reported: true, Source: "claude-sub", AccountID: 1, Stale: stale, ReadAt: readAt}}
+		},
+		Accounts: func() []AccountNow { return rounds[min(int(polls.Load()), len(rounds))-1] },
+	})
+	var states []AccountStateChanged
+	var windows []QuotaWindow
+	until := func(state AccountCondition) {
+		c.until(func(line wireLine) bool {
+			switch line.Method {
+			case "quota.updated":
+				var updated QuotaUpdated
+				_ = json.Unmarshal(line.Params, &updated)
+				windows = append(windows, updated.Windows...)
+			case "account.state":
+				var changed AccountStateChanged
+				_ = json.Unmarshal(line.Params, &changed)
+				states = append(states, changed)
+				return changed.State == state
+			}
+			return false
+		}, "account.state "+string(state))
+	}
+	c.ask("1", "initialize", `{"client":"desk"}`)
+	c.answer("1", &InitializeResult{})
+	c.ask("2", "session.open", `{}`)
+	c.answer("2", &SessionOpenResult{})
+	until(ConditionRateLimited)
+	until(ConditionSpent)
+	c.ask("3", "session.open", `{}`)
+	c.answer("3", &SessionOpenResult{})
+	until(ConditionServing)
+
+	if len(states) != 3 || states[0].Source != "claude-sub" || states[0].AccountID != 1 || !states[0].RetryAt.Equal(retry) || states[1].State != ConditionSpent {
+		t.Errorf("account.state went out as %+v, want claude-sub 1 rate_limited until %s, then spent, then serving, and nothing for codex-sub, which never changed", states, retry)
+	}
+	if len(windows) < 2 || !windows[0].Stale || !windows[0].ReadAt.Equal(readAt) || windows[1].Stale {
+		t.Errorf("quota.updated carried %+v, want the first window stale and read at %s, then a fresh one", windows, readAt)
+	}
+}
 
 func TestTurnAccountNamesThePickAndTheMoveOfTheRunningTurn(t *testing.T) {
 	for _, fixed := range []bool{false, true} {

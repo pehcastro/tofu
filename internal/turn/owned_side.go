@@ -1,6 +1,7 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -57,21 +58,38 @@ const (
 	SeedNone    Seed = "none"
 )
 
-func BranchSide(store *session.Store, parent session.Header, access Access, seed Seed, at time.Time) (session.Header, int, error) {
+type SideBranch struct {
+	Access Access
+	Seed   Seed
+	Model  string
+	From   string
+}
+
+func BranchSide(store *session.Store, parent session.Header, side SideBranch, at time.Time) (session.Header, int, error) {
+	events, err := store.Body(parent.ID)
+	if err != nil {
+		return session.Header{}, 0, err
+	}
+	if side.From != "" {
+		upTo := slices.IndexFunc(events, func(event session.Event) bool { return event.ID == side.From })
+		if upTo < 0 {
+			return session.Header{}, 0, fmt.Errorf("event %q is not in session %s, so there is no point to branch from", side.From, parent.ID)
+		}
+		events = events[:upTo+1]
+	}
 	var seeded []llm.Message
-	switch seed {
+	switch side.Seed {
 	case SeedSummary:
-		var err error
-		if seeded, err = sideSeed(store, parent); err != nil {
+		if seeded, err = sideSeed(store, parent, events); err != nil {
 			return session.Header{}, 0, err
 		}
 	case SeedNone:
 	default:
-		return session.Header{}, 0, fmt.Errorf("seed %q is neither %s nor %s", seed, SeedSummary, SeedNone)
+		return session.Header{}, 0, fmt.Errorf("seed %q is neither %s nor %s", side.Seed, SeedSummary, SeedNone)
 	}
 	id := session.NewEventID()
-	log, err := store.Open(session.Header{ID: id, At: at, Root: id, Kind: session.KindSide, Owns: access.Owns, Preset: access.Preset, Wire: parent.Wire, Model: parent.Model,
-		BranchedFrom: &session.Carried{Session: parent.ID, Event: parent.Head}})
+	log, err := store.Open(session.Header{ID: id, At: at, Root: id, Kind: session.KindSide, Owns: side.Access.Owns, Preset: side.Access.Preset, Wire: parent.Wire,
+		Model: cmp.Or(side.Model, parent.Model), BranchedFrom: &session.Carried{Session: parent.ID, Event: cmp.Or(side.From, parent.Head)}})
 	if err != nil {
 		return session.Header{}, 0, err
 	}
@@ -89,10 +107,9 @@ func BranchSide(store *session.Store, parent session.Header, access Access, seed
 	return log.Header(), len(seeded), errors.Join(err, log.Close())
 }
 
-func sideSeed(store *session.Store, parent session.Header) ([]llm.Message, error) {
-	events, err := store.Body(parent.ID)
-	if err != nil {
-		return nil, err
+func sideSeed(store *session.Store, parent session.Header, events []session.Event) ([]llm.Message, error) {
+	if len(events) == 0 {
+		return nil, nil
 	}
 	messages, err := ConversationFrom(events)
 	if err != nil {
@@ -102,11 +119,14 @@ func sideSeed(store *session.Store, parent session.Header) ([]llm.Message, error
 	if err != nil {
 		return nil, err
 	}
-	task := ""
+	task, last := "", events[len(events)-1].ID
 	for _, event := range recorded {
 		var start session.TurnStart
 		if event.Kind == session.EventTurnStart && event.Agent == "" && json.Unmarshal(event.Body, &start) == nil {
 			task = start.Task
+		}
+		if event.ID == last {
+			break
 		}
 	}
 	if task == "" || len(messages) == 0 {

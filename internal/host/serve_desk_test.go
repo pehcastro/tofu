@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/cron"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
@@ -150,6 +152,17 @@ func TestDeskAnEndedSubAgentSaysWhenItEndedTheSameLiveAndOnReplay(t *testing.T) 
 		if !got.EndedAt.Equal(ended) || got.DurationMs != 3250 || got.Turn != turnID {
 			t.Errorf("%s agent.ended = endedAt %s, durationMs %d, turn %q; want %s, 3250 and %q, the run the session recorded", name, got.EndedAt, got.DurationMs, got.Turn, ended, turnID)
 		}
+	}
+}
+
+func TestDeskAFullOutboxDropsANotificationWithNoIdentityAndSaysSo(t *testing.T) {
+	box := newOutbox()
+	for range konst.ServeQueue + 2 {
+		box.push(notify(boardyPrefix+"changed", boardy.Changed{Board: "work"}))
+	}
+	last := box.queue[len(box.queue)-1]
+	if resync, said := last.msg.Params.(*Resync); last.msg.Method != resyncMethod || !said || resync.Dropped != 2 {
+		t.Errorf("past %d queued lines the outbox ended with %s %+v, want one resync counting the 2 boardy.changed it dropped", konst.ServeQueue, last.msg.Method, last.msg.Params)
 	}
 }
 
