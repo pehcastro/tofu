@@ -161,7 +161,7 @@ exit 0
         "do": "tofu run --dir . --show-prompt \"anything\""
       },
       {
-        "text": "store the openrouter key the gate needs",
+        "text": "store the openrouter or typesafe key the gate needs",
         "do": "tofu login classifier openrouter"
       },
       {

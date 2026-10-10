@@ -242,8 +242,11 @@ func (m Model) View() string {
 	if m.filter != (identity{}) {
 		heading = m.filter.label()
 	}
-	if p.first > 1 {
+	switch {
+	case p.first > 1:
 		hint = "wheel ↑ older"
+	case p.last < p.total:
+		hint = "oldest"
 	}
 	main := look.Sides(look.PaneTitle(heading, !m.railFocused), look.Faint(fmt.Sprintf("%d-%d/%d · %s", p.first, p.last, p.total, hint)), width) + "\n\n" + p.view
 	split := m.Split()

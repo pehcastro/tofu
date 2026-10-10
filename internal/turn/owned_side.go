@@ -62,6 +62,7 @@ type SideBranch struct {
 	Access Access
 	Seed   Seed
 	Model  string
+	Effort llm.Effort
 	From   string
 }
 
@@ -89,7 +90,7 @@ func BranchSide(store *session.Store, parent session.Header, side SideBranch, at
 	}
 	id := session.NewEventID()
 	log, err := store.Open(session.Header{ID: id, At: at, Root: id, Kind: session.KindSide, Owns: side.Access.Owns, Preset: side.Access.Preset, Wire: parent.Wire,
-		Model: cmp.Or(side.Model, parent.Model), BranchedFrom: &session.Carried{Session: parent.ID, Event: cmp.Or(side.From, parent.Head)}})
+		Model: cmp.Or(side.Model, parent.Model), Effort: string(side.Effort), BranchedFrom: &session.Carried{Session: parent.ID, Event: cmp.Or(side.From, parent.Head)}})
 	if err != nil {
 		return session.Header{}, 0, err
 	}

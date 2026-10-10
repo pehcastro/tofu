@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
@@ -20,12 +21,6 @@ const (
 	scratchCleanupSetting = "scratchCleanupDays"
 	scratchMaxGBSetting   = "scratchMaxGB"
 )
-
-type scratchCleaned struct {
-	Root    string              `json:"root"`
-	DryRun  bool                `json:"dry_run"`
-	Removed []sys.ScratchFolder `json:"removed"`
-}
 
 func runScratch(args []string, out, errOut io.Writer) int {
 	o := verbOutput{verb: "scratch", usageLine: scratchUsage, asJSON: jsonAsked(args), out: out, errOut: errOut}
@@ -61,7 +56,7 @@ func runScratch(args []string, out, errOut io.Writer) int {
 		}
 	}
 	sweep.Leftovers = sweep.Session == ""
-	cleaned := scratchCleaned{Root: report.Root, DryRun: dryRun, Removed: report.Removable(sweep)}
+	cleaned := host.ScratchCleaned{Root: report.Root, DryRun: dryRun, Removed: append([]sys.ScratchFolder{}, report.Removable(sweep)...)}
 	if !dryRun {
 		if err := removeScratch(cleaned.Removed); err != nil {
 			return o.fail(err)

@@ -210,7 +210,7 @@
   do: tofu run --dir . --no-instructions "<task>"
   check: tofu run --dir . --no-instructions --show-prompt "<task>"
   topic: instructions
-- ask: store the openrouter key the gate needs
+- ask: store the openrouter or typesafe key the gate needs
   do: tofu login classifier openrouter
   check: tofu doctor
   topic: gate

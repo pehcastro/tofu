@@ -95,7 +95,7 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 			return sessionBranchReport{}, err
 		}
 	}
-	header, carried, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Model: ask.model, From: ask.at}, time.Now())
+	header, carried, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Model: ask.model, Effort: effort, From: ask.at}, time.Now())
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
@@ -105,7 +105,7 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 		}
 	}
 	return sessionBranchReport{Session: header.ID, Handle: handleOf(store, header.ID), Kind: header.Kind, Parent: *header.BranchedFrom, Owns: append([]string{}, header.Owns...),
-		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, Model: header.Model, Effort: effort, parentHandle: handleOf(store, parent.ID)}, nil
+		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: carried, Model: header.Model, Effort: llm.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
 }
 
 func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {

@@ -172,7 +172,7 @@ func sessionFamilyLines(page cli.Page, report sessionFamilyReport, now time.Time
 		if generation.Name != "" {
 			kind += " · was " + generation.Name
 		}
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{"." + strconv.Itoa(generation.Generation), sessionWhen(generation.At, now), sessionSteps(generation.Steps),
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{"." + strconv.Itoa(generation.Generation), sessionWhen(generation.At, now), plural(generation.Steps, "step"),
 			widget.Until(time.Duration(generation.ActiveMS) * time.Millisecond), widget.Size(int(generation.Bytes)), kind}}
 	}
 	rows[len(rows)-1].Mark = cli.Active

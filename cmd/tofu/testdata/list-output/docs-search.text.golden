@@ -78,7 +78,7 @@ Docs · "change the colours"                                           64 matche
     → tofu usage
   see which skills the model is offered
     → tofu run --dir . --show-prompt "anything"
-  store the openrouter key the gate needs
+  store the openrouter or typesafe key the gate needs
     → tofu login classifier openrouter
   work one task with the gate off
     → tofu run --dir . --no-gate "<task>"

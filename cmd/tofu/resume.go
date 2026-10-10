@@ -10,7 +10,7 @@ import (
 )
 
 func resumeNote(carry sessionResume) string {
-	note := "resumed " + carry.Handle + ", carrying " + plural(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
+	note := "resumed " + carry.Handle + ", carrying " + plural(carry.Carried, "message") + " · " + plural(carry.Steps, "step")
 	switch {
 	case carry.Fresh != "":
 		return "started a new session: " + carry.Fresh

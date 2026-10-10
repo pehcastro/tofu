@@ -440,7 +440,7 @@ func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []
 	var verdict cli.Verdict
 	rows := make([]cli.Row, len(report.Sessions))
 	for i, row := range report.Sessions {
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{row.Handle, sessionWhen(row.At, now), sessionSteps(row.Steps), row.Outcome}, Detail: oneLine(row.Task)}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{row.Handle, sessionWhen(row.At, now), plural(row.Steps, "step"), row.Outcome}, Detail: oneLine(row.Task)}
 		if row.sideOf != "" {
 			rows[i].Detail = strings.Join(slices.DeleteFunc([]string{"side chat of " + row.sideOf, rows[i].Detail}, func(part string) bool { return part == "" }), " · ")
 		}
@@ -560,7 +560,7 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 func busyResumeLines(page cli.Page, carry sessionResume) []string {
 	carried, head := "none, starts over", ""
 	if carry.Carried > 0 {
-		carried = plural(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
+		carried = plural(carry.Carried, "message") + " · " + plural(carry.Steps, "step")
 	}
 	if carry.HeadDerived {
 		head = "none written, took the newest"
@@ -574,8 +574,6 @@ func busyResumeLines(page cli.Page, carry sessionResume) []string {
 		{Label: "writer", Text: carry.Busy.Error()},
 	})...)...)
 }
-
-func sessionSteps(steps int) string { return plural(steps, "step") }
 
 func dollars(usd float64) string { return fmt.Sprintf("$%.6f", usd) }
 

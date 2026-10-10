@@ -622,7 +622,7 @@ func appResume(live *host.Host, handle string) (string, []tui.Event) {
 	if err != nil {
 		return err.Error(), nil
 	}
-	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + sessionSteps(carry.Steps), chat
+	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + plural(carry.Steps, "step"), chat
 }
 
 func appSessions(inUse string) ([]tui.SessionRow, error) {

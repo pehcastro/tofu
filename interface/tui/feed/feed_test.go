@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +75,23 @@ func TestViewGolden(t *testing.T) {
 	m := sessionModel(&clock, 3)
 	m.SetAgents(true, append(sessionAgents()[:3], Agent{Name: "lint", State: roster.Errored, Doing: "Exited with status 1", Since: 6 * time.Minute}))
 	golden.Assert(t, "sub-agents-120x36.golden", m.View())
+}
+
+func TestFeedHeaderNamesWhereThePageSits(t *testing.T) {
+	clock := sessionStart.Add(19 * time.Minute)
+	m := sessionModel(&clock, 3)
+	header := func() string { return strings.SplitN(m.View(), "\n", 3)[1] }
+	if got := header(); !strings.Contains(got, "/27 · wheel ↑ older") {
+		t.Fatalf("at the newest with older cards above, the header says %q", got)
+	}
+	m.scroll = 1 << 20
+	if got := header(); !strings.Contains(got, "1-4/27 · oldest") {
+		t.Fatalf("with card 1 on screen and newer below, the header says %q", got)
+	}
+	m.SetEvents(sessionEvents()[:1])
+	if got := header(); !strings.Contains(got, "1-1/1 · newest") {
+		t.Fatalf("with every card on screen, the header says %q", got)
+	}
 }
 
 func TestActivityCardCacheInvalidatesOnVisibleChanges(t *testing.T) {

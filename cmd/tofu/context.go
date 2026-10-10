@@ -194,7 +194,7 @@ func contextLines(page cli.Page, r contextReport) []string {
 	facts = append(facts,
 		cli.Fact{Label: "bytes", Text: strconv.Itoa(r.BytesPerThousandTokens) + " per thousand tokens"},
 		cli.Fact{Label: "fork", Text: forkFact(r.Fork)})
-	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), sessionSteps(r.Steps)}, verdict), "")
+	lines := append(page.Title("Context", []string{sessionHandle(r.Session, r.Name), plural(r.Steps, "step")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts(facts)...)...)
 	return append(lines, skippedLines(page, r.Skipped)...)
 }
