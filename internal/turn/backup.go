@@ -28,6 +28,7 @@ type subAgentBackup struct {
 	Mission string            `json:"mission,omitempty"`
 	Brief   string            `json:"brief"`
 	Owns    []string          `json:"owns,omitempty"`
+	Ticket  string            `json:"ticket,omitempty"`
 	Depth   int               `json:"depth"`
 	Taken   time.Time         `json:"taken"`
 	History []MessageRow      `json:"history"`
@@ -99,7 +100,7 @@ func (t *SpawnTool) backup(to string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	kept := subAgentBackup{ID: to, Agent: held.agent.Agent, Model: held.agent.Model, Mission: held.agent.Mission, Brief: held.agent.Brief, Owns: held.boundary.Owns(),
+	kept := subAgentBackup{ID: to, Agent: held.agent.Agent, Model: held.agent.Model, Mission: held.agent.Mission, Brief: held.agent.Brief, Owns: held.boundary.Owns(), Ticket: held.agent.Ticket,
 		Depth: held.trace.depth, Taken: t.clock(), Files: map[string]string{}}
 	for _, message := range history {
 		kept.History = append(kept.History, messageRowOf(message))
@@ -166,7 +167,7 @@ func (t *SpawnTool) restoreBackup(to, from string) ([]llm.Message, error) {
 		}
 		history = append(history, message)
 	}
-	agent := subagent.SubAgent{ID: kept.ID, Agent: kept.Agent, Model: kept.Model, Mission: kept.Mission, Brief: kept.Brief, Owns: kept.Owns, Started: t.clock(), State: subagent.Parked}
+	agent := subagent.SubAgent{ID: kept.ID, Agent: kept.Agent, Model: kept.Model, Mission: kept.Mission, Brief: kept.Brief, Owns: kept.Owns, Ticket: kept.Ticket, Started: t.clock(), State: subagent.Parked}
 	if _, known := t.roster.SubAgent(to); !known {
 		t.roster.Restore(agent)
 	}

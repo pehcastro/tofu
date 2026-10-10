@@ -70,6 +70,10 @@ Turn
     subAgentCache           1h                               default
     subAgentCheckSeconds    1800                             default
     subAgentWatchSeconds    600                              default
+    scratchCleanupDays      7                                default
+    scratchMaxGB            50                               default
+    projectManagement       off                              default
+    boardFlow               jira                             default
     verifySubAgents         true                             default
     agentSources            tofu,agents,claude               default
 ```

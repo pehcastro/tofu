@@ -195,6 +195,9 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
 	heard := func(typed string) { emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1}) }
 	var reported []error
+	if scratched, err := turn.WithLeadScratch(asking, config); err == nil {
+		asking = scratched
+	}
 	leadErr := turn.Lead(asking, config, live.Steering, heard, func(row turn.Row, err error) {
 		watch.stop.reset()
 		steps.Store(0)

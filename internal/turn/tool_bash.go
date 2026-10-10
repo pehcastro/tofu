@@ -21,6 +21,8 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 type BashTool struct {
@@ -367,10 +369,24 @@ func (t *BashTool) checkPort(ctx context.Context, port int) Result {
 	}
 }
 
-func (t *BashTool) command(ctx context.Context, command string) *exec.Cmd {
-	cmd := t.choice.Command(ctx, string(t.root), command, subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
+func (t *BashTool) command(lifetime, scope context.Context, command string) *exec.Cmd {
+	env := append(sys.ScratchEnv(scope), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
+	if actor := boardActor(scope); actor != "" {
+		env = append(env, subagent.SessionEnv+"="+actor)
+	}
+	cmd := t.choice.Command(lifetime, string(t.root), command, env...)
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
 	return cmd
+}
+
+type boardActorKey struct{}
+
+func boardActor(ctx context.Context) string {
+	if actor, found := ctx.Value(boardActorKey{}).(string); found {
+		return actor
+	}
+	place, _ := sys.ScratchOf(ctx)
+	return place.SessionID
 }
 
 func exitedResult(command, output string, code int, note string) Result {
@@ -391,7 +407,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	if registry == nil {
 		return Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
-	cmd := t.command(context.Background(), args.Command)
+	cmd := t.command(context.Background(), ctx, args.Command)
 	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), shell.Wait{
 		Within: konst.BackgroundYieldMillis * time.Millisecond,
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
@@ -428,7 +444,7 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 	if deadline > t.softLimit {
 		wait.Kept = shell.KeptMoved
 	}
-	got, err := registry.YieldReady(ctx, t.command(context.Background(), command), command, shellOwnerFrom(ctx), wait)
+	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, shellOwnerFrom(ctx), wait)
 	if err != nil {
 		return Result{}, fmt.Errorf("bash: %w", err)
 	}
@@ -584,7 +600,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (Result, error)
 	ctx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
-	cmd := t.command(ctx, args.Command)
+	cmd := t.command(ctx, ctx, args.Command)
 	output := &heldOutput{}
 	cmd.Stdout, cmd.Stderr = output, output
 	tracked, startErr := shell.StartTracked(cmd)

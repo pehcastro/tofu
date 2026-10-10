@@ -76,6 +76,7 @@ func Serve(cfg ServeConfig) error {
 	workers.Go(func() { s.pump(quit) })
 	workers.Go(func() { s.watchShells(quit) })
 	workers.Go(func() { s.pollQuota(quit) })
+	workers.Go(func() { s.watchBoardy(quit) })
 	err := s.read()
 	s.windDown()
 	close(quit)
@@ -230,6 +231,12 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.statusList)
 	case statusMethod + ".ack":
 		return handle(raw, s.statusAck)
+	}
+	switch {
+	case strings.HasPrefix(method, boardyPrefix):
+		return s.boardy(method, raw)
+	case strings.HasPrefix(method, scratchPrefix):
+		return s.scratch(method, raw)
 	}
 	return s.data(method, raw)
 }

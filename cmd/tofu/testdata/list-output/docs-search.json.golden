@@ -13,6 +13,10 @@ exit 0
         "do": "tofu settings set theme Nord"
       },
       {
+        "text": "let a session change tickets on the board",
+        "do": "tofu boardy manager add <session>"
+      },
+      {
         "text": "change when a scheduled job fires",
         "do": "/cron edit c1 --schedule \"every 30m\" --reason \"the build is stable\""
       },
@@ -23,6 +27,18 @@ exit 0
       {
         "text": "When the lead asks you",
         "do": "tofu docs asking"
+      },
+      {
+        "text": "Boardy managers, triage, hand and board rules",
+        "do": "tofu docs boardy-rules"
+      },
+      {
+        "text": "Boardy views, reports, epics and sprints",
+        "do": "tofu docs boardy-views"
+      },
+      {
+        "text": "Boardy, a ticket board in files",
+        "do": "tofu docs boardy"
       },
       {
         "text": "Browser",
@@ -63,6 +79,10 @@ exit 0
       {
         "text": "Models",
         "do": "tofu docs models"
+      },
+      {
+        "text": "Scratchpad",
+        "do": "tofu docs scratchpad"
       },
       {
         "text": "Every method tofu serve answers",
@@ -163,6 +183,22 @@ exit 0
       {
         "text": "read the output of a running shell",
         "do": "tofu shells log <name>"
+      },
+      {
+        "text": "see what agents left in the scratchpad",
+        "do": "tofu scratch"
+      },
+      {
+        "text": "clean the scratchpad",
+        "do": "tofu scratch clean"
+      },
+      {
+        "text": "see what other sessions asked the board for",
+        "do": "tofu boardy triage list"
+      },
+      {
+        "text": "sum up the board",
+        "do": "tofu boardy report --since 7d"
       },
       {
         "text": "see the Claude Code and codex hooks tofu runs here",

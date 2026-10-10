@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/subagent"
 )
@@ -287,6 +288,14 @@ func Default() []Spec {
 			Least: 0, Most: math.MaxInt32, Unit: "seconds between checks on a running sub-agent, where 0 sends none"},
 		{Key: SubAgentWatchSeconds, Label: "Sub-agent watch", Description: "a sub-agent call open this many seconds gets a line in the chat saying what it is doing: waiting for the orchestrator's answer, running bash or building; a sub-agent with no new output, step or request for this long is shown as stalled", Category: "Turn", Kind: Int, Default: konst.SubAgentWatchSecondsDefault,
 			Least: 1, Most: math.MaxInt32, Unit: "seconds before a long call is named, and before a sub-agent with no progress is stalled"},
+		{Key: "scratchCleanupDays", Label: "Scratch cleanup", Description: "a session's scratch folder untouched this many days, with no tofu running it, is deleted, its processes stopped first; shared is never cleaned", Category: "Turn", Kind: Int, Default: konst.ScratchCleanupDays,
+			Least: 0, Most: math.MaxInt32, Unit: "days a session's scratch folder is kept untouched"},
+		{Key: "scratchMaxGB", Label: "Scratch size", Description: "past this many gigabytes in one project's scratchpad, the oldest session folders are deleted first", Category: "Turn", Kind: Int, Default: konst.ScratchMaxGB,
+			Least: 1, Most: math.MaxInt32, Unit: "gigabytes one project's scratchpad may hold"},
+		{Key: boardy.ManagementSetting, Label: "Project management", Description: "boardy runs the lead and its sub-agents from board tickets: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review; off keeps owns a grant per spawn", Category: "Turn", Kind: Text, DefaultText: string(boardy.ManagementOff),
+			Choices: []string{string(boardy.ManagementOff), string(boardy.ManagementBoardy)}},
+		{Key: boardy.FlowSetting, Label: "Board flow", Description: "the words tofu boardy uses: jira says ticket, board, epic, sprint and points; linear says issue, team, project, cycle and estimate", Category: "Turn", Kind: Text, DefaultText: string(boardy.Jira),
+			Choices: []string{string(boardy.Jira), string(boardy.Linear)}},
 		{Key: VerifySubAgents, Label: "Check sub-agents", Description: "the lead checks each sub-agent's work itself before it reports, reading what it changed, running the build or the tests again and opening what it made; off takes the report as the result unless you ask for a check. tofu rules off verify_sub_agents turns it off too, whatever this says", Category: "Turn", Kind: Bool, Default: 1},
 		{Key: AgentSources, Label: "Agent folders", Description: "the folders sub-agents are read from, in order, as a comma list of tofu, agents and claude, inside the project; the home directory gives only ~/.tofu/agents, and the library is always read", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
 			ListOf: []string{"tofu", "agents", "claude"}},

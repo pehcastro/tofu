@@ -55,6 +55,12 @@ type Shell struct {
 	Kept     Kept       `json:"kept,omitempty"`
 	Port     int        `json:"port,omitempty"`
 	Ready    Readiness  `json:"ready,omitempty"`
+	Env      []string   `json:"env,omitempty"`
+}
+
+func addedEnv(env []string) []string {
+	inherited := os.Environ()
+	return slices.DeleteFunc(slices.Clone(env), func(entry string) bool { return slices.Contains(inherited, entry) })
 }
 
 type Kept string
@@ -188,7 +194,7 @@ func (r *Registry) keep(entry Shell, process *live, waited <-chan error, logFile
 	return err
 }
 
-func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
+func (r *Registry) Start(root, name, command, owner string, env ...string) (Shell, error) {
 	if err := r.reserve(name); err != nil {
 		return Shell{}, err
 	}
@@ -200,14 +206,14 @@ func (r *Registry) Start(root, name, command, owner string) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	cmd := choice.Command(context.Background(), root, command)
+	cmd := choice.Command(context.Background(), root, command, env...)
 	started := time.Now()
 	spawned, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {
 		return Shell{}, err
 	}
 	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal,
-		Kept: KeptBackground, Port: NamedPort(root, command, cmd.Env)}
+		Kept: KeptBackground, Port: NamedPort(root, command, cmd.Env), Env: env}
 	return entry, r.keep(entry, &live{tree: spawned, finished: make(chan struct{})}, waited, logFile)
 }
 

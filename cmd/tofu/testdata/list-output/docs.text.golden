@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 91 asks                                                         26 topics
+Docs · 99 asks                                                         30 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -19,6 +19,29 @@ agents  add a sub-agent for every project or for one, choose the model it
 
 asking  how the lead puts a decision to you with options and a recommended
   one, what auto and ask do with it, and when it cannot ask
+
+boardy-rules  who may change a ticket on a boardy board, how other sessions
+  ask through triage, how a ticket moves boards, and rules that stop a move or
+  wait for the person
+  let a session change tickets on the board
+    → tofu boardy manager add <session>
+  see what other sessions asked the board for
+    → tofu boardy triage list
+
+boardy-views  saved views over a board's ticket files, a report built from
+  tickets and events, epics, milestones and sprints as files, and the boardy
+  methods on tofu serve
+  show only this sprint's tickets
+    → tofu boardy view
+  sum up the board
+    → tofu boardy report --since 7d
+
+boardy  boards of tickets kept as markdown files under the tofu home, numbered
+  under a lock, moved through statuses and checked by lint
+  keep a ticket board for this project
+    → tofu boardy init --key DEMO
+  run my agents from board tickets
+    → tofu settings set projectManagement boardy
 
 browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
   badge, and what tofu never does there
@@ -159,6 +182,13 @@ rules  add your own rules for every project or for one, switch a rule off, and
     → tofu rules remove <id>
   see which rules run and where each one comes from
     → tofu rules list
+
+scratchpad  where agents put temporary files, probes and build caches, outside
+  the repository, and how it is cleaned
+  see what agents left in the scratchpad
+    → tofu scratch
+  clean the scratchpad
+    → tofu scratch clean
 
 serve-methods  the requests of tofu.host/1, what each takes and what it
   answers, for a frontend wiring tofu serve

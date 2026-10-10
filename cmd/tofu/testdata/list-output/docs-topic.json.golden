@@ -9,7 +9,7 @@ exit 0
     "topic": "settings",
     "title": "Settings",
     "summary": "every setting, its default, what it takes, and how to change it",
-    "markdown": "## What it is\n\nA setting is a named switch, like `theme` or `gatePrompt`. Each one has a\ndefault, and you only write the ones you want different.\n\nThe settings come in groups:\n\n- Appearance: theme, density, animations, statusBar, colorMode\n- Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate\n- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills, memory, autoMemory, memoryFromAllUsers, learn\n- Files: diffContext, hyperlinks, groupByAgent\n- Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell\n- Turn: decisionCap, turnMaySpawn, oneTurnPerProject, sideChatAccess, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb\n- Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor\n\n`gatePrompt` is `auto` by default, which is auto mode: Jev decides at every\ngate and the work does not stop for you. Only a call it denies is refused,\nand the model is told why. A call it would ask about runs, and shows in the\nchat with its verdict. Every decision is a ledger row `tofu why` reads.\n`tofu settings set gatePrompt ask` turns asking on: a call Jev would ask\nabout waits for your answer, `1` to allow it once, `2` to deny it, `3` to\nallow it here from now on. A project hook that asks, a rule override and\nthe model changing a setting ask you in both modes: no classifier answers\nthe first two, and the last could otherwise turn its own gate off.\n`tofu run` has nobody to ask, so there an ask is refused in both modes.\n\n`subAgentCache` is how long a sub-agent's prompt cache lives, `1h` by\ndefault. `tofu settings set subAgentCache 5m` writes a sub-agent's cache at\nthe cheaper five minute rate; a sub-agent idle past five minutes then\nwrites its prefix again. The lead keeps one hour either way, and\n`tofu session trace` shows each request's write at the lifetime it got.\n\n## Where it lives\n\n- `~/.tofu/settings.json`: yours, in every project\n- `.tofu/settings.json` in a project: that project only\n\nThe project file wins over yours, and yours wins over the default.\n\n## Change it\n\n    tofu settings set <key> <value>\n\nwrites your file. Add `--scope project` to write the project's instead:\n\n    tofu settings set --scope project gatePrompt ask\n\nA true or false setting takes `true` or `false`. A list takes commas and no\nspaces, like `tofu,claude`. A value the setting does not take is refused and\nnothing is written. An older value a setting used to take, like\n`AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the\nchoice it became. In the app, type `/settings` for the same list\nwith a search.\n\nA setting marked (on the next start) is read once when tofu opens, so quit\nand open it again.\n\n## Check it\n\n    tofu settings\n\nprints every setting by group, its value, and `project`, `global` or\n`default` for where it came from, with `●` on the ones you set.\n\n    tofu settings get <key>\n\nprints one value. Both take `--json` and print one JSON document. `set`\nprints one `~` line with the file and `→ undo:` with the command that puts\nthe old value back.\n\n## Undo it\n\nSet it back to the default shown below, or delete its line from the\nsettings file. With the line gone, the next file down wins.\n\n## Every setting\n",
+    "markdown": "## What it is\n\nA setting is a named switch, like `theme` or `gatePrompt`. Each one has a\ndefault, and you only write the ones you want different.\n\nThe settings come in groups:\n\n- Appearance: theme, density, animations, statusBar, colorMode\n- Interaction: composer, gatePrompt, readBeforeEdit, autoUpdate\n- Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, instructionSources, skills, memory, autoMemory, memoryFromAllUsers, learn\n- Files: diffContext, hyperlinks, groupByAgent\n- Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell\n- Turn: decisionCap, turnMaySpawn, oneTurnPerProject, sideChatAccess, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, scratchCleanupDays, scratchMaxGB, projectManagement, boardFlow, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb\n- Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor\n\n`gatePrompt` is `auto` by default, which is auto mode: Jev decides at every\ngate and the work does not stop for you. Only a call it denies is refused,\nand the model is told why. A call it would ask about runs, and shows in the\nchat with its verdict. Every decision is a ledger row `tofu why` reads.\n`tofu settings set gatePrompt ask` turns asking on: a call Jev would ask\nabout waits for your answer, `1` to allow it once, `2` to deny it, `3` to\nallow it here from now on. A project hook that asks, a rule override and\nthe model changing a setting ask you in both modes: no classifier answers\nthe first two, and the last could otherwise turn its own gate off.\n`tofu run` has nobody to ask, so there an ask is refused in both modes.\n\n`subAgentCache` is how long a sub-agent's prompt cache lives, `1h` by\ndefault. `tofu settings set subAgentCache 5m` writes a sub-agent's cache at\nthe cheaper five minute rate; a sub-agent idle past five minutes then\nwrites its prefix again. The lead keeps one hour either way, and\n`tofu session trace` shows each request's write at the lifetime it got.\n\n## Where it lives\n\n- `~/.tofu/settings.json`: yours, in every project\n- `.tofu/settings.json` in a project: that project only\n\nThe project file wins over yours, and yours wins over the default.\n\n## Change it\n\n    tofu settings set <key> <value>\n\nwrites your file. Add `--scope project` to write the project's instead:\n\n    tofu settings set --scope project gatePrompt ask\n\nA true or false setting takes `true` or `false`. A list takes commas and no\nspaces, like `tofu,claude`. A value the setting does not take is refused and\nnothing is written. An older value a setting used to take, like\n`AGENTS.md,CLAUDE.md` for `instructionSources`, is read and written as the\nchoice it became. In the app, type `/settings` for the same list\nwith a search.\n\nA setting marked (on the next start) is read once when tofu opens, so quit\nand open it again.\n\n## Check it\n\n    tofu settings\n\nprints every setting by group, its value, and `project`, `global` or\n`default` for where it came from, with `●` on the ones you set.\n\n    tofu settings get <key>\n\nprints one value. Both take `--json` and print one JSON document. `set`\nprints one `~` line with the file and `→ undo:` with the command that puts\nthe old value back.\n\n## Undo it\n\nSet it back to the default shown below, or delete its line from the\nsettings file. With the line gone, the next file down wins.\n\n## Every setting\n",
     "settings": [
       {
         "key": "theme",
@@ -338,6 +338,38 @@ exit 0
         "takes": "at least 1 seconds before a long call is named, and before a sub-agent with no progress is stalled",
         "restart": false,
         "description": "a sub-agent call open this many seconds gets a line in the chat saying what it is doing: waiting for the orchestrator's answer, running bash or building; a sub-agent with no new output, step or request for this long is shown as stalled"
+      },
+      {
+        "key": "scratchCleanupDays",
+        "category": "Turn",
+        "default": "7",
+        "takes": "at least 0 days a session's scratch folder is kept untouched",
+        "restart": false,
+        "description": "a session's scratch folder untouched this many days, with no tofu running it, is deleted, its processes stopped first; shared is never cleaned"
+      },
+      {
+        "key": "scratchMaxGB",
+        "category": "Turn",
+        "default": "50",
+        "takes": "at least 1 gigabytes one project's scratchpad may hold",
+        "restart": false,
+        "description": "past this many gigabytes in one project's scratchpad, the oldest session folders are deleted first"
+      },
+      {
+        "key": "projectManagement",
+        "category": "Turn",
+        "default": "off",
+        "takes": "one of off, boardy",
+        "restart": false,
+        "description": "boardy runs the lead and its sub-agents from board tickets: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review; off keeps owns a grant per spawn"
+      },
+      {
+        "key": "boardFlow",
+        "category": "Turn",
+        "default": "jira",
+        "takes": "one of jira, linear",
+        "restart": false,
+        "description": "the words tofu boardy uses: jira says ticket, board, epic, sprint and points; linear says issue, team, project, cycle and estimate"
       },
       {
         "key": "verifySubAgents",

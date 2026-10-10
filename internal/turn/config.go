@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
@@ -102,6 +103,9 @@ type Config struct {
 	Budget          recall.Budget
 	Sessions        *session.Store
 	Session         string
+	Board           *boardy.Managed
+	TicketGrant     func(board boardy.Managed, id, lead, agent string) ([]string, error)
+	TicketTools     func(board boardy.Managed, actor string) ([]Tool, error)
 	Log             *session.Log
 	Turn            string
 	SpawnedBy       string

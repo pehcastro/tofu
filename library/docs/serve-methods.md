@@ -96,10 +96,10 @@ no envelope; a verb that fails errs with its problems. Only `undo`, `label`,
   `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one
   with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
-  `login.logout` `role`, `provider`, `number`; both answer `note`.
-  `login.start` takes `role`, `provider`; `settings.set` `key`, `value`, `scope`
+  `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role`, `provider`; `settings.set` `key`, `value`, `scope`
 - `cron.command` takes the line you would type (`/cron delete all`), answers
-  `note`. `label` takes `row` and `outcome`
+  `note`. `label` takes `row` and `outcome`. `scratch.list` (`scratch`) answers `root`, `folders`;
+  `scratch.clean` takes `session`, `cache`, `dryRun`. `boardy.*` (`boardy`): `tofu docs boardy-views`
 - `status.list` (`status`) takes `session`, none or the open one, and errs on any other; answers
   `records`: `id`, `state`, `kind`, `progress`, `msg`, `ask` (the approval or question a blocked
   record waits on) and `at`, when it entered its state. `status.ack` takes a `done` or `error`

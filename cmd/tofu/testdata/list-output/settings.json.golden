@@ -487,6 +487,54 @@ exit 0
         "unit": "seconds before a long call is named, and before a sub-agent with no progress is stalled"
       },
       {
+        "key": "scratchCleanupDays",
+        "category": "Turn",
+        "value": 7,
+        "source": "default",
+        "label": "Scratch cleanup",
+        "description": "a session's scratch folder untouched this many days, with no tofu running it, is deleted, its processes stopped first; shared is never cleaned",
+        "kind": "int",
+        "min": 0,
+        "unit": "days a session's scratch folder is kept untouched"
+      },
+      {
+        "key": "scratchMaxGB",
+        "category": "Turn",
+        "value": 50,
+        "source": "default",
+        "label": "Scratch size",
+        "description": "past this many gigabytes in one project's scratchpad, the oldest session folders are deleted first",
+        "kind": "int",
+        "min": 1,
+        "unit": "gigabytes one project's scratchpad may hold"
+      },
+      {
+        "key": "projectManagement",
+        "category": "Turn",
+        "value": "off",
+        "source": "default",
+        "label": "Project management",
+        "description": "boardy runs the lead and its sub-agents from board tickets: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review; off keeps owns a grant per spawn",
+        "kind": "choice",
+        "choices": [
+          "off",
+          "boardy"
+        ]
+      },
+      {
+        "key": "boardFlow",
+        "category": "Turn",
+        "value": "jira",
+        "source": "default",
+        "label": "Board flow",
+        "description": "the words tofu boardy uses: jira says ticket, board, epic, sprint and points; linear says issue, team, project, cycle and estimate",
+        "kind": "choice",
+        "choices": [
+          "jira",
+          "linear"
+        ]
+      },
+      {
         "key": "verifySubAgents",
         "category": "Turn",
         "value": true,

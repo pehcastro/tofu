@@ -63,7 +63,7 @@ func (r *Registry) Restart(name string) (Shell, error) {
 	if err := r.Kill(name); err != nil && !errors.Is(err, ErrNotRunning) {
 		return Shell{}, err
 	}
-	return r.Start(entry.Dir, name, entry.Command, entry.Owner)
+	return r.Start(entry.Dir, name, entry.Command, entry.Owner, entry.Env...)
 }
 
 func processName(word string) string {

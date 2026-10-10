@@ -274,6 +274,30 @@
   do: tofu scratch clean
   check: tofu scratch clean --dry-run
   topic: scratchpad
+- ask: keep a ticket board for this project
+  do: tofu boardy init --key DEMO
+  check: tofu boardy boards
+  topic: boardy
+- ask: run my agents from board tickets
+  do: tofu settings set projectManagement boardy
+  check: tofu settings get projectManagement
+  topic: boardy
+- ask: let a session change tickets on the board
+  do: tofu boardy manager add <session>
+  check: tofu boardy manager list
+  topic: boardy-rules
+- ask: see what other sessions asked the board for
+  do: tofu boardy triage list
+  check: tofu boardy triage list --json
+  topic: boardy-rules
+- ask: show only this sprint's tickets
+  do: tofu boardy view
+  check: tofu boardy view --json
+  topic: boardy-views
+- ask: sum up the board
+  do: tofu boardy report --since 7d
+  check: tofu boardy report --json
+  topic: boardy-views
 - ask: why a long build moved to a background shell
   do: tofu docs shells
   check: tofu shells list

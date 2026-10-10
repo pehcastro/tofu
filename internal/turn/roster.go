@@ -81,7 +81,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 					continue
 				}
 				ran[body.Agent] = &recordedSubAgent{call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagent.Parked, active: event.At,
-					agent: subagent.SubAgent{ID: body.Agent, Agent: body.Definition, Model: body.Model, Mission: body.Mission, Owns: body.Owns, Started: event.At}}
+					agent: subagent.SubAgent{ID: body.Agent, Agent: body.Definition, Model: body.Model, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket, Started: event.At}}
 				order = append(order, ran[body.Agent])
 			case event.Kind == session.EventToolCall:
 				var call session.CallBody

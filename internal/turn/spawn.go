@@ -265,6 +265,9 @@ func (t *SpawnTool) Definition() llm.Tool {
 		"mission": map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
 		"owns":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 	}
+	if t.base.Board != nil {
+		properties["ticket"] = map[string]any{"type": "string", "description": "the board ticket this sub-agent works, such as DEMO-2: its owns become the sub-agent's paths and owns given here are ignored"}
+	}
 	var levels []string
 	for _, level := range llm.Efforts() {
 		levels = append(levels, string(level))
@@ -297,6 +300,7 @@ type spawnArgs struct {
 	Owns    []string `json:"owns"`
 	Agent   string   `json:"agent,omitempty"`
 	Effort  string   `json:"effort,omitempty"`
+	Ticket  string   `json:"ticket,omitempty"`
 }
 
 func (a spawnArgs) mission() string {
@@ -327,8 +331,13 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if err != nil {
 		return Result{}, err
 	}
-	if t.writesNothing && len(args.Owns) > 0 {
+	if t.writesNothing && (len(args.Owns) > 0 || args.Ticket != "") {
 		return Result{}, ReadOnlyError{Tool: t.Name()}
+	}
+	if args.Ticket != "" && t.base.Board != nil {
+		if args.Owns, err = t.base.TicketGrant(*t.base.Board, args.Ticket, t.base.Session, t.ticketActor(args.Ticket)); err != nil {
+			return Result{}, fmt.Errorf("spawn: %w", err)
+		}
 	}
 	limits := t.limits()
 	if t.depth+1 > limits.Depth {
@@ -354,7 +363,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	}
 	narrowed := ""
 	if fire, firing := ctx.Value(hookFireKey{}).(func(hook.Input) hook.Verdict); firing {
-		spawning := fire(hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...)}})
+		spawning := fire(hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...), Ticket: args.Ticket}})
 		if spawning.Block != "" {
 			return Result{}, errors.New("spawn refused by a SubagentSpawn hook: " + spawning.Block)
 		}
@@ -394,6 +403,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		Mission: args.mission(),
 		Brief:   args.Task,
 		Owns:    args.Owns,
+		Ticket:  args.Ticket,
 		Started: t.clock(),
 	}
 	subAgentID, holding := agent.ID, t.roster.Hold(agent)
@@ -416,7 +426,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system,
 		environment: environment + scratchWords(scratch) + t.briefFiles(ctx, args, site.conversation),
 		boundary:    subagent.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
-		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, depth: t.depth + 1}}
+		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Inbox.keep(held, cancel)
 	t.tree.mu.Lock()
@@ -463,7 +473,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	if opened.Close != nil {
 		defer opened.Close()
 	}
-	ctx = context.WithValue(ctx, subAgentKey{}, held.agent.ID)
+	ctx = context.WithValue(context.WithValue(ctx, subAgentKey{}, held.agent.ID), boardActorKey{}, t.ticketActor(cmp.Or(held.agent.Ticket, held.agent.ID)))
 	if held.scratch.Root != "" {
 		ctx = sys.WithScratch(ctx, held.scratch)
 	}
@@ -513,6 +523,11 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 			tool = ownedShell{tool: tool, boundary: held.boundary}
 		}
 		owned = append(owned, watchedTool{tool: tool, held: held})
+	}
+	if held.agent.Ticket != "" && t.base.Board != nil {
+		if ticketTools, err := t.base.TicketTools(*t.base.Board, t.ticketActor(held.agent.Ticket)); err == nil {
+			owned = append(owned, ticketTools...)
+		}
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
@@ -619,6 +634,11 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome))
 	}
 	contract := subagent.BuildContract(agent.Brief, report.Prose, stoppedEarly(state, last.Outcome))
+	if agent.Ticket != "" && t.base.Board != nil {
+		if ticket, err := t.base.Board.Get(agent.Ticket); err == nil {
+			contract = subagent.TicketContract(ticket.ID, ticket.Acceptance, report.Prose, stoppedEarly(state, last.Outcome))
+		}
+	}
 	contract.Wrote = report.Wrote
 	text := report.Text(t.proseStore()) + "\n\n" + contract.Block()
 	if runs := held.runsAs(); runs != "" {
@@ -630,4 +650,8 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text)
 	}
 	return text
+}
+
+func (t *SpawnTool) ticketActor(ticket string) string {
+	return t.base.Session + "/" + ticket
 }

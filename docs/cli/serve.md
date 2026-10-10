@@ -45,6 +45,8 @@ turn, settings and login methods, the families include:
 | `side` | `session.branch`, `session.access` | a side chat beside the lead, and what it may write |
 | `status` | `status.list`, `status.ack` | every program status record as it stands, with when it entered its state and the approval or question a blocked one waits on; an acknowledged finished record clears |
 | `mention` | `mention.resolve` | the item a `ref` points at |
+| `boardy` | `boardy.boards`, `boardy.list`, `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
+| `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
 | `queries` | `query.context`, `query.rules`, `query.usage`, `query.settings`, `query.ledger` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the decisions of one session |
 
 `session.state` lists the approvals waiting, the standing answers, the
@@ -56,6 +58,10 @@ and a `ref` that `mention.resolve` turns back into the call that started it.
 
 - `status`, one per program status record: the lead, each sub-agent, each
   kept shell and each cron job. See [Program status](/docs/features/status).
+- `boardy.changed`, `{board, paths}`, within two seconds of a write to a
+  board's files, whether tofu or a person's editor made it.
+- `scratch.changed`, the `scratch.list` answer again, after a
+  `scratch.clean` that removed folders.
 - `shell.started` only for a shell tofu keeps, never a one-shot command,
   and `shell.exited` for every one of them. `shell.ready` carries a dev
   server's port once tofu reads `http://localhost:3000` or a like address in

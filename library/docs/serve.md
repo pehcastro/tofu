@@ -60,6 +60,8 @@ answers. This page is what serve sends without being asked.
   address in its output, colours stripped, or finds its process listening ten seconds after it started
 - `status`: what the lead, each sub-agent, shell and cron job is doing, as OSC 7501 records with `at`, when
   the state began, and `ask` on a blocked one; `status.list` answers them all. `tofu docs status`
+- `boardy.changed` `{board, paths}` within two seconds of a write to a board's files, by tofu or by
+  hand; `scratch.changed`, the `scratch.list` answer again, after a `scratch.clean` that removed
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never waits; `session.state` answers it
 - `tofu serve --schema`: the JSON Schema of every line out, in under `$defs.clientMessage`
 

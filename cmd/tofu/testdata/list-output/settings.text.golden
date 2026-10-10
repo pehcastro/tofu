@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Settings · 2 set                                                     53 declared
+Settings · 2 set                                                     57 declared
 
 Appearance
   ● theme                   Nord                                  project
@@ -54,6 +54,10 @@ Turn
     subAgentCache           1h                                    default
     subAgentCheckSeconds    1800                                  default
     subAgentWatchSeconds    600                                   default
+    scratchCleanupDays      7                                     default
+    scratchMaxGB            50                                    default
+    projectManagement       off                                   default
+    boardFlow               jira                                  default
     verifySubAgents         true                                  default
     agentSources            tofu,agents,claude                    default
     modelTier.genius        empty                                 default

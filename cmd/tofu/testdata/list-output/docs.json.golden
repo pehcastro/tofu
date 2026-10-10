@@ -18,6 +18,21 @@ exit 0
         "summary": "how the lead puts a decision to you with options and a recommended one, what auto and ask do with it, and when it cannot ask"
       },
       {
+        "topic": "boardy-rules",
+        "title": "Boardy managers, triage, hand and board rules",
+        "summary": "who may change a ticket on a boardy board, how other sessions ask through triage, how a ticket moves boards, and rules that stop a move or wait for the person"
+      },
+      {
+        "topic": "boardy-views",
+        "title": "Boardy views, reports, epics and sprints",
+        "summary": "saved views over a board's ticket files, a report built from tickets and events, epics, milestones and sprints as files, and the boardy methods on tofu serve"
+      },
+      {
+        "topic": "boardy",
+        "title": "Boardy, a ticket board in files",
+        "summary": "boards of tickets kept as markdown files under the tofu home, numbered under a lock, moved through statuses and checked by lint"
+      },
+      {
         "topic": "browser",
         "title": "Browser",
         "summary": "how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there"
@@ -86,6 +101,11 @@ exit 0
         "topic": "rules",
         "title": "Rules",
         "summary": "add your own rules for every project or for one, switch a rule off, and see which rules run"
+      },
+      {
+        "topic": "scratchpad",
+        "title": "Scratchpad",
+        "summary": "where agents put temporary files, probes and build caches, outside the repository, and how it is cleaned"
       },
       {
         "topic": "serve-methods",
@@ -540,6 +560,54 @@ exit 0
         "do": "tofu shells log <name>",
         "check": "tofu shells list",
         "topic": "shells"
+      },
+      {
+        "ask": "see what agents left in the scratchpad",
+        "do": "tofu scratch",
+        "check": "tofu scratch open",
+        "topic": "scratchpad"
+      },
+      {
+        "ask": "clean the scratchpad",
+        "do": "tofu scratch clean",
+        "check": "tofu scratch clean --dry-run",
+        "topic": "scratchpad"
+      },
+      {
+        "ask": "keep a ticket board for this project",
+        "do": "tofu boardy init --key DEMO",
+        "check": "tofu boardy boards",
+        "topic": "boardy"
+      },
+      {
+        "ask": "run my agents from board tickets",
+        "do": "tofu settings set projectManagement boardy",
+        "check": "tofu settings get projectManagement",
+        "topic": "boardy"
+      },
+      {
+        "ask": "let a session change tickets on the board",
+        "do": "tofu boardy manager add <session>",
+        "check": "tofu boardy manager list",
+        "topic": "boardy-rules"
+      },
+      {
+        "ask": "see what other sessions asked the board for",
+        "do": "tofu boardy triage list",
+        "check": "tofu boardy triage list --json",
+        "topic": "boardy-rules"
+      },
+      {
+        "ask": "show only this sprint's tickets",
+        "do": "tofu boardy view",
+        "check": "tofu boardy view --json",
+        "topic": "boardy-views"
+      },
+      {
+        "ask": "sum up the board",
+        "do": "tofu boardy report --since 7d",
+        "check": "tofu boardy report --json",
+        "topic": "boardy-views"
       },
       {
         "ask": "why a long build moved to a background shell",

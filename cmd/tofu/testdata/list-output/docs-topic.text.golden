@@ -19,8 +19,9 @@ What it is
   - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
   - Turn: decisionCap, turnMaySpawn, oneTurnPerProject, sideChatAccess,
     subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds,
-    subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius,
-    modelTier.smart, modelTier.worker, modelTier.dumb
+    subAgentWatchSeconds, scratchCleanupDays, scratchMaxGB, projectManagement,
+    boardFlow, verifySubAgents, agentSources, modelTier.genius, modelTier.smart,
+    modelTier.worker, modelTier.dumb
   - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort,
     browserCursor
 
@@ -270,6 +271,23 @@ Turn
       what it is doing: waiting for the orchestrator's answer, running bash or
       building; a sub-agent with no new output, step or request for this long is
       shown as stalled
+    scratchCleanupDays      7
+      at least 0 days a session's scratch folder is kept untouched
+      a session's scratch folder untouched this many days, with no tofu running
+      it, is deleted, its processes stopped first; shared is never cleaned
+    scratchMaxGB            50
+      at least 1 gigabytes one project's scratchpad may hold
+      past this many gigabytes in one project's scratchpad, the oldest session
+      folders are deleted first
+    projectManagement       off
+      one of off, boardy
+      boardy runs the lead and its sub-agents from board tickets: a spawn names
+      a ticket, its owns become the sub-agent's paths and the sub-agent moves it
+      to review; off keeps owns a grant per spawn
+    boardFlow               jira
+      one of jira, linear
+      the words tofu boardy uses: jira says ticket, board, epic, sprint and
+      points; linear says issue, team, project, cycle and estimate
     verifySubAgents         true
       true or false
       the lead checks each sub-agent's work itself before it reports, reading

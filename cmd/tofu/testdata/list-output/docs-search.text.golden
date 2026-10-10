@@ -1,15 +1,23 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           55 matches
+Docs · "change the colours"                                           64 matches
 
   change the colours
     → tofu settings set theme Nord
+  let a session change tickets on the board
+    → tofu boardy manager add <session>
   change when a scheduled job fires
     → /cron edit c1 --schedule "every 30m" --reason "the build is stable"
   Sub-agents
     → tofu docs agents
   When the lead asks you
     → tofu docs asking
+  Boardy managers, triage, hand and board rules
+    → tofu docs boardy-rules
+  Boardy views, reports, epics and sprints
+    → tofu docs boardy-views
+  Boardy, a ticket board in files
+    → tofu docs boardy
   Browser
     → tofu docs browser
   Commands in the app
@@ -30,6 +38,8 @@ Docs · "change the colours"                                           55 matche
     → tofu docs memory
   Models
     → tofu docs models
+  Scratchpad
+    → tofu docs scratchpad
   Every method tofu serve answers
     → tofu docs serve-methods
   Serving a project to another program
@@ -80,6 +90,14 @@ Docs · "change the colours"                                           55 matche
     → tofu undo, or /undo in the app
   read the output of a running shell
     → tofu shells log <name>
+  see what agents left in the scratchpad
+    → tofu scratch
+  clean the scratchpad
+    → tofu scratch clean
+  see what other sessions asked the board for
+    → tofu boardy triage list
+  sum up the board
+    → tofu boardy report --since 7d
   see the Claude Code and codex hooks tofu runs here
     → tofu hooks
   check the library files and these pages

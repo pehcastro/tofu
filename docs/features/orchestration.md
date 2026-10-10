@@ -139,6 +139,14 @@ its logs, captures and probes. It writes and deletes there with no paths held
 and no ask, and nothing it writes there reaches the repository. See
 [Scratchpad](/docs/features/scratchpad).
 
+With `projectManagement` set to `boardy`, the lead spawns a sub-agent with
+`ticket: DEMO-2` rather than owns: the ticket's owns become its paths, the
+ticket is assigned to `<session>/DEMO-2` and moves to doing, and the
+sub-agent logs its evidence and moves the ticket to review itself. Every shell
+tofu starts carries `TOFU_SESSION`, so `tofu boardy` run there acts as that
+agent. The lead's session must manage the board: `tofu boardy manager add
+<session>`. See [Boardy](/docs/features/boardy).
+
 ## What you see
 
 The chat stays on the conversation with the lead. A running

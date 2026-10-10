@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/browser/jevloop"
 	"tofu/internal/cron"
 	"tofu/internal/host"
@@ -758,6 +759,19 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if run.sessions != nil && memoryOn(dir) {
 		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
+	}
+	if settingText(dir, boardy.ManagementSetting, run.notify) == string(boardy.ManagementBoardy) {
+		store, err := boardy.OpenStore(dir)
+		if err != nil {
+			return turn.Config{}, nil, err
+		}
+		board := boardy.Managed{Local: boardy.Local{Store: store}}
+		config.Board, config.TicketGrant, config.TicketTools = &board, tools.TicketGrant, tools.TicketTools
+		leadTickets, err := tools.TicketTools(board, sessionID)
+		if err != nil {
+			return turn.Config{}, nil, err
+		}
+		asking = append(asking, leadTickets...)
 	}
 	if opts.agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, func()) {

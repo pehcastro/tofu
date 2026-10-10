@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/command"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
@@ -13,6 +14,7 @@ import (
 	"tofu/internal/memory"
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -316,6 +318,7 @@ type AgentStarted struct {
 	Number    int        `json:"number"`
 	Task      string     `json:"task"`
 	Owns      []string   `json:"owns"`
+	Ticket    string     `json:"ticket,omitempty"`
 	Model     string     `json:"model"`
 	State     AgentState `json:"state"`
 	StartedAt time.Time  `json:"startedAt"`
@@ -1000,6 +1003,8 @@ func notifications() []method {
 		{name: "item.persisted", params: Persisted{}},
 		{name: statusMethod, params: StatusReport{}},
 		{name: resyncMethod, params: Resync{}},
+		{name: boardyPrefix + "changed", params: boardy.Changed{}},
+		{name: scratchPrefix + "changed", params: sys.ScratchReport{}},
 	}
 }
 
@@ -1081,12 +1086,12 @@ func requests() []method {
 	for _, write := range []string{"agents.add", "agents.set", "agents.remove"} {
 		methods = append(methods, method{name: write, params: AgentWriteParams{}, result: WriteReceipt{}})
 	}
-	return methods
+	return append(append(methods, boardyRequests()...), scratchRequests()...)
 }
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch"}
 }
 
 const queryPrefix = "query."

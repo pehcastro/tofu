@@ -166,7 +166,7 @@ func (l *resumedLead) note(event session.Event) {
 	case session.EventSpawn:
 		var body session.SpawnBody
 		_ = json.Unmarshal(event.Body, &body)
-		recorded.spawn = SubAgentRow{Started: event.At, Name: body.Agent, Agent: body.Definition, Model: body.Model, Owns: body.Owns, Doing: body.Mission, State: roster.Working}
+		recorded.spawn = SubAgentRow{Started: event.At, Name: body.Agent, Agent: body.Definition, Model: body.Model, Owns: body.Owns, Ticket: body.Ticket, Doing: body.Mission, State: roster.Working}
 	}
 }
 

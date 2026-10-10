@@ -302,7 +302,7 @@ func (s *items) agentChanges(rows []SubAgentRow, now time.Time) []outgoing {
 		id := s.identity(row.Name, row.Name)
 		state := AgentState(row.State.String())
 		if !known {
-			out = append(out, kept("agent.started", &AgentStarted{Identity: id, Instance: row.Name, Kind: row.Agent, Number: len(s.agents), Task: row.Doing, Owns: row.Owns, Model: row.Model, State: state, StartedAt: row.Started}))
+			out = append(out, kept("agent.started", &AgentStarted{Identity: id, Instance: row.Name, Kind: row.Agent, Number: len(s.agents), Task: row.Doing, Owns: row.Owns, Ticket: row.Ticket, Model: row.Model, State: state, StartedAt: row.Started}))
 		} else if changed := agentDelta(id, was, row); changed != nil {
 			out = append(out, merged("agent.updated", row.Name, changed))
 		}

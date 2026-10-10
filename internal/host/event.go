@@ -203,6 +203,7 @@ type SubAgentRow struct {
 	Agent   string
 	Model   string
 	Owns    []string
+	Ticket  string
 	Doing   string
 	Since   time.Duration
 	Steps   int
@@ -233,6 +234,7 @@ func SubAgentRows(agents []roster.SubAgent, now time.Time, steps int, spent map[
 			Agent:   agent.Agent,
 			Model:   agent.Model,
 			Owns:    agent.Owns,
+			Ticket:  agent.Ticket,
 			Doing:   agent.Mission,
 			Since:   since,
 			Steps:   agent.Steps,

@@ -25,7 +25,8 @@ these asks the gate. Each sub-agent also has a scratch folder outside the
 project, under `~/.tofu/projects/<project>/scratchpad/`, where it writes
 and deletes with no ask. See [Scratchpad](scratchpad).
 A sub-agent from before a restart holds no paths until a message resumes
-it, so a new one can start on them.
+it, so a new one can start on them. With `projectManagement` set to `boardy`, a spawn names a `ticket`:
+its owns become the paths, and the sub-agent moves it to review itself. See [Boardy](boardy).
 
 A name is one plain lower-case word: letters, digits and `-`, starting
 with a letter, like `planner` or `ts-dev`.
