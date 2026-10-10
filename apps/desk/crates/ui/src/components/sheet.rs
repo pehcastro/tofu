@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use desk_motion::reduced_motion;
 use desk_motion::tokens::{EASE_OUT, HOVER_MS, PANEL_IN_MS, PANEL_OUT_MS};
 use gpui::{
-    AnyElement, App, Bounds, BoxShadow, DispatchPhase, Div, ElementId, Empty, Entity, Length,
-    Motion, MouseButton, Pixels, Point, SharedString, SpringConfig, SpringState, Stateful, Window,
-    div, point, prelude::*, px, relative,
+    AnyElement, App, Background, Bounds, BoxShadow, DispatchPhase, Div, ElementId, Empty, Entity,
+    Length, Motion, MouseButton, Pixels, Point, SharedString, SpringConfig, SpringState, Stateful,
+    Window, div, linear_color_stop, linear_gradient, point, prelude::*, px, relative,
 };
 
 use crate::components::button::{ButtonKind, button};
@@ -29,11 +29,12 @@ const STALE: Duration = Duration::from_millis(50);
 const CLICK_SLOP: f32 = 3.0;
 const KNOB_HIT: f32 = 18.0;
 const KNOB_LIT: f32 = 0.34;
-const SCRIM: f32 = 0.32;
+const SCRIM_TOP: f32 = 0.2;
+const SCRIM_BOTTOM: f32 = 0.48;
 const SHEET_SIZE: f32 = 360.0;
 const MODAL_WIDTH: f32 = 420.0;
 const MODAL_SHARE: f32 = 0.9;
-const MODAL_RISE: f32 = 8.0;
+pub(crate) const MODAL_RISE: f32 = 8.0;
 
 type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -47,7 +48,7 @@ struct Grab {
     moved: bool,
 }
 
-struct Slide {
+pub(crate) struct Slide {
     open: bool,
     from: SpringState,
     since: Instant,
@@ -55,15 +56,15 @@ struct Slide {
     grab: Option<Grab>,
 }
 
-struct Pose {
-    shown: f32,
-    hidden: f32,
-    opacity: f32,
+pub(crate) struct Pose {
+    pub(crate) shown: f32,
+    pub(crate) hidden: f32,
+    pub(crate) opacity: f32,
     measured: bool,
 }
 
 impl Slide {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Slide {
             open: false,
             from: SpringState::default(),
@@ -198,7 +199,21 @@ fn place(side: Side, panel: Div, size: Length, push: f32) -> Div {
     }
 }
 
-fn pose(slide: &Entity<Slide>, open: bool, window: &mut Window, cx: &mut App) -> Option<Pose> {
+pub(crate) fn scrim_fill(shown: f32, theme: &Theme) -> Background {
+    let shade = theme.color(ColorToken::Shadow);
+    linear_gradient(
+        180.0,
+        linear_color_stop(tint(shade, SCRIM_TOP * shown), 0.0),
+        linear_color_stop(tint(shade, SCRIM_BOTTOM * shown), 1.0),
+    )
+}
+
+pub(crate) fn pose(
+    slide: &Entity<Slide>,
+    open: bool,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<Pose> {
     let now = Instant::now();
     let reduced = reduced_motion(cx);
     let (shown, grabbing, moving, extent, open) = slide.update(cx, |slide, _| {
@@ -514,7 +529,6 @@ impl RenderOnce for Sheet {
             return Empty.into_any_element();
         };
         let theme = ActiveTheme::theme(cx);
-        let shade = theme.color(ColorToken::Shadow);
         let call = |handler: &Option<Handler>| {
             let handler = handler.clone();
             move |window: &mut Window, cx: &mut App| {
@@ -534,7 +548,7 @@ impl RenderOnce for Sheet {
             .top_0()
             .left_0()
             .size_full()
-            .bg(tint(shade, SCRIM * pose.shown))
+            .bg(scrim_fill(pose.shown, &theme))
             .when(self.open, |scrim| {
                 scrim
                     .occlude()

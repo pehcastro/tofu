@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 
 use desk_motion::GlideKind;
 use gpui::{
@@ -17,6 +18,7 @@ use crate::components::list::{HoverList, HoverVariant, Marker, bare_row, separat
 use crate::components::overlay::menu_surface;
 use crate::components::paint::{glyph, ink};
 use crate::components::scroll::ScrollArea;
+use crate::components::sheet::{MODAL_RISE, Slide, pose, scrim_fill};
 use crate::components::size::{
     CAPTION_TEXT, FIELD, FONT_SMALL, GROUP_PAD_BOTTOM, GROUP_PAD_TOP, HOVER, LINE_CAP, MENU_PAD,
     RADIUS_POP, RADIUS_ROW, ROW_GAP, ROW_PAD_X, ROW_PAD_Y, T2, T3,
@@ -29,8 +31,10 @@ use crate::theme::Theme;
 const META_GAP: f32 = 6.0;
 const META_DOT: &str = "·";
 const PALETTE_WIDTH: f32 = 520.0;
-const PALETTE_TOP: f32 = 96.0;
+const PALETTE_LIFT: f32 = 0.16;
 const PALETTE_LIST: f32 = 400.0;
+const OPENED: f32 = 0.99;
+const FRAME_LOG: &str = "DESK_FRAME_LOG";
 const PLACEHOLDER: &str = "Type a command or search";
 const NOTHING_FOUND: &str = "No matching commands";
 
@@ -81,6 +85,8 @@ pub struct Palette {
     on_close: Option<OnClose>,
     scroll: ScrollHandle,
     row_spans: Rc<RefCell<Vec<Bounds<Pixels>>>>,
+    slide: Entity<Slide>,
+    opening: Option<Vec<Instant>>,
 }
 
 impl Palette {
@@ -125,6 +131,8 @@ impl Palette {
                 on_close: None,
                 scroll: ScrollHandle::new(),
                 row_spans: Rc::default(),
+                slide: cx.new(|_| Slide::new()),
+                opening: None,
             }
         })
     }
@@ -155,6 +163,7 @@ impl Palette {
             self.query.clear();
             self.field.update(cx, |field, cx| field.clear(cx));
             self.return_focus = window.focused(cx);
+            self.opening = std::env::var_os(FRAME_LOG).map(|_| vec![Instant::now()]);
         }
         let field = self.field.read(cx).focus_handle(cx);
         window.focus(&field, cx);
@@ -347,8 +356,15 @@ impl Palette {
 
 impl Render for Palette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.open {
+        let Some(pose) = pose(&self.slide, self.open, window, cx) else {
             return div().into_any_element();
+        };
+        if let Some(frames) = self.opening.as_mut() {
+            frames.push(Instant::now());
+            if pose.shown >= OPENED {
+                report_opening(frames);
+                self.opening = None;
+            }
         }
         let theme = ActiveTheme::theme(cx);
         let panel = menu_surface(&theme)
@@ -362,13 +378,12 @@ impl Render for Palette {
                 div()
                     .flex()
                     .items_center()
-                    .h(px(FIELD))
-                    .mx(px(MENU_PAD))
-                    .mt(px(MENU_PAD))
-                    .px(px(ROW_PAD_X))
+                    .h(px(FIELD + MENU_PAD * 2.0))
+                    .px(px(MENU_PAD + ROW_PAD_X))
+                    .bg(ink(&theme, HOVER))
                     .child(self.field.clone()),
             )
-            .child(separator(&theme).my(px(MENU_PAD)))
+            .child(separator(&theme).mb(px(MENU_PAD)))
             .child(
                 ScrollArea::new("palette-scroll")
                     .max_h(PALETTE_LIST)
@@ -383,18 +398,28 @@ impl Render for Palette {
         let viewport = window.viewport_size();
         let layer = div()
             .id("palette-layer")
-            .occlude()
             .w(viewport.width)
             .h(viewport.height)
             .flex()
             .flex_col()
             .items_center()
-            .pt(px(PALETTE_TOP))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|palette, _: &MouseDownEvent, window, cx| palette.dismiss(window, cx)),
-            )
-            .child(panel);
+            .justify_center()
+            .pb(viewport.height * PALETTE_LIFT)
+            .bg(scrim_fill(pose.shown, &theme))
+            .when(self.open, |layer| {
+                layer.occlude().on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|palette, _: &MouseDownEvent, window, cx| {
+                        palette.dismiss(window, cx)
+                    }),
+                )
+            })
+            .child(
+                panel
+                    .relative()
+                    .top(px(pose.hidden * MODAL_RISE))
+                    .opacity(pose.shown),
+            );
         deferred(
             anchored()
                 .position_mode(AnchoredPositionMode::Window)
@@ -403,6 +428,22 @@ impl Render for Palette {
         )
         .into_any_element()
     }
+}
+
+fn report_opening(frames: &[Instant]) {
+    let mut intervals: Vec<f32> = frames
+        .iter()
+        .zip(frames.iter().skip(1))
+        .map(|(before, after)| after.saturating_duration_since(*before).as_secs_f32() * 1000.0)
+        .collect();
+    intervals.sort_by(f32::total_cmp);
+    let (Some(median), Some(worst)) = (intervals.get(intervals.len() / 2), intervals.last()) else {
+        return;
+    };
+    eprintln!(
+        "desk: palette frames while opening: {} frames, median {median:.2} ms, worst {worst:.2} ms",
+        intervals.len()
+    );
 }
 
 fn detailed(label: &SharedString, detail: &PaletteDetail, theme: &Theme) -> Div {

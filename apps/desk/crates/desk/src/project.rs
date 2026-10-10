@@ -11,6 +11,7 @@ use desk_core::git::{Git, GitBinary, State};
 use desk_core::model::{StatusState, Statuses};
 use desk_core::sessions::SessionRow;
 use desk_tiling::Store as Layouts;
+use desk_ui::components::glyph::Glyph;
 use desk_ui::components::palette::{
     Palette, PaletteDetail, PaletteEntry, PaletteItem, PaletteMeta,
 };
@@ -384,6 +385,12 @@ pub fn picker(
         .collect();
     shown.sort_by_key(|recent| !recent.current);
     let menu = Palette::detailed(entries(&shown), window, cx);
+    let marks = shown
+        .iter()
+        .map(|recent| (format!("{RECENT_ID}{}", recent.at).into(), Glyph::Code))
+        .chain(iter::once((OPEN_FOLDER_ID.into(), Glyph::Folder)))
+        .collect();
+    menu.update(cx, |menu, _| menu.marks(marks));
     let filling = menu.downgrade();
     cx.spawn(async move |cx| {
         let shown = cx

@@ -634,6 +634,7 @@ impl Desk {
             .collect();
         palette.update(cx, |palette, _| {
             palette.on_pick(picked);
+            palette.on_close(|_, _| eprintln!("desk: palette closed"));
             palette.marks(marks);
         });
         #[cfg_attr(
@@ -1932,6 +1933,7 @@ impl Desk {
             cx.listener(|desk, id: &SharedString, window, cx| desk.project_picked(id, window, cx));
         menu.update(cx, |menu, cx| {
             menu.on_pick(picked);
+            menu.on_close(|_, _| eprintln!("desk: projects menu closed"));
             menu.open(window, cx);
         });
         eprintln!(
