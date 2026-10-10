@@ -9,7 +9,7 @@
     Context       14      the typed model that judges the model's calls, shell results, browser…    
     Files         03                                                                                
     Shell         05    enter change  ·  shift+tab scope  ·  esc chat                               
-    Turn          15                                                                                
+    Turn          19                                                                                
     Browser       06                                                                                
                                                                                                     
   NAVIGATE                                                                                          

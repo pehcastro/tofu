@@ -9,7 +9,7 @@
     Context       14       tofu                                                                     
     Files         03                                                                                
     Shell         05       tofu light                                                 subtle  ▾     
-    Turn          15                                                                                
+    Turn          19                                                                                
     Browser       06       tofu dusk                                                                
                                                                                      compact  ▾     
   NAVIGATE               >  Solarized Light                                                         

@@ -89,7 +89,7 @@ Select an edit reference to read every changed line.
     Context       14      Density        comfortable  ▾     
     Files         03      Spacing across lists and pane…    
     Shell         05                                        
-    Turn          15      Animations          subtle  ▾     
+    Turn          19      Animations          subtle  ▾     
     Browser       06      Motion for conversational sta…    
                                                             
   NAVIGATE                Status bar         compact  ▾     
@@ -205,7 +205,7 @@ Select an edit reference to read every changed line.
     Context       14      Spacing across lists and panels                       
     Files         03                                                            
     Shell         05      Animations                              subtle  ▾     
-    Turn          15      Motion for conversational states                      
+    Turn          19      Motion for conversational states                      
     Browser       06                                                            
                           Status bar                             compact  ▾     
   NAVIGATE                Context, quotas, and runtime counters                 
@@ -357,7 +357,7 @@ Select an edit reference to read every changed line.
     Context       14      Spacing across lists and panels                                               
     Files         03                                                                                    
     Shell         05      Animations                                                      subtle  ▾     
-    Turn          15      Motion for conversational states                                              
+    Turn          19      Motion for conversational states                                              
     Browser       06                                                                                    
                           Status bar                                                     compact  ▾     
   NAVIGATE                Context, quotas, and runtime counters                                         
@@ -549,7 +549,7 @@ Select an edit reference to read every changed line.
     Context             14      Spacing across lists and panels                                               tofu                          
     Files               03                                                                                                                  
     Shell               05      Animations                                                     subtle  ▾     HOW IT WORKS                   
-    Turn                15      Motion for conversational states                                             Enter opens a focused          
+    Turn                19      Motion for conversational states                                             Enter opens a focused          
     Browser             06                                                                                   choice. Changes preview        
                                 Status bar                                                    compact  ▾     immediately; Esc keeps the     
   NAVIGATE                      Context, quotas, and runtime counters                                        prior value.                   

@@ -69,20 +69,21 @@ type appWiring struct {
 }
 
 type appLaunch struct {
-	resumed     sessionResume
-	fresh       bool
-	registry    *shell.Registry
-	registryErr error
-	note        string
-	tabs        *tools.BrowserTabs
-	release     *func()
-	endSession  *func() []string
+	resumed       sessionResume
+	fresh         bool
+	registry      *shell.Registry
+	registryErr   error
+	note          string
+	tabs          *tools.BrowserTabs
+	release       *func()
+	endSession    *func() []string
+	stopRestoring func()
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string)}
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), stopRestoring: func() {}}
 	if registryErr != nil {
 		return launch
 	}
@@ -95,6 +96,7 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 }
 
 func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
+	defer launch.stopRestoring()
 	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, tabs: launch.tabs}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted()})
 	notes := append([]string{launch.note}, troubles...)
@@ -244,10 +246,9 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	stopRestoring := restoring(out, resumed)
 	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota, reload: reloadAccounts}
 	launch := launchOf(dir, resumed, resumed.Session == "")
+	launch.stopRestoring = stopRestoring
 	stopKeeping := keepAccountsAlive(func(string) {})
-	options := appOptions(dir, runOpts{}, live, launch)
-	stopRestoring()
-	err = tui.Run(options)
+	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
 	stopKeeping()
 	(*launch.release)()
 	for _, warning := range (*launch.endSession)() {

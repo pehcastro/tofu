@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"time"
-
-	"tofu/internal/konst"
 )
 
 type ScratchKind string
@@ -132,16 +130,16 @@ func (r ScratchReport) Removable(sweep ScratchSweep) []ScratchFolder {
 	return removed
 }
 
-func RemoveScratch(folders []ScratchFolder, stop func(dir string)) error {
+func RemoveScratch(folders []ScratchFolder, stop func(dir string), tries int, wait time.Duration) error {
 	var failed []error
 	for _, folder := range folders {
 		stop(folder.Path)
 		var err error
-		for range konst.ScratchRemoveTries {
+		for range tries {
 			if err = os.RemoveAll(folder.Path); err == nil {
 				break
 			}
-			time.Sleep(konst.ScratchRemoveRetryMillis * time.Millisecond)
+			time.Sleep(wait)
 		}
 		failed = append(failed, err)
 	}

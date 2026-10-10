@@ -132,7 +132,7 @@ func removeScratch(folders []sys.ScratchFolder) error {
 	if err != nil {
 		return err
 	}
-	return sys.RemoveScratch(folders, func(dir string) { registry.StopUnder(dir) })
+	return sys.RemoveScratch(folders, func(dir string) { registry.StopUnder(dir) }, konst.ScratchRemoveTries, konst.ScratchRemoveRetryMillis*time.Millisecond)
 }
 
 func leadScratch(ctx context.Context, config turn.Config, errOut io.Writer) (context.Context, error) {
