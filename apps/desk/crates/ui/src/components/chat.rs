@@ -8,9 +8,10 @@ use desk_markdown::{
     self as md, Alignment, BlockKind, CodeKind, Inline, InlineKind, ListKind, Options,
 };
 use gpui::{
-    AnyElement, App, Div, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, Rgba,
-    SharedString, Stateful, StrikethroughStyle, StyledText, TextRun, Transformation,
-    UnderlineStyle, div, font, prelude::*, px, radians, rgb_to_hsla, rgba,
+    AnyElement, App, Bounds, Div, ElementId, FontStyle, FontWeight, HighlightStyle,
+    InteractiveText, Rgba, SharedString, Stateful, StrikethroughStyle, StyledText, TextLayout,
+    TextRun, Transformation, TransformationMatrix, UnderlineStyle, Window, canvas, div, font,
+    point, prelude::*, px, radians, rgb_to_hsla, rgba, size,
 };
 
 use crate::components::avatar::spinner;
@@ -54,11 +55,18 @@ const MENTION_FILL: u32 = 0xb9a6ea1f;
 const MENTION_TEXT: u32 = 0xd6cbf5ff;
 const PILL_PAD_X: f32 = 7.0;
 const PILL_PAD_Y: f32 = 3.0;
-const HEADING_GAP: f32 = 10.0;
-const BULLETS_GAP: f32 = 4.0;
+const BLOCK_GAP: f32 = 12.0;
+const ITEM_GAP: f32 = 4.0;
 const BULLET_INDENT: f32 = 20.0;
-const PARA_GAP: f32 = 6.0;
-const CODE_PAD: char = '\u{202f}';
+const CODE_PAD: &str = "\u{202f}\u{202f}";
+const GLYPH_SLOT: &str = "\u{2007}\u{2007}";
+const LINK_SLOT: &str = "\u{202f}\u{2007}\u{2007}";
+const INLINE_GLYPH: f32 = 11.0;
+const PILL_INSET: f32 = 2.5;
+const PATH_FILL: f32 = 0.14;
+const CELL_CHAR: f32 = 7.5;
+const CELL_MIN: f32 = 72.0;
+const CELL_MAX: f32 = 320.0;
 const QUOTE_PAD: f32 = 12.0;
 const RULE_INK: f32 = 0.12;
 const RULE_HEIGHT: f32 = 1.0;
@@ -126,6 +134,8 @@ pub struct Call {
 pub enum Face {
     Plain,
     Code,
+    Path,
+    LinkTail,
     Mention,
 }
 
@@ -162,6 +172,7 @@ pub struct ListItem {
 
 pub struct Code {
     pub text: SharedString,
+    pub label: Option<SharedString>,
     pub paints: Vec<(Range<usize>, Kind)>,
 }
 
@@ -434,7 +445,13 @@ impl Reader<'_> {
                 InlineKind::Text(text) | InlineKind::Html(text) => {
                     out.push(span(Face::Plain, text.clone().into()));
                 }
-                InlineKind::Code(text) => out.push(span(Face::Code, text.clone().into())),
+                InlineKind::Code(text) => out.push(span(
+                    match looks_like_path(text) {
+                        true => Face::Path,
+                        false => Face::Code,
+                    },
+                    text.clone().into(),
+                )),
                 InlineKind::Component(_) => out.push(span(Face::Code, self.source(&inline.range))),
                 InlineKind::SoftBreak => out.push(span(Face::Plain, " ".into())),
                 InlineKind::HardBreak => out.push(span(Face::Plain, "\n".into())),
@@ -470,26 +487,38 @@ impl Reader<'_> {
                     match to.children.is_empty() {
                         true => out.push(Span {
                             link: Some(url.clone()),
-                            ..span(Face::Plain, url)
+                            ..span(Face::Plain, url.clone())
                         }),
                         false => self.inlines(&to.children, stress, Some(&url), out),
                     }
+                    out.push(Span {
+                        link: Some(url),
+                        ..span(Face::LinkTail, SharedString::default())
+                    });
                 }
-                InlineKind::Autolink { destination, text } => out.push(Span {
-                    link: Some(destination.clone().into()),
-                    ..span(Face::Plain, text.clone().into())
-                }),
+                InlineKind::Autolink { destination, text } => {
+                    let url = SharedString::from(destination.clone());
+                    out.push(Span {
+                        link: Some(url.clone()),
+                        ..span(Face::Plain, text.clone().into())
+                    });
+                    out.push(Span {
+                        link: Some(url),
+                        ..span(Face::LinkTail, SharedString::default())
+                    });
+                }
             }
         }
     }
 
     fn code(&self, kind: &CodeKind, text: &str) -> Code {
         let text = text.strip_suffix('\n').unwrap_or(text);
-        let language = match kind {
-            CodeKind::Fenced { info } => fence_language(info),
-            CodeKind::Indented => None,
+        let (language, label) = match kind {
+            CodeKind::Fenced { info } => (fence_language(info), fence_label(info)),
+            CodeKind::Indented => (None, None),
         };
         Code {
+            label,
             paints: language
                 .filter(|_| self.painted)
                 .map(|language| paints(language, text))
@@ -514,6 +543,52 @@ fn fence_language(info: &str) -> Option<Language> {
         "sh" | "bash" | "shell" | "zsh" => Some(Language::Bash),
         _ => None,
     }
+}
+
+fn fence_label(info: &str) -> Option<SharedString> {
+    let word = info.split_whitespace().next()?;
+    let known = match word.to_ascii_lowercase().as_str() {
+        "go" | "golang" => "Go",
+        "rust" | "rs" => "Rust",
+        "ts" | "typescript" => "TypeScript",
+        "tsx" => "TSX",
+        "js" | "javascript" | "mjs" => "JavaScript",
+        "jsx" => "JSX",
+        "py" | "python" => "Python",
+        "json" => "JSON",
+        "toml" => "TOML",
+        "yaml" | "yml" => "YAML",
+        "md" | "markdown" => "Markdown",
+        "sh" | "bash" | "shell" | "zsh" => "Shell",
+        "ps1" | "powershell" | "pwsh" => "PowerShell",
+        "html" => "HTML",
+        "css" => "CSS",
+        "sql" => "SQL",
+        "diff" | "patch" => "Diff",
+        "c" => "C",
+        "cpp" | "c++" | "cc" => "C++",
+        "java" => "Java",
+        "rb" | "ruby" => "Ruby",
+        _ => return Some(word.to_owned().into()),
+    };
+    Some(known.into())
+}
+
+fn looks_like_path(text: &str) -> bool {
+    if text.is_empty() || text.contains(char::is_whitespace) || text.contains("://") {
+        return false;
+    }
+    let bare = text.trim_end_matches(|c: char| c.is_ascii_digit() || c == ':');
+    let name = bare.rsplit(['/', '\\']).next().unwrap_or(bare);
+    let extended = name.rsplit_once('.').is_some_and(|(stem, ext)| {
+        !stem.is_empty()
+            && (1..=5).contains(&ext.len())
+            && ext.starts_with(|c: char| c.is_ascii_lowercase())
+            && ext
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    });
+    extended || (bare.contains(['/', '\\']) && !name.is_empty())
 }
 
 fn paints(language: Language, text: &str) -> Vec<(Range<usize>, Kind)> {
@@ -545,6 +620,8 @@ fn span_text(span: &Span) -> String {
     match span.face {
         Face::Plain => span.text.to_string(),
         Face::Code | Face::Mention => format!("{CODE_PAD}{}{CODE_PAD}", span.text),
+        Face::Path => format!("{CODE_PAD}{GLYPH_SLOT}{}{CODE_PAD}", span.text),
+        Face::LinkTail => LINK_SLOT.to_owned(),
     }
 }
 
@@ -583,7 +660,7 @@ fn mark_runs(runs: Vec<TextRun>, marks: &[(Range<usize>, HighlightStyle)]) -> Ve
 fn run(span: &Span, len: usize, base: Rgba, theme: &Theme) -> TextRun {
     let mut face = match span.face {
         Face::Plain => font(theme.word(WordToken::ShapeFont)),
-        Face::Code | Face::Mention => font(mono(theme)),
+        Face::Code | Face::Path | Face::LinkTail | Face::Mention => font(mono(theme)),
     };
     if span.stress.strong {
         face.weight = FontWeight::SEMIBOLD;
@@ -591,22 +668,27 @@ fn run(span: &Span, len: usize, base: Rgba, theme: &Theme) -> TextRun {
     if span.stress.italic {
         face.style = FontStyle::Italic;
     }
-    let (color, fill) = match (span.face, &span.link) {
-        (Face::Mention, _) => (rgba(MENTION_TEXT), Some(rgba(MENTION_FILL))),
-        (Face::Code, _) => (ink(theme, T1), Some(ink(theme, CODE_FILL))),
-        (Face::Plain, Some(_)) => (theme.color(ColorToken::StatusAccent), None),
-        (Face::Plain, None) if span.stress.strong => (theme.color(ColorToken::TextStrong), None),
-        (Face::Plain, None) => (base, None),
+    let color = match (span.face, &span.link) {
+        (Face::Mention, _) => rgba(MENTION_TEXT),
+        (Face::Code, _) => ink(theme, T1),
+        (Face::Path | Face::LinkTail, _) | (Face::Plain, Some(_)) => {
+            theme.color(ColorToken::StatusAccent)
+        }
+        (Face::Plain, None) if span.stress.strong => theme.color(ColorToken::TextStrong),
+        (Face::Plain, None) => base,
     };
     TextRun {
         len,
         font: face,
         color: rgb_to_hsla(color),
-        background_color: fill.map(rgb_to_hsla),
-        underline: span.link.as_ref().map(|_| UnderlineStyle {
-            thickness: px(TEXT_LINE),
-            ..UnderlineStyle::default()
-        }),
+        underline: span
+            .link
+            .as_ref()
+            .filter(|_| span.face == Face::Plain)
+            .map(|_| UnderlineStyle {
+                thickness: px(TEXT_LINE),
+                ..UnderlineStyle::default()
+            }),
         strikethrough: span.stress.struck.then(|| StrikethroughStyle {
             thickness: px(TEXT_LINE),
             ..StrikethroughStyle::default()
@@ -682,7 +764,102 @@ struct Draw<'a> {
     marks: &'a [Marks],
     theme: &'a Theme,
     piece: usize,
+    tables: usize,
+    gap: f32,
     quoted: bool,
+}
+
+#[derive(Clone, Copy)]
+enum Decor {
+    Pill(Rgba),
+    Glyph(Glyph, Rgba),
+}
+
+fn decor(spans: &[Span], pieces: &[String], theme: &Theme) -> Vec<(Range<usize>, Decor)> {
+    let accent = theme.color(ColorToken::StatusAccent);
+    let mut found = Vec::new();
+    let mut start = 0;
+    for (span, piece) in spans.iter().zip(pieces) {
+        let range = start..start + piece.len();
+        start = range.end;
+        let slot = |from: usize, slot: &str| from..from + slot.len();
+        match span.face {
+            Face::Plain => {}
+            Face::Code => found.push((range, Decor::Pill(ink(theme, CODE_FILL)))),
+            Face::Mention => found.push((range, Decor::Pill(rgba(MENTION_FILL)))),
+            Face::Path => {
+                found.push((range.clone(), Decor::Pill(tint(accent, PATH_FILL))));
+                found.push((
+                    slot(range.start + CODE_PAD.len(), GLYPH_SLOT),
+                    Decor::Glyph(Glyph::File, accent),
+                ));
+            }
+            Face::LinkTail => found.push((
+                slot(range.end - GLYPH_SLOT.len(), GLYPH_SLOT),
+                Decor::Glyph(Glyph::Globe, accent),
+            )),
+        }
+    }
+    found
+}
+
+fn paint_decor(
+    layout: &TextLayout,
+    decor: &[(Range<usize>, Decor)],
+    window: &mut Window,
+    cx: &App,
+) {
+    let bounds = layout.bounds();
+    let line = layout.line_height();
+    for (range, kind) in decor {
+        let (Some(from), Some(to)) = (
+            layout.position_for_index(range.start),
+            layout.position_for_index(range.end),
+        ) else {
+            continue;
+        };
+        match kind {
+            Decor::Pill(fill) => {
+                let height = line - px(PILL_INSET * 2.0);
+                let pieces = match from.y == to.y {
+                    true => vec![(from.x, to.x, from.y)],
+                    false => vec![
+                        (from.x, bounds.right(), from.y),
+                        (bounds.left(), to.x, to.y),
+                    ],
+                };
+                for (left, right, top) in pieces {
+                    window.paint_quad(
+                        gpui::fill(
+                            Bounds::new(
+                                point(left, top + px(PILL_INSET)),
+                                size(right - left, height),
+                            ),
+                            rgb_to_hsla(*fill),
+                        )
+                        .corner_radii(px(RADIUS_CHIP_SMALL)),
+                    );
+                }
+            }
+            Decor::Glyph(glyph, color) => {
+                let side = px(INLINE_GLYPH);
+                let origin = point(
+                    from.x + (to.x - from.x - side) / 2.0,
+                    from.y + (line - side) / 2.0,
+                );
+                if let Err(error) = window.paint_svg(
+                    Bounds::new(origin, size(side, side)),
+                    glyph.path().into(),
+                    None,
+                    TransformationMatrix::unit(),
+                    rgb_to_hsla(*color),
+                    cx,
+                ) {
+                    eprintln!("desk: chat inline glyph not drawn: {error}");
+                }
+            }
+        }
+    }
 }
 
 impl<'a> Draw<'a> {
@@ -696,7 +873,10 @@ impl<'a> Draw<'a> {
         blocks
             .iter()
             .enumerate()
-            .map(|(at, block)| self.block(block, at == 0))
+            .map(|(at, block)| {
+                let gap = self.gap;
+                self.block(block).when(at > 0, |drawn| drawn.mt(px(gap)))
+            })
             .collect()
     }
 
@@ -713,6 +893,8 @@ impl<'a> Draw<'a> {
             .map(|(span, piece)| run(span, piece.len(), base, self.theme))
             .collect();
         let text = StyledText::new(pieces.concat()).with_runs(mark_runs(runs, marks));
+        let decor = decor(spans, &pieces, self.theme);
+        let layout = text.layout().clone();
         let (mut ranges, mut urls, mut start) = (Vec::new(), Vec::new(), 0);
         for (span, piece) in spans.iter().zip(&pieces) {
             if let Some(url) = &span.link {
@@ -721,7 +903,7 @@ impl<'a> Draw<'a> {
             }
             start += piece.len();
         }
-        match ranges.is_empty() {
+        let drawn = match ranges.is_empty() {
             true => text.into_any_element(),
             false => InteractiveText::new(("chat-text", at), text)
                 .on_click(ranges, move |picked, _, cx| {
@@ -729,6 +911,21 @@ impl<'a> Draw<'a> {
                         open(url, cx);
                     }
                 })
+                .into_any_element(),
+        };
+        match decor.is_empty() {
+            true => drawn,
+            false => div()
+                .relative()
+                .child(
+                    canvas(
+                        |_, _, _| {},
+                        move |_, (), window, cx| paint_decor(&layout, &decor, window, cx),
+                    )
+                    .absolute()
+                    .size_full(),
+                )
+                .child(drawn)
                 .into_any_element(),
         }
     }
@@ -758,33 +955,22 @@ impl<'a> Draw<'a> {
         }
     }
 
-    fn block(&mut self, block: &Block, first: bool) -> Div {
+    fn block(&mut self, block: &Block) -> Div {
         let theme = self.theme;
-        let gap = match block {
-            Block::Heading(_) => HEADING_GAP,
-            Block::List { .. } => BULLETS_GAP,
-            Block::Para(_)
-            | Block::Quote(_)
-            | Block::Code(_)
-            | Block::Table { .. }
-            | Block::Rule
-            | Block::Source(_) => PARA_GAP,
-        };
-        let drawn = match block {
+        match block {
             Block::Para(spans) | Block::Heading(spans) => div().child(self.prose(spans)),
             Block::List { start, items } => {
                 let mut number = start.map(u64::from);
                 div().flex().flex_col().children(items.iter().map(|item| {
                     let shown = number;
                     number = number.map(|at| at.saturating_add(1));
-                    div().flex().child(self.marker(shown, item.task)).child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .children(self.blocks(&item.blocks)),
-                    )
+                    let was = std::mem::replace(&mut self.gap, ITEM_GAP);
+                    let inner = self.blocks(&item.blocks);
+                    self.gap = was;
+                    div()
+                        .flex()
+                        .child(self.marker(shown, item.task))
+                        .child(div().flex_1().min_w_0().flex().flex_col().children(inner))
                 }))
             }
             Block::Quote(inner) => {
@@ -801,39 +987,92 @@ impl<'a> Draw<'a> {
             }
             Block::Code(code) => {
                 let (_, marks) = self.next();
-                boxed(theme).bg(ink(theme, CODE_FILL)).child(
-                    StyledText::new(code.text.clone())
-                        .with_runs(mark_runs(code_runs(code, theme), marks)),
+                boxed(theme)
+                    .relative()
+                    .bg(ink(theme, CODE_FILL))
+                    .child(
+                        StyledText::new(code.text.clone())
+                            .with_runs(mark_runs(code_runs(code, theme), marks)),
+                    )
+                    .when_some(code.label.clone(), |boxed, label| {
+                        boxed.child(
+                            div()
+                                .absolute()
+                                .top(px(CALLS_PAD_Y))
+                                .right(px(CALLS_PAD_X))
+                                .font_family(theme.word(WordToken::ShapeFont))
+                                .text_size(px(FONT_SMALL))
+                                .text_color(ink(theme, T3))
+                                .child(label),
+                        )
+                    })
+            }
+            Block::Table { alignments, rows } => {
+                let columns = rows.iter().map(Vec::len).max().unwrap_or_default();
+                let widths: Vec<f32> = (0..columns)
+                    .map(|column| {
+                        let widest = rows
+                            .iter()
+                            .filter_map(|row| row.get(column))
+                            .map(|cell| {
+                                cell.iter()
+                                    .map(|span| span_text(span).chars().count())
+                                    .sum::<usize>()
+                            })
+                            .max()
+                            .unwrap_or_default();
+                        (widest as f32 * CELL_CHAR + CELL_PAD_X * 2.0).clamp(CELL_MIN, CELL_MAX)
+                    })
+                    .collect();
+                let table = self.tables;
+                self.tables += 1;
+                let lines: Vec<Div> = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(at, row)| {
+                        div()
+                            .flex()
+                            .when(at == 0, |head| head.bg(ink(theme, CODE_FILL)))
+                            .when(at > 0, |line| {
+                                line.border_t_1().border_color(ink(theme, RULE_INK))
+                            })
+                            .children(widths.iter().enumerate().map(|(column, width)| {
+                                let cell_box = div()
+                                    .flex_basis(px(*width))
+                                    .flex_grow(1.0)
+                                    .flex_shrink_0()
+                                    .min_w_0()
+                                    .px(px(CELL_PAD_X))
+                                    .py(px(CELL_PAD_Y))
+                                    .children(row.get(column).map(|cell| self.prose(cell)));
+                                match alignments.get(column) {
+                                    Some(Alignment::Center) => cell_box.text_center(),
+                                    Some(Alignment::Right) => cell_box.text_right(),
+                                    Some(Alignment::Left | Alignment::None) | None => cell_box,
+                                }
+                            }))
+                    })
+                    .collect();
+                div().child(
+                    div()
+                        .id(("chat-table", table))
+                        .flex()
+                        .rounded(px(ROW_RADIUS))
+                        .border_1()
+                        .border_color(ink(theme, RULE_INK))
+                        .overflow_x_scroll()
+                        .restrict_scroll_to_axis()
+                        .child(
+                            div()
+                                .flex_none()
+                                .min_w_full()
+                                .w(px(widths.iter().sum()))
+                                .flex()
+                                .flex_col()
+                                .children(lines),
+                        ),
                 )
             }
-            Block::Table { alignments, rows } => div()
-                .flex()
-                .flex_col()
-                .rounded(px(ROW_RADIUS))
-                .border_1()
-                .border_color(ink(theme, RULE_INK))
-                .overflow_hidden()
-                .children(rows.iter().enumerate().map(|(at, row)| {
-                    div()
-                        .flex()
-                        .when(at == 0, |head| head.bg(ink(theme, CODE_FILL)))
-                        .when(at > 0, |line| {
-                            line.border_t_1().border_color(ink(theme, RULE_INK))
-                        })
-                        .children(row.iter().enumerate().map(|(column, cell)| {
-                            let cell_box = div()
-                                .flex_1()
-                                .min_w_0()
-                                .px(px(CELL_PAD_X))
-                                .py(px(CELL_PAD_Y))
-                                .child(self.prose(cell));
-                            match alignments.get(column) {
-                                Some(Alignment::Center) => cell_box.text_center(),
-                                Some(Alignment::Right) => cell_box.text_right(),
-                                Some(Alignment::Left | Alignment::None) | None => cell_box,
-                            }
-                        }))
-                })),
             Block::Rule => div().h(px(RULE_HEIGHT)).bg(ink(theme, RULE_INK)),
             Block::Source(text) => {
                 let (_, marks) = self.next();
@@ -842,8 +1081,7 @@ impl<'a> Draw<'a> {
                     .text_color(ink(theme, T3))
                     .child(marked(text.clone(), marks))
             }
-        };
-        drawn.when(!first, |drawn| drawn.mt(px(gap)))
+        }
     }
 }
 
@@ -869,6 +1107,8 @@ pub fn lead(
         marks,
         theme,
         piece: 0,
+        tables: 0,
+        gap: BLOCK_GAP,
         quoted: false,
     };
     div()
