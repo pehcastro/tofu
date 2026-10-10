@@ -290,8 +290,20 @@ func (h *Host) holdTurn(id string) (func() error, error) {
 		return store.Claim(side)
 	case !h.engine.OneTurnPerProject():
 		return free, nil
+	case h.turnLock == nil:
+		return store.HoldTurn()
+	case !h.turnLock.TryLock():
+		return free, errProjectTurn
 	}
-	return store.HoldTurn()
+	release, err := store.HoldTurn()
+	if err != nil {
+		h.turnLock.Unlock()
+		return free, err
+	}
+	return func() error {
+		defer h.turnLock.Unlock()
+		return release()
+	}, nil
 }
 
 func (h *Host) label(store *session.Store, id string) (Event, bool) {

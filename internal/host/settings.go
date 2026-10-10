@@ -84,10 +84,11 @@ func (s *server) settingsMoved() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	focus := s.focus().items
 	for _, row := range report.Settings {
 		if scope, changed := moved[row.Key]; changed {
 			set := SettingsSet{Key: row.Key, Value: row.Value, Scope: scope, Source: row.Source}
-			s.box.push(merged("settings.changed", row.Key, &SettingsChanged{Identity: s.items.identity("", ""), SettingsSet: set}))
+			s.box.push(merged("settings.changed", row.Key, &SettingsChanged{Identity: focus.identity("", ""), SettingsSet: set}))
 		}
 	}
 }

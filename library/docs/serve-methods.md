@@ -26,7 +26,10 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   picks its `model`. `tofu session branch` takes `--model`, `--effort`, `--at`. `session.access` takes `session`
   and `owns` or `preset`, `read` with neither, and errs while that chat's turn runs
 - `session.open`: takes `session` (none starts a fresh one), `asking` and `replay`, how many of the newest
-  lines it sends; answers `session` and `fresh`. A session another tofu holds errs `session.busy`
+  lines it sends; answers `session` and `fresh`. A session another tofu holds errs `session.busy`. While a
+  turn runs, the new one opens beside it (capability `sessions`) and one already open here takes the focus;
+  a request with no `session` means the one opened last. `session.close` takes `session` and `stop`, and
+  errs while that session's turn runs unless `stop` is true, and on the only session open
 - `session.state`, the answer to `resync`: `running` and its `turn`, `asking`, the `pick`, waiting approvals,
   `standing` answers (`target`, `decision`; kept beside the session, read back when it reopens, carried into
   its compaction and never into another session), open `questions`, sub-agents, kept shells (each with `port`
@@ -34,12 +37,11 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 - `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
   turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
-- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`.
-  `session.history`: takes `session`, `limit` and `before`; answers `lines`,
-  each `{method, params}` as `session.open` sends it, from `first` of `total`
-- `session.info` and `session.trace` answer what `tofu session info` and
-  `trace` print. `session.find` takes `session` and any of `tool`, `command`,
-  `file`, `text`, `agent`, `since`, `until`; answers `handle`, `query`, `hits`
+- `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened
+  beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
+  `{method, params}` as `session.open` sends it, from `first` of `total`
+- `session.info` and `session.trace` answer what `tofu session info` and `trace` print. `session.find` takes
+  `session` and any of `tool`, `command`, `file`, `text`, `agent`, `since`, `until`; answers `handle`, `query`, `hits`
 - `session.turns` takes `session`; answers `snapshots`, how many turns undo holds, and `turns`, each
   `turn`, `at`, `ended_at`, `worked_for_ms`, `origin`, `asked`, `summary` (the lead's last reply),
   `status`, `outcome` (`loop_guard`, `step_cap` and the rest), `error`, `held` (calls a `gate` or a
@@ -66,8 +68,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its
   oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
   open one, which before its first turn answers `unmeasured`; `items`, each `{band, kind, name, tokens,
-  fate, step}`) and
-  `ledger` (takes `id`, or `last`, `point` and `session`, which keeps that session's rows before
+  fate, step}`) and `ledger` (takes `id`, or `last`, `point` and `session`, which keeps that session's rows before
   `last` counts; `rows` with `precedents` and `subject`, `{tool, command, path, url}`)
 - boards (capability `boards`): `query.session` takes `session`; answers `info` and `generations`, the fork
   tree, each with `forked_into`, `fork_kind`, `tokens_before` and `tokens_after`. `query.usage.history` takes
@@ -100,16 +101,15 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   and `outcome`; answers `id`, `outcome`, `kind`, `verdict`. `scratch.list` (`scratch`) answers `root`, `folders`;
   `scratch.clean` takes `session`, `cache`, `dryRun`; answers `root`, `dry_run`, `removed`, the folders
   `tofu scratch clean --json` prints. `boardy.*` (`boardy`): `tofu docs boardy-views`
-- `status.list` (`status`) takes `session`, none or the open one, and errs on any other; answers
-  `records`: `id`, `state`, `kind`, `progress`, `msg`, `ask` (the approval or question a blocked
-  record waits on) and `at`, when it entered its state. `status.ack` takes a `done` or `error`
-  record's `id` and clears it until it changes state
+- `status.list` (`status`) takes `session`, none for every session open here, and errs on one not open;
+  answers `records`: `session`, `id`, `state`, `kind`, `progress`, `msg`, `ask` (the approval or question a
+  blocked record waits on) and `at`, when it entered its state. `status.ack` takes a `done` or `error`
+  record's `id` and its `session`, else the one opened last, and clears it until it changes state
 
 ## Change it
 
-A `remember` ask (`tofu/requestApproval`, `scope` is Jev's pick) answers
-`remember_global`, `remember_user_local`, `remember_project` or
-`remember_project_local` as offered; `reject_*` keeps nothing, others err.
+A `remember` ask (`tofu/requestApproval`, `scope` is Jev's pick) answers `remember_global`,
+`remember_user_local`, `remember_project` or `remember_project_local` as offered; `reject_*` keeps nothing, others err.
 
 ## Check it
 

@@ -28,7 +28,7 @@ const serveUsage = `usage: tofu serve --stdio [--dir PATH] [--cassette PATH]
 
 serves one project to a frontend over standard input and output: JSON-RPC 2.0,
 one object a line, in the protocol tofu.host/1. Standard error carries logs and
-nothing else. Closing standard input stops the running turn and ends tofu.
+nothing else. Closing standard input stops every running turn and ends tofu.
 
 --schema prints the JSON Schema of every line tofu writes, with the lines it
 reads under $defs.clientMessage.
@@ -121,25 +121,36 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		stopKeeping = keepAccountsAlive(func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) })
 	}
 	launch := launchOf(dir, sessionResume{}, true)
-	engine := &appEngine{dir: dir, open: open, tabs: launch.tabs}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir)})
-	for _, line := range append([]string{launch.note, "speaking " + host.Protocol + " for " + dir}, troubles...) {
+	say := func(line string) {
 		if line != "" {
 			_, _ = fmt.Fprintln(errOut, "tofu serve: "+line)
 		}
 	}
-	err = host.Serve(host.ServeConfig{Host: live, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled, Accounts: accounts,
+	say(launch.note)
+	say("speaking " + host.Protocol + " for " + dir)
+	var projectTurn sync.Mutex
+	spawn := func() (*host.Host, func()) {
+		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs}
+		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn})
+		for _, trouble := range troubles {
+			say(trouble)
+		}
+		return live, func() {
+			engine.warm.Close()
+			live.Close()
+			for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
+				say(warning)
+			}
+		}
+	}
+	live, release := spawn()
+	err = host.Serve(host.ServeConfig{Host: live, Release: release, Spawn: spawn, Dir: dir, In: in, Out: out, Shells: launch.registry, Carry: serveCarry, Verb: serveVerbs(errOut), Quota: polled, Accounts: accounts,
 		Sessions: serveSessions, Branch: serveBranch, Access: serveAccess, Wires: wires, Sources: wireSources(), Ledger: serveLedger, Compact: func() (host.Compaction, error) { return compactCarried(live) },
 		Run: func(ctx context.Context, command string) (string, bool) {
 			return shellCommand(ctx, dir, launch.registry, command)
 		},
 		Stale: func() bool { return catalogStale(time.Now()) }, Setup: serveSetup, SaveKey: serveKey, Logout: serveLogout})
 	stopKeeping()
-	engine.warm.Close()
-	live.Close()
-	for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
-		_, _ = fmt.Fprintln(errOut, "tofu serve: "+warning)
-	}
 	leaveShells(launch.registry)
 	if err != nil {
 		return serveFail(errOut, err)

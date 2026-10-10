@@ -24,7 +24,12 @@ type StatusReport struct {
 }
 
 type StatusList struct {
-	Records []status.Record `json:"records"`
+	Records []StatusRecord `json:"records"`
+}
+
+type StatusRecord struct {
+	Session string `json:"session"`
+	status.Record
 }
 
 type statusFeed struct {
@@ -43,7 +48,8 @@ type StatusListParams struct {
 }
 
 type StatusAckParams struct {
-	ID string `json:"id"`
+	Session string `json:"session,omitempty"`
+	ID      string `json:"id"`
 }
 
 type shellStatus struct {
@@ -206,31 +212,52 @@ func (f *statusFeed) unacked(records []status.Record) []status.Record {
 	})
 }
 
-func (s *server) reportStatus() {
-	for _, record := range s.status.board.Sync(s.status.unacked(s.status.records(s.shells))) {
+func (s *server) reportStatus(l *lane) {
+	var shells map[string]*watchedShell
+	if l == s.focus() {
+		shells = s.shells
+	}
+	s.sendStatus(l, l.status.board.Sync(l.status.unacked(l.status.records(shells))))
+}
+
+func (s *server) sendStatus(l *lane, records []status.Record) {
+	for _, record := range records {
 		agent := ""
 		if strings.HasPrefix(record.ID, "agents/") {
 			agent = record.Title
 		}
-		s.box.push(kept(statusMethod, &StatusReport{Identity: s.items.identity(agent, record.ID), Record: record}))
+		s.box.push(kept(statusMethod, &StatusReport{Identity: l.items.identity(agent, record.ID), Record: record}))
 	}
 }
 
 func (s *server) statusList(p StatusListParams) (any, error) {
+	lanes := s.tracked()
 	if p.Session != "" {
-		if err := s.sameSession(p.Session); err != nil {
+		l, err := s.lane(p.Session)
+		if err != nil {
 			return nil, err
 		}
+		lanes = []*lane{l}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return StatusList{Records: s.status.board.List()}, nil
+	records := []StatusRecord{}
+	for _, l := range lanes {
+		for _, record := range l.status.board.List() {
+			records = append(records, StatusRecord{Session: l.items.session, Record: record})
+		}
+	}
+	return StatusList{Records: records}, nil
 }
 
 func (s *server) statusAck(p StatusAckParams) (any, error) {
+	l, err := s.lane(p.Session)
+	if err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	listed := s.status.board.List()
+	listed := l.status.board.List()
 	at := slices.IndexFunc(listed, func(record status.Record) bool { return record.ID == p.ID })
 	switch {
 	case at < 0:
@@ -238,7 +265,7 @@ func (s *server) statusAck(p StatusAckParams) (any, error) {
 	case !listed[at].State.Finished():
 		return nil, &Refusal{Code: CodeRefused, Message: "status record " + strconv.Quote(p.ID) + " is " + string(listed[at].State) + ": only a done or error record is acknowledged"}
 	}
-	s.status.acked[p.ID] = true
-	s.reportStatus()
+	l.status.acked[p.ID] = true
+	s.reportStatus(l)
 	return Ack{OK: true}, nil
 }

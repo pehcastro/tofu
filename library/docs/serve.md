@@ -19,16 +19,17 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 
 ## Where it lives
 
-- `initialize` first; anything else before it errs. Its `capabilities` name
-  each family of methods, so a client tells an older tofu from a newer
-- `session.open` replays the chat as events; `session.history` pages it
+- `initialize` first, anything else before it errs; its `capabilities` name each family of methods
+- `session.open` replays the chat as events; `session.history` pages it. Opened while a turn runs, it keeps
+  that turn going in its own session (capability `sessions`), each event naming its `session`; a request
+  with no `session` means the session opened last, and `session.close` lets one go. Both run turns at once
+  only with `oneTurnPerProject` off; while it is on, the default, the second turn ends `failed`: project busy
 - `session.listed`: the open row of `session.list` again when a turn starts or ends, after a fork and a
   rename; `session.updated` follows every turn, a rename and a compaction, with `lastAt`, the last record;
   `session.turns.updated` carries the ended turn's `digest`, one row of `session.turns`
 - `turn.account`: the account a turn spends, `source`, `account_id`, `login`, `model` and `reason`:
   `picked` as it starts, `moved` with `from_account` when tofu leaves a spent account mid-turn
-- `session.settings`: `asking` and the `pick` of wire, model and effort, sent
-  to every client when `session.set` changes them
+- `session.settings`: `asking` and the `pick` of wire, model and effort, to every client on `session.set`
 - `origin` on `turn.started` and every `message.user`: `{"kind":"person"}`, `{"kind":"cron","job":"c1",
   "schedule":"every 30m"}`, `{"kind":"agent","name":"research-1"}` or `{"kind":"tofu","source":"stop hook"}`:
   you, a cron fire, a sub-agent's report, a line tofu added. Older sessions, and a cron fire that joined a
@@ -61,7 +62,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
   `endedAt`, and `exitCode` when tofu saw it. `shell.ready` `{shell, port}` follows once tofu reads a local
   address in its output, colours stripped, or finds its process listening ten seconds after it started
 - `status`: what the lead, each sub-agent, shell and cron job is doing, as OSC 7501 records with `at`, when
-  the state began, and `ask` on a blocked one; `status.list` answers them all. `tofu docs status`
+  the state began, and `ask` on a blocked one; `status.list` answers them all with their `session`. `tofu docs status`
 - `boardy.changed` `{board, paths}` within two seconds of a write to a board's files, by tofu or by
   hand; `scratch.changed`, the `scratch.list` answer again, after a `scratch.clean` that removed
 - a slow reader: past 128 queued lines tofu drops, sends `resync`, never waits; `session.state` answers it
@@ -72,10 +73,9 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 Confirmations follow the setting `gatePrompt`, auto unless you changed it. `session.open` and `session.set`
 take `asking`, `ask` or `auto`, for that session alone. Every gate sends a `decision` event either way:
 
-- `auto`: a call jev would ask about runs unasked, and one the gate could
-  not judge is refused. `tofu/requestApproval` still comes, and the turn
-  waits, for a change to tofu's settings or a harness file, a PreToolUse
-  hook that asks, untrusted project hooks, `remember` and `rule_override`
+- `auto`: a call jev would ask about runs unasked, and one the gate could not judge is refused.
+  `tofu/requestApproval` still comes, and the turn waits, for a change to tofu's settings or a harness
+  file, a PreToolUse hook that asks, untrusted project hooks, `remember` and `rule_override`
 - `ask`: those, and every call jev would ask about or could not judge
 - a request's `decisions` are the answers it takes: `allow_once`,
   `allow_always`, `reject_once`, `reject_always`, `cancelled` (stops the
@@ -117,4 +117,4 @@ your own.
 
 ## Undo it
 
-Close standard input: tofu stops the turn, keeps the session, and exits.
+Close standard input: tofu stops every running turn, keeps the sessions, and exits.

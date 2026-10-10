@@ -103,22 +103,22 @@ func (s *server) turns(p SessionParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sessionTurns(store, cmp.Or(p.Session, s.Host.ID()))
+	return sessionTurns(store, cmp.Or(p.Session, s.focus().host.ID()))
 }
 
-func (s *server) turnEnded(id string) {
+func (s *server) turnEnded(l *lane, id string) {
 	store, err := session.OpenIn(s.Host.dir)
 	if err != nil {
 		return
 	}
-	answer, err := sessionTurns(store, s.Host.ID())
+	answer, err := sessionTurns(store, l.host.ID())
 	at := slices.IndexFunc(answer.Turns, func(digest TurnDigest) bool { return digest.Turn == id })
 	if err != nil || at < 0 {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.box.push(kept("session.turns.updated", &SessionTurnUpdated{Identity: s.items.identity("", id), Digest: answer.Turns[at]}))
+	s.box.push(kept("session.turns.updated", &SessionTurnUpdated{Identity: l.items.identity("", id), Digest: answer.Turns[at]}))
 }
 
 func sessionTurns(store *session.Store, handle string) (SessionTurns, error) {

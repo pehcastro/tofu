@@ -36,7 +36,10 @@ const (
 
 func ImageToken(index int) string { return ImageTokenHead + strconv.Itoa(index) + "]" }
 
-var errTurnRunning = errors.New("a turn is running: wait for it to end, or stop it")
+var (
+	errTurnRunning = errors.New("a turn is running: wait for it to end, or stop it")
+	errProjectTurn = errors.New("another session this tofu holds is running a turn in this project, and a project runs one turn at a time: wait for it, or set oneTurnPerProject off")
+)
 
 type Play func(ctx context.Context, pick Pick, task string, live Live)
 
@@ -58,13 +61,14 @@ type Carry struct {
 }
 
 type Config struct {
-	Dir     string
-	Engine  Engine
-	Play    Play
-	Now     func() time.Time
-	Shells  *shell.Registry
-	Check   cron.Checker
-	Resumed Carry
+	Dir         string
+	Engine      Engine
+	Play        Play
+	Now         func() time.Time
+	Shells      *shell.Registry
+	Check       cron.Checker
+	Resumed     Carry
+	ProjectTurn *sync.Mutex
 }
 
 type Host struct {
@@ -81,6 +85,7 @@ type Host struct {
 	cron     *cron.Book
 	cronMove chan struct{}
 	readOnly error
+	turnLock *sync.Mutex
 
 	mu        sync.Mutex
 	closed    bool
@@ -136,6 +141,7 @@ func New(cfg Config) (*Host, []string) {
 		sendNow:     make(chan struct{}, 1),
 		cron:        &cron.Book{Check: cfg.Check, Changed: cronMove},
 		cronMove:    cronMove,
+		turnLock:    cfg.ProjectTurn,
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
 		shown:       map[string]bool{},

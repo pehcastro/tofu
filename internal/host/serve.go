@@ -8,13 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"maps"
 	"math/rand/v2"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/konst"
@@ -50,6 +49,8 @@ type ServeConfig struct {
 	Setup    func() []Requirement
 	SaveKey  func(provider, key string) (note string, err error)
 	Logout   func(LogoutParams) (note string, err error)
+	Spawn    func() (*Host, func())
+	Release  func()
 }
 
 var errCommandRunning = errors.New("a shell.run command is still running: wait for it, or turn.stop stops it")
@@ -72,25 +73,39 @@ type server struct {
 	requota  chan struct{}
 	accounts map[string]AccountCondition
 	seen     settingsSeen
+	lanes    atomic.Pointer[[]*lane]
 }
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), pending: map[string]ApprovalRequest{}, asked: map[string]QuestionRequest{}, shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
 		status: statusFeed{board: status.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
+	first := s.first()
+	first.stop, first.pumped = make(chan struct{}), make(chan struct{})
+	s.lanes.Store(&[]*lane{first})
 	written := make(chan error, 1)
 	go func() { written <- s.box.drain(cfg.Out) }()
 	quit := make(chan struct{})
 	var workers sync.WaitGroup
-	workers.Go(func() { s.pump(quit) })
+	s.pumpOn(first)
 	workers.Go(func() { s.watchShells(quit) })
 	workers.Go(func() { s.pollQuota(quit) })
 	workers.Go(func() { s.watchBoardy(quit) })
 	workers.Go(func() { s.watchSettings(quit) })
 	err := s.read()
-	s.windDown()
+	s.stopCommand()
+	lanes := s.tracked()
+	s.stopTurns(lanes...)
+	for _, l := range lanes {
+		l.halt()
+	}
 	close(quit)
 	workers.Wait()
+	for _, l := range lanes {
+		if l.release != nil {
+			l.release()
+		}
+	}
 	s.box.close()
 	return errors.Join(err, <-written)
 }
@@ -181,6 +196,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 			go s.quota()
 		}
 		return result, err
+	case "session.close":
+		return handle(raw, s.closeSession)
 	case "session.rename":
 		return handle(raw, s.rename)
 	case "session.branch":
@@ -189,11 +206,11 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.access)
 	case "cron.command":
 		return handle(raw, func(p CronCommandParams) (any, error) {
-			reply, err := s.Host.CronCommand(p.Line)
+			reply, err := s.focus().host.CronCommand(p.Line)
 			return CronCommandResult{Note: reply.Note}, err
 		})
 	case queryPrefix + "cron":
-		return handle(raw, func(NoParams) (any, error) { return s.cronState(), nil })
+		return handle(raw, func(NoParams) (any, error) { return s.focus().host.cronState(), nil })
 	case "turn.send":
 		return handle(raw, s.send)
 	case "turn.steer":
@@ -203,7 +220,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "turn.stop":
 		return handle(raw, s.stop)
 	case "turn.unsteer":
-		return handle(raw, func(p UnsteerParams) (any, error) { return UnsteerResult{Removed: s.Host.Unsteer(p.Text)}, nil })
+		return handle(raw, func(p UnsteerParams) (any, error) { return UnsteerResult{Removed: s.focus().host.Unsteer(p.Text)}, nil })
 	case "shell.run":
 		return handle(raw, s.shellRun)
 	case "session.compact":
@@ -266,57 +283,6 @@ func (s *server) initialize(p InitializeParams) (any, error) {
 	return InitializeResult{Protocol: Protocol, Tofu: konst.Version, Project: s.Dir, Capabilities: capabilities()}, nil
 }
 
-func (s *server) open(p SessionOpenParams) (any, error) {
-	if p.Project != "" && filepath.Clean(p.Project) != filepath.Clean(s.Dir) {
-		return nil, &Refusal{Code: CodeRefused, Message: "this tofu serves " + s.Dir + ", not " + p.Project}
-	}
-	if err := checkAsking(p.Asking); err != nil {
-		return nil, err
-	}
-	if p.Asking != "" {
-		s.Host.SetAsking(p.Asking)
-	}
-	if p.Session == "" {
-		id, err := s.Host.OpenFresh()
-		if err != nil {
-			return nil, busy(err)
-		}
-		s.mu.Lock()
-		s.items.session = id
-		s.mu.Unlock()
-		return SessionOpenResult{Session: id, Fresh: true}, nil
-	}
-	carry, err := s.Carry(p.Session)
-	if err != nil {
-		return nil, err
-	}
-	chat, err := s.Host.Resume(carry)
-	if err != nil {
-		return nil, busy(err)
-	}
-	if store, err := session.OpenIn(s.Host.dir); err == nil {
-		if side, found, _ := store.Side(carry.Session); found && side.Model != "" {
-			asking, pick := s.Host.Settings()
-			pick.Wire, pick.Model = cmp.Or(side.Wire, pick.Wire), side.Model
-			s.Host.Choose(pick)
-			s.box.push(merged("session.settings", "", &SessionSettings{Identity: Identity{Session: carry.Session}, Asking: asking, Pick: s.shown(pick)}))
-		}
-	}
-	read := newItems(carry.Session)
-	lines := read.all(chat)
-	if p.Replay != nil {
-		lines = lines[len(lines)-min(max(*p.Replay, 0), len(lines)):]
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	maps.Copy(read.logged, s.items.logged)
-	s.items = read
-	for _, line := range lines {
-		s.box.push(line)
-	}
-	return SessionOpenResult{Session: carry.Session}, nil
-}
-
 func (s *server) history(p SessionHistoryParams) (any, error) {
 	if p.Limit < 1 {
 		return nil, &Refusal{Code: CodeBadParams, Message: "limit is the number of lines a page holds, at least 1"}
@@ -339,10 +305,13 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 }
 
 func (s *server) compact(NoParams) (any, error) {
-	if s.Compact == nil {
+	focus := s.focus()
+	switch {
+	case s.Compact == nil:
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu compacts no sessions"}
-	}
-	if _, running := s.Host.Turn(); running {
+	case focus.host != s.Host:
+		return nil, &Refusal{Code: CodeRefused, Message: "session.compact compacts the session this tofu serve opened first, and " + strconv.Quote(focus.host.ID()) + " opened beside it"}
+	case focus.running():
 		return nil, errTurnRunning
 	}
 	compacted, err := s.Compact()
@@ -354,10 +323,10 @@ func (s *server) compact(NoParams) (any, error) {
 		labelled = labelledAs(store, labelled)
 	}
 	s.mu.Lock()
-	s.items.session = compacted.Into
-	s.box.push(sessionUpdated(s.items.identity("", compacted.Into), labelled))
+	focus.items.session = compacted.Into
+	s.box.push(sessionUpdated(focus.items.identity("", compacted.Into), labelled))
 	s.mu.Unlock()
-	go s.listed()
+	go s.listed(focus)
 	return compacted, nil
 }
 
@@ -371,7 +340,7 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 		return nil, err
 	}
 	s.box.push(sessionUpdated(Identity{Session: header.ID, Item: header.ID}, labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID})))
-	go s.listed()
+	go s.listed(s.focus())
 	return Ack{OK: true}, nil
 }
 
@@ -383,24 +352,12 @@ func busy(err error) error {
 	return err
 }
 
-func (s *server) sameSession(id string) error {
-	open := s.Host.ID()
-	if id == open {
-		return nil
-	}
-	if store, err := session.OpenIn(s.Host.dir); err == nil {
-		if family, err := store.Identity(open); err == nil && family.Family == id {
-			return nil
-		}
-	}
-	return &Refusal{Code: CodeRefused, Message: "session " + strconv.Quote(id) + " is not the one open here, " + strconv.Quote(open) + ": open it first"}
-}
-
 func (s *server) send(p TurnSendParams) (any, error) {
-	if err := s.sameSession(p.Session); err != nil {
+	l, err := s.lane(p.Session)
+	if err != nil {
 		return nil, err
 	}
-	if _, running := s.Host.Turn(); running {
+	if l.running() {
 		return nil, errTurnRunning
 	}
 	s.mu.Lock()
@@ -409,7 +366,7 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	if commanding {
 		return nil, errCommandRunning
 	}
-	_, picked := s.Host.Settings()
+	_, picked := l.host.Settings()
 	pick, err := s.chosen(picked, p.ModelPick)
 	if err != nil {
 		return nil, err
@@ -417,7 +374,7 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	task := p.Text
 	for _, mention := range p.Mentions {
 		s.mu.Lock()
-		item, asked := s.items.loggedAs(mention)
+		item, asked := l.items.loggedAs(mention)
 		s.mu.Unlock()
 		if item != "" {
 			quoted := tools.QuoteRef(strings.TrimPrefix(asked, "#"))
@@ -430,43 +387,48 @@ func (s *server) send(p TurnSendParams) (any, error) {
 			task += " " + mention
 		}
 	}
-	tokens, err := s.attach(p.Images)
+	tokens, err := attach(l.host, p.Images)
 	if err != nil {
 		return nil, err
 	}
-	if !s.Host.Send(pick, task+tokens) {
+	if !l.host.Send(pick, task+tokens) {
 		return nil, errTurnRunning
 	}
-	turn, _ := s.Host.Turn()
+	turn, _ := l.host.Turn()
 	return TurnResult{Turn: turn}, nil
 }
 
 func (s *server) steer(p TurnSteerParams) (any, error) {
-	if err := s.sameSession(p.Session); err != nil {
+	l, err := s.lane(p.Session)
+	if err != nil {
 		return nil, err
 	}
-	turn, running := s.Host.Turn()
+	turn, running := l.host.Turn()
 	if !running || turn != p.ExpectedTurnID {
 		return nil, &Refusal{Code: CodeRefused, Message: "turn " + strconv.Quote(p.ExpectedTurnID) + " is not running, so nothing was steered"}
 	}
-	return SteerResult{Turn: turn, ID: s.Host.Steer(p.Text)}, nil
+	return SteerResult{Turn: turn, ID: l.host.Steer(p.Text)}, nil
 }
 
 func (s *server) sendNow(p SendNowParams) (any, error) {
-	if _, running := s.Host.Turn(); !running || !s.Host.SendNow(p.ID) {
+	if focus := s.focus(); !focus.running() || !focus.host.SendNow(p.ID) {
 		return nil, &Refusal{Code: CodeRefused, Message: "no turn is running with that message queued, so nothing was sent"}
 	}
 	return Ack{OK: true}, nil
 }
 
 func (s *server) stop(p TurnParams) (any, error) {
-	turn, running := s.Host.Turn()
+	l, err := s.lane(p.Session)
+	if err != nil {
+		l = s.focus()
+	}
+	turn, running := l.host.Turn()
 	stopping := running && (p.Turn == "" || p.Turn == turn)
 	switch {
 	case stopping && p.Lead:
-		s.Host.StopLead()
+		l.host.StopLead()
 	case stopping:
-		s.Host.Stop()
+		l.host.Stop()
 	}
 	return Ack{OK: stopping || !running && s.stopCommand()}, nil
 }
@@ -484,7 +446,8 @@ func (s *server) shellRun(p ShellRunParams) (any, error) {
 	if s.Run == nil {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu runs no commands"}
 	}
-	if _, running := s.Host.Turn(); running {
+	focus := s.focus()
+	if focus.running() {
 		return nil, errTurnRunning
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -500,14 +463,15 @@ func (s *server) shellRun(p ShellRunParams) (any, error) {
 	s.mu.Lock()
 	s.command = nil
 	s.mu.Unlock()
-	return ShellRunResult{Output: s.Host.Ran(p.Command, output, stopped), Stopped: stopped}, nil
+	return ShellRunResult{Output: focus.host.Ran(p.Command, output, stopped), Stopped: stopped}, nil
 }
 
 func (s *server) undo(p UndoParams) (any, error) {
-	if err := s.sameSession(p.Session); err != nil {
+	l, err := s.lane(p.Session)
+	if err != nil {
 		return nil, err
 	}
-	if _, running := s.Host.Turn(); running {
+	if l.running() {
 		return nil, errTurnRunning
 	}
 	return verbAs[snapshot.Report](s, "undo", strconv.Itoa(max(p.Turns, 1)), "--session", p.Session)
@@ -539,13 +503,20 @@ func (s *server) answered(id, result json.RawMessage) error {
 	_ = json.Unmarshal(id, &approval)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if asked, open := s.asked[approval]; open {
-		return s.questionAnswered(asked, result)
-	}
-	asked, pending := s.pending[approval]
-	if !pending {
+	lanes := s.tracked()
+	at := slices.IndexFunc(lanes, func(l *lane) bool {
+		_, asked := l.asked[approval]
+		_, pending := l.pending[approval]
+		return asked || pending
+	})
+	if at < 0 {
 		return &Refusal{Code: CodeInvalid, Message: "nothing waits on the answer " + string(id) + ": it was answered, withdrawn, or never asked"}
 	}
+	l := lanes[at]
+	if asked, open := l.asked[approval]; open {
+		return s.questionAnswered(l, asked, result)
+	}
+	asked := l.pending[approval]
 	var answer ApprovalAnswer
 	if json.Unmarshal(result, &answer) != nil || !slices.Contains(asked.Decisions, answer.Decision) {
 		accepted := make([]string, len(asked.Decisions))
@@ -557,29 +528,29 @@ func (s *server) answered(id, result json.RawMessage) error {
 	answered, stands := true, false
 	switch {
 	case answer.Decision == Cancelled:
-		s.Host.Stop()
+		l.host.Stop()
 	case asked.Tool == turn.RememberToolName:
-		answered = s.Host.AnswerMemory(approval, keptAs(answer.Decision))
+		answered = l.host.AnswerMemory(approval, keptAs(answer.Decision))
 	default:
-		answered, stands = s.Host.AnswerAsk(approval, personAnswerOf(answer.Decision))
+		answered, stands = l.host.AnswerAsk(approval, personAnswerOf(answer.Decision))
 	}
 	if !answered {
 		return &Refusal{Code: CodeInvalid, Message: "approval " + approval + " was withdrawn before this answer arrived"}
 	}
-	delete(s.pending, approval)
+	delete(l.pending, approval)
 	s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: approval, Decision: answer.Decision, By: s.client, Standing: stands}))
 	return nil
 }
 
-func (s *server) questionAnswered(asked QuestionRequest, result json.RawMessage) error {
+func (s *server) questionAnswered(l *lane, asked QuestionRequest, result json.RawMessage) error {
 	var answer QuestionAnswer
 	if json.Unmarshal(result, &answer) != nil || answer.Outcome != QuestionSubmitted && answer.Outcome != QuestionCancelled || !offered(asked.Questions, answer.Answers) {
 		return &Refusal{Code: CodeBadParams, Message: "question " + asked.Question + " takes submitted with answers among its options, or cancelled"}
 	}
-	if !s.Host.AnswerQuestion(asked.Question, answer, s.client) {
+	if !l.host.AnswerQuestion(asked.Question, answer, s.client) {
 		return &Refusal{Code: CodeInvalid, Message: "question " + asked.Question + " was withdrawn before this answer arrived"}
 	}
-	delete(s.asked, asked.Question)
+	delete(l.asked, asked.Question)
 	s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: asked.Question, Outcome: answer.Outcome, By: s.client}))
 	return nil
 }
@@ -599,87 +570,46 @@ func offered(questions []turn.PersonQuestion, answers []turn.PersonReply) bool {
 	return true
 }
 
-func (s *server) pump(quit <-chan struct{}) {
-	for {
-		select {
-		case event := <-s.Host.Events():
-			s.publish(event)
-		case <-s.Host.cronMove:
-			s.mu.Lock()
-			id := s.items.identity("", "cron")
-			s.mu.Unlock()
-			s.box.push(merged("cron.updated", "", &CronUpdated{Identity: id, CronState: s.cronState()}))
-		case <-quit:
-			for events := s.Host.Events(); len(events) > 0; {
-				s.publish(<-events)
-			}
-			return
-		}
-	}
-}
-
 func (s *server) publish(event Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	l := s.laneOf(event.from)
 	switch event.Kind {
 	case EventAwaitPerson:
 		if event.Questions != nil && !s.answers {
-			go s.Host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, cmp.Or(s.client, "this client"))
+			go l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, cmp.Or(s.client, "this client"))
 			return
 		}
 		if event.Questions != nil {
-			s.asked[event.ID] = questionRequest(s.items.identity(event.Agent, event.ID), event)
+			l.asked[event.ID] = questionRequest(l.items.identity(event.Agent, event.ID), event)
 			break
 		}
-		s.pending[event.ID] = approvalRequest(s.items.identity(event.Agent, event.ID), event)
+		l.pending[event.ID] = approvalRequest(l.items.identity(event.Agent, event.ID), event)
 	case EventResumed:
-		if asked, open := s.asked[event.ID]; open {
-			delete(s.asked, event.ID)
+		if asked, open := l.asked[event.ID]; open {
+			delete(l.asked, event.ID)
 			s.box.push(kept("question.resolved", &QuestionResolved{Identity: asked.Identity, Question: event.ID, Outcome: QuestionOutcome(event.Text), By: event.Detail}))
 		}
-		if asked, pending := s.pending[event.ID]; pending {
-			delete(s.pending, event.ID)
+		if asked, pending := l.pending[event.ID]; pending {
+			delete(l.pending, event.ID)
 			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: event.ID, Decision: Cancelled, By: "tofu"}))
 		}
 	case EventTurnEnded:
 		go s.quota()
-		go s.listed()
-		go s.turnEnded(s.items.turn)
+		go s.listed(l)
+		go s.turnEnded(l, l.items.turn)
 	case EventTurnStarted, EventForkEnd:
-		go s.listed()
+		go s.listed(l)
 	case EventAccount:
 		if event.Account.Reason == AccountReason(turn.AccountMoved) {
 			go s.quota()
 		}
 	}
-	s.translated(event)
-	s.status.follow(event)
-	s.reportStatus()
-}
-
-func (s *server) cronState() CronState {
-	state := CronState{Jobs: []CronJob{}}
-	for _, job := range s.Host.Cron().Jobs() {
-		spec := job.Spec()
-		one := CronJob{ID: job.ID, Schedule: spec.Schedule, Prompt: spec.Prompt, Paused: spec.Paused, Ended: job.Ended}
-		if !job.Next.IsZero() {
-			one.Next = &job.Next
-		}
-		if job.Live() {
-			state.Live++
-		}
-		if job.Live() && job.Noun() == "goal" {
-			state.Goals++
-		}
-		state.Jobs = append(state.Jobs, one)
-	}
-	return state
-}
-
-func (s *server) translated(event Event) {
-	for _, out := range s.items.translate(event, time.Now()) {
+	for _, out := range l.items.translate(event, time.Now()) {
 		s.box.push(out)
 	}
+	l.status.follow(event)
+	s.reportStatus(l)
 }
 
 func (s *server) quota() {
@@ -693,7 +623,8 @@ func (s *server) quota() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.box.push(merged("quota.updated", "", &QuotaUpdated{Identity: s.items.identity("", s.items.turn), Windows: windows}))
+	focus := s.focus().items
+	s.box.push(merged("quota.updated", "", &QuotaUpdated{Identity: focus.identity("", focus.turn), Windows: windows}))
 	s.retryAt = time.Time{}
 	for _, account := range held {
 		if !account.RetryAt.IsZero() && (s.retryAt.IsZero() || account.RetryAt.Before(s.retryAt)) {
@@ -703,7 +634,7 @@ func (s *server) quota() {
 		was, known := s.accounts[key]
 		s.accounts[key] = account.State
 		if was != account.State && (known || account.State != ConditionServing) {
-			s.box.push(merged("account.state", key, &AccountStateChanged{Identity: s.items.identity("", ""), AccountNow: account}))
+			s.box.push(merged("account.state", key, &AccountStateChanged{Identity: focus.identity("", ""), AccountNow: account}))
 		}
 	}
 	select {
@@ -805,6 +736,7 @@ func (s *server) scanShells(first bool) {
 	mask, listening := sys.LoadKeyRedactor().Redact, s.listenersOf(found)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	focus := s.focus()
 	listed := map[string]bool{}
 	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
 		listed[one.Name] = true
@@ -815,7 +747,7 @@ func (s *server) scanShells(first bool) {
 			watched.announced, watched.state = true, one.State
 			continue
 		}
-		id := s.items.identity(one.Owner, one.Name)
+		id := focus.items.identity(one.Owner, one.Name)
 		_ = s.follow(one.Name, watched, mask)
 		learned := 0
 		if port := cmp.Or(listening[one.Name], watched.portPrinted()); port > 0 && one.Port == 0 && one.Kept != "" && s.Shells.SetPort(one.Name, port) == nil {
@@ -845,22 +777,8 @@ func (s *server) scanShells(first bool) {
 			continue
 		}
 		ended := time.Now()
-		s.box.push(kept("shell.exited", &ShellExited{Identity: s.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
+		s.box.push(kept("shell.exited", &ShellExited{Identity: focus.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
 		watched.state = shell.Exited
 	}
-	s.reportStatus()
-}
-
-func (s *server) windDown() {
-	s.stopCommand()
-	if _, running := s.Host.Turn(); !running {
-		return
-	}
-	s.Host.Stop()
-	for gaveUp := time.Now().Add(konst.ServeStopMillis * time.Millisecond); time.Now().Before(gaveUp); {
-		if _, running := s.Host.Turn(); !running {
-			return
-		}
-		time.Sleep(konst.ServeShellPollMillis * time.Millisecond)
-	}
+	s.reportStatus(focus)
 }

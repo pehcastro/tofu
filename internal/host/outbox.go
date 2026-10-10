@@ -42,6 +42,9 @@ func kept(method string, params any) outgoing {
 func merged(method, key string, params any) outgoing {
 	out := notify(method, params)
 	out.merge = method + " " + key
+	if identified, numbered := params.(stamped); numbered {
+		out.merge += " " + identified.about().Session
+	}
 	return out
 }
 

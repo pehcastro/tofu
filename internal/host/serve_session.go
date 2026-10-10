@@ -24,7 +24,7 @@ const (
 )
 
 func (s *server) sessions(p SessionListParams) (any, error) {
-	list, err := s.listing()
+	list, _, err := s.listing()
 	if err != nil {
 		return nil, err
 	}
@@ -65,53 +65,74 @@ func (s *server) access(p SessionAccessParams) (any, error) {
 	if s.Access == nil {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu changes no side chat's access"}
 	}
-	if turn, running := s.Host.Turn(); running && p.Session == s.Host.ID() {
-		return nil, &Refusal{Code: CodeRefused, Message: "turn " + turn + " is running in this side chat: change its access when it ends"}
+	for _, l := range s.tracked() {
+		if turn, running := l.host.Turn(); running && p.Session == l.host.ID() {
+			return nil, &Refusal{Code: CodeRefused, Message: "turn " + turn + " is running in this side chat: change its access when it ends"}
+		}
 	}
 	return s.Access(p)
 }
 
-func (s *server) listing() (SessionList, error) {
+func (s *server) listing() (SessionList, []*lane, error) {
 	if s.Sessions == nil {
-		return SessionList{}, &Refusal{Code: CodeRefused, Message: "this tofu lists no sessions"}
+		return SessionList{}, nil, &Refusal{Code: CodeRefused, Message: "this tofu lists no sessions"}
 	}
-	list, err := s.Sessions(s.Host.ID())
-	_, running := s.Host.Turn()
+	lanes, focus := s.tracked(), s.focus()
+	list, err := s.Sessions(focus.host.ID())
+	ids, families := make([]string, len(lanes)), make([]string, len(lanes))
+	store, storeErr := session.OpenIn(s.Host.dir)
+	for at, l := range lanes {
+		ids[at] = l.host.ID()
+		if storeErr != nil {
+			continue
+		}
+		if family, err := store.Identity(ids[at]); err == nil {
+			families[at] = family.Family
+		}
+	}
+	owners := make([]*lane, len(list.Sessions))
 	for index, row := range list.Sessions {
-		list.Sessions[index].Running, list.Sessions[index].Wire = running && row.Open, s.sourceOf(row.Wire)
+		running := row.Open && focus.running()
+		for at, l := range lanes {
+			if row.ID == ids[at] || families[at] != "" && row.Family == families[at] {
+				owners[index], running = l, l.running()
+			}
+		}
+		list.Sessions[index].Open, list.Sessions[index].Running, list.Sessions[index].Wire = row.Open || owners[index] != nil, running, s.sourceOf(row.Wire)
 	}
-	return list, err
+	return list, owners, err
 }
 
-func (s *server) listed() {
-	list, err := s.listing()
-	at := slices.IndexFunc(list.Sessions, func(row SessionRow) bool { return row.Open })
+func (s *server) listed(l *lane) {
+	list, owners, err := s.listing()
+	at := slices.Index(owners, l)
 	if err != nil || at < 0 {
 		return
 	}
 	row := list.Sessions[at]
 	s.mu.Lock()
-	id := s.items.identity("", row.ID)
+	id := l.items.identity("", row.ID)
 	s.mu.Unlock()
 	s.box.push(merged("session.listed", row.ID, &SessionListed{Identity: id, SessionRow: row}))
 }
 
 func (s *server) state() SessionState {
-	turn, running := s.Host.Turn()
-	asking, pick := s.Host.Settings()
-	state := SessionState{Session: s.Host.ID(), Running: running, Asking: asking, Pick: s.shown(pick), Standing: s.Host.Standing(), Shells: s.shellsNow(), Cron: s.cronState()}
+	focus := s.focus()
+	turn, running := focus.host.Turn()
+	asking, pick := focus.host.Settings()
+	state := SessionState{Session: focus.host.ID(), Running: running, Asking: asking, Pick: s.shown(pick), Standing: focus.host.Standing(), Shells: s.shellsNow(), Cron: focus.host.cronState()}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if running && s.items.turn == turn {
-		state.Turn = &RunningTurn{ID: turn, Task: s.items.task, StartedAt: s.items.began}
+	if running && focus.items.turn == turn {
+		state.Turn = &RunningTurn{ID: turn, Task: focus.items.task, StartedAt: focus.items.began}
 	}
-	state.Context = s.items.context
-	state.Approvals = slices.AppendSeq([]ApprovalRequest{}, maps.Values(s.pending))
+	state.Context = focus.items.context
+	state.Approvals = slices.AppendSeq([]ApprovalRequest{}, maps.Values(focus.pending))
 	slices.SortFunc(state.Approvals, func(a, b ApprovalRequest) int { return strings.Compare(a.Approval, b.Approval) })
-	state.Questions = slices.AppendSeq([]QuestionRequest{}, maps.Values(s.asked))
+	state.Questions = slices.AppendSeq([]QuestionRequest{}, maps.Values(focus.asked))
 	slices.SortFunc(state.Questions, func(a, b QuestionRequest) int { return strings.Compare(a.Question, b.Question) })
 	state.Agents = []AgentNow{}
-	for _, row := range s.items.agents {
+	for _, row := range focus.items.agents {
 		state.Agents = append(state.Agents, AgentNow{Instance: row.Name, Kind: row.Agent, Task: row.Doing, Owns: row.Owns, Model: row.Model,
 			State: AgentState(row.State.String()), Steps: row.Steps, Tokens: row.Tokens, StartedAt: row.Started})
 	}
@@ -136,7 +157,8 @@ func (s *server) shellsNow() []ShellNow {
 }
 
 func (s *server) set(p SessionSetParams) (any, error) {
-	asking, picked := s.Host.Settings()
+	focus := s.focus()
+	asking, picked := focus.host.Settings()
 	pick, err := s.chosen(picked, p.ModelPick)
 	if err != nil {
 		return nil, err
@@ -145,10 +167,10 @@ func (s *server) set(p SessionSetParams) (any, error) {
 		return nil, err
 	}
 	asking = cmp.Or(p.Asking, asking)
-	s.Host.SetAsking(asking)
-	s.Host.Choose(pick)
+	focus.host.SetAsking(asking)
+	focus.host.Choose(pick)
 	s.mu.Lock()
-	id := s.items.identity("", "settings")
+	id := focus.items.identity("", "settings")
 	s.mu.Unlock()
 	s.box.push(merged("session.settings", "", &SessionSettings{Identity: id, Asking: asking, Pick: s.shown(pick)}))
 	return Ack{OK: true}, nil
@@ -204,7 +226,7 @@ func (s *server) chosen(pick Pick, asked ModelPick) (Pick, error) {
 	return Pick{Wire: cmp.Or(asked.Wire, pick.Wire), Model: cmp.Or(asked.Model, pick.Model), Effort: cmp.Or(asked.Effort, pick.Effort)}, nil
 }
 
-func (s *server) attach(images []AttachedImage) (string, error) {
+func attach(h *Host, images []AttachedImage) (string, error) {
 	if len(images) == 0 {
 		return "", nil
 	}
@@ -222,7 +244,7 @@ func (s *server) attach(images []AttachedImage) (string, error) {
 		}
 		bodies[index] = body
 	}
-	dir, err := s.Host.AttachmentDir()
+	dir, err := h.AttachmentDir()
 	if err != nil {
 		return "", err
 	}
@@ -237,7 +259,7 @@ func (s *server) attach(images []AttachedImage) (string, error) {
 		if err := sys.WriteFile(filepath.Join(dir, name), bodies[index], attachedImageMode); err != nil {
 			return "", err
 		}
-		s.Host.Attached(index+1, name, len(bodies[index]), strings.ToUpper(strings.TrimPrefix(suffix, ".")))
+		h.Attached(index+1, name, len(bodies[index]), strings.ToUpper(strings.TrimPrefix(suffix, ".")))
 		tokens += " " + ImageToken(index+1)
 	}
 	return tokens, nil

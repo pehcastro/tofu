@@ -37,9 +37,13 @@ type MentionResolved struct {
 
 func (s *server) resolveMention(p MentionParams) (any, error) {
 	ref := strings.TrimSpace(p.Ref)
+	l, err := s.lane(p.Session)
+	if err != nil {
+		l = s.focus()
+	}
 	s.mu.Lock()
-	recorded := cmp.Or(p.Session, s.items.session)
-	item, asked := s.items.loggedAs(ref)
+	recorded := cmp.Or(p.Session, l.items.session)
+	item, asked := l.items.loggedAs(ref)
 	s.mu.Unlock()
 	if recorded == "" {
 		return nil, &Refusal{Code: CodeRefused, Message: "no session is open and none was named, so there is nothing to resolve the mention in"}

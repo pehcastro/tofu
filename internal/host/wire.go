@@ -672,6 +672,11 @@ type SessionRenameParams struct {
 	Name    string `json:"name"`
 }
 
+type SessionCloseParams struct {
+	Session string `json:"session"`
+	Stop    bool   `json:"stop,omitempty"`
+}
+
 type SessionOpenResult struct {
 	Session string `json:"session"`
 	Fresh   bool   `json:"fresh"`
@@ -1081,6 +1086,7 @@ func requests() []method {
 		{name: "initialize", params: InitializeParams{}, result: InitializeResult{}},
 		{name: "session.list", params: SessionListParams{}, result: SessionList{}},
 		{name: "session.open", params: SessionOpenParams{}, result: SessionOpenResult{}},
+		{name: "session.close", params: SessionCloseParams{}, result: Ack{}},
 		{name: "session.state", params: NoParams{}, result: SessionState{}},
 		{name: "session.set", params: SessionSetParams{}, result: Ack{}},
 		{name: "session.rename", params: SessionRenameParams{}, result: Ack{}},
@@ -1158,7 +1164,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions"}
 }
 
 const queryPrefix = "query."

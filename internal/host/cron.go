@@ -27,6 +27,25 @@ func (h *Host) CronCommand(line string) (cron.Reply, error) {
 	return reply, nil
 }
 
+func (h *Host) cronState() CronState {
+	state := CronState{Jobs: []CronJob{}}
+	for _, job := range h.cron.Jobs() {
+		spec := job.Spec()
+		one := CronJob{ID: job.ID, Schedule: spec.Schedule, Prompt: spec.Prompt, Paused: spec.Paused, Ended: job.Ended}
+		if !job.Next.IsZero() {
+			one.Next = &job.Next
+		}
+		if job.Live() {
+			state.Live++
+		}
+		if job.Live() && job.Noun() == "goal" {
+			state.Goals++
+		}
+		state.Jobs = append(state.Jobs, one)
+	}
+	return state
+}
+
 func (h *Host) armCron() {
 	h.mu.Lock()
 	defer h.mu.Unlock()

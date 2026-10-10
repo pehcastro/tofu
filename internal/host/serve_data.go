@@ -169,7 +169,7 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		return typedVerb[DoctorReport](s, raw, "doctor")
 	case queryPrefix + "context":
 		return handle(raw, func(p SessionParams) (any, error) {
-			asked := cmp.Or(p.Session, s.Host.ID())
+			asked := cmp.Or(p.Session, s.focus().host.ID())
 			if p.Session == "" {
 				store, err := session.OpenIn(s.Host.dir)
 				if err == nil {
@@ -270,11 +270,12 @@ func (s *server) memoryAdd(p MemoryAddParams) (any, error) {
 	default:
 		kind = memory.KindProject
 	}
-	added, err := shelves.Add(memory.Entry{Scope: p.Scope, Kind: kind, Text: p.Text, Said: p.Text, Session: s.Host.ID(), At: time.Now(), By: memory.ByPerson}, "")
+	focus := s.focus().host
+	added, err := shelves.Add(memory.Entry{Scope: p.Scope, Kind: kind, Text: p.Text, Said: p.Text, Session: focus.ID(), At: time.Now(), By: memory.ByPerson}, "")
 	if err != nil {
 		return nil, err
 	}
-	s.Host.Remembered(added.Saved())
+	focus.Remembered(added.Saved())
 	return added, nil
 }
 
@@ -292,6 +293,6 @@ func (s *server) memoryEdit(p MemoryEditParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.Host.Remembered(changed.Saved())
+	s.focus().host.Remembered(changed.Saved())
 	return changed, nil
 }
