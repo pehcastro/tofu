@@ -36,8 +36,10 @@ type MentionResolved struct {
 }
 
 func (s *server) resolveMention(p MentionParams) (any, error) {
+	ref := strings.TrimSpace(p.Ref)
 	s.mu.Lock()
 	recorded := cmp.Or(p.Session, s.items.session)
+	item, asked := s.items.loggedAs(ref)
 	s.mu.Unlock()
 	if recorded == "" {
 		return nil, &Refusal{Code: CodeRefused, Message: "no session is open and none was named, so there is nothing to resolve the mention in"}
@@ -46,17 +48,17 @@ func (s *server) resolveMention(p MentionParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	found, err := tools.ResolveQuote(store, recorded, p.Ref)
+	found, err := tools.ResolveQuote(store, recorded, asked)
 	if errors.Is(err, tools.ErrQuoteNoID) {
 		return nil, &Refusal{Code: CodeBadParams, Message: err.Error()}
 	}
 	if err != nil {
 		return nil, err
 	}
-	resolved := MentionResolved{Outcome: MentionOutcome(found.Outcome), Ref: strings.TrimSpace(p.Ref), Session: found.Session}
+	resolved := MentionResolved{Outcome: MentionOutcome(found.Outcome), Ref: ref, Session: found.Session}
 	if found.Outcome == tools.QuoteItem {
 		line, _, _ := strings.Cut(strings.TrimSpace(found.Words), "\n")
-		resolved.Ref, resolved.Item, resolved.Speaker, resolved.Line = tools.QuoteRef(found.Event), found.Event, found.Speaker, line
+		resolved.Ref, resolved.Item, resolved.Speaker, resolved.Line = found.Ref, cmp.Or(item, found.Event), found.Speaker, line
 	}
 	return resolved, nil
 }

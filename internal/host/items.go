@@ -4,12 +4,14 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
+	"tofu/internal/turn/tools"
 )
 
 const (
@@ -24,22 +26,64 @@ type openTool struct {
 	at   time.Time
 }
 
+type awaiting struct {
+	item string
+	role string
+	text string
+}
+
 type items struct {
-	session string
-	turn    string
-	task    string
-	began   time.Time
-	context *ContextUse
-	status  Status
-	message string
-	written string
-	minted  int
-	tools   map[string]openTool
-	agents  map[string]SubAgentRow
+	session  string
+	turn     string
+	task     string
+	began    time.Time
+	context  *ContextUse
+	status   Status
+	message  string
+	written  string
+	minted   int
+	tools    map[string]openTool
+	agents   map[string]SubAgentRow
+	unlogged []awaiting
+	logged   map[string]string
 }
 
 func newItems(session string) items {
-	return items{session: session, tools: map[string]openTool{}, agents: map[string]SubAgentRow{}}
+	return items{session: session, tools: map[string]openTool{}, agents: map[string]SubAgentRow{}, logged: map[string]string{}}
+}
+
+func (s *items) awaitLog(item, role, text string) {
+	if text = strings.TrimSpace(text); text != "" {
+		s.unlogged = append(s.unlogged, awaiting{item: item, role: role, text: text})
+	}
+}
+
+func (s *items) bind(logged session.Event) {
+	var said session.MessageBody
+	if json.Unmarshal(logged.Body, &said) != nil {
+		return
+	}
+	s.unlogged = slices.DeleteFunc(s.unlogged, func(waiting awaiting) bool {
+		matched := waiting.role == said.Role && strings.Contains(said.Content, waiting.text)
+		if matched {
+			s.logged[waiting.item] = logged.ID
+		}
+		return matched
+	})
+}
+
+func (s *items) loggedAs(ref string) (item, asked string) {
+	asked = ref
+	for minted, id := range s.logged {
+		if tools.QuoteRef(minted) != ref {
+			continue
+		}
+		if item != "" {
+			return "", ref
+		}
+		item, asked = minted, "#"+id
+	}
+	return item, asked
 }
 
 func (s *items) all(chat []Event) []outgoing {
@@ -64,6 +108,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	s.turn = cmp.Or(event.Turn, s.turn)
 	if s.message != "" && event.Kind != EventStreamReset && endsTheLeadReply(event) {
 		out = append(out, notify("message.completed", &Text{Identity: s.identity("", s.message), Text: s.written}))
+		s.awaitLog(s.message, session.RoleAssistant, s.written)
 		s.message, s.written = "", ""
 	}
 	id := s.identity(event.Agent, event.ID)
@@ -72,6 +117,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		s.turn, s.task, s.began, s.status = event.ID, event.Text, now, StatusFailed
 		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: now}))
 	case EventTurnEnded:
+		s.unlogged = nil
 		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))
 	case EventDone:
 		s.status = event.Status
@@ -87,9 +133,11 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, notify("message.delta", &Text{Identity: s.identity("", s.message), Text: event.Text}))
 	case EventText:
 		id.Item = s.mint("message")
+		s.awaitLog(id.Item, session.RoleAssistant, event.Text)
 		return append(out, notify("message.started", &Marker{Identity: id}), notify("message.completed", &Text{Identity: id, Text: event.Text}))
 	case EventTask:
 		id.Item = s.mint("task")
+		s.awaitLog(id.Item, session.RoleUser, event.Text)
 		return append(out, notify("message.user", &UserMessage{Identity: id, Text: event.Text, Origin: event.Origin}))
 	case EventStreamReset:
 		if event.Agent != "" || s.message == "" {
@@ -104,6 +152,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		if id.Item == "" {
 			id.Item = s.mint("steered")
 		}
+		s.awaitLog(id.Item, session.RoleUser, event.Text)
 		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Step: event.Step, ReadAt: now}))
 	case EventToolCall:
 		var args struct {
@@ -166,6 +215,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		request.msg.ID, _ = json.Marshal(event.ID)
 		return append(out, request)
 	case EventPersisted:
+		if event.Agent == "" && event.Logged.Kind == session.EventMessage {
+			s.bind(*event.Logged)
+		}
 		if event.Logged.Call != "" {
 			id.Item = session.EventIDFor(cmp.Or(event.Agent, s.turn), event.Logged.Call)
 		}

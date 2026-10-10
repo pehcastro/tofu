@@ -22,6 +22,7 @@ import (
 
 const (
 	quoteOpenMark   = "[quote"
+	agentOpenMark   = "[&"
 	quoteCloseMark  = "]"
 	quoteShortRunes = 6
 )
@@ -39,6 +40,7 @@ var ErrQuoteNoID = errors.New("quote: id is required, and it is the reference th
 type Quoted struct {
 	Outcome QuoteOutcome
 	Hash    string
+	Ref     string
 	Session string
 	Event   string
 	Speaker string
@@ -122,7 +124,13 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 }
 
 func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
-	hash := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(ref), quoteOpenMark), quoteCloseMark)
+	trimmed := strings.TrimSpace(ref)
+	hash := strings.TrimSuffix(strings.TrimPrefix(trimmed, quoteOpenMark), quoteCloseMark)
+	find, refOf := quotedIn, QuoteRef
+	if agent, named := strings.CutPrefix(trimmed, agentOpenMark); named {
+		hash, find = strings.TrimSuffix(agent, quoteCloseMark), quotedAgent
+		refOf = func(name string) string { return agentOpenMark + name + quoteCloseMark }
+	}
 	if strings.Trim(hash, "#") == "" {
 		return Quoted{}, ErrQuoteNoID
 	}
@@ -144,12 +152,12 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 		return Quoted{}, fmt.Errorf("quote: %w", err)
 	}
 	for _, header := range append([]session.Header{newest}, ancestors...) {
-		hits, err := quotedIn(store, header.ID, hash)
+		hits, err := find(store, header.ID, hash)
 		switch {
 		case err != nil:
 			return Quoted{}, err
 		case len(hits) == 1:
-			hits[0].Outcome, hits[0].Hash, hits[0].Session = QuoteItem, hash, header.ID
+			hits[0].Outcome, hits[0].Hash, hits[0].Session, hits[0].Ref = QuoteItem, hash, header.ID, refOf(hits[0].Event)
 			return hits[0], nil
 		case len(hits) > 1:
 			return Quoted{Outcome: QuoteAmbiguous, Hash: hash, Session: header.ID}, nil
@@ -159,11 +167,11 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 }
 
 func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
-	talk, err := store.Conversation(recorded)
+	events, err := store.Events(recorded)
 	if err != nil {
 		return nil, fmt.Errorf("quote: %w", err)
 	}
-	events, err := store.Events(recorded)
+	talk, err := store.Conversation(recorded)
 	if err != nil {
 		return nil, fmt.Errorf("quote: %w", err)
 	}
@@ -176,14 +184,49 @@ func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
 		}
 	}
 	for _, event := range events {
-		if event.Kind != session.EventToolCall || !session.DrawnAs(event.ID, hash) {
+		switch {
+		case event.Kind == session.EventTurnStart && event.Agent == "" && session.DrawnAs(event.Turn, hash):
+			var start session.TurnStart
+			if err := json.Unmarshal(event.Body, &start); err != nil {
+				return nil, fmt.Errorf("quote: the start of turn %s is recorded in a shape this build cannot read: %w", event.Turn, err)
+			}
+			hits = append(hits, Quoted{Event: event.Turn, Speaker: "you, starting a turn", Noun: "turn", Words: start.Task})
+		case event.Kind == session.EventToolCall && session.DrawnAs(event.ID, hash):
+			call, err := quotedCall(event, events)
+			if err != nil {
+				return nil, err
+			}
+			hits = append(hits, call)
+		}
+	}
+	return hits, nil
+}
+
+func quotedAgent(store *session.Store, recorded, name string) ([]Quoted, error) {
+	events, err := store.Events(recorded)
+	if err != nil {
+		return nil, fmt.Errorf("quote: %w", err)
+	}
+	var hits []Quoted
+	for _, event := range events {
+		if event.Kind != session.EventSpawn {
 			continue
 		}
-		call, err := quotedCall(event, events)
-		if err != nil {
-			return nil, err
+		var spawned session.SpawnBody
+		if err := json.Unmarshal(event.Body, &spawned); err != nil {
+			return nil, fmt.Errorf("quote: the spawn %s is recorded in a shape this build cannot read: %w", event.ID, err)
 		}
-		hits = append(hits, call)
+		if spawned.Agent != name {
+			continue
+		}
+		words := "it was spawned as " + cmp.Or(spawned.Definition, "a sub-agent") + " with the mission: " + spawned.Mission
+		for _, reported := range events {
+			var report session.ReportBody
+			if reported.Kind == session.EventReport && reported.Agent == name && json.Unmarshal(reported.Body, &report) == nil {
+				words += "\nit reported " + report.State + ": " + report.Text
+			}
+		}
+		hits = append(hits, Quoted{Event: name, Speaker: "the sub-agent " + name, Noun: "sub-agent", Words: sys.LoadKeyRedactor().Redact(words)})
 	}
 	return hits, nil
 }
