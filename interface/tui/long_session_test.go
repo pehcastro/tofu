@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,16 +18,39 @@ import (
 )
 
 const (
-	longAgents      = 117
-	longCalls       = 4700
-	longBusiestCall = 210
-	longEditEvery   = 8
-	longShells      = 40
-	longShellLines  = 200
-	longFrames      = 9
-	longWidth       = 160
-	longHeight      = 45
+	longAgents       = 117
+	longCalls        = 4700
+	longThought      = 1
+	longBusiestCall  = 210
+	longEditEvery    = 8
+	longShells       = 40
+	longShellLines   = 200
+	longFrames       = 9
+	longChunksAFrame = 9
+	longWidth        = 160
+	longHeight       = 45
+	longThinking     = "reading the package before the change"
 )
+
+type longSize struct {
+	agents, calls, thought int
+}
+
+func longSizeFromEnv(t *testing.T) longSize {
+	t.Helper()
+	read := func(name string, fallback int) int {
+		said := os.Getenv(name)
+		if said == "" {
+			return fallback
+		}
+		value, err := strconv.Atoi(said)
+		if err != nil || value < 1 {
+			t.Fatalf("%s=%q is not a positive count", name, said)
+		}
+		return value
+	}
+	return longSize{agents: read("TOFU_LONG_AGENTS", longAgents), calls: read("TOFU_LONG_CALLS", longCalls), thought: read("TOFU_LONG_THOUGHT", longThought)}
+}
 
 type longSession struct {
 	app  *App
@@ -54,41 +79,57 @@ func longShellEntries(at time.Time) []shells.Entry {
 	return entries
 }
 
-func generatedLongSession(t *testing.T) longSession {
+func allocated() uint64 {
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	return stats.TotalAlloc
+}
+
+func generatedLongSession(t *testing.T, size longSize) longSession {
 	t.Helper()
 	at := fixedStart()
 	app := phaseApp(t, &at)
 	shellEntries := longShellEntries(at)
 	app.options.Shells = func() []shells.Entry { return shellEntries }
 	app.Update(tea.WindowSizeMsg{Width: longWidth, Height: longHeight})
-	rows := make([]subagent.Row, longAgents)
+	events, began, before := 0, time.Now(), allocated()
+	send := func(event Event) {
+		app.Update(event)
+		events++
+	}
+	rows := make([]subagent.Row, size.agents)
 	for index := range rows {
 		name := "go-dev-" + strconv.Itoa(index)
 		rows[index] = subagent.Row{Name: name, Agent: "go-dev", Model: "claude-sub/claude-opus-5", Owns: []string{"internal/pkg" + strconv.Itoa(index) + "/**"},
 			Doing: "the work of " + name, Total: konst.TurnMaxSteps, State: roster.Finished, Report: "done with " + name}
-		app.Update(Event{Kind: EventToolCall, ID: "spawn-" + name, Tool: "spawn", Text: rows[index].Doing, Promote: true})
-		app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(rows[:index+1])})
-		app.Update(Event{Kind: EventToolResult, ID: "spawn-" + name, Text: "spawned"})
+		send(Event{Kind: EventToolCall, ID: "spawn-" + name, Tool: "spawn", Text: rows[index].Doing, Promote: true})
+		send(Event{Kind: EventSubAgent, SubAgents: slices.Clone(rows[:index+1])})
+		send(Event{Kind: EventToolResult, ID: "spawn-" + name, Text: "spawned"})
 	}
-	for call := range longCalls {
-		agent := call % longAgents
+	for call := range size.calls {
+		agent := call % size.agents
 		if call < longBusiestCall {
 			agent = 0
 		}
 		name, id := rows[agent].Name, "call-"+strconv.Itoa(call)
 		at = at.Add(time.Second)
-		app.Update(Event{Kind: EventThinking, ID: "think-" + strconv.Itoa(call), Agent: name, Text: "reading the package before the change"})
+		for range size.thought {
+			send(Event{Kind: EventThinking, ID: "think-" + strconv.Itoa(call), Agent: name, Text: longThinking})
+		}
 		path := "internal/pkg" + strconv.Itoa(agent) + "/file" + strconv.Itoa(call%7) + ".go"
-		app.Update(Event{Kind: EventToolCall, ID: id, Agent: name, Tool: "read", Text: path})
+		send(Event{Kind: EventToolCall, ID: id, Agent: name, Tool: "read", Text: path})
 		result := Event{Kind: EventToolResult, ID: id, Agent: name, Text: "84 lines, 2.1 KB"}
 		if call%longEditEvery == 0 {
 			result.Diff = longEdit(path, call)
 		}
-		app.Update(result)
+		send(result)
 		rows[agent].Calls = append(rows[agent].Calls, subagent.Call{ID: id, At: at, Tool: "read", Text: path, Result: "84 lines"})
 		rows[agent].Steps++
 	}
-	app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(rows)})
+	send(Event{Kind: EventSubAgent, SubAgents: slices.Clone(rows)})
+	taken, spent := time.Since(began), allocated()-before
+	t.Logf("%d agents, %d calls, thoughts in %d chunks: %d events, %d held, %.1f KB and %.1f us per event",
+		size.agents, size.calls, size.thought, events, len(app.happened), float64(spent)/float64(events)/1024, float64(taken.Microseconds())/float64(events))
 	app.Update(shellsMsg(shellEntries))
 	app.View()
 	return longSession{app: app, rows: rows, at: &at}
@@ -97,15 +138,17 @@ func generatedLongSession(t *testing.T) longSession {
 func (s longSession) frames(t *testing.T, label string, step func(at int)) {
 	t.Helper()
 	taken := make([]time.Duration, longFrames)
+	before := allocated()
 	for at := range taken {
 		began := time.Now()
 		step(at)
 		s.app.View()
 		taken[at] = time.Since(began)
 	}
+	perFrame := float64(allocated()-before) / longFrames / 1024
 	slices.Sort(taken)
 	median, worst := taken[len(taken)/2], taken[len(taken)-1]
-	t.Logf("%-44s median %7.2f ms  worst %7.2f ms  budget %.1f ms", label, ms(median), ms(worst), float64(konst.FrameBudgetMicros)/1000)
+	t.Logf("%-44s median %7.2f ms  worst %7.2f ms  %9.1f KB a frame  budget %.1f ms", label, ms(median), ms(worst), perFrame, float64(konst.FrameBudgetMicros)/1000)
 	if median > konst.FrameBudgetMicros*time.Microsecond {
 		t.Errorf("%s: median %v over the %v budget", label, median, konst.FrameBudgetMicros*time.Microsecond)
 	}
@@ -136,7 +179,7 @@ func keyPress(name string) tea.KeyPressMsg {
 }
 
 func (s longSession) working(at int) {
-	busy := &s.rows[1+at%(longAgents-1)]
+	busy := &s.rows[1+at%(len(s.rows)-1)]
 	busy.State = roster.Working
 	*s.at = s.at.Add(time.Second)
 	id := "live-" + strconv.Itoa(at)
@@ -146,12 +189,24 @@ func (s longSession) working(at int) {
 	s.app.Update(pulseMsg{})
 }
 
+func (s longSession) thinking(at int) {
+	busy := s.rows[1+at%(len(s.rows)-1)]
+	for range longChunksAFrame {
+		s.app.Update(Event{Kind: EventThinking, ID: "streaming-" + strconv.Itoa(at), Agent: busy.Name, Text: longThinking})
+	}
+}
+
 func TestLongSessionFramesStayInsideTheBudget(t *testing.T) {
-	s := generatedLongSession(t)
-	if got := len(s.app.happened); got < 9000 {
-		t.Fatalf("the generated session holds %d activity events, want the 9,389 shape", got)
+	size := longSizeFromEnv(t)
+	s := generatedLongSession(t, size)
+	if want := 2 * size.calls; len(s.app.happened) < want {
+		t.Fatalf("the generated session holds %d activity events, want at least %d", len(s.app.happened), want)
 	}
 	s.app.show(screenAgents)
+	began := time.Now()
+	s.app.Update(pulseMsg{})
+	s.app.View()
+	t.Logf("%-44s %7.2f ms", "sub-agents, first frame", ms(time.Since(began)))
 	s.frames(t, "sub-agents, steady", func(int) {})
 	s.frames(t, "sub-agents, pgup/pgdown at the newest", s.press("right", "pgup", "pgdown"))
 	s.app.feed.SetScroll(1 << 30)
@@ -161,10 +216,12 @@ func TestLongSessionFramesStayInsideTheBudget(t *testing.T) {
 	s.app.feed.SetScroll(1 << 30)
 	s.frames(t, "sub-agents, agent detail at its oldest", s.press("pgdown", "pgup"))
 	s.frames(t, "sub-agents, agents working", s.working)
+	s.frames(t, "sub-agents, thinking streams between frames", s.thinking)
 	s.app.show(screenEdits)
 	s.frames(t, "file edits, next and previous edit", s.press("n", "p"))
 	s.frames(t, "file edits, pgup/pgdown", s.press("pgup", "pgdown"))
 	s.frames(t, "file edits, agents working", s.working)
+	s.frames(t, "file edits, thinking streams between frames", s.thinking)
 	s.app.show(screenShells)
 	s.frames(t, "shells, down/up", s.press("j", "up"))
 	s.frames(t, "shells, pgup/pgdown", s.press("pgup", "pgdown"))

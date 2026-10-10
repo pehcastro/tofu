@@ -37,6 +37,7 @@ func (a *App) follow(ref string) tea.Cmd {
 		return cmd
 	}
 	cmd := a.show(screenAgents)
+	a.flushFeed()
 	a.feed.Focus(id)
 	return cmd
 }

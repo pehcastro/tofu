@@ -118,6 +118,7 @@ func (a *App) jumpToID(typed string) {
 	for _, event := range a.happened {
 		if strings.HasPrefix(event.ID, typed) || strings.HasSuffix(event.ID, typed) {
 			a.show(screenAgents)
+			a.flushFeed()
 			a.feed.Focus(event.ID)
 			return
 		}
@@ -372,6 +373,16 @@ func (a *App) listen() tea.Cmd {
 	if read == nil || !a.listening.CompareAndSwap(false, true) {
 		return nil
 	}
+	events := a.options.Host.Events()
+	for queued := len(events); a.busy && queued > 0; queued-- {
+		event := <-events
+		if event.Kind == host.EventTurnEnded {
+			read = func() tea.Msg { return Closed{} }
+			break
+		}
+		a.followStatus(event)
+		a.absorb(event)
+	}
 	return func() tea.Msg {
 		msg := read()
 		a.listening.Store(false)
@@ -598,7 +609,7 @@ func (a *App) forget(at int) {
 }
 
 func (a *App) flushFeed() {
-	if a.feedStale {
+	if a.feedStale && a.current == screenAgents {
 		a.feed.SetEvents(slices.Clone(a.happened))
 		a.feedStale = false
 	}
@@ -643,16 +654,20 @@ func (a *App) judged(decision session.Decision, actor string) {
 }
 
 func (a *App) showSubAgents(subAgents []subagent.Row) {
+	callsBefore := map[string][]subagent.Call{}
+	for _, held := range a.subAgents {
+		callsBefore[held.Name] = held.Calls
+	}
 	a.subAgents, a.view.SubAgents, a.edits.SubAgents = subAgents, subAgents, subAgents
 	a.status.Agents = 0
+	a.linkSpawns(subAgents)
 	for _, subAgent := range subAgents {
 		if subAgent.State == roster.Working {
 			a.status.Agents++
 		}
-		a.linkSpawn(subAgent)
 		a.stepped(subAgent)
 		a.drawReport(subAgent)
-		for _, call := range subAgent.Calls {
+		for _, call := range subAgent.Calls[settledPrefix(callsBefore[subAgent.Name], subAgent.Calls):] {
 			a.rosterCall(subAgent.Name, call)
 		}
 	}
@@ -690,23 +705,44 @@ func (a *App) rosterCall(actor string, call subagent.Call) {
 	a.record(feed.Event{ID: id, Actor: actor, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: cmp.Or(call.At, a.options.Now())})
 }
 
-func (a *App) linkSpawn(subAgent subagent.Row) {
-	if slices.ContainsFunc(a.happened, func(held feed.Event) bool { return held.Kind == feed.KindSpawn && held.Target == subAgent.Name }) {
-		return
+func settledPrefix(before, now []subagent.Call) int {
+	settled := 0
+	for settled < min(len(before), len(now)) && before[settled].ID == now[settled].ID && before[settled].Result != "" {
+		settled++
 	}
+	return settled
+}
+
+func (a *App) linkSpawns(subAgents []subagent.Row) {
 	turn := a.happened[min(a.happenedAtTurn, len(a.happened)):]
-	at := slices.IndexFunc(turn, func(held feed.Event) bool {
+	unlinked := func(held feed.Event) bool {
 		return held.Kind == feed.KindSpawn && held.State != feed.StateFailed && held.Target == ""
-	})
-	if at < 0 {
+	}
+	if !slices.ContainsFunc(turn, unlinked) {
 		return
 	}
-	spawn := turn[at]
-	spawn.Target, spawn.Title = subAgent.Name, subAgent.Doing
-	a.record(spawn)
-	if spawn.Actor == orchestrator {
-		a.view.Spawned(subAgent.Name)
-		a.reports[subAgent.Name] = ""
+	linked := map[string]bool{}
+	for _, held := range a.happened {
+		if held.Kind == feed.KindSpawn {
+			linked[held.Target] = true
+		}
+	}
+	for _, subAgent := range subAgents {
+		if linked[subAgent.Name] {
+			continue
+		}
+		at := slices.IndexFunc(turn, unlinked)
+		if at < 0 {
+			return
+		}
+		spawn := turn[at]
+		spawn.Target, spawn.Title = subAgent.Name, subAgent.Doing
+		a.record(spawn)
+		linked[subAgent.Name] = true
+		if spawn.Actor == orchestrator {
+			a.view.Spawned(subAgent.Name)
+			a.reports[subAgent.Name] = ""
+		}
 	}
 }
 
