@@ -639,7 +639,7 @@ func appSessions(inUse string) ([]tui.SessionRow, error) {
 	rows := make([]tui.SessionRow, len(report.Sessions))
 	for i, row := range report.Sessions {
 		rows[i] = tui.SessionRow{ID: row.ID, Name: row.Handle, Task: oneLine(row.Task), InUse: row.ID == inUse || (open.Family != "" && row.Family == open.Family),
-			Facts: sessionWhen(row.At, now) + " · " + countOf(row.Turns, "turn") + " · " + countOf(row.Generations, "generation")}
+			Facts: sessionWhen(row.At, now) + " · " + plural(row.Turns, "turn") + " · " + plural(row.Generations, "generation")}
 	}
 	return rows, nil
 }

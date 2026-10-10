@@ -433,7 +433,7 @@ func sessionListLines(page cli.Page, report sessionListReport, now time.Time) []
 	if len(report.Sessions) == 0 && len(report.Skipped) == 0 {
 		return page.Title("Sessions", nil, cli.Verdict{Mark: cli.Idle, Text: "none recorded"})
 	}
-	facts := []string{countOf(len(report.Sessions), "session")}
+	facts := []string{plural(len(report.Sessions), "session")}
 	if report.Expired > 0 {
 		facts = append(facts, strconv.Itoa(report.Expired)+" past "+report.Lifetime.String()+", kept")
 	}
@@ -475,7 +475,7 @@ func sessionReadsLines(page cli.Page, report sessionReadsReport) []string {
 	if report.Unrecorded > 0 {
 		verdict = cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(report.Unrecorded) + " not recorded"}
 	}
-	lines := append(page.Title("Reads", []string{sessionHandle(report.Session, report.Name), countOf(len(report.Reads), "read")}, verdict), "")
+	lines := append(page.Title("Reads", []string{sessionHandle(report.Session, report.Name), plural(len(report.Reads), "read")}, verdict), "")
 	if len(report.Reads) == 0 {
 		return append(lines, cli.Indent(page.Label("none recorded"))...)
 	}
@@ -509,12 +509,12 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 		noun string
 	}{{row.Turns, "turn"}, {row.Steps, "step"}, {row.Agents, "sub-agent run"}, {row.Reads, "read"}} {
 		if count.n > 0 {
-			counts = append(counts, countOf(count.n, count.noun))
+			counts = append(counts, plural(count.n, count.noun))
 		}
 	}
 	carried := "none, a resume starts over"
 	if row.Carried > 0 {
-		carried = countOf(row.Carried, "message")
+		carried = plural(row.Carried, "message")
 	}
 	ended := "open"
 	if row.EndedAt != nil {
@@ -560,7 +560,7 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time) []string {
 func busyResumeLines(page cli.Page, carry sessionResume) []string {
 	carried, head := "none, starts over", ""
 	if carry.Carried > 0 {
-		carried = countOf(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
+		carried = plural(carry.Carried, "message") + " · " + sessionSteps(carry.Steps)
 	}
 	if carry.HeadDerived {
 		head = "none written, took the newest"
@@ -575,14 +575,9 @@ func busyResumeLines(page cli.Page, carry sessionResume) []string {
 	})...)...)
 }
 
-func countOf(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return strconv.Itoa(n) + " " + noun + "s"
-}
+func countOf(n int, noun string) string { return plural(n, noun) }
 
-func sessionSteps(steps int) string { return countOf(steps, "step") }
+func sessionSteps(steps int) string { return plural(steps, "step") }
 
 func dollars(usd float64) string { return fmt.Sprintf("$%.6f", usd) }
 
@@ -764,14 +759,14 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 				calls++
 			}
 		}
-		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Agent, cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "orchestrator's model"), run.Status, countOf(calls, "call"), dollars(run.CostUSD)},
+		agents[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Agent, cmp.Or(run.Definition, "unnamed"), cmp.Or(run.Model, "orchestrator's model"), run.Status, plural(calls, "call"), dollars(run.CostUSD)},
 			Detail: "spawned by " + run.SpawnCall + " in " + run.SpawnTurn}
 	}
 	requests := make([]cli.Row, len(report.Requests))
 	for i, request := range report.Requests {
 		cells := []string{cmp.Or(request.Agent, session.AuthorOrchestrator), request.Request, request.Model}
 		if request.Messages > 0 {
-			cells = append(cells, countOf(request.Messages, "message")+", "+strconv.Itoa(request.New)+" new")
+			cells = append(cells, plural(request.Messages, "message")+", "+strconv.Itoa(request.New)+" new")
 		}
 		if words := report.Cache.Lifetimes[request.Request]; words != "" {
 			cells = append(cells, words)
@@ -834,7 +829,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	changes := make([]cli.Row, len(report.Changes))
 	for i, change := range report.Changes {
 		changes[i] = cli.Row{Mark: cli.Changed, Cells: []string{cmp.Or(change.Agent, session.AuthorOrchestrator), change.Kind,
-			strconv.Itoa(change.Before) + " to " + countOf(change.After, "message")}, Detail: change.Why}
+			strconv.Itoa(change.Before) + " to " + plural(change.After, "message")}, Detail: change.Why}
 	}
 	notices := make([]cli.Row, len(report.Notices))
 	for i, notice := range report.Notices {
@@ -856,7 +851,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	if report.Error != "" {
 		verdict = cli.Verdict{Mark: cli.Fail, Text: "ended in error"}
 	}
-	facts := []string{report.Handle, countOf(report.Events, "event")}
+	facts := []string{report.Handle, plural(report.Events, "event")}
 	if sizes := report.Sizes; sizes != nil {
 		facts = append(facts, "events "+widget.Size(int(sizes.Events))+", requests "+widget.Size(int(sizes.Requests))+", bodies "+widget.Size(int(sizes.Blobs)))
 	}
@@ -982,7 +977,7 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 	if report.Error != "" {
 		verdict = cli.Verdict{Mark: cli.Fail, Text: "failed"}
 	}
-	lines := append(page.Title("Request", []string{report.Request, countOf(len(report.Messages), "message")}, verdict), "")
+	lines := append(page.Title("Request", []string{report.Request, plural(len(report.Messages), "message")}, verdict), "")
 	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{
 		{Label: "agent", Text: cmp.Or(report.Agent, session.AuthorOrchestrator)},
 		{Label: "turn", Text: report.Turn},

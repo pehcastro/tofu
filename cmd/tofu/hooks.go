@@ -59,7 +59,7 @@ func hooksList(o verbOutput, engine *hook.Engine) int {
 			rows[i] = cli.Row{Mark: mark, Cells: []string{string(one.Event), cmp.Or(one.Matcher, "*"), state}, Detail: one.Command}
 			under[i] = relativeToRoot(project, page.Path(one.File)) + " · " + string(one.Level) + " · " + cmp.Or(one.Skipped, lastResult(one.Last))
 		}
-		facts := []string{countOf(len(hooks), "hook")}
+		facts := []string{plural(len(hooks), "hook")}
 		if untrusted > 0 {
 			facts = append(facts, strconv.Itoa(untrusted)+" not trusted")
 		}

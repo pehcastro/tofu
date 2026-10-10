@@ -214,8 +214,6 @@ func Overlap(a, b string) bool {
 	return globsMeet(ownedTree(a), ownedTree(b))
 }
 
-func overlap(a, b string) bool { return Overlap(a, b) }
-
 func globsMeet(a, b string) bool {
 	left, right := normalizePath(a), normalizePath(b)
 	for _, l := range globForms(left) {

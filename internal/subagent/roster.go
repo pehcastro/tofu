@@ -160,7 +160,7 @@ func (r *Roster) collides(agent SubAgent) error {
 				continue
 			}
 			for _, other := range held.Owns {
-				if overlap(glob, other) {
+				if Overlap(glob, other) {
 					return CollisionError{SubAgent: agent.ID, Glob: glob, Holder: held.ID, HolderGlob: other}
 				}
 			}

@@ -24,19 +24,11 @@ func scratchRequests() []method {
 func (s *server) scratch(method string, raw json.RawMessage) (any, error) {
 	switch method {
 	case scratchPrefix + "list":
-		return handle(raw, func(NoParams) (any, error) { return s.scratchReport() })
+		return handle(raw, func(NoParams) (any, error) { return sys.ReadScratch(s.Dir) })
 	case scratchPrefix + "clean":
 		return handle(raw, s.scratchClean)
 	}
 	return nil, &Refusal{Code: CodeNoMethod, Message: "no method " + method}
-}
-
-func (s *server) scratchReport() (sys.ScratchReport, error) {
-	report, err := sys.ReadScratch(s.Dir)
-	if report.Folders == nil {
-		report.Folders = []sys.ScratchFolder{}
-	}
-	return report, err
 }
 
 func (s *server) scratchClean(p ScratchCleanParams) (any, error) {
@@ -52,7 +44,7 @@ func (s *server) scratchClean(p ScratchCleanParams) (any, error) {
 	}
 	result, err := s.Verb(args)
 	if err == nil && !p.DryRun {
-		if report, readErr := s.scratchReport(); readErr == nil {
+		if report, readErr := sys.ReadScratch(s.Dir); readErr == nil {
 			s.box.push(notify(scratchPrefix+"changed", report))
 		}
 	}

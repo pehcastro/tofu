@@ -35,7 +35,7 @@ func TicketTools(board boardy.Managed, actor string) ([]turn.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	manager := slices.ContainsFunc(boards, func(b boardy.Board) bool { return slices.Contains(b.Managers, actor) })
+	manager := slices.ContainsFunc(boards, func(b boardy.Board) bool { return board.Manages(b.Key, actor, "") == nil })
 	verbs := []ticketVerb{ticketRead, ticketLog, ticketAsk, ticketRequest, ticketMove}
 	if manager {
 		verbs = append(verbs, ticketCreate, ticketAssign)

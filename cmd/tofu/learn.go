@@ -160,7 +160,7 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 			return []learn.Source{{Store: store, Headers: headers}}, opts.chain, err
 		}
 		headers, err := learn.Recent(store, opts.last)
-		return []learn.Source{{Store: store, Headers: headers}}, countOf(len(headers), "session") + " of the last " + strconv.Itoa(opts.last) + " conversations of this project", err
+		return []learn.Source{{Store: store, Headers: headers}}, plural(len(headers), "session") + " of the last " + strconv.Itoa(opts.last) + " conversations of this project", err
 	}
 	home, err := sys.HomeConfigDir()
 	if err != nil {
@@ -380,7 +380,7 @@ func learnDrafts(o verbOutput, home learn.Home) int {
 
 func scanLines(page cli.Page, run learn.Run, opts learnOpts, file string) []string {
 	read := run.Read
-	head := page.Subject("Learn") + page.Label(" · "+countOf(len(read.Sessions), "session")+" · "+run.Scope)
+	head := page.Subject("Learn") + page.Label(" · "+plural(len(read.Sessions), "session")+" · "+run.Scope)
 	if read.Typed > 0 {
 		head += page.Label(" · " + read.From.Local().Format(time.DateOnly) + " to " + read.To.Local().Format(time.DateOnly))
 	}
@@ -399,7 +399,7 @@ func scanLines(page cli.Page, run learn.Run, opts learnOpts, file string) []stri
 	if len(run.Summary.Wrong) == 0 {
 		lines = append(lines, "  nothing said again in two or more sessions")
 	}
-	lines = append(lines, "  "+page.Label(fmt.Sprintf("it cost you %s, and the lead %s answering them", countOf(run.Summary.Repeats, "repeat"), countOf(run.Summary.Calls, "call"))))
+	lines = append(lines, "  "+page.Label(fmt.Sprintf("it cost you %s, and the lead %s answering them", plural(run.Summary.Repeats, "repeat"), plural(run.Summary.Calls, "call"))))
 	if len(run.Summary.Do) > 0 {
 		lines = append(lines, "  "+page.Hint(strings.Join(run.Summary.Do, " · ")))
 	}
@@ -442,7 +442,7 @@ func scanLines(page cli.Page, run learn.Run, opts learnOpts, file string) []stri
 }
 
 func briefOf(f learn.Finding) string {
-	brief := fmt.Sprintf("%s in %s · %s", countOf(f.Times, "time"), countOf(f.Sessions, "session"), f.Class.Label())
+	brief := fmt.Sprintf("%s in %s · %s", plural(f.Times, "time"), plural(f.Sessions, "session"), f.Class.Label())
 	if f.FixedIn != "" {
 		brief += " · fixed in " + f.FixedIn + ", last seen on " + f.Built
 		if f.FixedSameDay {
@@ -457,7 +457,7 @@ func briefOf(f learn.Finding) string {
 
 func findingLines(page cli.Page, f learn.Finding) []string {
 	lines := []string{fmt.Sprintf("  %-2d %s", f.ID, f.Title),
-		"     " + page.Label(fmt.Sprintf("%s in %s · %s · %s confidence", countOf(f.Times, "time"), countOf(f.Sessions, "session"), f.Class.Label(), f.Confidence)),
+		"     " + page.Label(fmt.Sprintf("%s in %s · %s · %s confidence", plural(f.Times, "time"), plural(f.Sessions, "session"), f.Class.Label(), f.Confidence)),
 		"     why   " + clip(f.Reason, learn.ShownTextRunes)}
 	switch {
 	case f.Target() == learn.TargetUpstream:
