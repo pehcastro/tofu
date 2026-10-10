@@ -33,6 +33,7 @@ Long sessions stay fast on the sub-agents and shells screens, and one `tofu serv
 - With many sub-agents reporting at once on Windows, a report or spawn result no longer fails on `session.json` being held by another reader.
 - The chat no longer drops the lead's text while a sub-agent it started has not answered yet.
 - `login.start` over serve refuses a role tofu does not know.
+- `session.turns` on a session that has recorded no turn yet answers an empty list instead of an error.
 - Boardy dates are plain days, read the same in every time zone, and `boardy lint` catches two wildcard owns in one folder.
 
 ## 0.5.10-fix1 - 2026-10-09
