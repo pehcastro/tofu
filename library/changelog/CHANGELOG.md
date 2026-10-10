@@ -10,6 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.10-fix1 - 2026-10-09
+
+The first open of a project no longer copies its folder before drawing.
+
+### Fixed
+
+- The first `tofu`, `tofu --continue`, `tofu session`, `tofu serve` or `tofu run` in a project renames its old folder to the new name at once; 0.5.10 copied the whole folder first, with nothing on screen, which took minutes for a few gigabytes. A rename that fails prints one line and the old folder keeps working.
+
 ## 0.5.10 - 2026-10-09
 
 A scratchpad per agent outside your repository, boardy for local project management, and a project folder named after the project.
