@@ -63,6 +63,14 @@ per language.
   message carries an id you can quote.
 - **Pictures and updates**: `read` shows the model an image file, and tofu
   updates itself, telling an open session when a newer tofu is installed.
+- **Scratchpad**: each agent writes temporary files, logs and build caches in
+  its own folder outside your repository, `tofu scratch` lists them and
+  `clean` removes old ones. See [Scratchpad](/docs/features/scratchpad).
+- **Boardy**: local project management in markdown files, with managers,
+  triage, board rules, views and sprints, and a lead that can work from a
+  board's tickets. See [Boardy](/docs/features/boardy).
+- **Project folders**: a project's state lives in `<name>-<hash>`, so two
+  paths never share one, and a moved repository can be relinked.
 
 ## 0.4
 

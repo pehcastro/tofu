@@ -10,6 +10,30 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.10 - 2026-10-09
+
+A scratchpad per agent outside your repository, boardy for local project management, and a project folder named after the project.
+
+Close every older tofu session before the first run of this version: it copies each project's folder to its new name once, and an older tofu keeps writing the old one.
+
+### Added
+
+- A scratchpad outside the repository, under `~/.tofu/projects/<project>/scratchpad/`: each agent writes its temporary files, logs and outputs in its own folder, every process tofu starts gets `TMP`, `TEMP` and `TMPDIR` pointing there, and build caches (cargo, pycache, ruff, mypy, pytest, Go) go under it. `tofu scratch` lists the folders and leftovers, `tofu scratch clean` removes old ones, and the settings `scratchCleanupDays` and `scratchMaxGB` bound them. Agents use `scratch_path`, `scratch_share`, `scratch_list` and `scratch_read`; reading another project's `shared/` asks you once per project.
+- Boardy, local project management in markdown files: `tofu boardy init|new|list|show|move|log|lint|boards`, managers and a triage queue, hand-over between boards, board rules on create, move, widen and close, views, reports, epics, milestones and sprints. `projectManagement` set to `boardy` makes the lead and its sub-agents work from tickets with `ticket_*` tools; `boardFlow` speaks Jira or Linear words.
+- `tofu serve` answers `query.settings` with labels, kinds, choices and bounds, `query.commands`, `session.turns`, `status.list` for one session, `status.ack`, and sends `turn.account`, `shell.ready` with a port, `session.turns.updated`, plus `scratch.*` and `boardy.*`.
+
+### Changed
+
+- A sub-agent writing outside its folder, its scratch folder or the shared one is refused, including `/tmp`.
+- A project's folder under `~/.tofu/projects/` is its folder name and a short hash, such as `shop-7cd21bfb`, so two paths never share one and a long path no longer makes a long name. The first open copies the old folder and keeps it. A moved repository is offered a relink, and `tofu migrate --relink` accepts it.
+- `tofu --continue` and `tofu session resume` open the app at once with a `restoring <handle>` spinner; the resume summary is a note inside the app instead of a block printed before it.
+- `tofu session list` counts only the lead's steps; calls to the memory model show in their own `memory model` section of `tofu session trace` and no longer read as a cache break.
+
+### Fixed
+
+- A sub-agent's question stays on screen after the lead's turn ends, and a question raised while the lead is idle shows; before, the answer key went into the composer and the sub-agent waited forever.
+- `session.trace` over `tofu serve` answers for a session that used the memory model, and carries its `memory` calls.
+
 ## 0.5.9-fix1 - 2026-10-09
 
 The app opens and answers keys in a project with hundreds of finished shells.
