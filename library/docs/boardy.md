@@ -84,7 +84,8 @@ reaches a prompt.
 `--status review` shows one status. `lint` reads every ticket on every
 board and exits 1 on a front matter error, a reference to a ticket no board
 holds, a blocked ticket with no reason, a counter behind its tickets, or two
-live tickets whose owns overlap, naming both.
+live tickets whose owns overlap, naming both: `x/*.go` and `x/*_test.go`
+overlap, because both hold `x/a_test.go`.
 
 ## Undo it
 

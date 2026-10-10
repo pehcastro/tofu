@@ -21,7 +21,7 @@ new` started at once get twenty different numbers.
 
 **Ownership is checked, not hoped for.** A ticket names the paths it owns.
 `tofu boardy lint` refuses two live tickets whose owns overlap and names
-both.
+both, globs included: `x/*.go` and `x/*_test.go` both hold `x/a_test.go`.
 
 **Your words.** Set `boardFlow` to `jira` (ticket, board, epic, sprint,
 points) or `linear` (issue, team, project, cycle, estimate). The files are

@@ -47,6 +47,10 @@ The `boards` folder is under the project's folder in the tofu home.
     tofu boardy sprint start S1
     tofu boardy sprint close S1
 
+A due, start or end is a day, written `YYYY-MM-DD` or `Nd` from today, and
+read back as that same day in any time zone; a sprint started with no start
+takes today where you are.
+
 Starting a sprint closes the one that was active. Only a manager of the
 board changes its epics, milestones and sprints.
 

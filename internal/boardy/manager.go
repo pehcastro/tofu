@@ -55,7 +55,7 @@ func (m Managed) changeManagers(key, name, actor string, change func(*Board) err
 		if board, err = m.Store.Board(key); err != nil {
 			return err
 		}
-		if !m.isPerson(actor) && m.role(board, actor) != RoleManager {
+		if !m.actsForPerson(actor) && m.role(board, actor) != RoleManager {
 			return RefusedError{Why: fmt.Sprintf("%s is neither %s nor a manager of %s, so it cannot change who manages it", actor, RolePerson, key)}
 		}
 		if err := change(&board); err != nil {

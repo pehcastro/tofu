@@ -21,10 +21,29 @@ type Epic struct {
 }
 
 type Milestone struct {
-	ID    string    `json:"id"`
-	Title string    `json:"title"`
-	Due   time.Time `json:"due,omitzero"`
-	Text  string    `json:"text,omitempty"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Due   Day    `json:"due,omitempty"`
+	Text  string `json:"text,omitempty"`
+}
+
+type Day string
+
+func DayOf(at time.Time) Day {
+	if at.IsZero() {
+		return ""
+	}
+	return Day(at.Format(time.DateOnly))
+}
+
+func parseDay(raw string) (Day, error) {
+	if raw == "" {
+		return "", nil
+	}
+	if _, err := time.Parse(time.DateOnly, raw); err != nil {
+		return "", err
+	}
+	return Day(raw), nil
 }
 
 type planFile struct {
@@ -57,21 +76,7 @@ func (s Store) Milestones(key string) ([]Milestone, error) {
 }
 
 func (s Store) SaveMilestone(key string, milestone Milestone) error {
-	return s.savePlan(key, "milestones", milestone.ID, milestone.Text, "title", milestone.Title, "due", formatDay(milestone.Due))
-}
-
-func parseDay(raw string) (time.Time, error) {
-	if raw == "" {
-		return time.Time{}, nil
-	}
-	return time.Parse(time.DateOnly, raw)
-}
-
-func formatDay(day time.Time) string {
-	if day.IsZero() {
-		return ""
-	}
-	return day.Format(time.DateOnly)
+	return s.savePlan(key, "milestones", milestone.ID, milestone.Text, "title", milestone.Title, "due", string(milestone.Due))
 }
 
 func validPlanID(id string) bool {

@@ -154,10 +154,10 @@ func TestAnOwnedDirectoryWithATrailingSlashOwnsWhatIsInsideIt(t *testing.T) {
 			t.Errorf("src/routes/ owns %q: want %v, got %v %v", path, want, got, err)
 		}
 	}
-	if !overlap("src/routes/", "src/routes/**") {
+	if !Overlap("src/routes/", "src/routes/**") {
 		t.Error("src/routes/ and src/routes/** must overlap")
 	}
-	if overlap("src/routes/", "src/other/**") {
+	if Overlap("src/routes/", "src/other/**") {
 		t.Error("src/routes/ and src/other/** must not overlap")
 	}
 }
@@ -181,10 +181,10 @@ func TestAnOwnedDirectoryWithoutASlashOwnsWhatIsInsideIt(t *testing.T) {
 			t.Errorf("%s owns %q: want %v, got %v %v", row.owns, row.path, row.want, got, err)
 		}
 	}
-	if !overlap("packages/core", "packages/core/**") {
+	if !Overlap("packages/core", "packages/core/**") {
 		t.Error("packages/core and packages/core/** must overlap")
 	}
-	if overlap("packages/core", "packages/cli/**") {
+	if Overlap("packages/core", "packages/cli/**") {
 		t.Error("packages/core and packages/cli/** must not overlap")
 	}
 }

@@ -94,9 +94,7 @@ func (s Store) lintTicket(ticket Ticket, tickets map[string]Ticket) []Finding {
 func ownsMeet(left, right []string) (string, string, bool) {
 	for _, a := range left {
 		for _, b := range right {
-			atA, _ := subagent.Matches(literalPrefix(a), []string{b})
-			atB, _ := subagent.Matches(literalPrefix(b), []string{a})
-			if atA || atB {
+			if subagent.Overlap(a, b) {
 				return a, b, true
 			}
 		}

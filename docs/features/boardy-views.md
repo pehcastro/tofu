@@ -40,7 +40,8 @@ tofu boardy sprint start S1
 ```
 
 A ticket names its epic and sprint in its front matter (`epic: E1`,
-`sprint: S1`).
+`sprint: S1`). A due, start or end is a day, `2026-11-01` in the file and
+over `tofu serve`, so it reads as the same day in every time zone.
 
 Look at it:
 

@@ -28,6 +28,16 @@ func Statuses() []Status {
 	return []Status{Triage, Backlog, Todo, Doing, Review, Done, Dropped, Blocked}
 }
 
+func (Status) Enum() []string { return enum(Statuses()...) }
+
+func enum[T ~string](values ...T) []string {
+	names := make([]string, len(values))
+	for i, value := range values {
+		names[i] = string(value)
+	}
+	return names
+}
+
 func ParseStatus(raw string) (Status, error) {
 	if status := Status(raw); slices.Contains(Statuses(), status) {
 		return status, nil
@@ -46,23 +56,26 @@ const (
 	Subtask Kind = "subtask"
 )
 
+func (Kind) Enum() []string { return enum(Story, Task, Bug, Subtask) }
+
 func ParseKind(raw string) (Kind, error) {
-	switch kind := Kind(raw); kind {
-	case Story, Task, Bug, Subtask:
-		return kind, nil
+	if kinds := Kind("").Enum(); !slices.Contains(kinds, raw) {
+		return "", fmt.Errorf("%q is not a ticket type: %s", raw, strings.Join(kinds, ", "))
 	}
-	return "", fmt.Errorf("%q is not a ticket type: story, task, bug, subtask", raw)
+	return Kind(raw), nil
 }
 
 type Priority string
 
 const DefaultPriority Priority = "P2"
 
+func (Priority) Enum() []string { return []string{"P0", "P1", "P2", "P3", "P4"} }
+
 func ParsePriority(raw string) (Priority, error) {
-	if len(raw) == 2 && raw[0] == 'P' && raw[1] >= '0' && raw[1] <= '4' {
-		return Priority(raw), nil
+	if !slices.Contains(Priority("").Enum(), raw) {
+		return "", fmt.Errorf("%q is not a priority: P0 to P4", raw)
 	}
-	return "", fmt.Errorf("%q is not a priority: P0 to P4", raw)
+	return Priority(raw), nil
 }
 
 type Front struct {

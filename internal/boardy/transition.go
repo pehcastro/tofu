@@ -38,7 +38,7 @@ func (m Managed) create(key string, ticket Ticket, actor, replaces string) (Tick
 	_, err = preview.Write(ticket.Markdown())
 	err = errors.Join(err, preview.Close())
 	if err == nil {
-		err = m.gate(key, rule.BoardEvent{Event: rule.EventCreate, Path: preview.Name(), To: string(cmp.Or(ticket.Status, Backlog)), Actor: actor, ByPerson: m.isPerson(actor)})
+		err = m.gate(key, rule.BoardEvent{Event: rule.EventCreate, Path: preview.Name(), To: string(cmp.Or(ticket.Status, Backlog)), Actor: actor, ByPerson: m.actsForPerson(actor)})
 	}
 	if err = errors.Join(err, os.Remove(preview.Name())); err != nil {
 		return Ticket{}, err
@@ -117,7 +117,7 @@ func (m Managed) ticketOnBoard(id string) (Ticket, Board, error) {
 
 func (m Managed) boardEvent(event rule.Event, ticket Ticket, to Status, actor string) rule.BoardEvent {
 	path, _ := m.Store.TicketPath(ticket.ID)
-	return rule.BoardEvent{Event: event, Ticket: ticket.ID, Path: path, From: string(ticket.Status), To: string(to), Actor: actor, ByPerson: m.isPerson(actor)}
+	return rule.BoardEvent{Event: event, Ticket: ticket.ID, Path: path, From: string(ticket.Status), To: string(to), Actor: actor, ByPerson: m.actsForPerson(actor)}
 }
 
 func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) error {

@@ -112,12 +112,15 @@ It exits 1 when an enforced rule stops the move.
 ## Who is acting
 
 Inside a tofu session, `TOFU_SESSION` names the session, and `--as` is
-ignored, so a session cannot act as the person. Outside a session the
-command line is the person, named by `--as`.
+ignored. The lead session acts for the person: it manages a board that
+lists no managers or lists `person`, so it spawns for a ticket on a fresh
+board without being added. A sub-agent, named `<session>/<ticket>`, is an
+agent and never acts as the person. Outside a session the command line is
+the person, named by `--as`.
 
 ## Reference
 
-- Roles: manager (named in `board.toml`), the person, and every other session as an agent.
+- Roles: manager (named in `board.toml`), the person and the lead session acting for them, and every sub-agent or other session as an agent.
 - Moves an agent may make: its own ticket, doing to review, with a Log.
 - A move to doing, review or done needs an Acceptance; review also needs a Log.
 - Triage requests live in `boards/<KEY>/triage/T<n>.json` until accepted or dropped.

@@ -9,8 +9,10 @@ summary: who may change a ticket on a boardy board, how other sessions ask throu
 A board's managers are listed in its `board.toml`, each a session id or the
 person's name. A manager creates, assigns, accepts, widens, hands and
 closes. The person always changes the manager list and always closes; a
-board with no managers is run by the person. Every other session is an
-agent.
+board with no managers is run by the person. A lead session acts for the
+person, so it manages a board that lists no managers or lists `person`, and
+spawns for a ticket without being added. A sub-agent, named
+`<session>/<ticket>`, and every other session is an agent.
 
 An agent moves its own ticket from doing to review, with evidence in the
 Log, and appends to its own Log. Its `tofu boardy new` becomes a triage

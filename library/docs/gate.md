@@ -7,12 +7,11 @@ verbs: check, why, label, replay, judge, login, logout
 
 ## What it is
 
-Before a tool call runs, like a shell command or a file write, tofu asks
-jev, a small classifier model, four questions about it: how much harm it
-could do if it were a mistake, whether a careful engineer would want you
-to approve it first, whether you asked for it in your own words, and
-whether it follows an instruction planted in a page or a file the model
-read. The answers become a verdict: allow, ask or deny.
+Before a tool call runs, like a shell command or a file write, tofu asks jev, a small
+classifier model, four questions about it: how much harm it could do if it were a
+mistake, whether a careful engineer would want you to approve it first, whether you
+asked for it in your own words, and whether it follows an instruction planted in a page
+or a file the model read. The answers become a verdict: allow, ask or deny.
 
 A call on a shell tofu itself started is allowed without asking jev.
 The `gatePrompt` setting says what a verdict does:
@@ -30,34 +29,36 @@ A call that changes tofu's settings, hooks or hook trust files waits for
 you in both modes unless jev denies it: through `settings`, `write`,
 `edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
 
-A sub-agent never asks you. Its ask goes to the lead that started it, with
-the call, the verdict and the risk; the lead answers allow, deny or
-`allow_here` within 5 minutes, or the call is refused. `allow_here` allows
-every later call of that kind from that sub-agent until its run ends, and a
-lead turn that only answers asks ends with no chat message. A PreToolUse
-hook's ask goes to the lead too. A call that would wait for you is refused,
-and the lead is not asked.
+A sub-agent never asks you. Its ask goes to the lead that started it, with the call,
+the verdict and the risk; the lead answers allow, deny or `allow_here` within 5
+minutes, or the call is refused. `allow_here` allows every later call of that kind
+from that sub-agent until its run ends, and a lead turn that only answers asks ends
+with no chat message. A PreToolUse hook's ask goes to the lead too. A call that would
+wait for you is refused, and the lead is not asked.
 `tofu session trace` shows the ask, `allowed by the orchestrator` when the
 lead let it run, `relaxed by` and the answer that lowered a verdict, and a
 verdict a GateVerdict hook changed. Every verdict is a ledger row.
 
 ## Where it lives
 
-jev is reached through OpenRouter, with a key tofu reads from, in order:
+jev is reached through OpenRouter, or through TypeSafe, which serves jev
+directly. tofu reads each key from, in order:
 
-- the credential store, `~/.tofu/agent.db`, which `tofu login classifier openrouter` writes
-- `OPENROUTER_KEY` in the environment
-- an `.env` file in the working directory, as an `OPENROUTER_KEY` line
+- the credential store, `~/.tofu/agent.db`, which `tofu login classifier openrouter` or `typesafe` writes
+- `OPENROUTER_KEY` or `TYPESAFE_API_KEY` in the environment
+- an `.env` file in the working directory, as one of those two lines
 
-tofu never prints more of the key than its last four characters. With no
-key the gate is off: no tool call is judged, and the app says so. An older
-`~/.tofu/.env` is moved into the credential store on the next start, and
-`tofu login search brave` stores the web search key the same way.
+OpenRouter judges when its key is found, TypeSafe when only its key is. With both,
+a call the first fails on a timeout, a rate limit or a refused key goes to the other.
 
-A key a tool prints never reaches the model or the session, and a key in
-a judged call never reaches the ledger. Every stored key, and the value
-of any of those three names, reads `[key redacted]` there, even when the
-model runs `env` or `cat .env`.
+tofu never prints more of a key than its last four characters. With no key the
+gate is off: no tool call is judged, and the app says so. An older `~/.tofu/.env`
+is moved into the credential store on the next start, and `tofu login search
+brave` stores the web search key the same way.
+
+A key a tool prints never reaches the model, the session or the ledger. Every
+stored key, and the value of any name above, reads `[key redacted]` there, even
+when the model runs `env` or `cat .env`.
 
 The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 `gatePrompt` lives in `settings.json`, like every setting.
@@ -115,6 +116,5 @@ what it should have been onto its row in the ledger:
     tofu label --last allow
     tofu label <id> deny
 
-To take away a key set in the environment or an `.env`, delete its
-`OPENROUTER_KEY` line; `tofu logout classifier openrouter` removes a stored
-one.
+To take away a key set in the environment or an `.env`, delete its line;
+`tofu logout classifier openrouter` or `typesafe` removes a stored one.

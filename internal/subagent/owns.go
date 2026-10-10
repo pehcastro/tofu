@@ -210,9 +210,11 @@ func withinPackageDirectory(glob, target string) bool {
 	return ok && dir == pattern
 }
 
-func overlap(a, b string) bool {
+func Overlap(a, b string) bool {
 	return globsMeet(ownedTree(a), ownedTree(b))
 }
+
+func overlap(a, b string) bool { return Overlap(a, b) }
 
 func globsMeet(a, b string) bool {
 	left, right := normalizePath(a), normalizePath(b)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -15,20 +16,21 @@ const (
 	Closed  SprintState = "closed"
 )
 
+func (SprintState) Enum() []string { return enum(Planned, Active, Closed) }
+
 func parseSprintState(raw string) (SprintState, error) {
-	switch state := SprintState(raw); state {
-	case Planned, Active, Closed:
-		return state, nil
+	if states := SprintState("").Enum(); !slices.Contains(states, raw) {
+		return "", fmt.Errorf("%q is not a sprint state: %s", raw, strings.Join(states, ", "))
 	}
-	return "", fmt.Errorf("%q is not a sprint state: planned, active, closed", raw)
+	return SprintState(raw), nil
 }
 
 type Sprint struct {
 	ID    string      `json:"id"`
 	Title string      `json:"title"`
 	State SprintState `json:"state"`
-	Start time.Time   `json:"start,omitzero"`
-	End   time.Time   `json:"end,omitzero"`
+	Start Day         `json:"start,omitempty"`
+	End   Day         `json:"end,omitempty"`
 	Text  string      `json:"text,omitempty"`
 }
 
@@ -49,7 +51,7 @@ func (s Store) Sprints(key string) ([]Sprint, error) {
 }
 
 func (s Store) SaveSprint(key string, sprint Sprint) error {
-	return s.savePlan(key, "sprints", sprint.ID, sprint.Text, "title", sprint.Title, "state", string(sprint.State), "start", formatDay(sprint.Start), "end", formatDay(sprint.End))
+	return s.savePlan(key, "sprints", sprint.ID, sprint.Text, "title", sprint.Title, "state", string(sprint.State), "start", string(sprint.Start), "end", string(sprint.End))
 }
 
 func ActiveSprint(sprints []Sprint) (Sprint, bool) {
@@ -73,8 +75,8 @@ func (s Store) SetSprint(key, id string, state SprintState) error {
 		switch {
 		case sprint.ID == id:
 			sprint.State = state
-			if state == Active && sprint.Start.IsZero() {
-				sprint.Start = time.Now().UTC().Truncate(24 * time.Hour)
+			if state == Active && sprint.Start == "" {
+				sprint.Start = DayOf(time.Now())
 			}
 		case state == Active && sprint.State == Active:
 			sprint.State = Closed

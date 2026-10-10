@@ -1,8 +1,10 @@
 package boardy
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type Role string
@@ -40,15 +42,23 @@ func (e WaitingError) Error() string {
 	return fmt.Sprintf("%s waits for %s: %s (rule %s)", e.Ticket, RolePerson, e.Detail, e.Rule)
 }
 
-func (m Managed) isPerson(actor string) bool { return actor != "" && actor == m.Person }
+const subAgentOfSession = "/"
+
+func (m Managed) actsForPerson(actor string) bool {
+	if m.Person == "" {
+		return actor != "" && !strings.Contains(actor, subAgentOfSession)
+	}
+	return actor == m.Person
+}
 
 func (m Managed) role(board Board, actor string) Role {
+	forPerson := m.actsForPerson(actor)
 	switch {
 	case slices.Contains(board.Managers, actor):
 		return RoleManager
-	case m.isPerson(actor) && len(board.Managers) == 0:
+	case forPerson && (len(board.Managers) == 0 || slices.Contains(board.Managers, cmp.Or(m.Person, string(RolePerson)))):
 		return RoleManager
-	case m.isPerson(actor):
+	case forPerson:
 		return RolePerson
 	}
 	return RoleAgent

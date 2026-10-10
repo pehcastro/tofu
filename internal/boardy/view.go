@@ -27,6 +27,8 @@ const (
 	defaultViewID         = "default"
 )
 
+func (GroupBy) Enum() []string { return enum(ByEpic, ByStatus, ByAssignee) }
+
 type Filter struct {
 	Statuses []Status `json:"statuses,omitempty"`
 	Live     bool     `json:"live,omitempty"`

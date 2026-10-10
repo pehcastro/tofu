@@ -48,7 +48,7 @@ func ReadScratch(project string) (ScratchReport, error) {
 	if err != nil {
 		return ScratchReport{}, err
 	}
-	report := ScratchReport{Root: root}
+	report := ScratchReport{Root: root, Folders: []ScratchFolder{}}
 	for _, kind := range []ScratchKind{ScratchKindShared, ScratchKindCache} {
 		if folder, found := measured(filepath.Join(root, string(kind)), kind); found {
 			report.Folders = append(report.Folders, folder)

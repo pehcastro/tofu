@@ -20,6 +20,10 @@ const (
 	Commented EventKind = "commented"
 )
 
+func (EventKind) Enum() []string {
+	return enum(Created, Moved, Commented, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned)
+}
+
 type Event struct {
 	At     time.Time `json:"at"`
 	Ticket string    `json:"ticket"`

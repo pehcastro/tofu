@@ -219,6 +219,8 @@ const (
 	TriageDrop   TriageAction = "drop"
 )
 
+func (TriageAction) Enum() []string { return enum(TriageList, TriageAccept, TriageDrop) }
+
 type TriageRequest struct {
 	Board   string       `json:"board,omitempty"`
 	Action  TriageAction `json:"action"`

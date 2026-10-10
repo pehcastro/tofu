@@ -176,8 +176,8 @@ func (c boardyCall) epic() int {
 		due := map[string]string{}
 		for _, milestone := range milestones {
 			due[milestone.ID] = milestone.ID + " " + milestone.Title
-			if !milestone.Due.IsZero() {
-				due[milestone.ID] += " due " + milestone.Due.Format(time.DateOnly)
+			if milestone.Due != "" {
+				due[milestone.ID] += " due " + string(milestone.Due)
 			}
 		}
 		return c.o.done(true, struct {
@@ -198,10 +198,11 @@ func (c boardyCall) epic() int {
 		epic := boardy.Epic{ID: c.args[1], Title: strings.Join(c.args[2:], " "), Milestone: c.flags["milestone"]}
 		return c.planSaved(key, words.Epic+" "+epic.ID, epic, func() error { return c.store.SaveEpic(key, epic) })
 	case len(c.args) >= 3 && c.args[0] == "milestone":
-		milestone := boardy.Milestone{ID: c.args[1], Title: strings.Join(c.args[2:], " ")}
-		if milestone.Due, err = boardyDate(c.flags["due"], daysAhead); err != nil {
+		due, err := boardyDate(c.flags["due"], daysAhead)
+		if err != nil {
 			return c.o.usage(err)
 		}
+		milestone := boardy.Milestone{ID: c.args[1], Title: strings.Join(c.args[2:], " "), Due: boardy.DayOf(due)}
 		return c.planSaved(key, "milestone "+milestone.ID, milestone, func() error { return c.store.SaveMilestone(key, milestone) })
 	case len(c.args) == 2 && c.args[0] == "done":
 		epics, err := c.store.Epics(key)
@@ -237,13 +238,12 @@ func (c boardyCall) sprint() int {
 			return append(page.Title(key+" "+words.Sprint+"s", []string{strconv.Itoa(len(sprints))}, cli.Verdict{}), page.Rows(rows)...)
 		})
 	case len(c.args) >= 3 && c.args[0] == "new":
-		sprint := boardy.Sprint{ID: c.args[1], Title: strings.Join(c.args[2:], " "), State: boardy.Planned}
-		var startErr, endErr error
-		sprint.Start, startErr = boardyDate(c.flags["start"], daysAhead)
-		sprint.End, endErr = boardyDate(c.flags["end"], daysAhead)
+		start, startErr := boardyDate(c.flags["start"], daysAhead)
+		end, endErr := boardyDate(c.flags["end"], daysAhead)
 		if err := errors.Join(startErr, endErr); err != nil {
 			return c.o.usage(err)
 		}
+		sprint := boardy.Sprint{ID: c.args[1], Title: strings.Join(c.args[2:], " "), State: boardy.Planned, Start: boardy.DayOf(start), End: boardy.DayOf(end)}
 		return c.planSaved(key, words.Sprint+" "+sprint.ID, sprint, func() error { return c.store.SaveSprint(key, sprint) })
 	case len(c.args) == 2 && c.args[0] == "start":
 		return c.planSaved(key, words.Sprint+" "+c.args[1]+" active", c.args[1], func() error { return c.store.SetSprint(key, c.args[1], boardy.Active) })
@@ -254,14 +254,13 @@ func (c boardyCall) sprint() int {
 }
 
 func sprintDays(sprint boardy.Sprint) string {
-	if sprint.Start.IsZero() {
+	if sprint.Start == "" {
 		return "-"
 	}
-	text := sprint.Start.Format(time.DateOnly)
-	if !sprint.End.IsZero() {
-		text += " to " + sprint.End.Format(time.DateOnly)
+	if sprint.End == "" {
+		return string(sprint.Start)
 	}
-	return text
+	return string(sprint.Start) + " to " + string(sprint.End)
 }
 
 func (c boardyCall) planSaved(key, what string, data any, write func() error) int {
