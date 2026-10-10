@@ -624,7 +624,7 @@ func TestASubAgentsMessageIsNeverSpokenInTheOrchestratorsTranscript(t *testing.T
 	for _, event := range []Event{
 		{Kind: EventText, Text: "handing it to a sub-agent"},
 		{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read note.txt", Promote: true},
-		{Kind: EventTextDelta, Text: subAgentSaid},
+		{Kind: EventTextDelta, Agent: "c1", Text: subAgentSaid},
 		{Kind: EventToolResult, ID: "s1", Text: "spawn c1 finished"},
 		{Kind: EventSubAgent, SubAgents: subAgentOf(subAgentSaid)},
 		{Kind: EventText, Text: orchestratorSaid},

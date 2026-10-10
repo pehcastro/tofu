@@ -394,7 +394,7 @@ func (a *App) absorb(event Event) {
 	if answered(event) && event.Agent == "" {
 		a.view.Returned()
 	}
-	if len(a.subAgentCalls) > 0 && (event.Kind == EventText || event.Kind == EventTextDelta) {
+	if event.Agent != "" && (event.Kind == EventText || event.Kind == EventTextDelta) {
 		return
 	}
 	at := a.options.Now()
