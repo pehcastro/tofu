@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"tofu/bench/corpus"
 	"tofu/internal/konst"
@@ -31,14 +32,16 @@ type GlobCall struct {
 
 type Result struct {
 	SessionsDir    string
+	RecordedBy     time.Time
 	Turns          int
+	LaterTurns     int
 	Skipped        []corpus.SkippedTurn
 	ReplayFailures int
 	Totals         []ToolTotals
 	GlobCalls      []GlobCall
 }
 
-func Run(sessionsDir, repoRoot string) (Result, error) {
+func Run(sessionsDir, repoRoot string, recordedBy time.Time) (Result, error) {
 	walked, err := corpus.WalkSessions(sessionsDir)
 	if err != nil {
 		return Result{}, err
@@ -53,8 +56,13 @@ func Run(sessionsDir, repoRoot string) (Result, error) {
 		return Result{}, err
 	}
 	byTool := map[string]*ToolTotals{}
-	result := Result{SessionsDir: sessionsDir, Turns: len(walked.Turns), Skipped: walked.Skipped}
+	result := Result{SessionsDir: sessionsDir, RecordedBy: recordedBy, Skipped: walked.Skipped}
 	for _, turn := range walked.Turns {
+		if turn.At.After(recordedBy) {
+			result.LaterTurns++
+			continue
+		}
+		result.Turns++
 		for _, step := range turn.Steps {
 			for _, call := range step.ToolCalls {
 				totals, ok := byTool[call.Tool]
@@ -117,6 +125,7 @@ func Render(result Result) string {
 
 	fmt.Fprintf(b, "replayed against commit %s, never against the working tree\n", PinnedCommit)
 	fmt.Fprintf(b, "sessions read: %d turns under %s, %d skipped\n", result.Turns, result.SessionsDir, len(result.Skipped))
+	fmt.Fprintf(b, "turns recorded after %s: %d, not replayed\n", result.RecordedBy.Format(time.RFC3339), result.LaterTurns)
 	for _, s := range result.Skipped {
 		fmt.Fprintf(b, "  skipped: %s: %s\n", s.Path, s.Reason)
 	}

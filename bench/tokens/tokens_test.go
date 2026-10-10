@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/sys"
@@ -16,9 +17,11 @@ func sessionsDir() string { return sys.RecordedStateDir("sessions") }
 const repoRoot = "../.."
 const replayFailuresInTheReport = 6
 
+var reportGeneratedAt = time.Date(2026, time.September, 21, 20, 45, 0, 0, time.FixedZone("-03", -3*60*60))
+
 func replayed(t *testing.T) Result {
 	t.Helper()
-	result, err := Run(sessionsDir(), repoRoot)
+	result, err := Run(sessionsDir(), repoRoot, reportGeneratedAt)
 	if errors.Is(err, ErrNoPinnedTree) {
 		t.Skipf("skip, named: commit %s is not in this checkout: %v", PinnedCommit, err)
 	}
