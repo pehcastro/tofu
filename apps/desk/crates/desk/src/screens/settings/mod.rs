@@ -2,6 +2,7 @@ pub mod board;
 mod fixture;
 mod intro;
 mod rows;
+mod terminal;
 
 pub use rows::Rows;
 

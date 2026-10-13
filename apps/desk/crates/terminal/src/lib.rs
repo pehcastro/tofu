@@ -4,6 +4,7 @@ mod paint;
 mod palette;
 mod pty;
 mod scrollbar;
+pub mod shells;
 
 use crate::keys::{KeyInput, key_input};
 use crate::mouse::Cell;
@@ -31,13 +32,14 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+const START_SETTLE: Duration = Duration::from_millis(150);
 const INITIAL_COLS: u16 = 80;
 const INITIAL_ROWS: u16 = 24;
 const MIN_COLS: f32 = 2.;
 const MIN_ROWS: f32 = 1.;
-const PADDING: f32 = 8.;
+const GUTTER: f32 = 8.;
 const DRAG_THRESHOLD: f32 = 2.;
 const FOCUS_IN: &[u8] = b"\x1b[I";
 const FOCUS_OUT: &[u8] = b"\x1b[O";
@@ -69,7 +71,7 @@ pub struct Terminal {
     title: Option<SharedString>,
     palette: Palette,
     grid: (u16, u16),
-    sized: bool,
+    started: bool,
     cell: Size<Pixels>,
     bounds: Bounds<Pixels>,
     drawn: Option<Rc<Frame>>,
@@ -84,6 +86,7 @@ pub struct Terminal {
     sync_at: Option<Instant>,
     focus: FocusHandle,
     _pump: Option<Task<()>>,
+    _settle: Option<Task<Result<()>>>,
     _sync: Option<Task<Result<()>>>,
     _blink: Option<Task<Result<()>>>,
 }
@@ -113,12 +116,12 @@ impl Terminal {
             parser: Processor::new(),
             events,
             pty: None,
-            shell: pty::pick_shell(),
+            shell: shells::current(),
             cwd: cwd.to_path_buf(),
             title: None,
             palette: Palette::default(),
             grid,
-            sized: false,
+            started: false,
             cell: size(px(1.), px(1.)),
             bounds: Bounds::default(),
             drawn: None,
@@ -133,6 +136,7 @@ impl Terminal {
             sync_at: None,
             focus: cx.focus_handle(),
             _pump: None,
+            _settle: None,
             _sync: None,
             _blink: None,
         }
@@ -178,6 +182,7 @@ impl Terminal {
     }
 
     fn start(&mut self, cx: &mut Context<Self>) {
+        self.started = true;
         let (cols, rows) = self.grid;
         match Pty::spawn(&self.shell, &self.cwd, cols, rows) {
             Ok((pty, output)) => {
@@ -350,7 +355,8 @@ impl Terminal {
         self.bounds = bounds;
         self.cell = cell;
         self.frame_owed = false;
-        if self.grid != (cols, rows) {
+        let resized = self.grid != (cols, rows);
+        if resized {
             self.grid = (cols, rows);
             self.drawn = None;
             self.term.resize(TermSize::new(cols.into(), rows.into()));
@@ -361,9 +367,11 @@ impl Terminal {
                 }
             }
         }
-        if !self.sized {
-            self.sized = true;
-            self.start(cx);
+        if !self.started && (resized || self._settle.is_none()) {
+            self._settle = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(START_SETTLE).await;
+                this.update(cx, |terminal, cx| terminal.start(cx))
+            }));
         }
         if let Some(frame) = &self.drawn {
             return frame.clone();
@@ -387,8 +395,15 @@ impl Terminal {
         }
     }
 
+    fn inside_gutter(&self) -> Bounds<Pixels> {
+        Bounds::new(
+            self.bounds.origin,
+            size(self.bounds.size.width - px(GUTTER), self.bounds.size.height),
+        )
+    }
+
     fn thumb(&self) -> Option<PaintQuad> {
-        scrollbar::thumb(self.bounds, px(PADDING), self.scrollback())
+        scrollbar::thumb(self.inside_gutter(), px(GUTTER), self.scrollback())
             .map(|thumb| scrollbar::quad(thumb, self.grabbed.is_some(), self.palette.foreground))
     }
 
@@ -421,7 +436,7 @@ impl Terminal {
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if self.pty.is_none() && event.keystroke.key == "enter" {
+        if self.started && self.pty.is_none() && event.keystroke.key == "enter" {
             self.restart(cx);
             return cx.stop_propagation();
         }
@@ -489,7 +504,9 @@ impl Terminal {
         }
         match event.button {
             MouseButton::Left
-                if scrollbar::rail(self.bounds, px(PADDING)).contains(&event.position) =>
+                if self.scrollback().history > 0
+                    && scrollbar::rail(self.inside_gutter(), px(GUTTER))
+                        .contains(&event.position) =>
             {
                 self.press_rail(event.position.y, cx)
             }
@@ -502,7 +519,8 @@ impl Terminal {
     }
 
     fn press_rail(&mut self, y: Pixels, cx: &mut Context<Self>) {
-        let Some(thumb) = scrollbar::thumb(self.bounds, px(PADDING), self.scrollback()) else {
+        let Some(thumb) = scrollbar::thumb(self.inside_gutter(), px(GUTTER), self.scrollback())
+        else {
             return;
         };
         if y < thumb.top() {
@@ -722,7 +740,6 @@ impl Render for Terminal {
         let palette = self.palette;
         div()
             .size_full()
-            .p(px(PADDING))
             .bg(palette.background)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
@@ -742,15 +759,7 @@ impl Render for Terminal {
                         let (frame, thumb) = terminal.update(cx, |terminal, cx| {
                             (terminal.frame(bounds, cell, cx), terminal.thumb())
                         });
-                        paint::prepare(
-                            &frame,
-                            bounds.origin,
-                            cell,
-                            focused,
-                            &palette,
-                            thumb,
-                            window,
-                        )
+                        paint::prepare(&frame, bounds, cell, focused, &palette, thumb, window)
                     },
                     move |bounds, painted, window, cx| {
                         window.handle_input(&focus, ElementInputHandler::new(bounds, typed), cx);

@@ -157,6 +157,7 @@ fn build(
         ];
         let bodies = mounted.clone();
         let titles = mounted.clone();
+        let badges = mounted.clone();
         let sessions = mounted.store.clone();
         let expandable = mounted.clone();
         let board = TilingBoard::new(
@@ -189,11 +190,17 @@ fn build(
                             }),
                     }
                 }),
-                subtitle: Box::new(move |module, cx| {
-                    (*module == Module::Chat)
-                        .then(|| session(&sessions, cx))
-                        .flatten()
-                        .map(|name| div().child(name).into_any_element())
+                subtitle: Box::new(move |module, cx| match module {
+                    Module::Chat => {
+                        session(&sessions, cx).map(|name| div().child(name).into_any_element())
+                    }
+                    Module::Terminal => badges
+                        .terminal
+                        .0
+                        .borrow()
+                        .as_ref()
+                        .map(|terminal| terminal.read(cx).badge(cx)),
+                    _ => None,
                 }),
                 spawnable: OPENABLE.to_vec(),
                 spawns: OPENABLE.to_vec(),

@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde_json::Value as Json;
 
-use crate::protocol::{SettingsReport, VerbResult};
+use crate::protocol::SettingsReport;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -154,20 +154,4 @@ impl TryFrom<SettingsReport> for Settings {
             categories,
         })
     }
-}
-
-pub fn refusal(result: &VerbResult) -> Option<String> {
-    if result.ok {
-        return None;
-    }
-    let said: Vec<&str> = result
-        .problems
-        .iter()
-        .map(|problem| problem.what.as_str())
-        .collect();
-    Some(if said.is_empty() {
-        format!("tofu refused {} and said why nowhere", result.verb)
-    } else {
-        said.join(". ")
-    })
 }

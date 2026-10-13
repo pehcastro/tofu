@@ -52,6 +52,8 @@ pub(crate) struct Frame {
     blocks: Vec<Block>,
     spans: Vec<Span>,
     cursor: Option<Cursor>,
+    rows: usize,
+    cols: usize,
 }
 
 pub(crate) struct Painted {
@@ -73,7 +75,8 @@ pub(crate) fn cell_size(window: &Window) -> Size<Pixels> {
     let width = text
         .em_advance(text.resolve_font(&mono()), px(FONT_SIZE))
         .unwrap_or(px(FONT_SIZE * FALLBACK_ADVANCE));
-    size(width, px((FONT_SIZE * LINE_HEIGHT).round()))
+    let scale = window.scale_factor();
+    size(width, px((FONT_SIZE * LINE_HEIGHT * scale).round() / scale))
 }
 
 struct Layout {
@@ -295,43 +298,44 @@ pub(crate) fn frame(
         blocks: layout.blocks,
         spans: layout.spans,
         cursor,
+        rows: layout.row + 1,
+        cols: end,
     }
 }
 
 pub(crate) fn prepare(
     frame: &Frame,
-    origin: Point<Pixels>,
+    view: Bounds<Pixels>,
     cell: Size<Pixels>,
     focused: bool,
     palette: &Palette,
     thumb: Option<PaintQuad>,
     window: &Window,
 ) -> Painted {
+    let origin = view.origin;
     let scale = window.scale_factor();
-    let snap = |at: Point<Pixels>, round: fn(f32) -> f32| {
-        at.map(|value| px(round(f32::from(value) * scale) / scale))
-    };
-    let corner = |row: usize, col: usize| {
+    let at = |row: usize, col: usize| {
         point(
             origin.x + cell.width * col as f32,
             origin.y + cell.height * row as f32,
         )
+        .map(|value| px((f32::from(value) * scale).round() / scale))
     };
-    let at = |row: usize, col: usize| snap(corner(row, col), f32::floor);
     let cells = |row: usize, col: usize, rows: usize, cols: usize| {
-        Bounds::from_corners(
-            at(row, col),
-            snap(corner(row + rows, col + cols), f32::ceil),
-        )
+        Bounds::from_corners(at(row, col), at(row + rows, col + cols))
     };
     let backgrounds = frame
         .blocks
         .iter()
         .map(|block| {
-            fill(
-                cells(block.row, block.col, block.rows, block.cols),
-                block.color,
-            )
+            let mut rect = cells(block.row, block.col, block.rows, block.cols);
+            if block.col + block.cols >= frame.cols {
+                rect.size.width = view.right() - rect.left();
+            }
+            if block.row + block.rows >= frame.rows {
+                rect.size.height = view.bottom() - rect.top();
+            }
+            fill(rect, block.color)
         })
         .collect();
     let cursor = frame.cursor.and_then(|cursor| {

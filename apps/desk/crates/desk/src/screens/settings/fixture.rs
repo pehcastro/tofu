@@ -5,6 +5,7 @@ use gpui::SharedString;
 pub enum DeskPage {
     Keys,
     Editor,
+    Terminal,
     Git,
 }
 
@@ -13,6 +14,7 @@ impl DeskPage {
         match self {
             DeskPage::Keys => "Keyboard",
             DeskPage::Editor => "Editor",
+            DeskPage::Terminal => "Terminal",
             DeskPage::Git => "Git",
         }
     }
@@ -21,6 +23,7 @@ impl DeskPage {
         match self {
             DeskPage::Keys => &KEYS,
             DeskPage::Editor => &EDITOR,
+            DeskPage::Terminal => &TERMINAL,
             DeskPage::Git => &GIT,
         }
     }
@@ -32,8 +35,15 @@ pub enum PageId {
     Tofu(SharedString),
 }
 
-pub const DESK_NAV: (&str, [DeskPage; 3]) =
-    ("Desk", [DeskPage::Keys, DeskPage::Editor, DeskPage::Git]);
+pub const DESK_NAV: (&str, [DeskPage; 4]) = (
+    "Desk",
+    [
+        DeskPage::Keys,
+        DeskPage::Editor,
+        DeskPage::Terminal,
+        DeskPage::Git,
+    ],
+);
 pub const TOFU_NAV: &str = "tofu";
 pub const FIRST_TOFU_PAGE: &str = "Turn";
 
@@ -93,6 +103,12 @@ const EDITOR: Page = Page {
             control: Control::Pack,
         }],
     )],
+};
+
+const TERMINAL: Page = Page {
+    title: "Terminal",
+    desc: "The shell a new terminal starts. A terminal already open keeps its own.",
+    groups: &[],
 };
 
 const GIT: Page = Page {

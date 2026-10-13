@@ -3,6 +3,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 include!(concat!(env!("OUT_DIR"), "/protocol.rs"));
 
+pub type FileEditOp = Op;
+pub type TurnCompletedStatus = TurnStatus;
+
 pub trait Request {
     const METHOD: &'static str;
     type Params: Serialize;

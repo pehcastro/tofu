@@ -1089,7 +1089,17 @@ impl<V: 'static> TilingBoard<V> {
                 }
             });
         });
-        let trailing = div().relative().child(close);
+        let badge = shown
+            .modules
+            .get(shown.active)
+            .filter(|module| **module == Module::Terminal)
+            .and_then(|module| (self.host.subtitle)(module, cx));
+        let trailing = div()
+            .relative()
+            .flex()
+            .items_center()
+            .children(badge)
+            .child(close);
         Header::Tabs(
             strip.new_button(plus).into_any_element(),
             Some(trailing.into_any_element()),

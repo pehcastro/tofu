@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::ModelError;
-use crate::protocol::{StatusReport, status::Record};
+use crate::protocol::{self as wire, StatusKind, StatusRecord, StatusReport};
 
 const LEAD: &str = "tofu";
 const AGENTS: &str = "agents/";
@@ -17,17 +17,17 @@ pub enum StatusState {
 }
 
 impl StatusState {
-    pub fn read(word: &str) -> Result<Self, ModelError> {
-        match word {
-            "idle" => Ok(Self::Idle),
-            "working" => Ok(Self::Working),
-            "done" => Ok(Self::Done),
-            "blocked" => Ok(Self::Blocked),
-            "error" => Ok(Self::Error),
-            "clear" => Ok(Self::Clear),
-            other => Err(ModelError::UnknownValue {
+    pub fn read(state: &wire::StatusState) -> Result<Self, ModelError> {
+        match state {
+            wire::StatusState::Idle => Ok(Self::Idle),
+            wire::StatusState::Working => Ok(Self::Working),
+            wire::StatusState::Done => Ok(Self::Done),
+            wire::StatusState::Blocked => Ok(Self::Blocked),
+            wire::StatusState::Error => Ok(Self::Error),
+            wire::StatusState::Clear => Ok(Self::Clear),
+            wire::StatusState::Unknown(other) => Err(ModelError::UnknownValue {
                 field: "status state",
-                value: other.to_owned(),
+                value: other.clone(),
             }),
         }
     }
@@ -47,8 +47,10 @@ impl StatusState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
     pub state: StatusState,
-    pub kind: Option<String>,
+    pub kind: Option<StatusKind>,
     pub msg: Option<String>,
+    pub at: Option<String>,
+    pub ask: Option<String>,
 }
 
 pub type Change = (String, StatusState);
@@ -96,6 +98,8 @@ impl Statuses {
             state: StatusState::read(&report.state)?,
             kind: report.kind.clone(),
             msg: report.msg.clone(),
+            at: report.at.clone(),
+            ask: report.ask.clone(),
         };
         let records = self.sessions.entry(report.session.clone()).or_default();
         if status.state == StatusState::Clear {
@@ -106,7 +110,11 @@ impl Statuses {
         Ok(())
     }
 
-    pub fn listed(&mut self, session: &str, list: &[Record]) -> Result<Vec<Change>, ModelError> {
+    pub fn listed(
+        &mut self,
+        session: &str,
+        list: &[StatusRecord],
+    ) -> Result<Vec<Change>, ModelError> {
         let mut now = BTreeMap::new();
         for record in list {
             let id = record.id.clone().ok_or_else(|| ModelError::UnknownValue {
@@ -119,6 +127,8 @@ impl Statuses {
                     state,
                     kind: record.kind.clone(),
                     msg: record.msg.clone(),
+                    at: record.at.clone(),
+                    ask: record.ask.clone(),
                 };
                 now.insert(id, status);
             }

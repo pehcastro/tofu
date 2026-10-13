@@ -124,8 +124,10 @@ impl Store {
                 if let Notification::Resync(_) = notification {
                     self.statuses.again();
                 }
-                let id = session_of(notification)?;
-                self.session(id).apply(notification)
+                match session_of(notification)? {
+                    Some(id) => self.session(id).apply(notification),
+                    None => Ok(()),
+                }
             }
             Event::Request {
                 id,
@@ -157,9 +159,15 @@ impl Store {
     }
 }
 
-fn session_of(notification: &Notification) -> Result<&str, ModelError> {
+fn session_of(notification: &Notification) -> Result<Option<&str>, ModelError> {
     use Notification as N;
-    Ok(match notification {
+    Ok(Some(match notification {
+        N::BoardyChanged(_) | N::ScratchChanged(_) => return Ok(None),
+        N::AccountState(e) => &e.session,
+        N::SessionTurnsUpdated(e) => &e.session,
+        N::SettingsChanged(e) => &e.session,
+        N::ShellReady(e) => &e.session,
+        N::TurnAccount(e) => &e.session,
         N::AgentEnded(e) => &e.session,
         N::AgentStarted(e) => &e.session,
         N::AgentUpdated(e) => &e.session,
@@ -193,5 +201,5 @@ fn session_of(notification: &Notification) -> Result<&str, ModelError> {
         N::TurnStarted(e) => &e.session,
         N::UsageUpdated(e) => &e.session,
         N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
-    })
+    }))
 }

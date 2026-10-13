@@ -2,11 +2,11 @@ use std::env;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use desk_terminal::{Palette, Terminal, TerminalEvent};
+use desk_terminal::{Palette, Terminal, TerminalEvent, shells};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, SharedString,
+    AnyElement, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, SharedString,
     Subscription, Task, Window, div, prelude::*, rgb_to_hsla,
 };
 
@@ -61,6 +61,14 @@ fn log_pid(terminal: &Terminal) {
 impl TerminalModule {
     pub fn label(&self, cx: &App) -> Option<SharedString> {
         self.terminal.read(cx).title()
+    }
+
+    pub fn badge(&self, cx: &App) -> AnyElement {
+        div()
+            .text_xs()
+            .text_color(ActiveTheme::theme(cx).color(ColorToken::TextMuted))
+            .child(shells::name(self.terminal.read(cx).shell()))
+            .into_any_element()
     }
 
     pub fn ringing(&self) -> bool {

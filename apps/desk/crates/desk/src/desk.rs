@@ -1,4 +1,6 @@
 use crate::modules::chat::Find;
+#[cfg(all(feature = "screen-work", feature = "screen-settings"))]
+use crate::modules::chat::SettingsMoved;
 #[cfg(feature = "screen-work")]
 use crate::modules::chat::{Chat, Listed, Touched};
 #[cfg(feature = "screen-work")]
@@ -28,8 +30,11 @@ use crate::title_bar::{Bell, ask_github, github, title_bar};
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
+use desk_core::model::Store;
+#[cfg(feature = "screen-work")]
 use desk_core::protocol::{
-    AccountStatusState, Accounts as AccountList, CronJob, QuotaWindow, Role, WindowStatus,
+    AccountStateChanged, AccountStateChangedState, AccountStatusState, Accounts as AccountList,
+    CronJob, QuotaWindow, Role, WindowStatus,
 };
 #[cfg(feature = "screen-work")]
 use desk_core::query::Answer;
@@ -46,6 +51,8 @@ use desk_ui::components::paint::{ink, ring};
 use desk_ui::components::palette::{Palette, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
+#[cfg(feature = "screen-work")]
+use desk_ui::components::sidebar::SessionState;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sidebar::{SessionAt, unnamed};
@@ -477,13 +484,13 @@ fn accounts(
     answer: &Answer<AccountList>,
     quota: &[QuotaWindow],
     source: Option<&str>,
-) -> (Accounts, Serving) {
+) -> (Accounts, Serving, Vec<i64>) {
     let Some(read) = &answer.read else {
         let accounts = match &answer.failed {
             Some(error) => Accounts::Unread(error.to_string().into()),
             None => Accounts::Reading,
         };
-        return (accounts, Serving::Unpicked);
+        return (accounts, Serving::Unpicked, Vec::new());
     };
     let now = chrono::Local::now();
     let mut accounts: Vec<(Account, Room)> = read
@@ -523,9 +530,11 @@ fn accounts(
         )
     });
     let serving = predicted_account(&accounts, source);
+    let ids = accounts.iter().map(|(_, room)| room.id).collect();
     (
         Accounts::Read(accounts.into_iter().map(|(account, _)| account).collect()),
         serving,
+        ids,
     )
 }
 
@@ -559,6 +568,55 @@ fn standing(state: &AccountStatusState) -> Standing {
         | AccountStatusState::Unchecked
         | AccountStatusState::Unknown(_) => Standing::Trouble(word()),
     }
+}
+
+#[cfg(feature = "screen-work")]
+fn held(notice: &AccountStateChanged, ids: &[i64], accounts: &mut Accounts, serving: &mut Serving) {
+    let word = match &notice.state {
+        AccountStateChangedState::Serving => return,
+        AccountStateChangedState::RateLimited => "rate limited",
+        AccountStateChangedState::Spent => "spent",
+        AccountStateChangedState::Unknown(raw) => {
+            return eprintln!("desk: account.state {raw} is not a state the desk knows");
+        }
+    };
+    let (Accounts::Read(read), Serving::Account { at, why, spent }) = (accounts, serving) else {
+        return;
+    };
+    if ids.get(*at) != Some(&notice.account_id) {
+        return;
+    }
+    let Some(account) = read
+        .get_mut(*at)
+        .filter(|account| *account.source == notice.source)
+    else {
+        return;
+    };
+    let retry = notice
+        .retry_at
+        .as_deref()
+        .and_then(|stamp| resets(stamp, chrono::Local::now()));
+    let said = match &retry {
+        Some(reset) => format!("{word}, retry {}", reset.left),
+        None => word.to_owned(),
+    };
+    *why = match retry {
+        Some(reset) => format!("{said}. {}", reset.at),
+        None => said.clone(),
+    }
+    .into();
+    account.standing = Standing::Trouble(said.into());
+    *spent = true;
+}
+
+#[cfg(feature = "screen-work")]
+fn running(store: &Store) -> Vec<&str> {
+    store
+        .sessions
+        .iter()
+        .filter(|(_, session)| session.turns.values().any(|turn| turn.status.is_none()))
+        .map(|(id, _)| id.as_str())
+        .collect()
 }
 
 #[cfg(feature = "screen-work")]
@@ -1533,6 +1591,10 @@ impl Desk {
                 cx.notify();
             }),
             cx.subscribe(&chat, |desk, _, _: &Touched, cx| desk.reread_head(cx)),
+            #[cfg(feature = "screen-settings")]
+            cx.subscribe(&chat, |desk, _, _: &SettingsMoved, cx| {
+                desk.reread_settings(cx)
+            }),
             cx.observe(&chat, |desk, _, cx| {
                 desk.track_running(cx);
                 desk.remember_state(cx);
@@ -1646,6 +1708,20 @@ impl Desk {
         }
     }
 
+    #[cfg(feature = "screen-settings")]
+    fn reread_settings(&mut self, cx: &mut Context<Self>) {
+        let views: Vec<Entity<SettingsScreen>> = std::iter::once(&self.shown)
+            .chain(&self.parked)
+            .filter_map(|shown| match &shown.body {
+                Body::View(view) => view.clone().downcast::<SettingsScreen>().ok(),
+                Body::Work(_) | Body::Whole(_) => None,
+            })
+            .collect();
+        for settings in views {
+            settings.update(cx, |settings, cx| settings.reread(cx));
+        }
+    }
+
     fn reread_head(&mut self, cx: &mut Context<Self>) {
         let Some(folder) = self.projects.head.as_ref().map(|head| head.folder.clone()) else {
             return;
@@ -1675,7 +1751,13 @@ impl Desk {
         let chat = work.read(cx).chat().read(cx);
         let busy = chat.open_id().filter(|_| chat.busy(cx));
         let problem = chat.problem().cloned();
-        let moved = project::keep_active(&mut self.projects.active, chat.rows(), busy);
+        let mut moved = project::keep_active(&mut self.projects.active, chat.rows(), busy);
+        for id in running(chat.store().read(cx)) {
+            if !self.projects.active.iter().any(|known| known == id) {
+                self.projects.active.push(id.to_owned());
+                moved = true;
+            }
+        }
         if moved {
             eprintln!("desk: active {}", self.projects.active.join(" "));
             cx.notify();
@@ -1699,7 +1781,14 @@ impl Desk {
             open: chat.open_id(),
             statuses: &chat.store().read(cx).statuses,
         };
-        Some(project::sidebar(head, chat.rows(), &opened))
+        let mut project = project::sidebar(head, chat.rows(), &opened);
+        let running = running(chat.store().read(cx));
+        for (id, session) in self.projects.active.iter().zip(&mut project.active) {
+            if running.contains(&id.as_str()) && session.state != SessionState::Waiting {
+                session.state = SessionState::Running;
+            }
+        }
+        Some(project)
     }
 
     fn session_id(&self, at: SessionAt, chat: &Chat) -> Option<String> {
@@ -1794,7 +1883,19 @@ impl Desk {
             .open_id()
             .and_then(|id| Some((id, store.sessions.get(id)?)));
         let source = chat.source(cx);
-        let (accounts, serving) = accounts(chat.accounts(), &store.quota, source.as_deref());
+        let (mut accounts, mut serving, ids) =
+            accounts(chat.accounts(), &store.quota, source.as_deref());
+        let notice = open
+            .and_then(|(_, session)| session.account.as_ref())
+            .or_else(|| {
+                store
+                    .sessions
+                    .values()
+                    .find_map(|session| session.account.as_ref())
+            });
+        if let Some(notice) = notice {
+            held(notice, &ids, &mut accounts, &mut serving);
+        }
         let Some((id, session)) = open else {
             return Status {
                 branch,

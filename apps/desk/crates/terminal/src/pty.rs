@@ -1,16 +1,16 @@
+use crate::shells;
 use flume::Receiver;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::thread;
 use std::time::Instant;
 
 const READ_CHUNK: usize = 16 * 1024;
 const TERM_PROGRAM: &str = "tofu-desk";
 const BYTES_LOG_VARIABLE: &str = "DESK_TERMINAL_BYTES";
-const DESK_FOLDER: &str = "tofu-desk";
 const BYTES_LOG_FILE: &str = "terminal-bytes.log";
 const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
 
@@ -26,47 +26,9 @@ pub(crate) struct Pty {
     pid: Option<u32>,
 }
 
-#[cfg(windows)]
-pub(crate) fn pick_shell() -> PathBuf {
-    let installed = env::var_os("ProgramFiles").map(|folder| {
-        PathBuf::from(folder)
-            .join("PowerShell")
-            .join("7")
-            .join("pwsh.exe")
-    });
-    let on_path = env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths)
-            .map(|folder| folder.join("pwsh.exe"))
-            .find(|candidate| candidate.is_file())
-    });
-    let windows = env::var_os("SystemRoot").map(|root| {
-        PathBuf::from(root)
-            .join("System32")
-            .join("WindowsPowerShell")
-            .join("v1.0")
-            .join("powershell.exe")
-    });
-    [installed, on_path, windows]
-        .into_iter()
-        .flatten()
-        .find(|candidate| candidate.is_file())
-        .or_else(|| env::var_os("ComSpec").map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("cmd.exe"))
-}
-
-#[cfg(not(windows))]
-pub(crate) fn pick_shell() -> PathBuf {
-    env::var_os("SHELL").map_or_else(|| PathBuf::from("/bin/sh"), PathBuf::from)
-}
-
 fn command(shell: &Path, cwd: &Path) -> CommandBuilder {
     let mut command = CommandBuilder::new(shell);
-    let powershell = shell.file_stem().is_some_and(|stem| {
-        POWERSHELLS
-            .iter()
-            .any(|name| stem.eq_ignore_ascii_case(name))
-    });
-    if powershell {
+    if POWERSHELLS.contains(&shells::name(shell).as_str()) {
         command.arg("-NoLogo");
     }
     command.cwd(cwd);
@@ -79,17 +41,7 @@ fn command(shell: &Path, cwd: &Path) -> CommandBuilder {
 
 fn bytes_log() -> Option<File> {
     env::var_os(BYTES_LOG_VARIABLE)?;
-    let home = |name: &str| {
-        env::var_os(name)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    let config = if cfg!(windows) {
-        home("APPDATA")
-    } else {
-        home("XDG_CONFIG_HOME").or_else(|| home("HOME").map(|home| home.join(".config")))
-    };
-    let Some(folder) = config.map(|config| config.join(DESK_FOLDER)) else {
+    let Some(folder) = shells::desk_folder() else {
         eprintln!("terminal: {BYTES_LOG_VARIABLE} is set but there is no config folder");
         return None;
     };

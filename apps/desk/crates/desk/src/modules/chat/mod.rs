@@ -19,8 +19,8 @@ use desk_core::protocol::{
     Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
     PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionInfo,
     SessionListParams, SessionOpenParams, SessionOpenResult, SessionParams, SessionRenameParams,
-    SessionSetParams, SessionState, SessionTrace, ShellParams, TurnCompleted, TurnParams,
-    TurnSendParams, TurnSteerParams, request, subagent,
+    SessionSetParams, SessionState, SessionTrace, ShellParams, StatusListParams, TurnCompleted,
+    TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
@@ -107,6 +107,7 @@ pub struct Chat {
     link: Link,
     store: Entity<Store>,
     orders: BTreeMap<String, Vec<Entry>>,
+    awaiting_delta: BTreeMap<String, Instant>,
     slots: Vec<Slot>,
     opening: Opening,
     items: Rc<Vec<Item>>,
@@ -162,6 +163,10 @@ impl EventEmitter<Listed> for Chat {}
 pub struct Touched;
 
 impl EventEmitter<Touched> for Chat {}
+
+pub struct SettingsMoved;
+
+impl EventEmitter<SettingsMoved> for Chat {}
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let store = cx.new(|_| Store::default());
@@ -422,6 +427,7 @@ impl Chat {
             link,
             store,
             orders: BTreeMap::new(),
+            awaiting_delta: BTreeMap::new(),
             slots: Vec::new(),
             opening: Opening::Closed,
             items: Rc::default(),
@@ -546,13 +552,10 @@ impl Chat {
         if session.is_some() && session.as_deref() == self.open_id() {
             return;
         }
-        if self.busy(cx) {
-            return self.fail(
-                "a turn is running: stop it before opening another session".to_owned(),
-                cx,
-            );
+        match self.running(cx) {
+            Some((busy, _)) => self.step_aside(&busy, cx),
+            None => self.restart(cx),
         }
-        self.restart(cx);
         self.problem = None;
         self.set_opening(Opening::Pending, cx);
         let params = SessionOpenParams {
@@ -713,6 +716,15 @@ impl Chat {
         self.ask_due(cx);
     }
 
+    fn step_aside(&mut self, busy: &str, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, cx| {
+            store.sessions.retain(|id, _| id == busy);
+            cx.notify();
+        });
+        self.orders.retain(|id, _| id == busy);
+        self.forget_view(cx);
+    }
+
     pub fn restart(&mut self, cx: &mut Context<Self>) {
         self.store.update(cx, |store, cx| {
             store.sessions.clear();
@@ -720,6 +732,10 @@ impl Chat {
             cx.notify();
         });
         self.orders.clear();
+        self.forget_view(cx);
+    }
+
+    fn forget_view(&mut self, cx: &mut Context<Self>) {
         self.slots.clear();
         self.set_opening(Opening::Closed, cx);
         self.items = Rc::default();
@@ -772,6 +788,9 @@ impl Chat {
         }
         let (session, entry) = match event {
             Event::Notification(Notification::TurnStarted(started)) => {
+                eprintln!("desk: turn {} started", started.turn);
+                self.awaiting_delta
+                    .insert(started.turn.clone(), Instant::now());
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
@@ -817,9 +836,36 @@ impl Chat {
                     exited.session, exited.shell, exited.exit_code, exited.killed
                 );
             }
+            Event::Notification(Notification::ShellReady(ready)) => {
+                return eprintln!(
+                    "desk: session {} shell {} ready port {}",
+                    ready.session, ready.shell, ready.port
+                );
+            }
+            Event::Notification(Notification::TurnAccount(account)) => {
+                return eprintln!(
+                    "desk: session {} turn {} account {} {} {}",
+                    account.session,
+                    account.turn,
+                    account.source,
+                    account.account_id,
+                    account.model
+                );
+            }
+            Event::Notification(notification @ Notification::AccountState(_)) => {
+                self.accounts.notified();
+                return eprintln!("desk: tofu sent {notification:?}");
+            }
             Event::Notification(Notification::FileEdit(edit)) => {
                 cx.set_global(EditedFile(PathBuf::from(&edit.path)));
                 return cx.emit(Touched);
+            }
+            Event::Notification(Notification::SettingsChanged(changed)) => {
+                eprintln!(
+                    "desk: settings.changed {:?} {} = {}",
+                    changed.scope, changed.key, changed.value
+                );
+                return cx.emit(SettingsMoved);
             }
             Event::Notification(Notification::SessionSettings(settings)) => {
                 eprintln!(
@@ -842,10 +888,24 @@ impl Chat {
                 | Notification::UsageUpdated(_)),
             ) => return eprintln!("desk: tofu sent {notification:?}"),
             Event::Notification(Notification::Status(report)) => {
-                return eprintln!("desk: status {} {}", report.item, report.state);
+                return eprintln!(
+                    "desk: status {} {}",
+                    report.item,
+                    String::from(report.state.clone())
+                );
             }
             Event::Request { request, .. } => {
                 eprintln!("desk: tofu asks {request:?}");
+                return;
+            }
+            Event::Notification(Notification::MessageDelta(delta)) => {
+                if let Some(at) = self.awaiting_delta.remove(&delta.turn) {
+                    eprintln!(
+                        "desk: turn {} first delta after {} ms",
+                        delta.turn,
+                        at.elapsed().as_millis()
+                    );
+                }
                 return;
             }
             Event::Notification(_) | Event::Unreadable { .. } => return,
@@ -1347,7 +1407,10 @@ impl Chat {
                 .store
                 .update(cx, |store, _| store.statuses.take_due(&open))
         {
-            self.call::<request::StatusList>(&NoParams {}, cx, move |chat, list, cx| {
+            let params = StatusListParams {
+                session: Some(open.clone()),
+            };
+            self.call::<request::StatusList>(&params, cx, move |chat, list, cx| {
                 let listed = chat.store.update(cx, |store, cx| {
                     cx.notify();
                     store.statuses.listed(&open, &list.records)

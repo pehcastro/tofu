@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use desk_core::protocol::request::{QuerySettings, SettingsSet};
-use desk_core::protocol::{NoParams, Request, SettingsReport, SettingsSetParams, VerbResult};
+use desk_core::protocol::{self, NoParams, Request, SettingsReport, SettingsSetParams};
 use desk_core::query::{Answer, QueryError, Read};
-use desk_core::settings::{self as wire, Settings, Value, refusal};
+use desk_core::settings::{self as wire, Settings, Value};
 use desk_tiling::SHORTCUTS;
 use desk_ui::components::chip::flat_chip;
 use desk_ui::components::form::{TextInput, input, switch_bare};
@@ -30,6 +30,7 @@ use gpui::{
 use super::fixture::{
     Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, KEYS_GROUP, PageId, Scope, Setting, TOFU_NAV,
 };
+use super::terminal::TerminalPage;
 use crate::modules::chat::Chat;
 use crate::screens::frame;
 
@@ -68,6 +69,7 @@ pub struct Rows {
     switching: HashMap<String, bool>,
     problems: HashMap<String, SharedString>,
     fields: HashMap<String, Field>,
+    shells: Option<Entity<TerminalPage>>,
 }
 
 struct Field {
@@ -93,6 +95,7 @@ impl Rows {
             switching: HashMap::new(),
             problems: HashMap::new(),
             fields: HashMap::new(),
+            shells: None,
         }
     }
 
@@ -106,6 +109,10 @@ impl Rows {
         }
         self.tofu = Some((chat.downgrade(), chat.entity_id()));
         self.answer.want();
+        self.reread(cx);
+    }
+
+    pub fn reread(&mut self, cx: &mut Context<Self>) {
         self.answer.again();
         self.ask(cx);
         cx.notify();
@@ -198,7 +205,7 @@ impl Rows {
         let params = SettingsSetParams {
             key: key.clone(),
             value,
-            scope: Some(scope.wire().to_owned()),
+            scope: Some(scope.wire().to_owned().into()),
         };
         self.send::<SettingsSet>(params, cx, move |rows, reply, cx| {
             rows.written(key, reply, cx)
@@ -206,8 +213,13 @@ impl Rows {
         cx.notify();
     }
 
-    fn written(&mut self, key: String, reply: Result<VerbResult, String>, cx: &mut Context<Self>) {
-        match reply.map_or_else(Some, |result| refusal(&result)) {
+    fn written(
+        &mut self,
+        key: String,
+        reply: Result<protocol::SettingsSet, String>,
+        cx: &mut Context<Self>,
+    ) {
+        match reply.err() {
             Some(problem) => {
                 eprintln!("desk: settings {key} refused: {problem}");
                 self.switching.remove(&key);
@@ -570,6 +582,13 @@ impl Rows {
                 .map(Into::into),
             theme,
         );
+        if page == DeskPage::Terminal {
+            let shells = self
+                .shells
+                .get_or_insert_with(|| cx.new(|_| TerminalPage::new()))
+                .clone();
+            return div().child(title).child(shells);
+        }
         if page == DeskPage::Keys {
             let keys = SHORTCUTS.iter().map(|shortcut| SettingRow {
                 id: shortcut.label.into(),

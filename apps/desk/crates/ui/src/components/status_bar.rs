@@ -59,6 +59,7 @@ const BAR_HEIGHT: f32 = 5.0;
 const BAR_RADIUS: f32 = 3.0;
 const BAR_TRACK: f32 = 0.08;
 const BAR_FILL: f32 = 0.6;
+const HELD_OPACITY: f32 = 0.7;
 
 #[derive(Clone)]
 pub struct Branch {
@@ -402,7 +403,18 @@ fn serving_item(
                 .and_then(|email| email.split('@').next())
                 .map(|login| dim(login.to_owned(), theme));
             let tightest = account.windows.iter().max_by_key(|window| window.percent);
-            let item = item.child(account.provider.clone()).children(login);
+            let held = match (&account.standing, spent) {
+                (Standing::Trouble(word) | Standing::Reauth(word), true) => Some(word.clone()),
+                _ => None,
+            };
+            let item = item
+                .when(spent, |item| {
+                    item.text_color(theme.color(ColorToken::StatusWarn))
+                        .opacity(HELD_OPACITY)
+                })
+                .child(account.provider.clone())
+                .children(login)
+                .children(held);
             let item = match tightest {
                 Some(usage) => {
                     let level = if spent {

@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use super::ModelError;
 use crate::protocol::{
-    AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit, FileEditOp, ModelPick,
-    Notification, Origin, OriginKind, PlanStep, QuestionRequest, QuotaWindow, RequestId,
-    SessionForked, ShellKept, ShellNow, ShellNowState, ShellReady, TurnCompletedStatus,
-    UsageUpdated,
+    AccountStateChanged, AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit,
+    FileEditOp, ModelPick, Notification, Origin, OriginKind, PlanStep, QuestionRequest,
+    QuotaWindow, RequestId, SessionForked, SettingsChanged, ShellKept, ShellNow, ShellNowState,
+    ShellReady, TurnAccount, TurnCompletedStatus, TurnDigest, UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +35,8 @@ pub struct Turn {
     pub started_at: String,
     pub status: Option<TurnCompletedStatus>,
     pub worked_for_ms: i64,
+    pub account: Option<TurnAccount>,
+    pub digest: Option<TurnDigest>,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +126,8 @@ pub struct Session {
     pub cron: Option<CronState>,
     pub pick: Option<ModelPick>,
     pub dropped: i64,
+    pub account: Option<AccountStateChanged>,
+    pub settings: BTreeMap<String, SettingsChanged>,
 }
 
 fn known(state: &AgentState) -> Result<AgentState, ModelError> {
@@ -303,9 +307,37 @@ impl Session {
                         started_at: e.started_at.clone(),
                         status: None,
                         worked_for_ms: 0,
+                        account: None,
+                        digest: None,
                     },
                 );
             }
+            N::TurnAccount(e) => {
+                self.turns
+                    .get_mut(&e.turn)
+                    .ok_or_else(|| orphan("turn.account", &e.turn))?
+                    .account = Some((**e).clone());
+            }
+            N::SessionTurnsUpdated(e) => {
+                if let Some(turn) = self.turns.get_mut(&e.turn) {
+                    turn.digest = Some(e.digest.clone());
+                }
+            }
+            N::AccountState(e) => self.account = Some((**e).clone()),
+            N::SettingsChanged(e) => {
+                self.settings.insert(e.key.clone(), (**e).clone());
+            }
+            N::ShellReady(e) => {
+                let shell = self
+                    .shells
+                    .get_mut(&e.shell)
+                    .ok_or_else(|| orphan("shell.ready", &e.shell))?;
+                shell.port = u16::try_from(e.port).ok();
+                if e.r#ref.is_some() {
+                    shell.mention.clone_from(&e.r#ref);
+                }
+            }
+            N::BoardyChanged(_) | N::ScratchChanged(_) => {}
             N::TurnCompleted(e) => {
                 if let TurnCompletedStatus::Unknown(value) = &e.status {
                     return Err(ModelError::UnknownValue {

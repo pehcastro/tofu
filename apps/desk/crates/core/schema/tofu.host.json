@@ -82,6 +82,57 @@
       ],
       "type": "object"
     },
+    "AccountStateChanged": {
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "retry_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "serving",
+            "rate_limited",
+            "spent"
+          ],
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "source",
+        "account_id",
+        "state"
+      ],
+      "type": "object"
+    },
     "AccountStatus": {
       "additionalProperties": false,
       "properties": {
@@ -350,6 +401,9 @@
           "type": "string"
         },
         "task": {
+          "type": "string"
+        },
+        "ticket": {
           "type": "string"
         },
         "turn": {
@@ -654,6 +708,24 @@
         "version",
         "heading",
         "body"
+      ],
+      "type": "object"
+    },
+    "CommandList": {
+      "additionalProperties": false,
+      "properties": {
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/command.Command"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "commands"
       ],
       "type": "object"
     },
@@ -1964,6 +2036,30 @@
       ],
       "type": "object"
     },
+    "LabelResult": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "outcome",
+        "kind",
+        "verdict"
+      ],
+      "type": "object"
+    },
     "LearnApplyParams": {
       "additionalProperties": false,
       "properties": {
@@ -2028,6 +2124,9 @@
           "type": "integer"
         },
         "point": {
+          "type": "string"
+        },
+        "session": {
           "type": "string"
         }
       },
@@ -2457,6 +2556,30 @@
       "required": [
         "role",
         "provider"
+      ],
+      "type": "object"
+    },
+    "LoginStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "change": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "account",
+        "change"
       ],
       "type": "object"
     },
@@ -3302,21 +3425,6 @@
       ],
       "type": "object"
     },
-    "Problem": {
-      "additionalProperties": false,
-      "properties": {
-        "hint": {
-          "type": "string"
-        },
-        "what": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "what"
-      ],
-      "type": "object"
-    },
     "QuestionAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -3489,8 +3597,15 @@
         "account": {
           "type": "string"
         },
+        "account_id": {
+          "type": "integer"
+        },
         "percent": {
           "type": "number"
+        },
+        "read_at": {
+          "format": "date-time",
+          "type": "string"
         },
         "reported": {
           "type": "boolean"
@@ -3498,6 +3613,12 @@
         "resetsAt": {
           "format": "date-time",
           "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "stale": {
+          "type": "boolean"
         },
         "window": {
           "type": "string"
@@ -3507,7 +3628,8 @@
         "account",
         "window",
         "percent",
-        "reported"
+        "reported",
+        "stale"
       ],
       "type": "object"
     },
@@ -3883,6 +4005,48 @@
       ],
       "type": "object"
     },
+    "ScratchCleanParams": {
+      "additionalProperties": false,
+      "properties": {
+        "cache": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "ScratchCleaned": {
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "type": "boolean"
+        },
+        "removed": {
+          "items": {
+            "$ref": "#/$defs/sys.ScratchFolder"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "dry_run",
+        "removed"
+      ],
+      "type": "object"
+    },
     "SendNowParams": {
       "additionalProperties": false,
       "properties": {
@@ -3942,10 +4106,31 @@
       ],
       "type": "object"
     },
+    "SessionBranchAt": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "item"
+      ],
+      "type": "object"
+    },
     "SessionBranchParams": {
       "additionalProperties": false,
       "properties": {
+        "at": {
+          "$ref": "#/$defs/SessionBranchAt"
+        },
+        "effort": {
+          "type": "string"
+        },
         "kind": {
+          "type": "string"
+        },
+        "model": {
           "type": "string"
         },
         "name": {
@@ -3982,7 +4167,13 @@
         "carried": {
           "type": "integer"
         },
+        "effort": {
+          "type": "string"
+        },
         "handle": {
+          "type": "string"
+        },
+        "model": {
           "type": "string"
         },
         "owns": {
@@ -4010,6 +4201,21 @@
         "parent",
         "owns",
         "carried"
+      ],
+      "type": "object"
+    },
+    "SessionCloseParams": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "stop": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session"
       ],
       "type": "object"
     },
@@ -4921,6 +5127,15 @@
             "null"
           ]
         },
+        "memory": {
+          "items": {
+            "$ref": "#/$defs/session.TracedMemory"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "messages": {
           "items": {
             "$ref": "#/$defs/TraceMessage"
@@ -4975,6 +5190,66 @@
         "requests",
         "calls",
         "cache"
+      ],
+      "type": "object"
+    },
+    "SessionTurnUpdated": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/TurnDigest"
+        },
+        "item": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "SessionTurns": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "snapshots": {
+          "type": "integer"
+        },
+        "turns": {
+          "items": {
+            "$ref": "#/$defs/TurnDigest"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "session",
+        "turns",
+        "snapshots"
       ],
       "type": "object"
     },
@@ -5071,10 +5346,47 @@
         "category": {
           "type": "string"
         },
+        "choices": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
         "key": {
           "type": "string"
         },
+        "kind": {
+          "enum": [
+            "bool",
+            "int",
+            "text",
+            "choice",
+            "list"
+          ],
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "min": {
+          "type": "integer"
+        },
+        "restart": {
+          "type": "boolean"
+        },
         "source": {
+          "type": "string"
+        },
+        "unit": {
           "type": "string"
         },
         "value": {}
@@ -5083,6 +5395,57 @@
         "key",
         "category",
         "value",
+        "source",
+        "label",
+        "description",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SettingsChanged": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "project"
+          ],
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "key",
+        "value",
+        "scope",
         "source"
       ],
       "type": "object"
@@ -5113,6 +5476,32 @@
       ],
       "type": "object"
     },
+    "SettingsSet": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "project"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "key",
+        "value",
+        "scope",
+        "source"
+      ],
+      "type": "object"
+    },
     "SettingsSetParams": {
       "additionalProperties": false,
       "properties": {
@@ -5120,6 +5509,10 @@
           "type": "string"
         },
         "scope": {
+          "enum": [
+            "global",
+            "project"
+          ],
           "type": "string"
         },
         "value": {
@@ -5195,6 +5588,44 @@
       ],
       "type": "object"
     },
+    "ShellListening": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "shell",
+        "port"
+      ],
+      "type": "object"
+    },
     "ShellNow": {
       "additionalProperties": false,
       "properties": {
@@ -5234,6 +5665,9 @@
             "waited",
             "stopped"
           ],
+          "type": "string"
+        },
+        "ref": {
           "type": "string"
         },
         "shell": {
@@ -5499,12 +5933,27 @@
       ],
       "type": "object"
     },
+    "StatusAckParams": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "StatusList": {
       "additionalProperties": false,
       "properties": {
         "records": {
           "items": {
-            "$ref": "#/$defs/status.Record"
+            "$ref": "#/$defs/StatusRecord"
           },
           "type": [
             "array",
@@ -5517,6 +5966,70 @@
       ],
       "type": "object"
     },
+    "StatusListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "StatusRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "permission",
+            "question",
+            "auth"
+          ],
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "idle",
+            "working",
+            "done",
+            "blocked",
+            "error",
+            "clear"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "state"
+      ],
+      "type": "object"
+    },
     "StatusReport": {
       "additionalProperties": false,
       "properties": {
@@ -5526,6 +6039,13 @@
         "app": {
           "type": "string"
         },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -5533,6 +6053,11 @@
           "type": "string"
         },
         "kind": {
+          "enum": [
+            "permission",
+            "question",
+            "auth"
+          ],
           "type": "string"
         },
         "msg": {
@@ -5551,6 +6076,14 @@
           "type": "string"
         },
         "state": {
+          "enum": [
+            "idle",
+            "working",
+            "done",
+            "blocked",
+            "error",
+            "clear"
+          ],
           "type": "string"
         },
         "title": {
@@ -6104,6 +6637,93 @@
       ],
       "type": "object"
     },
+    "TurnAccount": {
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "from_account": {
+          "type": "integer"
+        },
+        "item": {
+          "type": "string"
+        },
+        "login": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "picked",
+            "moved"
+          ],
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "source",
+        "account_id",
+        "model",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "TurnAgent": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent",
+        "status",
+        "started_at"
+      ],
+      "type": "object"
+    },
     "TurnCompleted": {
       "additionalProperties": false,
       "properties": {
@@ -6149,6 +6769,174 @@
         "status",
         "startedAt",
         "workedForMs"
+      ],
+      "type": "object"
+    },
+    "TurnDigest": {
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/TurnAgent"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "asked": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "calls": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/TurnFile"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "held": {
+          "items": {
+            "$ref": "#/$defs/TurnHold"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "loop_guard": {
+          "$ref": "#/$defs/turn.LoopGuardStop"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "outcome": {
+          "enum": [
+            "unset",
+            "stopped",
+            "step_cap",
+            "cost_cap",
+            "wall_clock_cap",
+            "decision_cap",
+            "forked",
+            "error",
+            "truncated",
+            "loop_guard"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "finished",
+            "stopped",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "tokens": {
+          "$ref": "#/$defs/TurnTokens"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "worked_for_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turn",
+        "at",
+        "worked_for_ms",
+        "origin",
+        "asked",
+        "held",
+        "agents",
+        "files",
+        "calls",
+        "tokens",
+        "cost_usd"
+      ],
+      "type": "object"
+    },
+    "TurnFile": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "type": "integer"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "create",
+            "modify"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "removed": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "op",
+        "added",
+        "removed"
+      ],
+      "type": "object"
+    },
+    "TurnHold": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "by": {
+          "enum": [
+            "gate",
+            "hook"
+          ],
+          "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "call",
+        "tool",
+        "by"
       ],
       "type": "object"
     },
@@ -6286,6 +7074,26 @@
         "session",
         "expectedTurnId",
         "text"
+      ],
+      "type": "object"
+    },
+    "TurnTokens": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "type": "integer"
+        },
+        "input": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input",
+        "output",
+        "cache_read"
       ],
       "type": "object"
     },
@@ -6568,42 +7376,6 @@
       ],
       "type": "object"
     },
-    "VerbResult": {
-      "additionalProperties": false,
-      "properties": {
-        "at": {
-          "type": "string"
-        },
-        "data": {},
-        "ok": {
-          "type": "boolean"
-        },
-        "problems": {
-          "items": {
-            "$ref": "#/$defs/Problem"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "tofu": {
-          "type": "string"
-        },
-        "verb": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "tofu",
-        "verb",
-        "ok",
-        "at",
-        "data",
-        "problems"
-      ],
-      "type": "object"
-    },
     "VersionCheck": {
       "additionalProperties": false,
       "properties": {
@@ -6701,6 +7473,931 @@
       ],
       "type": "object"
     },
+    "boardy.Actual": {
+      "additionalProperties": false,
+      "properties": {
+        "minutes": {
+          "type": "integer"
+        },
+        "rounds": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rounds",
+        "minutes"
+      ],
+      "type": "object"
+    },
+    "boardy.Aging": {
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "days"
+      ],
+      "type": "object"
+    },
+    "boardy.AssignRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "assignee"
+      ],
+      "type": "object"
+    },
+    "boardy.BoardSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "created": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "holds": {
+          "items": {
+            "enum": [
+              "triage",
+              "backlog",
+              "todo",
+              "doing",
+              "review",
+              "done",
+              "dropped",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "key": {
+          "type": "string"
+        },
+        "live": {
+          "type": "integer"
+        },
+        "managers": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "tickets": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "holds",
+        "created",
+        "dir",
+        "tickets",
+        "live"
+      ],
+      "type": "object"
+    },
+    "boardy.BoardsAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "boards": {
+          "items": {
+            "$ref": "#/$defs/boardy.BoardSummary"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "boards",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.Changed": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "board",
+        "paths"
+      ],
+      "type": "object"
+    },
+    "boardy.CreateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "ticket": {
+          "$ref": "#/$defs/boardy.Ticket"
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "type": "object"
+    },
+    "boardy.Event": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "from": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked"
+          ],
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "created",
+            "moved",
+            "commented",
+            "rule",
+            "waiting",
+            "requested",
+            "accepted",
+            "request-dropped",
+            "handed",
+            "widened",
+            "managers",
+            "assigned"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "ticket",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "boardy.EventsAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/boardy.Event"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "next": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "board",
+        "events",
+        "next"
+      ],
+      "type": "object"
+    },
+    "boardy.EventsRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "since": {
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.Filter": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "type": "string"
+        },
+        "epic": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "live": {
+          "type": "boolean"
+        },
+        "sprint": {
+          "type": "string"
+        },
+        "statuses": {
+          "items": {
+            "enum": [
+              "triage",
+              "backlog",
+              "todo",
+              "doing",
+              "review",
+              "done",
+              "dropped",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.GetAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "actual": {
+          "$ref": "#/$defs/boardy.Actual"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/boardy.Event"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ticket": {
+          "$ref": "#/$defs/boardy.Ticket"
+        }
+      },
+      "required": [
+        "ticket",
+        "actual",
+        "events"
+      ],
+      "type": "object"
+    },
+    "boardy.GetRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "boardy.Group": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "tickets": {
+          "items": {
+            "$ref": "#/$defs/boardy.Ticket"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "tickets"
+      ],
+      "type": "object"
+    },
+    "boardy.HandRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "to"
+      ],
+      "type": "object"
+    },
+    "boardy.ListAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/boardy.Group"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sprint": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/boardy.View"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "board",
+        "view",
+        "groups",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.ListRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/boardy.Filter"
+        },
+        "view": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.LogRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "type": "object"
+    },
+    "boardy.MoveRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "to"
+      ],
+      "type": "object"
+    },
+    "boardy.ReportAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked": {
+          "items": {
+            "$ref": "#/$defs/boardy.Aging"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "board": {
+          "type": "string"
+        },
+        "epics": {
+          "items": {
+            "$ref": "#/$defs/boardy.Tally"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "finished": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "minutes": {
+          "type": "integer"
+        },
+        "moves": {
+          "type": "integer"
+        },
+        "review": {
+          "items": {
+            "$ref": "#/$defs/boardy.Aging"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "rounds": {
+          "type": "integer"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "sprint": {
+          "$ref": "#/$defs/boardy.Tally"
+        },
+        "statuses": {
+          "items": {
+            "$ref": "#/$defs/boardy.Tally"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "board",
+        "since",
+        "statuses",
+        "epics",
+        "finished",
+        "moves",
+        "rounds",
+        "minutes",
+        "review",
+        "blocked",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.ReportRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.Request": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "ticket": {
+          "$ref": "#/$defs/boardy.Ticket"
+        }
+      },
+      "required": [
+        "id",
+        "by",
+        "at",
+        "ticket"
+      ],
+      "type": "object"
+    },
+    "boardy.Tally": {
+      "additionalProperties": false,
+      "properties": {
+        "done": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "points": {
+          "type": "integer"
+        },
+        "points_done": {
+          "type": "integer"
+        },
+        "tickets": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "tickets",
+        "done",
+        "points",
+        "points_done"
+      ],
+      "type": "object"
+    },
+    "boardy.Ticket": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "assignee": {
+          "type": "string"
+        },
+        "blocks": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "component": {
+          "type": "string"
+        },
+        "created": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "depends": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "duplicates": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "epic": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "log": {
+          "type": "string"
+        },
+        "owns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "points": {
+          "type": "integer"
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3",
+            "P4"
+          ],
+          "type": "string"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "relates": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "sprint": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "story",
+            "task",
+            "bug",
+            "subtask"
+          ],
+          "type": "string"
+        },
+        "updated": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "type",
+        "status",
+        "priority",
+        "created",
+        "updated",
+        "problem",
+        "scope",
+        "acceptance",
+        "log"
+      ],
+      "type": "object"
+    },
+    "boardy.TicketAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket": {
+          "$ref": "#/$defs/boardy.Ticket"
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "type": "object"
+    },
+    "boardy.TriageAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "$ref": "#/$defs/boardy.Ticket"
+        },
+        "board": {
+          "type": "string"
+        },
+        "requests": {
+          "items": {
+            "$ref": "#/$defs/boardy.Request"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "board",
+        "requests"
+      ],
+      "type": "object"
+    },
+    "boardy.TriageRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "list",
+            "accept",
+            "drop"
+          ],
+          "type": "string"
+        },
+        "board": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "boardy.View": {
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "$ref": "#/$defs/boardy.Filter"
+        },
+        "group_by": {
+          "enum": [
+            "epic",
+            "status",
+            "assignee"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "filter"
+      ],
+      "type": "object"
+    },
+    "boardy.Words": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "epic": {
+          "type": "string"
+        },
+        "points": {
+          "type": "string"
+        },
+        "sprint": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "board",
+        "epic",
+        "sprint",
+        "points"
+      ],
+      "type": "object"
+    },
     "browser.NativeHost": {
       "additionalProperties": false,
       "properties": {
@@ -6794,6 +8491,33 @@
             },
             "params": {
               "$ref": "#/$defs/SessionOpenParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.close"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionCloseParams"
             }
           },
           "required": [
@@ -7090,7 +8814,7 @@
               "const": "session.compact"
             },
             "params": {
-              "$ref": "#/$defs/NoParams"
+              "$ref": "#/$defs/SessionParams"
             }
           },
           "required": [
@@ -7118,6 +8842,33 @@
             },
             "params": {
               "$ref": "#/$defs/SessionHistoryParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.turns"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
             }
           },
           "required": [
@@ -8467,6 +10218,60 @@
               "const": "status.list"
             },
             "params": {
+              "$ref": "#/$defs/StatusListParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "status.ack"
+            },
+            "params": {
+              "$ref": "#/$defs/StatusAckParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "query.commands"
+            },
+            "params": {
               "$ref": "#/$defs/NoParams"
             }
           },
@@ -8673,6 +10478,357 @@
             "id": {
               "type": [
                 "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.boards"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.list"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.ListRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.get"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.GetRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.events"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.EventsRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.report"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.ReportRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.create"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.CreateRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.move"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.MoveRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.assign"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.AssignRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.log"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.LogRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.hand"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.HandRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.triage"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.TriageRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "scratch.list"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "scratch.clean"
+            },
+            "params": {
+              "$ref": "#/$defs/ScratchCleanParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
                 "integer",
                 "null"
               ]
@@ -8716,6 +10872,46 @@
           "type": "object"
         }
       ]
+    },
+    "command.Command": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "needs": {
+          "enum": [
+            "always",
+            "reload",
+            "resume",
+            "new",
+            "compact",
+            "undo",
+            "cron"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "tofu",
+            "interface"
+          ],
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "summary",
+        "scope",
+        "needs"
+      ],
+      "type": "object"
     },
     "hook.Hook": {
       "additionalProperties": false,
@@ -9987,6 +12183,43 @@
       ],
       "type": "object"
     },
+    "session.TracedMemory": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "request": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/session.Usage"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request",
+        "at",
+        "usage",
+        "cost_usd"
+      ],
+      "type": "object"
+    },
     "session.TracedNotice": {
       "additionalProperties": false,
       "properties": {
@@ -10236,6 +12469,74 @@
       ],
       "type": "object"
     },
+    "snapshot.Refusal": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "why"
+      ],
+      "type": "object"
+    },
+    "snapshot.Report": {
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "type": "boolean"
+        },
+        "refused": {
+          "items": {
+            "$ref": "#/$defs/snapshot.Refusal"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "removed": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "restored": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "turns": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "turns",
+        "restored",
+        "removed",
+        "refused",
+        "dry_run"
+      ],
+      "type": "object"
+    },
     "state.Subject": {
       "additionalProperties": false,
       "properties": {
@@ -10253,36 +12554,6 @@
         }
       },
       "required": [],
-      "type": "object"
-    },
-    "status.Record": {
-      "additionalProperties": false,
-      "properties": {
-        "app": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "msg": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "integer"
-        },
-        "state": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "state"
-      ],
       "type": "object"
     },
     "subagent.Broken": {
@@ -10496,6 +12767,59 @@
       ],
       "type": "object"
     },
+    "sys.ScratchFolder": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "touched": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "bytes",
+        "touched"
+      ],
+      "type": "object"
+    },
+    "sys.ScratchReport": {
+      "additionalProperties": false,
+      "properties": {
+        "folders": {
+          "items": {
+            "$ref": "#/$defs/sys.ScratchFolder"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "folders"
+      ],
+      "type": "object"
+    },
     "turn.HookRun": {
       "additionalProperties": false,
       "properties": {
@@ -10521,6 +12845,23 @@
       "required": [
         "event",
         "ran"
+      ],
+      "type": "object"
+    },
+    "turn.LoopGuardStop": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {},
+        "repeats": {
+          "type": "integer"
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "repeats"
       ],
       "type": "object"
     },
@@ -10734,6 +13075,26 @@
         },
         "params": {
           "$ref": "#/$defs/TurnStarted"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "turn.account"
+        },
+        "params": {
+          "$ref": "#/$defs/TurnAccount"
         }
       },
       "required": [
@@ -11050,6 +13411,26 @@
           "const": "2.0"
         },
         "method": {
+          "const": "shell.ready"
+        },
+        "params": {
+          "$ref": "#/$defs/ShellListening"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "shell.output"
         },
         "params": {
@@ -11230,6 +13611,26 @@
           "const": "2.0"
         },
         "method": {
+          "const": "account.state"
+        },
+        "params": {
+          "$ref": "#/$defs/AccountStateChanged"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "cron.updated"
         },
         "params": {
@@ -11310,10 +13711,50 @@
           "const": "2.0"
         },
         "method": {
+          "const": "session.turns.updated"
+        },
+        "params": {
+          "$ref": "#/$defs/SessionTurnUpdated"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "session.settings"
         },
         "params": {
           "$ref": "#/$defs/SessionSettings"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "settings.changed"
+        },
+        "params": {
+          "$ref": "#/$defs/SettingsChanged"
         }
       },
       "required": [
@@ -11446,6 +13887,46 @@
     {
       "additionalProperties": false,
       "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "boardy.changed"
+        },
+        "params": {
+          "$ref": "#/$defs/boardy.Changed"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "scratch.changed"
+        },
+        "params": {
+          "$ref": "#/$defs/sys.ScratchReport"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
         "id": {
           "type": [
             "string",
@@ -11522,10 +14003,10 @@
               "$ref": "#/$defs/SessionOpenResult"
             },
             {
-              "$ref": "#/$defs/SessionState"
+              "$ref": "#/$defs/Ack"
             },
             {
-              "$ref": "#/$defs/Ack"
+              "$ref": "#/$defs/SessionState"
             },
             {
               "$ref": "#/$defs/SessionBranchResult"
@@ -11549,13 +14030,25 @@
               "$ref": "#/$defs/SessionHistory"
             },
             {
+              "$ref": "#/$defs/SessionTurns"
+            },
+            {
               "$ref": "#/$defs/ShellRunResult"
             },
             {
-              "$ref": "#/$defs/VerbResult"
+              "$ref": "#/$defs/snapshot.Report"
             },
             {
               "$ref": "#/$defs/ShellReadResult"
+            },
+            {
+              "$ref": "#/$defs/LabelResult"
+            },
+            {
+              "$ref": "#/$defs/SettingsSet"
+            },
+            {
+              "$ref": "#/$defs/LoginStarted"
             },
             {
               "$ref": "#/$defs/CronCommandResult"
@@ -11667,6 +14160,36 @@
             },
             {
               "$ref": "#/$defs/StatusList"
+            },
+            {
+              "$ref": "#/$defs/CommandList"
+            },
+            {
+              "$ref": "#/$defs/boardy.BoardsAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.ListAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.GetAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.EventsAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.ReportAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.TicketAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.TriageAnswer"
+            },
+            {
+              "$ref": "#/$defs/sys.ScratchReport"
+            },
+            {
+              "$ref": "#/$defs/ScratchCleaned"
             }
           ]
         }
@@ -11705,6 +14228,9 @@
   ],
   "title": "tofu.host/1, every line tofu serve --stdio writes; clientMessage is every line it reads",
   "x-notifications": {
+    "account.state": {
+      "$ref": "#/$defs/AccountStateChanged"
+    },
     "agent.ended": {
       "$ref": "#/$defs/AgentEnded"
     },
@@ -11716,6 +14242,9 @@
     },
     "approval.resolved": {
       "$ref": "#/$defs/ApprovalResolved"
+    },
+    "boardy.changed": {
+      "$ref": "#/$defs/boardy.Changed"
     },
     "context.updated": {
       "$ref": "#/$defs/ContextUpdated"
@@ -11768,6 +14297,9 @@
     "resync": {
       "$ref": "#/$defs/Resync"
     },
+    "scratch.changed": {
+      "$ref": "#/$defs/sys.ScratchReport"
+    },
     "session.forked": {
       "$ref": "#/$defs/SessionForked"
     },
@@ -11777,14 +14309,23 @@
     "session.settings": {
       "$ref": "#/$defs/SessionSettings"
     },
+    "session.turns.updated": {
+      "$ref": "#/$defs/SessionTurnUpdated"
+    },
     "session.updated": {
       "$ref": "#/$defs/SessionUpdated"
+    },
+    "settings.changed": {
+      "$ref": "#/$defs/SettingsChanged"
     },
     "shell.exited": {
       "$ref": "#/$defs/ShellExited"
     },
     "shell.output": {
       "$ref": "#/$defs/ShellOutput"
+    },
+    "shell.ready": {
+      "$ref": "#/$defs/ShellListening"
     },
     "shell.started": {
       "$ref": "#/$defs/ShellStarted"
@@ -11800,6 +14341,9 @@
     },
     "tool.started": {
       "$ref": "#/$defs/ToolStarted"
+    },
+    "turn.account": {
+      "$ref": "#/$defs/TurnAccount"
     },
     "turn.completed": {
       "$ref": "#/$defs/TurnCompleted"
@@ -11839,6 +14383,94 @@
         "$ref": "#/$defs/WriteReceipt"
       }
     },
+    "boardy.assign": {
+      "params": {
+        "$ref": "#/$defs/boardy.AssignRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TicketAnswer"
+      }
+    },
+    "boardy.boards": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.BoardsAnswer"
+      }
+    },
+    "boardy.create": {
+      "params": {
+        "$ref": "#/$defs/boardy.CreateRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TicketAnswer"
+      }
+    },
+    "boardy.events": {
+      "params": {
+        "$ref": "#/$defs/boardy.EventsRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.EventsAnswer"
+      }
+    },
+    "boardy.get": {
+      "params": {
+        "$ref": "#/$defs/boardy.GetRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.GetAnswer"
+      }
+    },
+    "boardy.hand": {
+      "params": {
+        "$ref": "#/$defs/boardy.HandRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TicketAnswer"
+      }
+    },
+    "boardy.list": {
+      "params": {
+        "$ref": "#/$defs/boardy.ListRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.ListAnswer"
+      }
+    },
+    "boardy.log": {
+      "params": {
+        "$ref": "#/$defs/boardy.LogRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TicketAnswer"
+      }
+    },
+    "boardy.move": {
+      "params": {
+        "$ref": "#/$defs/boardy.MoveRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TicketAnswer"
+      }
+    },
+    "boardy.report": {
+      "params": {
+        "$ref": "#/$defs/boardy.ReportRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.ReportAnswer"
+      }
+    },
+    "boardy.triage": {
+      "params": {
+        "$ref": "#/$defs/boardy.TriageRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TriageAnswer"
+      }
+    },
     "cron.command": {
       "params": {
         "$ref": "#/$defs/CronCommandParams"
@@ -11868,7 +14500,7 @@
         "$ref": "#/$defs/LabelParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/LabelResult"
       }
     },
     "learn.apply": {
@@ -11924,7 +14556,7 @@
         "$ref": "#/$defs/LoginParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/LoginStarted"
       }
     },
     "memory.add": {
@@ -12013,6 +14645,14 @@
       },
       "result": {
         "$ref": "#/$defs/ChangelogReport"
+      }
+    },
+    "query.commands": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/CommandList"
       }
     },
     "query.context": {
@@ -12199,6 +14839,22 @@
         "$ref": "#/$defs/WriteReceipt"
       }
     },
+    "scratch.clean": {
+      "params": {
+        "$ref": "#/$defs/ScratchCleanParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ScratchCleaned"
+      }
+    },
+    "scratch.list": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/sys.ScratchReport"
+      }
+    },
     "session.access": {
       "params": {
         "$ref": "#/$defs/SessionAccessParams"
@@ -12215,9 +14871,17 @@
         "$ref": "#/$defs/SessionBranchResult"
       }
     },
+    "session.close": {
+      "params": {
+        "$ref": "#/$defs/SessionCloseParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "session.compact": {
       "params": {
-        "$ref": "#/$defs/NoParams"
+        "$ref": "#/$defs/SessionParams"
       },
       "result": {
         "$ref": "#/$defs/Compaction"
@@ -12295,12 +14959,20 @@
         "$ref": "#/$defs/SessionTrace"
       }
     },
+    "session.turns": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionTurns"
+      }
+    },
     "settings.set": {
       "params": {
         "$ref": "#/$defs/SettingsSetParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/SettingsSet"
       }
     },
     "setup.check": {
@@ -12335,9 +15007,17 @@
         "$ref": "#/$defs/ShellRunResult"
       }
     },
+    "status.ack": {
+      "params": {
+        "$ref": "#/$defs/StatusAckParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "status.list": {
       "params": {
-        "$ref": "#/$defs/NoParams"
+        "$ref": "#/$defs/StatusListParams"
       },
       "result": {
         "$ref": "#/$defs/StatusList"
@@ -12388,7 +15068,7 @@
         "$ref": "#/$defs/UndoParams"
       },
       "result": {
-        "$ref": "#/$defs/VerbResult"
+        "$ref": "#/$defs/snapshot.Report"
       }
     }
   },
