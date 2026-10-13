@@ -91,14 +91,10 @@ func Trees(project string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	mine, err := m.author(m.repo, false)
-	if err != nil {
-		return nil, err
-	}
 	for _, shelf := range m.all() {
 		for _, store := range shelf.stores {
 			log := filepath.Join(m.treeDir(store), logFile)
-			if _, missing := os.Stat(log); missing != nil || shelf.Scope == UserLocal && filepath.Base(store) != mine {
+			if _, missing := os.Stat(log); missing != nil || shelf.Scope == UserLocal && filepath.Base(store) != m.mine {
 				continue
 			}
 			logs[string(shelf.Scope)] = log

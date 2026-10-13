@@ -156,18 +156,17 @@ func readRecords(file string) ([]record, error) {
 
 func (m *Memory) read(shelf *Shelf) error {
 	shelf.stores = []string{shelf.Dir}
-	mine := ""
 	if _, missing := os.Stat(shelf.Dir); missing == nil && shelf.Scope.local() {
 		author, err := m.author(m.repo, false)
 		if err != nil {
 			return err
 		}
-		mine = author
+		m.mine = author
 	}
 	if shelf.Scope == UserLocal {
 		shelf.stores = nil
-		if mine != "" {
-			shelf.stores = []string{filepath.Join(shelf.Dir, mine)}
+		if m.mine != "" {
+			shelf.stores = []string{filepath.Join(shelf.Dir, m.mine)}
 		}
 		if m.allUsers {
 			found, _ := filepath.Glob(filepath.Join(shelf.Dir, "*", entriesFile))
@@ -188,7 +187,7 @@ func (m *Memory) read(shelf *Shelf) error {
 			entries = slices.DeleteFunc(entries, func(e Entry) bool { return e.ID == r.ID })
 			if !r.Removed {
 				entries = append(entries, Entry{ID: r.ID, Scope: shelf.Scope, Kind: r.Kind, Text: r.Text, Said: r.Said, Session: r.Session, At: r.At, By: r.By,
-					Author: r.Author, Yours: !shelf.Scope.local() || r.Author == mine, File: filepath.Join(store, entriesFile)})
+					Author: r.Author, Yours: !shelf.Scope.local() || r.Author == m.mine, File: filepath.Join(store, entriesFile)})
 			}
 		}
 		shelf.Entries = append(shelf.Entries, entries...)
@@ -202,10 +201,6 @@ func (m Memory) Block() (string, error) {
 	for _, shelf := range m.all() {
 		precedence = append(precedence, string(shelf.Scope))
 	}
-	mine, err := m.author(m.repo, false)
-	if err != nil {
-		return "", err
-	}
 	var block strings.Builder
 	for _, shelf := range []Shelf{m.Global, m.Project, m.UserLocal, m.ProjectLocal} {
 		for _, store := range shelf.stores {
@@ -214,7 +209,7 @@ func (m Memory) Block() (string, error) {
 				return "", err
 			}
 			head := string(shelf.Scope)
-			if shelf.Scope == UserLocal && filepath.Base(store) != mine {
+			if shelf.Scope == UserLocal && filepath.Base(store) != m.mine {
 				head += ", another author"
 			}
 			if view != "" {

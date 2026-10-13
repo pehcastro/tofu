@@ -132,7 +132,7 @@ type Memory struct {
 	Global, Project, UserLocal, ProjectLocal Shelf
 	Notices                                  []string
 	Copied                                   []string
-	home, state, repo, project               string
+	home, state, repo, project, mine         string
 	allUsers                                 bool
 	who                                      *who
 }
