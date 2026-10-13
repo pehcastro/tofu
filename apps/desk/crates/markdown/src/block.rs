@@ -4,7 +4,7 @@ use std::ops::Range;
 use crate::ast::{Alignment, CodeKind, ListKind};
 use crate::component::{self, PropValue};
 use crate::scan::{self, is_blank, is_space_tab};
-use crate::{MAX_NESTING, Options};
+use crate::{MAX_COMPONENTS, MAX_NESTING, Options};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Mapped {
@@ -193,6 +193,7 @@ struct Parser<'a> {
     blank: bool,
     partial_tab: bool,
     defs: Vec<Def>,
+    components: usize,
 }
 
 pub(crate) fn parse(src: &str, from: usize, options: Options) -> Parsed {
@@ -222,10 +223,24 @@ pub(crate) fn parse(src: &str, from: usize, options: Options) -> Parsed {
         blank: false,
         partial_tab: false,
         defs: Vec::new(),
+        components: 0,
     };
     let mut pos = from;
     while let Some(rest) = src.get(pos..).filter(|r| !r.is_empty()) {
-        let len = rest.find(['\n', '\r']).unwrap_or(rest.len());
+        let mut len = rest.find(['\n', '\r']).unwrap_or(rest.len());
+        let indent = rest.bytes().take(4).take_while(|&c| c == b' ').count();
+        if options.components
+            && indent < 4
+            && let Some(tag) = rest.get(indent..).and_then(component::open_tag)
+            && indent + tag.len > len
+        {
+            let after = indent + tag.len;
+            len = after
+                + rest
+                    .get(after..)
+                    .and_then(|r| r.find(['\n', '\r']))
+                    .unwrap_or(rest.len() - after);
+        }
         let newline = if rest.get(len..).is_some_and(|r| r.starts_with("\r\n")) {
             2
         } else {
@@ -782,9 +797,11 @@ impl Parser<'_> {
             if first == Some(b'<') {
                 if self.options.components
                     && depth < MAX_NESTING
+                    && self.components < MAX_COMPONENTS
                     && let Some(tag) = component::open_tag(rest)
                     && is_blank(rest.get(tag.len..).unwrap_or_default())
                 {
+                    self.components += 1;
                     self.close_unmatched();
                     let n = self.add_child(Kind::Component(tag.name, tag.props), nns);
                     self.offset = line.len();

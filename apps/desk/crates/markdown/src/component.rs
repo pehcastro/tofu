@@ -4,12 +4,14 @@ use std::ops::Range;
 
 use crate::ast::Component;
 use crate::json::{Json, JsonError, parse_json};
+use crate::{MAX_PROP_BYTES, MAX_PROP_ITEMS};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropValue {
     Text(String),
     Json(Json),
     Invalid { raw: String, error: JsonError },
+    TooLong { bytes: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +50,8 @@ pub enum PropError {
     MissingProp(String),
     WrongKind { prop: String, expected: PropKind },
     InvalidJson { prop: String, error: JsonError },
+    TooLong { prop: String, bytes: usize },
+    TooManyItems { prop: String, items: usize },
 }
 
 impl fmt::Display for PropError {
@@ -58,6 +62,18 @@ impl fmt::Display for PropError {
             Self::MissingProp(prop) => write!(f, "required prop {prop} is missing"),
             Self::WrongKind { prop, expected } => write!(f, "prop {prop} is not {expected:?}"),
             Self::InvalidJson { prop, error } => write!(f, "prop {prop} holds bad json: {error}"),
+            Self::TooLong { prop, bytes } => {
+                write!(
+                    f,
+                    "prop {prop} is {bytes} bytes, over the cap of {MAX_PROP_BYTES}"
+                )
+            }
+            Self::TooManyItems { prop, items } => {
+                write!(
+                    f,
+                    "prop {prop} has {items} items, over the cap of {MAX_PROP_ITEMS}"
+                )
+            }
         }
     }
 }
@@ -80,6 +96,18 @@ pub fn validate<C>(component: &Component<C>, registry: &Registry) -> Result<(), 
                 return Err(PropError::InvalidJson {
                     prop: name.clone(),
                     error: *error,
+                });
+            }
+            (PropValue::TooLong { bytes }, _) => {
+                return Err(PropError::TooLong {
+                    prop: name.clone(),
+                    bytes: *bytes,
+                });
+            }
+            (PropValue::Json(Json::Array(items)), _) if items.len() > MAX_PROP_ITEMS => {
+                return Err(PropError::TooManyItems {
+                    prop: name.clone(),
+                    items: items.len(),
                 });
             }
             (_, PropKind::Any)
@@ -159,25 +187,50 @@ fn braced_end(b: &[u8], start: usize) -> Option<usize> {
 }
 
 fn prop_value(s: &str, b: &[u8], i: usize) -> Option<(PropValue, usize)> {
-    match b.get(i)? {
+    let (raw, end, quoted) = match b.get(i)? {
         q @ (b'"' | b'\'') => {
             let close = i + 1 + b.get(i + 1..)?.iter().position(|c| c == q)?;
-            Some((PropValue::Text(s.get(i + 1..close)?.to_string()), close + 1))
+            (s.get(i + 1..close)?, close + 1, true)
         }
         b'{' => {
             let end = braced_end(b, i)?;
-            let raw = s.get(i + 1..end - 1)?;
-            let value = match parse_json(raw) {
-                Ok(json) => PropValue::Json(json),
-                Err(error) => PropValue::Invalid {
-                    raw: raw.to_string(),
-                    error,
-                },
-            };
-            Some((value, end))
+            (s.get(i + 1..end - 1)?, end, false)
         }
-        _ => None,
+        _ => return None,
+    };
+    if raw.len() > MAX_PROP_BYTES {
+        return Some((PropValue::TooLong { bytes: raw.len() }, end));
     }
+    if quoted {
+        return Some((PropValue::Text(raw.to_string()), end));
+    }
+    let value = match parse_json(raw) {
+        Ok(json) => PropValue::Json(json),
+        Err(error) => PropValue::Invalid {
+            raw: raw.to_string(),
+            error,
+        },
+    };
+    Some((value, end))
+}
+
+pub(crate) fn tag_end(b: &[u8], from: usize) -> Option<usize> {
+    let (mut quote, mut depth, mut i) = (None, 0usize, from);
+    while let Some(&c) = b.get(i) {
+        match (quote, c) {
+            (_, b'\n') if b.get(i + 1) == Some(&b'\n') => return Some(i),
+            (Some(_), b'\\') if depth > 0 => i += 1,
+            (Some(q), _) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, b'"' | b'\'') => quote = Some(c),
+            (None, b'{' | b'[') => depth += 1,
+            (None, b'}' | b']') => depth = depth.saturating_sub(1),
+            (None, b'>') if depth == 0 => return Some(i + 1),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 pub(crate) fn open_tag(s: &str) -> Option<Tag> {
@@ -190,6 +243,9 @@ pub(crate) fn open_tag(s: &str) -> Option<Tag> {
     let mut props = Vec::new();
     loop {
         let j = skip_ws(b, i);
+        if b.get(i..j)?.iter().filter(|&&c| c == b'\n').count() > 1 {
+            return None;
+        }
         match b.get(j)? {
             b'>' => {
                 return Some(Tag {

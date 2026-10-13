@@ -1,6 +1,6 @@
 use crate::ast::Document;
 use crate::block::{self, Def, RawBlock, Refs};
-use crate::{Options, resolve};
+use crate::{Options, component, resolve};
 
 pub struct Stream {
     options: Options,
@@ -14,18 +14,34 @@ pub struct Stream {
 }
 
 pub fn visible_prefix(text: &str) -> &str {
-    let line = text.rfind('\n').map_or(0, |i| i + 1);
-    let tail = text.get(line..).unwrap_or_default();
-    let open = tail.match_indices('<').map(|(i, _)| i).find(|&i| {
-        tail.as_bytes()
-            .get(i + 1)
-            .is_some_and(u8::is_ascii_uppercase)
-            && !tail.get(i..).unwrap_or_default().contains('>')
-    });
-    match open {
-        Some(i) => text.get(..line + i).unwrap_or(text),
-        None => text,
+    visible_from(text, 0)
+}
+
+fn visible_from(text: &str, from: usize) -> &str {
+    let b = text.as_bytes();
+    let mut i = from;
+    while let Some(at) = b.get(i..).and_then(|r| r.iter().position(|&c| c == b'<')) {
+        let at = i + at;
+        let name = at + 1 + usize::from(b.get(at + 1) == Some(&b'/'));
+        let after_name = name
+            + b.get(name..)
+                .unwrap_or_default()
+                .iter()
+                .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.'))
+                .count();
+        let tag_like = b.get(name).is_none_or(u8::is_ascii_uppercase)
+            && b.get(after_name)
+                .is_none_or(|c| matches!(c, b' ' | b'\t' | b'\n' | b'\r' | b'/' | b'>'));
+        if !tag_like {
+            i = at + 1;
+            continue;
+        }
+        match component::tag_end(b, after_name) {
+            Some(end) => i = end,
+            None => return text.get(..at).unwrap_or(text),
+        }
     }
+    text
 }
 
 impl Stream {
@@ -44,7 +60,9 @@ impl Stream {
 
     pub fn push(&mut self, chunk: &str) {
         self.text.push_str(chunk);
-        let complete = self.text.rfind('\n').map_or(0, |i| i + 1);
+        let complete = visible_from(&self.text, self.stable_end)
+            .rfind('\n')
+            .map_or(0, |i| i + 1);
         if complete <= self.stable_end {
             return;
         }
@@ -72,7 +90,7 @@ impl Stream {
     }
 
     pub fn snapshot(&mut self) -> &Document {
-        let visible = visible_prefix(&self.text);
+        let visible = visible_from(&self.text, self.stable_end);
         let tail = block::parse(visible, self.stable_end.min(visible.len()), self.options);
         let refs = block::refs(self.stable_defs.iter().chain(&tail.defs));
         if refs != self.refs {

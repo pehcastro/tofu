@@ -19,6 +19,9 @@ pub use stream::{Stream, visible_prefix};
 
 pub const MAX_NESTING: usize = 64;
 pub const MAX_JSON_DEPTH: usize = 64;
+pub const MAX_PROP_BYTES: usize = 64 * 1024;
+pub const MAX_PROP_ITEMS: usize = 1024;
+pub const MAX_COMPONENTS: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Options {

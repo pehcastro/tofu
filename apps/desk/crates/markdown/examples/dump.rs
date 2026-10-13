@@ -55,6 +55,7 @@ fn component<C>(out: &mut String, pad: &str, c: &Component<C>, registry: &Regist
             PropValue::Text(t) => format!("{k}={t:?}"),
             PropValue::Json(j) => format!("{k}={{{}}}", json(j)),
             PropValue::Invalid { raw, error } => format!("{k}=invalid json {raw:?} ({error})"),
+            PropValue::TooLong { bytes } => format!("{k}=too long, {bytes} bytes"),
         })
         .collect();
     writeln!(out, "{pad}  props: {}", props.join(" "))?;

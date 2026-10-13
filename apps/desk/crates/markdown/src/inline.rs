@@ -718,7 +718,13 @@ impl<'a> Parser<'a> {
             if self.depth + 1 >= MAX_NESTING {
                 return None;
             }
-            let close = self.cx.pairs.get(&at).filter(|c| c.end <= self.end)?;
+            let close = self
+                .cx
+                .pairs
+                .get(&at)
+                .filter(|c| c.end <= self.end)
+                .cloned()
+                .unwrap_or(self.end..self.end);
             let (children, depth) =
                 Parser::new(self.s, at + tag.len, close.start, self.cx, self.depth + 1).run();
             (children, depth + 1, close.end - at)
