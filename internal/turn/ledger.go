@@ -63,6 +63,16 @@ func (l *ReadLedger) Saw(path string, body []byte) bool {
 	return l.seen[ledgerKey(path)].hash == sha256.Sum256(body)
 }
 
+func (l *ReadLedger) Known(path string) bool {
+	if l == nil {
+		return true
+	}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	_, known := l.seen[ledgerKey(path)]
+	return known
+}
+
 type LineChange struct{ first, oldLast, newLast int }
 
 func ChangeOf(before, after string) LineChange {

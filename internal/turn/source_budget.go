@@ -36,7 +36,7 @@ func (e SourceBudgetError) Error() string {
 	spawn := strings.Join(e.Spawn, " or ")
 	switch e.Reason {
 	case RefusedShellSource:
-		return fmt.Sprintf("%s: %s is source code written by hand through the shell, which the orchestrator never does: use edit or write within your budget of %d lines in one directory, or spawn %s. a rename across files goes through the language's own rename or rewrite tool, and a program's own output redirected into a file, such as a generator or a schema printer, is not counted and runs",
+		return fmt.Sprintf("%s: %s is source code written by hand through the shell, which the orchestrator never does: use edit or write within your budget of %d lines in one directory, or spawn %s. a rename is edit with replace_all in each file, and a program's own output redirected into a file, such as a generator or a schema printer, is not counted and runs",
 			e.Tool, e.Path, konst.OrchestratorSourceLinesPerTurn, spawn)
 	case RefusedSecondSlice:
 		return fmt.Sprintf("%s: %s is source in a second directory, and this turn already changed source in %s: work in one directory is yours, a second is a separate piece, so spawn %s with it",
@@ -106,7 +106,7 @@ func (t budgetedTool) Definition() llm.Tool {
 	definition := t.tool.Definition()
 	definition.Description += fmt.Sprintf(". as the orchestrator you change source code yourself, through write and edit, when the work stays in one directory and within %d changed lines in one turn: "+
 		"do that work without spawning. source in a second directory, or past the lines, is refused and goes to a sub-agent. never write source by hand through the shell, sed -i and a heredoc included: "+
-		"a rename across files goes through the language's own rename or rewrite tool, which is a program and runs, and a program's own output redirected into a file is not counted. read every file you will change with the read tool first, in one call: a file a shell command printed was not read, and edit and write refuse it. "+
+		"a rename is edit with replace_all in each file, and a program's own output redirected into a file is not counted. an exact edit of a small file applies without a read, so edit straight from what search or a shell command showed you, every file in one call. "+
 		"markdown, notes, plans, configuration and data are free", konst.OrchestratorSourceLinesPerTurn)
 	return definition
 }

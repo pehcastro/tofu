@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/transform"
@@ -47,6 +48,7 @@ func (e Edit) Definition() llm.Tool {
 			"old_string is copied from the file character for character, including indentation and line breaks, " +
 			"and it has to appear exactly once: when it appears more than once the result lists every occurrence with its line number, " +
 			"so add the lines above or below it until it is unique. " +
+			"replace_all true replaces every exact occurrence of old_string instead and says how many, which is how a name is renamed through a file: never sed -i. " +
 			"new_string is what it becomes, and an empty new_string deletes it. " +
 			"a path that does not exist, or a stretch of text that differs from the file in whitespace alone, is repaired when there is exactly one candidate and refused when there are two, " +
 			"and a repair is named at the top of the result. " +
@@ -60,10 +62,11 @@ func (e Edit) Definition() llm.Tool {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"path":       map[string]any{"type": "string"},
-				"old_string": map[string]any{"type": "string"},
-				"new_string": map[string]any{"type": "string"},
-				"symbol":     map[string]any{"type": "string"},
+				"path":        map[string]any{"type": "string"},
+				"old_string":  map[string]any{"type": "string"},
+				"new_string":  map[string]any{"type": "string"},
+				"symbol":      map[string]any{"type": "string"},
+				"replace_all": map[string]any{"type": "boolean"},
 			},
 			"required": []string{"path", "new_string"},
 		},
@@ -75,6 +78,7 @@ type editArgs struct {
 	Old    string `json:"old_string"`
 	New    string `json:"new_string"`
 	Symbol string `json:"symbol"`
+	All    bool   `json:"replace_all"`
 }
 
 func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
@@ -88,6 +92,9 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	if args.Old != "" && args.Symbol != "" {
 		return turn.Result{}, errors.New("edit: old_string and symbol are the two ways to say what is replaced and a call gives exactly one: symbol replaces a whole go declaration and old_string replaces a stretch of text")
+	}
+	if args.All && args.Symbol != "" {
+		return turn.Result{}, errors.New("edit: replace_all replaces every occurrence of old_string and symbol names one declaration, so a call gives replace_all with old_string only")
 	}
 	if args.Old != "" && args.Old == args.New {
 		return turn.Result{}, errors.New("edit: old_string and new_string are the same text, so there is nothing to change")
@@ -120,9 +127,12 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	before := string(body)
 	text, endings := turn.EndingsOf(before)
 	var after, note string
-	if args.Symbol != "" {
+	switch count := strings.Count(text, args.Old); {
+	case args.Symbol != "":
 		after, err = replaceDeclaration(e.root, target, args.Symbol, text, args.New)
-	} else {
+	case args.All && count > 1:
+		after, note = strings.ReplaceAll(text, args.Old, args.New), fmt.Sprintf("replaced %d occurrences of old_string", count)
+	default:
 		after, note, err = replaceOnce(text, target, args.Old, args.New)
 	}
 	var change turn.LineChange
@@ -130,8 +140,11 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 		change = turn.ChangeOf(text, after)
 	}
 	if !e.ledger.Saw(target, body) {
-		return turn.Result{}, fmt.Errorf("edit: %s has not been read in this session or has changed since, so the edit is refused rather than trusted against a guess: %s",
-			target, e.ledger.Refuse(target, body, change))
+		if err != nil || args.Symbol != "" || e.ledger.Known(target) || len(body) > konst.RefusalCarriesWholeUpToBytes {
+			return turn.Result{}, fmt.Errorf("edit: %s has not been read in this session or has changed since, so the edit is refused rather than trusted against a guess: %s",
+				target, e.ledger.Refuse(target, body, change))
+		}
+		e.ledger.Mark(target, body)
 	}
 	if err != nil {
 		return turn.Result{}, err

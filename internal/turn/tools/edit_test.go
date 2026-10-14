@@ -89,6 +89,44 @@ func TestAnEditOnASlowProjectReturnsAtOnceAndTypecheckReportsItAfter(t *testing.
 	t.Logf("edit, %s:\n%s\ntypecheck after:\n%s\nnext edit:\n%s", took, edited, after, again)
 }
 
+func TestReplaceAllRenamesEveryExactMatchAndSaysHowMany(t *testing.T) {
+	const cart = "package shop\n\nfunc (c Cart) CalcTotal() int { return 0 }\n\nfunc Use(c Cart) int { return c.CalcTotal() + c.CalcTotal() }\n"
+	for _, c := range []struct {
+		name, old, symbol string
+		all               bool
+		refused           string
+		want              string
+	}{
+		{name: "every match replaced and counted", old: "CalcTotal", all: true, want: "3 occurrences"},
+		{name: "a match nowhere writes nothing", old: "Missing", all: true, refused: "matches old_string"},
+		{name: "without it three matches are refused", old: "CalcTotal", refused: "appears 3 times"},
+		{name: "symbol and replace_all together are refused", symbol: "Use", all: true, refused: "replace_all"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "cart.go"), []byte(cart), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			editor, err := NewEdit(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := json.Marshal(map[string]any{"path": "cart.go", "old_string": c.old, "symbol": c.symbol, "new_string": "Subtotal", "replace_all": c.all})
+			result, err := editor.Run(context.Background(), raw)
+			got, _ := os.ReadFile(filepath.Join(dir, "cart.go"))
+			if c.refused != "" {
+				if err == nil || !strings.Contains(err.Error(), c.refused) || string(got) != cart {
+					t.Fatalf("want a refusal naming %q and the file untouched, got %v and:\n%s", c.refused, err, got)
+				}
+				return
+			}
+			if err != nil || strings.Contains(string(got), "CalcTotal") || strings.Count(string(got), "Subtotal") != 3 || !strings.Contains(result.Content, c.want) {
+				t.Fatalf("err %v, result:\n%s\nfile:\n%s", err, result.Content, got)
+			}
+		})
+	}
+}
+
 func TestAnEditOnAFastProjectKeepsItsInlineTypecheck(t *testing.T) {
 	if _, err := exec.LookPath("bun"); err != nil {
 		t.Skip("bun is not on PATH")

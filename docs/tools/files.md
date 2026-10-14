@@ -67,6 +67,8 @@ declaration by name, and answers with the diff.
 
 `old_string` must appear exactly once. When it appears more often,
 the result lists each occurrence with its line, instead of changing the first.
+With `replace_all` every exact occurrence is replaced and the result says how
+many, which is how a name is renamed through a file without `sed -i`.
 A whitespace-only mismatch is repaired when there's one candidate, and an
 edit that would leave a Go file unable to parse is refused with nothing
 written.
@@ -77,6 +79,7 @@ written.
 | `old_string` | string | the exact text to replace |
 | `symbol` | string | or a Go declaration, such as `Resolve` or `Root.Resolve` |
 | `new_string` | string | what it becomes; empty deletes |
+| `replace_all` | boolean | replace every occurrence of `old_string`, not one |
 
 ## glob
 
@@ -131,7 +134,11 @@ model calls it first in a project it doesn't know. Parameter: `limit`.
 ## Read before edit
 
 The model chooses these tools. You decide one thing: `readBeforeEdit`, on by
-default, in settings.
+default, in settings. With it on, both refuse a file changed since it was
+read, and `write` refuses replacing a file never read. `edit` refuses a file
+never read only when it is too large to show whole: an exact edit of a small
+one is applied, since the refusal would only print the file and let the same
+edit through.
 
 ```bash
 tofu settings get readBeforeEdit
