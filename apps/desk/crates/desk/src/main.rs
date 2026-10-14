@@ -317,6 +317,15 @@ fn main() -> ExitCode {
         eprintln!("desk: home: {error}");
         return ExitCode::FAILURE;
     }
+    std::thread::spawn(|| {
+        let started = Instant::now();
+        let chosen = project::chosen().ok().flatten().map(|(folder, _)| folder);
+        let run = desk_core::first_run::detect(&project::tofu(), chosen.as_deref());
+        eprintln!(
+            "desk: first run {run} in {} ms",
+            started.elapsed().as_millis()
+        );
+    });
     let mut assets = Icon::registry();
     if let Err(duplicates) = assets.extend(desk_ui::components::glyph::Glyph::entries()) {
         eprintln!("the desk has two assets under one path: {duplicates:?}");

@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod buffer;
 pub mod control;
+pub mod first_run;
 pub mod git;
 pub mod home;
 pub mod limits;

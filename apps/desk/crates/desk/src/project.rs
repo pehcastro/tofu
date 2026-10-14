@@ -55,6 +55,15 @@ pub fn launch() -> Result<PathBuf, String> {
 }
 
 pub fn launched() -> Result<(PathBuf, &'static str), String> {
+    match chosen()? {
+        Some(found) => Ok(found),
+        None => env::current_dir()
+            .map(|folder| (folder, "the launch folder"))
+            .map_err(|error| format!("the desk cannot read the folder it runs in: {error}")),
+    }
+}
+
+pub fn chosen() -> Result<Option<(PathBuf, &'static str)>, String> {
     let named = env::args_os()
         .nth(1)
         .filter(|argument| !argument.to_string_lossy().starts_with("--"))
@@ -70,7 +79,7 @@ pub fn launched() -> Result<(PathBuf, &'static str), String> {
         if !folder.is_dir() {
             return Err(format!("{from} {} is not a folder", folder.display()));
         }
-        return Ok((folder, from));
+        return Ok(Some((folder, from)));
     }
     let recent = recents()
         .unwrap_or_else(|error| {
@@ -79,12 +88,11 @@ pub fn launched() -> Result<(PathBuf, &'static str), String> {
         })
         .into_iter()
         .find(|folder| folder.is_dir());
-    match recent {
-        Some(folder) => Ok((folder, "the most recent project")),
-        None => env::current_dir()
-            .map(|folder| (folder, "the launch folder"))
-            .map_err(|error| format!("the desk cannot read the folder it runs in: {error}")),
-    }
+    Ok(recent.map(|folder| (folder, "the most recent project")))
+}
+
+pub fn tofu() -> PathBuf {
+    env::var_os(TOFU_VARIABLE).map_or_else(|| PathBuf::from("tofu"), PathBuf::from)
 }
 
 #[derive(Clone, PartialEq)]
@@ -483,7 +491,7 @@ fn branch(folder: &Path) -> Option<String> {
 }
 
 fn with_activity(mut shown: Vec<Recent>) -> Vec<Recent> {
-    let tofu = env::var_os(TOFU_VARIABLE).map_or_else(|| PathBuf::from("tofu"), PathBuf::from);
+    let tofu = tofu();
     let listing: Vec<Option<io::Result<Child>>> = shown
         .iter()
         .map(|recent| (!recent.missing).then(|| list_sessions(&tofu, &recent.folder)))
