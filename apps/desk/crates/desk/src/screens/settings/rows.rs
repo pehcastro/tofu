@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -28,10 +29,13 @@ use gpui::{
 };
 
 use super::fixture::{
-    Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, KEYS_GROUP, PageId, Scope, Setting, TOFU_NAV,
+    Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, KEYS_GROUP, PLUGINS_GENERAL, PLUGINS_NAV, PageId,
+    Scope, Setting, TOFU_NAV,
 };
+use super::plugins::PluginsPage;
 use super::terminal::TerminalPage;
 use crate::modules::chat::Chat;
+use crate::plugins;
 use crate::screens::frame;
 
 const NAV_WIDTH: f32 = 247.0;
@@ -70,6 +74,7 @@ pub struct Rows {
     problems: HashMap<String, SharedString>,
     fields: HashMap<String, Field>,
     shells: Option<Entity<TerminalPage>>,
+    plugins: Option<(Entity<PluginsPage>, Subscription)>,
 }
 
 struct Field {
@@ -96,7 +101,24 @@ impl Rows {
             problems: HashMap::new(),
             fields: HashMap::new(),
             shells: None,
+            plugins: None,
         }
+    }
+
+    pub fn install_plugin(&mut self, folder: PathBuf, cx: &mut Context<Self>) {
+        self.page = PageId::Plugins(None);
+        self.plugins_page(cx)
+            .update(cx, |page, cx| page.install_from(folder, cx));
+    }
+
+    fn plugins_page(&mut self, cx: &mut Context<Self>) -> Entity<PluginsPage> {
+        if let Some((page, _)) = &self.plugins {
+            return page.clone();
+        }
+        let page = cx.new(|_| PluginsPage::new());
+        let watched = cx.observe(&page, |_, _, cx| cx.notify());
+        self.plugins = Some((page.clone(), watched));
+        page
     }
 
     pub fn read_from(&mut self, chat: &Entity<Chat>, cx: &mut Context<Self>) {
@@ -379,7 +401,15 @@ impl Rows {
             .map(|category| PageId::Tofu(category.name.clone().into()))
             .collect();
         let desk: Vec<PageId> = DESK_NAV.1.iter().copied().map(PageId::Desk).collect();
-        for (label, pages) in [(TOFU_NAV, tofu), (DESK_NAV.0, desk)] {
+        let installed: Vec<PageId> = [PageId::Plugins(None)]
+            .into_iter()
+            .chain(plugins::all().map(|plugin| PageId::Plugins(Some(plugin.id.clone().into()))))
+            .collect();
+        for (label, pages) in [
+            (TOFU_NAV, tofu),
+            (DESK_NAV.0, desk),
+            (PLUGINS_NAV, installed),
+        ] {
             list = list.inert(group_header(label, label, pages.len(), true, theme));
             for page in pages {
                 at += 1;
@@ -704,6 +734,10 @@ fn page_name(page: &PageId) -> SharedString {
     match page {
         PageId::Desk(page) => page.name().into(),
         PageId::Tofu(name) => name.clone(),
+        PageId::Plugins(None) => PLUGINS_GENERAL.into(),
+        PageId::Plugins(Some(id)) => {
+            plugins::find(id).map_or_else(|| id.clone(), |plugin| plugin.name.clone().into())
+        }
     }
 }
 
@@ -742,7 +776,17 @@ impl Render for Rows {
         let page_body = match self.page.clone() {
             PageId::Desk(page) => self.desk_page(page, &theme, window, cx).into_any_element(),
             PageId::Tofu(name) => self.tofu_page(&name, &theme, window, cx),
+            PageId::Plugins(shown) => {
+                let page = self.plugins_page(cx);
+                page.update(cx, |page, _| page.show(shown));
+                page.into_any_element()
+            }
         };
+        let sheet = self
+            .plugins
+            .as_ref()
+            .map(|(page, _)| page.clone())
+            .and_then(|page| page.update(cx, |page, cx| page.consent_sheet(cx)));
         let content = div().flex_1().min_w_0().flex().flex_col().child(
             ScrollArea::new("settings-content").child(
                 div()
@@ -760,8 +804,10 @@ impl Render for Rows {
                 .flex_1()
                 .min_h_0()
                 .flex()
+                .relative()
                 .child(self.nav(&theme, cx))
-                .child(content),
+                .child(content)
+                .children(sheet),
         )
     }
 }

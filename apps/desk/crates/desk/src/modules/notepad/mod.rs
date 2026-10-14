@@ -23,7 +23,9 @@ use gpui::{
     Window, div, prelude::*, px, relative,
 };
 
-use crate::plugins::Plugin;
+use desk_plugin::Capability;
+
+use crate::plugins::{Plugin, consent};
 
 const NOTES: &str = "notes";
 const OPEN_NOTE: &str = "open";
@@ -53,6 +55,7 @@ struct Page {
 }
 
 pub struct Notepad {
+    plugin: &'static Plugin,
     folder: Result<PathBuf, String>,
     notes: Vec<PathBuf>,
     page: Option<Page>,
@@ -61,10 +64,17 @@ pub struct Notepad {
     saving: Option<Task<()>>,
 }
 
-fn write(path: &Path, buffer: &Buffer, saved: &RefCell<String>) -> Result<(), String> {
+fn write(
+    plugin: &Plugin,
+    path: &Path,
+    buffer: &Buffer,
+    saved: &RefCell<String>,
+) -> Result<(), String> {
     if *buffer.rope() == *saved.borrow() {
         return Ok(());
     }
+    let what = format!("write {}", path.display());
+    consent::check(&plugin.id, &plugin.folder()?, Capability::FsWrite, &what)?;
     let started = Instant::now();
     let text = buffer.text();
     fs::write(path, &text).map_err(|error| format!("{}: {error}", path.display()))?;
@@ -121,6 +131,7 @@ impl Notepad {
         })
         .detach();
         let mut notepad = Notepad {
+            plugin,
             folder,
             notes: Vec::new(),
             page: None,
@@ -203,9 +214,9 @@ impl Notepad {
         };
         let text = editor.buffer().text();
         let saved = Rc::new(RefCell::new(text.clone()));
-        let (target, written) = (path.clone(), saved.clone());
-        let editor =
-            cx.new(|_| editor.on_save(move |buffer, _, _| write(&target, buffer, &written)));
+        let (plugin, target, written) = (self.plugin, path.clone(), saved.clone());
+        let editor = cx
+            .new(|_| editor.on_save(move |buffer, _, _| write(plugin, &target, buffer, &written)));
         let edited = cx.observe(&editor, |notepad: &mut Notepad, _, cx| notepad.edited(cx));
         eprintln!("desk: notepad opened {}", path.display());
         self.page = Some(Page {
@@ -225,7 +236,12 @@ impl Notepad {
         let Some(page) = &self.page else {
             return;
         };
-        let written = write(&page.path, page.editor.read(cx).buffer(), &page.saved);
+        let written = write(
+            self.plugin,
+            &page.path,
+            page.editor.read(cx).buffer(),
+            &page.saved,
+        );
         if let Err(error) = written {
             self.fail(error);
         }

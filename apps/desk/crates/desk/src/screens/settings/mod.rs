@@ -1,13 +1,28 @@
 pub mod board;
 mod fixture;
 mod intro;
+mod plugins;
 mod rows;
 mod terminal;
 
 pub use rows::Rows;
 
+use std::path::Path;
+
 use desk_ui::live::ActiveTheme;
 use gpui::{AnyView, App, AppContext, Window};
+
+pub fn install_plugin(folder: &Path, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
+    board::load_fonts(cx)?;
+    let folder = folder.to_owned();
+    Ok(cx
+        .new(|cx| {
+            let mut rows = rows::Rows::new(&ActiveTheme::theme(cx));
+            rows.install_plugin(folder, cx);
+            rows
+        })
+        .into())
+}
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     board::load_fonts(cx)?;

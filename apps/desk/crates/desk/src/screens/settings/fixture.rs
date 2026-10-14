@@ -33,7 +33,11 @@ impl DeskPage {
 pub enum PageId {
     Desk(DeskPage),
     Tofu(SharedString),
+    Plugins(Option<SharedString>),
 }
+
+pub const PLUGINS_NAV: &str = "Plugins";
+pub const PLUGINS_GENERAL: &str = "General";
 
 pub const DESK_NAV: (&str, [DeskPage; 4]) = (
     "Desk",

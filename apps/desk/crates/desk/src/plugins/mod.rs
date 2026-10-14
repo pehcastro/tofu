@@ -1,3 +1,11 @@
+#[cfg_attr(
+    not(feature = "screen-settings"),
+    expect(
+        dead_code,
+        reason = "Settings > Plugins is the only caller of the consent sheet, install and activity, and it is built only with screen-settings"
+    )
+)]
+pub mod consent;
 mod view;
 mod wasm;
 
@@ -15,8 +23,15 @@ const API: &str = "desk@0.1";
 
 pub type Mount = fn(&'static Plugin, &mut App) -> AnyView;
 
+#[cfg_attr(
+    not(feature = "screen-settings"),
+    expect(
+        dead_code,
+        reason = "a native plugin's manifest text is read only by Settings > Plugins, built with screen-settings"
+    )
+)]
 enum Kind {
-    Native(Mount),
+    Native(Mount, &'static str),
     Wasm(wasm::Guest),
 }
 
@@ -47,7 +62,7 @@ const NATIVE: &[(&str, Mount)] = &[
 static FIRST_PARTY: LazyLock<Result<Vec<Plugin>, String>> = LazyLock::new(|| {
     NATIVE
         .iter()
-        .map(|(manifest, mount)| parse(manifest, Kind::Native(*mount)))
+        .map(|(manifest, mount)| parse(manifest, Kind::Native(*mount, manifest)))
         .collect()
 });
 
@@ -87,13 +102,15 @@ pub fn find(id: &str) -> Option<&'static Plugin> {
 }
 
 pub fn modules() -> impl Iterator<Item = Module> {
-    all().map(|plugin| Module::Plugin(plugin.id.clone()))
+    all()
+        .filter(|plugin| plugin.enabled())
+        .map(|plugin| Module::Plugin(plugin.id.clone()))
 }
 
 impl Plugin {
     pub fn mount(&'static self, cx: &mut App) -> AnyView {
         let view = match &self.kind {
-            Kind::Native(mount) => mount(self, cx),
+            Kind::Native(mount, _) => mount(self, cx),
             Kind::Wasm(guest) => view::mount(self, guest, cx),
         };
         eprintln!("desk: plugin {} mounted", self.id);
@@ -102,8 +119,32 @@ impl Plugin {
 
     pub fn state(&self) -> Option<&'static str> {
         match &self.kind {
-            Kind::Native(_) => None,
+            Kind::Native(..) => None,
             Kind::Wasm(guest) => Some(guest.state()),
+        }
+    }
+
+    #[cfg_attr(
+        not(feature = "screen-settings"),
+        expect(
+            dead_code,
+            reason = "only Settings > Plugins asks for a native plugin's manifest, built with screen-settings"
+        )
+    )]
+    pub fn built_in(&self) -> Option<&'static str> {
+        match &self.kind {
+            Kind::Native(_, manifest) => Some(*manifest),
+            Kind::Wasm(_) => None,
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        match &self.kind {
+            Kind::Native(..) => self
+                .folder()
+                .and_then(|dir| consent::modes(&self.id, &dir))
+                .is_ok_and(|modes| modes.values().any(|mode| *mode == desk_plugin::Mode::Allow)),
+            Kind::Wasm(_) => true,
         }
     }
 

@@ -92,6 +92,20 @@ use gpui::{App, AppContext, EmptyView};
 use modules::editor::{open_dir, open_file};
 #[cfg(feature = "module-git")]
 use modules::git::open_repo;
+#[cfg(feature = "screen-settings")]
+use screens::settings::install_plugin;
+
+#[cfg(not(feature = "screen-settings"))]
+fn install_plugin(
+    _: &std::path::Path,
+    _: &mut gpui::Window,
+    _: &mut App,
+) -> Result<gpui::AnyView, String> {
+    Err(
+        "--install-plugin needs the settings screen: rebuild with --features screen-settings"
+            .to_owned(),
+    )
+}
 
 #[cfg(not(feature = "module-editor"))]
 fn open_file(
@@ -124,7 +138,8 @@ fn open_repo(
     Err("--repo needs the git module: rebuild with --features module-git".to_owned())
 }
 
-const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>] [--repo <path>]]\n\
+const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>] [--repo <path>]] | [--install-plugin <folder>]\n\
+--install-plugin installs the plugin in <folder> and opens Settings > Plugins on its consent sheet\n\
 --file opens a file in the editor screen\n\
 --dir lists a folder in the editor screen's file tree\n\
 --repo opens a git repository in the git screen\n\
@@ -152,6 +167,7 @@ enum Target {
     File(PathBuf),
     Dir(PathBuf, Option<PathBuf>),
     Repo(PathBuf),
+    Plugin(PathBuf),
 }
 
 struct ScreenLaunch {
@@ -211,6 +227,12 @@ fn parse(args: &[String]) -> Result<Launch, String> {
     match args {
         [] => Ok(Launch::Desk),
         [folder] if !folder.starts_with("--") => Ok(Launch::Desk),
+        [flag, folder] if flag == "--install-plugin" => Ok(Launch::Screen(ScreenLaunch {
+            open: screen("settings")?,
+            name: "settings".to_owned(),
+            board: None,
+            target: Some(Target::Plugin(PathBuf::from(folder))),
+        })),
         [flag, name, rest @ ..] if flag == "--screen" => {
             let (mut board, mut file, mut dir, mut repo) = (None, None, None, None);
             for pair in rest.chunks(2) {
@@ -286,6 +308,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
                     open_dir(dir, file.as_deref(), board.as_deref(), window, cx)
                 }
                 Some(Target::Repo(path)) => open_repo(path, board.as_deref(), window, cx),
+                Some(Target::Plugin(folder)) => install_plugin(folder, window, cx),
                 None => open(board.as_deref(), window, cx),
             };
             let view = opened.unwrap_or_else(|error| {
