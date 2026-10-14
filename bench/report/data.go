@@ -48,15 +48,6 @@ func (d Data) outOfDecisions(count int) Figure {
 	return countFigure(count, fmt.Sprintf("of %d decisions", len(d.Judgments)))
 }
 
-func (d Data) provenance(source string) string {
-	for _, report := range d.Reports {
-		if report.Source == source {
-			return source + ", " + report.Line()
-		}
-	}
-	return source
-}
-
 func (d Data) JSON() ([]byte, error) {
 	body, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {

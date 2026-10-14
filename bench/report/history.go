@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -42,10 +43,6 @@ func (r Run) span() (float64, float64) {
 		return r.Value, r.Value
 	}
 	return r.Low, r.High
-}
-
-func (r Run) Conditions() string {
-	return fmt.Sprintf("%s, %s, %s, tofu %s, %s", r.Source, r.Date, r.Commit, r.Version, r.Build)
 }
 
 type Measure struct {
@@ -128,6 +125,8 @@ func (m Measure) Words(ours, theirs Run) string {
 		word = m.Gain
 	}
 	switch {
+	case ratio < 1.005:
+		return "same"
 	case m.Rough && ratio >= 10:
 		return fmt.Sprintf("over %.0fx %s", math.Pow(10, math.Floor(math.Log10(ratio))), word)
 	case ratio >= 1.5:
@@ -178,14 +177,37 @@ func (h History) state(one Headline) (Stated, error) {
 	return Stated{}, fmt.Errorf("%s: the headline %q names %s, %s against %s, which no measure carries", HistoryPath, one.Says, one.Pairing, one.Short, one.Rival)
 }
 
+type Table struct {
+	Pairing string `json:"pairing"`
+	Rival   string `json:"rival"`
+	Title   string `json:"title"`
+	Tag     string `json:"tag"`
+}
+
 type History struct {
 	ReadOn    string     `json:"read_on"`
 	Tree      string     `json:"tree"`
 	Version   string     `json:"version"`
 	Rule      string     `json:"level_rule"`
 	Headlines []Headline `json:"headlines"`
+	Tables    []Table    `json:"tables"`
 	Measures  []Measure  `json:"measures"`
 	Stated    []Stated   `json:"-"`
+}
+
+func (h History) Rows(table Table) []Measure {
+	var rows []Measure
+	for _, m := range h.Measures {
+		at := slices.IndexFunc(m.Rivals, func(rival Run) bool { return rival.Label == table.Rival })
+		if m.Pairing == table.Pairing && at >= 0 {
+			m.Rivals = m.Rivals[at : at+1]
+			rows = append(rows, m)
+		}
+	}
+	slices.SortStableFunc(rows, func(a, b Measure) int {
+		return slices.Index(ranked, a.Against(a.Rivals[0])) - slices.Index(ranked, b.Against(b.Rivals[0]))
+	})
+	return rows
 }
 
 type Standing struct {
@@ -232,7 +254,10 @@ func (h History) DateLine() string {
 	return fmt.Sprintf("Read on %s from the tree at %s, tofu %s. The newest measurement ran on %s. Every number names its bench, the day it ran, the commit and the tofu version it measured.", h.ReadOn, h.Tree, h.Version, newest)
 }
 
-var numberIn = regexp.MustCompile(`[0-9][0-9,.]*[0-9]|[0-9]`)
+var (
+	numberIn     = regexp.MustCompile(`[0-9][0-9,.]*[0-9]|[0-9]`)
+	dateOrCommit = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2}|[0-9a-f]{7,40})\b`)
+)
 
 func readHistory(path, tree string) (History, error) {
 	var history History
@@ -267,6 +292,14 @@ func readHistory(path, tree string) (History, error) {
 			return History{}, err
 		}
 		history.Stated = append(history.Stated, stated)
+	}
+	for _, table := range history.Tables {
+		if table.Title == "" || table.Tag == "" || len(history.Rows(table)) == 0 {
+			return History{}, fmt.Errorf("%s: the table %q needs a title, a tag and a measure of %s against %s", HistoryPath, table.Title, table.Pairing, table.Rival)
+		}
+		if dated := dateOrCommit.FindString(table.Title + " " + table.Tag); dated != "" {
+			return History{}, fmt.Errorf("%s: the table %q shows %s, and the page carries no date and no commit", HistoryPath, table.Title, dated)
+		}
 	}
 	return history, nil
 }

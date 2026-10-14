@@ -3,14 +3,14 @@
     {
       "label": "Jev, paid per decision",
       "figure": "$0.000041",
-      "note": "per correct decision, 6 case battery, 2026-09-18",
+      "note": "per correct decision, 6 case battery",
       "source": "bench/cost/report-2026-09-18.md",
       "evidence": "Jev decided for $0.000041 per correct decision and opus for $0.005351, 131 times Jev."
     },
     {
       "label": "Jev, median latency",
       "figure": "344 ms",
-      "note": "median of 7 calls, 2026-09-21",
+      "note": "median of 7 calls",
       "source": "bench/ask/report-2026-09-21.md",
       "evidence": "judged 4 of 7, free 3 of 7, 7 calls, $0.000187, $0.000027 each, mean 376ms, p50 344ms"
     }
@@ -31,7 +31,7 @@
       "decides": "file_shortlist",
       "wiring": "unwired",
       "source": "bench/shortlist/report-2026-09-21.md",
-      "unanswerable_because": "The one table that scored the two methods was struck on 2026-09-23 by bench/report/withdrawals.json, so there is no reading left to compare. 3 of the 4 questions name their own answer inside their own prompt, which makes that table a judge reading a filename out of the task against a BM25 with no stopword list, and nothing scored on it can be told apart from a regular expression pulling the filename out. The corpus is parked rather than rebuilt: the recorded sessions yield 7 recordable turns carrying 2 distinct tasks against a floor of 30, so there is nothing to rerun it on. What stands from the run is the cost and latency of Jev alone, 4 calls at $0.000063 a question and a p50 of about 333 ms, which says what the method costs and nothing about whether it wins.",
+      "unanswerable_because": "The one table that scored the two methods was struck by bench/report/withdrawals.json, so there is no reading left to compare. 3 of the 4 questions name their own answer inside their own prompt, which makes that table a judge reading a filename out of the task against a BM25 with no stopword list, and nothing scored on it can be told apart from a regular expression pulling the filename out. The corpus is parked rather than rebuilt: the recorded sessions yield 7 recordable turns carrying 2 distinct tasks against a floor of 30, so there is nothing to rerun it on. What stands from the run is the cost and latency of Jev alone, 4 calls at $0.000063 a question and a p50 of about 333 ms, which says what the method costs and nothing about whether it wins.",
       "unanswerable_evidence": "Not yet decided, and it cannot be decided from four questions."
     },
     {
@@ -205,7 +205,7 @@
       "decides": "tool_gate",
       "wiring": "unwired",
       "source": "bench/cost/report-2026-09-19.md",
-      "unanswerable_because": "Nobody has a usable score for either side of this one. The only dated report that measured it withdrew every accuracy number in the file on 2026-09-19, because they were scored by a rule the gate does not actually run. It needs one fresh run of Jev and one of the regular expression over the same 89 cases, through the rule the gate really uses, written up as a dated report.",
+      "unanswerable_because": "Nobody has a usable score for either side of this one. The only dated report that measured it withdrew every accuracy number in the file, because they were scored by a rule the gate does not actually run. It needs one fresh run of Jev and one of the regular expression over the same 89 cases, through the rule the gate really uses, written up as a dated report.",
       "unanswerable_evidence": "Agreement with the label: the Correct, Agreement, Blocks caught and False blocks columns, every row."
     },
     {

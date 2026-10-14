@@ -18,7 +18,6 @@ func Page(d Data) string {
 	older := []section{
 		{"jev", "Jev against the cheap way", judgmentsHTML(d)},
 		{"decides", "What decides what today", wiringHTML(d)},
-		{"reports", "Every dated report under bench/", reportsHTML(d)},
 	}
 	page := &strings.Builder{}
 	page.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
@@ -27,7 +26,7 @@ func Page(d Data) string {
 	for _, one := range append(append([]section{}, shown...), older...) {
 		fmt.Fprintf(page, "<a href=\"#%s\">%s</a>", one.id, html.EscapeString(one.title))
 	}
-	page.WriteString("</nav>\n" + headlinesHTML(d.History) + tldrHTML(d.History))
+	page.WriteString("</nav>\n" + tldrHTML(d.History) + headlinesHTML(d.History))
 	for _, one := range shown {
 		fmt.Fprintf(page, "<section id=\"%s\">\n<h2>%s</h2>\n%s</section>\n", one.id, html.EscapeString(one.title), one.body)
 	}
@@ -35,8 +34,8 @@ func Page(d Data) string {
 	for _, one := range older {
 		fmt.Fprintf(page, "<details class=\"older\" id=\"%s\"><summary>%s</summary>\n%s</details>\n", one.id, html.EscapeString(one.title), one.body)
 	}
-	fmt.Fprintf(page, "</section>\n<footer>Read on %s, tofu %s. Built by <code>%s</code>, fetches nothing.</footer>\n",
-		html.EscapeString(d.History.ReadOn), html.EscapeString(d.History.Version), html.EscapeString(d.GeneratedBy))
+	fmt.Fprintf(page, "</section>\n<footer>tofu %s. Built by <code>%s</code>, fetches nothing.</footer>\n",
+		html.EscapeString(d.History.Version), html.EscapeString(d.GeneratedBy))
 	page.WriteString("</main>\n<script>" + openTarget + "</script>\n</body>\n</html>\n")
 	return page.String()
 }
@@ -49,23 +48,6 @@ func figureIn(class string, figure Figure) string {
 
 func quoteHTML(text, source string) string {
 	return fmt.Sprintf("<blockquote>%s<cite>%s</cite></blockquote>\n", html.EscapeString(text), html.EscapeString(source))
-}
-
-func saidHTML(said []Said, source string) string {
-	quote := &strings.Builder{}
-	quote.WriteString("<blockquote>")
-	for at, part := range said {
-		if at > 0 {
-			quote.WriteString(" ")
-		}
-		if part.Fell {
-			fmt.Fprintf(quote, "<s class=\"fell\">%s</s> <span class=\"badge\" data-variant=\"secondary\">withdrawn</span>", html.EscapeString(part.Text))
-			continue
-		}
-		quote.WriteString(html.EscapeString(part.Text))
-	}
-	fmt.Fprintf(quote, "<cite>%s</cite></blockquote>\n", html.EscapeString(source))
-	return quote.String()
 }
 
 func statCards(stats []Stat) string {
@@ -104,17 +86,6 @@ func verdictClass(verdict Verdict) string {
 	}
 }
 
-func runsHTML(m Measure) string {
-	list := &strings.Builder{}
-	list.WriteString("<ul>")
-	for at, run := range m.Tofu {
-		fmt.Fprintf(list, "<li><strong>%s</strong> %s<span class=\"detail\">%s</span><span class=\"detail\">%s</span></li>",
-			html.EscapeString(run.Label), figureHTML(m.Shown(run)), html.EscapeString(m.Change(at)), html.EscapeString(run.Conditions()))
-	}
-	list.WriteString("</ul>")
-	return list.String()
-}
-
 func measureHead(m Measure) string {
 	return fmt.Sprintf("<td class=\"table-cell\">%s<span class=\"detail\">%s, %s is better</span><span class=\"detail\"><code>bench/%s</code></span></td>",
 		html.EscapeString(m.Name), html.EscapeString(m.Task), m.Better, html.EscapeString(m.Bench))
@@ -134,27 +105,26 @@ func tableOf(caption string, heads []string, rows string) string {
 	return table.String()
 }
 
-func rivalsHTML(measures []Measure) string {
+func rangesHTML(rival string, measures []Measure) string {
 	rows := &strings.Builder{}
 	for _, m := range measures {
-		rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td><td class=\"table-cell\"><ul>")
-		for _, rival := range m.Rivals {
-			verdict := m.Against(rival)
-			fmt.Fprintf(rows, "<li class=\"%s\"><strong>%s</strong> %s <span class=\"badge\" data-variant=\"outline\">tofu %s</span><span class=\"detail\">%s</span></li>",
-				verdictClass(verdict), html.EscapeString(rival.Label), figureHTML(m.Shown(rival)), verdict, html.EscapeString(rival.Conditions()))
-		}
-		rows.WriteString("</ul></td></tr>\n")
+		fmt.Fprintf(rows, "<tr class=\"table-row\">%s<td class=\"table-cell\">%s</td><td class=\"table-cell %s\">%s</td></tr>\n",
+			measureHead(m), figureHTML(m.Shown(m.Latest())), verdictClass(m.Against(m.Rivals[0])), figureHTML(m.Shown(m.Rivals[0])))
 	}
-	return tableOf("tofu's runs oldest first, the latest one judged against each other harness on the same task, machine and day.",
-		[]string{"What is measured", "tofu, run by run", "The other harness, and tofu's latest run against it"}, rows.String())
+	return tableOf("Median, lowest and highest in brackets.", []string{"What is measured", "tofu", html.EscapeString(rival)}, rows.String())
 }
 
 func changesHTML(measures []Measure) string {
 	rows := &strings.Builder{}
 	for _, m := range measures {
-		rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td></tr>\n")
+		rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\"><ul>")
+		for at, run := range m.Tofu {
+			fmt.Fprintf(rows, "<li><strong>%s</strong> %s<span class=\"detail\">%s</span></li>",
+				html.EscapeString(run.Label), figureHTML(m.Shown(run)), html.EscapeString(m.Change(at)))
+		}
+		rows.WriteString("</ul></td></tr>\n")
 	}
-	return tableOf("Each run names the tofu version and commit it measured, and the change from the run before it.",
+	return tableOf("Each run and the change from the run before it.",
 		[]string{"What is measured", "Every run, oldest first"}, rows.String())
 }
 
@@ -183,11 +153,7 @@ func judgmentsHTML(d Data) string {
 		{Label: "Not compared", Figure: d.outOfDecisions(len(d.Judgments) - d.ComparedDecisions()), Note: "no usable score on one side"},
 		{Label: "Switched on", Figure: d.PointsOn(), Note: "read from " + d.MethodTable},
 	}
-	for _, cost := range d.Answers.JevCosts {
-		cost.Note += ", " + d.provenance(cost.Source)
-		stats = append(stats, cost)
-	}
-	body.WriteString(statCards(stats))
+	body.WriteString(statCards(append(stats, d.Answers.JevCosts...)))
 	body.WriteString(gapChart(d.Judgments))
 	rows := &strings.Builder{}
 	for _, row := range d.Judgments {
@@ -200,8 +166,8 @@ func judgmentsHTML(d Data) string {
 		} else {
 			fmt.Fprintf(rows, "<td class=\"table-cell missing\" colspan=\"4\"><strong>Not compared.</strong> %s</td>", html.EscapeString(row.NotCompared))
 		}
-		fmt.Fprintf(rows, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span><span class=\"detail\"><code>%s</code></span></td></tr>\n",
-			figureIn("fig sample", row.Sample), useVariant(row.Wired), html.EscapeString(row.SwitchedOn), html.EscapeString(d.provenance(row.Source)))
+		fmt.Fprintf(rows, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span></td></tr>\n",
+			figureIn("fig sample", row.Sample), useVariant(row.Wired), html.EscapeString(row.SwitchedOn))
 	}
 	body.WriteString(tableOf("Each row is one decision, the cheapest method anyone has written for it, and Jev, on the same set of cases.",
 		[]string{"What decides", "Method", "Method", "Winner", "By how much", "Measured on", "Switched on"}, rows.String()))
@@ -261,45 +227,4 @@ func gapChart(rows []JudgmentRow) string {
 	}
 	chart.WriteString("</svg>\n")
 	return chart.String()
-}
-
-func reportsHTML(d Data) string {
-	body := &strings.Builder{}
-	benches := d.Counts.MeasuredPackage + d.Counts.NoReport
-	body.WriteString(statCards([]Stat{
-		{Label: "Written up", Figure: countFigure(d.Counts.Reports, "dated reports"), Note: "one file each, under bench/"},
-		{Label: "Benches measuring", Figure: countFigure(d.Counts.MeasuredPackage, "of "+fmt.Sprint(benches)), Note: "the rest are named below, not hidden"},
-		{Label: "Withdrawn", Figure: countFigure(d.Counts.Withdrawn, "of "+fmt.Sprint(d.Counts.Reports)), Note: "struck rather than deleted"},
-		{Label: "Stale", Figure: countFigure(d.Counts.Stale, "of "+fmt.Sprint(d.Counts.Reports)), Note: "measured against a corpus that moved"},
-		{Label: "Naming no answer", Figure: countFigure(d.Counts.Unparsed, "of "+fmt.Sprint(d.Counts.Reports)), Note: "no heading names the file's own conclusion"},
-	}))
-	for _, report := range d.Reports {
-		fmt.Fprintf(body, "<details><summary>%s, %s <span class=\"path\">%s</span>%s<span class=\"detail\">%s</span><span class=\"detail\">run before it: %s</span></summary>\n",
-			html.EscapeString(report.Package), html.EscapeString(report.Date), html.EscapeString(report.Source), stateBadge(report.State),
-			html.EscapeString(report.Line()), html.EscapeString(report.Previous))
-		if report.StateNote != "" {
-			body.WriteString(quoteHTML(report.StateNote, string(report.State)+", said by "+report.StateSource))
-		}
-		body.WriteString("<h3>What it found, in the report's own words</h3>\n")
-		body.WriteString(saidHTML(report.Conclusion, report.Source))
-		body.WriteString("<h3>What it rests on</h3>\n")
-		body.WriteString(quoteHTML(report.Sample, report.Source))
-		if report.Skips != "" {
-			body.WriteString(quoteHTML("Skipped: "+report.Skips, report.Source))
-		}
-		fmt.Fprintf(body, "<span class=\"badge\" data-variant=\"outline\">built from %s</span>\n</details>\n", html.EscapeString(string(report.BuiltFrom)))
-	}
-	body.WriteString("<h3>Benches with no dated report</h3>\n<ul>\n")
-	for _, pkg := range d.NoReport {
-		fmt.Fprintf(body, "<li><code>bench/%s</code>, %s: %s</li>\n", html.EscapeString(pkg.Package), html.EscapeString(string(pkg.Kind)), html.EscapeString(pkg.Note))
-	}
-	body.WriteString("</ul>\n")
-	return body.String()
-}
-
-func stateBadge(state State) string {
-	if state.Stands() {
-		return ""
-	}
-	return fmt.Sprintf("<span class=\"badge\" data-variant=\"secondary\">%s</span>", html.EscapeString(string(state)))
 }
