@@ -136,6 +136,7 @@ type runtime struct {
 	leadAsks     turn.Person
 	cron         *cron.Book
 	places       sys.Places
+	startup      *startupClock
 
 	omitThinkingSummary bool
 }
@@ -361,11 +362,13 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprint(out, runUsage())
 		return exitOK
 	}
+	clock := clockFromProcessStart()
 	opts, err := parseRunArgs(args)
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	opts = onTheBoundKeyWire(opts)
+	clock.step("model roles")
 	dir := cmp.Or(opts.dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
 	if opts.maxSteps == 0 {
@@ -386,11 +389,13 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if opts.showPrompt {
 		return showPrompt(opts, out, errOut)
 	}
+	clock.step("settings")
 
 	selected, err := chooseModel(opts)
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	clock.step("model choice")
 
 	shell, err := turn.ResolveRunShell(settingText(dir, settingspkg.Shell, say))
 	if err != nil {
@@ -405,10 +410,12 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	clock.step("shell and tools")
 	budget, err := contextBudget(opts, selected)
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	clock.step("model catalogue")
 
 	if opts.dryRun {
 		opts.effort = selected.EffortTaken(opts.effort)
@@ -424,7 +431,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, selected, built, plan, budget, warm.tabs, out, errOut)
+	return runTurn(opts, selected, built, plan, budget, warm.tabs, clock, out, errOut)
 }
 
 func contextBudget(opts runOpts, model models.Model) (recall.Budget, error) {
@@ -470,7 +477,7 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
 }
 
-func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools.Plan, budget recall.Budget, tabs *tools.BrowserTabs, out, errOut io.Writer) int {
+func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools.Plan, budget recall.Budget, tabs *tools.BrowserTabs, clock *startupClock, out, errOut io.Writer) int {
 	open := openAppWire
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -486,8 +493,13 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	defer opened.held.checkUsageAlongside(clock)()
+	clock.step("credentials")
 	wrap := func(model turn.Model) (turn.Model, error) { return guarded(model, budget) }
-	opened.held.wrap = wrap
+	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
+		asked, err := wrap(model)
+		return clock.leading(asked), err
+	}
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
 		return runFail(errOut, err)
@@ -513,12 +525,14 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	clock.step("gate, sift and session store")
 
-	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: tabs, plan: plan, places: places})
+	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(opened.held.forTurn(), opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
+		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: tabs, plan: plan, places: places, startup: clock})
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	clock.step("lead tools, board and spawn")
 	if spawner != nil {
 		review, reviewErr := newDoneReview(opts.doneArm)
 		if reviewErr != nil {
@@ -539,10 +553,14 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	clock.step("shell registry and scratch")
 	runErr := turn.Lead(turn.WithShellRegistry(leading, registry), config, nil, nil, func(row turn.Row, _ error) {
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head, rows = cmp.Or(row.Session, head), append(rows, row)
 	})
+	if err := clock.record(sessions, config.Session); err != nil {
+		_, _ = fmt.Fprintln(errOut, "tofu run: the startup steps were not recorded: "+err.Error())
+	}
 	for _, warning := range turn.EndSession(context.Background(), cmp.Or(opts.dir, "."), head, sessionEndOther) {
 		_, _ = fmt.Fprintln(errOut, "tofu run: "+warning)
 	}
@@ -637,6 +655,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	environment, files, instructions, notice := runEnvironment(opts)
 	say(notice)
+	run.startup.step("instructions and environment")
 	remembered := ""
 	if opts.agent == "" && memoryOn(cmp.Or(opts.dir, ".")) {
 		block, unread := memory.Block(cmp.Or(opts.dir, "."))
@@ -645,15 +664,18 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		}
 		remembered = block
 	}
+	run.startup.step("memory")
 	discovered := <-found
 	opts.subAgentList = turn.SubAgentList(discovered.Definitions)
 	for _, broken := range discovered.Broken {
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
 	}
+	run.startup.step("sub-agent definitions")
 	stack, err := stackRules("", cmp.Or(opts.dir, "."))
 	if err != nil {
 		return composedRun{}, err
 	}
+	run.startup.step("rules")
 	rules := stack.rules
 	var switchedOff []rule.Overriding
 	for _, applied := range stack.overrides {
@@ -673,6 +695,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		}
 		skills = offered.Skills
 	}
+	run.startup.step("skills")
 	frameworks, err := rule.Frameworks(cmp.Or(opts.dir, "."), turn.TaskNamed(opts.task).Paths)
 	if err != nil {
 		say("no framework rule fires this run: " + err.Error())
@@ -690,6 +713,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		spec.Role = rule.RoleOrchestrator
 	}
 	composed, err := turn.Compose(spec)
+	run.startup.step("frameworks and prompt")
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, subAgents: subAgents, skills: skills,
 		checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == verifySubAgentsRule })}, err
 }

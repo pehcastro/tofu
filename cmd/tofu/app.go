@@ -696,6 +696,7 @@ type appEngine struct {
 	tabs   *tools.BrowserTabs
 	warm   *warmProcesses
 	places sys.Places
+	timed  string
 }
 
 func (e *appEngine) Renew() {
@@ -710,6 +711,7 @@ func (e *appEngine) OneTurnPerProject() bool {
 
 func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {
 	say := hooks.Say
+	clock := clockFromNow()
 	opts := pickedOpts(e.dir, start, cmp.Or(e.arms.maxSteps, settingInt(e.dir, settingspkg.DecisionCap, say)))
 	opts.gateArm, opts.siftArm, opts.noInstructions, opts.noDocs = e.arms.gateArm, e.arms.siftArm, e.arms.noInstructions, e.arms.noDocs
 	opts.toolSet, opts.contextCeiling = cmp.Or(e.arms.toolSet, opts.toolSet), e.arms.contextCeiling
@@ -722,6 +724,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		return prepared, err
 	}
 	opts.shell = shell
+	clock.step("settings")
 	opened, err := e.open(opts)
 	if opened.held != nil {
 		prepared.Close = opened.held.close
@@ -729,6 +732,12 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if err != nil {
 		return prepared, err
 	}
+	checked := opened.held.checkUsageAlongside(clock)
+	prepared.Close = func() {
+		checked()
+		opened.held.close()
+	}
+	clock.step("model choice and credentials")
 	images := start.Images
 	if len(images) > 0 {
 		if refused := imagesRefused(settingText(e.dir, settingspkg.Images, say), opened.selected, len(images)); refused != "" {
@@ -744,6 +753,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if start.Pick.Fired != "" {
 		built = withoutPush(built)
 	}
+	clock.step("shell, tools and session store")
 	places := e.places
 	if places == (sys.Places{}) {
 		if places, err = sys.ResolvePlaces("."); err != nil {
@@ -763,16 +773,18 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if siftErr != nil {
 		say("no shell result is cut: " + siftErr.Error())
 	}
+	clock.step("gate and sift")
 	budget, err := contextBudget(opts, opened.selected)
 	if err != nil {
 		return prepared, err
 	}
+	clock.step("model catalogue")
 	opened.held.wrap = func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
 		if guardErr != nil {
 			return nil, guardErr
 		}
-		return hooks.Lead(asked), nil
+		return hooks.Lead(clock.leading(asked)), nil
 	}
 	wrapSubAgent := func(model turn.Model) (turn.Model, error) {
 		asked, guardErr := guarded(model, budget)
@@ -783,10 +795,21 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if stand := e.standIns(opened.held, opts.wire); len(stand.mine()) > 0 {
 		turnAccounts, others, account = stand.forTurn(), stand.others, stand.spent
 	}
-	config, spawner, err := runConfig(opts, built, runtime{accounts: turnAccounts, spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
-		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places})
+	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock})
 	if err != nil {
 		return prepared, err
+	}
+	clock.step("lead tools, board and spawn")
+	if config.Session != e.timed {
+		e.timed = config.Session
+		closeAccounts := prepared.Close
+		prepared.Close = func() {
+			closeAccounts()
+			if err := clock.record(sessions, config.Session); err != nil {
+				say("the startup steps were not recorded: " + err.Error())
+			}
+		}
 	}
 	if gate != nil {
 		gate.watch = hooks.Gate
