@@ -1,0 +1,281 @@
+{
+  "Name": "v3",
+  "Against": "v2",
+  "Note": "the working tree with hook config parsed by pelletier/go-toml/v2, so no package reads the local zone at init, and third_party/clipboard loading user32 on first use",
+  "Version": "0.5.14+dev",
+  "Commit": "9f1aaf8810c2586fa6bc707011e04867cffd2611-dirty",
+  "Recorded": "2026-10-14T07:18:44.3263395Z",
+  "Platform": "windows/amd64",
+  "Method": "CPU is QueryProcessCycleTime at a cycle rate calibrated by spinning one locked thread, because Windows user and kernel times move in 15.6 ms ticks; RSS is the peak working set",
+  "Runs": 7,
+  "InitMs": 10.467,
+  "InitMB": 3.370352,
+  "Rows": [
+    {
+      "Command": "version",
+      "WallMs": 18.776,
+      "WallP90Ms": 19.494,
+      "CPUMs": 18.537,
+      "RSSMB": 16.941056
+    },
+    {
+      "Command": "help",
+      "WallMs": 18.184,
+      "WallP90Ms": 21.561,
+      "CPUMs": 17.506,
+      "RSSMB": 16.7936
+    },
+    {
+      "Command": "docs",
+      "WallMs": 20,
+      "WallP90Ms": 23.026,
+      "CPUMs": 19.408,
+      "RSSMB": 17.661952
+    },
+    {
+      "Command": "changelog",
+      "WallMs": 23.003,
+      "WallP90Ms": 23.999,
+      "CPUMs": 22.091,
+      "RSSMB": 17.412096
+    },
+    {
+      "Command": "settings",
+      "WallMs": 18.908,
+      "WallP90Ms": 22.993,
+      "CPUMs": 18.596,
+      "RSSMB": 17.088512
+    },
+    {
+      "Command": "memory",
+      "WallMs": 22.165,
+      "WallP90Ms": 26.474,
+      "CPUMs": 21.468,
+      "RSSMB": 17.088512
+    },
+    {
+      "Command": "agents",
+      "WallMs": 26,
+      "WallP90Ms": 29,
+      "CPUMs": 25.262,
+      "RSSMB": 18.640896
+    },
+    {
+      "Command": "models",
+      "WallMs": 20.338,
+      "WallP90Ms": 23,
+      "CPUMs": 19.969,
+      "RSSMB": 18.116608
+    },
+    {
+      "Command": "library",
+      "WallMs": 30.306,
+      "WallP90Ms": 37.987,
+      "CPUMs": 31.424,
+      "RSSMB": 21.508096
+    },
+    {
+      "Command": "hooks",
+      "WallMs": 20.608,
+      "WallP90Ms": 23.34,
+      "CPUMs": 19.958,
+      "RSSMB": 16.961536
+    },
+    {
+      "Command": "context",
+      "WallMs": 20.761,
+      "WallP90Ms": 25.033,
+      "CPUMs": 19.987,
+      "RSSMB": 17.14176
+    },
+    {
+      "Command": "scratch",
+      "WallMs": 20.515,
+      "WallP90Ms": 22.525,
+      "CPUMs": 19.361,
+      "RSSMB": 17.051648
+    },
+    {
+      "Command": "learn",
+      "WallMs": 39.998,
+      "WallP90Ms": 51.753,
+      "CPUMs": 38.535,
+      "RSSMB": 19.607552
+    },
+    {
+      "Command": "usage",
+      "WallMs": 58.677,
+      "WallP90Ms": 60.299,
+      "CPUMs": 36.447,
+      "RSSMB": 19.509248
+    },
+    {
+      "Command": "doctor",
+      "WallMs": 99.008,
+      "WallP90Ms": 144.614,
+      "CPUMs": 73.057,
+      "RSSMB": 24.178688
+    },
+    {
+      "Command": "frame",
+      "WallMs": 49.912,
+      "WallP90Ms": 52.431,
+      "CPUMs": 51.428,
+      "RSSMB": 21.725184
+    },
+    {
+      "Command": "reload",
+      "WallMs": 36,
+      "WallP90Ms": 39.623,
+      "CPUMs": 37.568,
+      "RSSMB": 21.348352
+    },
+    {
+      "Command": "migrate --dry-run",
+      "WallMs": 20,
+      "WallP90Ms": 22.243,
+      "CPUMs": 18.956,
+      "RSSMB": 16.949248
+    },
+    {
+      "Command": "preview",
+      "WallMs": 19.264,
+      "WallP90Ms": 20.996,
+      "CPUMs": 18.631,
+      "RSSMB": 17.055744
+    },
+    {
+      "Command": "serve --schema",
+      "WallMs": 27.749,
+      "WallP90Ms": 30.055,
+      "CPUMs": 27.74,
+      "RSSMB": 22.294528
+    },
+    {
+      "Command": "drive",
+      "WallMs": 82.635,
+      "WallP90Ms": 87.737,
+      "CPUMs": 66.191,
+      "RSSMB": 23.482368
+    },
+    {
+      "Command": "update --check",
+      "WallMs": 21.998,
+      "WallP90Ms": 24,
+      "CPUMs": 20.997,
+      "RSSMB": 17.887232
+    },
+    {
+      "Command": "browser",
+      "WallMs": 23.155,
+      "WallP90Ms": 25.989,
+      "CPUMs": 22.473,
+      "RSSMB": 17.502208
+    },
+    {
+      "Command": "session list",
+      "WallMs": 72.573,
+      "WallP90Ms": 75.699,
+      "CPUMs": 30.946,
+      "RSSMB": 18.620416
+    },
+    {
+      "Command": "shells list",
+      "WallMs": 19.361,
+      "WallP90Ms": 20.221,
+      "CPUMs": 18.44,
+      "RSSMB": 17.031168
+    },
+    {
+      "Command": "rules list",
+      "WallMs": 25.365,
+      "WallP90Ms": 27.763,
+      "CPUMs": 25.9,
+      "RSSMB": 19.94752
+    },
+    {
+      "Command": "lint comments",
+      "WallMs": 19.263,
+      "WallP90Ms": 20.596,
+      "CPUMs": 18.145,
+      "RSSMB": 16.945152
+    },
+    {
+      "Command": "boardy",
+      "WallMs": 18.464,
+      "WallP90Ms": 20.135,
+      "CPUMs": 17.628,
+      "RSSMB": 16.920576
+    },
+    {
+      "Command": "why --last",
+      "WallMs": 19.055,
+      "WallP90Ms": 20.607,
+      "CPUMs": 18.092,
+      "RSSMB": 16.900096
+    },
+    {
+      "Command": "label",
+      "WallMs": 18.268,
+      "WallP90Ms": 20.672,
+      "CPUMs": 17.822,
+      "RSSMB": 16.953344
+    },
+    {
+      "Command": "replay",
+      "WallMs": 19.019,
+      "WallP90Ms": 22,
+      "CPUMs": 17.606,
+      "RSSMB": 16.83456
+    },
+    {
+      "Command": "undo",
+      "WallMs": 19.788,
+      "WallP90Ms": 20.433,
+      "CPUMs": 18.461,
+      "RSSMB": 17.068032
+    },
+    {
+      "Command": "check",
+      "WallMs": 18.651,
+      "WallP90Ms": 22.012,
+      "CPUMs": 18.13,
+      "RSSMB": 16.887808
+    },
+    {
+      "Command": "judge",
+      "WallMs": 18.891,
+      "WallP90Ms": 20.944,
+      "CPUMs": 18.137,
+      "RSSMB": 16.900096
+    },
+    {
+      "Command": "sift",
+      "WallMs": 18.345,
+      "WallP90Ms": 20.593,
+      "CPUMs": 17.664,
+      "RSSMB": 17.01888
+    },
+    {
+      "Command": "run",
+      "WallMs": 74.881,
+      "WallP90Ms": 77.533,
+      "CPUMs": 31.946,
+      "RSSMB": 18.386944
+    },
+    {
+      "Command": "logout",
+      "WallMs": 18.816,
+      "WallP90Ms": 21.828,
+      "CPUMs": 18.24,
+      "RSSMB": 16.920576
+    },
+    {
+      "Command": "login --status",
+      "WallMs": 27.459,
+      "WallP90Ms": 29.279,
+      "CPUMs": 26.724,
+      "RSSMB": 17.702912
+    }
+  ]
+}

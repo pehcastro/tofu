@@ -1,6 +1,7 @@
 {
   "Name": "v1-runewidth",
   "Note": "runewidth v0.0.30, whose strict width table is built on first lookup; every rune width identical to v0.0.27",
+  "Version": "0.5.11-fix2",
   "Commit": "06042c16652197a3a38d62dbea64f301c5d0cb57-dirty",
   "Recorded": "2026-10-13T05:20:18.2034036Z",
   "Platform": "windows/amd64",

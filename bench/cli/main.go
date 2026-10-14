@@ -32,7 +32,9 @@ type row struct {
 
 type pass struct {
 	Name     string
+	Against  string
 	Note     string
+	Version  string
 	Commit   string
 	Recorded time.Time
 	Platform string
@@ -57,6 +59,7 @@ func commands() [][]string {
 
 func main() {
 	name := flag.String("pass", "", "the pass name, v0 for the baseline")
+	against := flag.String("against", "v0", "the earlier pass this one is compared with")
 	note := flag.String("note", "", "what changed in this pass")
 	runs := flag.Int("n", 7, "runs per command")
 	modfile := flag.String("modfile", "", "build against this go.mod instead of the tree's, to measure an earlier dependency set")
@@ -73,7 +76,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "bench/cli: -pass is required")
 		os.Exit(2)
 	}
-	if err := record(pass{Name: *name, Note: *note, Runs: *runs, Recorded: time.Now().UTC(), Platform: runtime.GOOS + "/" + runtime.GOARCH, Method: cpuMethod}, *modfile); err != nil {
+	if err := record(pass{Name: *name, Against: *against, Note: *note, Runs: *runs, Recorded: time.Now().UTC(), Platform: runtime.GOOS + "/" + runtime.GOARCH, Method: cpuMethod}, *modfile); err != nil {
 		fmt.Fprintln(os.Stderr, "bench/cli:", err)
 		os.Exit(1)
 	}
@@ -105,6 +108,9 @@ func record(result pass, modfile string) error {
 		for line := range strings.Lines(r.stdout) {
 			if commit, ok := strings.CutPrefix(line, "commit"); ok {
 				result.Commit = strings.TrimSpace(commit)
+			}
+			if version, ok := strings.CutPrefix(line, "version"); ok {
+				result.Version = strings.TrimSpace(version)
 			}
 		}
 		ms, bytes := initCost(r.stderr)

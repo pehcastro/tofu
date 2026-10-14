@@ -1,0 +1,281 @@
+{
+  "Name": "v2",
+  "Against": "v0",
+  "Note": "e68578c9, the tree before TOFU-1328: hook config parsed by BurntSushi/toml, whose init reads the local zone",
+  "Version": "0.5.14+dev",
+  "Commit": "e68578c9-archive",
+  "Recorded": "2026-10-14T06:57:03.2180527Z",
+  "Platform": "windows/amd64",
+  "Method": "CPU is QueryProcessCycleTime at a cycle rate calibrated by spinning one locked thread, because Windows user and kernel times move in 15.6 ms ticks; RSS is the peak working set",
+  "Runs": 7,
+  "InitMs": 40.771,
+  "InitMB": 3.40192,
+  "Rows": [
+    {
+      "Command": "version",
+      "WallMs": 49,
+      "WallP90Ms": 59.998,
+      "CPUMs": 50.063,
+      "RSSMB": 18.2272
+    },
+    {
+      "Command": "help",
+      "WallMs": 50.004,
+      "WallP90Ms": 58.471,
+      "CPUMs": 47.769,
+      "RSSMB": 18.526208
+    },
+    {
+      "Command": "docs",
+      "WallMs": 52.7,
+      "WallP90Ms": 70.227,
+      "CPUMs": 52.862,
+      "RSSMB": 19.255296
+    },
+    {
+      "Command": "changelog",
+      "WallMs": 50.204,
+      "WallP90Ms": 59.999,
+      "CPUMs": 50.623,
+      "RSSMB": 18.8416
+    },
+    {
+      "Command": "settings",
+      "WallMs": 42.335,
+      "WallP90Ms": 52.655,
+      "CPUMs": 42.499,
+      "RSSMB": 18.673664
+    },
+    {
+      "Command": "memory",
+      "WallMs": 46.999,
+      "WallP90Ms": 68.972,
+      "CPUMs": 46.245,
+      "RSSMB": 18.665472
+    },
+    {
+      "Command": "agents",
+      "WallMs": 52.002,
+      "WallP90Ms": 55.24,
+      "CPUMs": 51.951,
+      "RSSMB": 20.078592
+    },
+    {
+      "Command": "models",
+      "WallMs": 45.851,
+      "WallP90Ms": 63.998,
+      "CPUMs": 44.79,
+      "RSSMB": 19.705856
+    },
+    {
+      "Command": "library",
+      "WallMs": 52.591,
+      "WallP90Ms": 62.855,
+      "CPUMs": 56.158,
+      "RSSMB": 22.831104
+    },
+    {
+      "Command": "hooks",
+      "WallMs": 45.751,
+      "WallP90Ms": 50.753,
+      "CPUMs": 44.695,
+      "RSSMB": 18.505728
+    },
+    {
+      "Command": "context",
+      "WallMs": 48.002,
+      "WallP90Ms": 55.673,
+      "CPUMs": 48.89,
+      "RSSMB": 18.747392
+    },
+    {
+      "Command": "scratch",
+      "WallMs": 48.001,
+      "WallP90Ms": 51.014,
+      "CPUMs": 45.74,
+      "RSSMB": 18.763776
+    },
+    {
+      "Command": "learn",
+      "WallMs": 58.998,
+      "WallP90Ms": 82.458,
+      "CPUMs": 55.705,
+      "RSSMB": 20.463616
+    },
+    {
+      "Command": "usage",
+      "WallMs": 107.664,
+      "WallP90Ms": 309.661,
+      "CPUMs": 74.891,
+      "RSSMB": 20.97152
+    },
+    {
+      "Command": "doctor",
+      "WallMs": 170.001,
+      "WallP90Ms": 185.12,
+      "CPUMs": 129.909,
+      "RSSMB": 25.075712
+    },
+    {
+      "Command": "frame",
+      "WallMs": 94.962,
+      "WallP90Ms": 104.515,
+      "CPUMs": 97.694,
+      "RSSMB": 23.240704
+    },
+    {
+      "Command": "reload",
+      "WallMs": 73.998,
+      "WallP90Ms": 85,
+      "CPUMs": 74.801,
+      "RSSMB": 22.786048
+    },
+    {
+      "Command": "migrate --dry-run",
+      "WallMs": 60.002,
+      "WallP90Ms": 65.995,
+      "CPUMs": 60.568,
+      "RSSMB": 18.567168
+    },
+    {
+      "Command": "preview",
+      "WallMs": 55.999,
+      "WallP90Ms": 59.003,
+      "CPUMs": 54.702,
+      "RSSMB": 18.587648
+    },
+    {
+      "Command": "serve --schema",
+      "WallMs": 65.408,
+      "WallP90Ms": 71.995,
+      "CPUMs": 66.157,
+      "RSSMB": 23.523328
+    },
+    {
+      "Command": "drive",
+      "WallMs": 144.001,
+      "WallP90Ms": 153.76,
+      "CPUMs": 122.172,
+      "RSSMB": 24.768512
+    },
+    {
+      "Command": "update --check",
+      "WallMs": 55,
+      "WallP90Ms": 58.97,
+      "CPUMs": 53.222,
+      "RSSMB": 19.398656
+    },
+    {
+      "Command": "browser",
+      "WallMs": 47.703,
+      "WallP90Ms": 54.899,
+      "CPUMs": 46.558,
+      "RSSMB": 19.017728
+    },
+    {
+      "Command": "session list",
+      "WallMs": 128.001,
+      "WallP90Ms": 137.999,
+      "CPUMs": 68.266,
+      "RSSMB": 19.894272
+    },
+    {
+      "Command": "shells list",
+      "WallMs": 44.995,
+      "WallP90Ms": 50.723,
+      "CPUMs": 45.406,
+      "RSSMB": 18.65728
+    },
+    {
+      "Command": "rules list",
+      "WallMs": 65.002,
+      "WallP90Ms": 77.001,
+      "CPUMs": 67.133,
+      "RSSMB": 21.229568
+    },
+    {
+      "Command": "lint comments",
+      "WallMs": 42.037,
+      "WallP90Ms": 50.735,
+      "CPUMs": 41.943,
+      "RSSMB": 18.427904
+    },
+    {
+      "Command": "boardy",
+      "WallMs": 49.643,
+      "WallP90Ms": 52.585,
+      "CPUMs": 49.146,
+      "RSSMB": 18.497536
+    },
+    {
+      "Command": "why --last",
+      "WallMs": 56.429,
+      "WallP90Ms": 64.695,
+      "CPUMs": 56.004,
+      "RSSMB": 18.6368
+    },
+    {
+      "Command": "label",
+      "WallMs": 50.99,
+      "WallP90Ms": 63.962,
+      "CPUMs": 49.521,
+      "RSSMB": 18.296832
+    },
+    {
+      "Command": "replay",
+      "WallMs": 51.442,
+      "WallP90Ms": 56.894,
+      "CPUMs": 49.164,
+      "RSSMB": 18.563072
+    },
+    {
+      "Command": "undo",
+      "WallMs": 47.999,
+      "WallP90Ms": 67.538,
+      "CPUMs": 46.676,
+      "RSSMB": 18.599936
+    },
+    {
+      "Command": "check",
+      "WallMs": 49.543,
+      "WallP90Ms": 52.672,
+      "CPUMs": 48.504,
+      "RSSMB": 18.579456
+    },
+    {
+      "Command": "judge",
+      "WallMs": 54.666,
+      "WallP90Ms": 58.716,
+      "CPUMs": 53.711,
+      "RSSMB": 18.743296
+    },
+    {
+      "Command": "sift",
+      "WallMs": 48.11,
+      "WallP90Ms": 61.998,
+      "CPUMs": 49.004,
+      "RSSMB": 18.702336
+    },
+    {
+      "Command": "run",
+      "WallMs": 133.462,
+      "WallP90Ms": 156.445,
+      "CPUMs": 66.271,
+      "RSSMB": 19.582976
+    },
+    {
+      "Command": "logout",
+      "WallMs": 45.789,
+      "WallP90Ms": 58.709,
+      "CPUMs": 46.162,
+      "RSSMB": 18.665472
+    },
+    {
+      "Command": "login --status",
+      "WallMs": 64.861,
+      "WallP90Ms": 78,
+      "CPUMs": 65.402,
+      "RSSMB": 19.456
+    }
+  ]
+}

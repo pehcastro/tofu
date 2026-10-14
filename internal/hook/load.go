@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"maps"
 	"math"
@@ -17,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 
 	"tofu/internal/shell"
 	"tofu/internal/sys"
@@ -215,7 +216,12 @@ func readSettings(path string, body []byte) (settingsFile, error) {
 	var codex struct {
 		Hooks map[string]any `toml:"hooks"`
 	}
-	if _, err := toml.Decode(string(body), &codex); err != nil {
+	if err := toml.Unmarshal(body, &codex); err != nil {
+		var broken *toml.DecodeError
+		if errors.As(err, &broken) {
+			row, _ := broken.Position()
+			err = fmt.Errorf("toml: line %d: %s", row, strings.TrimPrefix(broken.Error(), "toml: "))
+		}
 		return parsed, err
 	}
 	delete(codex.Hooks, "state")

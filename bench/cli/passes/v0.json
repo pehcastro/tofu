@@ -1,6 +1,7 @@
 {
   "Name": "v0",
   "Note": "baseline: runewidth v0.0.27, chroma v2.24.1 from the module cache",
+  "Version": "0.5.11-fix2",
   "Commit": "06042c16652197a3a38d62dbea64f301c5d0cb57-dirty",
   "Recorded": "2026-10-13T05:19:28.5536627Z",
   "Platform": "windows/amd64",

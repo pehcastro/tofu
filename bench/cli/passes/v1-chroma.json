@@ -1,6 +1,7 @@
 {
   "Name": "v1-chroma",
   "Note": "runewidth v0.0.30 and chroma v2.24.1 from third_party/chroma, whose lexer and style registries are built on first use",
+  "Version": "0.5.11-fix2",
   "Commit": "06042c16652197a3a38d62dbea64f301c5d0cb57-dirty",
   "Recorded": "2026-10-13T05:20:55.6800507Z",
   "Platform": "windows/amd64",
