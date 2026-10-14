@@ -18,7 +18,11 @@ pub enum Kind {
 
 impl Kind {
     pub fn of(element: &Element) -> Kind {
-        match element.kind.as_str() {
+        Kind::of_name(&element.kind)
+    }
+
+    pub fn of_name(name: &str) -> Kind {
+        match name {
             "rectangle" => Kind::Rectangle,
             "ellipse" => Kind::Ellipse,
             "diamond" => Kind::Diamond,

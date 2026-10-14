@@ -3,7 +3,8 @@ use gpui::{Bounds, Pixels, Point, Size, point, px};
 
 pub const ZOOM_LEAST: f64 = 0.1;
 pub const ZOOM_MOST: f64 = 8.0;
-const FIT_MARGIN: f64 = 40.0;
+const FIT_MARGIN: f64 = 24.0;
+const FIT_MOST: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct View {
@@ -31,7 +32,7 @@ impl View {
         let spanned = |side: f64| side.max(1.0);
         let zoom = (room(width) / spanned(content.max_x - content.min_x))
             .min(room(height) / spanned(content.max_y - content.min_y))
-            .clamp(ZOOM_LEAST, ZOOM_MOST);
+            .clamp(ZOOM_LEAST, FIT_MOST);
         let middle_x = (content.min_x + content.max_x) / 2.0;
         let middle_y = (content.min_y + content.max_y) / 2.0;
         View::new(

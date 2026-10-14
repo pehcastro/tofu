@@ -214,7 +214,7 @@ fn rebound(arrow: &Element, changed: &[Element]) -> Result<Element, DocError> {
     Ok(shape::with_trace(arrow, &trace))
 }
 
-fn edge(target: &Element, toward: (f64, f64), gap: f64) -> (f64, f64) {
+pub fn edge(target: &Element, toward: (f64, f64), gap: f64) -> (f64, f64) {
     let (a, b) = (target.width / 2.0, target.height / 2.0);
     let middle = (target.x + a, target.y + b);
     let (dx, dy) = (toward.0 - middle.0, toward.1 - middle.1);

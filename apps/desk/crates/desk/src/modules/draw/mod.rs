@@ -4,18 +4,19 @@ use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
-use desk_canvas::{Canvas, Framing};
+use desk_canvas::{Canvas, Framing, Tool, ToolChanged};
 use desk_plugin::{Capability, Home};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_ROW, T1, T2};
+use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use draw_doc::Scene;
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Entity, Global, KeyDownEvent,
-    Render, SharedString, StyleRefinement, WeakEntity, Window, div, prelude::*, px,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Entity, Focusable, Global,
+    KeyDownEvent, Render, SharedString, StyleRefinement, WeakEntity, Window, div, prelude::*, px,
 };
 use serde_json::{Value, json};
 
@@ -201,10 +202,13 @@ impl Draw {
             async {}
         })
         .detach();
+        let canvas = cx.new(|cx| Canvas::new(Scene::new(), cx));
+        cx.subscribe(&canvas, |_, _, _: &ToolChanged, cx| cx.notify())
+            .detach();
         let mut draw = Draw {
             plugin,
             folder: folder(),
-            canvas: cx.new(|cx| Canvas::new(Scene::new(), cx)),
+            canvas,
             board: None,
             picker: None,
             problem: None,
@@ -301,6 +305,55 @@ impl Draw {
             self.save(cx);
             cx.notify();
         }
+    }
+
+    fn tools(
+        &self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let (active, locked) = self.canvas.read(cx).tool();
+        let picks = Tool::ALL
+            .into_iter()
+            .map(|tool| (Some(tool), tool.name(), tool.key(), tool == active))
+            .chain([(None, "Lock", "q", locked)]);
+        let mut row = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap_0p5()
+            .px_2()
+            .pb_1()
+            .overflow_hidden();
+        for (at, (tool, name, key, on)) in picks.enumerate() {
+            let face = button(("draw-tool", at), name, None, ButtonKind::Text, theme)
+                .px_2()
+                .when(on, |face| {
+                    face.bg(theme.color(ColorToken::ButtonPrimary))
+                        .text_color(theme.color(ColorToken::ButtonPrimaryText))
+                })
+                .on_click(cx.listener(move |draw, _: &ClickEvent, window, cx| {
+                    draw.canvas.update(cx, |canvas, cx| {
+                        match tool {
+                            Some(tool) => canvas.set_tool(tool, cx),
+                            None => canvas.toggle_lock(cx),
+                        }
+                        canvas.focus_handle(cx).focus(window, cx);
+                    });
+                }));
+            let tip = format!("{name}  {}", key.to_uppercase());
+            row = row.child(tooltip(
+                ("draw-tool-tip", at),
+                face,
+                Edge::Frame,
+                tip,
+                theme,
+                window,
+                cx,
+            ));
+        }
+        row
     }
 
     fn rows(&self, boards: &[PathBuf], theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
@@ -423,10 +476,15 @@ impl Render for Draw {
             (None, Some(_)) => div()
                 .flex_1()
                 .min_h_0()
+                .flex()
+                .flex_col()
+                .child(self.tools(&theme, window, cx))
                 .child(
-                    self.canvas
-                        .clone()
-                        .cached(StyleRefinement::default().size_full()),
+                    div().flex_1().min_h_0().child(
+                        self.canvas
+                            .clone()
+                            .cached(StyleRefinement::default().size_full()),
+                    ),
                 )
                 .into_any_element(),
             (None, None) => empty_state(

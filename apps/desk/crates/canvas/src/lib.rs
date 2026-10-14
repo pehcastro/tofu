@@ -1,3 +1,4 @@
+mod create;
 mod edit;
 mod paint;
 mod shape;
@@ -6,15 +7,17 @@ mod view;
 use std::time::Instant;
 
 use desk_ui::live::ActiveTheme;
-use draw_doc::{BoundKind, DocError, Element, Rect, Scene};
+use draw_doc::{ArrowEnd, BoundKind, DocError, Element, Op, Rect, Scene};
 use gpui::{
-    App, Bounds, ContentMask, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
-    Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point, ScrollWheelEvent, SharedString, TextRun, UTF16Selection, Window, canvas, div, fill,
-    prelude::*, px,
+    App, Bounds, ContentMask, Context, ElementInputHandler, EntityInputHandler, EventEmitter,
+    FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, ScrollWheelEvent, SharedString, TextRun, UTF16Selection, Window,
+    canvas, div, fill, prelude::*, px,
 };
 use std::ops::Range;
 
+use create::Mint;
+pub use create::Tool;
 use edit::Handle;
 use paint::{Frame, Palette};
 use shape::Kind;
@@ -24,22 +27,37 @@ const HIT_SLACK: f64 = 6.0;
 const HANDLE_REACH: f32 = 8.0;
 const ZOOM_STEP: f64 = 0.002;
 const PAINT_WINDOW: usize = 120;
+const LEAST_DRAG: f64 = 3.0;
+const BIND_GAP: f64 = 6.0;
 
 pub enum Framing {
     Fit,
     At(View),
 }
 
+pub struct ToolChanged;
+
 enum Gesture {
     Idle,
     Pan(Point<Pixels>),
-    Move { from: Box<Element>, at: (f64, f64) },
-    Resize { from: Box<Element>, grip: Handle },
+    Move {
+        from: Box<Element>,
+        at: (f64, f64),
+    },
+    Resize {
+        from: Box<Element>,
+        grip: Handle,
+    },
+    Create {
+        from: Box<Element>,
+        trace: Vec<(f64, f64)>,
+    },
 }
 
 struct Editing {
     id: String,
     text: String,
+    fresh: Option<Box<Element>>,
 }
 
 pub struct Canvas {
@@ -54,7 +72,12 @@ pub struct Canvas {
     failure: Option<SharedString>,
     focus: FocusHandle,
     paints: Vec<f64>,
+    tool: Tool,
+    locked: bool,
+    mint: Mint,
 }
+
+impl EventEmitter<ToolChanged> for Canvas {}
 
 impl Canvas {
     pub fn new(scene: Scene, cx: &mut Context<Self>) -> Self {
@@ -70,11 +93,117 @@ impl Canvas {
             failure: None,
             focus: cx.focus_handle(),
             paints: Vec::with_capacity(PAINT_WINDOW),
+            tool: Tool::Select,
+            locked: false,
+            mint: Mint::new(),
         }
     }
 
     pub fn scene(&self) -> &Scene {
         &self.scene
+    }
+
+    pub fn tool(&self) -> (Tool, bool) {
+        (self.tool, self.locked)
+    }
+
+    pub fn set_tool(&mut self, tool: Tool, cx: &mut Context<Self>) {
+        self.tool = tool;
+        cx.emit(ToolChanged);
+        cx.notify();
+    }
+
+    pub fn toggle_lock(&mut self, cx: &mut Context<Self>) {
+        self.locked = !self.locked;
+        cx.emit(ToolChanged);
+        cx.notify();
+    }
+
+    fn created(&mut self, cx: &mut Context<Self>) {
+        if !self.locked {
+            self.set_tool(Tool::Select, cx);
+        }
+    }
+
+    fn target(&self, x: f64, y: f64) -> Option<&Element> {
+        let slack = HIT_SLACK / self.view.zoom();
+        self.scene.elements().iter().rev().find(|element| {
+            Kind::of(element).resizable()
+                && shape::container(element).is_none()
+                && shape::hit(element, x, y, slack)
+        })
+    }
+
+    fn create(&mut self, element: Element, cx: &mut Context<Self>) {
+        let drag = element.width.hypot(element.height) * self.view.zoom();
+        if drag < LEAST_DRAG {
+            return;
+        }
+        let id = element.id.clone();
+        let kind = element.kind.clone();
+        let mut binds = Vec::with_capacity(2);
+        let element = match Kind::of(&element) {
+            Kind::Arrow => {
+                let drawn = shape::trace(&element);
+                let mut trace = drawn.clone();
+                let last = drawn.len().saturating_sub(1);
+                for (end, at, near) in [
+                    (ArrowEnd::Start, 0, 1.min(last)),
+                    (ArrowEnd::End, last, last.saturating_sub(1)),
+                ] {
+                    let (Some(&(x, y)), Some(&toward)) = (drawn.get(at), drawn.get(near)) else {
+                        continue;
+                    };
+                    let Some(target) = self.target(x, y) else {
+                        continue;
+                    };
+                    let outline = edit::edge(target, toward, BIND_GAP);
+                    if let Some(slot) = trace.get_mut(at) {
+                        *slot = outline;
+                    }
+                    let share =
+                        |at: f64, start: f64, span: f64| (at - start) / span.max(f64::EPSILON);
+                    binds.push(Op::BindArrow {
+                        arrow: id.clone(),
+                        end,
+                        target: target.id.clone(),
+                        fixed_point: [
+                            share(outline.0, target.x, target.width),
+                            share(outline.1, target.y, target.height),
+                        ],
+                    });
+                }
+                shape::with_trace(&element, &trace)
+            }
+            _ => element,
+        };
+        let ops = std::iter::once(Op::Add {
+            at: None,
+            element: Box::new(element),
+        })
+        .chain(binds)
+        .collect();
+        match self.scene.apply(ops) {
+            Ok(()) => {
+                eprintln!("desk: draw created {kind} {id}");
+                self.selected = Some(id);
+                self.created(cx);
+            }
+            Err(error) => self.fail(&error),
+        }
+    }
+
+    fn delete(&mut self) {
+        let Some(element) = self.selected.as_deref().and_then(|id| self.scene.get(id)) else {
+            return;
+        };
+        let mut ids = vec![element.id.clone()];
+        ids.extend(self.label_of(element).filter(|label| *label != element.id));
+        let ops = ids.into_iter().map(|id| Op::Delete { id }).collect();
+        match self.scene.apply(ops) {
+            Ok(()) => self.selected = None,
+            Err(error) => self.fail(&error),
+        }
     }
 
     pub fn show(&mut self, scene: Scene, framing: Framing, cx: &mut Context<Self>) {
@@ -141,8 +270,34 @@ impl Canvas {
             let label = self.hit(x, y).and_then(|element| self.label_of(element));
             self.editing = label.and_then(|id| {
                 let text = self.scene.get(&id).and_then(shape::label)?.to_owned();
-                Some(Editing { id, text })
+                Some(Editing {
+                    id,
+                    text,
+                    fresh: None,
+                })
             });
+            cx.notify();
+            return;
+        }
+        let stroke = create::hex(Palette::new(&ActiveTheme::theme(cx)).ink);
+        if let Some(from) = create::fresh(self.tool, &mut self.mint, &stroke, (x, y)) {
+            self.selected = None;
+            match self.tool {
+                Tool::Text => {
+                    self.editing = Some(Editing {
+                        id: from.id.clone(),
+                        text: String::new(),
+                        fresh: Some(Box::new(from)),
+                    });
+                    self.created(cx);
+                }
+                _ => {
+                    self.gesture = Gesture::Create {
+                        from: Box::new(from),
+                        trace: vec![(x, y), (x, y)],
+                    };
+                }
+            }
             cx.notify();
             return;
         }
@@ -182,6 +337,13 @@ impl Canvas {
             Gesture::Resize { from, grip } => {
                 edit::resized(&self.scene, from, *grip, (x, y), event.modifiers.shift)
             }
+            Gesture::Create { from, trace } => {
+                if Kind::of(from) != Kind::Freedraw {
+                    trace.pop();
+                }
+                trace.push((x, y));
+                Ok(vec![create::drawn(from, trace)])
+            }
         };
         match previewed {
             Ok(preview) => self.preview = preview,
@@ -192,7 +354,14 @@ impl Canvas {
 
     fn mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
         let gesture = std::mem::replace(&mut self.gesture, Gesture::Idle);
-        let preview = std::mem::take(&mut self.preview);
+        let mut preview = std::mem::take(&mut self.preview);
+        if let Gesture::Create { .. } = gesture {
+            if let Some(element) = preview.pop() {
+                self.create(element, cx);
+            }
+            cx.notify();
+            return;
+        }
         if let Gesture::Resize { from, .. } = gesture
             && let Some(sized) = preview.iter().find(|element| element.id == from.id)
         {
@@ -239,6 +408,10 @@ impl Canvas {
                     self.commit(window);
                     true
                 }
+                "escape" if editing.fresh.is_some() => {
+                    self.commit(window);
+                    true
+                }
                 "escape" => {
                     self.editing = None;
                     true
@@ -251,9 +424,22 @@ impl Canvas {
             },
             None => {
                 let redo = keys.key == "y" || (keys.key == "z" && keys.modifiers.shift);
+                let plain = !keys.modifiers.secondary() && !keys.modifiers.alt;
                 let stepped = match (keys.modifiers.secondary(), keys.key.as_str()) {
                     (true, _) if redo => Some(self.scene.redo()),
                     (true, "z") => Some(self.scene.undo()),
+                    (false, "delete" | "backspace") => {
+                        self.delete();
+                        Some(Ok(true))
+                    }
+                    (false, "q") if plain => {
+                        self.toggle_lock(cx);
+                        Some(Ok(true))
+                    }
+                    (false, key) if plain => Tool::of_key(key).map(|tool| {
+                        self.set_tool(tool, cx);
+                        Ok(true)
+                    }),
                     _ => None,
                 };
                 match stepped {
@@ -273,10 +459,17 @@ impl Canvas {
     }
 
     fn commit(&mut self, window: &mut Window) {
-        let Some(Editing { id, text }) = self.editing.take() else {
+        let Some(Editing { id, text, fresh }) = self.editing.take() else {
             return;
         };
-        let Some(from) = self.scene.get(&id).cloned() else {
+        let added = fresh.is_some();
+        if added && text.is_empty() {
+            return;
+        }
+        let Some(from) = fresh
+            .map(|fresh| *fresh)
+            .or_else(|| self.scene.get(&id).cloned())
+        else {
             return;
         };
         let size = px(shape::font_size(&from) as f32);
@@ -299,10 +492,24 @@ impl Canvas {
                     .width()
             })
             .fold(px(0.0), Pixels::max);
-        let committed = edit::retexted(&self.scene, &from, &text, f64::from(width))
-            .and_then(|changed| self.scene.apply(edit::updates(changed)));
-        if let Err(error) = committed {
-            self.fail(&error);
+        let committed =
+            edit::retexted(&self.scene, &from, &text, f64::from(width)).and_then(|changed| {
+                let ops = match added {
+                    true => changed
+                        .into_iter()
+                        .map(|element| Op::Add {
+                            at: None,
+                            element: Box::new(element),
+                        })
+                        .collect(),
+                    false => edit::updates(changed),
+                };
+                self.scene.apply(ops)
+            });
+        match committed {
+            Ok(()) if added => eprintln!("desk: draw created text {id}"),
+            Ok(()) => {}
+            Err(error) => self.fail(&error),
         }
     }
 
@@ -360,7 +567,10 @@ impl Canvas {
                 frame.selection(self.shown(selected), window);
             }
             if let Some(editing) = &self.editing
-                && let Some(element) = self.scene.get(&editing.id)
+                && let Some(element) = editing
+                    .fresh
+                    .as_deref()
+                    .or_else(|| self.scene.get(&editing.id))
             {
                 frame.field(element, &editing.text, window, cx);
             }
@@ -481,6 +691,7 @@ impl Render for Canvas {
             .relative()
             .size_full()
             .overflow_hidden()
+            .when(self.tool != Tool::Select, |area| area.cursor_crosshair())
             .on_mouse_down(MouseButton::Left, cx.listener(Self::mouse_down))
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
