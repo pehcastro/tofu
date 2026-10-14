@@ -47,7 +47,7 @@ pub enum ArrowEnd {
 }
 
 impl ArrowEnd {
-    fn field(self) -> &'static str {
+    pub(crate) fn field(self) -> &'static str {
         match self {
             ArrowEnd::Start => "startBinding",
             ArrowEnd::End => "endBinding",

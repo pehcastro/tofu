@@ -62,6 +62,10 @@ pub fn answer(
         Call::ScreenOpen(open) => Some(screen_open(open, window, screens, cx)),
         Call::FileOpen(_) | Call::EditorSelectionGet(_) => Some(editor::answer(&call, window, cx)),
         Call::Capture(capture) => Some(capture::answer(capture, window, cx)),
+        #[cfg(feature = "plugin-draw")]
+        Call::CommandRun(run) if run.name.starts_with("draw.") => {
+            Some(super::draw::answer(run, work.as_ref(), cx))
+        }
         _ => None,
     };
     if let Some(routed) = routed {

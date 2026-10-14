@@ -1,7 +1,7 @@
 use std::cmp::Reverse;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
 use desk_canvas::{Canvas, Framing};
@@ -14,8 +14,8 @@ use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use draw_doc::Scene;
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Entity, KeyDownEvent, Render,
-    SharedString, StyleRefinement, Window, div, prelude::*, px,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Entity, Global, KeyDownEvent,
+    Render, SharedString, StyleRefinement, WeakEntity, Window, div, prelude::*, px,
 };
 use serde_json::{Value, json};
 
@@ -28,8 +28,73 @@ const GRID_PITCH: (f64, f64) = (160.0, 120.0);
 const GRID_SHAPE: (f64, f64) = (120.0, 80.0);
 const GRID_KINDS: [&str; 5] = ["rectangle", "ellipse", "diamond", "text", "arrow"];
 
+pub const PLUGIN: &str = "tofu.draw";
+
 pub fn mount(plugin: &'static Plugin, cx: &mut App) -> AnyView {
     cx.new(|cx| Draw::new(plugin, cx)).into()
+}
+
+struct Link {
+    live: Option<WeakEntity<Draw>>,
+    pending: Option<PathBuf>,
+}
+
+impl Global for Link {}
+
+fn live(cx: &App) -> Option<Entity<Draw>> {
+    cx.try_global::<Link>()?.live.as_ref()?.upgrade()
+}
+
+pub fn show(path: PathBuf, cx: &mut App) {
+    match live(cx) {
+        Some(draw) => draw.update(cx, |draw, cx| {
+            draw.open(path, cx);
+            cx.notify();
+        }),
+        None => cx.set_global(Link {
+            live: None,
+            pending: Some(path),
+        }),
+    }
+}
+
+pub fn folder() -> Result<PathBuf, String> {
+    Home::find()
+        .map(|home| home.plugins.join("draw").join("boards"))
+        .map_err(|error| error.to_string())
+}
+
+pub fn board(name: &str) -> Result<PathBuf, String> {
+    let stem = name.strip_suffix(&format!(".{EXTENSION}")).unwrap_or(name);
+    let single = Path::new(stem)
+        .components()
+        .map(|part| matches!(part, Component::Normal(_)))
+        .collect::<Vec<_>>();
+    if single != [true] {
+        return Err(format!(
+            "board {name:?} must be a plain name, no folder, no .."
+        ));
+    }
+    Ok(folder()?.join(format!("{stem}.{EXTENSION}")))
+}
+
+pub fn boards() -> Result<Vec<PathBuf>, String> {
+    listed(&folder()?)
+}
+
+pub fn replace(path: PathBuf, text: &str, cx: &mut App) -> Result<(), String> {
+    let plugin =
+        crate::plugins::find(PLUGIN).ok_or(format!("plugin {PLUGIN} is not in this desk"))?;
+    if let Some(draw) = live(cx) {
+        draw.update(cx, |draw, _| {
+            if draw.board.as_ref() == Some(&path) {
+                draw.board = None;
+            }
+        });
+    }
+    write(plugin, &path, text)?;
+    show(path, cx);
+    Ok(())
 }
 
 pub struct Draw {
@@ -123,24 +188,32 @@ fn name(path: &Path) -> String {
 
 impl Draw {
     fn new(plugin: &'static Plugin, cx: &mut Context<Self>) -> Self {
-        let folder = Home::find()
-            .map(|home| home.plugins.join("draw").join("boards"))
-            .map_err(|error| error.to_string());
+        let pending = cx
+            .try_global::<Link>()
+            .and_then(|link| link.pending.clone());
+        cx.set_global(Link {
+            live: Some(cx.weak_entity()),
+            pending: None,
+        });
         cx.on_release(|draw, cx| draw.save(cx)).detach();
         cx.on_app_quit(|draw, cx| {
             draw.save(cx);
             async {}
         })
         .detach();
-        Draw {
+        let mut draw = Draw {
             plugin,
-            folder,
+            folder: folder(),
             canvas: cx.new(|cx| Canvas::new(Scene::new(), cx)),
             board: None,
             picker: None,
             problem: None,
             opening: None,
+        };
+        if let Some(path) = pending {
+            draw.open(path, cx);
         }
+        draw
     }
 
     fn fail(&mut self, problem: String) {

@@ -1,6 +1,8 @@
 mod capture;
 mod change;
 mod dispatch;
+#[cfg(feature = "plugin-draw")]
+mod draw;
 mod editor;
 
 use std::io;

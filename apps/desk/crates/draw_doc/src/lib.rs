@@ -1,8 +1,11 @@
+mod diagram;
 mod element;
+mod layout;
 mod scene;
 
 use std::fmt;
 
+pub use diagram::{Edge, Graph, Node, diagram, graph};
 pub use element::{ArrowEnd, BindMode, Binding, BoundElement, BoundKind, Element, Rect};
 pub use scene::{Op, Scene};
 
