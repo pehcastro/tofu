@@ -4891,6 +4891,11 @@
       "note": "report.md, undated by name, 1 run per rung of 0 to 10 sub-agents on 2026-10-13, committed at b7c52479 (tofu 0.5.13-fix1). results.jsonl names no tofu version."
     },
     {
+      "package": "serve",
+      "kind": "measurement with no dated report",
+      "note": "times tofu serve's query methods for 2 or more tofu builds, 50 calls of each method a round over 2 rounds by default, on a cassette session of 200 steps; it prints its table and writes 0 files, so 0 numbers from it are on this page."
+    },
+    {
       "package": "sessiontime",
       "kind": "measurement with no dated report",
       "note": "prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/report/runs/sessiontime-2026-10-14.txt."
@@ -4904,7 +4909,7 @@
   "counts": {
     "reports": 64,
     "packages_with_a_dated_report": 39,
-    "packages_with_no_dated_report": 15,
+    "packages_with_no_dated_report": 16,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2

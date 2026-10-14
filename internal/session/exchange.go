@@ -1,14 +1,12 @@
 package session
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -163,27 +161,23 @@ func (l *Log) closeSide() error {
 }
 
 func eachLine(path string, read func(line []byte) error) error {
-	file, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	defer func() { _ = file.Close() }()
-	reader := bufio.NewReader(file)
 	for {
-		line, err := reader.ReadBytes('\n')
-		if trimmed := bytes.TrimSpace(line); len(trimmed) > 0 && bytes.HasSuffix(line, []byte("\n")) {
+		line, rest, terminated := bytes.Cut(raw, []byte{'\n'})
+		if !terminated {
+			return nil
+		}
+		raw = rest
+		if trimmed := bytes.TrimSpace(line); len(trimmed) > 0 {
 			if readErr := read(trimmed); readErr != nil {
 				return fmt.Errorf("%s: %w", filepath.Base(path), readErr)
 			}
-		}
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		if err != nil {
-			return err
 		}
 	}
 }

@@ -325,11 +325,11 @@ func sessionReads(store *session.Store, handle string) (sessionReadsReport, erro
 }
 
 func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Message, error) {
-	header, err := sessionHeader(store, handle)
+	row, recorded, err := sessionSummary(store, handle)
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
-	events, err := store.Body(header.ID)
+	events, err := store.Part(recorded, "")
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
@@ -341,12 +341,40 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
+	row.Steps, row.Reads, row.Carried = len(reading.Steps), len(reading.Reads), len(messages)
+	if row.ForkedInto != "" {
+		if into, err := store.Header(row.ForkedInto); err == nil {
+			row.ForkIntoKind = into.ForkKind
+		}
+		steps, err := contextSteps(events)
+		if err != nil {
+			return sessionRow{}, nil, err
+		}
+		for _, step := range steps {
+			if step.Fork != nil {
+				row.ForkIntoKind = string(step.Fork.Kind)
+			}
+		}
+	}
+	return row, messages, nil
+}
+
+func sessionSummary(store *session.Store, handle string) (sessionRow, []session.Event, error) {
+	header, err := sessionHeader(store, handle)
+	if err != nil {
+		return sessionRow{}, nil, err
+	}
+	events, err := store.Events(header.ID)
+	if err != nil {
+		return sessionRow{}, nil, err
+	}
 	var tasks []string
 	for _, event := range events {
 		var outcome struct {
 			Task string `json:"task"`
 		}
-		if event.Kind == session.EventOutcome && json.Unmarshal(event.Body, &outcome) == nil {
+		ended := event.Kind == session.EventOutcome || event.Kind == session.EventTurnEnd
+		if event.Agent == "" && ended && json.Unmarshal(event.Body, &outcome) == nil {
 			tasks = append(tasks, outcome.Task)
 		}
 	}
@@ -357,9 +385,6 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 		Task:             header.Task,
 		Turns:            max(header.Turns, len(tasks)),
 		Agents:           len(header.Agents),
-		Steps:            len(reading.Steps),
-		Reads:            len(reading.Reads),
-		Carried:          len(messages),
 		Outcome:          header.Outcome,
 		Error:            header.Error,
 		Wire:             header.Wire,
@@ -387,24 +412,17 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 	if identity, err := store.Identity(header.ID); err == nil {
 		row.Handle, row.Family, row.Generation = identity.Handle(), identity.Family, identity.Generation
 	}
-	if header.ForkedInto != "" {
-		if into, err := store.Header(header.ForkedInto); err == nil {
-			row.ForkIntoKind = into.ForkKind
-		}
-		steps, err := contextSteps(events)
-		if err != nil {
-			return sessionRow{}, nil, err
-		}
-		for _, step := range steps {
-			if step.Fork != nil {
-				row.ForkIntoKind = string(step.Fork.Kind)
-			}
-		}
-	}
-	return row, messages, nil
+	return row, events, nil
 }
 
 func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Time) (sessionListReport, error) {
+	return sessionListingOf(store, lifetime, now, func(store *session.Store, handle string) (sessionRow, error) {
+		row, _, err := sessionDetail(store, handle)
+		return row, err
+	})
+}
+
+func sessionListingOf(store *session.Store, lifetime session.Lifetime, now time.Time, rowOf func(*session.Store, string) (sessionRow, error)) (sessionListReport, error) {
 	listing, err := store.Listing()
 	if err != nil {
 		return sessionListReport{}, err
@@ -417,7 +435,7 @@ func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Ti
 		report.Skipped = append(report.Skipped, sessionSkip{Session: skip.ID, Reason: skip.Reason.Error()})
 	}
 	for _, family := range listing.Families() {
-		row, _, err := sessionDetail(store, family.Session)
+		row, err := rowOf(store, family.Session)
 		if err != nil {
 			report.Skipped = append(report.Skipped, sessionSkip{Session: family.Session, Reason: err.Error()})
 			continue
@@ -632,17 +650,32 @@ func tracedRequests(steps []traceRequest, exchanges []session.Exchange) []traceR
 		used[step.Request] = step
 	}
 	requests := make([]traceRequest, 0, len(exchanges))
-	before := map[string][]string{}
+	type sentBefore struct {
+		hashes []string
+		set    map[string]bool
+	}
+	before := map[string]sentBefore{}
 	for _, exchange := range exchanges {
 		request := used[exchange.Request]
 		request.Request, request.Agent, request.Turn, request.Model = exchange.Request, exchange.Agent, exchange.Turn, cmp.Or(request.Model, exchange.Model)
 		request.Why, request.Messages, request.Attempts, request.DurationMS, request.Error = strings.Trim(exchange.Why+" · "+request.Why, " ·"), len(exchange.Messages), len(exchange.Attempts), exchange.DurationMS, exchange.Error
+		sent := before[exchange.Agent]
 		for _, hash := range exchange.Messages {
-			if !slices.Contains(before[exchange.Agent], hash) {
+			if !sent.set[hash] {
 				request.New++
 			}
 		}
-		before[exchange.Agent] = exchange.Messages
+		added := exchange.Messages
+		if sent.set != nil && len(sent.hashes) <= len(added) && slices.Equal(sent.hashes, added[:len(sent.hashes)]) {
+			added = added[len(sent.hashes):]
+		} else {
+			sent.set = make(map[string]bool, len(added))
+		}
+		for _, hash := range added {
+			sent.set[hash] = true
+		}
+		sent.hashes = exchange.Messages
+		before[exchange.Agent] = sent
 		if last := len(exchange.Attempts) - 1; last >= 0 {
 			var attempt llm.Attempt
 			if json.Unmarshal(exchange.Attempts[last].Detail, &attempt) == nil {
