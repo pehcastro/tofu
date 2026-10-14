@@ -17,7 +17,7 @@ use crate::components::paint::{ink, tint};
 use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CARET_HEIGHT, CARET_WIDTH, CODE_LINE, FONT_BODY, NUMBER_COLUMN, NUMBER_PAD, NUMBER_TEXT,
-    SELECTION_FILL, T1,
+    SELECTION_FILL, T1, T3,
 };
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
@@ -30,6 +30,9 @@ const MARK_TOP: f32 = 3.0;
 const REMOVED_SIZE: f32 = 6.0;
 const EDGE_WIDTH: f32 = 2.0;
 const WRAP_MARGIN: f32 = 12.0;
+const FOLD_X: f32 = NUMBER_COLUMN - NUMBER_PAD + 4.5;
+const FOLD_HALF: f32 = 3.0;
+const FOLD_STROKE: f32 = 1.5;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CodeLine {
@@ -47,6 +50,12 @@ pub enum GutterMark {
     Removed(ColorToken),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FoldMark {
+    Open,
+    Folded,
+}
+
 pub type Trailing = Rc<dyn Fn(&Theme) -> AnyElement>;
 
 #[derive(Clone, Default)]
@@ -55,6 +64,7 @@ pub struct LineMarks {
     pub edge: Option<ColorToken>,
     pub background: Option<ColorToken>,
     pub trailing: Option<Trailing>,
+    pub fold: Option<FoldMark>,
 }
 
 pub type Marks = BTreeMap<usize, LineMarks>;
@@ -171,13 +181,30 @@ impl Wrap {
     }
 }
 
-fn line_at(wrap: Option<&Wrap>, row: usize) -> (usize, bool) {
-    match wrap {
-        Some(wrap) => {
-            let (line, piece) = wrap.locate(row);
-            (line, piece == 0)
+#[derive(Clone, Default)]
+struct RowMap {
+    wrap: Option<Rc<Wrap>>,
+    shown: Option<Rc<[usize]>>,
+}
+
+impl RowMap {
+    fn line_at(&self, row: usize) -> (usize, bool) {
+        match (&self.wrap, &self.shown) {
+            (Some(wrap), _) => {
+                let (line, piece) = wrap.locate(row);
+                (line, piece == 0)
+            }
+            (None, Some(shown)) => (shown.get(row).copied().unwrap_or(row), true),
+            (None, None) => (row, true),
         }
-        None => (row, true),
+    }
+
+    fn count(&self, lines: usize) -> usize {
+        match (&self.wrap, &self.shown) {
+            (Some(wrap), _) => wrap.rows(),
+            (None, Some(shown)) => shown.len(),
+            (None, None) => lines,
+        }
     }
 }
 
@@ -224,7 +251,7 @@ pub struct CodeView {
     scroll: UniformListScrollHandle,
     lines: LineSource,
     marks: Rc<Marks>,
-    wrap: Option<Rc<Wrap>>,
+    rows: RowMap,
 }
 
 pub fn code_view(
@@ -240,7 +267,7 @@ pub fn code_view(
         scroll: scroll.clone(),
         lines: Rc::new(lines),
         marks: Rc::default(),
-        wrap: None,
+        rows: RowMap::default(),
     }
 }
 
@@ -251,7 +278,12 @@ impl CodeView {
     }
 
     pub fn wrap(mut self, wrap: Option<Rc<Wrap>>) -> Self {
-        self.wrap = wrap;
+        self.rows.wrap = wrap;
+        self
+    }
+
+    pub fn shown(mut self, shown: Option<Rc<[usize]>>) -> Self {
+        self.rows.shown = shown;
         self
     }
 
@@ -274,7 +306,7 @@ fn row_top(bounds: Bounds<Pixels>, top: Pixels, row: usize) -> Pixels {
 fn backgrounds(
     marks: Rc<Marks>,
     count: usize,
-    wrap: Option<Rc<Wrap>>,
+    rows: RowMap,
     base: ScrollHandle,
 ) -> impl IntoElement {
     canvas(
@@ -283,7 +315,7 @@ fn backgrounds(
             let theme = ActiveTheme::theme(cx);
             let top = px(CODE_PAD_TOP) + base.offset().y;
             for row in shown_rows(bounds, top, count) {
-                let (line, _) = line_at(wrap.as_deref(), row);
+                let (line, _) = rows.line_at(row);
                 if let Some(token) = marks.get(&line).and_then(|mark| mark.background) {
                     let area = Bounds::new(
                         point(bounds.origin.x, row_top(bounds, top, row)),
@@ -334,6 +366,25 @@ fn paint_marks(
             }
         }
         None => {}
+    }
+    if let Some(fold) = mark.fold.filter(|_| first) {
+        let (x, mid, half) = (left + px(FOLD_X), y + px(CODE_LINE / 2.0), px(FOLD_HALF));
+        let mut shape = PathBuilder::stroke(px(FOLD_STROKE));
+        match fold {
+            FoldMark::Open => {
+                shape.move_to(point(x - half, mid - half / 2.0));
+                shape.line_to(point(x, mid + half / 2.0));
+                shape.line_to(point(x + half, mid - half / 2.0));
+            }
+            FoldMark::Folded => {
+                shape.move_to(point(x - half / 2.0, mid - half));
+                shape.line_to(point(x + half / 2.0, mid));
+                shape.line_to(point(x - half / 2.0, mid + half));
+            }
+        }
+        if let Ok(path) = shape.build() {
+            window.paint_path(path, ink(theme, T3));
+        }
     }
 }
 
@@ -471,23 +522,25 @@ impl RenderOnce for CodeView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let lines = self.lines;
         let marks = self.marks.clone();
-        let wrap = self.wrap.clone();
-        let count = wrap.as_ref().map_or(self.count, |wrap| wrap.rows());
+        let rows = self.rows.clone();
+        let count = rows.count(self.count);
         let list = uniform_list(self.id.clone(), count, move |range, _, cx| {
             let theme = ActiveTheme::theme(cx);
-            if let Some(wrap) = &wrap {
+            if let Some(wrap) = &rows.wrap {
                 return wrapped_rows(&lines, wrap, &marks, range, &theme, cx);
             }
             lines(range.clone(), cx)
                 .iter()
                 .zip(range)
                 .map(|(line, row)| {
-                    let trailing = marks.get(&row).and_then(|mark| mark.trailing.as_ref());
+                    let trailing = marks
+                        .get(&rows.line_at(row).0)
+                        .and_then(|mark| mark.trailing.as_ref());
                     code_row(line, trailing, &theme)
                 })
                 .collect::<Vec<_>>()
         })
-        .map(|list| match self.wrap {
+        .map(|list| match self.rows.wrap {
             Some(_) => list.with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::FitList),
             None => list
                 .with_width_from_item(Some(self.widest))
@@ -507,7 +560,7 @@ impl RenderOnce for CodeView {
                 view.child(backgrounds(
                     self.marks.clone(),
                     count,
-                    self.wrap.clone(),
+                    self.rows.clone(),
                     base.clone(),
                 ))
             })
@@ -515,13 +568,13 @@ impl RenderOnce for CodeView {
             .child(gutter(
                 count,
                 self.marks.clone(),
-                self.wrap.clone(),
+                self.rows.clone(),
                 base.clone(),
                 window,
                 cx,
             ))
             .child(bar(Axis::Vertical))
-            .when(self.wrap.is_none(), |view| {
+            .when(self.rows.wrap.is_none(), |view| {
                 view.child(bar(Axis::Horizontal))
             })
     }
@@ -530,7 +583,7 @@ impl RenderOnce for CodeView {
 fn gutter(
     count: usize,
     marks: Rc<Marks>,
-    wrap: Option<Rc<Wrap>>,
+    rows: RowMap,
     base: ScrollHandle,
     window: &mut Window,
     cx: &mut App,
@@ -555,7 +608,7 @@ fn gutter(
             let top = px(CODE_PAD_TOP) + base.offset().y;
             shown_rows(bounds, top, count)
                 .map(|row| {
-                    let (line, first) = line_at(wrap.as_deref(), row);
+                    let (line, first) = rows.line_at(row);
                     let shaped = first.then(|| {
                         let text = SharedString::from((line + 1).to_string());
                         let run = TextRun {

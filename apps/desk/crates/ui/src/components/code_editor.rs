@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fs;
 use std::ops::Range;
@@ -9,21 +10,23 @@ use std::time::{Duration, Instant};
 use desk_core::buffer::Buffer;
 use desk_core::syntax::{Kind, Span, Syntax};
 use gpui::{
-    App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity, EntityInputHandler,
-    FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, Point, ScrollStrategy, SharedString, Task, UTF16Selection,
-    UniformListScrollHandle, Window, canvas, div, point, prelude::*, px, size,
+    AnyElement, App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity,
+    EntityInputHandler, FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollStrategy, SharedString, Task,
+    UTF16Selection, UniformListScrollHandle, WeakEntity, Window, canvas, div, point, prelude::*,
+    px, size,
 };
 
 use crate::components::chat::fail;
 use crate::components::code::{
-    CodeLine, Marks, Wrap, code_origin, code_place, code_shape, code_view, wrap_width,
+    CodeLine, FoldMark, Marks, Wrap, code_origin, code_place, code_shape, code_view, wrap_width,
 };
 use crate::components::find::{FindBar, find_ranges};
 use crate::components::form::{blinker, caret_shown};
-use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN};
+use crate::components::paint::ink;
+use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN, NUMBER_PAD, T3};
 use crate::live::ActiveTheme;
-use crate::theme::ColorToken;
+use crate::theme::{ColorToken, Theme};
 
 const TAB: &str = "    ";
 const FAILURE_INSET: f32 = 12.0;
@@ -34,6 +37,10 @@ const LONG_LINE_BYTES: usize = 64 * 1024;
 const SNIFF_BYTES: usize = 8192;
 const CONTROL_SHARE: f32 = 0.3;
 const PROSE: [&str; 4] = ["md", "mdx", "txt", "rst"];
+const PILL_GAP: f32 = 6.0;
+const PILL_PAD: f32 = 6.0;
+const PILL_HEIGHT: f32 = 16.0;
+const PILL_RADIUS: f32 = 4.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileKind {
@@ -270,23 +277,70 @@ fn chars_within(text: &str, units: usize) -> usize {
         .count()
 }
 
-fn follow(marks: &Marks, line: usize, line_start: bool, removed: &str, inserted: &str) -> Marks {
-    let whole_lines = |text: &str| text.is_empty() || text.ends_with('\n');
-    let whole = line_start && whole_lines(removed) && whole_lines(inserted);
-    let first = line + usize::from(!whole);
-    let gone = removed.matches('\n').count();
-    let added = inserted.matches('\n').count();
-    marks
-        .iter()
-        .filter_map(|(row, mark)| {
-            let row = match *row {
-                row if row < first => row,
-                row if row < first + gone => return None,
-                row => row - gone + added,
-            };
-            Some((row, mark.clone()))
+#[derive(Clone, Copy)]
+struct LineEdit {
+    line: usize,
+    first: usize,
+    gone: usize,
+    added: usize,
+}
+
+impl LineEdit {
+    fn new(line: usize, line_start: bool, removed: &str, inserted: &str) -> Self {
+        let whole_lines = |text: &str| text.is_empty() || text.ends_with('\n');
+        let whole = line_start && whole_lines(removed) && whole_lines(inserted);
+        LineEdit {
+            line,
+            first: line + usize::from(!whole),
+            gone: removed.matches('\n').count(),
+            added: inserted.matches('\n').count(),
+        }
+    }
+
+    fn row(self, row: usize) -> Option<usize> {
+        match row {
+            row if row < self.first => Some(row),
+            row if row < self.first + self.gone => None,
+            row => Some(row - self.gone + self.added),
+        }
+    }
+
+    fn touches(self, lines: &Range<usize>) -> bool {
+        self.line < lines.end && lines.start <= self.line + self.gone
+    }
+
+    fn follow<T: Clone>(self, rows: &BTreeMap<usize, T>) -> BTreeMap<usize, T> {
+        rows.iter()
+            .filter_map(|(row, value)| Some((self.row(*row)?, value.clone())))
+            .collect()
+    }
+}
+
+fn fold_pill(header: usize, editor: WeakEntity<CodeEditor>, theme: &Theme) -> AnyElement {
+    div()
+        .id(("fold-pill", header))
+        .flex_none()
+        .ml(px(PILL_GAP))
+        .px(px(PILL_PAD))
+        .h(px(PILL_HEIGHT))
+        .flex()
+        .items_center()
+        .rounded(px(PILL_RADIUS))
+        .bg(theme.color(ColorToken::StateHover))
+        .text_color(ink(theme, T3))
+        .cursor_pointer()
+        .child("…")
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            cx.stop_propagation();
+            let unfolded = editor.update(cx, |editor, cx| {
+                editor.toggle_fold(header);
+                cx.notify();
+            });
+            if let Err(error) = unfolded {
+                eprintln!("desk: editor is gone before its unfold: {error}");
+            }
         })
-        .collect()
+        .into_any_element()
 }
 
 type Save = Rc<dyn Fn(&mut Buffer, &mut Window, &mut App) -> Result<(), String>>;
@@ -317,6 +371,10 @@ pub struct CodeEditor {
     wrap_stale: bool,
     frames: Option<Rc<RefCell<TypingFrames>>>,
     frames_flush: Option<Task<()>>,
+    folds: BTreeMap<usize, usize>,
+    shown_lines: Option<Rc<[usize]>>,
+    chevron: Option<usize>,
+    folded_at: Rc<Cell<Option<Instant>>>,
 }
 
 #[derive(Default)]
@@ -371,6 +429,10 @@ impl CodeEditor {
             wrap_stale: true,
             frames: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
             frames_flush: None,
+            folds: BTreeMap::new(),
+            shown_lines: None,
+            chevron: None,
+            folded_at: Rc::default(),
         };
         editor.widest = editor.widest_line();
         editor
@@ -629,6 +691,148 @@ impl CodeEditor {
         base.set_offset(point(px(0.0), base.offset().y));
         let state = if self.wrapping { "on" } else { "off" };
         eprintln!("desk: editor wrap {state}");
+        self.refold();
+    }
+
+    fn foldable(&self, line: usize) -> Option<usize> {
+        match &self.syntax {
+            Highlight::Tree(syntax) if !self.wrapping => syntax.fold(line),
+            Highlight::Tree(_) | Highlight::Plain => None,
+        }
+    }
+
+    fn refold(&mut self) {
+        let folds = std::mem::take(&mut self.folds);
+        self.folds = folds
+            .into_keys()
+            .filter_map(|header| Some((header, self.foldable(header)?)))
+            .collect();
+        if self.folds.is_empty() {
+            self.shown_lines = None;
+            return;
+        }
+        let mut shown = Vec::with_capacity(self.buffer.line_count());
+        let mut next = 0;
+        for (&header, &last) in &self.folds {
+            if header < next {
+                continue;
+            }
+            shown.extend(next..=header);
+            next = last + 1;
+        }
+        shown.extend(next..self.buffer.line_count());
+        self.shown_lines = Some(shown.into());
+    }
+
+    fn fold(&mut self, header: usize) {
+        let Some(last) = self.foldable(header) else {
+            return;
+        };
+        self.folded_at.set(Some(Instant::now()));
+        self.folds.insert(header, last);
+        let Ok(start) = self.buffer.line_to_char(header) else {
+            return;
+        };
+        let end = start + self.line_len(header);
+        let hidden = header + 1..last + 1;
+        for caret in &mut self.carets {
+            let line = self.buffer.char_to_line(caret.head);
+            if line.is_ok_and(|line| hidden.contains(&line)) {
+                *caret = Caret::at(end);
+            }
+        }
+        self.merge();
+        self.refold();
+    }
+
+    fn unfold(&mut self, header: usize) {
+        if self.folds.remove(&header).is_some() {
+            self.folded_at.set(Some(Instant::now()));
+            self.refold();
+        }
+    }
+
+    fn toggle_fold(&mut self, header: usize) {
+        match self.folds.contains_key(&header) {
+            true => self.unfold(header),
+            false => self.fold(header),
+        }
+    }
+
+    fn caret_line(&self) -> Option<usize> {
+        let caret = self.carets.last()?;
+        self.buffer.char_to_line(caret.head).ok()
+    }
+
+    fn fold_at_caret(&mut self) {
+        let header = match (&self.syntax, self.caret_line()) {
+            (Highlight::Tree(syntax), Some(line)) => syntax.fold_header(line),
+            _ => None,
+        };
+        if let Some(header) = header {
+            self.fold(header);
+        }
+    }
+
+    fn unfold_carets(&mut self) {
+        let lines: Vec<usize> = self
+            .carets
+            .iter()
+            .filter_map(|caret| self.buffer.char_to_line(caret.head).ok())
+            .collect();
+        let before = self.folds.len();
+        self.folds
+            .retain(|header, last| !lines.iter().any(|line| header < line && line <= last));
+        if self.folds.len() != before {
+            self.refold();
+        }
+    }
+
+    fn row_count(&self) -> usize {
+        self.shown_lines
+            .as_ref()
+            .map_or(self.buffer.line_count(), |shown| shown.len())
+    }
+
+    fn line_of(&self, row: usize) -> usize {
+        let row = row.min(self.row_count().saturating_sub(1));
+        match &self.shown_lines {
+            Some(shown) => shown.get(row).copied().unwrap_or(0),
+            None => row,
+        }
+    }
+
+    fn row_of(&self, line: usize) -> usize {
+        self.shown_lines
+            .as_ref()
+            .map_or(line, |shown| shown.partition_point(|at| *at < line))
+    }
+
+    fn hover(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let (row, _) = code_place(self.bounds.get(), &self.scroll, position);
+        let line = self.line_of(row);
+        let chevron =
+            Some(line).filter(|line| row < self.row_count() && self.foldable(*line).is_some());
+        if chevron != self.chevron {
+            self.chevron = chevron;
+            cx.notify();
+        }
+    }
+
+    fn gutter_fold(&mut self, position: Point<Pixels>) -> bool {
+        let area = self.bounds.get();
+        let x = position.x - area.left();
+        if x < px(NUMBER_COLUMN - NUMBER_PAD) || x >= px(NUMBER_COLUMN) {
+            return false;
+        }
+        let (row, _) = code_place(area, &self.scroll, position);
+        let line = self.line_of(row);
+        let foldable = self.folds.contains_key(&line) || self.foldable(line).is_some();
+        if row >= self.row_count() || !foldable {
+            return false;
+        }
+        self.toggle_fold(line);
+        true
     }
 
     fn visual(&self, at: usize, wrap: &Wrap) -> Option<(usize, usize)> {
@@ -682,10 +886,12 @@ impl CodeEditor {
             ("end", true) => (self.buffer.len_chars(), None),
             ("up" | "down", _) => {
                 let goal = caret.goal.unwrap_or(head - start);
+                let shown = self.row_of(row);
                 let next = match key {
-                    "up" => row.checked_sub(1),
-                    _ => Some(row + 1).filter(|next| *next < self.buffer.line_count()),
-                };
+                    "up" => shown.checked_sub(1),
+                    _ => Some(shown + 1).filter(|next| *next < self.row_count()),
+                }
+                .map(|next| self.line_of(next));
                 let to = match next {
                     Some(next) => {
                         self.buffer.line_to_char(next).ok()? + goal.min(self.line_len(next))
@@ -789,6 +995,7 @@ impl CodeEditor {
         } else {
             self.widest_line()
         };
+        self.refold();
     }
 
     fn apply(&mut self, ranges: &[Range<usize>], text: &str) {
@@ -801,10 +1008,10 @@ impl CodeEditor {
             return;
         }
         let lines = self.buffer.line_count();
-        let marks = self.followed(&ranges, text);
+        let edits = self.line_edits(&ranges, text);
         match self.buffer.edit(&ranges, text) {
             Ok(()) => {
-                self.marks = marks;
+                self.shift(&edits);
                 self.settle(lines);
                 if let Some(frames) = &self.frames {
                     frames.borrow_mut().edited.get_or_insert_with(Instant::now);
@@ -814,25 +1021,36 @@ impl CodeEditor {
         }
     }
 
-    fn followed(&self, ranges: &[Range<usize>], text: &str) -> Rc<Marks> {
-        if self.marks.is_empty() {
-            return self.marks.clone();
+    fn line_edits(&self, ranges: &[Range<usize>], text: &str) -> Vec<LineEdit> {
+        if self.marks.is_empty() && self.folds.is_empty() {
+            return Vec::new();
         }
         let mut ranges = ranges.to_vec();
         ranges.sort_by_key(|range| std::cmp::Reverse(range.start));
-        let mut marks = (*self.marks).clone();
-        for range in ranges {
-            let rope = self.buffer.rope();
-            let (Ok(line), Some(removed)) = (
-                rope.try_char_to_line(range.start),
-                rope.get_slice(range.clone()),
-            ) else {
-                continue;
-            };
-            let line_start = rope.try_line_to_char(line).ok() == Some(range.start);
-            marks = follow(&marks, line, line_start, &removed.to_string(), text);
+        let rope = self.buffer.rope();
+        ranges
+            .into_iter()
+            .filter_map(|range| {
+                let line = rope.try_char_to_line(range.start).ok()?;
+                let removed = rope.get_slice(range.clone())?;
+                let line_start = rope.try_line_to_char(line).ok() == Some(range.start);
+                Some(LineEdit::new(line, line_start, &removed.to_string(), text))
+            })
+            .collect()
+    }
+
+    fn shift(&mut self, edits: &[LineEdit]) {
+        for edit in edits {
+            self.folds
+                .retain(|header, last| !edit.touches(&(*header + 1..*last + 1)));
+            self.folds = edit.follow(&self.folds);
         }
-        Rc::new(marks)
+        if !self.marks.is_empty() {
+            let marks = edits
+                .iter()
+                .fold((*self.marks).clone(), |marks, edit| edit.follow(&marks));
+            self.marks = Rc::new(marks);
+        }
     }
 
     fn selections(&self) -> Vec<Range<usize>> {
@@ -872,7 +1090,7 @@ impl CodeEditor {
             return;
         }
         let after = self.buffer.rope();
-        if !self.marks.is_empty() {
+        if !self.marks.is_empty() || !self.folds.is_empty() {
             let same = |pair: &(char, char)| pair.0 == pair.1;
             let start = before.chars().zip(after.chars()).take_while(same).count();
             let (old_len, new_len) = (before.len_chars(), after.len_chars());
@@ -887,7 +1105,7 @@ impl CodeEditor {
             let line_start = before.line_to_char(line) == start;
             let removed = before.slice(start..old_len - tail).to_string();
             let inserted = after.slice(start..new_len - tail).to_string();
-            self.marks = Rc::new(follow(&self.marks, line, line_start, &removed, &inserted));
+            self.shift(&[LineEdit::new(line, line_start, &removed, &inserted)]);
         }
         self.settle(lines);
     }
@@ -921,13 +1139,14 @@ impl CodeEditor {
         cx.notify();
     }
 
-    fn reveal(&self) {
+    fn reveal(&mut self) {
+        self.unfold_carets();
         if let Some(caret) = self.carets.last()
-            && let Ok(row) = self.buffer.char_to_line(caret.head)
+            && let Ok(line) = self.buffer.char_to_line(caret.head)
         {
             let row = match self.wrapped() {
-                Some(wrap) => self.visual(caret.head, wrap).map_or(row, |(row, _)| row),
-                None => row,
+                Some(wrap) => self.visual(caret.head, wrap).map_or(line, |(row, _)| row),
+                None => self.row_of(line),
             };
             self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
         }
@@ -938,6 +1157,13 @@ impl CodeEditor {
         let held = keys.modifiers;
         let key = keys.key.as_str();
         let command = held.secondary();
+        if command && self.frames.is_some() {
+            eprintln!(
+                "desk: editor key {} char {:?}",
+                keys.unparse(),
+                keys.key_char
+            );
+        }
         match (command, key) {
             (true, "up" | "down") if held.alt => self.stack(key),
             (_, "left" | "right" | "up" | "down" | "home" | "end") => {
@@ -956,6 +1182,12 @@ impl CodeEditor {
                     .collect();
             }
             (false, "z") if held.alt && !held.shift => self.toggle_wrap(),
+            (true, "{") | (true, "[") if held.shift || key == "{" => self.fold_at_caret(),
+            (true, "}") | (true, "]") if held.shift || key == "}" => {
+                if let Some(line) = self.caret_line() {
+                    self.unfold(line);
+                }
+            }
             (true, "z") => self.history(!held.shift),
             (true, "y") => self.history(false),
             (true, "a") => {
@@ -989,7 +1221,7 @@ impl CodeEditor {
         let wrap = self.wrapped();
         let (line, piece) = match wrap {
             Some(wrap) => wrap.locate(row.min(wrap.rows().saturating_sub(1))),
-            None => (row.min(self.buffer.line_count().saturating_sub(1)), 0),
+            None => (self.line_of(row), 0),
         };
         let drawn = self.drawn(line);
         let text = &drawn.text;
@@ -1015,6 +1247,10 @@ impl CodeEditor {
 
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
+        if self.gutter_fold(event.position) {
+            cx.notify();
+            return;
+        }
         let Some(at) = self.char_at_point(event.position, window, cx) else {
             return;
         };
@@ -1035,6 +1271,7 @@ impl CodeEditor {
 
     fn mouse_move(&mut self, event: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
         if !self.dragging || !event.dragging() {
+            self.hover(event.position, cx);
             return;
         }
         let Some(at) = self.char_at_point(event.position, window, cx) else {
@@ -1088,7 +1325,7 @@ impl CodeEditor {
         lines.into_iter().map(|(line, _)| line).collect()
     }
 
-    fn lit_marks(&self) -> Rc<Marks> {
+    fn lit_marks(&self, editor: &WeakEntity<Self>) -> Rc<Marks> {
         let lines: Vec<usize> = self
             .carets
             .iter()
@@ -1098,7 +1335,7 @@ impl CodeEditor {
                 (self.buffer.char_to_line(range.end).ok()? == line).then_some(line)
             })
             .collect();
-        if lines.is_empty() {
+        if lines.is_empty() && self.folds.is_empty() && self.chevron.is_none() {
             return self.marks.clone();
         }
         let mut marks = (*self.marks).clone();
@@ -1108,6 +1345,22 @@ impl CodeEditor {
                 .or_default()
                 .background
                 .get_or_insert(CURRENT_LINE);
+        }
+        if let Some(line) = self.chevron {
+            marks.entry(line).or_default().fold = Some(FoldMark::Open);
+        }
+        for &header in self.folds.keys() {
+            let mark = marks.entry(header).or_default();
+            mark.fold = Some(FoldMark::Folded);
+            let (editor, before) = (editor.clone(), mark.trailing.take());
+            mark.trailing = Some(Rc::new(move |theme: &Theme| {
+                div()
+                    .flex()
+                    .items_center()
+                    .child(fold_pill(header, editor.clone(), theme))
+                    .children(before.as_ref().map(|before| before(theme)))
+                    .into_any_element()
+            }));
         }
         Rc::new(marks)
     }
@@ -1234,7 +1487,7 @@ impl EntityInputHandler for CodeEditor {
                 let row = wrap.row_of(line, byte);
                 (row, wrap.piece(line, wrap.locate(row).1, text.len()))
             }
-            None => (line, 0..text.len()),
+            None => (self.row_of(line), 0..text.len()),
         };
         let piece: SharedString = text.get(within.clone())?.to_owned().into();
         let x = code_shape(piece, window, &ActiveTheme::theme(cx))
@@ -1280,15 +1533,26 @@ impl Render for CodeEditor {
         let bounds = self.bounds.clone();
         let focus = self.focus.clone();
         let wrapped_at = self.wrapping.then(|| self.wrap.width());
+        let folded_at = self.folded_at.clone();
+        let shown_lines = self.shown_lines.clone();
         let rows = code_view(
             "code-editor-rows",
             self.buffer.line_count(),
             &self.scroll,
-            move |rows, cx| source.update(cx, |editor, _| editor.rows(rows, shown)),
+            move |rows, cx| {
+                source.update(cx, |editor, _| match &shown_lines {
+                    None => editor.rows(rows, shown),
+                    Some(lines) => rows
+                        .filter_map(|row| lines.get(row))
+                        .flat_map(|line| editor.rows(*line..*line + 1, shown))
+                        .collect(),
+                })
+            },
         )
         .widest(self.widest)
         .wrap(self.wrapped().map(|_| self.wrap.clone()))
-        .marks(self.lit_marks());
+        .shown(self.shown_lines.clone())
+        .marks(self.lit_marks(&entity.downgrade()));
         let failure = self.failure.clone().map(|(what, error)| {
             div()
                 .absolute()
@@ -1308,12 +1572,21 @@ impl Render for CodeEditor {
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::release))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::release))
+            .on_hover(cx.listener(|editor, hovered: &bool, _, cx| {
+                if !hovered && editor.chevron.take().is_some() {
+                    cx.notify();
+                }
+            }))
             .child(rows)
             .child(
                 canvas(
                     |_, _, _| {},
                     move |area, _, window, cx| {
                         bounds.set(area);
+                        if let Some(clicked) = folded_at.take() {
+                            let ms = clicked.elapsed().as_secs_f64() * 1000.0;
+                            eprintln!("desk: editor fold {ms:.2} ms");
+                        }
                         if let Some(frames) = &frames {
                             let mut frames = frames.borrow_mut();
                             if let Some(edited) = frames.edited.take() {

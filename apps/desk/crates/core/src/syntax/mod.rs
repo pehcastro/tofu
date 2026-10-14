@@ -267,6 +267,44 @@ impl Syntax {
         spans
     }
 
+    pub fn fold(&self, line: usize) -> Option<usize> {
+        self.blocks_at(line)
+            .into_iter()
+            .find(|(start, _)| *start == line)
+            .map(|(_, last)| last)
+    }
+
+    pub fn fold_header(&self, line: usize) -> Option<usize> {
+        self.blocks_at(line).last().map(|(start, _)| *start)
+    }
+
+    fn blocks_at(&self, line: usize) -> Vec<(usize, usize)> {
+        let last_row = |node: &Node| {
+            let (start, end) = (node.start_position(), node.end_position());
+            match end.column == 0 && end.row > start.row {
+                true => end.row - 1,
+                false => end.row,
+            }
+        };
+        let mut found = Vec::new();
+        let mut node = self.tree.root_node();
+        loop {
+            let mut cursor = node.walk();
+            let inside = node
+                .children(&mut cursor)
+                .filter(|child| child.start_position().row <= line && line <= last_row(child))
+                .max_by_key(|child| (child.start_position().row == line, last_row(child)));
+            let Some(child) = inside else {
+                return found;
+            };
+            let (start, last) = (child.start_position().row, last_row(&child));
+            if last > start {
+                found.push((start, last));
+            }
+            node = child;
+        }
+    }
+
     fn paint_lines(&self, lines: Range<usize>) -> Vec<Span> {
         let rope = &self.rope;
         let last = rope.len_lines();
