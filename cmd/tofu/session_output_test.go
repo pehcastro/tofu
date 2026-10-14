@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"tofu/internal/golden"
@@ -67,7 +68,7 @@ func sessionOutputProject(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().Truncate(time.Second)
+	now := time.Now()
 	step := turn.StepRow{Index: 1, AssistantText: "looking at the store", Model: "claude-opus-5", PromptTokens: 1200, CompletionTokens: 300, CostUSD: 0.0042,
 		Occupancy: &recall.Occupancy{Identity: 3300, Facts: 1200, WorkingSet: 9000, Recent: 4000, Target: 50000}}
 	storeWalk, olderTask := "store-walk", "older-task"
@@ -121,7 +122,7 @@ func TestSessionContextAndShellsMatchTheirTextAndJSONGoldens(t *testing.T) {
 	clock := regexp.MustCompile(`\b\d{2}:\d{2}:\d{2}\b`)
 	printed := map[string]string{}
 	for _, mode := range []string{"text", "json"} {
-		t.Run(mode, func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
 			t.Setenv("NO_COLOR", "1")
 			escapedHome, _ := json.Marshal(sessionOutputProject(t))
 			for _, c := range sessionOutputCases() {
@@ -135,7 +136,7 @@ func TestSessionContextAndShellsMatchTheirTextAndJSONGoldens(t *testing.T) {
 				}
 				got, out, errOut := runOutput(args)
 				if got != code {
-					t.Errorf("%s exited %d, want %d\nstdout %s\nstderr %s", c.name, got, code, out, errOut)
+					t.Errorf("%s %s exited %d, want %d\nstdout %s\nstderr %s", mode, c.name, got, code, out, errOut)
 				}
 				if asJSON {
 					if !json.Valid([]byte(out)) || errOut != "" {
