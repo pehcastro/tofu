@@ -96,7 +96,8 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
             ));
         }
     };
-    let launched = project::launch()?;
+    let (launched, from) = intro_project()?;
+    eprintln!("desk: intro project {} from {from}", launched.display());
     let recents = project::recents().unwrap_or_else(|error| {
         eprintln!("desk: intro recents: {error}");
         Vec::new()
@@ -126,6 +127,22 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
             }
         })
         .into())
+}
+
+fn intro_project() -> Result<(PathBuf, &'static str), String> {
+    let remembered = match project::chosen()? {
+        Some((folder, "the folder argument")) => return Ok((folder, "argument")),
+        Some((folder, "the most recent project")) => Some(folder),
+        Some((folder, _)) => return Ok((folder, "env")),
+        None => None,
+    };
+    let cwd = std::env::current_dir()
+        .map_err(|error| format!("the intro cannot read the folder it runs in: {error}"))?;
+    let repository = cwd.ancestors().any(|folder| folder.join(".git").exists());
+    match (repository, remembered) {
+        (false, Some(folder)) => Ok((folder, "remembered")),
+        _ => Ok((cwd, "cwd")),
+    }
 }
 
 impl Tofu {

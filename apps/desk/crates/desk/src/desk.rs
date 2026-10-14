@@ -104,7 +104,7 @@ const WINDOW_RADIUS: f32 = 8.0;
 const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
 const LIMITS_SCREEN: &str = "limits";
-const WHOLE_SCREENS: [&str; 2] = ["intro", "onboarding"];
+const WHOLE_SCREENS: [&str; 3] = ["intro", "onboarding", "no-tofu"];
 const SCREEN_ID: &str = "screen.";
 const LAYOUT_ID: &str = "layout.";
 const OPEN_SETTINGS_ID: &str = "settings.open";
@@ -218,7 +218,7 @@ impl Render for NoTofu {
             glyph: None,
             keys: None,
         };
-        empty_state(
+        let panel = empty_state(
             "no-tofu",
             self.title.clone(),
             Some(self.line.clone()),
@@ -237,7 +237,15 @@ impl Render for NoTofu {
                 .font_family(theme.word(WordToken::ShapeMono))
                 .text_color(ink(&theme, T2))
                 .child(self.command.clone()),
-        )
+        );
+        div()
+            .flex_1()
+            .min_h_0()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(panel)
     }
 }
 
