@@ -23,7 +23,7 @@ func Page(d Data) string {
 	page := &strings.Builder{}
 	page.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
 	page.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>tofu, measured</title>\n")
-	page.WriteString("<style>" + stylesheet + "</style>\n</head>\n<body>\n<main>\n<h1>tofu against Claude Code, omp and codex</h1>\n<nav class=\"index\">")
+	page.WriteString("<style>" + fontFace() + stylesheet + "</style>\n</head>\n<body>\n<main>\n<h1>tofu against Claude Code, omp and codex</h1>\n<nav class=\"index\">")
 	for _, one := range append(append([]section{}, shown...), older...) {
 		fmt.Fprintf(page, "<a href=\"#%s\">%s</a>", one.id, html.EscapeString(one.title))
 	}

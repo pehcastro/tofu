@@ -11,6 +11,8 @@ import (
 
 var onDisk = regexp.MustCompile(`^report-\d{4}-\d{2}-\d{2}.*\.(md|txt)$`)
 
+const maxViewerBytes = 400 * 1024
+
 func built(t *testing.T) Data {
 	t.Helper()
 	data, err := Build("..")
@@ -313,6 +315,17 @@ func TestTheViewerFetchesNothingWhenItOpens(t *testing.T) {
 		if strings.Contains(page, refused) {
 			t.Errorf("%s reaches for %q when it opens", ViewerFile, refused)
 		}
+	}
+	for _, link := range regexp.MustCompile(`url\(([^)]*)\)`).FindAllStringSubmatch(page, -1) {
+		if !strings.HasPrefix(link[1], "data:") {
+			t.Errorf("%s loads %q, and only a data: URL is carried inside the page", ViewerFile, link[1][:min(60, len(link[1]))])
+		}
+	}
+	if len(body) > maxViewerBytes {
+		t.Errorf("%s is %d bytes, over the %d the embedded font leaves room for", ViewerFile, len(body), maxViewerBytes)
+	}
+	if !strings.Contains(page, "src:url(data:font/woff2;base64,") {
+		t.Errorf("%s does not carry Inter inside it, so it renders in whatever the machine has", ViewerFile)
 	}
 	for _, specified := range []string{"--font:Inter, system-ui", "font-feature-settings:\"tnum\"", "max-width:960px", "--bg:#fafafa", "prefers-color-scheme: dark", "--ahead-text:#15803d", "--behind-bg:#fee2e2"} {
 		if !strings.Contains(page, specified) {

@@ -1,5 +1,20 @@
 package report
 
+import (
+	_ "embed"
+	"encoding/base64"
+)
+
+//go:embed fonts/inter-latin.woff2
+var interLatin []byte
+
+func fontFace() string {
+	return "@font-face{font-family:Inter;font-style:normal;font-weight:400 600;font-display:swap;src:url(data:font/woff2;base64," +
+		base64.StdEncoding.EncodeToString(interLatin) + ") format('woff2');" + latinRange + "}"
+}
+
+const latinRange = "unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+
 const stylesheet = `
 :root{
   --bg:#fafafa;--surface:#fff;--text:#111;--muted:#6b7280;--line:#e5e7eb;--accent:#2563eb;
@@ -28,7 +43,7 @@ nav.index{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin-bottom:
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;
   box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.stat-value{font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--ahead-text)}
+.stat-value{font-size:28px;font-weight:600;letter-spacing:-.02em}
 .stat-line{font-size:13px;color:var(--muted)}
 .tldr{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin:0;list-style:none}
 .tldr li{margin:2px 0}
