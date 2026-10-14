@@ -2,7 +2,7 @@
 title: Subscription quota
 description: How full each subscription's windows are and when they reset, read from replies tofu already gets, shared by every tofu process, and never blank after a refusal.
 order: 5
-updated: 2026-10-09
+updated: 2026-10-14
 ---
 
 `tofu usage` shows each signed-in subscription account, its quota windows,
@@ -33,6 +33,26 @@ a blank row.
 spread a little so accounts and processes don't ask together. Near a limit
 it is asked sooner: after 2 minutes at 75% used, 1 minute at 90%, and 30
 seconds at 99%, unless a reply already said more recently.
+
+## When a limit is reached
+
+**Another account of the same subscription first.** When a reply comes back
+with the rate limit, tofu asks the same step again on your next signed-in
+account of that subscription, `claude-sub` to `claude-sub`, without asking
+you. The screen notes the move and `tofu serve` sends `turn.account` with
+the reason `moved`. Each account is tried at most once per step.
+
+**Then you choose, because another source is other money.** When every
+account of the subscription is at its limit and another subscription you
+are signed in to has room, tofu asks: `continue on codex-sub`, or `I'll wait
+for the limit to reset`. Continuing keeps the conversation, so the other
+model picks up where the first stopped.
+
+**Waiting resumes by itself.** The screen says when the turn resumes, from
+the window's reset time, or the reply's `Retry-After`, or 10 minutes when
+neither says. At that time the turn goes on with no input. Typing goes on
+at once with what you typed, and `esc` cancels the wait. A cron turn never
+asks: it waits.
 
 ## Reading it
 

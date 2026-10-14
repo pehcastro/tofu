@@ -173,6 +173,7 @@ func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 			account, moved, err := accounts.Next(ctx, pinned)
 			return omitted(account), moved, err
 		},
+		Resets: accounts.Resets,
 	}
 }
 

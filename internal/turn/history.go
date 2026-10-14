@@ -42,6 +42,14 @@ type Compaction struct {
 	Drops        []recall.Drop `json:"drops"`
 }
 
+func WithoutThinking(messages []llm.Message) []llm.Message {
+	cleared := slices.Clone(messages)
+	for i := range cleared {
+		cleared[i].Thinking = llm.Thinking{}
+	}
+	return cleared
+}
+
 func RecordedContext(events []session.Event) (recall.Conversation, error) {
 	messages, err := ConversationFrom(events)
 	if err != nil {

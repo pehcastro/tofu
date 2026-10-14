@@ -24,10 +24,14 @@ import (
 )
 
 const (
-	processDir    = "."
-	standingPoint = "standing"
-	cancelledAt   = "cancelled at"
-	hookTrustTool = "hooks"
+	processDir      = "."
+	standingPoint   = "standing"
+	cancelledAt     = "cancelled at"
+	hookTrustTool   = "hooks"
+	resumedTask     = "continue"
+	continueOn      = "continue on "
+	waitForTheLimit = "I'll wait for the limit to reset"
+	limitQuestion   = "limit"
 )
 
 type Engine interface {
@@ -68,17 +72,64 @@ type Prepared struct {
 	GateOff   error
 	Close     func()
 	Account   func(id int64) TurnAccount
+	Others    func() []OtherSource
+}
+
+type OtherSource struct {
+	Name string
+	Pick Pick
+}
+
+type limitReached struct {
+	*turn.RateLimited
+	source string
+	others []OtherSource
 }
 
 func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
+	h.runFrom(ctx, pick, task, live, false)
+}
+
+func (h *Host) runFrom(ctx context.Context, pick Pick, task string, live Live, resumed bool) {
+	reached := h.lead(ctx, pick, task, live, resumed)
+	if reached.RateLimited == nil {
+		return
+	}
+	resumesAt := reached.ResetAt.Local().Format(time.DateTime) + ", in " + reached.ResetAt.Sub(h.now()).Round(time.Second).String()
+	other, goesOn := h.anotherSource(ctx, reached, resumesAt, live)
+	switch {
+	case !goesOn:
+	case other != nil:
+		h.mu.Lock()
+		h.carried, h.pick = turn.WithoutThinking(h.carried), other.Pick
+		h.mu.Unlock()
+		live.Emit(Event{Kind: EventNote, Text: "the turn continues on " + other.Name + " from the same conversation"})
+		h.runFrom(ctx, other.Pick, resumedTask, live, true)
+	default:
+		if task, resumes := h.waitForTheReset(ctx, reached, resumesAt, live); resumes {
+			h.runFrom(ctx, pick, task, live, true)
+		}
+	}
+}
+
+func (h *Host) heardTyped(emit func(Event), typed string) {
+	emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1})
+}
+
+func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resumed bool) limitReached {
 	emit := live.Emit
 	fail := func(err error) { emit(Event{Kind: EventFailure, Text: err.Error()}) }
-	say := func(text string) { emit(Event{Kind: EventNote, Text: text}) }
+	var started atomic.Bool
+	say := func(text string) {
+		if started.Load() || !resumed {
+			emit(Event{Kind: EventNote, Text: text})
+		}
+	}
 	id := h.pendingID()
 	releaseTurn, err := h.holdTurn(id)
 	if err != nil {
 		fail(err)
-		return
+		return limitReached{}
 	}
 	defer func() { _ = releaseTurn() }()
 	task += h.takeRan()
@@ -131,8 +182,9 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	if err != nil {
 		fail(err)
-		return
+		return limitReached{}
 	}
+	started.Store(true)
 	sessions, config := prepared.Sessions, prepared.Config
 	if err := h.cron.Keep(cronFile(sessions, id)); err != nil {
 		say("cron jobs were not written: " + err.Error())
@@ -140,7 +192,7 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	if labelled, named := h.label(sessions, h.ID()); named {
 		emit(labelled)
 	}
-	if prepared.GateOff != nil {
+	if prepared.GateOff != nil && !resumed {
 		emit(gateOffEvent(prepared.GateOff))
 	}
 	watch.spawner, watch.maxSteps, watch.decisions = prepared.Spawner, prepared.MaxSteps, prepared.Decisions
@@ -192,8 +244,9 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	stopClocks := watch.clockRunningSubAgents()
 	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
-	heard := func(typed string) { emit(Event{Kind: EventSteered, ID: h.steering.heard(), Text: typed, Step: 1}) }
+	heard := func(typed string) { h.heardTyped(emit, typed) }
 	var reported []error
+	var reached limitReached
 	if scratched, err := turn.WithLeadScratch(asking, config); err == nil {
 		asking = scratched
 	}
@@ -203,10 +256,17 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 		if err != nil {
 			reported = append(reported, err)
 		}
+		reached = limitReached{}
 		words, status := doneWords(row.Outcome, row.Guard)
 		switch {
 		case errors.Is(err, context.Canceled):
 			words, status = cancelledAt, StatusStopped
+		case errors.As(err, &reached.RateLimited):
+			words, status = "stopped at the rate limit after", StatusStopped
+			reached.source = pick.Wire
+			if prepared.Account != nil {
+				reached.source = cmp.Or(prepared.Account(row.Account).Source, pick.Wire)
+			}
 		case err != nil:
 			status = StatusFailed
 			fail(err)
@@ -255,6 +315,54 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	h.mu.Unlock()
 	if err != nil {
 		fail(err)
+	}
+	if reached.RateLimited == nil || ctx.Err() != nil {
+		return limitReached{}
+	}
+	if prepared.Others != nil {
+		reached.others = prepared.Others()
+	}
+	return reached
+}
+
+func (h *Host) anotherSource(ctx context.Context, reached limitReached, resumesAt string, live Live) (*OtherSource, bool) {
+	if live.Origin.Kind == OriginCron || len(reached.others) == 0 {
+		return nil, true
+	}
+	options := make([]turn.PersonOption, 0, len(reached.others)+1)
+	for _, other := range reached.others {
+		options = append(options, turn.PersonOption{Label: continueOn + other.Name, Description: "another subscription, paid apart from " + reached.source + ": the conversation carries over"})
+	}
+	options = append(options, turn.PersonOption{Label: waitForTheLimit, Description: "the turn resumes by itself at " + resumesAt})
+	replies, err := askForm(live.Emit, h.questions)(ctx, []turn.PersonQuestion{{ID: limitQuestion, Header: reached.source + " limit", Type: turn.QuestionChoice, Options: options,
+		Question: "every " + reached.source + " account is at its limit: go on with another subscription, or wait for the limit to reset?"}}, 0)
+	var undelivered turn.QuestionUndelivered
+	if err != nil && !errors.As(err, &undelivered) {
+		return nil, false
+	}
+	for _, other := range reached.others {
+		if len(replies) > 0 && slices.Contains(replies[0].Chosen, continueOn+other.Name) {
+			return &other, true
+		}
+	}
+	return nil, true
+}
+
+func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, resumesAt string, live Live) (string, bool) {
+	live.Emit(Event{Kind: EventNote, Text: "every " + reached.source + " account is at its limit, so the turn resumes by itself at " + resumesAt +
+		": type to go on now, or press esc to cancel"})
+	timer := time.NewTimer(reached.ResetAt.Sub(h.now()))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		live.Emit(Event{Kind: EventNote, Text: "the " + reached.source + " limit has reset, so the turn resumes"})
+		return resumedTask, true
+	case typed := <-live.Steering:
+		h.heardTyped(live.Emit, typed)
+		return typed, true
+	case <-ctx.Done():
+		live.Emit(Event{Kind: EventNote, Text: "the wait for the " + reached.source + " limit was cancelled, and the turn does not resume"})
+		return "", false
 	}
 }
 

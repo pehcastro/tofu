@@ -99,7 +99,7 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
-	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, tabs: launch.tabs, places: places}
+	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, quota: wiring.quota, tabs: launch.tabs, places: places}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted()})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKey(); err != nil {
@@ -692,6 +692,7 @@ type appEngine struct {
 	dir    string
 	arms   runOpts
 	open   func(runOpts) (appWire, error)
+	quota  func() []frame.Quota
 	tabs   *tools.BrowserTabs
 	warm   *warmProcesses
 	places sys.Places
@@ -778,7 +779,11 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		return hooks.SubAgent(asked), guardErr
 	}
 	person := hooks.Inbox.LeadAsks(hooks.Person)
-	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
+	turnAccounts, others, account := opened.held.forTurn(), opened.held.others, spentAccount(opened.held, opened.selected.ID)
+	if stand := e.standIns(opened.held, opts.wire); len(stand.mine()) > 0 {
+		turnAccounts, others, account = stand.forTurn(), stand.others, stand.spent
+	}
+	config, spawner, err := runConfig(opts, built, runtime{accounts: turnAccounts, spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
 		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places})
 	if err != nil {
 		return prepared, err
@@ -790,8 +795,15 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	config.Images = images
 	config.Person = person.Asking(config.GatePromptAsks)
 	prepared.Config, prepared.Spawner, prepared.Plan, prepared.Ceiling, prepared.Sessions, prepared.GateOff = config, spawner, plan, budget.CeilingTokens, sessions, gateErr
-	prepared.Account = spentAccount(opened.held, opened.selected.ID)
+	prepared.Account, prepared.Others = account, others
 	return prepared, nil
+}
+
+func (e *appEngine) standIns(held *accounts, wire string) standIns {
+	if _, recorded := held.fixed.(*cassette); !recorded || e.quota == nil {
+		return standIns{}
+	}
+	return standIns{held: held, source: string(subscriptionOf(wire)), readings: e.quota()}
 }
 
 func spentAccount(held *accounts, model string) func(int64) host.TurnAccount {

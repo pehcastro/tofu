@@ -6,9 +6,13 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"tofu/interface/tui/frame"
+	"tofu/internal/host"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -43,7 +47,111 @@ type accounts struct {
 }
 
 func (a *accounts) forTurn() turn.Accounts {
-	return turn.Accounts{Pick: a.pick, Next: a.next}
+	return turn.Accounts{Pick: a.pick, Next: a.next, Resets: a.resets}
+}
+
+func (a *accounts) resets(ctx context.Context, pinned turn.Account) (time.Time, bool) {
+	if a.fixed != nil {
+		return time.Time{}, false
+	}
+	candidates, _, err := a.read(ctx)
+	if at := slices.IndexFunc(candidates, func(candidate quota.Candidate) bool { return candidate.ID == pinned.ID }); err == nil && at >= 0 {
+		return candidates[at].Report.WaitUntil(a.now())
+	}
+	return time.Time{}, false
+}
+
+func (a *accounts) others() []host.OtherSource {
+	var serving []host.OtherSource
+	for _, wire := range []string{wireSubscription, wireCodex} {
+		provider := subscriptionOf(wire)
+		if provider == a.provider || a.store == nil {
+			continue
+		}
+		model, err := selectModel(wire, "")
+		if err != nil {
+			continue
+		}
+		other := &accounts{provider: provider, store: a.store, spends: model.Windows, urls: a.urls, now: a.now}
+		candidates, _, err := other.read(context.Background())
+		if err == nil && slices.ContainsFunc(candidates, func(candidate quota.Candidate) bool { return !quota.Spent(candidate.Report, model.Windows, a.now()) }) {
+			serving = append(serving, host.OtherSource{Name: string(provider), Pick: host.Pick{Wire: wire, Model: model.Slug(), Effort: a.effort}})
+		}
+	}
+	return serving
+}
+
+func subscriptionOf(wire string) cred.Provider {
+	if wire == wireCodex {
+		return cred.CodexSub
+	}
+	return cred.ClaudeSub
+}
+
+type standIns struct {
+	held     *accounts
+	source   string
+	readings []frame.Quota
+}
+
+func readingSource(reading frame.Quota) string {
+	source, _, _ := strings.Cut(reading.Label, " ")
+	return source
+}
+
+func (s standIns) idOf(reading frame.Quota) int64 {
+	id, _ := strconv.ParseInt(strings.TrimPrefix(reading.Account, "#"), 10, 64)
+	return id
+}
+
+func (s standIns) mine() []frame.Quota {
+	return slices.DeleteFunc(slices.Clone(s.readings), func(reading frame.Quota) bool { return readingSource(reading) != s.source })
+}
+
+func (s standIns) account(ctx context.Context, reading frame.Quota) (turn.Account, error) {
+	account, err := s.held.pick(ctx)
+	_, window, _ := strings.Cut(reading.Label, " ")
+	account.ID, account.Headroom, account.Window = s.idOf(reading), 1-reading.Fraction, window
+	return account, err
+}
+
+func (s standIns) forTurn() turn.Accounts {
+	mine := s.mine()
+	at := func(pinned turn.Account) int {
+		return slices.IndexFunc(mine, func(reading frame.Quota) bool { return s.idOf(reading) == pinned.ID })
+	}
+	return turn.Accounts{
+		Pick: func(ctx context.Context) (turn.Account, error) { return s.account(ctx, mine[0]) },
+		Next: func(ctx context.Context, pinned turn.Account) (turn.Account, bool, error) {
+			pinnedAt := at(pinned)
+			if pinnedAt < 0 || mine[pinnedAt].Fraction < 1 || len(mine) == 1 {
+				return turn.Account{}, false, nil
+			}
+			next, err := s.account(ctx, mine[(pinnedAt+1)%len(mine)])
+			return next, err == nil, err
+		},
+		Resets: func(_ context.Context, pinned turn.Account) (time.Time, bool) {
+			if pinnedAt := at(pinned); pinnedAt >= 0 {
+				return mine[pinnedAt].ResetsAt, !mine[pinnedAt].ResetsAt.IsZero()
+			}
+			return time.Time{}, false
+		},
+	}
+}
+
+func (s standIns) others() []host.OtherSource {
+	var serving []host.OtherSource
+	for _, wire := range []string{wireSubscription, wireCodex} {
+		source := string(subscriptionOf(wire))
+		if source != s.source && slices.ContainsFunc(s.readings, func(reading frame.Quota) bool { return readingSource(reading) == source && reading.Fraction < 1 }) {
+			serving = append(serving, host.OtherSource{Name: source, Pick: host.Pick{Wire: wire}})
+		}
+	}
+	return serving
+}
+
+func (s standIns) spent(id int64) host.TurnAccount {
+	return host.TurnAccount{Source: s.source, AccountID: id, Model: cassetteBuild}
 }
 
 func (a *accounts) close() {

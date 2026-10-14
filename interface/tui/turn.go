@@ -524,7 +524,22 @@ func (a *App) absorb(event Event) {
 	case EventStats:
 		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
 		a.status.Decisions = event.Decisions
+	case host.EventAccount:
+		a.followSource(event.Account)
 	}
+}
+
+func (a *App) followSource(spent *host.TurnAccount) {
+	if spent == nil || spent.Source == a.provider {
+		return
+	}
+	at := slices.IndexFunc(a.wires, func(wire Wire) bool { return wire.Provider == spent.Source })
+	if at < 0 {
+		a.notify("the turn moved to " + spent.Source + ", which the model picker does not list, so the next turn runs " + a.slug())
+		return
+	}
+	a.wire, a.provider, a.model, a.picked = a.wires[at].Name, spent.Source, spent.Model, spent.Source+"/"+spent.Model
+	a.view.Append(session.Entry{Kind: session.Note, Body: "the turn moved to " + a.picked + ", so the next turn runs there too; pick another model to change it"})
 }
 
 func (a *App) thought(event Event, at time.Time) {

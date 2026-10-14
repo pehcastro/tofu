@@ -313,6 +313,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return budget.Tokens(artifacts.preview, historyOf(messages))
 	}
 	var lastAnswered time.Time
+	var lastAttempts []llm.Attempt
 	ask := func(ctx context.Context, why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
 		if tokens := sentTokens(request.Messages); tokens > budget.Ceiling() {
@@ -322,7 +323,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 		tapped, tap := llm.Tapped(ctx)
 		decision, timing, err := askCountingAttempts(tapped, model, request)
-		recorded.exchange(id, why, config.Wire, request, started, tap.Attempts(), decision, err)
+		lastAttempts = tap.Attempts()
+		recorded.exchange(id, why, config.Wire, request, started, lastAttempts, decision, err)
 		if err == nil {
 			lastAnswered = now()
 		}
@@ -672,6 +674,26 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
 				}
 			}
+		}
+		for tried := []Account{account}; transport.KindOf(err) == transport.KindRateLimit; tried = append(tried, account) {
+			next, rotated := config.Accounts.rotate(ctx, account, tried)
+			if !rotated {
+				err = config.Accounts.limited(ctx, config.Wire, tried, lastAttempts, now(), err)
+				break
+			}
+			told := rotatedWords(account, next)
+			row.Warnings = append(row.Warnings, told)
+			recorded.notice(told)
+			if config.Notify != nil {
+				config.Notify(told)
+			}
+			config.tookAccount(AccountTaken{ID: next.ID, From: account.ID, Reason: AccountMoved})
+			account, row.Account = next, next.ID
+			if next.Model != nil {
+				model = next.Model
+			}
+			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on account #"+strconv.FormatInt(next.ID, 10)+" after a rate limit",
+				llm.Request{Messages: withPlan(messages), Tools: definitions})
 		}
 		if err != nil {
 			return fail(err)

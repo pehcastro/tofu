@@ -164,6 +164,8 @@ func (s *streamState) handle(event streamEvent) error {
 		switch {
 		case failed.Code == "context_length_exceeded":
 			kind, cause = transport.KindRequestTooLarge, transport.ErrContextOverflow
+		case usageLimited(failed.Type) || usageLimited(failed.Code):
+			kind = transport.KindRateLimit
 		case failed.Code == "server_is_overloaded" || failed.Code == "server_error" || failed.Type == "server_error":
 			cause = llm.ErrStreamBroke
 		}
@@ -232,6 +234,14 @@ func (s *streamState) handle(event streamEvent) error {
 		}
 	}
 	return nil
+}
+
+func usageLimited(code string) bool {
+	switch code {
+	case "usage_limit_reached", "workspace_member_usage_limit_reached", "rate_limit_exceeded", "slow_down":
+		return true
+	}
+	return false
 }
 
 func (s *streamState) think(text string) {

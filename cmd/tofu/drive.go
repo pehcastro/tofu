@@ -509,7 +509,18 @@ func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, quo
 	recorded := appWiring{
 		open: driveWire(deck),
 		wires: func() []tui.Wire {
-			return []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
+			listed := []tui.Wire{{Name: wireSubscription, Model: shown, Provider: cmp.Or(plan.source, cassetteBuild)}}
+			if plan.quota == "" {
+				return listed
+			}
+			for _, wire := range []string{wireSubscription, wireCodex} {
+				source := string(subscriptionOf(wire))
+				named := slices.ContainsFunc(quotas(), func(reading frame.Quota) bool { return readingSource(reading) == source })
+				if named && source != listed[0].Provider {
+					listed = append(listed, tui.Wire{Name: wire, Model: shown, Provider: source})
+				}
+			}
+			return listed
 		},
 		blockers: func() []tui.Requirement { return nil },
 		clipboard: func() (sys.Clipboard, error) {
