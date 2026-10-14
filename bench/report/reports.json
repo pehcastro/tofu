@@ -3747,6 +3747,28 @@
       "state_note": ""
     },
     {
+      "package": "minimal",
+      "date": "2026-10-14",
+      "source": "bench/minimal/report-2026-10-14.md",
+      "figure": "0.7 MB per sub-agent",
+      "built_from": "prose",
+      "sample": "one run per rung, 0, 1, 4 and 10 sub-agents, at 256 and 128 MB, on a WSL2 cgroup and a Windows job object; rivals live on Windows, one at a time",
+      "skips": "tofu ran on a cassette and the rivals live, so only starting and finishing compare; one run per row",
+      "commit": "3827a25d",
+      "version": "0.5.14",
+      "previous_run": "none, the first dated report of bench/minimal",
+      "conclusion": [
+        {
+          "text": "Hand read from bench/report/handread.json: Under one vCPU and 128 MB tofu finishes 0 to 10 sub-agents and idles as tofu serve, at 9 to 16 MB of private memory and about 0.7 MB per sub-agent; Claude Code and omp do not start under 256 MB, and codex dies at 4 sub-agents under 256 MB and at 0 under 128 MB.",
+          "withdrawn": false
+        }
+      ],
+      "conclusion_unparsed": false,
+      "state": "stands",
+      "state_source": "",
+      "state_note": ""
+    },
+    {
       "package": "startup/frame",
       "date": "2026-10-14",
       "source": "bench/startup/frame/report-2026-10-14.md",
@@ -5306,8 +5328,8 @@
     }
   ],
   "counts": {
-    "reports": 66,
-    "packages_with_a_dated_report": 41,
+    "reports": 67,
+    "packages_with_a_dated_report": 42,
     "packages_with_no_dated_report": 17,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,

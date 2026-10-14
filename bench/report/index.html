@@ -414,11 +414,11 @@ footer{margin-top:48px;color:var(--muted);font-size:12px}
 </details>
 <details class="older" id="reports"><summary>Every dated report under bench/</summary>
 <div class="cards" style="--cols:5">
-<div class="card"><div class="card-header"><p class="card-description">Written up</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="66 dated reports">66 dated reports</span></p><p class="card-description">one file each, under bench/</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Benches measuring</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="41 of 58">41 of 58</span></p><p class="card-description">the rest are named below, not hidden</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Withdrawn</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="20 of 66">20 of 66</span></p><p class="card-description">struck rather than deleted</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Stale</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="1 of 66">1 of 66</span></p><p class="card-description">measured against a corpus that moved</p></div></div>
-<div class="card"><div class="card-header"><p class="card-description">Naming no answer</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="2 of 66">2 of 66</span></p><p class="card-description">no heading names the file&#39;s own conclusion</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Written up</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="67 dated reports">67 dated reports</span></p><p class="card-description">one file each, under bench/</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Benches measuring</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="42 of 59">42 of 59</span></p><p class="card-description">the rest are named below, not hidden</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Withdrawn</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="20 of 67">20 of 67</span></p><p class="card-description">struck rather than deleted</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Stale</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="1 of 67">1 of 67</span></p><p class="card-description">measured against a corpus that moved</p></div></div>
+<div class="card"><div class="card-header"><p class="card-description">Naming no answer</p></div><div class="card-content"><p class="card-title"><span class="fig" data-figure="2 of 67">2 of 67</span></p><p class="card-description">no heading names the file&#39;s own conclusion</p></div></div>
 </div>
 <details><summary>boardy, 2026-10-14 <span class="path">bench/boardy/report-2026-10-14.md</span><span class="detail">first committed at fe3ff472, tofu 0.5.14</span><span class="detail">run before it: none, the first dated report of bench/boardy</span></summary>
 <h3>What it found, in the report's own words</h3>
@@ -426,6 +426,14 @@ footer{margin-top:48px;color:var(--muted);font-size:12px}
 <h3>What it rests on</h3>
 <blockquote>3 runs of 8 probes on a generated board of 1,500 tickets and 24,390 events, seed 1356: 60 calls at bd4b0480, then 20 calls x 3 rounds per arm for TOFU-1358 and TOFU-1359, on DESKTOP-AHUN9RO<cite>bench/boardy/report-2026-10-14.md</cite></blockquote>
 <blockquote>Skipped: the serve, show and epic rows of TOFU-1358 were logged as ratios with no milliseconds; the two fix runs have separate heads and are not multiplied<cite>bench/boardy/report-2026-10-14.md</cite></blockquote>
+<span class="badge" data-variant="outline">built from prose</span>
+</details>
+<details><summary>minimal, 2026-10-14 <span class="path">bench/minimal/report-2026-10-14.md</span><span class="detail">first committed at 3827a25d, tofu 0.5.14</span><span class="detail">run before it: none, the first dated report of bench/minimal</span></summary>
+<h3>What it found, in the report's own words</h3>
+<blockquote>Hand read from bench/report/handread.json: Under one vCPU and 128 MB tofu finishes 0 to 10 sub-agents and idles as tofu serve, at 9 to 16 MB of private memory and about 0.7 MB per sub-agent; Claude Code and omp do not start under 256 MB, and codex dies at 4 sub-agents under 256 MB and at 0 under 128 MB.<cite>bench/minimal/report-2026-10-14.md</cite></blockquote>
+<h3>What it rests on</h3>
+<blockquote>one run per rung, 0, 1, 4 and 10 sub-agents, at 256 and 128 MB, on a WSL2 cgroup and a Windows job object; rivals live on Windows, one at a time<cite>bench/minimal/report-2026-10-14.md</cite></blockquote>
+<blockquote>Skipped: tofu ran on a cassette and the rivals live, so only starting and finishing compare; one run per row<cite>bench/minimal/report-2026-10-14.md</cite></blockquote>
 <span class="badge" data-variant="outline">built from prose</span>
 </details>
 <details><summary>startup/frame, 2026-10-14 <span class="path">bench/startup/frame/report-2026-10-14.md</span><span class="detail">first committed at 41427b0a, tofu 0.5.14</span><span class="detail">run before it: none, the first dated report of bench/startup/frame</span></summary>
