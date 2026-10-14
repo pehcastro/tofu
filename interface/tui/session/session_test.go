@@ -51,8 +51,8 @@ func TestProseIsRenderedOncePerWidth(t *testing.T) {
 	model := New(fixed(), counted(&calls))
 	model.SetSize(80, 24)
 	model.Append(Entry{Kind: Assistant, Body: "**Tofu** reads `toolgate.go`"})
-	if calls != 1 {
-		t.Fatalf("appending one message called the renderer %d times, want 1", calls)
+	if calls != 0 {
+		t.Errorf("appending one message called the renderer %d times before any frame showed it, want 0", calls)
 	}
 	for range frames {
 		model.View()

@@ -217,7 +217,7 @@ func (m *Model) textWidth() int { return max(m.width-2*messageInset, 1) }
 
 func (m *Model) wrapped(entry *Entry) bool {
 	room := m.textWidth()
-	if entry.undrawn {
+	if entry.undrawn && entry.streaming {
 		m.rerender(entry)
 	}
 	if !entry.assistant() || entry.width == room {
@@ -318,7 +318,11 @@ func (m *Model) Append(entry Entry) {
 	if entry.Kind == User && entry.ID == "" {
 		entry.ID = m.mint()
 	}
-	m.rerender(&entry)
+	if entry.streaming {
+		m.rerender(&entry)
+	} else if entry.assistant() {
+		entry.undrawn, entry.rendered = true, widget.Wrap(entry.Body, m.textWidth())
+	}
 	m.entries = append(m.entries, entry)
 	if len(m.entries) <= entryWindow {
 		return

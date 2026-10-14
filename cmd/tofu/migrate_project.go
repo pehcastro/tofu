@@ -36,7 +36,7 @@ func openedProject(args []string) (string, bool) {
 	return ".", opens
 }
 
-func openProject(out io.Writer, in io.Reader, dir string, mayAsk bool) {
+func openProject(out io.Writer, in io.Reader, dir string, mayAsk bool, register func(sys.Project) error) {
 	if isDir, _ := sys.IsDir(dir); !isDir {
 		return
 	}
@@ -61,7 +61,7 @@ func openProject(out io.Writer, in io.Reader, dir string, mayAsk bool) {
 			moved = append(moved, "an unregistered half copy there replaced")
 		}
 	}
-	if err := project.Register(); err != nil {
+	if err := register(project); err != nil {
 		_ = page.Print(out, page.ErrorLine("the project folder of "+page.Path(project.Path)+" was not registered: "+err.Error(), ""))
 		return
 	}

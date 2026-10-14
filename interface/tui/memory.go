@@ -115,9 +115,10 @@ func (d *offerDialog) decide(a *App, choice palette.Choice) tea.Cmd {
 	return a.pop()
 }
 
+var savedByTheLead = regexp.MustCompile(`^\[memory#(m\d+(?:-[0-9a-f]+)?)\](saved to memory, [^:]+: .*?)\. The words it came from`)
+
 func (a *App) rememberedByTheLead(output string) {
-	saved := regexp.MustCompile(`^\[memory#(m\d+(?:-[0-9a-f]+)?)\](saved to memory, [^:]+: .*?)\. The words it came from`).FindStringSubmatch(output)
-	if saved != nil {
+	if saved := savedByTheLead.FindStringSubmatch(output); saved != nil {
 		a.view.Append(session.Entry{Kind: session.Note, Head: memoryRowHead, ID: saved[1], Body: saved[2]})
 	}
 }

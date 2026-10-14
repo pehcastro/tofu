@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -51,6 +52,7 @@ type Project struct {
 	home       string
 	remote     string
 	root       string
+	identified bool
 }
 
 func projectKey(path string) string {
@@ -252,13 +254,13 @@ func OpenProject(dir string) (Project, error) {
 		return Project{}, err
 	}
 	project, registry, err := locateProject(home, dir)
-	if err != nil || project.Registered {
+	if err != nil || project.Registered || !slices.ContainsFunc(registry.Projects, movedAway) {
 		return project, err
 	}
-	project.remote, project.root = gitIdentity(project.Path)
+	project.identify()
 	for i, entry := range registry.Projects {
 		sameRepository := project.remote != "" && entry.Remote == project.remote || project.root != "" && entry.Root == project.root
-		if sameRepository && !slices.ContainsFunc(entry.Paths, pathExists) {
+		if sameRepository && movedAway(entry) {
 			project.Moved = &registry.Projects[i]
 			break
 		}
@@ -266,9 +268,16 @@ func OpenProject(dir string) (Project, error) {
 	return project, nil
 }
 
+func movedAway(entry ProjectEntry) bool { return !slices.ContainsFunc(entry.Paths, pathExists) }
+
 func pathExists(path string) bool {
 	found, _ := Exists(path)
 	return found
+}
+
+func (p *Project) identify() {
+	p.remote, p.root = gitIdentity(p.Path)
+	p.identified = true
 }
 
 func gitIdentity(dir string) (remote, root string) {
@@ -279,15 +288,46 @@ func gitIdentity(dir string) (remote, root string) {
 		}
 		return strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
 	}
+	var both sync.WaitGroup
+	both.Go(func() { root = git("rev-list", "--max-parents=0", "HEAD") })
 	remote = git("remote", "get-url", "origin")
+	both.Wait()
 	if parsed, err := url.Parse(remote); err == nil && parsed.User != nil {
 		parsed.User = nil
 		remote = parsed.String()
 	}
-	return remote, git("rev-list", "--max-parents=0", "HEAD")
+	return remote, root
 }
 
 func (p Project) Register() error {
+	if !p.identified {
+		p.identify()
+	}
+	return p.RegisterIdentityLater()
+}
+
+func RecordIdentity(dir string) error {
+	home, err := HomeConfigDir()
+	if err != nil {
+		return err
+	}
+	project := Project{Path: resolvedPath(dir), home: home}
+	registry, err := readProjectRegistry(home)
+	if entry := registry.holding(project.Path); err != nil || entry == nil || entry.Remote != "" || entry.Root != "" {
+		return err
+	}
+	project.identify()
+	return project.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
+		entry := registry.holding(project.Path)
+		if entry == nil {
+			return nil, fmt.Errorf("%s left the project registry while its git identity was read", project.Path)
+		}
+		entry.Remote, entry.Root = cmp.Or(entry.Remote, project.remote), cmp.Or(entry.Root, project.root)
+		return entry, nil
+	})
+}
+
+func (p Project) RegisterIdentityLater() error {
 	return p.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
 		if entry := registry.holding(p.Path); entry != nil {
 			return entry, nil

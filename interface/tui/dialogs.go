@@ -97,6 +97,7 @@ func (a *App) chose(choice palette.Choice) tea.Cmd {
 type searchDialog struct{ palette.Search }
 
 func (a *App) searchDialog() *searchDialog {
+	a.refreshSettingsRows()
 	return &searchDialog{palette.NewSearch("Search", "Screens, agents and events · enter opens", a.find)}
 }
 

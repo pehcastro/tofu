@@ -366,7 +366,6 @@ func New(options Options) *App {
 	}
 	app.view.Stop()
 	app.readWires()
-	app.refreshSettingsRows()
 	app.flushFeed()
 	app.syncFeed()
 	return app
@@ -668,6 +667,9 @@ func (a *App) notify(note string) {
 func (a *App) show(to screen) tea.Cmd {
 	if to != screenSettings && a.settings.CloseDialog().Action == settings.ActionRevert {
 		a.preview = preview{}
+	}
+	if to == screenSettings {
+		a.refreshSettingsRows()
 	}
 	a.current = to
 	return a.clearDialogs()

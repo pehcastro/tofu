@@ -94,8 +94,12 @@ func main() {
 		copyLegacyStateDirs(os.Stderr)
 	}
 	dir, opens := openedProject(os.Args[1:])
+	register := sys.Project.Register
+	if opensTheApp {
+		register = sys.Project.RegisterIdentityLater
+	}
 	if opens {
-		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr))
+		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), register)
 	}
 	if wd, err := os.Getwd(); err == nil && (opensTheApp || opens) {
 		moveProjectState(os.Stderr, wd)

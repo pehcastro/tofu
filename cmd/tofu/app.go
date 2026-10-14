@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/x/term"
@@ -261,8 +262,15 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
 	stopKeeping := keepAccountsAlive(func(string) {})
+	var identity sync.WaitGroup
+	var identityErr error
+	identity.Go(func() { identityErr = sys.RecordIdentity(dir) })
 	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
 	stopKeeping()
+	identity.Wait()
+	if identityErr != nil {
+		_, _ = fmt.Fprintf(errOut, "tofu: the git remote and root of this project were not recorded: %v\n", identityErr)
+	}
 	(*launch.release)()
 	for _, warning := range (*launch.endSession)() {
 		_, _ = fmt.Fprintln(errOut, "tofu: "+warning)
