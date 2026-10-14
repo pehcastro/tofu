@@ -86,6 +86,9 @@ const LINK_SCHEMES: [&str; 3] = ["https://", "http://", "mailto:"];
 const MATH_SLOT: char = '\u{a0}';
 const MONO_ADVANCE_EM: f32 = 0.6;
 const MATH_AXIS_EM: f32 = 0.3;
+const H1_SCALE: f32 = 1.5;
+const H2_SCALE: f32 = 1.25;
+const H3_SCALE: f32 = 1.1;
 const STRONG: Stress = Stress {
     strong: true,
     italic: false,
@@ -206,7 +209,10 @@ impl Clone for Rich {
 #[derive(Clone)]
 pub enum Block {
     Para(Vec<Span>),
-    Heading(Vec<Span>),
+    Heading {
+        level: u8,
+        spans: Vec<Span>,
+    },
     List {
         start: Option<u32>,
         items: Vec<ListItem>,
@@ -527,7 +533,10 @@ impl Reader<'_> {
 
     fn block(&self, block: &md::Block) -> Block {
         match &block.kind {
-            BlockKind::Heading { inlines, .. } => Block::Heading(self.spans(inlines, STRONG)),
+            BlockKind::Heading { level, inlines } => Block::Heading {
+                level: *level,
+                spans: self.spans(inlines, STRONG),
+            },
             BlockKind::Paragraph(inlines) => Block::Para(self.spans(inlines, Stress::default())),
             BlockKind::ThematicBreak => Block::Rule,
             BlockKind::BlockQuote(inner) => Block::Quote(self.blocks(inner)),
@@ -912,7 +921,7 @@ pub fn pieces(body: &[Block]) -> Vec<String> {
 fn gather(body: &[Block], found: &mut Vec<String>) {
     for block in body {
         match block {
-            Block::Para(spans) | Block::Heading(spans) => {
+            Block::Para(spans) | Block::Heading { spans, .. } => {
                 found.push(spans.iter().map(span_text).collect());
             }
             Block::List { items, .. } => items.iter().for_each(|item| gather(&item.blocks, found)),
@@ -1184,7 +1193,19 @@ impl<'a> Draw<'a> {
     fn block(&mut self, block: &Block) -> Div {
         let theme = self.theme;
         match block {
-            Block::Para(spans) | Block::Heading(spans) => div().child(self.prose(spans)),
+            Block::Para(spans) => div().child(self.prose(spans)),
+            Block::Heading { level, spans } => {
+                let scale = match level {
+                    1 => H1_SCALE,
+                    2 => H2_SCALE,
+                    3 => H3_SCALE,
+                    _ => 1.0,
+                };
+                div()
+                    .text_size(px(FONT_CHAT * scale))
+                    .line_height(px(CHAT_LINE * scale))
+                    .child(self.prose(spans))
+            }
             Block::List { start, items } => {
                 let mut number = start.map(u64::from);
                 div().flex().flex_col().children(items.iter().map(|item| {
@@ -1418,6 +1439,14 @@ pub fn lead(
     marks: &[Marks],
     theme: &Theme,
 ) -> Div {
+    div()
+        .mt(px(LEAD_GAP))
+        .min_w_0()
+        .child(who(agent("lead", theme), time, false, theme))
+        .child(document(id, body, marks, theme))
+}
+
+pub fn document(id: impl Into<ElementId>, body: &[Block], marks: &[Marks], theme: &Theme) -> Div {
     let mut draw = Draw {
         marks,
         theme,
@@ -1427,12 +1456,10 @@ pub fn lead(
         quoted: false,
     };
     div()
-        .mt(px(LEAD_GAP))
         .min_w_0()
         .text_size(px(FONT_CHAT))
         .line_height(px(CHAT_LINE))
         .text_color(theme.color(ColorToken::TextBase))
-        .child(who(agent("lead", theme), time, false, theme))
         .child(div().id(id).flex().flex_col().children(draw.blocks(body)))
 }
 

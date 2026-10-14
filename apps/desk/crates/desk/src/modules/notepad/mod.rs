@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -7,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use desk_core::buffer::Buffer;
 use desk_ui::component::control;
+use desk_ui::components::chat::{self, Block};
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::form::{TextInput, segmented};
@@ -19,8 +21,8 @@ use desk_ui::metrics::ICON_SMALL;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityInputHandler,
-    Focusable, KeyDownEvent, PathPromptOptions, Render, SharedString, Stateful, Subscription, Task,
-    Window, div, prelude::*, px, relative,
+    FocusHandle, Focusable, KeyDownEvent, PathPromptOptions, Render, ScrollHandle, SharedString,
+    Stateful, Subscription, Task, Window, div, prelude::*, px, relative,
 };
 
 use desk_plugin::Capability;
@@ -32,8 +34,7 @@ const OPEN_NOTE: &str = "open";
 const SAVE_IDLE: Duration = Duration::from_millis(700);
 const LIST_WIDTH: f32 = 200.0;
 const MODES: [&str; 2] = ["Raw", "Rendered"];
-const RENDERED_LATER: &str = "rendered view comes with markdown in notepad";
-const DISABLED: f32 = 0.5;
+const TOGGLE_KEY: &str = "e";
 const NEW_NOTE: &str = "New note";
 const OPEN_FILE: &str = "Open file...";
 const RENAME: &str = "Rename";
@@ -51,13 +52,34 @@ struct Page {
     editor: Entity<CodeEditor>,
     saved: Rc<RefCell<String>>,
     seen: String,
+    view: View,
+    scroll: ScrollHandle,
     _edited: Subscription,
+}
+
+enum View {
+    Raw,
+    Rendered(Vec<Block>),
+}
+
+fn rendered(editor: &Entity<CodeEditor>, cx: &App) -> View {
+    let started = Instant::now();
+    let text = editor.read(cx).buffer().text();
+    let blocks = chat::markdown(&text);
+    eprintln!(
+        "desk: notepad rendered {} bytes in {} ms",
+        text.len(),
+        started.elapsed().as_millis()
+    );
+    View::Rendered(blocks)
 }
 
 pub struct Notepad {
     plugin: &'static Plugin,
     folder: Result<PathBuf, String>,
     notes: Vec<PathBuf>,
+    rendered: BTreeSet<PathBuf>,
+    focus: FocusHandle,
     page: Option<Page>,
     renaming: Option<Entity<TextInput>>,
     problem: Option<SharedString>,
@@ -134,6 +156,8 @@ impl Notepad {
             plugin,
             folder,
             notes: Vec::new(),
+            rendered: BTreeSet::new(),
+            focus: cx.focus_handle(),
             page: None,
             renaming: None,
             problem: None,
@@ -175,13 +199,21 @@ impl Notepad {
             return;
         };
         let remembered = folder.join(OPEN_NOTE);
-        match fs::read_to_string(&remembered) {
-            Ok(path) if Path::new(path.trim()).is_file() => {
-                self.show(PathBuf::from(path.trim()), cx)
-            }
-            Ok(path) => eprintln!("desk: notepad: {} is gone, so nothing opens", path.trim()),
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => self.fail(format!("{}: {error}", remembered.display())),
+        let state = match fs::read_to_string(&remembered) {
+            Ok(state) => state,
+            Err(error) if error.kind() == ErrorKind::NotFound => return,
+            Err(error) => return self.fail(format!("{}: {error}", remembered.display())),
+        };
+        let mut lines = state.lines().map(str::trim);
+        let open = lines.next().unwrap_or_default();
+        self.rendered = lines
+            .filter(|line| !line.is_empty())
+            .map(PathBuf::from)
+            .collect();
+        match Path::new(open).is_file() {
+            true => self.show(PathBuf::from(open), cx),
+            false if open.is_empty() => {}
+            false => eprintln!("desk: notepad: {open} is gone, so nothing opens"),
         }
     }
 
@@ -190,14 +222,12 @@ impl Notepad {
             return;
         };
         let remembered = folder.join(OPEN_NOTE);
-        let written = match &self.page {
-            Some(page) => fs::write(&remembered, page.path.to_string_lossy().as_bytes()),
-            None => fs::remove_file(&remembered).or_else(|error| match error.kind() {
-                ErrorKind::NotFound => Ok(()),
-                _ => Err(error),
-            }),
-        };
-        if let Err(error) = written {
+        let open = self.page.as_ref().map_or(Path::new(""), |page| &page.path);
+        let state: Vec<String> = std::iter::once(open)
+            .chain(self.rendered.iter().map(PathBuf::as_path))
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        if let Err(error) = fs::write(&remembered, state.join("\n")) {
             self.fail(format!("{}: {error}", remembered.display()));
         }
     }
@@ -219,11 +249,17 @@ impl Notepad {
             .new(|_| editor.on_save(move |buffer, _, _| write(plugin, &target, buffer, &written)));
         let edited = cx.observe(&editor, |notepad: &mut Notepad, _, cx| notepad.edited(cx));
         eprintln!("desk: notepad opened {}", path.display());
+        let view = match self.rendered.contains(&path) {
+            true => rendered(&editor, cx),
+            false => View::Raw,
+        };
         self.page = Some(Page {
             path,
             editor,
             saved,
             seen: text,
+            view,
+            scroll: ScrollHandle::new(),
             _edited: edited,
         });
         self.problem = None;
@@ -265,6 +301,42 @@ impl Notepad {
                 eprintln!("desk: notepad closed before its idle save");
             }
         }));
+    }
+
+    fn set_view(&mut self, to_rendered: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(page) = &mut self.page else {
+            return;
+        };
+        if matches!(page.view, View::Rendered(_)) == to_rendered {
+            return;
+        }
+        match to_rendered {
+            true => {
+                page.view = rendered(&page.editor, cx);
+                self.rendered.insert(page.path.clone());
+                window.focus(&self.focus, cx);
+            }
+            false => {
+                page.view = View::Raw;
+                self.rendered.remove(&page.path);
+                window.focus(&page.editor.focus_handle(cx), cx);
+            }
+        }
+        self.remember();
+        cx.notify();
+    }
+
+    fn toggle_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let keys = &event.keystroke;
+        let Some(page) = &self.page else {
+            return;
+        };
+        if !keys.modifiers.control || keys.key != TOGGLE_KEY {
+            return;
+        }
+        cx.stop_propagation();
+        let to_rendered = matches!(page.view, View::Raw);
+        self.set_view(to_rendered, window, cx);
     }
 
     fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -382,11 +454,19 @@ impl Notepad {
             from.display(),
             to.display()
         );
+        if self.rendered.remove(&from) {
+            self.rendered.insert(to.clone());
+        }
         self.page = None;
         self.list();
         self.show(to, cx);
-        if let Some(page) = &self.page {
-            window.focus(&page.editor.focus_handle(cx), cx);
+        match &self.page {
+            Some(Page {
+                view: View::Raw,
+                editor,
+                ..
+            }) => window.focus(&editor.focus_handle(cx), cx),
+            _ => window.focus(&self.focus, cx),
         }
     }
 
@@ -400,6 +480,7 @@ impl Notepad {
             Ok(()) => eprintln!("desk: notepad deleted {}", page.path.display()),
             Err(error) => self.fail(format!("{}: {error}", page.path.display())),
         }
+        self.rendered.remove(&page.path);
         self.list();
         self.remember();
         cx.notify();
@@ -469,18 +550,24 @@ impl Notepad {
                 .child(title)
                 .into_any_element(),
         };
-        let modes = segmented("notepad-mode", &MODES, 0, theme, |_, _, _| {
-            eprintln!("desk: notepad: {RENDERED_LATER}")
-        })
-        .opacity(DISABLED);
-        let modes = tooltip(
-            "notepad-mode-tip",
-            div().id("notepad-mode-target").child(modes),
-            Edge::Frame,
-            RENDERED_LATER,
+        let selected = match self.page.as_ref().map(|page| &page.view) {
+            Some(View::Rendered(_)) => 1,
+            _ => 0,
+        };
+        let this = cx.weak_entity();
+        let modes = segmented(
+            "notepad-mode",
+            &MODES,
+            selected,
             theme,
-            window,
-            cx,
+            move |at, window, cx| {
+                if this
+                    .update(cx, |notepad, cx| notepad.set_view(*at == 1, window, cx))
+                    .is_err()
+                {
+                    eprintln!("desk: notepad is gone");
+                }
+            },
         );
         let new = tool(NEW_NOTE, Glyph::FileAdd, theme, window, cx).on_click(
             cx.listener(|notepad, _: &ClickEvent, window, cx| notepad.new_note(window, cx)),
@@ -527,10 +614,32 @@ impl Notepad {
             .into_any_element();
         }
         match &self.page {
-            Some(page) => div()
+            Some(Page {
+                view: View::Raw,
+                editor,
+                ..
+            }) => div()
                 .flex_1()
                 .min_h_0()
-                .child(page.editor.clone())
+                .child(editor.clone())
+                .into_any_element(),
+            Some(Page {
+                view: View::Rendered(blocks),
+                scroll,
+                ..
+            }) => div()
+                .id("notepad-rendered")
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .p_3()
+                .overflow_y_scroll()
+                .track_scroll(scroll)
+                .on_mouse_down(
+                    gpui::MouseButton::Left,
+                    cx.listener(|notepad, _, window, cx| window.focus(&notepad.focus, cx)),
+                )
+                .child(chat::document("notepad-document", blocks, &[], theme))
                 .into_any_element(),
             None => {
                 let actions: Vec<EmptyAction> = ACTIONS
@@ -601,6 +710,8 @@ impl Render for Notepad {
             .flex()
             .flex_col()
             .min_w_0()
+            .track_focus(&self.focus)
+            .capture_key_down(cx.listener(Self::toggle_key))
             .child(header)
             .child(
                 div()
