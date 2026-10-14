@@ -8,8 +8,9 @@ verbs: rules, reload
 ## What it is
 
 A rule is one line of instruction the model reads, like "never write yaml
-by hand". A rule may declare a `language`, `framework`, `scope`, `condition`,
-`task` or `role`, and then reaches only the tasks that match. A `framework`
+by hand". A rule may declare a `language`, `framework`, `scope`, `condition`
+(with an `unless` that vetoes a match on its line), `task` or `role`, and
+then reaches only the tasks that match. A `framework`
 comes from the package.json or Cargo.toml the task reaches, and the reason names which. tofu ships its own set, and you can add yours,
 switch one of tofu's off, or replace one with your own text.
 

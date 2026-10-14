@@ -16,6 +16,7 @@ reaches a prompt only when all of them match:
 | `framework` | A `package.json` the task reaches lists it (`next` counts as `react`, `nuxt` as `vue`), or a `Cargo.toml` lists `gpui-ce`, by name or through `package = "gpui-ce"`; the reason names which file |
 | `scope` | A named path falls inside the glob |
 | `condition` | The regular expression matches the task |
+| `unless` | Beside `condition`: a match on a line this regular expression also matches does not count, so a domain inside an import or a module line does not fire a browse rule |
 | `touches` | For a sub-agent, the regular expression matches its task or a path it owns |
 | `task` | The task contains `debug`, `explore`, `review` or `write` |
 | `role` | The prompt is the `orchestrator`'s or a `sub-agent`'s |

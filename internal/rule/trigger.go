@@ -116,6 +116,7 @@ type Trigger struct {
 	event      Event
 	to         string
 	condition  *regexp.Regexp
+	unless     *regexp.Regexp
 	touches    *regexp.Regexp
 	scope      string
 	languages  []string
@@ -138,6 +139,7 @@ func (t Trigger) String() string {
 		{"to", t.to},
 		{"role", string(t.role)},
 		{"condition", regexpText(t.condition)},
+		{"unless", regexpText(t.unless)},
 		{"touches", regexpText(t.touches)},
 		{"scope", t.scope},
 		{"language", strings.Join(t.languages, ", ")},
@@ -149,6 +151,23 @@ func (t Trigger) String() string {
 		}
 	}
 	return strings.Join(declared, "; ")
+}
+
+func (t Trigger) matchOutsideUnless(text string) string {
+	if t.unless == nil {
+		return t.condition.FindString(text)
+	}
+	for _, at := range t.condition.FindAllStringIndex(text, -1) {
+		start := strings.LastIndexByte(text[:at[0]], '\n') + 1
+		end := len(text)
+		if next := strings.IndexByte(text[at[1]:], '\n'); next >= 0 {
+			end = at[1] + next
+		}
+		if !t.unless.MatchString(text[start:end]) {
+			return text[at[0]:at[1]]
+		}
+	}
+	return ""
 }
 
 func regexpText(pattern *regexp.Regexp) string {
@@ -187,6 +206,7 @@ type declaredTrigger struct {
 	on        string
 	to        string
 	condition string
+	unless    string
 	touches   string
 	scope     string
 	language  string
@@ -211,6 +231,12 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 	var err error
 	if t.condition, err = regexpOf(d.condition, "condition", file, id); err != nil {
 		return Trigger{}, err
+	}
+	if t.unless, err = regexpOf(d.unless, "unless", file, id); err != nil {
+		return Trigger{}, err
+	}
+	if t.unless != nil && t.condition == nil {
+		return Trigger{}, fmt.Errorf("%s: rule %q declares unless and no condition, and unless drops a line the condition matched", file, id)
 	}
 	if t.touches, err = regexpOf(d.touches, "touches", file, id); err != nil {
 		return Trigger{}, err
@@ -271,7 +297,10 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("the prompt is the %s's", t.role))
 	}
 	if t.condition != nil {
-		found := t.condition.FindString(task.Text)
+		found := t.matchOutsideUnless(task.Text)
+		if found == "" && t.unless != nil {
+			return false, fmt.Sprintf("the condition %s matches only on lines the unless %s drops", t.condition, t.unless)
+		}
 		if found == "" {
 			return false, fmt.Sprintf("the condition %s matches nothing in the task", t.condition)
 		}

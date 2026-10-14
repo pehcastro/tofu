@@ -81,6 +81,8 @@ func parseRule(data []byte, path string) (Rule, error) {
 			declares.to = value
 		case "condition":
 			declares.condition = value
+		case "unless":
+			declares.unless = value
 		case "touches":
 			declares.touches = value
 		case "scope":
