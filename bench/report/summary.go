@@ -9,7 +9,10 @@ import (
 	"strings"
 )
 
-const perSubAgent = "Per sub-agent"
+const (
+	perSubAgent = "Per sub-agent"
+	wallTime    = "Sub-agent wall time"
+)
 
 type section struct {
 	id    string
@@ -197,10 +200,33 @@ func scalingHTML(h History) string {
 	return tableOf("", heads, rows.String()) + foldHTML(rivalsHTML(measures), measures)
 }
 
+func wallHTML(h History) string {
+	measures := measuresIn(h, wallTime)
+	if len(measures) == 0 {
+		return ""
+	}
+	rows := &strings.Builder{}
+	for at, row := range measures[0].Tofu {
+		fmt.Fprintf(rows, "<tr class=\"table-row\"><td class=\"table-cell\">%s</td>", html.EscapeString(row.Label))
+		for _, m := range measures {
+			rows.WriteString(numberCell(cellNumber(m.Tofu[at]), ""))
+		}
+		rows.WriteString("</tr>\n")
+	}
+	heads := []string{"Run"}
+	for _, m := range measures {
+		heads = append(heads, m.Short)
+	}
+	return tableOf("", heads, rows.String()) + foldHTML(changesHTML(measures), measures)
+}
+
 func versionsHTML(h History) string {
 	rows := &strings.Builder{}
 	var shown, rest []Measure
 	for _, m := range h.Measures {
+		if m.Pairing == wallTime {
+			continue
+		}
 		if m.Pairing == perSubAgent || m.Moved || len(m.Tofu) < 2 || m.Better == BetterNeither {
 			rest = append(rest, m)
 			continue
@@ -234,6 +260,7 @@ func summarySections(h History) []section {
 		{"sonnet", "Sonnet 5.5: tofu, Claude Code and omp on one task", pairingHTML(h, "Sonnet 5.5")},
 		{"gpt", "GPT 5.6 sol: tofu and codex on one task", pairingHTML(h, "GPT 5.6 sol")},
 		{"per-agent", "Cost of sub-agents", scalingHTML(h)},
+		{"wall", "Where a sub-agent run's time goes, tofu 0.5.14+dev, live", wallHTML(h)},
 		{"versions", "Changes by version", versionsHTML(h)},
 	}
 	return slices.DeleteFunc(all, func(one section) bool { return one.body == "" })
