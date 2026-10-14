@@ -25,25 +25,37 @@ type sheet struct {
 func (m Model) sheet() *sheet {
 	about, lead := m.aboutCards()
 	key := sheetKey{m.version, m.feedWidth(), m.gap, m.filter, m.thinkingHidden, m.retention}
-	if s := m.cards.sheet; s != nil && s.key == key && slices.EqualFunc(s.about, about, sameEvent) {
-		return s
+	prior := m.cards.sheet
+	if prior != nil && prior.key == key && slices.EqualFunc(prior.about, about, func(a, b Event) bool { return sameEvent(&a, &b) }) {
+		return prior
 	}
-	kept := m.retained()
-	s := &sheet{key: key, about: about}
+	kept, s := m.retained(), &sheet{key: key, about: about}
+	var earlier []draft
+	if prior != nil {
+		earlier, s.drafts = prior.drafts, make([]draft, 0, len(prior.drafts))
+	}
+	add := func(e *Event, lines func(*cardCache, Event, cardKey) []string) {
+		d := draft{event: e, id: e.ID, lines: lines}
+		if at := len(s.drafts); at < len(earlier) && earlier[at].id == d.id {
+			d.held = earlier[at].held
+		}
+		s.drafts = append(s.drafts, d)
+	}
 	for index := range about[:lead] {
-		s.drafts = append(s.drafts, draft{&about[index], about[index].ID, agentCardLines})
+		add(&about[index], agentCardLines)
 	}
 	for index := range kept {
-		if m.hidden(kept[index]) {
+		e := &kept[index]
+		if m.hidden(e) {
 			continue
 		}
 		s.kept++
-		if m.shows(kept[index]) {
-			s.drafts = append(s.drafts, draft{&kept[index], kept[index].ID, (*cardCache).cardLines})
+		if m.shows(e) {
+			add(e, (*cardCache).cardLines)
 		}
 	}
 	for index := range about[lead:] {
-		s.drafts = append(s.drafts, draft{&about[lead+index], about[lead+index].ID, agentCardLines})
+		add(&about[lead+index], agentCardLines)
 	}
 	s.heights, s.starts, s.frontier = make([]int, len(s.drafts)), make([]int, len(s.drafts)), len(s.drafts)
 	m.cards.sheet = s
@@ -66,7 +78,7 @@ func (m Model) laid(depth int, through string) *sheet {
 	moved, fresh := s.frontier, 0
 	for s.frontier > 0 && (s.measured+(len(s.drafts)-s.frontier)*s.key.gap < depth || s.frontier > stop || fresh < measureBatch) {
 		s.frontier--
-		height, wrapped := m.sized(s.key.width, s.drafts[s.frontier])
+		height, wrapped := m.sized(s.key.width, &s.drafts[s.frontier])
 		if wrapped {
 			fresh++
 		}

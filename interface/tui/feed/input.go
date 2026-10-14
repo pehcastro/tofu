@@ -97,7 +97,7 @@ func (m *Model) Focus(id string) bool {
 	if i < 0 {
 		return false
 	}
-	if !m.shows(m.events[i]) {
+	if !m.shows(&m.events[i]) {
 		m.filter = identity{}
 	}
 	m.reveal(id)

@@ -73,7 +73,7 @@ type heldHeight struct {
 type cardCache struct {
 	cards    map[string]cachedCard
 	order    []string
-	heights  map[string]heldHeight
+	heights  map[string]*heldHeight
 	prose    markdown.Renderer
 	sheet    *sheet
 	owners   []Agent
@@ -81,7 +81,7 @@ type cardCache struct {
 	railRows map[railRow]string
 }
 
-func sameEvent(a, b Event) bool {
+func sameEvent(a, b *Event) bool {
 	return a.ID == b.ID && a.Actor == b.Actor && a.Target == b.Target && a.Instance == b.Instance &&
 		a.Kind == b.Kind && a.State == b.State && a.Title == b.Title && a.Body == b.Body &&
 		a.Path == b.Path && a.Op == b.Op && a.Added == b.Added && a.Removed == b.Removed &&
@@ -92,6 +92,7 @@ type draft struct {
 	event *Event
 	id    string
 	lines func(*cardCache, Event, cardKey) []string
+	held  *heldHeight
 }
 
 func (m Model) aboutCards() (about []Event, lead int) {
@@ -171,35 +172,43 @@ func textWidth(width int) int {
 	return max(cardMinWidth, width-2) - 2*cardPadX - cardBorderSides
 }
 
-func (m Model) sized(width int, d draft) (height int, wrapped bool) {
-	e, c := *d.event, m.cards
-	if held, ok := c.heights[e.ID]; ok && held.width == width && held.expanded == m.expanded[e.ID] && sameEvent(held.event, e) {
+func (m Model) sized(width int, d *draft) (height int, wrapped bool) {
+	c := m.cards
+	if d.held == nil {
+		d.held = c.heights[d.id]
+	}
+	if held := d.held; held != nil && held.width == width && held.expanded == m.expanded[d.id] && sameEvent(&held.event, d.event) {
 		return held.height, false
 	}
 	key, limit := m.cardKey(width, d.event), textWidth(width)
 	height = cardBorderRows + 2*cardPadY
-	for line := range strings.SplitSeq(strings.ReplaceAll(strings.Join(d.lines(c, e, key), "\n"), "\t", tabSpaces), "\n") {
+	for line := range strings.SplitSeq(strings.ReplaceAll(strings.Join(d.lines(c, *d.event, key), "\n"), "\t", tabSpaces), "\n") {
 		if lipgloss.Width(line) <= limit {
 			height++
 			continue
 		}
 		height += lipgloss.Height(lipgloss.Wrap(line, limit, ""))
 	}
-	c.hold(heldHeight{width, key.expanded, e, height})
+	d.held = c.hold(heldHeight{width, key.expanded, *d.event, height})
 	return height, true
 }
 
-func (c *cardCache) hold(held heldHeight) {
-	if c.heights == nil {
-		c.heights = make(map[string]heldHeight)
-	}
+func (c *cardCache) hold(held heldHeight) *heldHeight {
 	held.event.Detail = slices.Clone(held.event.Detail)
-	c.heights[held.event.ID] = held
+	if at := c.heights[held.event.ID]; at != nil {
+		*at = held
+		return at
+	}
+	if c.heights == nil {
+		c.heights = make(map[string]*heldHeight)
+	}
+	c.heights[held.event.ID] = &held
+	return &held
 }
 
 func (m Model) card(width int, d draft) card {
 	e, key, c := *d.event, m.cardKey(width, d.event), m.cards
-	if cached, ok := c.cards[e.ID]; ok && cached.key == key && sameEvent(cached.event, e) {
+	if cached, ok := c.cards[e.ID]; ok && cached.key == key && sameEvent(&cached.event, &e) {
 		return card{e.ID, cached.view, cached.height}
 	}
 	view := framed(d.lines(c, e, key), key)
@@ -242,11 +251,11 @@ func role(e Event) (string, look.Color) {
 
 func (c *cardCache) cardLines(e Event, key cardKey) []string {
 	word, colour := role(e)
-	_, said, talking := talk(e)
+	_, said, talking := talk(&e)
 	if talking {
 		word, colour = KindMessage.String(), look.Blue
 	}
-	left := look.AgentRef(actor(e).label()) + "  " + look.Style(colour).Render(word)
+	left := look.AgentRef(actor(&e).label()) + "  " + look.Style(colour).Render(word)
 	right := look.Faint(key.age+"  ") + look.TypedID(e.Kind.String(), e.ID)
 	headWidth := max(headMinWidth, key.width-headInset)
 	head := look.Sides(left, right, headWidth)
@@ -317,7 +326,7 @@ func proseOnly(thought string) string {
 }
 
 func agentCardLines(_ *cardCache, e Event, _ cardKey) []string {
-	lines := append([]string{look.AgentRef(actor(e).label()) + "  " + look.Style(look.Blue).Render(e.Title)}, e.Detail...)
+	lines := append([]string{look.AgentRef(actor(&e).label()) + "  " + look.Style(look.Blue).Render(e.Title)}, e.Detail...)
 	if e.Body != "" {
 		lines = append(lines, look.Style(look.Text).Render(e.Body))
 	}

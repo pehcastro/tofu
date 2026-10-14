@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/shells"
 	"tofu/interface/tui/subagent"
@@ -195,6 +196,21 @@ func (s longSession) thinking(at int) {
 	busy := s.rows[1+at%(len(s.rows)-1)]
 	for range longChunksAFrame {
 		s.app.Update(Event{Kind: EventThinking, ID: "streaming-" + strconv.Itoa(at), Agent: busy.Name, Text: longThinking})
+	}
+}
+
+func (s longSession) typing(at int) {
+	for range longChunksAFrame {
+		s.app.Update(Event{Kind: EventTextDelta, Text: longThinking + " "})
+	}
+	s.app.Update(keyPress(string(rune('a' + at%26))))
+}
+
+func TestKeystrokeToFrameWhileAReplyStreamsInALongSession(t *testing.T) {
+	s := generatedLongSession(t, longSizeFromEnv(t))
+	s.frames(t, "chat, a key behind the reply's deltas", s.typing)
+	if screen := ansi.Strip(s.app.View().Content); !strings.Contains(screen, "abcdefghi") {
+		t.Fatalf("the composer does not show the nine keys typed\n%s", screen)
 	}
 }
 

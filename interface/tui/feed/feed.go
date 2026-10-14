@@ -122,7 +122,7 @@ func (i identity) label() string {
 	return "[&" + i.name + "]"
 }
 
-func actor(e Event) identity { return identity{e.Actor, e.Instance} }
+func actor(e *Event) identity { return identity{e.Actor, e.Instance} }
 
 type Model struct {
 	now                func() time.Time
@@ -172,7 +172,7 @@ func (m *Model) SetRetention(retention Retention) { m.retention = retention }
 
 func (m *Model) SetThinking(shown bool) { m.thinkingHidden = !shown }
 
-func (m Model) hidden(e Event) bool { return m.thinkingHidden && e.Kind == KindThinking }
+func (m Model) hidden(e *Event) bool { return m.thinkingHidden && e.Kind == KindThinking }
 
 func (m Model) retained() []Event {
 	switch m.retention {
@@ -182,7 +182,7 @@ func (m Model) retained() []Event {
 		from, kept := len(m.events), 0
 		for from > 0 && kept < konst.FeedRecentEvents {
 			from--
-			if !m.hidden(m.events[from]) {
+			if !m.hidden(&m.events[from]) {
 				kept++
 			}
 		}
@@ -275,14 +275,14 @@ func (m Model) visible() []Event {
 	}
 	var events []Event
 	for _, e := range m.retained() {
-		if !m.hidden(e) && m.shows(e) {
+		if !m.hidden(&e) && m.shows(&e) {
 			events = append(events, e)
 		}
 	}
 	return events
 }
 
-func (m Model) shows(e Event) bool {
+func (m Model) shows(e *Event) bool {
 	if m.filter == (identity{}) || actor(e) == m.filter {
 		return true
 	}
@@ -290,7 +290,7 @@ func (m Model) shows(e Event) bool {
 	return talking && with == m.filter
 }
 
-func talk(e Event) (with identity, said []string, talking bool) {
+func talk(e *Event) (with identity, said []string, talking bool) {
 	if e.Kind != KindTool {
 		return identity{}, nil, false
 	}
@@ -468,6 +468,9 @@ func (m Model) railView() (string, []railTarget) {
 		members := slices.DeleteFunc(slices.Clone(entries), func(e entry) bool { return e.group != group(g) })
 		write("\n" + look.SectionLabel(name) + look.Faint("  "+strconv.Itoa(len(members))) + "\n")
 		for _, e := range members {
+			if rows >= m.height {
+				return b.String(), targets
+			}
 			targets = append(targets, railTarget{rows, e.who})
 			write(m.cards.railEntry(railRow{width, m.filter == e.who, e.who.label(), e.glyph, e.doing}) + "\n")
 			if e.who.name == orchestrator && m.plan != "" {

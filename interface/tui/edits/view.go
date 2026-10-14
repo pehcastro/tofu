@@ -39,17 +39,21 @@ const (
 )
 
 type sideKey struct {
-	width, height, count int
-	author, selected     string
-	first, last, authors string
-	focused              bool
-	from                 int
+	head         headKey
+	height, from int
+	selected     string
 }
 
 type listKey struct {
 	width, count              int
 	author, first, last, root string
 	plain                     bool
+}
+
+type headKey struct {
+	inner, count                 int
+	author, first, last, authors string
+	focused, noAuthors           bool
 }
 
 type trimKey struct {
@@ -61,6 +65,8 @@ type caches struct {
 	rows     diffRowIndex
 	side     sideKey
 	sideView string
+	head     headKey
+	headView string
 	list     listKey
 	listView string
 	main     look.PaneCache
@@ -406,12 +412,11 @@ func (m Model) sideRows() int {
 }
 
 func (m Model) sidebar(width int, visible []Edit, selected string) string {
-	authors := m.authors()
-	key := sideKey{width: width, height: m.height, count: len(m.edits), author: m.author, selected: selected, first: m.edits[0].ID, last: m.edits[len(m.edits)-1].ID, authors: strings.Join(authors, "\n"), focused: !m.focusMain, from: m.sideFrom}
+	inner, authors := width-2*padding, m.authors()
+	key := sideKey{head: m.headKey(inner, authors), height: m.height, from: m.sideFrom, selected: selected}
 	if m.cache != nil && m.cache.sideView != "" && m.cache.side == key {
 		return m.cache.sideView
 	}
-	inner := width - 2*padding
 	selectedPath := ""
 	if at := slices.IndexFunc(visible, func(edit Edit) bool { return edit.ID == selected }); at >= 0 {
 		selectedPath = visible[at].Path
@@ -444,7 +449,16 @@ func (m Model) sidebar(width int, visible []Edit, selected string) string {
 	return view
 }
 
+func (m Model) headKey(inner int, authors []string) headKey {
+	return headKey{inner: inner, count: len(m.edits), author: m.author, first: m.edits[0].ID, last: m.edits[len(m.edits)-1].ID,
+		authors: strings.Join(authors, "\n"), focused: !m.focusMain, noAuthors: m.prefs.NoAuthors}
+}
+
 func (m Model) sideHeader(inner int, authors []string) string {
+	key := m.headKey(inner, authors)
+	if m.cache != nil && m.cache.headView != "" && m.cache.head == key {
+		return m.cache.headView
+	}
 	paths := map[string]bool{}
 	kinds := map[Op]int{}
 	added, removed := map[string]int{}, map[string]int{}
@@ -467,7 +481,11 @@ func (m Model) sideHeader(inner int, authors []string) string {
 		}
 		content.WriteString("\n")
 	}
-	return content.String() + look.SectionLabel(editsLabel) + "\n"
+	head := content.String() + look.SectionLabel(editsLabel) + "\n"
+	if m.cache != nil {
+		m.cache.head, m.cache.headView = key, head
+	}
+	return head
 }
 
 func counts(width int, parts ...string) string {

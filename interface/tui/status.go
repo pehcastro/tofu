@@ -32,6 +32,23 @@ type statusWatch struct {
 	focus   focus
 	asks    []Event
 	seen    map[string]time.Time
+	rows    []host.SubAgentRow
+	agents  []status.Record
+}
+
+func sameForStatus(a, b host.SubAgentRow) bool {
+	return a.Name == b.Name && a.Parent == b.Parent && a.Doing == b.Doing && a.State == b.State
+}
+
+func (a *App) agentRecords() []status.Record {
+	watch := &a.statusWatch
+	if !slices.EqualFunc(watch.rows, a.subAgents, sameForStatus) {
+		watch.rows, watch.agents = slices.Clone(a.subAgents), make([]status.Record, len(a.subAgents))
+		for index, row := range a.subAgents {
+			watch.agents[index] = host.AgentStatus(row, a.subAgents)
+		}
+	}
+	return watch.agents
 }
 
 func (a *App) followStatus(msg tea.Msg) {
@@ -110,8 +127,9 @@ func (a *App) statusRecords() []status.Record {
 	if watch.cron != "" {
 		records = append(records, status.Record{ID: status.Path("cron", watch.cron), State: lead.State, Kind: lead.Kind, Title: watch.cron, Msg: lead.Msg})
 	}
-	for _, row := range a.subAgents {
-		record := host.AgentStatus(row, a.subAgents)
+	agents := a.agentRecords()
+	for index, row := range a.subAgents {
+		record := agents[index]
 		if ask, blocked := asked[row.Name]; blocked {
 			record.State = status.Blocked
 			record.Kind, record.Msg = host.AskStatus(ask)
