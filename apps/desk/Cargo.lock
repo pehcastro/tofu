@@ -1467,6 +1467,7 @@ name = "desk"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "desk_control",
  "desk_core",
  "desk_terminal",
  "desk_tiling",
@@ -1598,6 +1599,7 @@ dependencies = [
  "desk_tiling",
  "flume",
  "gpui-ce",
+ "image",
  "ratex-font",
  "ratex-katex-fonts",
  "ratex-layout",

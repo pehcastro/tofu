@@ -729,6 +729,10 @@ fn settled(layouts: Layouts) -> Settled {
 }
 
 impl Work {
+    pub fn board(&self) -> &TilingBoard<Work> {
+        &self.board
+    }
+
     pub fn chat(&self) -> &Entity<Chat> {
         &self.mounted.chat
     }

@@ -1,4 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#[cfg(feature = "screen-work")]
+mod control;
 mod desk;
 #[path = "screens/theme/pick.rs"]
 mod pick;
@@ -320,6 +322,14 @@ fn main() -> ExitCode {
         eprintln!("the desk has two assets under one path: {duplicates:?}");
         return ExitCode::FAILURE;
     }
+    #[cfg(feature = "screen-work")]
+    let (_server, asked) = match control::start() {
+        Ok((server, asked)) => (Some(server), Some(asked)),
+        Err(error) => {
+            eprintln!("desk: control is off: {error}");
+            (None, None)
+        }
+    };
     let failed = Rc::new(Cell::new(false));
     let failure = Rc::clone(&failed);
     gpui_platform::application()
@@ -346,6 +356,14 @@ fn main() -> ExitCode {
             let Some(window) = cx.windows().first().copied() else {
                 return;
             };
+            #[cfg(feature = "screen-work")]
+            if let Some(asked) = asked {
+                let screens = SCREENS
+                    .into_iter()
+                    .map(|name| (name, screen(name).is_ok()))
+                    .collect();
+                control::serve(asked, window, screens, cx);
+            }
             let painted = window.update(cx, |_, window, _| {
                 window.on_next_frame(move |_, _| {
                     eprintln!(

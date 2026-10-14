@@ -221,7 +221,7 @@ impl<V: 'static> TilingBoard<V> {
         self.host.below = below;
     }
 
-    fn area(&self) -> Rect {
+    pub fn area(&self) -> Rect {
         Rect {
             x: 0.0,
             y: 0.0,

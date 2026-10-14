@@ -1284,7 +1284,22 @@ impl Desk {
 
 #[cfg(feature = "screen-work")]
 impl Desk {
-    fn work(&self) -> Option<&Entity<Work>> {
+    pub fn screen(&self) -> &str {
+        &self.shown.name
+    }
+
+    pub fn open_screens(&self) -> Vec<&str> {
+        std::iter::once(&self.shown)
+            .chain(&self.parked)
+            .map(|shown| &*shown.name)
+            .collect()
+    }
+
+    pub fn modal(&self) -> bool {
+        self.projects.confirming
+    }
+
+    pub fn work(&self) -> Option<&Entity<Work>> {
         std::iter::once(&self.shown)
             .chain(&self.parked)
             .find_map(|shown| match &shown.body {
