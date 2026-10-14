@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Axis, Bounds, ContentMask, Div, ElementId, Font, HighlightStyle, LineFragment,
-    ListHorizontalSizingBehavior, PathBuilder, Pixels, Point, ScrollHandle, ShapedLine,
+    ListHorizontalSizingBehavior, PathBuilder, Pixels, Point, Rgba, ScrollHandle, ShapedLine,
     SharedString, StyledText, TextAlign, TextRun, UniformListScrollHandle, Window, canvas,
     combine_highlights, div, fill, font, point, prelude::*, px, rgb_to_hsla, size, uniform_list,
 };
@@ -33,6 +33,26 @@ const WRAP_MARGIN: f32 = 12.0;
 const FOLD_X: f32 = NUMBER_COLUMN - NUMBER_PAD + 4.5;
 const FOLD_HALF: f32 = 3.0;
 const FOLD_STROKE: f32 = 1.5;
+pub const TAB_STOP: usize = 4;
+const GUIDE_WIDTH: f32 = 1.0;
+const GUIDE_SHARE: f32 = 4.4;
+const ACTIVE_GUIDE_SHARE: f32 = 7.2;
+const BLANK_DOT: f32 = 2.0;
+const BLANK_INSET: f32 = 2.0;
+const BLANK_HEAD: f32 = 3.0;
+const BLANK_STROKE: f32 = 1.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blank {
+    Space,
+    Tab,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Guides {
+    pub levels: usize,
+    pub active: Option<usize>,
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CodeLine {
@@ -42,6 +62,8 @@ pub struct CodeLine {
     pub carets: Vec<usize>,
     pub matches: Vec<Range<usize>>,
     pub current_match: Option<usize>,
+    pub guides: Guides,
+    pub blanks: Vec<(Range<usize>, Blank)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -240,6 +262,15 @@ fn piece_of(line: &CodeLine, within: Range<usize>, last: bool) -> CodeLine {
             .collect(),
         matches: line.matches.iter().filter_map(inside).collect(),
         current_match,
+        guides: match within.start {
+            0 => line.guides,
+            _ => Guides::default(),
+        },
+        blanks: line
+            .blanks
+            .iter()
+            .filter_map(|(range, blank)| Some((inside(range)?, *blank)))
+            .collect(),
     }
 }
 
@@ -425,7 +456,41 @@ pub fn code_shape(text: SharedString, window: &Window, theme: &Theme) -> ShapedL
         .shape_line(text, px(FONT_BODY), &[run], None)
 }
 
-fn code_row(line: &CodeLine, trailing: Option<&Trailing>, theme: &Theme) -> Div {
+fn paint_blank(
+    blank: Blank,
+    from: Pixels,
+    to: Pixels,
+    mid: Pixels,
+    shade: Rgba,
+    window: &mut Window,
+) {
+    match blank {
+        Blank::Space => {
+            let half = px(BLANK_DOT / 2.0);
+            let centre = (from + to) / 2.0;
+            let dot = Bounds::new(
+                point(centre - half, mid - half),
+                size(half * 2.0, half * 2.0),
+            );
+            window.paint_quad(fill(dot, shade).corner_radii(half));
+        }
+        Blank::Tab => {
+            let (left, right) = (from + px(BLANK_INSET), to - px(BLANK_INSET));
+            let head = px(BLANK_HEAD);
+            let mut arrow = PathBuilder::stroke(px(BLANK_STROKE));
+            arrow.move_to(point(left, mid));
+            arrow.line_to(point(right, mid));
+            arrow.move_to(point(right - head, mid - head));
+            arrow.line_to(point(right, mid));
+            arrow.line_to(point(right - head, mid + head));
+            if let Ok(path) = arrow.build() {
+                window.paint_path(path, shade);
+            }
+        }
+    }
+}
+
+fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &Theme) -> Div {
     let runs = line.runs.iter().map(|(range, token)| {
         (
             range.clone(),
@@ -448,7 +513,14 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, theme: &Theme) -> Div 
         .with_highlights(combine_highlights(runs, selected.chain(found)));
     let layout = text.layout().clone();
     let carets = line.carets.clone();
+    let blanks = line.blanks.clone();
+    let guides = line.guides;
     let color = ink(theme, T1);
+    let blank_ink = ink(theme, T3);
+    let border = theme.color(ColorToken::Separator);
+    let guide_ink = |share: f32| tint(border, (border.alpha * share).min(1.0));
+    let (guide, active_guide) = (guide_ink(GUIDE_SHARE), guide_ink(ACTIVE_GUIDE_SHARE));
+    let drawn = !carets.is_empty() || !blanks.is_empty() || guides.levels > 0;
     div()
         .flex()
         .items_center()
@@ -463,11 +535,33 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, theme: &Theme) -> Div 
                 .relative()
                 .text_color(theme.color(ColorToken::SyntaxVariable))
                 .child(text)
-                .when(!carets.is_empty(), |row| {
+                .when(drawn, |row| {
                     row.child(
                         canvas(
                             |_, _, _| {},
-                            move |_, _, window, _| {
+                            move |bounds, _, window, _| {
+                                for level in 0..guides.levels {
+                                    let x = bounds.origin.x + cell * (level * TAB_STOP) as f32;
+                                    let line = Bounds::new(
+                                        point(x, bounds.origin.y),
+                                        size(px(GUIDE_WIDTH), px(CODE_LINE)),
+                                    );
+                                    let shade = match guides.active == Some(level) {
+                                        true => active_guide,
+                                        false => guide,
+                                    };
+                                    window.paint_quad(fill(line, shade));
+                                }
+                                for (range, blank) in &blanks {
+                                    let (Some(from), Some(to)) = (
+                                        layout.position_for_index(range.start),
+                                        layout.position_for_index(range.end),
+                                    ) else {
+                                        continue;
+                                    };
+                                    let mid = from.y + px(CODE_LINE / 2.0);
+                                    paint_blank(*blank, from.x, to.x, mid, blank_ink, window);
+                                }
                                 for at in &carets {
                                     let Some(origin) = layout.position_for_index(*at) else {
                                         continue;
@@ -482,6 +576,8 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, theme: &Theme) -> Div 
                             },
                         )
                         .absolute()
+                        .top_0()
+                        .left_0()
                         .size_full(),
                     )
                 }),
@@ -494,6 +590,7 @@ fn wrapped_rows(
     wrap: &Wrap,
     marks: &Marks,
     rows: Range<usize>,
+    cell: Pixels,
     theme: &Theme,
     cx: &mut App,
 ) -> Vec<Div> {
@@ -513,7 +610,12 @@ fn wrapped_rows(
             .get(&line)
             .and_then(|mark| mark.trailing.as_ref())
             .filter(|_| last);
-        Some(code_row(&piece_of(code, within, last), trailing, theme))
+        Some(code_row(
+            &piece_of(code, within, last),
+            trailing,
+            cell,
+            theme,
+        ))
     })
     .collect()
 }
@@ -524,10 +626,11 @@ impl RenderOnce for CodeView {
         let marks = self.marks.clone();
         let rows = self.rows.clone();
         let count = rows.count(self.count);
-        let list = uniform_list(self.id.clone(), count, move |range, _, cx| {
+        let list = uniform_list(self.id.clone(), count, move |range, window, cx| {
             let theme = ActiveTheme::theme(cx);
+            let cell = code_shape(" ".into(), window, &theme).width();
             if let Some(wrap) = &rows.wrap {
-                return wrapped_rows(&lines, wrap, &marks, range, &theme, cx);
+                return wrapped_rows(&lines, wrap, &marks, range, cell, &theme, cx);
             }
             lines(range.clone(), cx)
                 .iter()
@@ -536,7 +639,7 @@ impl RenderOnce for CodeView {
                     let trailing = marks
                         .get(&rows.line_at(row).0)
                         .and_then(|mark| mark.trailing.as_ref());
-                    code_row(line, trailing, &theme)
+                    code_row(line, trailing, cell, &theme)
                 })
                 .collect::<Vec<_>>()
         })

@@ -21,7 +21,8 @@ use gpui::{
 
 use crate::components::chat::fail;
 use crate::components::code::{
-    CodeLine, FoldMark, Marks, Wrap, code_origin, code_place, code_shape, code_view, wrap_width,
+    Blank, CodeLine, FoldMark, Guides, Marks, TAB_STOP, Wrap, code_origin, code_place, code_shape,
+    code_view, wrap_width,
 };
 use crate::components::find::{FindBar, find_ranges};
 use crate::components::form::{blinker, caret_shown};
@@ -76,6 +77,49 @@ const PILL_RADIUS: f32 = 4.0;
 const LINK_DROP: f32 = 4.0;
 const LINK_THICKNESS: f32 = 1.0;
 const LINK: ColorToken = ColorToken::SyntaxLinkUri;
+const GUIDE_REACH: usize = 1000;
+const PAINT_SAMPLES: usize = 120;
+
+fn indent_levels(chars: impl Iterator<Item = char>) -> Option<usize> {
+    let mut columns = 0;
+    for ch in chars {
+        match ch {
+            ' ' => columns += 1,
+            '\t' => columns += TAB_STOP - columns % TAB_STOP,
+            '\r' | '\n' => return None,
+            _ => return Some(columns.div_ceil(TAB_STOP)),
+        }
+    }
+    None
+}
+
+#[derive(Default)]
+struct PaintFrames {
+    started: Cell<Option<Instant>>,
+    samples: RefCell<Vec<f64>>,
+}
+
+impl PaintFrames {
+    fn start(&self) {
+        self.started.set(Some(Instant::now()));
+    }
+
+    fn end(&self) {
+        let Some(started) = self.started.take() else {
+            return;
+        };
+        let mut samples = self.samples.borrow_mut();
+        samples.push(started.elapsed().as_secs_f64() * 1000.0);
+        if samples.len() < PAINT_SAMPLES {
+            return;
+        }
+        samples.sort_by(f64::total_cmp);
+        if let Some(median) = samples.get(samples.len() / 2) {
+            eprintln!("desk: editor guides paint {median:.3} ms");
+        }
+        samples.clear();
+    }
+}
 
 pub enum Jump {
     Definition {
@@ -205,7 +249,7 @@ impl Drawn {
         for ch in cut(line, LONG_LINE_BYTES).chars() {
             starts.push(text.len());
             let width = match ch {
-                '\t' => TAB.len() - columns % TAB.len(),
+                '\t' => TAB_STOP - columns % TAB_STOP,
                 _ => 1,
             };
             match ch {
@@ -433,6 +477,9 @@ pub struct CodeEditor {
     symbols: Option<Arc<Index>>,
     link: Option<Range<usize>>,
     on_jump: Option<OnJump>,
+    guides: bool,
+    active_guide: Option<(usize, Range<usize>)>,
+    paints: Option<Rc<PaintFrames>>,
 }
 
 #[derive(Default)]
@@ -508,6 +555,9 @@ impl CodeEditor {
             symbols: None,
             link: None,
             on_jump: None,
+            guides: std::env::var_os("DESK_GUIDES").is_none_or(|on| on != "0"),
+            active_guide: None,
+            paints: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
         };
         editor.widest = editor.widest_line();
         editor
@@ -931,6 +981,46 @@ impl CodeEditor {
     fn caret_line(&self) -> Option<usize> {
         let caret = self.carets.last()?;
         self.buffer.char_to_line(caret.head).ok()
+    }
+
+    fn indent_of(&self, line: usize) -> Option<usize> {
+        indent_levels(self.buffer.rope().get_line(line)?.chars())
+    }
+
+    fn levels(&self, line: usize) -> usize {
+        if let Some(levels) = self.indent_of(line) {
+            return levels;
+        }
+        let end = self.buffer.line_count().min(line + 1 + GUIDE_REACH);
+        let above = (line.saturating_sub(GUIDE_REACH)..line)
+            .rev()
+            .find_map(|line| self.indent_of(line));
+        let below = (line + 1..end).find_map(|line| self.indent_of(line));
+        above.unwrap_or(0).min(below.unwrap_or(0))
+    }
+
+    fn guide_block(&self) -> Option<(usize, Range<usize>)> {
+        let line = self.caret_line()?;
+        let here = self.levels(line);
+        let header = self.levels(line + 1) > here;
+        let guide = match header {
+            true => here,
+            false => here.checked_sub(1)?,
+        };
+        let start = line + usize::from(header);
+        let inside = |line: usize| self.indent_of(line).map(|levels| (line, levels > guide));
+        let edge = |found: Option<(usize, bool)>| found.map_or(start, |(line, _)| line);
+        let first = (start.saturating_sub(GUIDE_REACH)..start)
+            .rev()
+            .filter_map(inside)
+            .take_while(|(_, within)| *within)
+            .last();
+        let end = self.buffer.line_count().min(start + 1 + GUIDE_REACH);
+        let last = (start + 1..end)
+            .filter_map(inside)
+            .take_while(|(_, within)| *within)
+            .last();
+        Some((guide, edge(first)..edge(last) + 1))
     }
 
     fn fold_at_caret(&mut self) {
@@ -2126,10 +2216,25 @@ impl CodeEditor {
     fn rows(&self, rows: Range<usize>, caret_on: bool) -> Vec<CodeLine> {
         let mut lines = coloured_lines(&self.buffer, self.syntax.spans(rows.clone()), rows.clone());
         let current = self.found.get(self.current);
+        let marking = !matches!(
+            self.vim.as_ref().map(Vim::mode),
+            Some(Mode::Normal | Mode::Pending | Mode::Command)
+        );
+        let rope = self.buffer.rope();
         for (row, (line, drawn)) in rows.zip(lines.iter_mut()) {
             let Ok(start) = self.buffer.line_to_char(row) else {
                 continue;
             };
+            if self.guides {
+                line.guides = Guides {
+                    levels: self.levels(row),
+                    active: self
+                        .active_guide
+                        .as_ref()
+                        .filter(|(_, block)| block.contains(&row))
+                        .map(|(guide, _)| *guide),
+                };
+            }
             let end = start + drawn.columns();
             let byte_of = |at: usize| drawn.byte(at - start);
             let first = self.found.partition_point(|found| found.end <= start);
@@ -2151,6 +2256,16 @@ impl CodeEditor {
                 let (from, to) = (range.start.max(start), range.end.min(end));
                 if from < to && Some(&range) != current {
                     line.selected.push(byte_of(from)..byte_of(to));
+                }
+                if from < to && marking {
+                    line.blanks.extend((from..to).filter_map(|at| {
+                        let blank = match rope.get_char(at)? {
+                            ' ' => Blank::Space,
+                            '\t' => Blank::Tab,
+                            _ => return None,
+                        };
+                        Some((byte_of(at)..byte_of(at + 1), blank))
+                    }));
                 }
             }
         }
@@ -2343,6 +2458,13 @@ impl Render for CodeEditor {
         }
         let shown = focused && caret_shown(self.since);
         self.rewrap(cx);
+        self.active_guide = self.guides.then(|| self.guide_block()).flatten();
+        let paints = self.paints.clone();
+        let painting = paints.clone().map(|paints| {
+            canvas(|_, _, _| {}, move |_, _, _, _| paints.start())
+                .absolute()
+                .size_full()
+        });
         let frames = self.frames.clone();
         if let Some(log) = frames.as_ref().filter(|log| log.borrow().edited.is_some()) {
             let log = log.clone();
@@ -2426,11 +2548,15 @@ impl Render for CodeEditor {
                     cx.notify();
                 }
             }))
+            .children(painting)
             .child(rows)
             .child(
                 canvas(
                     |_, _, _| {},
                     move |area, _, window, cx| {
+                        if let Some(paints) = &paints {
+                            paints.end();
+                        }
                         bounds.set(area);
                         if let Some((row, from, to)) = link {
                             let origin = code_origin(area, &scroll, row);
