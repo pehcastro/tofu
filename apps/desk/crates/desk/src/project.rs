@@ -413,6 +413,39 @@ pub fn picker(
     menu
 }
 
+#[cfg(feature = "screen-onboarding")]
+pub struct Listed {
+    pub folder: PathBuf,
+    pub branch: Option<String>,
+    pub missing: bool,
+    pub sessions: Option<usize>,
+}
+
+#[cfg(feature = "screen-onboarding")]
+pub fn listed(folder: PathBuf) -> Listed {
+    let missing = !folder.is_dir();
+    let read = match missing {
+        true => Err("the folder is missing".to_owned()),
+        false => list_sessions(&tofu(), &folder)
+            .and_then(Child::wait_with_output)
+            .map_err(|error| error.to_string())
+            .and_then(activity),
+    };
+    let sessions = match read {
+        Ok(activity) => Some(activity.sessions),
+        Err(error) => {
+            eprintln!("desk: sessions in {}: {error}", folder.display());
+            None
+        }
+    };
+    Listed {
+        branch: branch(&folder),
+        missing,
+        sessions,
+        folder,
+    }
+}
+
 fn entries(shown: &[Recent]) -> Vec<PaletteEntry> {
     let recent = shown.iter().map(|recent| {
         let mut meta: Vec<PaletteMeta> = Vec::new();
