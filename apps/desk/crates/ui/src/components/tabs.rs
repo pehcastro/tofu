@@ -262,6 +262,7 @@ struct Motion {
     revealed: Option<(usize, Option<Pixels>)>,
     slide: Option<Slide>,
     menued: bool,
+    hover_frames: Vec<Instant>,
 }
 
 fn unlearned_width(tab: &Tab, font: f32, window: &Window) -> Pixels {
@@ -324,6 +325,7 @@ impl Motion {
             revealed: None,
             slide: None,
             menued: false,
+            hover_frames: Vec::new(),
         }
     }
 
@@ -564,6 +566,7 @@ impl Motion {
             .unwrap_or(0);
         let mut looks = vec![Look::default(); count];
         let mut moving = false;
+        let mut rising = false;
         for (at, slot) in slots.iter().enumerate() {
             let Slot::Tab { ix, label, .. } = slot else {
                 continue;
@@ -594,6 +597,7 @@ impl Motion {
             lit.tint
                 .aim(tint, if tint > 0.0 { Duration::ZERO } else { leave }, now);
             moving |= lit.reveal.moving(now) || lit.tint.moving(now);
+            rising |= hovered && lit.reveal.moving(now);
             if let Some(look) = looks.get_mut(*ix) {
                 *look = Look {
                     lit: hovered,
@@ -602,6 +606,7 @@ impl Motion {
                 };
             }
         }
+        self.time_hover(rising, now);
         let busy = moving || (closing.is_some() && !finished);
         if self.trace.as_ref().is_some_and(|trace| busy || trace.busy) {
             let rows = self.rows(id, slots, closing, now);
@@ -616,6 +621,30 @@ impl Motion {
             finished,
             busy,
         }
+    }
+
+    fn time_hover(&mut self, rising: bool, now: Instant) {
+        if rising || !self.hover_frames.is_empty() {
+            self.hover_frames.push(now);
+        }
+        if rising {
+            return;
+        }
+        let mut gaps: Vec<f64> = self
+            .hover_frames
+            .windows(2)
+            .filter_map(|pair| Some(pair.get(1)?.duration_since(*pair.first()?)))
+            .map(|gap| gap.as_secs_f64() * 1000.0)
+            .collect();
+        self.hover_frames.clear();
+        gaps.sort_by(f64::total_cmp);
+        let (Some(median), Some(worst)) = (gaps.get(gaps.len() / 2), gaps.last()) else {
+            return;
+        };
+        eprintln!(
+            "desk: tab hover reveal {} frames, median {median:.2} ms, worst {worst:.2} ms",
+            gaps.len()
+        );
     }
 
     fn rows(&self, id: &str, slots: &[Slot], closing: Option<Closing>, now: Instant) -> Vec<Row> {
@@ -848,7 +877,7 @@ fn tab_frame(
     id: &SharedString,
     (tab, image): (&Tab, Option<&Arc<Image>>),
     pick: Pick,
-    theme: &Theme,
+    (theme, window): (&Theme, &Window),
     (on, shut, press, menu): (&OnTab, &Shut, Option<&Press>, Option<&Press>),
 ) -> Stateful<Div> {
     let Pick {
@@ -859,6 +888,14 @@ fn tab_frame(
         font,
         dim,
     } = pick;
+    let look = match chosen {
+        true => Look {
+            reveal: 1.0,
+            ..look
+        },
+        false => look,
+    };
+    let natural = unlearned_width(tab, font, window).as_f32();
     let select = on.clone();
     let asked = on.clone();
     let ask: Shut = Rc::new(move |ix, window, cx| asked(&TabEvent::Close(ix), window, cx));
@@ -891,6 +928,7 @@ fn tab_frame(
         .items_center()
         .min_w(px(TAB_MIN_WIDTH) + grown)
         .max_w(px(TAB_MAX_WIDTH) + grown)
+        .flex_shrink(natural / (natural + CLOSE_BOX * look.reveal))
         .when_some(press, |tab, press| {
             tab.on_mouse_down(MouseButton::Left, move |event, window, cx| {
                 press(ix, event.position, window, cx)
@@ -1480,7 +1518,7 @@ impl RenderOnce for TabStrip {
                         &id,
                         (tab, image(ix)),
                         pick(ix, FONT_TAB, ink(&theme, DIM_TEXT)),
-                        &theme,
+                        (&theme, window),
                         (&on, &shut, press.as_ref(), menu.as_ref()),
                     )
                     .h_full()
@@ -1527,7 +1565,7 @@ impl RenderOnce for TabStrip {
                         &id,
                         (tab, image(ix)),
                         pick(ix, FONT_BODY, ink(&theme, SHELL_TEXT)),
-                        &theme,
+                        (&theme, window),
                         (&on, &shut, press.as_ref(), opens),
                     )
                     .h(px(if screen { NEW_TAB } else { TAB }))
