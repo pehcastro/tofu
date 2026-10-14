@@ -423,8 +423,9 @@ const (
 )
 
 const (
-	HostEventBuffer   = 256
-	HostSteeringQueue = 64
+	HostEventBuffer     = 256
+	HostSteeringQueue   = 64
+	HostCloseWaitMillis = 3000
 )
 
 const (

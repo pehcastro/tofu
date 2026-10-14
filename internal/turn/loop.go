@@ -44,6 +44,10 @@ const theLeadSkippedTheLine = "the lead read a message from the person mid-turn 
 
 const cronTaskSource = "cron "
 
+const SourceReplyCut = "reply cut"
+
+const theReplyWasCut = "[the reply above was cut off before it finished, and what it streamed up to the cut is kept]"
+
 const thePlanAsItStands = "[your plan as it stands, shown by tofu before every step, not the person's words]\n"
 
 type SentNow struct{}
@@ -717,6 +721,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 				llm.Request{Messages: withPlan(messages), Tools: definitions})
 		}
 		if err != nil {
+			var cut llm.CutReply
+			if errors.As(err, &cut) {
+				answering = requestID
+				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: cut.Streamed}, inserted(SourceReplyCut, theReplyWasCut, time.Time{}))
+			}
 			return fail(err)
 		}
 		row.Model = decision.Build

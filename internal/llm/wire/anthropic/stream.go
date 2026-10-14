@@ -116,11 +116,11 @@ type openBlock struct {
 	arguments strings.Builder
 }
 
-func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (Result, error) {
-	var result Result
+func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (result Result, err error) {
 	open := map[int]*openBlock{}
 	var text, thinking, signature strings.Builder
 	sawStart, sawTerminal, sawStop := false, false, false
+	defer func() { err = llm.CutAfter(text.String(), err) }()
 
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)

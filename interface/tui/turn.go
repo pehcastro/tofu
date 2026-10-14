@@ -24,6 +24,7 @@ import (
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	roster "tofu/internal/subagent"
+	"tofu/internal/turn"
 )
 
 const (
@@ -436,8 +437,11 @@ func (a *App) absorb(event Event) {
 		}
 		a.view.Requesting()
 	case EventTask:
-		if event.Origin.Kind != host.OriginTofu {
+		switch {
+		case event.Origin.Kind != host.OriginTofu:
 			a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
+		case event.Origin.Source == turn.SourceReplyCut:
+			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
 		}
 	case EventText:
 		a.view.Append(session.Entry{Kind: session.Assistant, Body: event.Text, ID: event.ID})
@@ -526,6 +530,7 @@ func (a *App) absorb(event Event) {
 		a.status.Decisions = event.Decisions
 	case host.EventAccount:
 		a.followSource(event.Account)
+		a.followAccount(event.Account)
 	}
 }
 

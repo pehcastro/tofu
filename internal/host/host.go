@@ -94,6 +94,7 @@ type Host struct {
 	stopped   bool
 	cancelled bool
 	cancel    context.CancelFunc
+	turnOver  chan struct{}
 	pick      Pick
 	fired     []string
 	unread    []cron.Fire
@@ -211,9 +212,11 @@ func (h *Host) Send(pick Pick, task string) bool {
 
 func (h *Host) begin(pick Pick, task string, origin Origin) {
 	ctx, cancel := context.WithCancel(context.Background())
-	h.running, h.stopped, h.cancelled, h.cancel, h.turn = true, false, false, cancel, turn.NewID(h.now())
+	turnOver := make(chan struct{})
+	h.running, h.stopped, h.cancelled, h.cancel, h.turn, h.turnOver = true, false, false, cancel, turn.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
 	go func() {
+		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
 		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin})
@@ -304,7 +307,6 @@ func (h *Host) Standing() []StandingAnswer { return h.asks.standingNow() }
 
 func (h *Host) Close() {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.closed = true
 	if h.ticking != nil {
 		h.ticking.Stop()
@@ -312,6 +314,20 @@ func (h *Host) Close() {
 	if h.cancel != nil {
 		h.cancel()
 	}
+	turnOver := h.turnOver
+	h.mu.Unlock()
+	givenUp := time.After(konst.HostCloseWaitMillis * time.Millisecond)
+	for turnOver != nil {
+		select {
+		case <-turnOver:
+			turnOver = nil
+		case <-givenUp:
+			turnOver = nil
+		case <-h.events:
+		}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.letGo()
 }
 

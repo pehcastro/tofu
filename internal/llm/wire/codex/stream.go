@@ -114,8 +114,9 @@ type streamState struct {
 	terminal    bool
 }
 
-func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
+func ReadStream(body io.Reader, onThinking func(string)) (result Result, err error) {
 	state := streamState{open: map[int]*openItem{}, onThinking: onThinking}
+	defer func() { err = llm.CutAfter(result.Content, err) }()
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
 
