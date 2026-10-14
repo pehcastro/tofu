@@ -6,10 +6,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"slices"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -426,7 +428,16 @@ func Run(options Options) error {
 		programOptions = append(programOptions, tea.WithOutput(conhostOutput{os.Stdout}))
 	}
 	program := tea.NewProgram(New(options), programOptions...)
+	hangup := make(chan os.Signal, 1)
+	signal.Notify(hangup, syscall.SIGHUP)
+	go func() {
+		if _, hungUp := <-hangup; hungUp {
+			program.Quit()
+		}
+	}()
 	_, err := program.Run()
+	signal.Stop(hangup)
+	close(hangup)
 	_, _ = io.WriteString(os.Stdout, exitReset+status.Encode(status.Record{State: status.Clear}))
 	return err
 }
