@@ -238,7 +238,7 @@ func run(arms []*arm, calls, rounds, steps int, keep string) error {
 	}
 	fmt.Print(table(arms))
 	if keep == "" {
-		return nil
+		return os.RemoveAll(work)
 	}
 	for _, a := range arms {
 		if err := os.MkdirAll(filepath.Join(keep, a.label), 0o755); err != nil {
@@ -278,7 +278,7 @@ func main() {
 	calls := flag.Int("calls", 50, "calls of each method per round")
 	rounds := flag.Int("rounds", 2, "rounds, each arm once per round")
 	steps := flag.Int("steps", 200, "steps in the traced session, a multiple of 20")
-	keep := flag.String("keep", "", "a folder to write each arm's masked answers into, one file per method")
+	keep := flag.String("keep", "", "a folder to write each arm's masked answers into, one file per method; it also keeps the work folder the header names, which is removed without it")
 	flag.Parse()
 	arms, err := parseArms(*armsFlag)
 	if err == nil && (*steps < stepsPerTurn || *steps%stepsPerTurn != 0) {

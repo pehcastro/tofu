@@ -659,16 +659,17 @@ func tracedRequests(steps []traceRequest, exchanges []session.Exchange) []traceR
 		request := used[exchange.Request]
 		request.Request, request.Agent, request.Turn, request.Model = exchange.Request, exchange.Agent, exchange.Turn, cmp.Or(request.Model, exchange.Model)
 		request.Why, request.Messages, request.Attempts, request.DurationMS, request.Error = strings.Trim(exchange.Why+" · "+request.Why, " ·"), len(exchange.Messages), len(exchange.Attempts), exchange.DurationMS, exchange.Error
-		sent := before[exchange.Agent]
-		for _, hash := range exchange.Messages {
+		sent, added := before[exchange.Agent], exchange.Messages
+		extends := sent.set != nil && len(sent.hashes) <= len(added) && slices.Equal(sent.hashes, added[:len(sent.hashes)])
+		if extends {
+			added = added[len(sent.hashes):]
+		}
+		for _, hash := range added {
 			if !sent.set[hash] {
 				request.New++
 			}
 		}
-		added := exchange.Messages
-		if sent.set != nil && len(sent.hashes) <= len(added) && slices.Equal(sent.hashes, added[:len(sent.hashes)]) {
-			added = added[len(sent.hashes):]
-		} else {
+		if !extends {
 			sent.set = make(map[string]bool, len(added))
 		}
 		for _, hash := range added {
@@ -707,6 +708,7 @@ func callReason(result session.ResultBody) string {
 }
 
 func sessionTrace(store *session.Store, handle string) (sessionTraceReport, error) {
+	store = store.ReadOnce()
 	header, err := sessionHeader(store, handle)
 	if err != nil {
 		return sessionTraceReport{}, err

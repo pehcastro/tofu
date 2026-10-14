@@ -37,15 +37,16 @@ type Store struct {
 	readFile func(path string) ([]byte, error)
 	rename   func(from, to string) error
 	parsed   map[string][]Event
+	headers  map[string]Header
 }
 
 func (s *Store) ReadOnce() *Store {
 	once := *s
-	once.parsed = map[string][]Event{}
+	once.parsed, once.headers = map[string][]Event{}, map[string]Header{}
 	return &once
 }
 
-func (s *Store) ForgetRead() { s.parsed = nil }
+func (s *Store) ForgetRead() { s.parsed, s.headers = nil, nil }
 
 func NewStore(dir string) *Store {
 	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename}
@@ -139,6 +140,7 @@ func (s *Store) writeHeader(header Header, redact sys.KeyRedactor) error {
 	if err != nil {
 		return err
 	}
+	delete(s.headers, header.ID)
 	return s.writeWhole(filepath.Join(s.Dir(header.ID), headerName), []byte(redact.Redact(string(body))))
 }
 
@@ -474,6 +476,9 @@ func (s *Store) SetEffort(id, effort string) (Header, error) {
 }
 
 func (s *Store) read(id string) (Header, error) {
+	if header, kept := s.headers[id]; kept {
+		return header, nil
+	}
 	if err := namesOneSession(id); err != nil {
 		return Header{}, err
 	}
@@ -485,6 +490,9 @@ func (s *Store) read(id string) (Header, error) {
 		}
 		if header.CarriedFrom != nil {
 			header.Parent = header.CarriedFrom.Session
+		}
+		if s.headers != nil {
+			s.headers[id] = header
 		}
 		return header, nil
 	}

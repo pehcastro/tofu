@@ -199,14 +199,44 @@ func (s *Store) Sizes(id string) Sizes {
 	return Sizes{Events: size(eventsName), Requests: size(exchangesName), Blobs: size(blobsName)}
 }
 
+type sentList struct {
+	raw    json.RawMessage
+	hashes []string
+}
+
+func (sent sentList) extendedBy(raw json.RawMessage) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	opened := sent.raw[:max(len(sent.raw)-1, 0)]
+	if len(sent.hashes) > 0 && len(raw) > len(opened) && bytes.HasPrefix(raw, opened) && raw[len(opened)] == ',' {
+		var added []string
+		err := json.Unmarshal(slices.Concat([]byte("["), raw[len(opened)+1:]), &added)
+		return append(sent.hashes, added...), err
+	}
+	var hashes []string
+	err := json.Unmarshal(raw, &hashes)
+	return hashes, err
+}
+
 func (s *Store) Exchanges(id string) ([]Exchange, error) {
 	var exchanges []Exchange
+	sent := map[string]sentList{}
 	err := eachLine(filepath.Join(s.Dir(id), exchangesName), func(line []byte) error {
-		var exchange Exchange
-		if err := json.Unmarshal(line, &exchange); err != nil {
-			return err
+		var read struct {
+			Exchange
+			Messages json.RawMessage `json:"messages"`
 		}
-		exchanges = append(exchanges, exchange)
+		if json.Unmarshal(line, &read) != nil {
+			return json.Unmarshal(line, &Exchange{})
+		}
+		hashes, err := sent[read.Agent].extendedBy(read.Messages)
+		if err != nil {
+			return json.Unmarshal(line, &Exchange{})
+		}
+		sent[read.Agent] = sentList{raw: read.Messages, hashes: hashes}
+		read.Exchange.Messages = hashes[:len(hashes):len(hashes)]
+		exchanges = append(exchanges, read.Exchange)
 		return nil
 	})
 	return exchanges, err

@@ -183,6 +183,7 @@ func serveSessions(open string) (host.SessionList, error) {
 	if err != nil {
 		return host.SessionList{}, err
 	}
+	store = store.ReadOnce()
 	report, err := sessionListingOf(store, sessionstore.DefaultSettings().Lifetime, time.Now(), func(store *sessionstore.Store, handle string) (sessionRow, error) {
 		row, _, err := sessionSummary(store, handle)
 		return row, err

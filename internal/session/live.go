@@ -229,6 +229,7 @@ func (l *Log) save() error {
 	defer l.mu.Unlock()
 	path := filepath.Join(l.store.Dir(l.header.ID), headerName)
 	if !l.unchangedSinceSaved(path) {
+		delete(l.store.headers, l.header.ID)
 		if kept, err := l.store.read(l.header.ID); err == nil && kept.Name != nil {
 			l.header.Name = kept.Name
 		}
