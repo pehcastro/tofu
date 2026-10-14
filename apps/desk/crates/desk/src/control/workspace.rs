@@ -1,6 +1,6 @@
 use desk_control::params::{
-    LayoutApply, Switch, TileRef, TileZoom, WorkspaceNew, WorkspaceRef, WorkspaceRename,
-    WorkspaceSwitch,
+    LayoutApply, SWITCH_FORMS, Switch, TileRef, TileZoom, WorkspaceNew, WorkspaceRef,
+    WorkspaceRename, WorkspaceSwitch,
 };
 use desk_control::replies::{Active, Closed, Created, Renamed, Tree, Zoomed};
 use desk_control::shapes;
@@ -8,6 +8,7 @@ use desk_control::{Call, ErrorCode};
 use desk_tiling::{Preset, Rect, Refusal, TileId, Workspace};
 use desk_ui::components::tiling_board::TilingBoard;
 use gpui::{App, Entity};
+use serde_json::Value;
 
 use super::change::{Answered, json};
 use super::dispatch::tree;
@@ -104,12 +105,24 @@ fn change(call: &Call, board: &mut Board, journal: &mut Vec<Step>) -> Answered {
         Call::WorkspaceSwitch(WorkspaceSwitch { to }) => {
             let count = board.workspaces().len();
             let from = board.active();
-            let index = match to {
-                Switch::Id(id) | Switch::Name(id) => find(board, id)?,
-                Switch::Index(at) => usize::try_from(*at)
+            let at_index = |at: &str| {
+                at.parse::<usize>()
                     .ok()
                     .filter(|at| *at < count)
-                    .ok_or_else(|| missing(&at.to_string()))?,
+                    .ok_or_else(|| missing(at))
+            };
+            let index = match to {
+                Switch::Id(id) | Switch::Name(id) => find(board, id)?,
+                Switch::Index(at) => at_index(&at.to_string())?,
+                Switch::Bare(Value::String(at)) if at.bytes().all(|b| b.is_ascii_digit()) => {
+                    at_index(at)?
+                }
+                Switch::Bare(Value::String(name)) => board
+                    .workspaces()
+                    .iter()
+                    .position(|held| held.name == *name)
+                    .ok_or_else(|| missing(name))?,
+                Switch::Bare(_) => return Err((ErrorCode::BadParams, SWITCH_FORMS.to_owned())),
                 Switch::Next => (from + 1) % count,
                 Switch::Prev => (from + count - 1) % count,
             };

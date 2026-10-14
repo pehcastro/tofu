@@ -15,8 +15,9 @@ use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
 use draw_doc::Scene;
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Entity, Focusable, Global,
-    KeyDownEvent, Render, SharedString, StyleRefinement, WeakEntity, Window, div, prelude::*, px,
+    AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, Context, Entity, Focusable, Global,
+    KeyDownEvent, Pixels, Render, SharedString, StyleRefinement, WeakEntity, Window, div,
+    prelude::*, px,
 };
 use serde_json::{Value, json};
 
@@ -57,6 +58,10 @@ pub fn show(path: PathBuf, cx: &mut App) {
             pending: Some(path),
         }),
     }
+}
+
+pub fn drawn(pad: Pixels, cx: &App) -> Option<Bounds<Pixels>> {
+    live(cx)?.read(cx).canvas.read(cx).drawn(pad)
 }
 
 pub fn folder() -> Result<PathBuf, String> {

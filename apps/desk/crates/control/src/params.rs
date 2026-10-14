@@ -109,7 +109,11 @@ pub enum Switch {
     Index(u32),
     Next,
     Prev,
+    #[serde(untagged)]
+    Bare(Value),
 }
+
+pub const SWITCH_FORMS: &str = "workspace.switch takes to as a name, a decimal index, next, prev, or one of {\"id\": s}, {\"name\": s}, {\"index\": n}";
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

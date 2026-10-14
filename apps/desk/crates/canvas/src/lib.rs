@@ -103,6 +103,19 @@ impl Canvas {
         &self.scene
     }
 
+    pub fn drawn(&self, pad: Pixels) -> Option<Bounds<Pixels>> {
+        let content = self.content()?;
+        let origin = self.bounds.origin;
+        let near = self.view.screen(origin, content.min_x, content.min_y);
+        let far = self.view.screen(origin, content.max_x, content.max_y);
+        let padded = Bounds::from_corners(
+            gpui::point(near.x - pad, near.y - pad),
+            gpui::point(far.x + pad, far.y + pad),
+        );
+        let clipped = padded.intersect(&self.bounds);
+        (!clipped.is_empty()).then_some(clipped)
+    }
+
     pub fn tool(&self) -> (Tool, bool) {
         (self.tool, self.locked)
     }

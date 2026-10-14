@@ -8,7 +8,7 @@ use desk_control::{Call, ErrorCode, shapes};
 use desk_core::home::Home;
 use desk_tiling::{Module, Rect};
 use draw_doc::{Edge, Graph, Node, Scene, diagram, graph};
-use gpui::{App, Entity};
+use gpui::{App, Entity, px};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -45,6 +45,7 @@ struct Snapshot {
 }
 
 const SNAPSHOT_MAX_PX: u32 = 512;
+const SNAPSHOT_PAD_PX: f32 = 24.0;
 
 pub fn answer(run: &CommandRun, work: Option<&Entity<Work>>, cx: &mut App) -> Answered {
     if run.dry_run {
@@ -168,23 +169,23 @@ fn snapshot(
     let not_showing = || refused(format!("board {board} is not showing: run draw.open first"));
     let work = work.ok_or_else(not_showing)?;
     let draw = Module::Plugin(PLUGIN.to_owned());
-    let rect = {
-        let tiling = work.read(cx).board();
-        let (x, y) = tiling.origin();
-        tiling
-            .workspaces()
-            .get(tiling.active())
-            .and_then(|held| {
-                held.tiles(tiling.area())
-                    .into_iter()
-                    .find(|(stack, _)| stack.modules.get(stack.active) == Some(&draw))
-            })
-            .map(|(_, rect)| Rect {
-                x: rect.x + x,
-                y: rect.y + y,
-                ..rect
-            })
-            .ok_or_else(not_showing)?
+    let tiling = work.read(cx).board();
+    tiling
+        .workspaces()
+        .get(tiling.active())
+        .and_then(|held| {
+            held.tiles(tiling.area())
+                .into_iter()
+                .find(|(stack, _)| stack.modules.get(stack.active) == Some(&draw))
+        })
+        .ok_or_else(not_showing)?;
+    let drawn = tile::drawn(px(SNAPSHOT_PAD_PX), cx)
+        .ok_or_else(|| refused(format!("board {board} has nothing drawn in view")))?;
+    let rect = Rect {
+        x: f32::from(drawn.origin.x),
+        y: f32::from(drawn.origin.y),
+        w: f32::from(drawn.size.width),
+        h: f32::from(drawn.size.height),
     };
     let path = match path {
         Some(path) => path,
