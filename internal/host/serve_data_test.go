@@ -133,7 +133,7 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 		if event.Kind == EventAwaitPerson {
 			awaited <- event.ID
 		}
-	}, h.asks)
+	}, h.asks, &turn.Config{})
 	ask := func(tool, args string) (chan turn.PersonAnswer, string) {
 		got := make(chan turn.PersonAnswer, 1)
 		go func() {

@@ -28,6 +28,7 @@ type Log struct {
 	blobs   map[string]bool
 	side    map[string]*os.File
 	watch   func(Event)
+	saved   fs.FileInfo
 }
 
 func (l *Log) Observe(watch func(Event)) {
@@ -226,8 +227,20 @@ func (l *Log) Close() error {
 func (l *Log) save() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if kept, err := l.store.read(l.header.ID); err == nil && kept.Name != nil {
-		l.header.Name = kept.Name
+	path := filepath.Join(l.store.Dir(l.header.ID), headerName)
+	if !l.unchangedSinceSaved(path) {
+		if kept, err := l.store.read(l.header.ID); err == nil && kept.Name != nil {
+			l.header.Name = kept.Name
+		}
 	}
-	return l.store.writeHeader(l.header, l.redact)
+	if err := l.store.writeHeader(l.header, l.redact); err != nil {
+		return err
+	}
+	l.saved, _ = os.Stat(path)
+	return nil
+}
+
+func (l *Log) unchangedSinceSaved(path string) bool {
+	now, err := os.Stat(path)
+	return err == nil && l.saved != nil && now.ModTime().Equal(l.saved.ModTime()) && now.Size() == l.saved.Size()
 }

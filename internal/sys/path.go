@@ -159,4 +159,24 @@ func stateChild(name string) (string, error) {
 
 func CalibrationDir() (string, error) { return stateChild("calibration") }
 
-func LogDir() (string, error) { return stateChild("log") }
+func LogDir() (string, error) {
+	places, err := ResolvePlaces(".")
+	return places.Log, err
+}
+
+type Places struct {
+	State string
+	Log   string
+}
+
+func ResolvePlaces(dir string) (Places, error) {
+	home, err := HomeConfigDir()
+	if err != nil {
+		return Places{}, err
+	}
+	state, err := projectStateIn(home, dir)
+	if err != nil {
+		return Places{}, err
+	}
+	return Places{State: state, Log: filepath.Join(state, "log")}, nil
+}

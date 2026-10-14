@@ -82,7 +82,7 @@ func gateAndCheckRows(t *testing.T) (gated, checked ledger.Row) {
 	checked = rowByID(t, checkCommand(t, rulePath, forcePush).ID)
 	time.Sleep(2 * time.Millisecond)
 
-	gate, err := newToolGate(dir)
+	gate, err := newToolGate(dir, logHere(t))
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}

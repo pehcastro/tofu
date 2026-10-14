@@ -23,7 +23,7 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 	var h *Host
 	answers := make(chan turn.PersonAnswer, 8)
 	play := func(ctx context.Context, _ Pick, _ string, live Live) {
-		person := awaitPerson(live.Emit, h.asks)
+		person := awaitPerson(live.Emit, h.asks, &turn.Config{})
 		for _, request := range []turn.GateRequest{settingsAsk("3"), {Tool: hookTrustTool, Args: json.RawMessage(`{"command":"PreToolUse *: make lint"}`)}, settingsAsk("9"), settingsAsk("9")} {
 			answer, _ := person(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
 			answers <- answer
@@ -136,7 +136,7 @@ func TestStoppingTheLeadResolvesItsWaitingApprovalCancelled(t *testing.T) {
 	var h *Host
 	answered := make(chan error, 1)
 	play := func(ctx context.Context, _ Pick, _ string, live Live) {
-		_, err := h.inbox.LeadAsks(awaitPerson(live.Emit, h.asks))(ctx, settingsAsk("4"), turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
+		_, err := h.inbox.LeadAsks(awaitPerson(live.Emit, h.asks, &turn.Config{}))(ctx, settingsAsk("4"), turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
 		answered <- err
 	}
 	c, live, _ := serving(t, play, ServeConfig{})

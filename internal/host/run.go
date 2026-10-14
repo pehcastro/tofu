@@ -19,7 +19,6 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
-	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -92,13 +91,13 @@ func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
 	}
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
-	person, asking := awaitPerson(emit, h.asks), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(ctx, keptMemory(emit)), h.shells), h.questionsBlock)
+	var prepared Prepared
+	person, asking := awaitPerson(emit, h.asks, &prepared.Config), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(ctx, keptMemory(emit)), h.shells), h.questionsBlock)
 	if live.Origin.Kind == OriginCron {
 		person = unattended
 	} else {
 		asking = turn.WithPersonForm(tools.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
 	}
-	var prepared Prepared
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
 		Lead:     func(model turn.Model) turn.Model { watch.inner = model; return watch },
 		SubAgent: func(model turn.Model) turn.Model { return watchedSubAgent{watch: watch, inner: model} },
@@ -339,8 +338,9 @@ func gateOffEvent(gateErr error) Event {
 	return Event{Kind: EventGateOff, Text: gateErr.Error(), GateWhy: missing.Why}
 }
 
-func awaitPerson(emit func(Event), book *asks) turn.Person {
+func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
+		places, _ := config.ResolvedPlaces()
 		place := askedPlace(request)
 		var overriding struct{ Rule, Question string }
 		if request.Tool == (tools.RuleOverride{}).Name() {
@@ -357,10 +357,10 @@ func awaitPerson(emit func(Event), book *asks) turn.Person {
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})
 		case stands && request.Code != nil:
-			turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person, standing", Answer: codeAnswer(stood)}.Record()
+			turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person, standing", Answer: codeAnswer(stood)}.Record(places.Log)
 			return personAnswer(stood), nil
 		case stands:
-			recordStanding(request, place, stood)
+			recordStanding(places.Log, request, place, stood)
 			return personAnswer(stood), nil
 		case turn.StandingOnly(ctx):
 			return turn.PersonDenied, turn.NotStanding{}
@@ -381,10 +381,10 @@ func awaitPerson(emit func(Event), book *asks) turn.Person {
 		select {
 		case answered := <-reply:
 			if request.Code != nil {
-				turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person", Answer: codeAnswer(answered), Took: time.Since(started)}.Record()
+				turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person", Answer: codeAnswer(answered), Took: time.Since(started)}.Record(places.Log)
 			}
 			out := personAnswer(answered)
-			recordPersonAnswer(decision.ID, out)
+			recordPersonAnswer(places.Log, decision.ID, out)
 			return out, nil
 		case <-ctx.Done():
 			return turn.PersonDenied, ctx.Err()
@@ -418,20 +418,15 @@ func codeAnswer(answered Answer) turn.CodeAnswer {
 	panic("host: unknown answer from the person")
 }
 
-func recordPersonAnswer(id string, answer turn.PersonAnswer) {
-	if id == "" {
+func recordPersonAnswer(log, id string, answer turn.PersonAnswer) {
+	if log == "" || id == "" {
 		return
 	}
-	dir, err := sys.LogDir()
-	if err != nil {
-		return
-	}
-	_ = ledger.NewWriter(dir).Backfill(id, answer.Outcome())
+	_ = ledger.NewWriter(log).Backfill(id, answer.Outcome())
 }
 
-func recordStanding(request turn.GateRequest, place string, stood Answer) {
-	dir, err := sys.LogDir()
-	if err != nil {
+func recordStanding(log string, request turn.GateRequest, place string, stood Answer) {
+	if log == "" {
 		return
 	}
 	body, err := ledger.Canonical(map[string]string{"tool": request.Tool, "target": place})
@@ -442,7 +437,7 @@ func recordStanding(request turn.GateRequest, place string, stood Answer) {
 	if stood == AlwaysHere {
 		verdict = ledger.VerdictAllow
 	}
-	_, _ = ledger.NewWriter(dir).Append(ledger.Row{Point: standingPoint, StateHash: ledger.HashOf(body), State: body, Verdict: verdict, TurnID: request.TurnID})
+	_, _ = ledger.NewWriter(log).Append(ledger.Row{Point: standingPoint, StateHash: ledger.HashOf(body), State: body, Verdict: verdict, TurnID: request.TurnID})
 }
 
 type noPerson struct{}

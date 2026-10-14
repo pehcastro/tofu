@@ -100,7 +100,7 @@ func writeGateLedgerRowFixture(t *testing.T) {
 
 func gateThresholds(t *testing.T, dir string) gate.Thresholds {
 	t.Helper()
-	gate, err := newToolGate(dir)
+	gate, err := newToolGate(dir, logHere(t))
 	if err != nil {
 		t.Fatalf("building the gate: %v", err)
 	}
@@ -142,7 +142,7 @@ func enableGateAsking(t *testing.T) {
 func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, middlingRiskAskReply)
-	gate, err := newToolGate(dir)
+	gate, err := newToolGate(dir, logHere(t))
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}
@@ -244,7 +244,7 @@ const lowRiskAllowReply = `{"model":"typesafe/jev-1.13-20260917","provider":"Typ
 func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, lowRiskAllowReply)
-	gate, err := newToolGate(dir)
+	gate, err := newToolGate(dir, logHere(t))
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}

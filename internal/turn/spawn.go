@@ -511,8 +511,8 @@ func (t *SpawnTool) artifactDir() (string, error) {
 	if t.base.ArtifactDir != "" {
 		return t.base.ArtifactDir, nil
 	}
-	state, err := sys.ProjectStateDir()
-	return filepath.Join(state, "artifacts"), err
+	places, err := t.base.ResolvedPlaces()
+	return filepath.Join(places.State, "artifacts"), err
 }
 
 const resumedWords = "resumed by a message"
@@ -527,15 +527,16 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	if held.scratch.Root != "" {
 		ctx = sys.WithScratch(ctx, held.scratch)
 	}
-	if ttl := t.limits().CacheTTL; ttl != "" {
-		ctx = anthropic.WithCacheTTL(ctx, ttl)
+	limits := t.limits()
+	if limits.CacheTTL != "" {
+		ctx = anthropic.WithCacheTTL(ctx, limits.CacheTTL)
 	}
 	check := &checkIn{id: held.agent.ID, started: t.clock(), missed: func(run Row) []string {
 		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns(), []Row{run})
 	}}
 	defer t.watch(held, check)()
 	for {
-		subAgent := opened.onto(t.subAgentConfig(held, site, check))
+		subAgent := opened.onto(t.subAgentConfig(held, site, check, limits))
 		subAgent.Task, subAgent.TaskOrigin, subAgent.NewID = task, taskOrigin, func() string { return held.agent.ID }
 		report, completion := t.converse(ctx, held, warm.stagger(ctx, site.call, subAgent), site)
 		next, _ := held.inbox.next(ctx, nil)
@@ -558,7 +559,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	}
 }
 
-func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn) Config {
+func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn, limits SubAgentLimits) Config {
 	offered := func(name string) bool {
 		if name == ShellToolName {
 			name = bashToolName
@@ -587,7 +588,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		}
 	}
 	if offered(t.Name()) {
-		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: t.Limits, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
+		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: func() SubAgentLimits { return limits }, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree})
 	}
 	subAgent := t.base
@@ -597,7 +598,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	subAgent.Tools = claimedTools(NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...), t.base.Sessions, t.base.Session)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
-	subAgent.Caps.WallClock = cmp.Or(t.limits().WallClock, konst.SubAgentWallClockSeconds*time.Second)
+	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	held.kept.Lock()
 	subAgent.System, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.environment, held.history, &held.prefix
 	held.kept.Unlock()

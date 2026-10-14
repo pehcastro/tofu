@@ -75,14 +75,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	if err != nil {
 		return Row{}, err
 	}
-	dir := config.ArtifactDir
-	if dir == "" {
-		state, err := sys.ProjectStateDir()
-		if err != nil {
-			return Row{}, err
-		}
-		dir = filepath.Join(state, "artifacts")
+	if config.Places, err = config.ResolvedPlaces(); err != nil {
+		return Row{}, err
 	}
+	dir := cmp.Or(config.ArtifactDir, filepath.Join(config.Places.State, "artifacts"))
 	handles := !config.TruncateResults
 	artifacts, err := NewArtifacts(dir, handles)
 	if err != nil {
@@ -91,7 +87,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
 	sifter := siftOrNothing(config.Sift)
 	thrifter := thriftOrNothing(config.Thrift)
-	redactor := sys.LoadKeyRedactor()
+	if config.Redactor == nil {
+		loaded := sys.LoadKeyRedactor()
+		config.Redactor = &loaded
+	}
+	redactor := *config.Redactor
 	source := config.ToolSource
 	if source == nil {
 		source = func() Registry { return config.Tools }
@@ -262,8 +262,10 @@ func Run(ctx context.Context, config Config) (Row, error) {
 	concluding, taken := "", ""
 	for _, tool := range config.Tools.tools {
 		if spawner, spawning := tool.(*SpawnTool); spawning {
-			concluding = spawner.cleanReport(config.Task)
-			if concluding == "" && !spawner.ChecksWork {
+			if spawner.ChecksWork {
+				continue
+			}
+			if concluding = spawner.cleanReport(config.Task); concluding == "" {
 				taken = spawner.reportTaken(config.Task)
 			}
 		}
@@ -794,7 +796,7 @@ func Run(ctx context.Context, config Config) (Row, error) {
 					if asksCode && gated.refusal == "" {
 						request.Code = &code
 						if gated.refusal = codeRefusal(ctx, config.Person, request); gated.refusal == "" {
-							codes[gated.id] = NewRegistry(inlineCodeTool{request: request})
+							codes[gated.id] = NewRegistry(inlineCodeTool{request: request, log: config.Places.Log})
 						}
 					}
 					if gated.refusal != "" || asksCode {

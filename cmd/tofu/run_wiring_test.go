@@ -803,6 +803,11 @@ func armOpts(t *testing.T, args ...string) runOpts {
 
 func mustConfig(t *testing.T, opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
 	t.Helper()
+	places, err := sys.ResolvePlaces(".")
+	if err != nil {
+		t.Fatalf("sys.ResolvePlaces: %v", err)
+	}
+	run.places = places
 	config, spawner, err := runConfig(opts, built, run)
 	if err != nil {
 		t.Fatalf("runConfig: %v", err)

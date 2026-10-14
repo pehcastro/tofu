@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,7 +25,6 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
-	"tofu/internal/sys"
 )
 
 type GateRequest struct {
@@ -276,12 +276,13 @@ func (t *SpawnTool) codeAnswers(ctx context.Context, held *heldSubAgent, site sp
 		"answer deny to refuse it, or allow to pass it to the person, who sees this exact code and decides: you cannot allow inline code yourself, and allow_here stands for nothing here. "+
 		"call message with to %s and answer allow or deny within %s of the time you can answer, and the message call alone answers it. with no answer the code is refused.",
 		id, CodeShown(*request.Code), id, konst.SubAgentGateAnswerMillis*time.Millisecond))
+	places, _ := t.base.ResolvedPlaces()
 	switch {
 	case err != nil:
-		CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "nobody: " + err.Error(), Answer: CodeDeny}.Record()
+		CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "nobody: " + err.Error(), Answer: CodeDeny}.Record(places.Log)
 		return PersonDenied, err
 	case !allowed:
-		CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the orchestrator", Answer: CodeDeny}.Record()
+		CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the orchestrator", Answer: CodeDeny}.Record(places.Log)
 		return PersonDenied, errors.New("the orchestrator refused it")
 	}
 	site.notice(id, "the orchestrator passed "+id+"'s inline code to the person")
@@ -557,9 +558,8 @@ type CodeEntry struct {
 	Took   time.Duration
 }
 
-func (e CodeEntry) Record() {
-	dir, err := sys.LogDir()
-	if err != nil {
+func (e CodeEntry) Record(log string) {
+	if log == "" {
 		return
 	}
 	phase := "ask"
@@ -572,7 +572,7 @@ func (e CodeEntry) Record() {
 	if err != nil {
 		return
 	}
-	_, _ = ledger.NewWriter(dir).Append(ledger.Row{Point: inlineCodePoint, StateHash: ledger.HashOf(body), State: body, Verdict: e.Answer.verdict(), LatencyMS: e.Took.Milliseconds(), TurnID: e.Turn})
+	_, _ = ledger.NewWriter(log).Append(ledger.Row{Point: inlineCodePoint, StateHash: ledger.HashOf(body), State: body, Verdict: e.Answer.verdict(), LatencyMS: e.Took.Milliseconds(), TurnID: e.Turn})
 }
 
 func PersonOnly(project string, request GateRequest) bool {
@@ -647,6 +647,17 @@ func reachesHarnessFile(project, written string) bool {
 		full = filepath.Join(project, full)
 	}
 	names, roots := []string{full}, []string{project, home}
+	reaches := func() bool {
+		return slices.ContainsFunc(names, func(name string) bool {
+			return slices.ContainsFunc(roots, func(root string) bool { return namesHarnessFile(name, root) })
+		})
+	}
+	if reaches() {
+		return true
+	}
+	if info, err := os.Lstat(full); !harnessNamed(full) && (err != nil || info.Mode()&fs.ModeSymlink == 0) {
+		return false
+	}
 	for _, root := range []string{project, home} {
 		if real, err := filepath.EvalSymlinks(root); err == nil {
 			roots = append(roots, real)
@@ -664,9 +675,12 @@ func reachesHarnessFile(project, written string) bool {
 		}
 		names = append(names, target)
 	}
-	return slices.ContainsFunc(names, func(name string) bool {
-		return slices.ContainsFunc(roots, func(root string) bool { return namesHarnessFile(name, root) })
-	})
+	return reaches()
+}
+
+func harnessNamed(full string) bool {
+	base := path.Base(comparablePath(full))
+	return slices.ContainsFunc(harnessFiles(), func(file string) bool { return slices.Contains(strings.Split(file, "/"), base) })
 }
 
 func namesHarnessFile(name, root string) bool {

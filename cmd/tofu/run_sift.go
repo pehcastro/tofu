@@ -39,13 +39,14 @@ func shellSiftCost() string {
 type shellScorer struct {
 	client  *jev.Client
 	set     battery
+	rows    rowLedger
 	turnID  string
 	spent   sync.Mutex
 	calls   int
 	costUSD float64
 }
 
-func buildShellSift(arm string) (*turn.ShellSift, *shellScorer, error) {
+func buildShellSift(arm, log string) (*turn.ShellSift, *shellScorer, error) {
 	table, err := method.Load(shipped.Files())
 	if err != nil {
 		return nil, nil, err
@@ -71,7 +72,11 @@ func buildShellSift(arm string) (*turn.ShellSift, *shellScorer, error) {
 		if clientErr != nil {
 			return nil, nil, clientErr
 		}
-		scorer = &shellScorer{client: client, set: set}
+		rows, rowsErr := openRowLedger(log)
+		if rowsErr != nil {
+			return nil, nil, rowsErr
+		}
+		scorer = &shellScorer{client: client, set: set, rows: rows}
 		scores = scorer
 	}
 	built, err := turn.NewShellSift(scores)
@@ -140,7 +145,7 @@ func (s *shellScorer) record(state json.RawMessage, decision jev.Decision) error
 	s.costUSD += decision.Usage.Cost
 	turnID := s.turnID
 	s.spent.Unlock()
-	_, err := appendRow(state, s.set, rowInput{
+	_, err := s.rows.append(state, s.set, rowInput{
 		decision:     &decision,
 		answers:      toLedgerAnswers(s.set.QuestionsVersion, decision.Answers),
 		turnID:       turnID,

@@ -53,7 +53,7 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 	dir := chdirTemp(t)
 	stubJev(t, 200, untrustedDenyReply)
 
-	gate, err := newToolGate(dir)
+	gate, err := newToolGate(dir, logHere(t))
 	if err != nil {
 		t.Fatalf("newToolGate: %v", err)
 	}

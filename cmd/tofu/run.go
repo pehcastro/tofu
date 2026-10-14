@@ -135,6 +135,7 @@ type runtime struct {
 	tabs         *tools.BrowserTabs
 	leadAsks     turn.Person
 	cron         *cron.Book
+	places       sys.Places
 
 	omitThinkingSummary bool
 }
@@ -486,15 +487,19 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	}
 	wrap := func(model turn.Model) (turn.Model, error) { return guarded(model, budget) }
 	opened.held.wrap = wrap
+	places, err := sys.ResolvePlaces(".")
+	if err != nil {
+		return runFail(errOut, err)
+	}
 
 	var gate *toolGate
 	if opts.gateArm != gateOff {
-		if gate, err = newToolGate(opts.dir); err != nil {
+		if gate, err = newToolGate(opts.dir, places.Log); err != nil {
 			return runFail(errOut, err)
 		}
 	}
 
-	sifter, scorer, err := buildShellSift(opts.siftArm)
+	sifter, scorer, err := buildShellSift(opts.siftArm, places.Log)
 	if err != nil {
 		var contradiction turn.RuleContradictsTheTableError
 		if !errors.As(err, &contradiction) {
@@ -509,7 +514,7 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	}
 
 	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: tabs, plan: plan})
+		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: tabs, plan: plan, places: places})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -715,7 +720,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			references[reference.Name] = reference.Text
 		}
 	}
+	redactor := sys.LoadKeyRedactor()
 	config := turn.Config{
+		Places:        run.places,
+		Redactor:      &redactor,
 		References:    references,
 		Model:         run.model,
 		Now:           run.now,
@@ -770,10 +778,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
 	if run.leadAsks != nil {
-		asking = append(asking, askPersonTool(dir, run.leadAsks, config.Inbox, run.notify))
+		asking = append(asking, askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.notify))
 	}
 	if run.sessions != nil && memoryOn(dir) {
-		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.notify),
+		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.places.Log, run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
 	if settingText(dir, boardy.ManagementSetting, run.notify) == string(boardy.ManagementBoardy) && projectHasBoard(dir) {
@@ -822,8 +830,15 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		run.tabs.CloseOpenedBy(report.ID)
 	}
 	spawner.Limits = func() turn.SubAgentLimits {
-		return turn.SubAgentLimits{Running: settingInt(dir, settingspkg.SubAgentsPerTurn, run.notify), Depth: settingInt(dir, settingspkg.SubAgentDepth, run.notify),
-			CheckIn: time.Duration(settingInt(dir, settingspkg.SubAgentCheckSeconds, run.notify)) * time.Second, CacheTTL: settingText(dir, settingspkg.SubAgentCache, run.notify)}
+		store, err := openSettings(dir)
+		if err != nil {
+			if run.notify != nil {
+				run.notify("the sub-agent limits fell back to their defaults because the settings file could not be read: " + err.Error())
+			}
+			store, _ = settingspkg.Open("", "")
+		}
+		return turn.SubAgentLimits{Running: store.Int(settingspkg.SubAgentsPerTurn), Depth: store.Int(settingspkg.SubAgentDepth),
+			CheckIn: time.Duration(store.Int(settingspkg.SubAgentCheckSeconds)) * time.Second, CacheTTL: store.Text(settingspkg.SubAgentCache)}
 	}
 	own := slices.DeleteFunc(slices.Clone(built), func(tool turn.Tool) bool { return slices.Contains(leadNeverCalls(), tool.Name()) })
 	if settingText(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {

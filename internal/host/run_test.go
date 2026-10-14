@@ -379,7 +379,7 @@ func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 		if event.Kind == EventAwaitPerson {
 			book.answer(event.ID, AllowedOnce)
 		}
-	}, book)
+	}, book, &turn.Config{})
 
 	answer, err := person(context.Background(), turn.GateRequest{Tool: "write"}, turn.GateDecision{ID: row.ID})
 	if err != nil || answer != turn.PersonAllowedOnce {
@@ -398,7 +398,7 @@ func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 	dir, row := gateRowFixture(t)
 	request := turn.GateRequest{Tool: "write", Args: json.RawMessage(`{"path":"a.txt"}`)}
-	person := awaitPerson(func(Event) {}, &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}})
+	person := awaitPerson(func(Event) {}, &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}}, &turn.Config{})
 
 	answer, err := person(context.Background(), request, turn.GateDecision{ID: row.ID})
 	if err != nil || answer != turn.PersonAlwaysHere {
@@ -424,7 +424,7 @@ func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing
 		if event.Kind == EventAwaitPerson {
 			book.answer(event.ID, next)
 		}
-	}, book)
+	}, book, &turn.Config{})
 	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonDenied {
 		t.Fatalf("a rule question under a granted place answered %v, %v, want the person's no", got, err)
 	}

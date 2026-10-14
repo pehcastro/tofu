@@ -143,7 +143,7 @@ func doctorState(now time.Time) doctorReport {
 
 func shellSiftRule(point doctorRule) doctorRule {
 	point.Fallback, point.Unusable, point.ThresholdsFrom = "", "", "the rule"
-	sifter, _, err := buildShellSift(siftFollowsTheTable)
+	sifter, _, err := buildShellSift(siftFollowsTheTable, "")
 	if err == nil {
 		if chosen, _ := sifter.Methods.Of(sift.ShellSchema); chosen.Method == method.Unwired {
 			err = method.UnwiredError{Choice: chosen, File: sifter.Methods.File}

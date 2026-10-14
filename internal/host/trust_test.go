@@ -19,7 +19,7 @@ func TestAStandingAnswerNeverTrustsHooksThatChangedAfterIt(t *testing.T) {
 		if event.Kind == EventAwaitPerson {
 			asked <- event.ID
 		}
-	}, h.asks)
+	}, h.asks, &turn.Config{})
 	hooks := func(command string) turn.GateRequest {
 		args, _ := json.Marshal(map[string]string{"command": command})
 		return turn.GateRequest{Tool: "hooks", Args: args}

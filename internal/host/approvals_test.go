@@ -25,7 +25,7 @@ func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {
 			awaited <- event.ID
 		}
 	}
-	person := awaitPerson(emit, h.asks)
+	person := awaitPerson(emit, h.asks, &turn.Config{})
 	for round := range 50 {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		got := map[string]chan turn.PersonAnswer{}

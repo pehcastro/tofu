@@ -106,7 +106,7 @@ func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
 
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable)
+	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable)
+	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
@@ -211,11 +211,11 @@ func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 	shell := siftedShell()
 	whole := len(shell.Stdout)
 
-	judged, _, err := buildShellSift(siftJudged)
+	judged, _, err := buildShellSift(siftJudged, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift judged: %v", err)
 	}
-	free, freeScorer, err := buildShellSift(siftFree)
+	free, freeScorer, err := buildShellSift(siftFree, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift free: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
 
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable)
+	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}
@@ -428,11 +428,19 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 	}
 }
 
+func logHere(t *testing.T) string {
+	dir, err := sys.LogDir()
+	if err != nil {
+		t.Fatalf("sys.LogDir: %v", err)
+	}
+	return dir
+}
+
 func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
 	chdirTemp(t)
 	stubRecordedJudgedReplies(t)
-	sifter, scorer, err := buildShellSift(siftFollowsTheTable)
+	sifter, scorer, err := buildShellSift(siftFollowsTheTable, logHere(t))
 	if err != nil {
 		t.Fatalf("buildShellSift: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 )
 
 type Model interface {
@@ -98,6 +99,8 @@ type Config struct {
 	Thrift          *ThriftSift
 	ResultBytesCap  int
 	ArtifactDir     string
+	Places          sys.Places
+	Redactor        *sys.KeyRedactor
 	TruncateResults bool
 	NoCompaction    bool
 	NoFork          bool
@@ -120,6 +123,13 @@ type Config struct {
 	Notify          func(string)
 	Now             func() time.Time
 	NewID           func() string
+}
+
+func (c Config) ResolvedPlaces() (sys.Places, error) {
+	if c.Places != (sys.Places{}) {
+		return c.Places, nil
+	}
+	return sys.ResolvePlaces(".")
 }
 
 const (

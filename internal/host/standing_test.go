@@ -26,7 +26,7 @@ func answeredStanding(t *testing.T, h *Host, request turn.GateRequest, given Ans
 	}
 	got := make(chan turn.PersonAnswer, 1)
 	go func() {
-		answer, _ := awaitPerson(emit, h.asks)(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk})
+		answer, _ := awaitPerson(emit, h.asks, &turn.Config{})(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk})
 		got <- answer
 	}()
 	select {
@@ -49,7 +49,7 @@ func unasked(t *testing.T, h *Host, request turn.GateRequest) turn.PersonAnswer 
 			t.Errorf("%s asked again after a standing answer was given for it", request.Args)
 			cancel()
 		}
-	}, h.asks)(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk})
+	}, h.asks, &turn.Config{})(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk})
 	return answer
 }
 

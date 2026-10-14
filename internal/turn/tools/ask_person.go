@@ -16,7 +16,6 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/subagent"
-	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -72,6 +71,7 @@ type AskPerson struct {
 	Wait   time.Duration
 	Judge  *subagent.AskJudge
 	Inbox  *turn.Inbox
+	Log    string
 }
 
 func (AskPerson) Name() string { return turn.AskPersonToolName }
@@ -143,7 +143,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		acting.Rule.Mode = gate.ModeEnforced
 		a.Judge = &acting
 		ids := a.recordShadow(context.WithoutCancel(ctx), questions)
-		if proceeds(ids, len(questions)) {
+		if proceeds(a.Log, ids, len(questions)) {
 			taken := resolved(askTakenInAuto, questions, "the ask judge said proceed and the recommended option can be undone, so gatePrompt auto took it without asking the person")
 			a.backfill(ids, taken.Outcome)
 			shown, err := json.Marshal(taken)
@@ -297,12 +297,11 @@ func (a AskPerson) recordShadow(ctx context.Context, questions []turn.PersonQues
 	return ids
 }
 
-func proceeds(ids []string, asked int) bool {
-	dir, err := sys.LogDir()
-	if err != nil || len(ids) != asked {
+func proceeds(log string, ids []string, asked int) bool {
+	if log == "" || len(ids) != asked {
 		return false
 	}
-	rows := ledger.NewReader(dir)
+	rows := ledger.NewReader(log)
 	for _, id := range ids {
 		row, found, err := rows.ByID(id)
 		if err != nil || !found || row.Verdict != ledger.VerdictAllow || len(row.Answers) == 0 {

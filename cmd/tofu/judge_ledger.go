@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"sort"
@@ -50,15 +49,49 @@ type rowInput struct {
 	fingerprint  string
 }
 
-func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
+type rowLedger struct {
+	writer     *ledger.Writer
+	classifier models.Model
+}
+
+func openRowLedger(log string) (rowLedger, error) {
+	classifier, err := boundClassifier()
+	return rowLedger{writer: ledger.NewWriter(log), classifier: classifier}, err
+}
+
+func openedRowLedger() (rowLedger, error) {
+	dir, err := sys.LogDir()
+	if err != nil {
+		return rowLedger{}, err
+	}
+	return openRowLedger(dir)
+}
+
+func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
+	rows, err := openedRowLedger()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	return rows.append(state, set, in)
+}
+
+func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) { //nolint:unparam
+	if set.Rule == nil {
+		return ledger.Row{}, cause
+	}
+	rows, err := openedRowLedger()
+	if err != nil {
+		return ledger.Row{}, err
+	}
+	return rows.appendFallback(state, set, in, cause)
+}
+
+func (l rowLedger) skeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 	body, err := ledger.Canonical(state)
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	classifier, err := boundClassifier()
-	if err != nil {
-		return ledger.Row{}, err
-	}
+	classifier := l.classifier
 	if in.decision != nil {
 		classifier.Provider = models.Provider(in.decision.Wire)
 	}
@@ -77,12 +110,8 @@ func rowSkeleton(state any, set battery, in rowInput) (ledger.Row, error) {
 	}, nil
 }
 
-func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
-	dir, err := sys.LogDir()
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	row, err := rowSkeleton(state, set, in)
+func (l rowLedger) append(state any, set battery, in rowInput) (ledger.Row, error) {
+	row, err := l.skeleton(state, set, in)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -109,18 +138,14 @@ func appendRow(state any, set battery, in rowInput) (ledger.Row, error) {
 		row.Build = in.build
 		row.RequestID = in.requestID
 	}
-	return ledger.NewWriter(dir).Append(row)
+	return l.writer.Append(row)
 }
 
-func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) {
+func (l rowLedger) appendFallback(state json.RawMessage, set battery, in rowInput, cause error) (ledger.Row, error) {
 	if set.Rule == nil {
 		return ledger.Row{}, cause
 	}
-	dir, err := sys.LogDir()
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	row, err := rowSkeleton(state, set, in)
+	row, err := l.skeleton(state, set, in)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -130,7 +155,7 @@ func appendFallbackRow(state json.RawMessage, set battery, in rowInput, cause er
 	row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
 	row.Reason = toLedgerReason(fallback.Reason(*set.Rule, set.Mode))
 	row.Reason.ModeReason = &sentence
-	return ledger.NewWriter(dir).Append(row)
+	return l.writer.Append(row)
 }
 
 type judgeAsker struct {
@@ -336,7 +361,7 @@ func toLedgerReason(r gate.Reason) *ledger.Reason {
 	}
 }
 
-func memoryScopeJudge(dir string, say func(string)) *tools.ScopeJudge {
+func memoryScopeJudge(dir, log string, say func(string)) *tools.ScopeJudge {
 	layers, err := question.Layers(questions.Files(), dir)
 	var set question.Set
 	if err == nil {
@@ -346,12 +371,11 @@ func memoryScopeJudge(dir string, say func(string)) *tools.ScopeJudge {
 	if err == nil {
 		client, err = newJevClient(oneCallAtATime)
 	}
-	logDir, logErr := sys.LogDir()
-	if err = cmp.Or(err, logErr); err != nil {
+	if err != nil {
 		if say != nil {
 			say("remember asks Jev nothing and refuses project local: " + err.Error())
 		}
 		return nil
 	}
-	return &tools.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(logDir)}
+	return &tools.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(log)}
 }

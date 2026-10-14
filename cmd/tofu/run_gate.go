@@ -36,6 +36,7 @@ type toolGate struct {
 	client    *jev.Client
 	set       battery
 	cwd       string
+	rows      rowLedger
 	watch     func(ctx context.Context, tool string, decision turn.GateDecision, err error)
 	decisions int
 	costUSD   float64
@@ -51,7 +52,7 @@ func (u unusableRule) Error() string { return u.err.Error() }
 
 func (u unusableRule) Unwrap() error { return u.err }
 
-func newToolGate(dir string) (*toolGate, error) {
+func newToolGate(dir, log string) (*toolGate, error) {
 	set, err := resolvePoint(runGatePoint, dir)
 	if err != nil {
 		return nil, unusableRule{err}
@@ -60,7 +61,11 @@ func newToolGate(dir string) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &toolGate{client: client, set: set, cwd: dir}, nil
+	rows, err := openRowLedger(log)
+	if err != nil {
+		return nil, err
+	}
+	return &toolGate{client: client, set: set, cwd: dir, rows: rows}, nil
 }
 
 func resolvePoint(point, dir string) (battery, error) {
@@ -287,12 +292,12 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	written := rowInput{turnID: request.TurnID, stateBuilder: builder, fingerprint: state.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
 	if own := turn.OwnShellsCalled(ctx, request); len(own) > 0 {
-		return appendOwnShellRow(builtState, g.set, written, own)
+		return g.rows.appendOwnShell(builtState, g.set, written, own)
 	}
 	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
 	g.decisions++
 	if err != nil {
-		row, writeErr := appendFallbackRow(builtState, g.set, written, err)
+		row, writeErr := g.rows.appendFallback(builtState, g.set, written, err)
 		if writeErr != nil {
 			return row, writeErr
 		}
@@ -301,15 +306,11 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	g.costUSD += decision.Usage.Cost
 	written.decision = &decision
 	written.answers = toLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
-	return appendRow(builtState, g.set, written)
+	return g.rows.append(builtState, g.set, written)
 }
 
-func appendOwnShellRow(state json.RawMessage, set battery, in rowInput, own []string) (ledger.Row, error) {
-	dir, err := sys.LogDir()
-	if err != nil {
-		return ledger.Row{}, err
-	}
-	row, err := rowSkeleton(state, set, in)
+func (l rowLedger) appendOwnShell(state json.RawMessage, set battery, in rowInput, own []string) (ledger.Row, error) {
+	row, err := l.skeleton(state, set, in)
 	if err != nil {
 		return ledger.Row{}, err
 	}
@@ -319,5 +320,5 @@ func appendOwnShellRow(state json.RawMessage, set battery, in rowInput, own []st
 	if set.Rule != nil {
 		row.Policy, row.PolicyVersion = set.Rule.Name, set.Rule.RuleVersion
 	}
-	return ledger.NewWriter(dir).Append(row)
+	return l.writer.Append(row)
 }

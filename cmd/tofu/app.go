@@ -98,7 +98,8 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 
 func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
 	defer launch.stopRestoring()
-	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, tabs: launch.tabs}
+	places, _ := sys.ResolvePlaces(".")
+	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, tabs: launch.tabs, places: places}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted()})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKey(); err != nil {
@@ -688,11 +689,12 @@ func pickedOpts(dir string, start host.Turn, maxSteps int) runOpts {
 }
 
 type appEngine struct {
-	dir  string
-	arms runOpts
-	open func(runOpts) (appWire, error)
-	tabs *tools.BrowserTabs
-	warm *warmProcesses
+	dir    string
+	arms   runOpts
+	open   func(runOpts) (appWire, error)
+	tabs   *tools.BrowserTabs
+	warm   *warmProcesses
+	places sys.Places
 }
 
 func (e *appEngine) Renew() {
@@ -741,16 +743,22 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if start.Pick.Fired != "" {
 		built = withoutPush(built)
 	}
+	places := e.places
+	if places == (sys.Places{}) {
+		if places, err = sys.ResolvePlaces("."); err != nil {
+			return prepared, err
+		}
+	}
 	var gate *toolGate
 	var gateErr error
 	if opts.gateArm != gateOff {
-		gate, gateErr = newToolGate(e.dir)
+		gate, gateErr = newToolGate(e.dir, places.Log)
 	}
 	var unusable unusableRule
 	if errors.As(gateErr, &unusable) {
 		return prepared, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
 	}
-	sifter, scorer, siftErr := buildShellSift(opts.siftArm)
+	sifter, scorer, siftErr := buildShellSift(opts.siftArm, places.Log)
 	if siftErr != nil {
 		say("no shell result is cut: " + siftErr.Error())
 	}
@@ -771,7 +779,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	}
 	person := hooks.Inbox.LeadAsks(hooks.Person)
 	config, spawner, err := runConfig(opts, built, runtime{accounts: opened.held.forTurn(), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
-		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan})
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places})
 	if err != nil {
 		return prepared, err
 	}

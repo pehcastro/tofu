@@ -638,6 +638,7 @@ func codeFlags(code subagent.InlineCode) []string {
 
 type inlineCodeTool struct {
 	request GateRequest
+	log     string
 }
 
 func (inlineCodeTool) Name() string { return bashToolName }
@@ -683,7 +684,7 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (Result, err
 	default:
 		result = exitedResult(command, text, cmd.ProcessState.ExitCode(), ran)
 	}
-	CodeEntry{Turn: t.request.TurnID, Code: code, Answer: CodeRan, Exit: result.ExitCode, Took: time.Since(started)}.Record()
+	CodeEntry{Turn: t.request.TurnID, Code: code, Answer: CodeRan, Exit: result.ExitCode, Took: time.Since(started)}.Record(t.log)
 	return result, nil
 }
 

@@ -19,6 +19,7 @@ import (
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
 	sessionstore "tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/turn"
 )
@@ -129,9 +130,13 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	say(launch.note)
 	say("speaking " + host.Protocol + " for " + dir)
+	places, err := sys.ResolvePlaces(".")
+	if err != nil {
+		return serveFail(errOut, err)
+	}
 	var projectTurn sync.Mutex
 	spawn := func() (*host.Host, func()) {
-		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs}
+		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs, places: places}
 		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn})
 		for _, trouble := range troubles {
 			say(trouble)
