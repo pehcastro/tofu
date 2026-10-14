@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::Deserialize;
@@ -122,6 +122,18 @@ impl Id {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn publisher(&self) -> &str {
+        self.parts().0
+    }
+
+    pub fn name(&self) -> &str {
+        self.parts().1
+    }
+
+    fn parts(&self) -> (&str, &str) {
+        self.0.split_once('.').unwrap_or((&self.0, ""))
+    }
 }
 
 impl fmt::Display for Id {
@@ -230,13 +242,35 @@ fn declare(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Allow,
+    Ask,
+    Deny,
+}
+
+pub const GRANT_VERSION: u32 = 2;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawGrant {
-    granted: Vec<String>,
+    version: Option<u32>,
+    granted: Option<Vec<String>>,
+    modes: Option<BTreeMap<String, Mode>>,
 }
 
-pub fn parse_grant(text: &str) -> Result<BTreeSet<Capability>, Error> {
+pub fn parse_grant(text: &str) -> Result<BTreeMap<Capability, Mode>, Error> {
     let raw: RawGrant = serde_json::from_str(text).map_err(Error::Grant)?;
-    raw.granted.iter().map(|c| Capability::parse(c)).collect()
+    match (raw.version, raw.granted, raw.modes) {
+        (None, Some(granted), None) => granted
+            .iter()
+            .map(|c| Ok((Capability::parse(c)?, Mode::Allow)))
+            .collect(),
+        (Some(GRANT_VERSION), None, Some(modes)) => modes
+            .into_iter()
+            .map(|(c, mode)| Ok((Capability::parse(&c)?, mode)))
+            .collect(),
+        _ => Err(Error::GrantShape),
+    }
 }

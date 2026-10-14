@@ -1,3 +1,4 @@
+mod install;
 mod manifest;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,7 +16,10 @@ use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder, Trap};
 
-pub use manifest::{Api, Capability, Command, Contributes, Id, IdRule, MAX_ID_LEN, Manifest};
+pub use install::{Home, Origin, Refusal, Report};
+pub use manifest::{
+    Api, Capability, Command, Contributes, GRANT_VERSION, Id, IdRule, MAX_ID_LEN, Manifest, Mode,
+};
 pub use since_v0_1_0::tofu::desk::types::{Badge, Choice, Event, Kind, Node, Table, Toggle, Tone};
 
 mod since_v0_1_0 {
@@ -33,7 +37,10 @@ pub const WASMTIME: &str = "48.0.5";
 pub const MANIFEST_FILE: &str = "plugin.toml";
 pub const WASM_FILE: &str = "plugin.wasm";
 pub const GRANT_FILE: &str = "grant.json";
-pub const CACHE_DIR: &str = ".cache";
+pub const PIN_FILE: &str = "pin.json";
+pub const DATA_FOLDERS: [&str; 2] = ["data", "notes"];
+pub const RESERVED_PUBLISHER: &str = "tofu";
+pub const LOCAL_PUBLISHER: &str = "local";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Export {
@@ -71,6 +78,20 @@ pub enum TreeFault {
 pub enum Error {
     Manifest(toml::de::Error),
     Grant(serde_json::Error),
+    GrantShape,
+    NoHome(&'static str),
+    Refused {
+        id: Id,
+        refusal: Refusal,
+    },
+    Conflict {
+        id: Id,
+        installed: String,
+        incoming: String,
+    },
+    Disabled {
+        plugin: Id,
+    },
     Api(String),
     Id(String, IdRule),
     Capability(String),
@@ -125,6 +146,24 @@ impl fmt::Display for Error {
         match self {
             Error::Manifest(e) => write!(f, "{MANIFEST_FILE}: {e}"),
             Error::Grant(e) => write!(f, "{GRANT_FILE}: {e}"),
+            Error::GrantShape => write!(
+                f,
+                "{GRANT_FILE}: expected version {GRANT_VERSION} with modes, or an old granted list"
+            ),
+            Error::NoHome(name) => write!(f, "{name} is not set, so there is no plugins home"),
+            Error::Refused { id, refusal } => write!(f, "plugin {id}: refused, {refusal}"),
+            Error::Conflict {
+                id,
+                installed,
+                incoming,
+            } => write!(
+                f,
+                "plugin {id}: {installed} is installed, replacing it with {incoming} needs the person to confirm"
+            ),
+            Error::Disabled { plugin } => write!(
+                f,
+                "plugin {plugin}: disabled, a plugin from a project folder never enables itself"
+            ),
             Error::Api(api) => write!(f, "api {api} is not supported, this desk speaks desk@0.1"),
             Error::Id(id, rule) => write!(f, "id {id} is refused: {rule}"),
             Error::Capability(c) => write!(f, "unknown capability {c}"),
@@ -222,11 +261,18 @@ impl since_v0_1_0::tofu::desk::host::Host for State {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    Enabled,
+    Disabled,
+}
+
 #[derive(Debug, Clone)]
 pub struct Installed {
     pub dir: PathBuf,
     pub manifest: Manifest,
-    pub granted: BTreeSet<Capability>,
+    pub modes: BTreeMap<Capability, Mode>,
+    pub status: Status,
 }
 
 #[derive(Debug, Default)]
@@ -242,13 +288,13 @@ pub enum Cache {
 }
 
 pub struct Host {
-    home: PathBuf,
+    home: Home,
     engine: Engine,
     linker_v0_1_0: Linker<State>,
 }
 
 impl Host {
-    pub fn new(home: &Path) -> Result<Self, Error> {
+    pub fn new(home: &Home) -> Result<Self, Error> {
         let mut config = Config::new();
         config.epoch_interruption(true);
         let engine = Engine::new(&config).map_err(Error::Engine)?;
@@ -269,7 +315,7 @@ impl Host {
             }
         });
         Ok(Self {
-            home: home.to_owned(),
+            home: home.clone(),
             engine,
             linker_v0_1_0,
         })
@@ -278,7 +324,10 @@ impl Host {
     pub fn discover(&self, project: Option<&Path>) -> Discovered {
         let mut found = BTreeMap::new();
         let mut refused = Vec::new();
-        for root in [Some(self.home.as_path()), project].into_iter().flatten() {
+        let roots = [(self.home.plugins.as_path(), Status::Enabled)]
+            .into_iter()
+            .chain(project.map(|p| (p, Status::Disabled)));
+        for (root, status) in roots {
             let entries = match fs::read_dir(root) {
                 Ok(entries) => entries,
                 Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
@@ -304,10 +353,10 @@ impl Host {
                 let hidden = dir
                     .file_name()
                     .is_none_or(|n| n.to_string_lossy().starts_with('.'));
-                if hidden || !dir.is_dir() {
+                if hidden || !dir.join(MANIFEST_FILE).is_file() {
                     continue;
                 }
-                match installed(&dir) {
+                match installed(&dir, status) {
                     Ok(plugin) => {
                         found.insert(plugin.manifest.id.clone(), plugin);
                     }
@@ -323,16 +372,16 @@ impl Host {
 
     pub fn load(&self, plugin: &Installed) -> Result<(Plugin, Cache), Error> {
         let id = &plugin.manifest.id;
+        if plugin.status == Status::Disabled {
+            return Err(Error::Disabled { plugin: id.clone() });
+        }
         let wasm_path = plugin.dir.join(WASM_FILE);
-        let wasm = fs::read(&wasm_path).map_err(|source| Error::Io {
-            path: wasm_path,
-            source,
-        })?;
+        let wasm = fs::read(&wasm_path).map_err(io_at(&wasm_path))?;
         let (component, cache) = self.compile(id, &wasm)?;
         self.check_imports(&plugin.manifest, &component)?;
         if let Some(&capability) = plugin
-            .granted
-            .iter()
+            .modes
+            .keys()
             .find(|c| !plugin.manifest.capabilities.contains_key(c))
         {
             return Err(Error::Undeclared {
@@ -348,7 +397,12 @@ impl Host {
             &self.engine,
             State {
                 limits,
-                granted: plugin.granted.clone(),
+                granted: plugin
+                    .modes
+                    .iter()
+                    .filter(|&(_, &mode)| mode == Mode::Allow)
+                    .map(|(&c, _)| c)
+                    .collect(),
                 activity: Vec::new(),
             },
         );
@@ -373,16 +427,8 @@ impl Host {
     }
 
     fn compile(&self, id: &Id, wasm: &[u8]) -> Result<(Component, Cache), Error> {
-        let hash: String = Sha256::digest(wasm)
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        let dir = self.home.join(CACHE_DIR);
-        let path = dir.join(format!("{hash}-{WASMTIME}"));
-        let io = |path: &Path| {
-            let path = path.to_owned();
-            move |source| Error::Io { path, source }
-        };
+        let dir = &self.home.cache;
+        let path = dir.join(format!("{}-{WASMTIME}", sha256_hex(wasm)));
         match fs::read(&path) {
             Ok(bytes) => {
                 #[expect(
@@ -402,19 +448,22 @@ impl Host {
             source,
         })?;
         let bytes = component.serialize().map_err(Error::Engine)?;
-        fs::create_dir_all(&dir).map_err(io(&dir))?;
-        let partial = path.with_extension("partial");
-        fs::write(&partial, bytes).map_err(io(&partial))?;
-        fs::rename(&partial, &path).map_err(io(&path))?;
+        fs::create_dir_all(dir).map_err(io_at(dir))?;
+        write_whole(&path, &bytes)?;
         Ok((component, Cache::Miss))
     }
 
-    fn check_imports(&self, manifest: &Manifest, component: &Component) -> Result<(), Error> {
+    fn check_imports(
+        &self,
+        manifest: &Manifest,
+        component: &Component,
+    ) -> Result<Vec<String>, Error> {
         let refuse = |import: String, capability| Error::Import {
             plugin: manifest.id.clone(),
             import,
             capability,
         };
+        let mut imports = Vec::new();
         for (name, import) in component.component_type().imports(&self.engine) {
             let ComponentItem::ComponentInstance(instance) = import.ty else {
                 return Err(refuse(name.to_owned(), None));
@@ -425,13 +474,31 @@ impl Host {
                 }
                 let import = format!("{name}#{func}");
                 match capability_of(manifest.api, name, func) {
-                    Some(c) if manifest.capabilities.contains_key(&c) => {}
+                    Some(c) if manifest.capabilities.contains_key(&c) => imports.push(import),
                     capability => return Err(refuse(import, capability)),
                 }
             }
         }
-        Ok(())
+        Ok(imports)
     }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+fn io_at(path: &Path) -> impl FnOnce(io::Error) -> Error + use<> {
+    let path = path.to_owned();
+    move |source| Error::Io { path, source }
+}
+
+fn write_whole(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let partial = path.with_extension("partial");
+    fs::write(&partial, bytes).map_err(io_at(&partial))?;
+    fs::rename(&partial, path).map_err(io_at(path))
 }
 
 fn capability_of(api: Api, interface: &str, func: &str) -> Option<Capability> {
@@ -441,20 +508,23 @@ fn capability_of(api: Api, interface: &str, func: &str) -> Option<Capability> {
     }
 }
 
-fn installed(dir: &Path) -> Result<Installed, Error> {
-    let at = |path: &Path| {
-        let path = path.to_owned();
-        move |source| Error::At {
-            path,
-            source: Box::new(source),
-        }
-    };
-    let manifest_path = dir.join(MANIFEST_FILE);
-    let text = fs::read_to_string(&manifest_path).map_err(|source| Error::Io {
-        path: manifest_path.clone(),
-        source,
-    })?;
-    let manifest = Manifest::parse(&text).map_err(at(&manifest_path))?;
+fn at(path: &Path) -> impl FnOnce(Error) -> Error + use<> {
+    let path = path.to_owned();
+    move |source| Error::At {
+        path,
+        source: Box::new(source),
+    }
+}
+
+fn manifest_in(dir: &Path) -> Result<(Manifest, String), Error> {
+    let path = dir.join(MANIFEST_FILE);
+    let text = fs::read_to_string(&path).map_err(io_at(&path))?;
+    let manifest = Manifest::parse(&text).map_err(at(&path))?;
+    Ok((manifest, text))
+}
+
+fn named_manifest(dir: &Path) -> Result<(Manifest, String), Error> {
+    let (manifest, text) = manifest_in(dir)?;
     let folder = dir
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -465,21 +535,29 @@ fn installed(dir: &Path) -> Result<Installed, Error> {
             id: manifest.id,
         });
     }
+    Ok((manifest, text))
+}
+
+fn installed(dir: &Path, status: Status) -> Result<Installed, Error> {
+    let (manifest, _) = named_manifest(dir)?;
     let grant_path = dir.join(GRANT_FILE);
-    let granted = match fs::read_to_string(&grant_path) {
-        Ok(text) => manifest::parse_grant(&text).map_err(at(&grant_path))?,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => BTreeSet::new(),
-        Err(source) => {
-            return Err(Error::Io {
-                path: grant_path,
-                source,
-            });
-        }
+    let grant = match status {
+        Status::Disabled => None,
+        Status::Enabled => match fs::read_to_string(&grant_path) {
+            Ok(text) => Some(text),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(source) => return Err(io_at(&grant_path)(source)),
+        },
+    };
+    let modes = match grant {
+        Some(text) => manifest::parse_grant(&text).map_err(at(&grant_path))?,
+        None => BTreeMap::new(),
     };
     Ok(Installed {
         dir: dir.to_owned(),
         manifest,
-        granted,
+        modes,
+        status,
     })
 }
 

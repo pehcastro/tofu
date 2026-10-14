@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use desk_plugin::{Cache, Event, Host, Installed, Plugin};
+use desk_plugin::{Cache, Event, Home, Host, Installed, Plugin};
 use wit_component::ComponentEncoder;
 
 const COPIES: u8 = 10;
@@ -30,7 +30,7 @@ fn install(
     wasm: &[u8],
     grant: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
-    let dir = home.join(folder);
+    let dir = Home::at(home).plugins.join(folder);
     fs::create_dir_all(&dir)?;
     fs::write(dir.join("plugin.toml"), manifest)?;
     fs::write(dir.join("plugin.wasm"), wasm)?;
@@ -93,7 +93,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let as_id = |id: &str| table_toml.replacen("\"tofu.table\"", &format!("\"{id}\""), 1);
     let notify = Some(r#"{"granted":["notify"]}"#);
     install(&home, "tofu.table", &table_toml, &table, notify)?;
-    fs::create_dir_all(home.join("tofu.table").join("notes"))?;
+    fs::create_dir_all(Home::at(&home).plugins.join("tofu.table").join("notes"))?;
     install(&home, "tofu.rogue", &rogue_toml, &rogue, None)?;
     install(
         &home,
@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         None,
     )?;
 
-    let cold = Host::new(&home)?;
+    let cold = Host::new(&Home::at(&home))?;
     let found = cold.discover(None);
     for refused in &found.refused {
         println!("discover refused: {refused}");
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("discovered: {ids:?}");
     drop(load_all(&cold, &found.plugins, "cold"));
 
-    let warm = Host::new(&home)?;
+    let warm = Host::new(&Home::at(&home))?;
     let (plugins, _) = load_all(&warm, &warm.discover(None).plugins, "cached");
 
     let shown = find(&plugins, "tofu.table")?;
@@ -176,10 +176,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         wasm.extend_from_slice(&[0, 6, 4, b'c', b'o', b'p', b'y', copy]);
         install(&bench, &id, &as_id(&id), &wasm, notify)?;
     }
-    let cold = Host::new(&bench)?;
+    let cold = Host::new(&Home::at(&bench))?;
     let (loaded, cold_total) = load_all(&cold, &cold.discover(None).plugins, "bench cold");
     drop(loaded);
-    let warm = Host::new(&bench)?;
+    let warm = Host::new(&Home::at(&bench))?;
     let (loaded, warm_total) = load_all(&warm, &warm.discover(None).plugins, "bench cached");
     println!(
         "bench: {COPIES} copies of tofu.table, cold {:.3} ms total, cached {:.3} ms total, {} loaded cached",
