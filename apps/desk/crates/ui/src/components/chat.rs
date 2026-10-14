@@ -5,7 +5,8 @@ use std::rc::Rc;
 use desk_core::buffer::Buffer;
 use desk_core::syntax::{Kind, Language, Syntax};
 use desk_markdown::{
-    self as md, Alignment, BlockKind, CodeKind, Inline, InlineKind, ListKind, Options,
+    self as md, Alignment, BlockKind, CodeKind, Component, Inline, InlineKind, ListKind, Options,
+    Registry,
 };
 use gpui::{
     AnyElement, App, Bounds, Div, ElementId, FontStyle, FontWeight, HighlightStyle,
@@ -22,6 +23,7 @@ use crate::components::glyph::Glyph;
 use crate::components::hovercard::{hover, link_card, link_key};
 use crate::components::math::{self, Math};
 use crate::components::paint::{glyph, ink, ring, tint};
+use crate::components::rich::{self, Rich};
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
     FAIL_TINT, FIELD, FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_TAB, FONT_WHO, FOOT_GAP, FOOT_TEXT,
@@ -198,7 +200,11 @@ pub enum Block {
         rows: Vec<Vec<Vec<Span>>>,
     },
     Rule,
-    Source(SharedString),
+    Source {
+        text: SharedString,
+        refused: Option<SharedString>,
+    },
+    Component(Rich, Vec<Block>),
     Math(Rc<Math>),
 }
 
@@ -333,6 +339,7 @@ pub fn markdown(source: &str) -> Vec<Block> {
     Reader {
         source,
         painted: true,
+        registry: &rich::registry(),
     }
     .blocks(&md::parse(source, Options::ALL).blocks)
 }
@@ -340,6 +347,7 @@ pub fn markdown(source: &str) -> Vec<Block> {
 pub struct Streaming {
     stream: md::Stream,
     text: String,
+    registry: Registry,
 }
 
 impl Default for Streaming {
@@ -347,6 +355,7 @@ impl Default for Streaming {
         Self {
             stream: md::Stream::new(Options::ALL),
             text: String::new(),
+            registry: rich::registry(),
         }
     }
 }
@@ -368,6 +377,7 @@ impl Streaming {
         Reader {
             source: md::visible_prefix(&self.text),
             painted: false,
+            registry: &self.registry,
         }
         .blocks(&document.blocks)
     }
@@ -376,6 +386,18 @@ impl Streaming {
 struct Reader<'a> {
     source: &'a str,
     painted: bool,
+    registry: &'a Registry,
+}
+
+fn kept(inlines: &[Inline]) -> Option<&[Inline]> {
+    let edge = |i: &Inline| match &i.kind {
+        InlineKind::SoftBreak | InlineKind::HardBreak => true,
+        InlineKind::Text(text) => text.trim().is_empty(),
+        _ => false,
+    };
+    let start = inlines.iter().position(|i| !edge(i))?;
+    let end = inlines.iter().rposition(|i| !edge(i))?;
+    inlines.get(start..=end)
 }
 
 impl Reader<'_> {
@@ -383,10 +405,44 @@ impl Reader<'_> {
         blocks
             .iter()
             .flat_map(|block| match &block.kind {
-                BlockKind::Paragraph(inlines) => self.paragraph(inlines),
+                BlockKind::Paragraph(inlines) => match kept(inlines) {
+                    Some(
+                        [
+                            Inline {
+                                kind: InlineKind::Component(component),
+                                range,
+                            },
+                        ],
+                    ) => vec![self.component(component, range, || {
+                        self.para(&component.children).into_iter().collect()
+                    })],
+                    _ => self.paragraph(inlines),
+                },
                 _ => vec![self.block(block)],
             })
             .collect()
+    }
+
+    fn component<C>(
+        &self,
+        component: &Component<C>,
+        range: &Range<usize>,
+        children: impl FnOnce() -> Vec<Block>,
+    ) -> Block {
+        let read = rich::read(component, self.registry);
+        if self.painted {
+            match &read {
+                Ok(_) => eprintln!("desk: component {} ok", component.name),
+                Err(why) => eprintln!("desk: component {} refused {why}", component.name),
+            }
+        }
+        match read {
+            Ok(rich) => Block::Component(rich, children()),
+            Err(why) => Block::Source {
+                text: self.source(range),
+                refused: Some(why.to_string().into()),
+            },
+        }
     }
 
     fn paragraph(&self, inlines: &[Inline]) -> Vec<Block> {
@@ -411,15 +467,7 @@ impl Reader<'_> {
     }
 
     fn para(&self, inlines: &[Inline]) -> Option<Block> {
-        let edge = |i: &Inline| match &i.kind {
-            InlineKind::SoftBreak | InlineKind::HardBreak => true,
-            InlineKind::Text(text) => text.trim().is_empty(),
-            _ => false,
-        };
-        let start = inlines.iter().position(|i| !edge(i))?;
-        let end = inlines.iter().rposition(|i| !edge(i))?;
-        let kept = inlines.get(start..=end)?;
-        Some(Block::Para(self.spans(kept, Stress::default())))
+        Some(Block::Para(self.spans(kept(inlines)?, Stress::default())))
     }
 
     fn display(&self, tex: &str, range: &Range<usize>) -> Block {
@@ -475,8 +523,12 @@ impl Reader<'_> {
                     .collect(),
             },
             BlockKind::Math(tex) => self.display(tex, &block.range),
-            BlockKind::Html(_) | BlockKind::Component(_) => {
-                Block::Source(self.source(&block.range))
+            BlockKind::Html(_) => Block::Source {
+                text: self.source(&block.range),
+                refused: None,
+            },
+            BlockKind::Component(component) => {
+                self.component(component, &block.range, || self.blocks(&component.children))
             }
         }
     }
@@ -861,7 +913,8 @@ fn gather(body: &[Block], found: &mut Vec<String>) {
                     .map(|cell| cell.iter().map(span_text).collect()),
             ),
             Block::Rule => {}
-            Block::Source(text) => found.push(text.to_string()),
+            Block::Source { text, .. } => found.push(text.to_string()),
+            Block::Component(_, inner) => gather(inner, found),
             Block::Math(math) => found.push(math.tex.clone()),
         }
     }
@@ -1236,12 +1289,24 @@ impl<'a> Draw<'a> {
                 )
             }
             Block::Rule => div().h(px(RULE_HEIGHT)).bg(ink(theme, RULE_INK)),
-            Block::Source(text) => {
+            Block::Source { text, refused } => {
                 let (_, marks) = self.next();
                 boxed(theme)
                     .shadow(vec![ring(ink(theme, QUEUED_RING))])
                     .text_color(ink(theme, T3))
                     .child(marked(text.clone(), marks))
+                    .when_some(refused.clone(), |boxed, why| {
+                        boxed.child(
+                            div()
+                                .text_size(px(FONT_SMALL))
+                                .text_color(theme.color(ColorToken::StatusDanger))
+                                .child(why),
+                        )
+                    })
+            }
+            Block::Component(rich, inner) => {
+                let drawn = self.blocks(inner);
+                rich::frame(rich, drawn, theme)
             }
             Block::Math(math) => {
                 let (at, _) = self.next();
@@ -1632,6 +1697,34 @@ mod tests {
                 "false:inline |true:x^2|false: and prices $5 and $6.50.",
                 "math:\\frac{a}{b} + \\sqrt{x}",
             ]
+        );
+    }
+
+    #[test]
+    fn chat_stream_bench() {
+        let mut message = String::new();
+        for n in 0..50 {
+            message.push_str(&match n % 3 {
+                0 => format!("<Card title=\"card {n}\">\nSome **text** in card {n}.\n</Card>\n\n"),
+                1 => format!("<Callout kind=\"warn\">\nCareful with step {n}.\n</Callout>\n\n"),
+                _ => format!("<Nope id=\"{n}\" />\n\n"),
+            });
+            while message.len() < (n + 1) * 20_000 / 50 {
+                message.push_str("A paragraph line with `code` and *emphasis* to fill it.\n");
+            }
+            message.push('\n');
+        }
+        let mut streaming = Streaming::default();
+        let started = std::time::Instant::now();
+        let mut deltas = 0u32;
+        for (at, _) in message.char_indices().skip(1) {
+            std::hint::black_box(streaming.blocks(&message[..at]));
+            deltas += 1;
+        }
+        let micros = started.elapsed().as_secs_f64() * 1e6 / f64::from(deltas);
+        println!(
+            "chat stream bench: {} bytes, 50 components, {deltas} deltas of one char, {micros:.1} us per delta",
+            message.len()
         );
     }
 

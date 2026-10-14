@@ -9,9 +9,9 @@ use desk_ui::components::ask::{
 };
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::chat::{
-    self, Agent, AgentMark, Block, Call, FIND_RESERVE, Face, Hit, Marks, Span, Verdict, agent_list,
-    agent_row, agents, calls, command, cron_row, fail, find_hits, folding, foot, hit_marks, lead,
-    note, queued, tools, you,
+    self, Agent, AgentMark, Block, Call, FIND_RESERVE, Face, Hit, Marks, Span, Streaming, Verdict,
+    agent_list, agent_row, agents, calls, command, cron_row, fail, find_hits, folding, foot,
+    hit_marks, lead, note, queued, tools, you,
 };
 use desk_ui::components::chip::kbd;
 use desk_ui::components::find::FindBar;
@@ -69,6 +69,24 @@ fn main() {
 ---
 
 <Chart kind="bar" values={[1, 2, 3]} />"#;
+
+const COMPONENT_SAMPLE: &str = r#"The registry knows three tags. This reply uses them, and one it does not know.
+
+<Card title="x">hi</Card>
+
+<Callout kind="warn">careful</Callout>
+
+<Nope />
+
+<Card title="Gate">
+The gate passed in **4.2 s**, and the lock was read before the mode.
+</Card>
+
+<FileLink path="crates/ui/src/components/rich.rs" line={64} />
+
+<Callout kind="loud">a tone the registry does not know</Callout>
+"#;
+const TYPE_EVERY: Duration = Duration::from_millis(12);
 
 const BOARD_WIDTH: f32 = 760.0;
 const CONTENT_WIDTH: f32 = 672.0;
@@ -959,12 +977,70 @@ fn streamed(at: usize, theme: &Theme) -> AnyElement {
     .into_any_element()
 }
 
+struct Typing {
+    started: Instant,
+    streaming: Streaming,
+    finished: Option<Vec<Block>>,
+}
+
+impl Typing {
+    fn new() -> Self {
+        Typing {
+            started: Instant::now(),
+            streaming: Streaming::default(),
+            finished: None,
+        }
+    }
+
+    fn render(&mut self, theme: &Theme, window: &mut Window) -> Div {
+        let shown = self.started.elapsed().as_millis() / TYPE_EVERY.as_millis();
+        let cut = usize::try_from(shown)
+            .ok()
+            .and_then(|shown| COMPONENT_SAMPLE.char_indices().nth(shown))
+            .map(|(at, _)| at);
+        let streamed;
+        let (body, readout) = match cut {
+            Some(at) => {
+                window.request_animation_frame();
+                streamed = self
+                    .streaming
+                    .blocks(COMPONENT_SAMPLE.get(..at).unwrap_or_default());
+                (
+                    &streamed,
+                    format!("streaming · {at} of {} bytes", COMPONENT_SAMPLE.len()),
+                )
+            }
+            None => (
+                &*self
+                    .finished
+                    .get_or_insert_with(|| chat::markdown(COMPONENT_SAMPLE)),
+                "finished · m streams it again".to_owned(),
+            ),
+        };
+        div()
+            .w(px(BOARD_WIDTH))
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(label(readout, theme))
+            .child(
+                div()
+                    .rounded(px(INNER_RADIUS))
+                    .bg(theme.color(ColorToken::CardsInnerFill))
+                    .px(px(NARROW_PAD))
+                    .pb(px(COLUMN_BOTTOM))
+                    .child(lead("chat-components", "15:10", body, &[], theme)),
+            )
+    }
+}
+
 pub(super) struct ChatPage {
     book: EntityId,
     wide: Column,
     narrow: Column,
     asking: Rc<RefCell<Asking>>,
     stream: Rc<RefCell<Stream>>,
+    typing: Typing,
     find: Entity<FindBar>,
     hits: Rc<Vec<Hit>>,
     current: usize,
@@ -1000,6 +1076,7 @@ impl ChatPage {
                 count: STREAM_ROWS,
                 said: String::new(),
             })),
+            typing: Typing::new(),
             find,
             hits: Rc::default(),
             current: 0,
@@ -1125,6 +1202,11 @@ impl ChatPage {
             .items_start()
             .gap(px(PAGE_GAP))
             .child(block(
+                "components: a reply streams Card, Callout, FileLink and an unknown tag; m streams it again",
+                theme,
+                self.typing.render(theme, window),
+            ))
+            .child(block(
                 "board width: click 7 tools or 35 sub-agents; r replays the last turn; 1, 2, 3 answer",
                 theme,
                 self.wide
@@ -1166,6 +1248,10 @@ impl ChatPage {
         let key = keys.key.as_str();
         if key == "a" {
             self.stream.borrow_mut().append();
+            return true;
+        }
+        if key == "m" {
+            self.typing = Typing::new();
             return true;
         }
         if key == "r" {

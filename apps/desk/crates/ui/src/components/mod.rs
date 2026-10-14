@@ -27,6 +27,7 @@ pub mod math;
 pub mod overlay;
 pub mod paint;
 pub mod palette;
+pub mod rich;
 pub mod scroll;
 pub mod settings;
 pub mod sheet;
