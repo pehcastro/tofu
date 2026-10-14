@@ -29,7 +29,6 @@ pub const SANS: &str = "Geist";
 pub const MONO: &str = "Geist Mono";
 pub const LIVE: Rgba = hex(0x86e0b3);
 pub const WARN: Rgba = hex(0xe8c98a);
-pub const CARET: Rgba = hex(0x9db8f0);
 pub const SURFACE: u32 = 0x131218;
 pub const POP: Rgba = tint(0x1e1d24, 0.94);
 pub const T3: f32 = 0.38;
