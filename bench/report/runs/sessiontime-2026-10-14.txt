@@ -1,0 +1,68 @@
+where session time goes, run 2026-10-14 on windows/amd64 with 32 cores, window the start to today
+times are agent-hours summed over every agent, not wall clock; reads local files only, no network
+
+tofu: 93 sessions (187 generations, 3 unreadable), 2026-09-18 to 2026-10-14, 32373 requests (1216 with no recorded duration), 42061 tool calls
+  bucket                                                 hours  share
+  API calls                                              64.79   52.4%
+  builds                                                 34.35   27.8%
+  scripts and app runs                                   14.22   11.5%
+  tests                                                   3.69    3.0%
+  bash read and search                                    3.65    3.0%
+  native search, glob, grep                               1.05    0.9%
+  other bash                                              0.69    0.6%
+  sleep, poll and unmatched shell waits                   0.49    0.4%
+  git                                                     0.48    0.4%
+  read, edit, write                                       0.17    0.1%
+  other tools                                             0.11    0.1%
+  web and browser                                         0.04    0.0%
+  total                                                 123.73  100.0%
+  left out of the total:
+  waiting on sub-agents, background tasks, wakeups        8.66  
+  waiting on the person                                   0.00  
+  idle gaps over 15 minutes                               0.00  
+  by tool, top 12                                        hours  share
+  bash                                                   29.13   23.5%
+  shell                                                  28.44   23.0%
+  spawn                                                   7.94    6.4%
+  ask                                                     0.72    0.6%
+  search                                                  0.62    0.5%
+  glob                                                    0.26    0.2%
+  grep                                                    0.17    0.1%
+  remember                                                0.10    0.1%
+  read                                                    0.09    0.1%
+  edit                                                    0.07    0.1%
+  fetch                                                   0.03    0.0%
+  write                                                   0.01    0.0%
+
+claude code: 227 main sessions plus 2472 sub-agent transcripts, 2026-08-18 to 2026-10-14, 244728 requests, 294958 tool calls; each gap between two transcript lines is charged to the later line
+  bucket                                                 hours  share
+  API calls                                             470.78   42.3%
+  tests                                                 151.50   13.6%
+  bash read and search                                  142.08   12.8%
+  read, edit, write                                     123.99   11.1%
+  scripts and app runs                                  118.26   10.6%
+  builds                                                 40.57    3.6%
+  sleep, poll and unmatched shell waits                  22.54    2.0%
+  git                                                    14.95    1.3%
+  other bash                                             14.31    1.3%
+  other tools                                            10.31    0.9%
+  native search, glob, grep                               1.51    0.1%
+  web and browser                                         1.35    0.1%
+  total                                                1112.15  100.0%
+  left out of the total:
+  waiting on sub-agents, background tasks, wakeups      275.77  
+  waiting on the person                                  92.38  
+  idle gaps over 15 minutes                            1689.86  
+  by tool, top 12                                        hours  share
+  Bash                                                  490.11   44.1%
+  Edit                                                  105.44    9.5%
+  Write                                                  18.16    1.6%
+  PowerShell                                             14.10    1.3%
+  mcp                                                     8.80    0.8%
+  AskUserQuestion                                         2.45    0.2%
+  Agent                                                   1.75    0.2%
+  Grep                                                    1.23    0.1%
+  WebFetch                                                0.96    0.1%
+  SubagentHandback                                        0.85    0.1%
+  Read                                                    0.39    0.0%
+  WebSearch                                               0.39    0.0%

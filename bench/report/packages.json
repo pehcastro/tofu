@@ -12,7 +12,7 @@
   {
     "package": "report",
     "kind": "runner",
-    "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own."
+    "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own; bench/report/runs holds the 3 records it quotes that no other bench writes to disk."
   },
   {
     "package": "orchestrator",
@@ -42,6 +42,36 @@
   {
     "package": "learn",
     "kind": "measurement with no dated report",
-    "note": "TOFU-1176, 2026-10-07, owing a run. labels.txt holds 50 made-up example labels since TOFU-1185, so a run names its own chain with --chain and its own labels with --labels, and needs Jev and claude. No measured number is committed."
+    "note": "learn/jobs, TOFU-1305, 2026-10-13 at 6d565412 and rerun 2026-10-14 at 9586ec60: 4 of 5 labelled repeated jobs found, 0 false, on 5 made-up sessions; the output is in bench/report/runs/learn-jobs-2026-10-14.txt and on the first tab. The labels.txt run of TOFU-1176 needs Jev and claude and has no committed number."
+  },
+  {
+    "package": "cli",
+    "kind": "measurement with no dated report",
+    "note": "passes.md, written by go run ./bench/cli, 5 passes from 2026-10-13: v0, v1-runewidth and v1-chroma at 06042c16 (tofu 0.5.11-fix2), v2-ceiling, v2-gogc and v2-pool at f347e62d (tofu 0.5.12). Its rows name a commit and no tofu version; the version here is read from internal/konst at that commit."
+  },
+  {
+    "package": "fanin",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1307, 2026-10-13, 2 runs on 5 cassettes before (5a267524) and after (committed as 2d7ce78a), both tofu 0.5.12. The bench prints its table and writes no file; the rows are copied from the board into bench/report/runs/board-2026-10-13.md."
+  },
+  {
+    "package": "profile",
+    "kind": "measurement with no dated report",
+    "note": "report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON."
+  },
+  {
+    "package": "rivals",
+    "kind": "measurement with no dated report",
+    "note": "report.md, undated by name, 15 live runs of 2026-10-13 at f360965a: tofu 0.5.13-fix1+dev, Claude Code 2.1.296, omp 18.3.2 and codex-cli 0.155.1, 3 runs each. runs/ holds every run as JSON."
+  },
+  {
+    "package": "scale",
+    "kind": "measurement with no dated report",
+    "note": "report.md, undated by name, 1 run per rung of 0 to 10 sub-agents on 2026-10-13, committed at b7c52479 (tofu 0.5.13-fix1). results.jsonl names no tofu version."
+  },
+  {
+    "package": "sessiontime",
+    "kind": "measurement with no dated report",
+    "note": "prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/report/runs/sessiontime-2026-10-14.txt."
   }
 ]

@@ -1,4 +1,1966 @@
 {
+  "history": {
+    "read_on": "2026-10-14",
+    "tree": "9586ec60",
+    "version": "0.5.14",
+    "level_rule": "Level means the spread of tofu's latest 3 runs overlaps the other harness's, the rule bench/rivals judges by; where a measure has 1 run, the figures are compared as they are.",
+    "measures": [
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "quality, hidden tests plus rubric",
+        "unit": "of 10",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "10 [9 to 10]",
+            "value": 10,
+            "low": 9,
+            "high": 10,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "10 [9 to 10]",
+            "value": 10,
+            "low": 9,
+            "high": 10,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "peak memory of the whole process tree",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "393.0 [375.6 to 398.6]",
+            "value": 393,
+            "low": 375.6,
+            "high": 398.6,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "332 [328 to 333]",
+            "value": 332,
+            "low": 328,
+            "high": 333,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "615.9 [590.3 to 643.0]",
+            "value": 615.9,
+            "low": 590.3,
+            "high": 643,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "872.4 [790.9 to 896.4]",
+            "value": 872.4,
+            "low": 790.9,
+            "high": 896.4,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "CPU of the whole process tree",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "53.0 [52.7 to 53.8]",
+            "value": 53,
+            "low": 52.7,
+            "high": 53.8,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "39.2 [35.0 to 40.8]",
+            "value": 39.2,
+            "low": 35,
+            "high": 40.8,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "57.5 [49.8 to 59.1]",
+            "value": 57.5,
+            "low": 49.8,
+            "high": 59.1,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "55.5 [52.5 to 58.6]",
+            "value": 55.5,
+            "low": 52.5,
+            "high": 58.6,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "wall time",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "63.1 [62.4 to 66.7]",
+            "value": 63.1,
+            "low": 62.4,
+            "high": 66.7,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "48.2 [39.5 to 49.7]",
+            "value": 48.2,
+            "low": 39.5,
+            "high": 49.7,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "50.5 [46.8 to 55.2]",
+            "value": 50.5,
+            "low": 46.8,
+            "high": 55.2,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "38.7 [35.8 to 38.9]",
+            "value": 38.7,
+            "low": 35.8,
+            "high": 38.9,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "model requests",
+        "unit": "requests",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "11 [11 to 11]",
+            "value": 11,
+            "low": 11,
+            "high": 11,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "5 [4 to 7]",
+            "value": 5,
+            "low": 4,
+            "high": 7,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "6 [5 to 6]",
+            "value": 6,
+            "low": 5,
+            "high": 6,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "4 [4 to 4]",
+            "value": 4,
+            "low": 4,
+            "high": 4,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "input tokens, fresh plus cache read plus cache write",
+        "unit": "tokens",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "234241 [233130 to 239093]",
+            "value": 234241,
+            "low": 233130,
+            "high": 239093,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "111,727",
+            "value": 111727,
+            "low": 88183,
+            "high": 158846,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "151458 [129060 to 151532]",
+            "value": 151458,
+            "low": 129060,
+            "high": 151532,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "54983 [54901 to 56085]",
+            "value": 54983,
+            "low": 54901,
+            "high": 56085,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "failed tool calls",
+        "unit": "calls",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "4 [4 to 4]",
+            "value": 4,
+            "low": 4,
+            "high": 4,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "0 [0 to 1]",
+            "value": 0,
+            "high": 1,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "0 [0 to 0]",
+            "value": 0,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "0 [0 to 0]",
+            "value": 0,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "quality, hidden tests plus rubric",
+        "unit": "of 10",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "10 [4 to 10]",
+            "value": 10,
+            "low": 4,
+            "high": 10,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "peak memory of the whole process tree",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "393.2 [387.6 to 409.0]",
+            "value": 393.2,
+            "low": 387.6,
+            "high": 409,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "344 [343 to 353]",
+            "value": 344,
+            "low": 343,
+            "high": 353,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "543.0 [538.9 to 564.9]",
+            "value": 543,
+            "low": 538.9,
+            "high": 564.9,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "CPU of the whole process tree",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "55.8 [45.2 to 59.0]",
+            "value": 55.8,
+            "low": 45.2,
+            "high": 59,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "35.0 [33.2 to 35.9]",
+            "value": 35,
+            "low": 33.2,
+            "high": 35.9,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "67.1 [62.9 to 75.7]",
+            "value": 67.1,
+            "low": 62.9,
+            "high": 75.7,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "wall time",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "325.8 [105.2 to 333.2]",
+            "value": 325.8,
+            "low": 105.2,
+            "high": 333.2,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "138.8 [119.9 to 153.8]",
+            "value": 138.8,
+            "low": 119.9,
+            "high": 153.8,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "110.8 [108.0 to 138.9]",
+            "value": 110.8,
+            "low": 108,
+            "high": 138.9,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "model requests",
+        "unit": "requests",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "27 [12 to 29]",
+            "value": 27,
+            "low": 12,
+            "high": 29,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "12 [10 to 13]",
+            "value": 12,
+            "low": 10,
+            "high": 13,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "7 [6 to 7]",
+            "value": 7,
+            "low": 6,
+            "high": 7,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "input tokens, fresh plus cache read plus cache write",
+        "unit": "tokens",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "494279 [208359 to 517986]",
+            "value": 494279,
+            "low": 208359,
+            "high": 517986,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "218,474",
+            "value": 218474,
+            "low": 174746,
+            "high": 234257,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "125052 [105204 to 125069]",
+            "value": 125052,
+            "low": 105204,
+            "high": 125069,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "failed tool calls",
+        "unit": "calls",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "3 [0 to 5]",
+            "value": 3,
+            "high": 5,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "0 [0 to 2]",
+            "value": 0,
+            "high": 2,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "0 [0 to 0]",
+            "value": 0,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
+        "measure": "time per edit call, median",
+        "unit": "ms",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "2",
+            "value": 2,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | edit | 6 | 2 | 7 | 7 | 0 | 0 |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "39",
+            "value": 39,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | edit | 6 | 39 | 60 | 60 | 0 | 0 |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "83",
+            "value": 83,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | edit | 0 | 83 | 83 | 83 | 0 | 0 |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
+        "measure": "time per edit call, median",
+        "unit": "ms",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "2",
+            "value": 2,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | edit | 6 | 2 | 7 | 7 | 0 | 0 |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "4199",
+            "value": 4199,
+            "source": "bench/rivals/report.md",
+            "evidence": "| codex-gpt | edit | 1 | 4199 | 4781 | 4781 | 0 | 0 |"
+          }
+        ]
+      },
+      {
+        "bench": "scale",
+        "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+        "measure": "peak memory with no sub-agent",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "1 run per rung",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "0.5.13-fix1",
+            "build": "not recorded by bench/scale, the tree at b7c52479",
+            "figure": "42",
+            "value": 42,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "281",
+            "value": 281,
+            "source": "bench/scale/report.md",
+            "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "699",
+            "value": 699,
+            "source": "bench/scale/report.md",
+            "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 |"
+          },
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "215",
+            "value": 215,
+            "source": "bench/scale/report.md",
+            "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 |"
+          }
+        ]
+      },
+      {
+        "bench": "scale",
+        "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+        "measure": "peak memory each extra sub-agent adds",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "1 run per rung",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "0.5.13-fix1",
+            "build": "not recorded by bench/scale, the tree at b7c52479",
+            "figure": "0.4",
+            "value": 0.4,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "4.3",
+            "value": 4.3,
+            "source": "bench/scale/report.md",
+            "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "20.9",
+            "value": 20.9,
+            "source": "bench/scale/report.md",
+            "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 |"
+          },
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "22.0",
+            "value": 22,
+            "source": "bench/scale/report.md",
+            "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 |"
+          }
+        ]
+      },
+      {
+        "bench": "scale",
+        "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+        "measure": "CPU each extra sub-agent adds",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "1 run per rung",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "0.5.13-fix1",
+            "build": "not recorded by bench/scale, the tree at b7c52479",
+            "figure": "0.12",
+            "value": 0.12,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "0.30",
+            "value": 0.3,
+            "source": "bench/scale/report.md",
+            "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "0.62",
+            "value": 0.62,
+            "source": "bench/scale/report.md",
+            "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 |"
+          },
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "3.44",
+            "value": 3.44,
+            "source": "bench/scale/report.md",
+            "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 |"
+          }
+        ]
+      },
+      {
+        "bench": "sessiontime",
+        "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
+        "measure": "share of agent time waiting on the model",
+        "unit": "percent",
+        "better": "neither",
+        "tofu": [
+          {
+            "label": "window 2026-09-18 to 2026-10-09",
+            "date": "2026-10-13",
+            "commit": "7624da00",
+            "version": "0.5.13-fix1",
+            "build": "7624da00, TOFU-1313",
+            "figure": "54.2",
+            "value": 54.2,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "API 54.2% (research 54.3)"
+          },
+          {
+            "label": "every session to 2026-10-14",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "0.5.14",
+            "build": "the working tree at 9586ec60, other open tickets uncommitted",
+            "figure": "52.4",
+            "value": 52.4,
+            "source": "bench/report/runs/sessiontime-2026-10-14.txt",
+            "evidence": "API calls 64.79 52.4%"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "not recorded by bench/sessiontime",
+            "build": "every transcript to 2026-10-14",
+            "figure": "42.3",
+            "value": 42.3,
+            "source": "bench/report/runs/sessiontime-2026-10-14.txt",
+            "evidence": "API calls 470.78 42.3%"
+          }
+        ]
+      },
+      {
+        "bench": "sessiontime",
+        "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
+        "measure": "share of agent time in builds",
+        "unit": "percent",
+        "better": "neither",
+        "tofu": [
+          {
+            "label": "window 2026-09-18 to 2026-10-09",
+            "date": "2026-10-13",
+            "commit": "7624da00",
+            "version": "0.5.13-fix1",
+            "build": "7624da00, TOFU-1313",
+            "figure": "27.1",
+            "value": 27.1,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "builds 27.1 (26.9)"
+          },
+          {
+            "label": "every session to 2026-10-14",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "0.5.14",
+            "build": "the working tree at 9586ec60, other open tickets uncommitted",
+            "figure": "27.8",
+            "value": 27.8,
+            "source": "bench/report/runs/sessiontime-2026-10-14.txt",
+            "evidence": "builds 34.35 27.8%"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "not recorded by bench/sessiontime",
+            "build": "every transcript to 2026-10-14",
+            "figure": "3.6",
+            "value": 3.6,
+            "source": "bench/report/runs/sessiontime-2026-10-14.txt",
+            "evidence": "builds 40.57 3.6%"
+          }
+        ]
+      },
+      {
+        "bench": "sessiontime",
+        "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
+        "measure": "share of agent time in tests",
+        "unit": "percent",
+        "better": "neither",
+        "tofu": [
+          {
+            "label": "window 2026-09-18 to 2026-10-09",
+            "date": "2026-10-13",
+            "commit": "7624da00",
+            "version": "0.5.13-fix1",
+            "build": "7624da00, TOFU-1313",
+            "figure": "1.4",
+            "value": 1.4,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tests 1.4 (1.4)"
+          },
+          {
+            "label": "every session to 2026-10-14",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "0.5.14",
+            "build": "the working tree at 9586ec60, other open tickets uncommitted",
+            "figure": "3.0",
+            "value": 3,
+            "source": "bench/report/runs/sessiontime-2026-10-14.txt",
+            "evidence": "tests 3.69 3.0%"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "not recorded by bench/sessiontime",
+            "build": "every transcript to 2026-10-14",
+            "figure": "13.6",
+            "value": 13.6,
+            "source": "bench/report/runs/sessiontime-2026-10-14.txt",
+            "evidence": "tests 151.50 13.6%"
+          }
+        ]
+      },
+      {
+        "bench": "profile",
+        "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
+        "measure": "tofu's own CPU",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "2.38",
+            "value": 2.38,
+            "source": "bench/profile/report.md",
+            "evidence": "| rivals before, TOFU-1317 | 2.38 | 55.14 | 18 | 25 | 144.6 (profiled row, 16 calls) |"
+          },
+          {
+            "label": "after TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "60c41fb3",
+            "version": "0.5.13-fix1",
+            "build": "the tree committed as 60c41fb3, released in 0.5.14",
+            "figure": "1.28",
+            "value": 1.28,
+            "source": "bench/profile/report.md",
+            "evidence": "| rivals after | 1.28 | 50.16 | 7 | 19 | |"
+          },
+          {
+            "label": "TOFU-1321, 2 runs",
+            "date": "2026-10-13",
+            "commit": "372090cd with uncommitted changes",
+            "version": "0.5.14",
+            "build": "dev build of TOFU-1321, still open; the tree also carried the TOFU-1322 plan.go change",
+            "figure": "0.89 and 1.06",
+            "value": 0.975,
+            "low": 0.89,
+            "high": 1.06,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "rivals-after tofu CPU 0.89 s (job 41.25 s, 19 tool calls, 307 processes), rivals-after-r2 tofu CPU 1.06 s"
+          }
+        ]
+      },
+      {
+        "bench": "profile",
+        "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
+        "measure": "memory tofu allocates over the task",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "144.6",
+            "value": 144.6,
+            "source": "bench/profile/report.md",
+            "evidence": "| rivals before, TOFU-1317 | 2.38 | 55.14 | 18 | 25 | 144.6 (profiled row, 16 calls) |"
+          },
+          {
+            "label": "after TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "60c41fb3",
+            "version": "0.5.13-fix1",
+            "build": "the tree committed as 60c41fb3, released in 0.5.14",
+            "figure": "66.9",
+            "value": 66.9,
+            "source": "bench/profile/report.md",
+            "evidence": "| rivals after, profiled row | 1.14 | 48.41 | 7 | 24 | 66.9 |"
+          }
+        ]
+      },
+      {
+        "bench": "profile",
+        "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
+        "measure": "git processes tofu starts",
+        "unit": "processes",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "18",
+            "value": 18,
+            "source": "bench/profile/report.md",
+            "evidence": "| rivals before, TOFU-1317 | 2.38 | 55.14 | 18 | 25 | 144.6 (profiled row, 16 calls) |"
+          },
+          {
+            "label": "after TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "60c41fb3",
+            "version": "0.5.13-fix1",
+            "build": "the tree committed as 60c41fb3, released in 0.5.14",
+            "figure": "7",
+            "value": 7,
+            "source": "bench/profile/report.md",
+            "evidence": "| rivals after | 1.28 | 50.16 | 7 | 19 | |"
+          }
+        ]
+      },
+      {
+        "bench": "profile",
+        "task": "bench/scale tiny task, job CPU of 10 sub-agents less 0, over 10, live on Sonnet 5.5",
+        "measure": "CPU each sub-agent costs",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before TOFU-1319, 2 pairs",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "0.117 and 0.142",
+            "value": 0.1295,
+            "low": 0.117,
+            "high": 0.142,
+            "source": "bench/profile/report.md",
+            "evidence": "Per sub-agent, job CPU from the live tiny task, (10 agents less 0) / 10: before 0.117 and 0.142 s; after 0.104 s"
+          },
+          {
+            "label": "after TOFU-1319",
+            "date": "2026-10-13",
+            "commit": "60c41fb3",
+            "version": "0.5.13-fix1",
+            "build": "the tree committed as 60c41fb3, released in 0.5.14",
+            "figure": "0.104",
+            "value": 0.104,
+            "source": "bench/profile/report.md",
+            "evidence": "Per sub-agent, job CPU from the live tiny task, (10 agents less 0) / 10: before 0.117 and 0.142 s; after 0.104 s"
+          },
+          {
+            "label": "TOFU-1321, 4 pairs",
+            "date": "2026-10-13",
+            "commit": "372090cd with uncommitted changes",
+            "version": "0.5.14",
+            "build": "dev build of TOFU-1321, still open; the tree also carried the TOFU-1322 plan.go change",
+            "figure": "0.065 [0.056 to 0.073]",
+            "value": 0.065,
+            "low": 0.056,
+            "high": 0.073,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "per sub-agent (10 less 0)/10 = 0.073, 0.056, 0.069, 0.063, mean 0.065 s (from 0.104)"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+        "measure": "CPU of tofu version",
+        "unit": "ms",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "v0, runewidth v0.0.27 and chroma v2.24.1",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes",
+            "figure": "103.7",
+            "value": 103.7,
+            "source": "bench/cli/passes.md",
+            "evidence": "| version | 103.7 | 62.1 | 1.67x |"
+          },
+          {
+            "label": "v1-runewidth, runewidth v0.0.30",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes",
+            "figure": "62.1",
+            "value": 62.1,
+            "source": "bench/cli/passes.md",
+            "evidence": "| version | 103.7 | 62.1 | 1.67x |"
+          },
+          {
+            "label": "v1-chroma, registries built on first use",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes, committed as 787f2384",
+            "figure": "41.9",
+            "value": 41.9,
+            "source": "bench/cli/passes.md",
+            "evidence": "| version | 103.7 | 41.9 | 2.47x |"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+        "measure": "package init allocations",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "v0, runewidth v0.0.27 and chroma v2.24.1",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes",
+            "figure": "8.39",
+            "value": 8.39,
+            "source": "bench/cli/passes.md",
+            "evidence": "| v0 | 06042c16 dirty | 2026-10-13 05:19:28 | windows/amd64 | 7 | 78.6 | 8.39 |"
+          },
+          {
+            "label": "v1-runewidth, runewidth v0.0.30",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes",
+            "figure": "8.37",
+            "value": 8.37,
+            "source": "bench/cli/passes.md",
+            "evidence": "| v1-runewidth | 06042c16 dirty | 2026-10-13 05:20:18 | windows/amd64 | 7 | 46.8 | 8.37 |"
+          },
+          {
+            "label": "v1-chroma, registries built on first use",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes, committed as 787f2384",
+            "figure": "3.80",
+            "value": 3.8,
+            "source": "bench/cli/passes.md",
+            "evidence": "| v1-chroma | 06042c16 dirty | 2026-10-13 05:20:55 | windows/amd64 | 7 | 26.7 | 3.80 |"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
+        "measure": "package init clock",
+        "unit": "ms",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "v0, runewidth v0.0.27 and chroma v2.24.1",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes",
+            "figure": "78.6",
+            "value": 78.6,
+            "source": "bench/cli/passes.md",
+            "evidence": "| v0 | 06042c16 dirty | 2026-10-13 05:19:28 | windows/amd64 | 7 | 78.6 | 8.39 |"
+          },
+          {
+            "label": "v1-runewidth, runewidth v0.0.30",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes",
+            "figure": "46.8",
+            "value": 46.8,
+            "source": "bench/cli/passes.md",
+            "evidence": "| v1-runewidth | 06042c16 dirty | 2026-10-13 05:20:18 | windows/amd64 | 7 | 46.8 | 8.37 |"
+          },
+          {
+            "label": "v1-chroma, registries built on first use",
+            "date": "2026-10-13",
+            "commit": "06042c16",
+            "version": "0.5.11-fix2",
+            "build": "06042c16 with uncommitted changes, committed as 787f2384",
+            "figure": "26.7",
+            "value": 26.7,
+            "source": "bench/cli/passes.md",
+            "evidence": "| v1-chroma | 06042c16 dirty | 2026-10-13 05:20:55 | windows/amd64 | 7 | 26.7 | 3.80 |"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "the long-session TUI test, median of 3",
+        "measure": "GC CPU",
+        "unit": "ms",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "GOGC 100",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "219.3",
+            "value": 219.3,
+            "source": "bench/cli/passes.md",
+            "evidence": "| GC CPU ms over the long-session TUI test, median of 3 | 219.3 | 102.1 | 2.15x |"
+          },
+          {
+            "label": "GOGC 200 and a 512 MiB soft limit",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "102.1",
+            "value": 102.1,
+            "source": "bench/cli/passes.md",
+            "evidence": "| GC CPU ms over the long-session TUI test, median of 3 | 219.3 | 102.1 | 2.15x |"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "the long-session TUI test, median of 3",
+        "measure": "peak heap, the cost of the GC change",
+        "unit": "MB",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "GOGC 100",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "21",
+            "value": 21,
+            "source": "bench/cli/passes.md",
+            "evidence": "| peak heap MB over the long-session TUI test, median of 3 | 21 | 29 | 0.72x |"
+          },
+          {
+            "label": "GOGC 200 and a 512 MiB soft limit",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "29",
+            "value": 29,
+            "source": "bench/cli/passes.md",
+            "evidence": "| peak heap MB over the long-session TUI test, median of 3 | 21 | 29 | 0.72x |"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "tofu run --dry-run on claude-sub/claude-opus-5",
+        "measure": "tokens before the first fork on a 1M window model",
+        "unit": "tokens",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "ceiling 250000",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "200000",
+            "value": 200000,
+            "source": "bench/cli/passes.md",
+            "evidence": "| tokens before the first fork on a 1M window model | 200000 | 360000 | 1.80x |"
+          },
+          {
+            "label": "ceiling 450000",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "360000",
+            "value": 360000,
+            "source": "bench/cli/passes.md",
+            "evidence": "| tokens before the first fork on a 1M window model | 200000 | 360000 | 1.80x |"
+          }
+        ]
+      },
+      {
+        "bench": "cli",
+        "task": "Encode of a 1419957 byte request, median of 5",
+        "measure": "bytes allocated per Encode, a change measured and dropped",
+        "unit": "bytes",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "without a pool",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "2706804",
+            "value": 2706804,
+            "source": "bench/cli/passes.md",
+            "evidence": "| bytes allocated per Encode of a 1419957 byte request, median of 5 | 2706804 | 3570784 | 0.76x |"
+          },
+          {
+            "label": "with a sync.Pool buffer, dropped",
+            "date": "2026-10-13",
+            "commit": "f347e62d",
+            "version": "0.5.12",
+            "build": "f347e62d with uncommitted changes, committed as 4eb86202",
+            "figure": "3570784",
+            "value": 3570784,
+            "source": "bench/cli/passes.md",
+            "evidence": "| bytes allocated per Encode of a 1419957 byte request, median of 5 | 2706804 | 3570784 | 0.76x |"
+          }
+        ]
+      },
+      {
+        "bench": "fanin",
+        "task": "bench/fanin cassette clustered, 3 sub-agents finishing together, fresh home, no model called",
+        "measure": "lead turns",
+        "unit": "turns",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before, 2 runs",
+            "date": "2026-10-13",
+            "commit": "5a267524",
+            "version": "0.5.12",
+            "build": "5a267524",
+            "figure": "4",
+            "value": 4,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "clustered: before 4, 3, 3/3, 0, 0, 0s, 17ms, 2.7s | after 2, 1, 3/3, 0, 0, 0s, 1.028s, 2.8s"
+          },
+          {
+            "label": "after, 2 runs",
+            "date": "2026-10-13",
+            "commit": "2d7ce78a",
+            "version": "0.5.12",
+            "build": "the tree committed as 2d7ce78a",
+            "figure": "2",
+            "value": 2,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "clustered: before 4, 3, 3/3, 0, 0, 0s, 17ms, 2.7s | after 2, 1, 3/3, 0, 0, 0s, 1.028s, 2.8s"
+          }
+        ]
+      },
+      {
+        "bench": "fanin",
+        "task": "bench/fanin cassette straggler, 4 sub-agents with one late, fresh home, no model called",
+        "measure": "lead turns",
+        "unit": "turns",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before, 2 runs",
+            "date": "2026-10-13",
+            "commit": "5a267524",
+            "version": "0.5.12",
+            "build": "5a267524",
+            "figure": "5",
+            "value": 5,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "straggler: before 5, 4, 4/4, 0, 0, 0s, 17ms, 17s | after 3, 2, 4/4, 0, 0, 0s, 11.0s, 16.8s"
+          },
+          {
+            "label": "after, 2 runs",
+            "date": "2026-10-13",
+            "commit": "2d7ce78a",
+            "version": "0.5.12",
+            "build": "the tree committed as 2d7ce78a",
+            "figure": "3",
+            "value": 3,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "straggler: before 5, 4, 4/4, 0, 0, 0s, 17ms, 17s | after 3, 2, 4/4, 0, 0, 0s, 11.0s, 16.8s"
+          }
+        ]
+      },
+      {
+        "bench": "fanin",
+        "task": "bench/fanin cassette spread, 3 sub-agents finishing outside the window, fresh home, no model called",
+        "measure": "lead turns",
+        "unit": "turns",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before, 2 runs",
+            "date": "2026-10-13",
+            "commit": "5a267524",
+            "version": "0.5.12",
+            "build": "5a267524",
+            "figure": "4",
+            "value": 4,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "spread (outside the window, the cost): before 4, 3, 3/3 | after 4, 3, 3/3, report wait max 10.0s, last read 28s both"
+          },
+          {
+            "label": "after, 2 runs",
+            "date": "2026-10-13",
+            "commit": "2d7ce78a",
+            "version": "0.5.12",
+            "build": "the tree committed as 2d7ce78a",
+            "figure": "4",
+            "value": 4,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "spread (outside the window, the cost): before 4, 3, 3/3 | after 4, 3, 3/3, report wait max 10.0s, last read 28s both"
+          }
+        ]
+      },
+      {
+        "bench": "fanin",
+        "task": "bench/fanin cassette checkins, a check every second, fresh home, no model called",
+        "measure": "lead turns started by a check-in",
+        "unit": "turns",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before, 2 runs",
+            "date": "2026-10-13",
+            "commit": "5a267524",
+            "version": "0.5.12",
+            "build": "5a267524",
+            "figure": "7 and 9",
+            "value": 8,
+            "low": 7,
+            "high": 9,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "check-started lead turns before 7 and 9 (run 1, run 2), after 0 and 0"
+          },
+          {
+            "label": "after, 2 runs",
+            "date": "2026-10-13",
+            "commit": "2d7ce78a",
+            "version": "0.5.12",
+            "build": "the tree committed as 2d7ce78a",
+            "figure": "0 and 0",
+            "value": 0,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "check-started lead turns before 7 and 9 (run 1, run 2), after 0 and 0"
+          }
+        ]
+      },
+      {
+        "bench": "fanin",
+        "task": "bench/fanin cassette ask, an ask between two reports, fresh home, no model called",
+        "measure": "seconds until the last report is read, the cost of the window",
+        "unit": "s",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "before, 2 runs",
+            "date": "2026-10-13",
+            "commit": "5a267524",
+            "version": "0.5.12",
+            "build": "5a267524",
+            "figure": "3.2",
+            "value": 3.2,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "last report read 13.2s after vs 3.2s before"
+          },
+          {
+            "label": "after, 2 runs",
+            "date": "2026-10-13",
+            "commit": "2d7ce78a",
+            "version": "0.5.12",
+            "build": "the tree committed as 2d7ce78a",
+            "figure": "13.2",
+            "value": 13.2,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "last report read 13.2s after vs 3.2s before"
+          }
+        ]
+      },
+      {
+        "bench": "learn",
+        "task": "bench/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
+        "measure": "repeated jobs found",
+        "unit": "of 5 labelled jobs",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "two shared words, the bar before",
+            "date": "2026-10-13",
+            "commit": "6d565412",
+            "version": "0.5.12",
+            "build": "development build of 6d565412",
+            "figure": "3",
+            "value": 3,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "Baseline at two shared words was found 3 missed 2 false 1 (lint distractor joined flaky); the bar is now StrongSharedWords=3."
+          },
+          {
+            "label": "three shared words",
+            "date": "2026-10-13",
+            "commit": "6d565412",
+            "version": "0.5.12",
+            "build": "the tree committed as 6d565412",
+            "figure": "4",
+            "value": 4,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "labelled 5 · found 4 · missed 1 · false 0. Found nightly 4x"
+          },
+          {
+            "label": "rerun",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "0.5.14",
+            "build": "the working tree at 9586ec60, other open tickets uncommitted",
+            "figure": "4",
+            "value": 4,
+            "source": "bench/report/runs/learn-jobs-2026-10-14.txt",
+            "evidence": "labelled 5 · found 4 · missed 1 · false 0"
+          }
+        ]
+      },
+      {
+        "bench": "learn",
+        "task": "bench/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
+        "measure": "false finds",
+        "unit": "false finds",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "two shared words, the bar before",
+            "date": "2026-10-13",
+            "commit": "6d565412",
+            "version": "0.5.12",
+            "build": "development build of 6d565412",
+            "figure": "1",
+            "value": 1,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "Baseline at two shared words was found 3 missed 2 false 1 (lint distractor joined flaky); the bar is now StrongSharedWords=3."
+          },
+          {
+            "label": "three shared words",
+            "date": "2026-10-13",
+            "commit": "6d565412",
+            "version": "0.5.12",
+            "build": "the tree committed as 6d565412",
+            "figure": "0",
+            "value": 0,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "labelled 5 · found 4 · missed 1 · false 0. Found nightly 4x"
+          },
+          {
+            "label": "rerun",
+            "date": "2026-10-14",
+            "commit": "9586ec60",
+            "version": "0.5.14",
+            "build": "the working tree at 9586ec60, other open tickets uncommitted",
+            "figure": "0",
+            "value": 0,
+            "source": "bench/report/runs/learn-jobs-2026-10-14.txt",
+            "evidence": "labelled 5 · found 4 · missed 1 · false 0"
+          }
+        ]
+      },
+      {
+        "bench": "tokens",
+        "task": "glob calls replayed from recorded sessions",
+        "measure": "glob calls that cannot replay",
+        "unit": "glob calls, compared as a share of all",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "as reported",
+            "date": "2026-09-21",
+            "commit": "198947c1",
+            "version": "0.4.6",
+            "build": "198947c1",
+            "figure": "6 of 142",
+            "value": 4.2,
+            "source": "bench/tokens/report-2026-09-21-pinned.md",
+            "evidence": "Glob calls that cannot replay: 6 of 142."
+          },
+          {
+            "label": "rechecked against the live store",
+            "date": "2026-10-10",
+            "commit": "560c8075",
+            "version": "0.5.10-fix1",
+            "build": "560c8075",
+            "figure": "29 of 568",
+            "value": 5.1,
+            "source": "bench/tokens/report-2026-09-21-pinned.md",
+            "evidence": "The live folder on 2026-10-10: 29 of 568"
+          }
+        ]
+      },
+      {
+        "bench": "forkcache",
+        "task": "the first request after a context fork",
+        "measure": "forks whose first request reads cache and writes none",
+        "unit": "fork pairs, compared as a share",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "as reported",
+            "date": "2026-09-22",
+            "commit": "a8e9f43b",
+            "version": "0.4.8",
+            "build": "a8e9f43b",
+            "figure": "21 of 21",
+            "value": 100,
+            "source": "bench/forkcache/report-2026-09-22.txt",
+            "evidence": "matches the 21 pinned pairs"
+          },
+          {
+            "label": "rechecked against the live store",
+            "date": "2026-10-10",
+            "commit": "82890ac1",
+            "version": "0.5.10-fix1",
+            "build": "82890ac1",
+            "figure": "6 of 63",
+            "value": 9.5,
+            "source": "bench/forkcache/report-2026-09-22.txt",
+            "evidence": "57 of the 63 first billed a prefix read AND written: the first request read 15,673 to 28,240 tokens of cache and wrote 19,226 to 52,489, where carrying on would have presented 165,236 to 218,554. 6 read only."
+          }
+        ]
+      },
+      {
+        "bench": "recall",
+        "task": "the largest billed request in recorded sessions",
+        "measure": "largest billed request",
+        "unit": "tokens",
+        "better": "neither",
+        "tofu": [
+          {
+            "label": "as reported",
+            "date": "2026-09-23",
+            "commit": "36cb8150",
+            "version": "0.4.14",
+            "build": "36cb8150",
+            "figure": "66354",
+            "value": 66354,
+            "source": "bench/recall/report-2026-09-23.md",
+            "evidence": "largest billed request 66354 tokens"
+          },
+          {
+            "label": "rechecked against the live store",
+            "date": "2026-10-10",
+            "commit": "82890ac1",
+            "version": "0.5.10-fix1",
+            "build": "82890ac1",
+            "figure": "218558",
+            "value": 218558,
+            "source": "bench/recall/report-2026-09-23.md",
+            "evidence": "the largest billed request is 218558 tokens"
+          }
+        ]
+      },
+      {
+        "bench": "shortlist",
+        "task": "recorded turns a file shortlist question can be asked of",
+        "measure": "recordable turns",
+        "unit": "turns",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "as reported",
+            "date": "2026-09-23",
+            "commit": "b29d651e",
+            "version": "0.4.13",
+            "build": "b29d651e",
+            "figure": "8 of 117",
+            "value": 8,
+            "source": "bench/shortlist/report-2026-09-23.md",
+            "evidence": "117 turns, 8 recordable"
+          },
+          {
+            "label": "rechecked against the live store",
+            "date": "2026-10-10",
+            "commit": "82890ac1",
+            "version": "0.5.10-fix1",
+            "build": "82890ac1",
+            "figure": "462 of 2116",
+            "value": 462,
+            "source": "bench/shortlist/report-2026-09-23.md",
+            "evidence": "2116 turns, 462 recordable"
+          }
+        ]
+      },
+      {
+        "bench": "thrift",
+        "task": "read and search results over the size cap in recorded sessions",
+        "measure": "over-cap artifacts",
+        "unit": "artifacts",
+        "better": "neither",
+        "tofu": [
+          {
+            "label": "as reported",
+            "date": "2026-09-23",
+            "commit": "6a1e8315",
+            "version": "0.4.13",
+            "build": "6a1e8315",
+            "figure": "9",
+            "value": 9,
+            "source": "bench/thrift/report-2026-09-23-overcap.md",
+            "evidence": "and finds the 9 above"
+          },
+          {
+            "label": "rechecked against the live store",
+            "date": "2026-10-10",
+            "commit": "82890ac1",
+            "version": "0.5.10-fix1",
+            "build": "82890ac1",
+            "figure": "195",
+            "value": 195,
+            "source": "bench/thrift/report-2026-09-23-overcap.md",
+            "evidence": "holds 195 over-cap read or search artifacts"
+          }
+        ]
+      }
+    ]
+  },
   "answers": {
     "jev_costs": [
       {
@@ -16,73 +1978,6 @@
         "evidence": "judged 4 of 7, free 3 of 7, 7 calls, $0.000187, $0.000027 each, mean 376ms, p50 344ms"
       }
     ],
-    "arms": {
-      "question": "Is tofu better than claude and codex, on what, by how much",
-      "tab": "1. Tofu against claude and codex",
-      "because": "2 of 3 tools have a recorded run, over 2 tasks, 1 repeat each. Naming a winner needs 2 passing repeats per tool.",
-      "what_exists": [
-        {
-          "text": "4 recorded runs, of which 3 carry a turn count and a wall clock",
-          "evidence": "Four runs are recorded and three of them carry a turn count and a wall clock"
-        },
-        {
-          "text": "0 recorded codex runs: the one recorded codex transcript hit a usage limit and never finished",
-          "evidence": "codex has no recorded row at all, because the one recorded codex exec transcript hit a usage limit and never reached turn.completed"
-        },
-        {
-          "text": "the harness refuses to name a winner under 2 passing repeats",
-          "evidence": "a comparison where either arm has fewer than two passing repeats prints not separable instead of a winner"
-        },
-        {
-          "text": "2 kinds of money: a subscription and an API key are refused against each other rather than printed",
-          "evidence": "claude vs codex: wall clock not comparable, credential kinds differ (subscription vs key)"
-        }
-      ],
-      "what_it_would_take": [
-        {
-          "text": "36 runs: 3 tools, 4 tasks, 3 repeats each",
-          "evidence": "Three arms, four tasks, three repeats each is 36 runs."
-        },
-        {
-          "text": "828 turns at the median, 504 to 1,260 across the observed range",
-          "evidence": "Turns: 828 at the median, 504 to 1,260 across the observed range."
-        },
-        {
-          "text": "83 minutes of running time at the median, 38 to 141 minutes across the range, with build and test time on top and never measured",
-          "evidence": "Wall clock: 83 minutes of arm time at the median, 38 minutes to 141 minutes across the range."
-        },
-        {
-          "text": "2 more task prompts and 2 more checkers, because only 2 tasks exist",
-          "evidence": "Only two tasks exist, v1 and v2, so four tasks means writing two more prompts and two more checkers first"
-        }
-      ],
-      "source": "bench/harness/report-2026-09-22.md"
-    },
-    "versions": {
-      "question": "Is this version of tofu better than the last one, on what, by how much",
-      "tab": "2. This version against the last",
-      "because": "Every recorded run carries a version and 1 repeat. 1 run against 1 run is 2 samples side by side, the reading this harness was changed to stop printing.",
-      "what_exists": [
-        {
-          "text": "1 claude run at v1 and 1 at v2, 1 tofu run at v2, and 1 tofu run at v1 carrying no turn count and no wall clock",
-          "evidence": "| boji hono v1 run1 | none recorded | none recorded | none | none |"
-        },
-        {
-          "text": "the 70 percent version gap this page used to imply was 2 single runs put side by side",
-          "evidence": "Two single samples set side by side, which reads as a 70 percent gap."
-        }
-      ],
-      "what_it_would_take": [
-        {
-          "text": "a spread from repeating the same run, which no version has",
-          "evidence": "There is no rerun spread here, only an extrapolation from single runs, which is the very thing the change exists to stop reporting."
-        },
-        {
-          "text": "the same run shape as the table above, once per version"
-        }
-      ],
-      "source": "bench/harness/report-2026-09-22.md"
-    },
     "judgments": [
       {
         "point": "file_shortlist",
@@ -618,6 +2513,9 @@
       "built_from": "prose",
       "sample": "four requests, feature-small, medium-glob, hard-duration and hard-ls, one app session per wording on claude-sub, one run each",
       "skips": "one run per wording, so no rate and no spread; the 16.9% is a single pair of sums",
+      "commit": "024ef6ef",
+      "version": "0.5.0",
+      "previous_run": "none, the first dated report of bench/planspawn",
       "conclusion": [
         {
           "text": "Summed over the four requests in the tables below, the new wording spent 831150 lead tokens against the old wording's 710834, 16.9% more, on the same 21 lead requests and the same sub-agent count per request.",
@@ -637,6 +2535,9 @@
       "built_from": "prose",
       "sample": "every edit, read and glob call a model issued in 74 recorded runs, 2,330 tool calls read, of which 40 edits, 40 ranged reads and 20 glob patterns valid at the seed commit 09e048f were run on every arm, one run on DESKTOP-AHUN9RO",
       "skips": "2 recorded lines unparsed; a call whose file is absent at the seed, or an edit whose old_string does not occur there, is not kept; symbol reads are not a separate row because every recorded read addressed a range and the seed is TypeScript",
+      "commit": "65c73ea9",
+      "version": "0.5.0-rc-fix24",
+      "previous_run": "none, the first dated report of bench/nativetools",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Tool against tool with no model in the loop, tofu edit is right or refuses with a reason on 40 of 40 recorded edits, and changes no file wrongly without saying so. sed on the changed line gets 24 right and changes 16 files wrongly in silence, sed -z with the whole old_string 36 and 4, and a here-doc rewrite 36 and 0 while sending 587,287 bytes against tofu edit's 19,001. tofu read returns 57,522 bytes on 40 reads and never needs a second call, against 54,997 for sed -n and head and tail and 785,105 for cat, which needs a second call on 11. On 20 listings find returns 19,631 bytes, glob 20,989 and ls -R 125,828, and glob and find return different paths on 3 of 20.",
@@ -656,6 +2557,9 @@
       "built_from": "prose",
       "sample": "8 recorded pages, jev-ultrafast's hotel form and seven fastbrowse fixtures converted by hand, one live pass through OpenRouter on jev-1.13-20260917",
       "skips": "the model arm and the live turn against turn run, which need Chrome and a subscription",
+      "commit": "f11b9808",
+      "version": "0.5.0-rc-fix13",
+      "previous_run": "none, the first dated report of bench/browser",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Jev picked the right next browser action on 8 of 8 recorded pages, with a median of 316 ms and 1,340 input tokens a decision, against jev-ultrafast's 178 ms and 5.3k tokens. The whole pass cost $0.000496. The model arm, the turn's own model calling browser_act, is not measured.",
@@ -675,6 +2579,9 @@
       "built_from": "prose",
       "sample": "three throwaway skills, three tasks, one live run each with the listing on and off, on claude-sub/claude-sonnet-5 at low effort",
       "skips": "one run per cell, so no rate; per-run token totals were not recorded, only the listing's cost per request",
+      "commit": "fd942824",
+      "version": "0.5.0-rc-fix5",
+      "previous_run": "none, the first dated report of bench/skills",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: With the skill listing on, the model loaded the matching skill in 2 of 3 tasks and followed it both times. On the third it never loaded the skill and silently ignored the convention. With the listing off, 0 of 3 followed. The listing costs 247 cached tokens per request. Skills earn a place for a person's own conventions, not for library content that must always apply.",
@@ -694,6 +2601,9 @@
       "built_from": "prose",
       "sample": "the 30 most recent top-level turns of .tofu/sessions, 1,956 events, and a long arm of 116 turns and 6,373 events, at 120x36, one run before and one after TOFU-719",
       "skips": "4 work rows cannot be built because tofu has no work screen, ScrollbarPress/shells cannot be built because the one recorded shell has one log line, and 13 component rows run in their own packages",
+      "commit": "5ddc74a5",
+      "version": "0.4.19",
+      "previous_run": "none, the first dated report of bench/tui",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The new interface draws every screen inside the 16.7 ms frame budget on a replay of 30 real turns. Before the frame budget fixes a resize took 97 to 169 ms and the first open of sub-agents 59.6 ms; after them a resize takes 0.3 to 3.2 ms and sub-agents opens in 2.0 ms. The chat scrollbar went from 3.05x the showcase baseline to 0.28x. Every other row that could be built is within 1.5x of the baseline.",
@@ -713,6 +2623,9 @@
       "built_from": "prose",
       "sample": "121 turns readable across both directories after TOFU-560, 2 in the start a server intent domain, both fired",
       "skips": "none named: every readable turn was classified",
+      "commit": "d4525743",
+      "version": "0.4.14",
+      "previous_run": "bench/ask/server/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The same measurement after the reader was corrected: the arm fires on 2 of 121 readable turns, 1.65 percent, where the earlier run read 113 turns and 1.77 percent. The denominator moved because corpus.WalkSessions now returns one turn per outcome segment, so six restarted directories yield their real turns. Every finding about the arm itself is unchanged: 15 of 18 steps removed in one session, 23 of 24 in the other, and the literal name reading still picks the wrong script in both.",
@@ -732,6 +2645,12 @@
       "built_from": "prose",
       "sample": "2,785 ledger rows read from the day files under .tofu/log, of which 1,463 are tool_gate, with 20 carrying a hand labelled outcome",
       "skips": "none: every day file parsed",
+      "commit": "d4525743",
+      "version": "0.4.14",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/calibration/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The ledger holds 2,785 decision rows and 20 of them carry an outcome, all hand labelled, which is the same shape the report of 2026-09-23 found with five fewer rows. Nothing automatic has ever written an outcome, so the labelled set is still the only calibration evidence and it is still far under any floor a threshold could be fitted against. The five new rows since the previous count are all tool_gate, all unlabelled, written on this machine at 01:57 on 2026-09-24, so the labelled count, the near threshold counts and every calibratable verdict are unchanged.",
@@ -751,6 +2670,9 @@
       "built_from": "prose",
       "sample": "the same 118 turns and 635 usable steps as report-2026-09-24.md, split into 348 accountable and 287 unaccountable by the byte floor, plus 1841 assistant messages scanned across 48 header-plus-jsonl turns for a thinking or reasoning field",
       "skips": "same corpus skips as report-2026-09-24.md; the thinking scan only covers turns stored in the header-plus-jsonl schema, the only schema with a message stream, 48 of 118 turns",
+      "commit": "d4525743",
+      "version": "0.4.14",
+      "previous_run": "bench/tokencount/report-2026-09-24-corrected.md",
       "conclusion": [
         {
           "text": "Split by whether the billed tokens could physically come from the step's own visible bytes: on 348 steps where they could, bytes over four still misses by a median of 47.1%, 94.0% out by more than a tenth.",
@@ -770,6 +2692,9 @@
       "built_from": "prose",
       "sample": "the same 118 turns and 635 usable steps as report-2026-09-24.md, split into 348 accountable and 287 unaccountable by TOFU-562's byte floor; the factor is fitted only on the 348",
       "skips": "same corpus skips as report-2026-09-24.md; the factor is fitted and reported on the same steps, not validated on a held-out set",
+      "commit": "a977618e",
+      "version": "0.4.15",
+      "previous_run": "bench/tokencount/report-2026-09-24.md",
       "conclusion": [
         {
           "text": "Fitted per shape on the 348 accountable steps only, the residual median moves from 47.1% to 16.8%, worst 71.2%, 67.0% still out by more than a tenth.",
@@ -789,6 +2714,12 @@
       "built_from": "prose",
       "sample": "118 turns read through bench/corpus.WalkSessions over both wires in the corpus, anthropic and codex, 1033 steps read and 635 usable",
       "skips": "1 of 112 entries under .tofu/sessions is not a turn, HEAD; 58 of 118 turns carry no wire field and are excluded from the per-wire table; 398 of 1033 steps skipped, named by reason in the report's own Corpus section",
+      "commit": "d4525743",
+      "version": "0.4.14",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "none, the first dated report of bench/tokencount",
       "conclusion": [
         {
           "text": "Over 635 usable steps, bytes over four misses the provider's own completion_tokens by a median of 71.2% and a worst of 100.0%; 96.7% of steps are out by more than 10%.",
@@ -808,6 +2739,9 @@
       "built_from": "prose",
       "sample": "113 turns readable across .tofu/sessions and the admin-template sessions, 2 in the start a server intent domain, both fired, steps counted from the recorded calls",
       "skips": "none named: every readable turn was classified",
+      "commit": "d4525743",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/ask/server",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The free arm, read the project's declared commands and act when one candidate fits, fires on 2 of 113 readable turns and removes 15 of 18 recorded steps in one session and 23 of 24 in the other. The line that decides the ticket splits on a definition: read by literal name against the task's own words, exactly one script matches and it is the wrong one in both sessions, 2 of 2, because start needs a production build neither had where dev was right. Read by what the scripts actually run, two candidates fit and the arm asks instead of choosing, so it never picks wrong because it never picks. The cheap arm loses on this corpus and the one that does not lose needs judgement.",
@@ -827,6 +2761,9 @@
       "built_from": "prose",
       "sample": "2,780 ledger rows across the .tofu/log day files, of which 1,458 are tool_gate, 1,105 stop_check and 13 shell_sift, with 204 ad hoc judge questions excluded as not a threshold point",
       "skips": "the 204 inline rows are excluded with the reason stated; ask is counted as zero rows because no writer exists for it, which the report distinguishes from having no labels",
+      "commit": "c08407fe",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/calibration",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The ledger holds 2,780 decision rows and 20 of them carry an outcome, all hand labelled and all attached to tool_gate. Exactly one labelled row sits near a threshold, within three dead bands of risk_deny_at, and none sits near risk_ask_at; stop_check and shell_sift have none at all. A threshold needs roughly 60 labels near its operating point at a 5 percent false positive budget and 300 at 1 percent, so no point is calibratable at either and tool_gate alone needs 59 more near one threshold and 60 near the other. The reach of three dead bands is argued rather than assumed: one dead band is the tie zone the decision code already uses, so a label sitting inside it proves nothing about where the line should sit. There is no arrival rate, because all 20 outcomes were written in a 78 second window five days ago and nothing since, with nineteen of them inside two seconds, which the report calls consistent with a scripted loop rather than a person. Its conclusion is that hand labelling cannot close the gap and the shadow gate writing outcomes automatically is the path that scales. It also found that the ask point has never written a ledger row at all, which is a missing writer rather than a labelling gap.",
@@ -846,6 +2783,9 @@
       "built_from": "prose",
       "sample": "one task, the v1 hono seed of 5 files, one repeat per arm, three arms live on the owner's subscriptions, between 05:42 and 05:52 local time",
       "skips": "8 tests skipped in bench/harness and bench/cmd, all gated behind an environment variable: three live arm tests, two subprocess helpers, two writer gated recorders and the live API test",
+      "commit": "93a68ae6",
+      "version": "0.4.12",
+      "previous_run": "bench/harness/report-2026-09-22.md",
       "conclusion": [
         {
           "text": "Against who. Claude Code 2.1.280 driving claude -p on opus, and Codex CLI 0.155.1 driving codex exec on gpt-5.6-sol.",
@@ -865,6 +2805,9 @@
       "built_from": "prose",
       "sample": "27 labelled cases read out of .tofu/sessions at run time, every row keyed by turn id and tool call id, none hand written",
       "skips": "no .tofu/artifacts fetch was needed and the report says why: this project's recorded history holds no fetched page and no child hand-back tool. All four live tests skip unless TOFU_LIVE is set. Rows whose labelling could not be made consistent were dropped from the corpus rather than force-labelled, and the report names that as a leakage class the standard checks do not cover.",
+      "commit": "b3efc4aa",
+      "version": "0.4.13",
+      "previous_run": "none, the first dated report of bench/instruction",
       "conclusion": [
         {
           "text": "On this corpus jev beats the regex arm, 25 of 27 against 24 of 27, and the margin is two cases. Both arms score high because this project's own recorded sessions carry almost no adversarial instruction-shaped text: what looks like a directive is nearly always the harness's own scaffolding (an oversized-result notice telling the model to call artifact_fetch, a bash-timeout caution, a refused-citation notice), never a planted attack.",
@@ -884,6 +2827,9 @@
       "built_from": "prose",
       "sample": "110 turns read through bench/corpus.WalkSessions, 296 read tool calls, 1 entry skipped as not a .json file, plus the read tool's own source read both ways",
       "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD",
+      "commit": "386edbc8",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/linenumbers",
       "conclusion": [
         {
           "text": "internal/turn/tool_read.go never prefixes a returned line with its number. A whole read (no start_line) returns the file's bytes verbatim; a ranged read prepends one header line naming the span, then the raw lines joined by newlines, still with no per-line number.",
@@ -903,6 +2849,9 @@
       "built_from": "prose",
       "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
       "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
+      "commit": "386edbc8",
+      "version": "0.4.14",
+      "previous_run": "bench/prefix/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "With the real composed system prompt for a real task, 9 rules firing on top of the two builtin blocks, the per-session rewrite is 4492 bytes, an estimated 1123 tokens.",
@@ -922,6 +2871,9 @@
       "built_from": "prose",
       "sample": "one real task, write a fix for the flaky test in internal/turn/compose_test.go, against the shipped rule library under library/, composed and encoded directly with no live call and no network call",
       "skips": "0, everything measured runs; TestGeneratorReproducesTheSameBytesTwice composes and measures the same rules twice in process rather than by re-invoking the generator, since report.Generate refuses to overwrite a dated report already on disk",
+      "commit": "7b9626f3",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/prefix",
       "conclusion": [
         {
           "text": "With the real composed system prompt for a real task, 9 rules firing on top of the two builtin blocks, the per-session rewrite is 4135 bytes, an estimated 1033 tokens.",
@@ -941,6 +2893,9 @@
       "built_from": "rerun",
       "sample": "0 rows against a floor of 78, .tofu/promotions.jsonl absent anywhere under the tree",
       "skips": "everything: no run has produced a promotion log since the first count",
+      "commit": "d4525743",
+      "version": "0.4.14",
+      "previous_run": "bench/promote/report-2026-09-21.md",
       "conclusion": [
         {
           "text": "0 rows exist in the promotion log today, 2026-09-23, at .tofu\\promotions.jsonl. 0 distinct turns stand behind them and 0 carry a usable label.",
@@ -960,6 +2915,12 @@
       "built_from": "prose",
       "sample": "47 of 110 recorded sessions carry occupancy and could be measured, with two crossings and two forks among them",
       "skips": "63 of 110 sessions could not be measured, split by reason: 55 predate the occupancy field, 4 never wrote it to any step, 4 carry no steps at all. Three live tests stay skipped behind TOFU_LIVE and no model call was made.",
+      "commit": "36cb8150",
+      "version": "0.4.14",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/recall/report-2026-09-20.md",
       "conclusion": [
         {
           "text": "- Whether a wrong eviction is visible when one happens: the two real forks never produced one to check against, so the re-fetch label is proved to work in code (bench/recall/session.go, report-2026-09-20.md) but has never caught a real mistake.",
@@ -979,6 +2940,9 @@
       "built_from": "prose",
       "sample": "all 239 fire lines across three rules log files, with all 25 em dash fires and the full target list of the other 214 read by hand",
       "skips": "0 unreadable lines. The log records a per package finding count rather than a file and line, so the exact test that tripped a rule cannot be named without rerunning the checker, which the report says rather than guesses.",
+      "commit": "60129414",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/rules",
       "conclusion": [
         {
           "text": "comments: shadow: never fired, so there is no evidence it should enforce or that it should delete; leave it recording until it has a fire to judge.",
@@ -998,6 +2962,9 @@
       "built_from": "prose",
       "sample": "one recorded 11 step turn measured in full, plus 51 of 111 recorded turns carrying cache accounting, of which 24 wrote to cache and 15 are at today's 18 tool scale",
       "skips": "60 of 111 turns carry no usable cache accounting, either predating it or holding no steps, and the report gives the split. No live model call was made and no account was spent.",
+      "commit": "5968d7ec",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/schemas",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The tool schemas a turn sends cost 16,575 bytes on every request, about 4,143 tokens for all 18 tools, and deferring them is not worth building. The figure is measured by encoding a real request with and without the tools array and taking the difference; summing the tools individually gives 16,492, and the 83 byte gap is the array's own brackets and commas. Caching is what decides it: on the measured turn the block was written to cache once on step one and never again across eleven steps, and 81.6 percent of that turn's billed input was cache reads. Across the corpus, 24 recorded turns wrote to cache and 23 of them made a second model call and read the write back; at today's 18 tool scale, 14 of 15 did. The deferral mechanism is named and costed rather than assumed: a catalog line plus a fetch before first use would have added 5 round trips to the measured turn to save at most 2,873 tokens, paid once at cache-write price. The only case it would pay is a turn that makes exactly one model call and never returns, which was 1 of 24.",
@@ -1017,6 +2984,12 @@
       "built_from": "prose",
       "sample": "23 recorded search tool calls read out of .tofu/sessions at run time, 20 replayed against the tracked tree of 1513 files, 3 skipped because the recorded path is gone; cost measured 5 runs each, median",
       "skips": "1 entry under .tofu/sessions that is not a turn, 3 of 23 rows whose recorded path is gone, each logged with its turn id; every test skips with a stated reason when .tofu/sessions is absent",
+      "commit": "93a68ae6",
+      "version": "0.4.12",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "none, the first dated report of bench/search",
       "conclusion": [
         {
           "text": "The plan's claim that four search patterns cost nothing is false as written, and the rescue rate on recorded searches is zero.",
@@ -1036,6 +3009,9 @@
       "built_from": "prose",
       "sample": "110 recorded sessions, 23 search calls joined to a later acting call, 15 hits of which 13 carry a distinct task; no arm ran and no call was made",
       "skips": "1 entry under .tofu/sessions that is not a turn; the arms stay parked and their skip names the leakage, not the count; the report writer is gated behind TOFU_LIVE and makes no network call itself",
+      "commit": "b06242a1",
+      "version": "0.4.13",
+      "previous_run": "bench/shortlist/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "The search join is the right denominator by argument, and it clears the count floor of 12 at 13. It does not clear the leakage floor: 13 of 13 rows name their own label in their own task.",
@@ -1055,6 +3031,12 @@
       "built_from": "prose",
       "sample": "111 recorded entries read at run time, 110 turns parsed, 8 recordable and 2 distinct tasks; no arm was run and no call was made",
       "skips": "1 entry under .tofu/sessions that is not a turn; the two live arm tests stay skipped and their skip message now cites the two against twelve gap",
+      "commit": "b29d651e",
+      "version": "0.4.13",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/shortlist/report-2026-09-21.md",
       "conclusion": [
         {
           "text": "Twelve questions would decide the observed gap. The recorded corpus can support two distinct tasks.",
@@ -1074,6 +3056,9 @@
       "built_from": "prose",
       "sample": "13 shell_sift rows out of 3,039 in .tofu/log, all from one turn and two shell tool calls; the byte and session figures beside them are re-run over 110 recorded sessions",
       "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD, not a .json file; the live route tests skip unless TOFU_LIVE is set",
+      "commit": "f7533784",
+      "version": "0.4.12",
+      "previous_run": "bench/sift/report-2026-09-22-rerun.md",
       "conclusion": [
         {
           "text": "shell_sift is live. The ledger carries 13 real shell_sift decisions, all from one turn, and this report measures them instead of guessing from TOFU-217.",
@@ -1093,6 +3078,12 @@
       "built_from": "prose",
       "sample": "6 rounds per shape on DESKTOP-AHUN9RO, 12 samples for shell resolution, a temporary directory carrying a package.json for the node case, no live model call and no network call",
       "skips": "none: every round completed and no probe reached its 2000 ms limit",
+      "commit": "e32f4102",
+      "version": "0.4.14",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/startup/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "Shell resolution: median 96.0 ms, worst 102.0 ms, over 12 samples, crosses it.",
@@ -1112,6 +3103,9 @@
       "built_from": "prose",
       "sample": "6 interleaved rounds on DESKTOP-AHUN9RO, 12 baseline samples and 6 project samples each for go and node, no live model call and no network call",
       "skips": "none: every round completed and no probe reached its 2000 ms limit",
+      "commit": "e32f4102",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/startup",
       "conclusion": [
         {
           "text": "Shell resolution: median 101.5 ms, worst 135.3 ms, over 12 samples, crosses it.",
@@ -1131,6 +3125,9 @@
       "built_from": "prose",
       "sample": "every top level package under bench, 33 of them, with a computed source and test line baseline per package so a later sweep can diff it",
       "skips": "none: the sweep reads source rather than recorded material, so there is nothing to skip. No live model call and no write to .tofu.",
+      "commit": "cd3f65df",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/sweep",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Five independent readers of the recorded sessions exist where one shared reader is imported by nineteen packages, and three of the four extras have a real reason: one needs per step token fields the shared record does not carry, one needs occupancy and fork and compaction and reads through the session store instead, and one is a byte scan for a quota key rather than a turn parse. Only one re-walks by hand what the shared walker already does, and that is a clean merge. The most repeated shape is the smallest: six separate declarations of a skip record holding a path and a reason, with two pairs sharing a name across different packages. Two apparent duplications are left alone with arguments: a nearest rank percentile over integers is correct where an interpolated float one is not, because a fractional value between two byte counts means nothing. One thing that looks like duplication is named as not being any: four packages sum a cost with the same loop, and each sums a different field on a different struct answering a different question, so a shared helper would save one line per site and put a layer between the reader and the field. Nothing was merged, deleted or rewritten: the deliverable is the list and the judgment.",
@@ -1150,6 +3147,12 @@
       "built_from": "prose",
       "sample": "9 distinct read and search artifacts over the 32,768 byte cap, out of 39 stored, with 3 judged live and 6 skipped for a stated reason",
       "skips": "6 of the 9 artifacts, each named with its turn and its paragraph count against the remaining call budget; both live tests skip unless TOFU_LIVE is set",
+      "commit": "6a1e8315",
+      "version": "0.4.13",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/thrift/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The sibling report of the same day measured the judged cut on 8 results that were all under the truncation cap, where fixed truncation never fired. This one reaches the results over it, where the arm genuinely cuts, and the judged cut removes a further 3,367 of 24,619 tokens, 13.7 percent, against the 1.5 percent mechanical floor from TOFU-338. Nine distinct over-cap read and search artifacts were identified in the corpus and 3 were judged inside a stated cap of 250 live calls; 247 calls were made for $0.013247, against 393 calls and $0.040968 for the first run. The worked example is a design document, not a test log: fixed truncation drops 781 bytes from its middle and every one of those bytes falls inside a single paragraph the judgment marked keep, so truncation by position drops exactly the part the judgment says still matters. The 6 unjudged artifacts are each skipped with a named reason, a paragraph count over the remaining call budget, and two of them are 798 paragraph reads that would need roughly 0.18 dollars more to judge.",
@@ -1169,6 +3172,12 @@
       "built_from": "prose",
       "sample": "110 recorded sessions read out of 111 entries, 119 stored artifact handles, and 8 read and search results judged live inside a 400 call cap with 31 skipped",
       "skips": "1 entry under .tofu/sessions that is not a turn; 31 live calls skipped, each named with its reason: a result not split into more than one paragraph, or a paragraph count that would exceed the live call cap",
+      "commit": "0680c367",
+      "version": "0.4.12",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/thrift/report-2026-09-21.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: A judged cut over a read or search result was measured live against fixed truncation, 393 Jev calls for $0.040968, and it removed 402 of 21,569 tokens, 1.9 percent. TOFU-338 measured a mechanical pass at 1.5 percent of recorded result bytes, so the judgment clears that floor and does not clear it widely. The arm it is compared against did not fire on this sample: all 8 measured results are under the 32,768 byte truncation cap and the largest is 12,793 bytes, so the 1.9 percent came off results fixed truncation would have passed through whole. 9 of 39 stored read and search artifacts in the corpus exceed the cap and none fell inside the live call budget, so the arm-firing comparison cannot be made on this sample. Three arms over the corpus total read neither 570,999 tokens, rtk alone 458,199, rtk with the judged cut 457,797, and the last term is not extrapolated past the 8 calls actually judged. Task outcome was not measured, so fewer tokens with the same outcome is not claimed. The point ships off.",
@@ -1188,6 +3197,9 @@
       "built_from": "prose",
       "sample": "the same 18-tool registry cmd/tofu/run.go builds for a plain tofu run, that TOFU-520 measured",
       "skips": "none: no live model call and no network call, len(Description) and marshalled len(Parameters) read straight off the registry",
+      "commit": "f5920554",
+      "version": "0.4.14",
+      "previous_run": "bench/tokens/report-2026-09-21-pinned.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Description bytes are 69.7 percent of the wire schema bytes over all 18 tools, below the 79 percent another harness reports, 11,559 description bytes and 3,987 parameter bytes of a 16,574 byte whole. Seventeen of the eighteen tools measure byte for byte identical to TOFU-520's 16,575; bash alone differs by one byte, because its description embeds the shell's own pwd for the directory the generator ran from, one character shorter here than in bench/schemas/gen, and that is the whole of the gap.",
@@ -1207,6 +3219,9 @@
       "built_from": "prose",
       "sample": "the same corpus as report-2026-09-23.md: 111 entries under .tofu/sessions, 110 sessions, 1,412 tool calls, 67 failures, 1 entry skipped as not a .json file",
       "skips": "1 entry under .tofu/sessions that is not a turn, logged as HEAD",
+      "commit": "af92214d",
+      "version": "0.4.14",
+      "previous_run": "bench/toolerrors/report-2026-09-23.md",
       "conclusion": [
         {
           "text": "67 of 1412 recorded tool calls failed (4.7%), and 71.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.",
@@ -1226,6 +3241,9 @@
       "built_from": "prose",
       "sample": "1412 tool calls over 110 recorded sessions under .tofu/sessions, read once through bench/corpus.WalkSessions, no live call and no network call",
       "skips": "1 of 111 entries skipped, HEAD, not a .json file; 0 tool calls skipped; 0 of 5 test functions skipped",
+      "commit": "386edbc8",
+      "version": "0.4.14",
+      "previous_run": "none, the first dated report of bench/toolerrors",
       "conclusion": [
         {
           "text": "67 of 1412 recorded tool calls failed (4.7%), and 74.6% of those failures carry no reason this corpus can classify beyond a bare nonzero exit code.",
@@ -1245,6 +3263,12 @@
       "built_from": "prose",
       "sample": "2 recorded context forks",
       "skips": "the account fork arm could not be measured, because no recorded account fork exists",
+      "commit": "a8e9f43b",
+      "version": "0.4.8",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "none, the first dated report of bench/forkcache",
       "conclusion": [
         {
           "text": "The first request after a context fork READS cache and writes none. On both recorded forks it read the whole cacheable head and paid zero cache write.",
@@ -1264,6 +3288,9 @@
       "built_from": "prose",
       "sample": "4 recorded rows, 3 of them carrying a turn count and a wall clock, plus a 3-repeat fixture that fixes the output shape",
       "skips": "7 named: 3 live-gated, 2 needing an env-named tree, 1 measuring from a stored turn row, 1 helper process",
+      "commit": "d1093464",
+      "version": "0.4.8",
+      "previous_run": "bench/harness/report-2026-09-20.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Three arms, four tasks and three repeats is 36 runs and 83 minutes of arm time at the median of the recorded rows, gate time on top and never measured. The harness stopped printing a mean over runs: a comparison where either arm has fewer than two passing repeats prints not separable, and a task whose door opens on one repeat and shuts on the next ranks no arm.",
@@ -1283,6 +3310,9 @@
       "built_from": "prose",
       "sample": "404 files and 18,401 rows read, 0 readings over 0 distinct accounts",
       "skips": "0 on the real corpus, stated rather than hidden",
+      "commit": "b60ec83d",
+      "version": "0.4.8",
+      "previous_run": "none, the first dated report of bench/picker",
       "conclusion": [
         {
           "text": "The corpus cannot separate the three arms. There are zero recorded window readings in .tofu, over zero distinct accounts, so first usable, round robin and headroom make the same choice at every decision point there is, which is none.",
@@ -1302,6 +3332,9 @@
       "built_from": "rerun",
       "sample": "the same 34 recorded shell results at the shipped keep_at 0.50, three full live runs of 297 calls each, 891 calls, $0.02726 counted plus an identical first sitting whose output was lost, $0.05452 spent",
       "skips": "0 of 34 corpus rows skipped for a missing field, 0 of 891 calls failed, 4 tests skip offline wanting TOFU_LIVE=1 or TOFU_REWRITE_CORPUS=1",
+      "commit": "b9cf552b",
+      "version": "0.4.10",
+      "previous_run": "bench/sift/report-2026-09-22-rtk.md",
       "conclusion": [
         {
           "text": "The rerun spread is one needle and 0.4 points of bytes saved, so it cannot explain a move of three needles and 27.5 points, and the cause is on the model's side under an unchanged build id.",
@@ -1321,6 +3354,9 @@
       "built_from": "rerun",
       "sample": "the same 34 recorded shell results the regex and Jev arms were scored on, one needle planted per row, four methods through one scoring function, two full live runs plus an earlier single run, $0.04659 spent",
       "skips": "4 tests skipped offline, three wanting TOFU_LIVE=1 and one wanting TOFU_REWRITE_CORPUS=1; no corpus row skipped, all 34 scored by all four methods; 21 rows have no rtk filter and are scored as passthrough rather than dropped",
+      "commit": "34c6ec67",
+      "version": "0.4.9",
+      "previous_run": "bench/sift/report-2026-09-22.md",
       "conclusion": [
         {
           "text": "rtk in front of Jev buys a 29 percent cheaper Jev call and pays 5 of 34 needles for it, and neither rtk arm beats Jev alone.",
@@ -1340,6 +3376,9 @@
       "built_from": "rerun",
       "sample": "109 recorded sessions carrying 419 shell results, 2,999 ledger rows of which 1,756 are wire calls, and the 34 row shell corpus for candidate units per sift",
       "skips": "243 ledger rows with no point, 1,000 with a point but no wire call, 1 session entry named HEAD; no row skipped for a missing field",
+      "commit": "34c6ec67",
+      "version": "0.4.9",
+      "previous_run": "bench/sift/report-2026-09-21.md",
       "conclusion": [
         {
           "text": "Switching shell_sift@1 from shadow to enforced costs a median $0.00054 a session and $0.01107 in the worst session of 109 recorded, and it stops sending the model 54.0 percent of every shell result, which is 13.7 percent of every byte the model reads back from a tool.",
@@ -1359,6 +3398,9 @@
       "built_from": "rerun",
       "sample": "100 questions across five trees, 20 named, 40 described, 40 intent, six answers repinned first because the tofu tree had moved under them",
       "skips": "80 of 100 named, every described and intent question, skipped by git grep quoted for having no backtick term; 4 gated tests named in the output",
+      "commit": "c8397a94",
+      "version": "0.4.9",
+      "previous_run": "none, the first dated report of bench/tools",
       "conclusion": [
         {
           "text": "29 of 100 is the best a free arm does, git grep with one realistic term, and the corpus cannot tell it apart from tofu search at 18 of 100: 24 questions only the first gets, 13 only the second, exact two sided p = 0.10.",
@@ -1378,6 +3420,12 @@
       "built_from": "prose",
       "sample": "109 recorded sessions, 51 reverts and 48 contradictions",
       "skips": "82 of 109 sessions carry no shape at all, and one session holds 17 of the 51 reverts",
+      "commit": "67afb548",
+      "version": "0.4.8",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "82890ac1",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "none, the first dated report of bench/wrongpath",
       "conclusion": [
         {
           "text": "The measure cannot separate two arms and this line of work stops here.",
@@ -1397,6 +3445,9 @@
       "built_from": "prose",
       "sample": "7 real moments taken from the ticket logs",
       "skips": "",
+      "commit": "e3c805d2",
+      "version": "0.4.6",
+      "previous_run": "none, the first dated report of bench/ask",
       "conclusion": [
         {
           "text": "The free arm's three are exactly the three widenings. That is ask.md's own claim holding: the ownership boundary already knows the grant case, exactly and for nothing.",
@@ -1416,6 +3467,9 @@
       "built_from": "prose",
       "sample": "0 rows against a floor of 78",
       "skips": "everything: no run has produced a promotion log",
+      "commit": "e3c805d2",
+      "version": "0.4.6",
+      "previous_run": "none, the first dated report of bench/promote",
       "conclusion": [
         {
           "text": "unparsed: no heading in this file names its own answer",
@@ -1435,6 +3489,9 @@
       "built_from": "prose",
       "sample": "70 hand-labelled paragraphs, 35 keep and 35 drop, over 25 tasks, judged twice",
       "skips": "one labeller and no second reviewer, which the report names as its own limitation",
+      "commit": "a632f57e",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/readworth",
       "conclusion": [
         {
           "text": "The length-15 free arm, and read_worth should be unwired in favor of it. At the point where jev's accuracy sits, the length floor saves more bytes for the same accuracy, on both runs, with no live call and no cost.",
@@ -1454,6 +3511,9 @@
       "built_from": "prose",
       "sample": "4 questions, drawn from 131 recorded turns of which 20 ever write",
       "skips": "12 of those 20 turns are file creation, where there is no existing file to localise",
+      "commit": "a4730203",
+      "version": "0.4.1",
+      "previous_run": "none, the first dated report of bench/shortlist",
       "conclusion": [
         {
           "text": "The ticket asked for at least thirty file-localisation questions drawn from real recorded turns in .tofu/sessions. The corpus holds four.",
@@ -1473,6 +3533,9 @@
       "built_from": "prose",
       "sample": "34 needles, two full live runs, 594 live decisions",
       "skips": "",
+      "commit": "2e0afddc",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/sift",
       "conclusion": [
         {
           "text": "The judgment, on needles kept at equal bytes saved,",
@@ -1496,6 +3559,9 @@
       "built_from": "prose",
       "sample": "78 labelled steps of 79 recorded",
       "skips": "",
+      "commit": "2fe02af8",
+      "version": "0.4.2",
+      "previous_run": "bench/stopcheck/report-2026-09-20.md",
       "conclusion": [
         {
           "text": "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
@@ -1515,6 +3581,9 @@
       "built_from": "prose",
       "sample": "9 comparable tasks, 10 runs with the rules on and 10 with them off",
       "skips": "one task of ten is not comparable between the arms and is out of the count",
+      "commit": "e3c805d2",
+      "version": "0.4.6",
+      "previous_run": "none, the first dated report of bench/testquality",
       "conclusion": [
         {
           "text": "Dead-test count over the nine comparable tasks: off 53, on 53. Net zero.",
@@ -1534,6 +3603,9 @@
       "built_from": "prose",
       "sample": "107 recorded sessions, 1,401 tool calls, 419 of them bash",
       "skips": "counted and named in the report's own Skips section",
+      "commit": "e3c805d2",
+      "version": "0.4.6",
+      "previous_run": "none, the first dated report of bench/thrift",
       "conclusion": [
         {
           "text": "The volume case does not hold. A recorded session runs a median of 7 tool calls and a worst case of 55, not 9,000.",
@@ -1553,6 +3625,12 @@
       "built_from": "prose",
       "sample": "136 glob calls replayed against a tree of 1,223 tracked files",
       "skips": "counted and named in the report's own Skips section; the pin drops every call that named an ignored path",
+      "commit": "198947c1",
+      "version": "0.4.6",
+      "rechecked_on": "2026-10-10",
+      "rechecked_commit": "560c8075",
+      "rechecked_version": "0.5.10-fix1",
+      "previous_run": "bench/tokens/report-2026-09-21.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Replayed against a pinned commit, the safe band for the glob path cap is 207 to 1,222 and 300 sits inside it with nothing in between, so the cap is a judgement rather than a measurement. The cap is unchanged at 300.",
@@ -1572,6 +3650,9 @@
       "built_from": "prose",
       "sample": "109 recorded turns read through bench/corpus",
       "skips": "counted and named in the report's own Corpus and skips section",
+      "commit": "e3c805d2",
+      "version": "0.4.6",
+      "previous_run": "none, the first dated report of bench/tokens",
       "conclusion": [
         {
           "text": "Yes. glob is 88.7% of every result byte the model read, 48,186,030 of 54,295,422 over 109 recorded turns, and the cap cuts it to 3.2% and the total to 6,313,245 bytes, 88.4% less.",
@@ -1591,6 +3672,9 @@
       "built_from": "prose",
       "sample": "102 replayed turns",
       "skips": "8 of 110 entries under .tofu/sessions did not parse as a recorded turn",
+      "commit": "b5d43055",
+      "version": "0.4.1",
+      "previous_run": "bench/turn/report-2026-09-18.md",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Replaying 102 recorded turns, the repair rule saves 2 round trips and a derived 16513 ms. Refuse saves nothing by construction and remember saves nothing at all, and remember is not kept.",
@@ -1610,6 +3694,9 @@
       "built_from": "prose",
       "sample": "24 pages: 21 focused and 3 reference pages up to 390KB",
       "skips": "the whole first round was thrown out, because both arms had nothing to remove on those pages",
+      "commit": "2e0afddc",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/websift",
       "conclusion": [
         {
           "text": "The readability rule, a free arm, and the judgment is not wired.",
@@ -1633,6 +3720,9 @@
       "built_from": "prose",
       "sample": "1 recorded turn, 10 write calls",
       "skips": "the three-arm table, Claude against Codex against Tofu, has never been run and waits on E4",
+      "commit": "1208fb09",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/harness",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: The three-arm comparison this package exists for has never been run. The one real figure it produces is a transform measure over 1 recorded turn and its 10 write calls.",
@@ -1652,6 +3742,9 @@
       "built_from": "prose",
       "sample": "one recorded gremlins run: 88 killed, 16 lived, 5 not covered",
       "skips": "the after run is not reproduced here and its ticket log is empty, so a board line is the only surviving source",
+      "commit": "1208fb09",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/mutate",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Mutation efficacy on internal/judge/policy, reproduced today from the committed fixture: 88 killed, 16 lived, 84.62%. The after figures, 95.19 and 100, come from a board entry rather than a rerun.",
@@ -1671,6 +3764,9 @@
       "built_from": "prose",
       "sample": "20 real forks",
       "skips": "",
+      "commit": "1208fb09",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/recall",
       "conclusion": [
         {
           "text": "From the TOFU-246 log, dated 2026-09-21, taken from a ticket log rather than a rerun: the free arm, and gap 11 is struck rather than built.",
@@ -1690,6 +3786,9 @@
       "built_from": "prose",
       "sample": "78 labelled steps of 79 recorded",
       "skips": "",
+      "commit": "2fe02af8",
+      "version": "0.4.2",
+      "previous_run": "bench/stopcheck/report-2026-09-19.md",
       "conclusion": [
         {
           "text": "the typed arm won, 71 agreements against 68 out of 78 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
@@ -1709,6 +3808,9 @@
       "built_from": "prose",
       "sample": "17 recorded turns, 14 write calls",
       "skips": "",
+      "commit": "1208fb09",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/transform",
       "conclusion": [
         {
           "text": "Hand read from bench/report/handread.json: Only 3 of 14 recorded writes are the shape a typed edit exists for; the other 11 create a file that did not exist. One changed line in the largest recorded file costs 4,284 output tokens to rewrite and 96 to express typed.",
@@ -1728,6 +3830,9 @@
       "built_from": "prose",
       "sample": "89 cases, 5 arms",
       "skips": "the fable arm did not finish its half, 51 cases of 89",
+      "commit": "47fc09be",
+      "version": "none, older than konst.Version",
+      "previous_run": "bench/cost/report-2026-09-18.md",
       "conclusion": [
         {
           "text": "not quoted here: this report is withdrawn in part, and the note says by whom",
@@ -1747,6 +3852,9 @@
       "built_from": "prose",
       "sample": "41 labelled steps",
       "skips": "the corpus was extended to 78 steps after this run, so every figure here is measured against a smaller set",
+      "commit": "2f089002",
+      "version": "none, older than konst.Version",
+      "previous_run": "none, the first dated report of bench/stopcheck",
       "conclusion": [
         {
           "text": "the typed arm won, 37 agreements against 36 out of 41 labelled steps, which on a corpus this size is one labeller's judgement on a handful of steps rather than a result.",
@@ -1766,6 +3874,9 @@
       "built_from": "prose",
       "sample": "5 state sizes at 3 runs each, plus a 6 case gate battery",
       "skips": "",
+      "commit": "1208fb09",
+      "version": "0.4.2",
+      "previous_run": "none, the first dated report of bench/api",
       "conclusion": [
         {
           "text": "No first call was discarded as a warm-up. Latency by state size, 3 runs each, median/tokens: 300 tokens 305 ms/920, 1k 320 ms/1982, 4k 428 ms/6748, 12k 486 ms/19446, 28k 598 ms/32086.",
@@ -1785,6 +3896,9 @@
       "built_from": "prose",
       "sample": "6 cases, 4 arms",
       "skips": "accuracy is not readable from this run at all: every arm scored 6 of 6",
+      "commit": "d5ef9117",
+      "version": "none, older than konst.Version",
+      "previous_run": "none, the first dated report of bench/cost",
       "conclusion": [
         {
           "text": "Jev decided for $0.000041 per correct decision and opus for $0.005351, 131 times Jev. On this date both sides were money on the same credential kind, so the ratio was defined.",
@@ -1804,6 +3918,9 @@
       "built_from": "prose",
       "sample": "4 tasks, 3 reps, 2 arms, 24 turns",
       "skips": "3 of 24 runs failed their outcome check and are out of the timing figures",
+      "commit": "f827c037",
+      "version": "none, older than konst.Version",
+      "previous_run": "none, the first dated report of bench/turn",
       "conclusion": [
         {
           "text": "unparsed: no heading in this file names its own answer",
@@ -1823,6 +3940,9 @@
       "built_from": "prose",
       "sample": "6 cases, two wordings of the same question set",
       "skips": "",
+      "commit": "d5ef9117",
+      "version": "none, older than konst.Version",
+      "previous_run": "none, the first dated report of bench/wording",
       "conclusion": [
         {
           "text": "Keep tool_gate@1. No case's verdict changed between the two wordings, every margin sits inside or explained beyond the 0.00 to 0.05 rerun spread BOJI-006 measured on this corpus (1 of 6 cases (case-4-rm-rf.json) had a per-question margin wider than that spread, see above), and v2 costs more for the identical decision on every case.",
@@ -1842,6 +3962,11 @@
       "note": "two offline replays over ~/.tofu/projects, rerun 2026-10-05 at 7afccaa under TOFU-1083, 0 dated reports so far. cache/shrink: shrinking browser pages only when the batch pays is 427.67 USD against 445.57 at list price, 4.0% less over 11,801 requests, with 10 requests over the context target against 1. cache/ttl: history at 5 minutes is 14.93% less than all at 1 hour and all at 5 minutes 20.51% less, over 14,934 requests whose record holds no person pausing; the layout is open in TOFU-1064."
     },
     {
+      "package": "cli",
+      "kind": "measurement with no dated report",
+      "note": "passes.md, written by go run ./bench/cli, 5 passes from 2026-10-13: v0, v1-runewidth and v1-chroma at 06042c16 (tofu 0.5.11-fix2), v2-ceiling, v2-gogc and v2-pool at f347e62d (tofu 0.5.12). Its rows name a commit and no tofu version; the version here is read from internal/konst at that commit."
+    },
+    {
       "package": "cmd",
       "kind": "runner",
       "note": "the bench command, package main. Runs the other benches, measures 0 things of its own."
@@ -1852,9 +3977,14 @@
       "note": "the shared reader over recorded sessions and the 6 gate cases. Every bench that reads .tofu/sessions reads it through here."
     },
     {
+      "package": "fanin",
+      "kind": "measurement with no dated report",
+      "note": "TOFU-1307, 2026-10-13, 2 runs on 5 cassettes before (5a267524) and after (committed as 2d7ce78a), both tofu 0.5.12. The bench prints its table and writes no file; the rows are copied from the board into bench/report/runs/board-2026-10-13.md."
+    },
+    {
       "package": "learn",
       "kind": "measurement with no dated report",
-      "note": "TOFU-1176, 2026-10-07, owing a run. labels.txt holds 50 made-up example labels since TOFU-1185, so a run names its own chain with --chain and its own labels with --labels, and needs Jev and claude. No measured number is committed."
+      "note": "learn/jobs, TOFU-1305, 2026-10-13 at 6d565412 and rerun 2026-10-14 at 9586ec60: 4 of 5 labelled repeated jobs found, 0 false, on 5 made-up sessions; the output is in bench/report/runs/learn-jobs-2026-10-14.txt and on the first tab. The labels.txt run of TOFU-1176 needs Jev and claude and has no committed number."
     },
     {
       "package": "memory",
@@ -1872,9 +4002,29 @@
       "note": "reads 1 session folder and prints where its time went, with 0 dated reports of its own."
     },
     {
+      "package": "profile",
+      "kind": "measurement with no dated report",
+      "note": "report.md, undated by name, runs of 2026-10-13 on the build 0.5.13-fix1+dev at f360965a and after TOFU-1319 at 60c41fb3, 1 run per row. runs/ holds every row as JSON."
+    },
+    {
       "package": "report",
       "kind": "runner",
-      "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own."
+      "note": "this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own; bench/report/runs holds the 3 records it quotes that no other bench writes to disk."
+    },
+    {
+      "package": "rivals",
+      "kind": "measurement with no dated report",
+      "note": "report.md, undated by name, 15 live runs of 2026-10-13 at f360965a: tofu 0.5.13-fix1+dev, Claude Code 2.1.296, omp 18.3.2 and codex-cli 0.155.1, 3 runs each. runs/ holds every run as JSON."
+    },
+    {
+      "package": "scale",
+      "kind": "measurement with no dated report",
+      "note": "report.md, undated by name, 1 run per rung of 0 to 10 sub-agents on 2026-10-13, committed at b7c52479 (tofu 0.5.13-fix1). results.jsonl names no tofu version."
+    },
+    {
+      "package": "sessiontime",
+      "kind": "measurement with no dated report",
+      "note": "prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/report/runs/sessiontime-2026-10-14.txt."
     },
     {
       "package": "stat",
@@ -1885,7 +4035,7 @@
   "counts": {
     "reports": 64,
     "packages_with_a_dated_report": 39,
-    "packages_with_no_dated_report": 9,
+    "packages_with_no_dated_report": 15,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2

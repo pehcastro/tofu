@@ -24,21 +24,40 @@ type handRead struct {
 	From   Provenance `json:"from"`
 	Sample string     `json:"sample"`
 	Skips  string     `json:"skips"`
+	Measured
+}
+
+type Measured struct {
+	Commit           string `json:"commit"`
+	Version          string `json:"version"`
+	RecheckedOn      string `json:"rechecked_on,omitempty"`
+	RecheckedCommit  string `json:"rechecked_commit,omitempty"`
+	RecheckedVersion string `json:"rechecked_version,omitempty"`
+}
+
+func (m Measured) Line() string {
+	line := fmt.Sprintf("first committed at %s, tofu %s", m.Commit, m.Version)
+	if m.RecheckedOn == "" {
+		return line
+	}
+	return fmt.Sprintf("%s; rechecked %s at %s, tofu %s", line, m.RecheckedOn, m.RecheckedCommit, m.RecheckedVersion)
 }
 
 type Report struct {
-	Package     string     `json:"package"`
-	Date        string     `json:"date"`
-	Source      string     `json:"source"`
-	Figure      string     `json:"figure"`
-	BuiltFrom   Provenance `json:"built_from"`
-	Sample      string     `json:"sample"`
-	Skips       string     `json:"skips"`
-	Conclusion  []Said     `json:"conclusion"`
-	Unparsed    bool       `json:"conclusion_unparsed"`
-	State       State      `json:"state"`
-	StateSource string     `json:"state_source"`
-	StateNote   string     `json:"state_note"`
+	Package   string     `json:"package"`
+	Date      string     `json:"date"`
+	Source    string     `json:"source"`
+	Figure    string     `json:"figure"`
+	BuiltFrom Provenance `json:"built_from"`
+	Sample    string     `json:"sample"`
+	Skips     string     `json:"skips"`
+	Measured
+	Previous    string `json:"previous_run,omitempty"`
+	Conclusion  []Said `json:"conclusion"`
+	Unparsed    bool   `json:"conclusion_unparsed"`
+	State       State  `json:"state"`
+	StateSource string `json:"state_source"`
+	StateNote   string `json:"state_note"`
 }
 
 type Said struct {
@@ -97,6 +116,7 @@ func Build(benchRoot string) (Data, error) {
 			BuiltFrom:   read.From,
 			Sample:      read.Sample,
 			Skips:       read.Skips,
+			Measured:    read.Measured,
 			Conclusion:  quotable(entry),
 			Unparsed:    entry.Conclusion == Unparsed,
 			State:       entry.State,
@@ -128,7 +148,17 @@ func Build(benchRoot string) (Data, error) {
 	data.Wiring = wiringOf(table, callers)
 	data.MethodTable = table.File
 	data.Judgments = rowsOf(data.Answers, wiringByPoint(data.Wiring))
-	return data, nil
+	for at, report := range data.Reports {
+		data.Reports[at].Previous = "none, the first dated report of bench/" + report.Package
+		for _, older := range data.Reports[at+1:] {
+			if older.Package == report.Package {
+				data.Reports[at].Previous = older.Source
+				break
+			}
+		}
+	}
+	data.History, err = readHistory(filepath.Join(benchRoot, "report", "history.json"), tree)
+	return data, err
 }
 
 func readHandRead(path string) (map[string]handRead, error) {
@@ -143,8 +173,8 @@ func readHandRead(path string) (map[string]handRead, error) {
 		default:
 			return nil, fmt.Errorf("bench/report/handread.json: %s says it was built from %q, which is neither prose nor rerun", item.Report, item.From)
 		}
-		if item.Figure == "" || item.Says == "" || item.Sample == "" {
-			return nil, fmt.Errorf("bench/report/handread.json: %s needs a figure, the sentence that says what it means, and the sample it rests on", item.Report)
+		if item.Figure == "" || item.Says == "" || item.Sample == "" || item.Commit == "" || item.Version == "" {
+			return nil, fmt.Errorf("bench/report/handread.json: %s needs a figure, the sentence that says what it means, the sample it rests on, and the commit and tofu version it measured", item.Report)
 		}
 		byReport[item.Report] = item
 	}

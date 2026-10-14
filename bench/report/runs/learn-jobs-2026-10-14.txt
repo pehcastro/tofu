@@ -1,0 +1,9 @@
+bench learn jobs · bench/learn/jobs/corpus.json · 5 mocked sessions · 2026-10-14T03:25:17-03:00
+
+  nightly                4 times · 0.0410 USD each · 0.1640 USD total · bash > read > write
+  release                3 times · 0.0340 USD each · 0.1020 USD total · read > edit > bash
+  deps                   2 times · 0.0475 USD each · 0.0950 USD total · bash > edit > bash
+  flaky                  2 times · 0.0420 USD each · 0.0840 USD total · bash > edit > bash
+  review                 missed, 2 labelled runs
+
+labelled 5 · found 4 · missed 1 · false 0

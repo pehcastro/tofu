@@ -26,18 +26,20 @@ type panel struct {
 
 func Page(d Data) string {
 	panels := []panel{
-		{"arms", d.Answers.Arms.Tab, d.Answers.Arms.Question, refusedHTML(d.Answers.Arms)},
-		{"versions", d.Answers.Versions.Tab, d.Answers.Versions.Question, refusedHTML(d.Answers.Versions)},
+		{"rivals", "1. Against Claude Code, omp and codex", "Every measure where tofu ran beside another harness, tofu's latest run judged against each", rivalsHTML(d.History)},
+		{"changes", "2. Each change against the run before", "Every measure tofu repeated, with the version, the commit and the change since the run before", changesHTML(d.History)},
 		{"judgments", "3. Jev against the cheap way", "Which decisions Jev wins, which it loses, and by how much", judgmentsHTML(d)},
 		{"decides", "4. What decides what today", "What decides what when you run tofu, and what it costs", wiringHTML(d)},
 		{"reports", "Every measurement on disk", "Every dated report under bench/, newest first", reportsHTML(d)},
 	}
-	open := "judgments"
+	open := "rivals"
 	page := &strings.Builder{}
 	page.WriteString("<!doctype html>\n<html lang=\"en\" class=\"dark\">\n<head>\n<meta charset=\"utf-8\">\n")
 	page.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Tofu bench</title>\n")
 	page.WriteString("<style>" + shadcnTokens + shadcnComponents + pageLayout + badgeAsLabel + "</style>\n</head>\n<body>\n<main>\n")
-	page.WriteString("<h1>What bench has measured</h1>\n")
+	page.WriteString("<h1>Where tofu stands, measured</h1>\n")
+	fmt.Fprintf(page, "<p class=\"lede\">%s</p>\n", html.EscapeString(d.History.DateLine()))
+	page.WriteString(standingHTML(d.History))
 	page.WriteString("<div role=\"tablist\" class=\"tab-list\" aria-label=\"the questions this page answers\">\n")
 	for _, one := range panels {
 		fmt.Fprintf(page, "<button role=\"tab\" class=\"tab-trigger\" id=\"tab-%s\" aria-controls=\"panel-%s\" aria-selected=\"%t\"%s>%s</button>\n",
@@ -111,78 +113,138 @@ func cardColumns(count int) int {
 	return 4
 }
 
-func refusedHTML(section Refused) string {
+func standingHTML(h History) string {
 	body := &strings.Builder{}
-	fmt.Fprintf(body, "<p class=\"lede\">No answer today. %s</p>\n<div class=\"cards\" style=\"--cols:2\">\n", html.EscapeString(section.Because))
-	for _, group := range []struct {
-		title  string
-		why    string
-		claims []Claim
-	}{
-		{"What exists", "read from " + section.Source, section.WhatExists},
-		{"What it would take", "the run that would fill this table", section.WhatItWouldTake},
-	} {
-		fmt.Fprintf(body, "<div class=\"card\"><div class=\"card-header\"><h3 class=\"card-title\">%s</h3><p class=\"card-description\">%s</p></div><div class=\"card-content\"><ul>\n",
-			html.EscapeString(group.title), html.EscapeString(group.why))
-		for _, claim := range group.claims {
-			fmt.Fprintf(body, "<li>%s</li>\n", html.EscapeString(claim.Text))
+	standings := h.Standings()
+	fmt.Fprintf(body, "<div class=\"cards\" style=\"--cols:%d\">\n", cardColumns(len(ranked)))
+	for _, verdict := range ranked {
+		fmt.Fprintf(body, "<div class=\"card\"><div class=\"card-header\"><h3 class=\"card-title\">Where tofu is %s</h3></div><div class=\"card-content\"><ul>\n", verdict)
+		for _, one := range standings {
+			if one.Verdict == verdict {
+				fmt.Fprintf(body, "<li>%s</li>\n", html.EscapeString(one.Sentence()))
+			}
 		}
 		body.WriteString("</ul></div></div>\n")
 	}
-	body.WriteString("</div>\n")
+	fmt.Fprintf(body, "</div>\n<p class=\"lede\">%s</p>\n", html.EscapeString(h.Rule))
 	return body.String()
+}
+
+func verdictClass(verdict Verdict) string {
+	switch verdict {
+	case Ahead:
+		return "win"
+	case Behind:
+		return "loss"
+	case Level, Described:
+		return ""
+	default:
+		panic("unknown verdict " + string(verdict))
+	}
+}
+
+func runsHTML(m Measure) string {
+	list := &strings.Builder{}
+	list.WriteString("<ul>")
+	for at, run := range m.Tofu {
+		fmt.Fprintf(list, "<li><strong>%s</strong> %s<span class=\"detail\">%s</span><span class=\"detail\">%s</span></li>",
+			html.EscapeString(run.Label), figureHTML(m.Shown(run)), html.EscapeString(m.Change(at)), html.EscapeString(run.Conditions()))
+	}
+	list.WriteString("</ul>")
+	return list.String()
+}
+
+func measureHead(m Measure) string {
+	return fmt.Sprintf("<td class=\"table-cell\">%s<span class=\"detail\">%s, %s is better</span><span class=\"detail\"><code>bench/%s</code></span></td>",
+		html.EscapeString(m.Name), html.EscapeString(m.Task), m.Better, html.EscapeString(m.Bench))
+}
+
+func tableOf(caption string, heads []string, rows string) string {
+	table := &strings.Builder{}
+	fmt.Fprintf(table, "<div class=\"table-container\"><table class=\"table\">\n<caption class=\"table-caption\">%s</caption>\n<thead><tr class=\"table-row\">", html.EscapeString(caption))
+	for _, head := range heads {
+		fmt.Fprintf(table, "<th class=\"table-head\">%s</th>", head)
+	}
+	table.WriteString("</tr></thead>\n<tbody>\n" + rows + "</tbody></table></div>\n")
+	return table.String()
+}
+
+func rivalsHTML(h History) string {
+	rows := &strings.Builder{}
+	for _, m := range h.Measures {
+		if len(m.Rivals) == 0 {
+			continue
+		}
+		rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td><td class=\"table-cell\"><ul>")
+		for _, rival := range m.Rivals {
+			verdict := m.Against(rival)
+			fmt.Fprintf(rows, "<li class=\"%s\"><strong>%s</strong> %s <span class=\"badge\" data-variant=\"outline\">tofu %s</span><span class=\"detail\">%s</span></li>",
+				verdictClass(verdict), html.EscapeString(rival.Label), figureHTML(m.Shown(rival)), verdict, html.EscapeString(rival.Conditions()))
+		}
+		rows.WriteString("</ul></td></tr>\n")
+	}
+	return tableOf("tofu's runs oldest first, the latest one judged against each other harness on the same task, machine and day.",
+		[]string{"What is measured", "tofu, run by run", "The other harness, and tofu's latest run against it"}, rows.String())
+}
+
+func changesHTML(h History) string {
+	rows := &strings.Builder{}
+	for _, m := range h.Measures {
+		if len(m.Rivals) == 0 {
+			rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td></tr>\n")
+		}
+	}
+	return tableOf("Each run names the tofu version and commit it measured, and the change from the run before it.",
+		[]string{"What is measured", "Every run, oldest first"}, rows.String())
 }
 
 func wiringHTML(d Data) string {
 	body := &strings.Builder{}
 	fmt.Fprintf(body, "<p class=\"lede\">%s decide anything when you run tofu today, read from <code>%s</code>.</p>\n",
 		figureHTML(d.PointsOn()), html.EscapeString(d.MethodTable))
-	body.WriteString("<div class=\"table-container\"><table class=\"table\">\n<caption class=\"table-caption\">One row per decision point, what decides it now, and what that costs a session.</caption>\n")
-	body.WriteString("<thead><tr class=\"table-row\">")
-	for _, head := range []string{"What decides", "Switched on", "What it costs", "Why", "Called by"} {
-		fmt.Fprintf(body, "<th class=\"table-head\">%s</th>", head)
-	}
-	body.WriteString("</tr></thead>\n<tbody>\n")
+	rows := &strings.Builder{}
 	for _, row := range d.Wiring {
-		fmt.Fprintf(body, "<tr class=\"table-row\"><td class=\"table-cell\"><code>%s</code><span class=\"detail\"><code>%s</code></span></td>",
+		fmt.Fprintf(rows, "<tr class=\"table-row\"><td class=\"table-cell\"><code>%s</code><span class=\"detail\"><code>%s</code></span></td>",
 			html.EscapeString(row.Point), html.EscapeString(row.Measured))
-		fmt.Fprintf(body, "<td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span></td><td class=\"table-cell\">%s</td>",
+		fmt.Fprintf(rows, "<td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span></td><td class=\"table-cell\">%s</td>",
 			useVariant(row.On), html.EscapeString(row.SwitchedOn), quoteHTML(row.Costs, d.MethodTable))
-		fmt.Fprintf(body, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><code>%s</code></td></tr>\n",
+		fmt.Fprintf(rows, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><code>%s</code></td></tr>\n",
 			quoteHTML(row.Why, d.MethodTable), html.EscapeString(row.CalledBy))
 	}
-	body.WriteString("</tbody></table></div>\n")
+	body.WriteString(tableOf("One row per decision point, what decides it now, and what that costs a session.",
+		[]string{"What decides", "Switched on", "What it costs", "Why", "Called by"}, rows.String()))
 	return body.String()
 }
 
 func judgmentsHTML(d Data) string {
 	body := &strings.Builder{}
-	body.WriteString(statCards(append([]Stat{
+	stats := []Stat{
 		{Label: "Compared", Figure: d.outOfDecisions(d.ComparedDecisions()), Note: "a cheaper method measured beside Jev"},
 		{Label: "Not compared", Figure: d.outOfDecisions(len(d.Judgments) - d.ComparedDecisions()), Note: "no usable score on one side"},
 		{Label: "Switched on", Figure: d.PointsOn(), Note: "read from " + d.MethodTable},
-	}, d.Answers.JevCosts...)))
-	body.WriteString(gapChart(d.Judgments))
-	body.WriteString("<div class=\"table-container\"><table class=\"table\">\n<caption class=\"table-caption\">Each row is one decision, the cheapest method anyone has written for it, and Jev, on the same set of cases.</caption>\n")
-	body.WriteString("<thead><tr class=\"table-row\">")
-	for _, head := range []string{"What decides", "Method", "Method", "Winner", "By how much", "Measured on", "Switched on"} {
-		fmt.Fprintf(body, "<th class=\"table-head\">%s</th>", head)
 	}
-	body.WriteString("</tr></thead>\n<tbody>\n")
+	for _, cost := range d.Answers.JevCosts {
+		cost.Note += ", " + d.provenance(cost.Source)
+		stats = append(stats, cost)
+	}
+	body.WriteString(statCards(stats))
+	body.WriteString(gapChart(d.Judgments))
+	rows := &strings.Builder{}
 	for _, row := range d.Judgments {
-		fmt.Fprintf(body, "<tr class=\"table-row\"><td class=\"table-cell\">%s<span class=\"detail\">%s</span><span class=\"detail\"><code>%s</code></span></td>",
+		fmt.Fprintf(rows, "<tr class=\"table-row\"><td class=\"table-cell\">%s<span class=\"detail\">%s</span><span class=\"detail\"><code>%s</code></span></td>",
 			html.EscapeString(row.Question), html.EscapeString(row.Axis), html.EscapeString(row.Point))
 		if row.Compared() {
-			fmt.Fprintf(body, "%s%s<td class=\"table-cell %s\">%s</td><td class=\"table-cell\">%s, %s</td>",
+			fmt.Fprintf(rows, "%s%s<td class=\"table-cell %s\">%s</td><td class=\"table-cell\">%s, %s</td>",
 				methodCell(row.Without), methodCell(row.With), winnerClass(row), html.EscapeString(row.Winner),
 				figureHTML(row.Gap), figureHTML(row.Multiple))
 		} else {
-			fmt.Fprintf(body, "<td class=\"table-cell missing\" colspan=\"4\"><strong>Not compared.</strong> %s</td>", html.EscapeString(row.NotCompared))
+			fmt.Fprintf(rows, "<td class=\"table-cell missing\" colspan=\"4\"><strong>Not compared.</strong> %s</td>", html.EscapeString(row.NotCompared))
 		}
-		fmt.Fprintf(body, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span><span class=\"detail\"><code>%s</code></span></td></tr>\n",
-			figureIn("fig sample", row.Sample), useVariant(row.Wired), html.EscapeString(row.SwitchedOn), html.EscapeString(row.Source))
+		fmt.Fprintf(rows, "<td class=\"table-cell\">%s</td><td class=\"table-cell\"><span class=\"badge\" data-variant=\"%s\">%s</span><span class=\"detail\"><code>%s</code></span></td></tr>\n",
+			figureIn("fig sample", row.Sample), useVariant(row.Wired), html.EscapeString(row.SwitchedOn), html.EscapeString(d.provenance(row.Source)))
 	}
-	body.WriteString("</tbody></table></div>\n")
+	body.WriteString(tableOf("Each row is one decision, the cheapest method anyone has written for it, and Jev, on the same set of cases.",
+		[]string{"What decides", "Method", "Method", "Winner", "By how much", "Measured on", "Switched on"}, rows.String()))
 	return body.String()
 }
 
@@ -252,8 +314,9 @@ func reportsHTML(d Data) string {
 		{Label: "Naming no answer", Figure: countFigure(d.Counts.Unparsed, "of "+fmt.Sprint(d.Counts.Reports)), Note: "no heading names the file's own conclusion"},
 	}))
 	for _, report := range d.Reports {
-		fmt.Fprintf(body, "<details><summary>%s, %s <span class=\"path\">%s</span>%s</summary>\n",
-			html.EscapeString(report.Package), html.EscapeString(report.Date), html.EscapeString(report.Source), stateBadge(report.State))
+		fmt.Fprintf(body, "<details><summary>%s, %s <span class=\"path\">%s</span>%s<span class=\"detail\">%s</span><span class=\"detail\">run before it: %s</span></summary>\n",
+			html.EscapeString(report.Package), html.EscapeString(report.Date), html.EscapeString(report.Source), stateBadge(report.State),
+			html.EscapeString(report.Line()), html.EscapeString(report.Previous))
 		if report.StateNote != "" {
 			body.WriteString(quoteHTML(report.StateNote, string(report.State)+", said by "+report.StateSource))
 		}

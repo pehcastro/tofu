@@ -36,6 +36,7 @@ func generate(root string) error {
 			return err
 		}
 	}
+	fmt.Println(data.History.DateLine())
 	fmt.Printf("%s, %s and INDEX.md written under %s. %d of %d Jev decisions have a cheaper method measured beside them, %d reports over %d benches, %d with none, %d withdrawn, %d stale, %d naming no answer.\n",
 		report.ViewerFile, report.DataFile, filepath.Join(root, "report"),
 		data.ComparedDecisions(), len(data.Judgments),

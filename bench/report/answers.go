@@ -17,9 +17,10 @@ const AnswersPath = "bench/report/answers.json"
 type Better string
 
 const (
-	BetterHigher Better = "higher"
-	BetterLower  Better = "lower"
-	aTie                = "a tie"
+	BetterHigher  Better = "higher"
+	BetterLower   Better = "lower"
+	BetterNeither Better = "neither"
+	aTie                 = "a tie"
 )
 
 type Axis struct {
@@ -57,11 +58,6 @@ type Placement struct {
 	MissingEvidence string        `json:"unanswerable_evidence,omitempty"`
 }
 
-type Claim struct {
-	Text     string `json:"text"`
-	Evidence string `json:"evidence,omitempty"`
-}
-
 type Stat struct {
 	Label    string `json:"label"`
 	Figure   Figure `json:"figure"`
@@ -70,19 +66,8 @@ type Stat struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
-type Refused struct {
-	Question        string  `json:"question"`
-	Tab             string  `json:"tab"`
-	Because         string  `json:"because"`
-	WhatExists      []Claim `json:"what_exists"`
-	WhatItWouldTake []Claim `json:"what_it_would_take"`
-	Source          string  `json:"source"`
-}
-
 type Answers struct {
 	JevCosts   []Stat      `json:"jev_costs"`
-	Arms       Refused     `json:"arms"`
-	Versions   Refused     `json:"versions"`
 	Placements []Placement `json:"judgments"`
 }
 
@@ -193,11 +178,6 @@ func checkAnswers(answers Answers, table method.Table, tree string, reports map[
 			return err
 		}
 	}
-	for _, section := range []Refused{answers.Arms, answers.Versions} {
-		if err := checkRefused(section, bodies); err != nil {
-			return err
-		}
-	}
 	if len(answers.Placements) == 0 {
 		return fmt.Errorf("%s names no Jev decision, and that is the one table this project can fill", AnswersPath)
 	}
@@ -217,36 +197,6 @@ func checkStat(stat Stat, bodies map[string]string) error {
 		return fmt.Errorf("%s: the card %q reads %q, which is a bare count", AnswersPath, stat.Label, stat.Figure)
 	}
 	return checkEvidence(stat.Evidence, stat.Source, bodies)
-}
-
-func checkRefused(section Refused, bodies map[string]string) error {
-	if section.Question == "" || section.Tab == "" || section.Because == "" {
-		return fmt.Errorf("%s: a table that cannot be filled says which question it would answer, what to call it, and why it cannot", AnswersPath)
-	}
-	if !strings.ContainsAny(section.Because, "0123456789") {
-		return fmt.Errorf("%s: %q carries no number, and a line on this page without one is prose", AnswersPath, section.Because)
-	}
-	for _, group := range [][]Claim{section.WhatExists, section.WhatItWouldTake} {
-		for _, claim := range group {
-			if err := checkClaim(claim, section.Source, bodies); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func checkClaim(claim Claim, source string, bodies map[string]string) error {
-	if claim.Text == "" {
-		return fmt.Errorf("%s: an empty line is listed under %s", AnswersPath, source)
-	}
-	if !strings.ContainsAny(claim.Text, "0123456789") {
-		return nil
-	}
-	if claim.Evidence == "" {
-		return fmt.Errorf("%s: %q carries a number and cites nothing in %s", AnswersPath, claim.Text, source)
-	}
-	return checkEvidence(claim.Evidence, source, bodies)
 }
 
 func checkEvidence(evidence, source string, bodies map[string]string) error {
@@ -298,6 +248,8 @@ func checkPlacement(one Placement, table method.Table, tree string, bodies map[s
 	}
 	switch one.Axis.BetterWhen {
 	case BetterHigher, BetterLower:
+	case BetterNeither:
+		return fmt.Errorf("%s: %s is a decision, and on its axis neither direction is better", AnswersPath, one.Point)
 	default:
 		return fmt.Errorf("%s: %s is measured on an axis that says neither higher nor lower is better", AnswersPath, one.Point)
 	}
