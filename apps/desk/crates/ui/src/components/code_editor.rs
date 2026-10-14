@@ -23,9 +23,10 @@ use crate::components::code::{
 };
 use crate::components::find::{FindBar, find_ranges};
 use crate::components::form::{blinker, caret_shown};
-use crate::components::keymap::{Action, FocusedKeys, Keymap, Motion, Resolved, Stroke};
+use crate::components::keymap::{Action, FocusedKeys, Host, Keymap, Motion, Resolved, Stroke};
 use crate::components::paint::ink;
 use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN, NUMBER_PAD, T3};
+use crate::components::vim::{self, Mode, Vim};
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
 
@@ -279,13 +280,13 @@ impl Caret {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Class {
+pub(crate) enum Class {
     Space,
     Word,
     Mark,
 }
 
-fn class(ch: char) -> Class {
+pub(crate) fn class(ch: char) -> Class {
     if ch.is_whitespace() {
         Class::Space
     } else if ch.is_alphanumeric() || ch == '_' {
@@ -406,22 +407,33 @@ pub struct CodeEditor {
     folded_at: Rc<Cell<Option<Instant>>>,
     keymap: Rc<Keymap>,
     comment: Option<&'static str>,
+    vim: Option<Vim>,
 }
 
 #[derive(Default)]
 struct TypingFrames {
     edited: Option<Instant>,
     intervals: Vec<f64>,
+    what: &'static str,
 }
 
 impl TypingFrames {
+    fn mark(&mut self, what: &'static str) {
+        if what != self.what {
+            self.report();
+            self.what = what;
+        }
+        self.edited.get_or_insert_with(Instant::now);
+    }
+
     fn report(&mut self) {
         let mut intervals = std::mem::take(&mut self.intervals);
         intervals.sort_by(f64::total_cmp);
         if let (Some(median), Some(worst)) = (intervals.get(intervals.len() / 2), intervals.last())
         {
             eprintln!(
-                "desk: editor typing {} frames, median {median:.2} ms, worst {worst:.2} ms",
+                "desk: editor {} {} frames, median {median:.2} ms, worst {worst:.2} ms",
+                self.what,
                 intervals.len()
             );
         }
@@ -466,6 +478,7 @@ impl CodeEditor {
             folded_at: Rc::default(),
             keymap: Rc::default(),
             comment: None,
+            vim: None,
         };
         editor.widest = editor.widest_line();
         editor
@@ -549,6 +562,11 @@ impl CodeEditor {
 
     pub fn keymap(mut self, keymap: Rc<Keymap>) -> Self {
         self.keymap = keymap;
+        self
+    }
+
+    pub fn vim(mut self, on: bool) -> Self {
+        self.vim = on.then(Vim::default);
         self
     }
 
@@ -1057,7 +1075,7 @@ impl CodeEditor {
                 self.shift(&edits);
                 self.settle(lines);
                 if let Some(frames) = &self.frames {
-                    frames.borrow_mut().edited.get_or_insert_with(Instant::now);
+                    frames.borrow_mut().mark("typing");
                 }
             }
             Err(error) => self.report("Could not edit", Err(error)),
@@ -1204,6 +1222,18 @@ impl CodeEditor {
                 keys.key_char
             );
         }
+        let command = match (vim::key(keys), self.vim.as_mut()) {
+            (Some(key), Some(vim)) => vim.key(key),
+            _ => vim::Command::Pass,
+        };
+        if command != vim::Command::Pass {
+            self.obey(command, window, cx);
+            self.vim_clamp();
+            self.publish_keys(Vec::new(), cx);
+            cx.stop_propagation();
+            self.reveal();
+            return self.touch(cx);
+        }
         let mut typed = cx
             .try_global::<FocusedKeys>()
             .filter(|keys| keys.focus == self.focus)
@@ -1230,6 +1260,7 @@ impl CodeEditor {
         }
         eprintln!("desk: editor action {action}");
         self.run(action, window, cx);
+        self.vim_clamp();
         cx.stop_propagation();
         self.reveal();
         self.touch(cx);
@@ -1240,7 +1271,315 @@ impl CodeEditor {
             focus: self.focus.clone(),
             keymap: self.keymap.clone(),
             pending,
+            vim: self.vim.as_ref().map(Vim::mode),
         });
+    }
+
+    fn head(&self) -> usize {
+        self.carets.last().map_or(0, |caret| caret.head)
+    }
+
+    fn line_at(&self, at: usize) -> usize {
+        self.buffer.char_to_line(at).unwrap_or(0)
+    }
+
+    fn put_head(&mut self, head: usize) {
+        let anchor = match self.vim.as_ref().map(Vim::mode) {
+            Some(Mode::Visual | Mode::VisualLine) => self.carets.last().map_or(head, |c| c.anchor),
+            _ => head,
+        };
+        self.carets = vec![Caret {
+            anchor,
+            head,
+            goal: None,
+        }];
+    }
+
+    fn vim_clamp(&mut self) {
+        let Some(mode) = self.vim.as_ref().map(Vim::mode) else {
+            return;
+        };
+        if mode == Mode::Insert {
+            return;
+        }
+        let ends: Vec<Option<Range<usize>>> = self
+            .carets
+            .iter()
+            .map(|caret| vim::line_span(&self.buffer, self.line_at(caret.head)))
+            .collect();
+        for (caret, line) in self.carets.iter_mut().zip(ends) {
+            if let Some(line) = line.filter(|line| !line.is_empty() && caret.head >= line.end) {
+                caret.head = line.end - 1;
+            }
+            if !mode.visual() {
+                caret.anchor = caret.head;
+            }
+        }
+    }
+
+    fn painted(&self, caret: Caret) -> Range<usize> {
+        let line_of = |at: usize| vim::line_span(&self.buffer, self.line_at(at));
+        match self.vim.as_ref().map(Vim::mode) {
+            None | Some(Mode::Insert) => caret.range(),
+            Some(Mode::VisualLine) => self.selection(caret, true),
+            Some(Mode::Visual) => self.selection(caret, false),
+            Some(Mode::Normal | Mode::Pending | Mode::Command) => {
+                let end = line_of(caret.head).map_or(caret.head, |line| line.end);
+                caret.head..(caret.head + 1).min(end).max(caret.head)
+            }
+        }
+    }
+
+    fn selection(&self, caret: Caret, linewise: bool) -> Range<usize> {
+        let range = caret.range();
+        if !linewise {
+            return range.start..self.after(range.end);
+        }
+        let start = vim::line_span(&self.buffer, self.line_at(range.start));
+        let next = self.line_at(range.end) + 1;
+        let end = self
+            .buffer
+            .line_to_char(next)
+            .unwrap_or(self.buffer.len_chars());
+        start.map_or(range.start, |line| line.start)..end
+    }
+
+    fn obey(&mut self, command: vim::Command, window: &mut Window, cx: &mut Context<Self>) {
+        let head = self.head();
+        match command {
+            vim::Command::Pass | vim::Command::Held => {}
+            vim::Command::Move(motion, count) => {
+                if let Some(frames) = &self.frames {
+                    frames.borrow_mut().mark("vim motion");
+                }
+                self.vim_move(motion, count);
+            }
+            vim::Command::Operate(operator, target, count) => {
+                match vim::span(&self.buffer, head, operator, target, count) {
+                    Some(span) => self.vim_operate(operator, span),
+                    None => {
+                        if let Some(vim) = self.vim.as_mut() {
+                            vim.enter(Mode::Normal);
+                        }
+                    }
+                }
+            }
+            vim::Command::Selected(operator, linewise) => {
+                let caret = self.carets.last().copied().unwrap_or(Caret::at(head));
+                let chars = self.selection(caret, linewise);
+                self.vim_operate(operator, vim::Span { chars, linewise });
+            }
+            vim::Command::Grab(object) => {
+                let target = vim::Target::Object(object);
+                if let Some(span) = vim::span(&self.buffer, head, vim::Operator::Yank, target, 1)
+                    && !span.chars.is_empty()
+                {
+                    self.carets = vec![Caret {
+                        anchor: span.chars.start,
+                        head: span.chars.end - 1,
+                        goal: None,
+                    }];
+                }
+            }
+            vim::Command::Insert(entry) => self.vim_insert(entry),
+            vim::Command::Paste { before, count } => self.vim_paste(before, count),
+            vim::Command::Undo(count) => (0..count).for_each(|_| self.history(true)),
+            vim::Command::Redo(count) => (0..count).for_each(|_| self.history(false)),
+            vim::Command::Repeat(count) => self.vim_repeat(count, window, cx),
+            vim::Command::Select | vim::Command::Unselect => self.carets = vec![Caret::at(head)],
+            vim::Command::Normal => {
+                let line = vim::line_span(&self.buffer, self.line_at(head));
+                if let Some(vim) = self.vim.as_mut() {
+                    let from = vim.insert_from();
+                    let typed = self.buffer.rope().get_slice(from..head.max(from));
+                    vim.finished_insert(typed.map(|typed| typed.to_string()).unwrap_or_default());
+                }
+                let back = line.is_some_and(|line| head > line.start);
+                self.carets = vec![Caret::at(head - usize::from(back))];
+            }
+            vim::Command::Ex(ex) => self.vim_ex(ex, window, cx),
+        }
+    }
+
+    fn vim_move(&mut self, motion: vim::Motion, count: usize) {
+        let extend = self.vim.as_ref().is_some_and(|vim| vim.mode().visual());
+        let step = match motion {
+            vim::Motion::Up => "up",
+            vim::Motion::Down => "down",
+            _ => {
+                if let Some(reach) = vim::reach(&self.buffer, self.head(), motion, count) {
+                    self.put_head(reach.to);
+                }
+                return;
+            }
+        };
+        for _ in 0..count {
+            let (before, line) = (self.carets.clone(), self.line_at(self.head()));
+            self.travel(step, false, extend);
+            if self.wrapped().is_none() && self.line_at(self.head()) == line {
+                self.carets = before;
+                break;
+            }
+        }
+    }
+
+    fn vim_operate(&mut self, operator: vim::Operator, span: vim::Span) {
+        let mut chars = span.chars;
+        let mut text = self
+            .buffer
+            .rope()
+            .get_slice(chars.clone())
+            .map(|text| text.to_string())
+            .unwrap_or_default();
+        if span.linewise && !text.ends_with('\n') {
+            text.push('\n');
+        }
+        let first = self.line_at(chars.start);
+        if let Some(vim) = self.vim.as_mut() {
+            vim.yank(text, span.linewise);
+        }
+        match (operator, span.linewise) {
+            (vim::Operator::Yank, linewise) => {
+                let at = if linewise { self.head() } else { chars.start };
+                self.carets = vec![Caret::at(at)];
+            }
+            (vim::Operator::Delete, false) => self.apply(std::slice::from_ref(&chars), ""),
+            (vim::Operator::Delete, true) => {
+                let ends_file = chars.end >= self.buffer.len_chars();
+                if ends_file && chars.start > 0 {
+                    chars.start = self.before(chars.start);
+                }
+                self.apply(std::slice::from_ref(&chars), "");
+                let line = first.min(self.buffer.line_count().saturating_sub(1));
+                let at = vim::first_word(&self.buffer, line).unwrap_or(0);
+                self.carets = vec![Caret::at(at)];
+            }
+            (vim::Operator::Change, linewise) => {
+                if linewise {
+                    let last = self.line_at(chars.end.saturating_sub(1).max(chars.start));
+                    let end = vim::line_span(&self.buffer, last).map_or(chars.end, |l| l.end);
+                    let indent = vim::first_word(&self.buffer, first).unwrap_or(chars.start);
+                    chars = indent.min(end)..end;
+                }
+                self.apply(std::slice::from_ref(&chars), "");
+                self.carets = vec![Caret::at(chars.start)];
+                if let Some(vim) = self.vim.as_mut() {
+                    vim.began_insert(chars.start);
+                }
+            }
+        }
+    }
+
+    fn put(&mut self, at: usize, text: &str) {
+        self.apply(std::slice::from_ref(&(at..at)), text);
+    }
+
+    fn vim_insert(&mut self, entry: vim::Entry) {
+        let head = self.head();
+        let line = self.line_at(head);
+        let Some(span) = vim::line_span(&self.buffer, line) else {
+            return;
+        };
+        let indent = self
+            .buffer
+            .rope()
+            .get_slice(span.start..vim::first_word(&self.buffer, line).unwrap_or(span.start))
+            .map(|indent| indent.to_string())
+            .unwrap_or_default();
+        let at = match entry {
+            vim::Entry::Before => head,
+            vim::Entry::After => (head + 1).min(span.end),
+            vim::Entry::LineStart => vim::first_word(&self.buffer, line).unwrap_or(span.start),
+            vim::Entry::LineEnd => span.end,
+            vim::Entry::Below => {
+                self.put(span.end, &format!("\n{indent}"));
+                self.head()
+            }
+            vim::Entry::Above => {
+                self.put(span.start, &format!("{indent}\n"));
+                span.start + indent.chars().count()
+            }
+        };
+        self.carets = vec![Caret::at(at)];
+        if let Some(vim) = self.vim.as_mut() {
+            vim.began_insert(at);
+        }
+    }
+
+    fn vim_paste(&mut self, before: bool, count: usize) {
+        let Some((text, linewise)) = self.vim.as_ref().and_then(Vim::register) else {
+            return;
+        };
+        let text = text.repeat(count);
+        let head = self.head();
+        let line = self.line_at(head);
+        let Some(span) = vim::line_span(&self.buffer, line) else {
+            return;
+        };
+        if !linewise {
+            let at = if before {
+                head
+            } else {
+                (head + 1).min(span.end)
+            };
+            self.put(at, &text);
+            let end = self.head();
+            self.carets = vec![Caret::at(end.saturating_sub(1).max(at))];
+            return;
+        }
+        let below = line + 1;
+        let (at, text, landed) = match (before, self.buffer.line_to_char(below)) {
+            (true, _) => (span.start, text, line),
+            (false, Ok(next)) if below < self.buffer.line_count() => (next, text, below),
+            (false, _) => {
+                let body = text.strip_suffix('\n').unwrap_or(&text);
+                (self.buffer.len_chars(), format!("\n{body}"), below)
+            }
+        };
+        self.put(at, &text);
+        let at = vim::first_word(&self.buffer, landed).unwrap_or(at);
+        self.carets = vec![Caret::at(at)];
+    }
+
+    fn vim_repeat(&mut self, count: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((keys, text)) = self.vim.as_ref().map(Vim::last_change) else {
+            return;
+        };
+        if keys.is_empty() {
+            return;
+        }
+        for _ in 0..count {
+            for key in keys.iter().chain([&vim::Key::Escape]) {
+                let Some(vim) = self.vim.as_mut() else {
+                    return;
+                };
+                if *key == vim::Key::Escape && vim.mode() == Mode::Insert {
+                    self.insert(&text);
+                }
+                let Some(vim) = self.vim.as_mut() else {
+                    return;
+                };
+                let command = vim.key(*key);
+                self.obey(command, window, cx);
+            }
+        }
+    }
+
+    fn vim_ex(&mut self, ex: vim::Ex, window: &mut Window, cx: &mut Context<Self>) {
+        match ex {
+            vim::Ex::Write => self.run(Action::Save, window, cx),
+            vim::Ex::Quit => self.run(Action::Host(Host::CloseTab), window, cx),
+            vim::Ex::WriteQuit => {
+                self.run(Action::Save, window, cx);
+                self.run(Action::Host(Host::CloseTab), window, cx);
+            }
+            vim::Ex::Line(line) => {
+                let last = self.buffer.line_count().saturating_sub(1);
+                let line = line.saturating_sub(1).min(last);
+                self.carets = vec![Caret::at(vim::first_word(&self.buffer, line).unwrap_or(0))];
+            }
+            vim::Ex::Unknown(text) => eprintln!("desk: vim :{text} is not a command"),
+        }
     }
 
     fn run(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
@@ -1659,7 +1998,7 @@ impl CodeEditor {
                 if caret_on && (start..=end).contains(&caret.head) {
                     line.carets.push(byte_of(caret.head));
                 }
-                let range = caret.range();
+                let range = self.painted(*caret);
                 let (from, to) = (range.start.max(start), range.end.min(end));
                 if from < to && Some(&range) != current {
                     line.selected.push(byte_of(from)..byte_of(to));
@@ -1911,6 +2250,21 @@ impl Render for CodeEditor {
                 .bottom(px(FAILURE_INSET))
                 .child(fail(what, error, "", &ActiveTheme::theme(cx)))
         });
+        let pill = self.vim.as_ref().map(|vim| {
+            let theme = ActiveTheme::theme(cx);
+            div()
+                .absolute()
+                .right(px(FAILURE_INSET))
+                .bottom(px(FAILURE_INSET))
+                .px(px(PILL_PAD))
+                .h(px(PILL_HEIGHT))
+                .flex()
+                .items_center()
+                .rounded(px(PILL_RADIUS))
+                .bg(theme.color(ColorToken::StateHover))
+                .text_color(ink(&theme, T3))
+                .child(vim.pill())
+        });
         let editing = div()
             .id("code-editor")
             .relative()
@@ -1956,7 +2310,8 @@ impl Render for CodeEditor {
                 .left_0()
                 .size_full(),
             )
-            .children(failure);
+            .children(failure)
+            .children(pill);
         div()
             .relative()
             .size_full()

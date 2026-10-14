@@ -43,4 +43,5 @@ pub mod title_bar;
 pub mod tooltip;
 pub mod transcript;
 pub mod tree;
+pub mod vim;
 pub mod width;

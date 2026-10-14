@@ -7,6 +7,8 @@ use std::rc::Rc;
 use gpui::{App, FocusHandle, Global, KeyDownEvent, Keystroke, Window};
 use serde_json::{Map, Value};
 
+use crate::components::vim;
+
 pub mod host {
     gpui::actions!(
         editor,
@@ -410,6 +412,7 @@ pub struct FocusedKeys {
     pub(crate) focus: FocusHandle,
     pub(crate) keymap: Rc<Keymap>,
     pub(crate) pending: Vec<Stroke>,
+    pub(crate) vim: Option<vim::Mode>,
 }
 
 impl Global for FocusedKeys {}
@@ -420,8 +423,11 @@ pub fn editor_claims(event: &KeyDownEvent, window: &Window, cx: &App) -> bool {
     };
     let mut typed = keys.pending.clone();
     typed.push(Stroke::typed(&event.keystroke));
+    let modal = keys.vim.is_some_and(vim::Mode::claims) && vim::key(&event.keystroke).is_some();
     keys.focus.is_focused(window)
-        && (!keys.pending.is_empty() || !matches!(keys.keymap.resolve(&typed), Resolved::Miss))
+        && (modal
+            || !keys.pending.is_empty()
+            || !matches!(keys.keymap.resolve(&typed), Resolved::Miss))
 }
 
 fn refuse(file: &str, line: usize, reason: &str) {

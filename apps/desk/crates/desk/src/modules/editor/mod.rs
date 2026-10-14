@@ -29,6 +29,7 @@ use desk_ui::components::tree::{
     Draft, EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
     TreeSpot, picked_pack,
 };
+use desk_ui::components::vim::Vim;
 use desk_ui::live::ActiveTheme;
 use desk_ui::motion::reduced_motion;
 use desk_ui::theme::{ColorToken, Theme};
@@ -52,6 +53,7 @@ const PATH_HEIGHT: f32 = 30.0;
 const BAR_GAP: f32 = 8.0;
 const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 const KEYMAP_FILE: &str = "keymap.json";
+const SETTINGS_FILE: &str = "settings.json";
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let root = match cx.try_global::<OpenProject>() {
@@ -173,6 +175,7 @@ pub struct Editor {
     alerted: SharedString,
     menu: TreeMenu,
     keymap: Rc<Keymap>,
+    vim: bool,
     _tree: Subscription,
     _pack: Subscription,
     _project: Subscription,
@@ -186,6 +189,7 @@ pub struct Editor {
 
 impl Editor {
     fn new(folder: Folder, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let home = Home::find();
         let mut editor = Editor {
             _tree: cx.subscribe_in(&folder.tree, window, Self::tree_event),
             folder,
@@ -204,13 +208,16 @@ impl Editor {
                 undone: Vec::new(),
                 naming: None,
             },
-            keymap: Rc::new(match Home::find() {
+            keymap: Rc::new(match &home {
                 Ok(home) => Keymap::load(&home.config.join(KEYMAP_FILE)),
                 Err(error) => {
                     eprintln!("desk: keymap has no home, so the defaults stand: {error}");
                     Keymap::default()
                 }
             }),
+            vim: home
+                .as_ref()
+                .is_ok_and(|home| Vim::enabled(&home.config.join(SETTINGS_FILE))),
             _pack: cx.observe_global::<PickedPack>(Self::repack),
             _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
@@ -911,7 +918,7 @@ impl Editor {
     }
 
     fn page(&self, full: PathBuf, git: Option<Arc<GitBinary>>, cx: &mut Context<Self>) -> Page {
-        let code = file_editor(&full, self.keymap.clone(), cx);
+        let code = file_editor(&full, self.keymap.clone(), self.vim, cx);
         let changes = code
             .as_ref()
             .ok()
@@ -1924,7 +1931,7 @@ fn no_surface(action: &str) {
     eprintln!("desk: editor action {action} no surface yet");
 }
 
-fn file_editor(path: &Path, keymap: Rc<Keymap>, cx: &mut App) -> Opened {
+fn file_editor(path: &Path, keymap: Rc<Keymap>, vim: bool, cx: &mut App) -> Opened {
     let shown = path.display();
     let editor = match CodeEditor::open(path, cx) {
         Ok(editor) => editor,
@@ -1943,7 +1950,7 @@ fn file_editor(path: &Path, keymap: Rc<Keymap>, cx: &mut App) -> Opened {
         editor.buffer().line_count()
     );
     let path = PathBuf::from(path);
-    let editor = editor.keymap(keymap).on_save(move |buffer, _, _| {
+    let editor = editor.keymap(keymap).vim(vim).on_save(move |buffer, _, _| {
         let shown = path.display();
         match buffer.save(&path) {
             Ok(()) => {
