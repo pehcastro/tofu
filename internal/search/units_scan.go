@@ -39,9 +39,9 @@ func declaredUnits(rel, body string, lines []string, hits []hit) ([]Unit, bool) 
 	case ".go":
 		return goUnits(rel, body, lines, hits)
 	case ".ts", ".tsx", ".js", ".jsx":
-		found, parsed = braceOutline(body, scriptSyntax)
+		found, parsed = braceOutline(body, scriptSyntax())
 	case ".rs":
-		found, parsed = braceOutline(body, rustSyntax)
+		found, parsed = braceOutline(body, rustSyntax())
 	case ".py":
 		found, parsed = pythonOutline(body)
 	}

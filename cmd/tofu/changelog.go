@@ -28,10 +28,10 @@ const (
 
 var (
 	changelogVersionLine = regexp.MustCompile(`^##\s+\[?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\]?`)
-	prereleaseRun        = regexp.MustCompile(`\d+|\D+`)
-	markdownLink         = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
-	markdownBold         = regexp.MustCompile(`\*\*([^*]+)\*\*`)
-	markdownCode         = regexp.MustCompile("`([^`]*)`")
+	prereleaseRun        = sys.LazyRegexp(`\d+|\D+`)
+	markdownLink         = sys.LazyRegexp(`\[([^\]]*)\]\([^)]*\)`)
+	markdownBold         = sys.LazyRegexp(`\*\*([^*]+)\*\*`)
+	markdownCode         = sys.LazyRegexp("`([^`]*)`")
 )
 
 type semver struct {
@@ -54,7 +54,7 @@ func (v semver) after(other semver) bool {
 	if v.stage() != other.stage() || v.prerelease == "" {
 		return v.stage() > other.stage()
 	}
-	mine, theirs := prereleaseRun.FindAllString(v.prerelease, -1), prereleaseRun.FindAllString(other.prerelease, -1)
+	mine, theirs := prereleaseRun().FindAllString(v.prerelease, -1), prereleaseRun().FindAllString(other.prerelease, -1)
 	for i := range min(len(mine), len(theirs)) {
 		run, other := mine[i], theirs[i]
 		if run[0] >= '0' && run[0] <= '9' && other[0] >= '0' && other[0] <= '9' {
@@ -155,9 +155,9 @@ func changelogSince(versions []changelogVersion, seen string) []changelogVersion
 }
 
 func plainMarkdown(text string) string {
-	text = markdownLink.ReplaceAllString(text, "$1")
-	text = markdownBold.ReplaceAllString(text, "$1")
-	return markdownCode.ReplaceAllString(text, "$1")
+	text = markdownLink().ReplaceAllString(text, "$1")
+	text = markdownBold().ReplaceAllString(text, "$1")
+	return markdownCode().ReplaceAllString(text, "$1")
 }
 
 func changelogWrap(text, first, rest string, width int) []string {

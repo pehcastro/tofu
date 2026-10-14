@@ -2,22 +2,23 @@ package sift
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 const fenceLine = "--- sift ---"
 
 var (
-	markerPattern = regexp.MustCompile(`^\[sift:(\d+) [^\]]*\]$`)
-	summaryLine   = regexp.MustCompile(`^kept \d+/\d+ ends ([01])$`)
+	markerPattern = sys.LazyRegexp(`^\[sift:(\d+) [^\]]*\]$`)
+	summaryLine   = sys.LazyRegexp(`^kept \d+/\d+ ends ([01])$`)
 )
 
 func isFence(line string) bool { return strings.TrimRight(line, "\r\n") == fenceLine }
 
 func isMarkerLine(line string) bool {
-	return markerPattern.MatchString(strings.TrimRight(line, "\r\n"))
+	return markerPattern().MatchString(strings.TrimRight(line, "\r\n"))
 }
 
 func Render(parts []Part, marks []Mark) string {
@@ -57,7 +58,7 @@ func Restore(rendered string) (string, error) {
 	if fence+1 >= len(all) {
 		return "", fmt.Errorf("sift: the %q fence is not followed by a summary", fenceLine)
 	}
-	summary := summaryLine.FindStringSubmatch(strings.TrimRight(all[fence+1], "\r\n"))
+	summary := summaryLine().FindStringSubmatch(strings.TrimRight(all[fence+1], "\r\n"))
 	if summary == nil {
 		return "", fmt.Errorf("sift: %q is not a sift summary", strings.TrimRight(all[fence+1], "\r\n"))
 	}
@@ -73,7 +74,7 @@ func Restore(rendered string) (string, error) {
 
 	var out strings.Builder
 	for _, line := range all[:fence] {
-		marker := markerPattern.FindStringSubmatch(strings.TrimRight(line, "\r\n"))
+		marker := markerPattern().FindStringSubmatch(strings.TrimRight(line, "\r\n"))
 		if marker == nil {
 			out.WriteString(line)
 			continue

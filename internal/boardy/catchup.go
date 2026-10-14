@@ -6,11 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"tofu/internal/sys"
 )
 
 const CatchupFileName = "catchup.md"
@@ -44,7 +45,7 @@ type Catchup struct {
 	Stale   []TypedAnswer  `json:"stale"`
 }
 
-var catchupHeading = regexp.MustCompile(`^## ([A-Z][A-Z0-9]*-[1-9][0-9]*(?:-[1-9][0-9]*)?) Q([1-9][0-9]*): (.*)$`)
+var catchupHeading = sys.LazyRegexp(`^## ([A-Z][A-Z0-9]*-[1-9][0-9]*(?:-[1-9][0-9]*)?) Q([1-9][0-9]*): (.*)$`)
 
 func (m Managed) Catchup(key string) (Catchup, error) {
 	path := filepath.Join(m.Store.BoardDir(key), CatchupFileName)
@@ -144,7 +145,7 @@ func readTypedAnswers(path string) ([]TypedAnswer, error) {
 	answering := false
 	for line := range strings.Lines(strings.ReplaceAll(string(raw), "\r\n", "\n")) {
 		line = strings.TrimSpace(line)
-		if match := catchupHeading.FindStringSubmatch(line); match != nil {
+		if match := catchupHeading().FindStringSubmatch(line); match != nil {
 			number, _ := strconv.Atoi(match[2])
 			typed, answering = append(typed, TypedAnswer{Ticket: match[1], Question: number, TLDR: match[3]}), false
 			continue

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 type Status string
@@ -131,7 +132,7 @@ type Ticket struct {
 
 func (t Ticket) Board() string { key, _, _ := strings.Cut(t.ID, "-"); return key }
 
-var ticketID = regexp.MustCompile(`^([A-Z][A-Z0-9]*)-([1-9][0-9]*)(?:-([1-9][0-9]*))?$`)
+var ticketID = sys.LazyRegexp(`^([A-Z][A-Z0-9]*)-([1-9][0-9]*)(?:-([1-9][0-9]*))?$`)
 
 type Ref struct {
 	Key    string
@@ -140,7 +141,7 @@ type Ref struct {
 }
 
 func SplitID(id string) (Ref, error) {
-	match := ticketID.FindStringSubmatch(id)
+	match := ticketID().FindStringSubmatch(id)
 	if match == nil {
 		return Ref{}, fmt.Errorf("%q is not a ticket id like DEMO-1, or DEMO-1-2 for a sub-ticket", id)
 	}

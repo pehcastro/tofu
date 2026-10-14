@@ -4,15 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 
 	"tofu/internal/cron"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/settings"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
-var gitPush = regexp.MustCompile(`\bgit\b[^;&|\n]*\bpush\b`)
+var gitPush = sys.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)
 
 func cronChecker(dir string) cron.Checker {
 	return func(ctx context.Context, command string) (int, string, error) {
@@ -42,7 +42,7 @@ func (f firedBash) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	var args struct {
 		Command string `json:"command"`
 	}
-	if json.Unmarshal(raw, &args) == nil && gitPush.MatchString(args.Command) {
+	if json.Unmarshal(raw, &args) == nil && gitPush().MatchString(args.Command) {
 		return turn.Result{}, errors.New("bash: a turn a cron job started never pushes, whatever the gate says: leave the push to the person")
 	}
 	return f.Tool.Run(ctx, raw)

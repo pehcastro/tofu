@@ -3,7 +3,6 @@ package learn
 import (
 	"cmp"
 	"encoding/json"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -24,7 +23,7 @@ const (
 	learnTask    = "tofu learn"
 )
 
-var ruleNoteAhead = regexp.MustCompile(`\A\[[^\]\n]+, from the rule [^\]\n]+\]\n(?:[^\n]+\n)*?\n`)
+var ruleNoteAhead = sys.LazyRegexp(`\A\[[^\]\n]+, from the rule [^\]\n]+\]\n(?:[^\n]+\n)*?\n`)
 
 type Said struct {
 	Session  string    `json:"session"`
@@ -245,7 +244,7 @@ func wordsOf(raw string, wrapped []string) string {
 		words = raw[strings.LastIndex(raw[:shared], paragraph)+len(paragraph):]
 	}
 	for {
-		note := ruleNoteAhead.FindString(words)
+		note := ruleNoteAhead().FindString(words)
 		if note == "" {
 			return strings.TrimSpace(words)
 		}

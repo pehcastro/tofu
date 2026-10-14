@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -47,7 +46,7 @@ func OpenStore(project string) (Store, error) {
 	return Store{Dir: filepath.Join(state, BoardsDirName)}, err
 }
 
-var boardKey = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
+var boardKey = sys.LazyRegexp(`^[A-Z][A-Z0-9]{1,9}$`)
 
 func (s Store) BoardDir(key string) string { return filepath.Join(s.Dir, key) }
 
@@ -57,7 +56,7 @@ func (s Store) TicketPath(id string) (string, error) {
 }
 
 func (s Store) Init(key, name string) (Board, error) {
-	if !boardKey.MatchString(key) {
+	if !boardKey().MatchString(key) {
 		return Board{}, fmt.Errorf("%q is not a board key: two to ten capital letters or digits, starting with a letter", key)
 	}
 	board := Board{Key: key, Name: name, Holds: []Status{Doing}, Created: time.Now().UTC().Truncate(time.Second), Dir: s.BoardDir(key)}
@@ -82,7 +81,7 @@ func (s Store) Boards() ([]Board, error) {
 	}
 	var boards []Board
 	for _, entry := range entries {
-		if !entry.IsDir() || !boardKey.MatchString(entry.Name()) {
+		if !entry.IsDir() || !boardKey().MatchString(entry.Name()) {
 			continue
 		}
 		board, readErr := s.Board(entry.Name())

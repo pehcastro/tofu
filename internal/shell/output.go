@@ -5,7 +5,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -14,14 +13,15 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 	"tofu/internal/widget"
 )
 
 var (
-	commandStep = regexp.MustCompile(`&&|\|\||;`)
-	changedDir  = regexp.MustCompile(`(?i)^\s*(?:cd|pushd|set-location)\s+(?:/d\s+)?["']?([^"']+?)["']?\s*$`)
-	logTarget   = regexp.MustCompile(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`)
-	msysDrive   = regexp.MustCompile(`^/([a-zA-Z])(?:/|$)`)
+	commandStep = sys.LazyRegexp(`&&|\|\||;`)
+	changedDir  = sys.LazyRegexp(`(?i)^\s*(?:cd|pushd|set-location)\s+(?:/d\s+)?["']?([^"']+?)["']?\s*$`)
+	logTarget   = sys.LazyRegexp(`(?i)(?:(?:^|\s)--?log(?:-?file)?[=\s]+|(?:^|[^<>=-])[12&*]?>>?\s*|\btee\s+(?:-a\s+)?|\bout-file\s+(?:-filepath\s+)?|-RedirectStandard(?:Output|Error)\s+)["']?([^\s"'|;&<>()]+)`)
+	msysDrive   = sys.LazyRegexp(`^/([a-zA-Z])(?:/|$)`)
 )
 
 type Tails struct {
@@ -280,12 +280,12 @@ func lastLines(raw []byte, lines int) string {
 
 func namedLogs(dir, command string) []string {
 	var paths []string
-	for _, step := range commandStep.Split(command, -1) {
-		if moved := changedDir.FindStringSubmatch(step); moved != nil {
+	for _, step := range commandStep().Split(command, -1) {
+		if moved := changedDir().FindStringSubmatch(step); moved != nil {
 			dir = within(dir, moved[1])
 			continue
 		}
-		for _, match := range logTarget.FindAllStringSubmatch(step, -1) {
+		for _, match := range logTarget().FindAllStringSubmatch(step, -1) {
 			if slices.Contains([]string{"/dev/null", "$null", "nul"}, strings.ToLower(match[1])) {
 				continue
 			}
@@ -298,7 +298,7 @@ func namedLogs(dir, command string) []string {
 }
 
 func within(dir, path string) string {
-	if drive := msysDrive.FindStringSubmatch(path); drive != nil && runtime.GOOS == "windows" {
+	if drive := msysDrive().FindStringSubmatch(path); drive != nil && runtime.GOOS == "windows" {
 		path = strings.ToUpper(drive[1]) + ":/" + path[len(drive[0]):]
 	}
 	if filepath.IsAbs(path) {

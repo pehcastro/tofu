@@ -3,7 +3,6 @@ package learn
 import (
 	"cmp"
 	"encoding/json"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,17 +11,18 @@ import (
 
 	"tofu/internal/memory"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 var (
-	corrected   = regexp.MustCompile(`(?i)\b(?:again|i said|i asked|i told|as i said|lol|you should|your job|yourself|where is|never asked|can't i just|you can just|not verified|nothing i asked)\b|\bwhy\b[^.!?\n]*\?`)
-	askedPerson = regexp.MustCompile(`(?i)(decision for you|your call|you need to decide|until you decide|what i need from you|tell me (if|when|which|whether)|should i (start|do|go|build)|do you want|want me to|let me know|still open for you|\?\s*$)`)
-	turnEnded   = regexp.MustCompile(`(?i)\byou should be the one\b|\bwhy (?:u |you )?(?:idle|stopp?ed|stop|waiting|ask)\b|\bcan't i just\b|\byou can just\b|\byour job\b|\bkeep working\b`)
-	clauseEnd   = regexp.MustCompile(`[.?!,;:()]+\s*|\s+(?:and|then|but|so)\s+|\n+`)
-	directing   = regexp.MustCompile(`(?i)\b(?:yourself|you should|your job|you can just|i want|must)\b`)
+	corrected   = sys.LazyRegexp(`(?i)\b(?:again|i said|i asked|i told|as i said|lol|you should|your job|yourself|where is|never asked|can't i just|you can just|not verified|nothing i asked)\b|\bwhy\b[^.!?\n]*\?`)
+	askedPerson = sys.LazyRegexp(`(?i)(decision for you|your call|you need to decide|until you decide|what i need from you|tell me (if|when|which|whether)|should i (start|do|go|build)|do you want|want me to|let me know|still open for you|\?\s*$)`)
+	turnEnded   = sys.LazyRegexp(`(?i)\byou should be the one\b|\bwhy (?:u |you )?(?:idle|stopp?ed|stop|waiting|ask)\b|\bcan't i just\b|\byou can just\b|\byour job\b|\bkeep working\b`)
+	clauseEnd   = sys.LazyRegexp(`[.?!,;:()]+\s*|\s+(?:and|then|but|so)\s+|\n+`)
+	directing   = sys.LazyRegexp(`(?i)\b(?:yourself|you should|your job|you can just|i want|must)\b`)
 	toTheLead   = strings.NewReplacer(" yourself ", " itself ", " you are ", " the lead is ", " you're ", " the lead is ", " your ", " the lead's ", " you ", " the lead ", " u ", " the lead ", " lol ", " ", " pls ", " ", " please ", " ", " ok ", " ")
-	sentenceEnd = regexp.MustCompile(`[.?!]+\s+|\n+`)
-	tokens      = regexp.MustCompile(`[\pL\pN']+`)
+	sentenceEnd = sys.LazyRegexp(`[.?!]+\s+|\n+`)
+	tokens      = sys.LazyRegexp(`[\pL\pN']+`)
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 )
 
 func profaneIn(text string) bool {
-	return slices.ContainsFunc(tokens.FindAllString(strings.ToLower(text), -1), func(word string) bool { return strings.Contains(profane, " "+word+" ") })
+	return slices.ContainsFunc(tokens().FindAllString(strings.ToLower(text), -1), func(word string) bool { return strings.Contains(profane, " "+word+" ") })
 }
 
 type unit struct {
@@ -42,7 +42,7 @@ type unit struct {
 
 func stemsOf(text string) []string {
 	var stems []string
-	for _, word := range tokens.FindAllString(strings.ToLower(text), -1) {
+	for _, word := range tokens().FindAllString(strings.ToLower(text), -1) {
 		word = strings.TrimSuffix(strings.Trim(word, "'"), "'s")
 		if len([]rune(word)) < ShortestWord || strings.Contains(stopwords, " "+word+" ") || strings.Contains(profane, " "+word+" ") || unicode.IsDigit([]rune(word)[0]) {
 			continue
@@ -71,7 +71,7 @@ func unitsOf(said []Said) []unit {
 	for i, s := range said {
 		pieces := []string{s.Text}
 		if len(strings.Fields(s.Text)) > ShortMessageWords {
-			pieces = sentenceEnd.Split(s.Text, -1)
+			pieces = sentenceEnd().Split(s.Text, -1)
 		}
 		for _, piece := range pieces {
 			if piece = strings.TrimSpace(piece); piece != "" {
@@ -117,12 +117,12 @@ func localFindings(said []Said, sent requests) []Finding {
 	rare := telling(units, len(said))
 	var corrections, remarks, asked []unit
 	for _, u := range units {
-		if !corrected.MatchString(u.text) {
+		if !corrected().MatchString(u.text) {
 			remarks = append(remarks, u)
 			continue
 		}
 		corrections = append(corrections, u)
-		if turnEnded.MatchString(u.text) && askedPerson.MatchString(said[u.said].Before) && !slices.ContainsFunc(asked, func(a unit) bool { return a.said == u.said }) {
+		if turnEnded().MatchString(u.text) && askedPerson().MatchString(said[u.said].Before) && !slices.ContainsFunc(asked, func(a unit) bool { return a.said == u.said }) {
 			asked = append(asked, u)
 		}
 	}
@@ -244,9 +244,9 @@ func findingOf(group []unit, said []Said, rare map[string]bool, sent requests) F
 func directive(f Finding) string {
 	best, score := "", -1
 	for _, q := range f.Quotes {
-		for _, clause := range clauseEnd.Split(q.Text, -1) {
+		for _, clause := range clauseEnd().Split(q.Text, -1) {
 			points := shared(stemsOf(clause), f.words, nil)
-			if directing.MatchString(clause) {
+			if directing().MatchString(clause) {
 				points += SharedTellingWords
 			}
 			if clause = flat(clause); clause != "" && (points > score || points == score && len(clause) < len(best)) {
@@ -276,9 +276,9 @@ func ruleFault(text string, quotes []Quote) string {
 	if who, named := memory.PersonIn(text); named {
 		return "it names " + strings.TrimSpace(who)
 	}
-	words := tokens.FindAllString(strings.ToLower(text), -1)
+	words := tokens().FindAllString(strings.ToLower(text), -1)
 	for _, q := range quotes {
-		quoted := " " + strings.Join(tokens.FindAllString(strings.ToLower(q.Text), -1), " ") + " "
+		quoted := " " + strings.Join(tokens().FindAllString(strings.ToLower(q.Text), -1), " ") + " "
 		for i := 0; i+QuotedRunWords <= len(words); i++ {
 			if strings.Contains(quoted, " "+strings.Join(words[i:i+QuotedRunWords], " ")+" ") {
 				return "it copies the person's words"

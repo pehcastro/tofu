@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	"tofu/internal/boardy"
+	"tofu/internal/sys"
 )
 
 const reviewLogFloor = 200
 
-var citedTicket = lazy(`(TOFU|BOJI|DESK)-\d+(?:-\d+)?`)
+var citedTicket = sys.LazyRegexp(`(TOFU|BOJI|DESK)-\d+(?:-\d+)?`)
 
 func requireTicket(env Env, ev event) (Answer, error) {
 	kind := ev.ToolInput.SubagentType
@@ -102,7 +103,7 @@ func globsOverlap(a, b string) bool {
 	return pa == "" || pb == "" || foldPrefix(pa, pb) || foldPrefix(pb, pa)
 }
 
-var agentName = lazy(`(?im)^name:\s*(\S+)\s*$`)
+var agentName = sys.LazyRegexp(`(?im)^name:\s*(\S+)\s*$`)
 
 func knownAgentTypes(root string) []string {
 	known := []string{"orchestrator", "general-purpose"}
@@ -157,11 +158,11 @@ If this file genuinely belongs to your ticket, the ticket's owns: is wrong: stop
 }
 
 var (
-	logHeredocOpener = lazy(`^<<'?(\w+)'?\r?\n`)
-	movedTicketFile  = lazy(`(?i)(TOFU|BOJI|DESK)-\d+(?:-\d+)?\.md`)
-	moveCommand      = lazy(`(?i)\b(mv|move|move-item|git\s+mv)\b`)
-	reviewFolder     = lazy(`(?i)review[\\/]`)
-	boardyMove       = lazy(`(?i)\bboardy\s+move\s+((?:TOFU|BOJI|DESK)-\d+(?:-\d+)?)\s+([A-Za-z-]+)`)
+	logHeredocOpener = sys.LazyRegexp(`^<<'?(\w+)'?\r?\n`)
+	movedTicketFile  = sys.LazyRegexp(`(?i)(TOFU|BOJI|DESK)-\d+(?:-\d+)?\.md`)
+	moveCommand      = sys.LazyRegexp(`(?i)\b(mv|move|move-item|git\s+mv)\b`)
+	reviewFolder     = sys.LazyRegexp(`(?i)review[\\/]`)
+	boardyMove       = sys.LazyRegexp(`(?i)\bboardy\s+move\s+((?:TOFU|BOJI|DESK)-\d+(?:-\d+)?)\s+([A-Za-z-]+)`)
 )
 
 func ticketLog(env Env, ev event) (Answer, error) {

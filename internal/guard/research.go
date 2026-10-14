@@ -4,16 +4,18 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 var (
-	plannedDocument  = lazy(`(?i)\.local/boji/(tickets|planning)/.*\.md$`)
-	ticketDocument   = lazy(`(?i)\.local/boji/tickets/.*\.md$`)
-	scopeHeading     = lazy(`(?im)^## Scope`)
-	citesSource      = lazy(`(?i)\.local/(sources|research)/`)
-	searchedSources  = lazy(`(?i)nothing in \.local/sources`)
-	researchCitation = lazy(`(?i)\.local/research/([A-Za-z0-9._/@-]+\.md)`)
-	usedAt           = lazy(`(?im)^used_at:`)
+	plannedDocument  = sys.LazyRegexp(`(?i)\.local/boji/(tickets|planning)/.*\.md$`)
+	ticketDocument   = sys.LazyRegexp(`(?i)\.local/boji/tickets/.*\.md$`)
+	scopeHeading     = sys.LazyRegexp(`(?im)^## Scope`)
+	citesSource      = sys.LazyRegexp(`(?i)\.local/(sources|research)/`)
+	searchedSources  = sys.LazyRegexp(`(?i)nothing in \.local/sources`)
+	researchCitation = sys.LazyRegexp(`(?i)\.local/research/([A-Za-z0-9._/@-]+\.md)`)
+	usedAt           = sys.LazyRegexp(`(?im)^used_at:`)
 )
 
 const researchHeadLines = 12

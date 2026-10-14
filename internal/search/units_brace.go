@@ -3,7 +3,10 @@ package search
 import (
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
+
+	"tofu/internal/sys"
 )
 
 type declPattern struct {
@@ -28,36 +31,40 @@ const (
 )
 
 var (
-	scriptSyntax = braceSyntax{
-		decls: []declPattern{
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:async\s+)?function\b\s*\*?\s*([\w$]*)`), kind: KindFunc},
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?class\b\s*([\w$]*)`), kind: KindType, container: true},
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:declare\s+)?(?:const\s+)?(?:interface|enum)\s+([\w$]+)`), kind: KindType},
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:declare\s+)?type\s+([\w$]+)`), kind: KindType},
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:const|let|var)\s+([\w$]+)[^=]*` + scriptArrow), kind: KindFunc},
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:const|let|var)\s+([\w$]+)[^=]*=\s*$`), kind: KindValue},
-		},
-		members: []declPattern{
-			{shape: regexp.MustCompile(`(?s)` + scriptMember + `(?:(?:public|private|protected|static|readonly|async|override|abstract|declare|accessor|get|set)\s+)*\*?\s*(#?[\w$]+)\s*\??\s*(?:<.*>)?\s*\(.*\)\s*(?::.*)?$`), kind: KindFunc},
-			{shape: regexp.MustCompile(`(?s)` + scriptMember + `(?:(?:public|private|protected|static|readonly|override)\s+)*(#?[\w$]+)\s*(?::[^=]*)?` + scriptArrow), kind: KindFunc},
-		},
-		calls: []declPattern{
-			{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:const|let|var)\s+([\w$]+)[^=]*=\s*(?:await\s+)?[\w$.]+(?:<.*>)?$`), kind: KindValue},
-		},
-		stops: regexp.MustCompile(`^(?:abstract|async|await|class|const|declare|do|else|enum|export|for|function|if|import|interface|let|new|return|switch|throw|try|type|var|while|yield)\b`),
-	}
-	rustSyntax = braceSyntax{
-		rust: true,
-		decls: []declPattern{
-			{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:default\s+)?(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+(?:"[^"]*"\s+)?)?fn\s+(\w+)`), kind: KindFunc},
-			{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:struct|enum|union)\s+(\w+)`), kind: KindType},
-			{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:unsafe\s+)?(?:auto\s+)?trait\s+(\w+)`), kind: KindType, container: true},
-			{shape: regexp.MustCompile(`(?s)^(?:unsafe\s+)?impl\b(.*)$`), kind: KindType, container: true, named: implTarget},
-		},
-		stops: regexp.MustCompile(`^(?:async|const|else|enum|extern|fn|for|if|impl|let|loop|match|mod|pub|return|static|struct|trait|type|union|unsafe|use|while)\b`),
-	}
-	implType     = regexp.MustCompile(`^&?\s*(?:'\w+\s+)?(?:(?:mut|dyn)\s+)*(?:\w+::)*(\w+)`)
-	decoratorRun = regexp.MustCompile(`(?s)^(?:(?:@[\w$.]+\s*(?:\(.*\))?|#!?\[.*\])\s*)+$`)
+	scriptSyntax = sync.OnceValue(func() braceSyntax {
+		return braceSyntax{
+			decls: []declPattern{
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:async\s+)?function\b\s*\*?\s*([\w$]*)`), kind: KindFunc},
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?class\b\s*([\w$]*)`), kind: KindType, container: true},
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:declare\s+)?(?:const\s+)?(?:interface|enum)\s+([\w$]+)`), kind: KindType},
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:declare\s+)?type\s+([\w$]+)`), kind: KindType},
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:const|let|var)\s+([\w$]+)[^=]*` + scriptArrow), kind: KindFunc},
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:const|let|var)\s+([\w$]+)[^=]*=\s*$`), kind: KindValue},
+			},
+			members: []declPattern{
+				{shape: regexp.MustCompile(`(?s)` + scriptMember + `(?:(?:public|private|protected|static|readonly|async|override|abstract|declare|accessor|get|set)\s+)*\*?\s*(#?[\w$]+)\s*\??\s*(?:<.*>)?\s*\(.*\)\s*(?::.*)?$`), kind: KindFunc},
+				{shape: regexp.MustCompile(`(?s)` + scriptMember + `(?:(?:public|private|protected|static|readonly|override)\s+)*(#?[\w$]+)\s*(?::[^=]*)?` + scriptArrow), kind: KindFunc},
+			},
+			calls: []declPattern{
+				{shape: regexp.MustCompile(`(?s)^(?:export\s+)?(?:const|let|var)\s+([\w$]+)[^=]*=\s*(?:await\s+)?[\w$.]+(?:<.*>)?$`), kind: KindValue},
+			},
+			stops: regexp.MustCompile(`^(?:abstract|async|await|class|const|declare|do|else|enum|export|for|function|if|import|interface|let|new|return|switch|throw|try|type|var|while|yield)\b`),
+		}
+	})
+	rustSyntax = sync.OnceValue(func() braceSyntax {
+		return braceSyntax{
+			rust: true,
+			decls: []declPattern{
+				{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:default\s+)?(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+(?:"[^"]*"\s+)?)?fn\s+(\w+)`), kind: KindFunc},
+				{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:struct|enum|union)\s+(\w+)`), kind: KindType},
+				{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:unsafe\s+)?(?:auto\s+)?trait\s+(\w+)`), kind: KindType, container: true},
+				{shape: regexp.MustCompile(`(?s)^(?:unsafe\s+)?impl\b(.*)$`), kind: KindType, container: true, named: implTarget},
+			},
+			stops: regexp.MustCompile(`^(?:async|const|else|enum|extern|fn|for|if|impl|let|loop|match|mod|pub|return|static|struct|trait|type|union|unsafe|use|while)\b`),
+		}
+	})
+	implType     = sys.LazyRegexp(`^&?\s*(?:'\w+\s+)?(?:(?:mut|dyn)\s+)*(?:\w+::)*(\w+)`)
+	decoratorRun = sys.LazyRegexp(`(?s)^(?:(?:@[\w$.]+\s*(?:\(.*\))?|#!?\[.*\])\s*)+$`)
 )
 
 type frame struct {
@@ -182,7 +189,7 @@ func (o outline) classify(body string, from, to int, patterns []declPattern, sto
 			if pattern.named != nil {
 				decl.symbol = pattern.named(match[1])
 			}
-			for above := index - 1; above >= 0 && decoratorRun.MatchString(strings.TrimSpace(body[starts[above]:starts[above+1]])); above-- {
+			for above := index - 1; above >= 0 && decoratorRun().MatchString(strings.TrimSpace(body[starts[above]:starts[above+1]])); above-- {
 				decl.first = o.lineOf(starts[above])
 			}
 			return decl, true
@@ -366,7 +373,7 @@ func implTarget(rest string) string {
 			}
 		}
 	}
-	if match := implType.FindStringSubmatch(rest); match != nil {
+	if match := implType().FindStringSubmatch(rest); match != nil {
 		return match[1]
 	}
 	return ""

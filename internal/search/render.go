@@ -2,18 +2,18 @@ package search
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
-var unitHeaderPattern = regexp.MustCompile(`(?m)^(\S+):\d+-\d+ `)
+var unitHeaderPattern = sys.LazyRegexp(`(?m)^(\S+):\d+-\d+ `)
 
 func OfferedPaths(rendered string) []string {
 	seen := make(map[string]bool)
 	var paths []string
-	for _, match := range unitHeaderPattern.FindAllStringSubmatch(rendered, -1) {
+	for _, match := range unitHeaderPattern().FindAllStringSubmatch(rendered, -1) {
 		path := match[1]
 		if seen[path] {
 			continue

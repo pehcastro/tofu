@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -22,8 +24,8 @@ func emdash(stdin []byte) Answer {
 }
 
 var (
-	directive     = lazy(`(?i)^//(go:|nolint)`)
-	spacedSlashes = lazy(`(?i)\s//\s`)
+	directive     = sys.LazyRegexp(`(?i)^//(go:|nolint)`)
+	spacedSlashes = sys.LazyRegexp(`(?i)\s//\s`)
 )
 
 func comments(ev event) Answer {
@@ -70,18 +72,18 @@ Only compiler directives are allowed: //go:build, //go:generate, //go:embed, //n
 }
 
 var (
-	libraryPath   = lazy(`(?i)(^|/)library/`)
-	changelogPath = lazy(`(?i)/library/changelog/`)
+	libraryPath   = sys.LazyRegexp(`(?i)(^|/)library/`)
+	changelogPath = sys.LazyRegexp(`(?i)/library/changelog/`)
 	forbidden     = []struct {
 		pattern func() *regexp.Regexp
 		says    string
 	}{
-		{lazy(`(?i)\b(TOFU|BOJI)-\d+`), "a ticket id"},
-		{lazy(`(?i)\bbench/[a-z]`), "a bench path"},
-		{lazy(`(?i)report-\d{4}-\d{2}-\d{2}`), "a dated report"},
-		{lazy(`(?i)\.local/`), "a path under .local"},
-		{lazy(`(?i)\b(the owner|the user) (decided|asked|wants|said)`), "a decision attributed to a person"},
-		{lazy(`(?i)\bwithdrawn on \d{4}-\d{2}-\d{2}`), "a withdrawal note"},
+		{sys.LazyRegexp(`(?i)\b(TOFU|BOJI)-\d+`), "a ticket id"},
+		{sys.LazyRegexp(`(?i)\bbench/[a-z]`), "a bench path"},
+		{sys.LazyRegexp(`(?i)report-\d{4}-\d{2}-\d{2}`), "a dated report"},
+		{sys.LazyRegexp(`(?i)\.local/`), "a path under .local"},
+		{sys.LazyRegexp(`(?i)\b(the owner|the user) (decided|asked|wants|said)`), "a decision attributed to a person"},
+		{sys.LazyRegexp(`(?i)\bwithdrawn on \d{4}-\d{2}-\d{2}`), "a withdrawal note"},
 	}
 )
 

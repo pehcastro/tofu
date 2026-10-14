@@ -3,13 +3,13 @@ package boardy
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 const (
@@ -31,9 +31,9 @@ type Question struct {
 }
 
 var (
-	questionHeading = regexp.MustCompile(`^### Q([1-9][0-9]*) (.+)$`)
-	optionLine      = regexp.MustCompile(`^([1-9])\. (.+)$`)
-	recommendLine   = regexp.MustCompile(`^Recommend ([1-9]): (.+)$`)
+	questionHeading = sys.LazyRegexp(`^### Q([1-9][0-9]*) (.+)$`)
+	optionLine      = sys.LazyRegexp(`^([1-9])\. (.+)$`)
+	recommendLine   = sys.LazyRegexp(`^Recommend ([1-9]): (.+)$`)
 )
 
 func (q Question) tidy() Question {
@@ -59,7 +59,7 @@ func (q Question) complete() error {
 		return fmt.Errorf("its tldr is one line of at most %d characters", konst.BoardTLDRRunesMost)
 	case q.ELI5 == "" || len(eli5) > konst.BoardELI5LinesMost:
 		return fmt.Errorf("its eli5 is one to %d plain lines", konst.BoardELI5LinesMost)
-	case slices.ContainsFunc(eli5, func(line string) bool { return optionLine.MatchString(line) || recommendLine.MatchString(line) }):
+	case slices.ContainsFunc(eli5, func(line string) bool { return optionLine().MatchString(line) || recommendLine().MatchString(line) }):
 		return errors.New("an eli5 line reads as an option or a recommendation")
 	case len(q.Options) < konst.AskPersonOptionsLeast || len(q.Options) > konst.AskPersonOptionsMost:
 		return fmt.Errorf("it has %d options, and a question offers %d to %d", len(q.Options), konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)
@@ -92,7 +92,7 @@ func parseQuestions(body string) ([]Question, error) {
 		if line == "" {
 			continue
 		}
-		if match := questionHeading.FindStringSubmatch(line); match != nil {
+		if match := questionHeading().FindStringSubmatch(line); match != nil {
 			id, _ := strconv.Atoi(match[1])
 			questions = append(questions, Question{ID: id, TLDR: match[2]})
 			continue
@@ -101,14 +101,14 @@ func parseQuestions(body string) ([]Question, error) {
 			return nil, fmt.Errorf("the section %s has text before its first ### Q<n> heading: %q", QuestionsHeading, line)
 		}
 		q := &questions[len(questions)-1]
-		if match := optionLine.FindStringSubmatch(line); match != nil {
+		if match := optionLine().FindStringSubmatch(line); match != nil {
 			if match[1] != strconv.Itoa(len(q.Options)+1) {
 				return nil, fmt.Errorf("question %d lists option %s out of order", q.ID, match[1])
 			}
 			q.Options = append(q.Options, match[2])
 			continue
 		}
-		if match := recommendLine.FindStringSubmatch(line); match != nil {
+		if match := recommendLine().FindStringSubmatch(line); match != nil {
 			q.Recommend, _ = strconv.Atoi(match[1])
 			q.Why = match[2]
 			continue

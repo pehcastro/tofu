@@ -8,9 +8,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"unicode"
 	"unicode/utf16"
+
+	"tofu/internal/sys"
 )
 
 type Rule string
@@ -130,11 +131,7 @@ func foldSuffix(s, suffix string) bool {
 
 func utf16Len(s string) int { return len(utf16.Encode([]rune(s))) }
 
-func lazy(pattern string) func() *regexp.Regexp {
-	return sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(pattern) })
-}
-
-var newline = lazy(`\r?\n`)
+var newline = sys.LazyRegexp(`\r?\n`)
 
 const byteOrderMark = string(rune(0xFEFF))
 
@@ -190,8 +187,8 @@ func ownsGlobs(lines []string) []string {
 }
 
 var (
-	ownsKey  = lazy(`(?i)^owns:\s*$`)
-	listItem = lazy(`^\s*-\s*(.+?)\s*$`)
+	ownsKey  = sys.LazyRegexp(`(?i)^owns:\s*$`)
+	listItem = sys.LazyRegexp(`^\s*-\s*(.+?)\s*$`)
 )
 
 func ownsMatch(rel string, globs []string) bool {
@@ -206,7 +203,7 @@ func ownsMatch(rel string, globs []string) bool {
 	return false
 }
 
-var drivePath = lazy(`^[A-Za-z]:/`)
+var drivePath = sys.LazyRegexp(`^[A-Za-z]:/`)
 
 func relativePath(root, path string) string {
 	normRoot := strings.ReplaceAll(strings.TrimRight(root, `\/`), `\`, "/")

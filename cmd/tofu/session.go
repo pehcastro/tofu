@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/widget"
 )
@@ -32,7 +32,7 @@ const (
 	sessionDate        = "2 Jan 15:04"
 )
 
-var failureShaped = regexp.MustCompile(`(?i)\b(fail|failed|failure|errors?|fatal|panic|exception|denied|not found|no such file|undefined)\b`)
+var failureShaped = sys.LazyRegexp(`(?i)\b(fail|failed|failure|errors?|fatal|panic|exception|denied|not found|no such file|undefined)\b`)
 
 type sessionSkip = host.SessionSkip
 
@@ -699,7 +699,7 @@ func callReason(result session.ResultBody) string {
 	if len(lines) == 0 {
 		return "exit " + code
 	}
-	failed := slices.IndexFunc(lines, failureShaped.MatchString)
+	failed := slices.IndexFunc(lines, failureShaped().MatchString)
 	if failed < 0 {
 		failed = len(lines) - 1
 	}

@@ -4,23 +4,27 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 const emDash = string(rune(0x2014))
 
 var (
-	boldRun      = regexp.MustCompile(`\*\*[^*]+\*\*`)
-	greenResult  = regexp.MustCompile(`(ci|tests|test|suite) (is |are |will be |stays )?green`)
-	agreeingOpen = regexp.MustCompile(`^[ \t\n]*(you are right|you.re right|great question|good catch|exactly right|absolutely right)`)
-	metricRules  = []*regexp.Regexp{
-		regexp.MustCompile(`[0-9]+ (tests?|specs?)`),
-		regexp.MustCompile(`typecheck ?[0-9]`),
-		regexp.MustCompile(`lint (clean|0)`),
-		regexp.MustCompile(`[0-9]+ routes?|routes? 200`),
-		regexp.MustCompile(`(everything|all) committed|tree clean`),
-	}
+	boldRun      = sys.LazyRegexp(`\*\*[^*]+\*\*`)
+	greenResult  = sys.LazyRegexp(`(ci|tests|test|suite) (is |are |will be |stays )?green`)
+	agreeingOpen = sys.LazyRegexp(`^[ \t\n]*(you are right|you.re right|great question|good catch|exactly right|absolutely right)`)
+	metricRules  = sync.OnceValue(func() []*regexp.Regexp {
+		return []*regexp.Regexp{
+			regexp.MustCompile(`[0-9]+ (tests?|specs?)`),
+			regexp.MustCompile(`typecheck ?[0-9]`),
+			regexp.MustCompile(`lint (clean|0)`),
+			regexp.MustCompile(`[0-9]+ routes?|routes? 200`),
+			regexp.MustCompile(`(everything|all) committed|tree clean`),
+		}
+	})
 )
 
 func Cheap(part Part) Mark {
@@ -36,7 +40,7 @@ func Cheap(part Part) Mark {
 	if n := strings.Count(part.Text, emDash); n > 0 {
 		flags = append(flags, fmt.Sprintf("%d em dashes", n))
 	}
-	if n := len(boldRun.FindAllString(part.Text, -1)); n > konst.BrevityBoldCap {
+	if n := len(boldRun().FindAllString(part.Text, -1)); n > konst.BrevityBoldCap {
 		flags = append(flags, fmt.Sprintf("%d bold phrases", n))
 	}
 	var banned []string
@@ -45,7 +49,7 @@ func Cheap(part Part) Mark {
 			banned = append(banned, word)
 		}
 	}
-	if greenResult.MatchString(low) {
+	if greenResult().MatchString(low) {
 		banned = append(banned, "green")
 	}
 	if len(banned) > 0 {
@@ -54,7 +58,7 @@ func Cheap(part Part) Mark {
 	if metrics(low) >= konst.BrevityMetricsCap {
 		flags = append(flags, "a scorecard")
 	}
-	if agreeingOpen.MatchString(low) {
+	if agreeingOpen().MatchString(low) {
 		flags = append(flags, "it opens by agreeing")
 	}
 
@@ -66,7 +70,7 @@ func Cheap(part Part) Mark {
 
 func metrics(low string) int {
 	count := 0
-	for _, rule := range metricRules {
+	for _, rule := range metricRules() {
 		if rule.MatchString(low) {
 			count++
 		}

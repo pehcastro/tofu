@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 var ErrNotRunning = errors.New("shell: not running")
@@ -75,8 +76,8 @@ func processName(word string) string {
 }
 
 var (
-	flagShape  = regexp.MustCompile(`^(-{1,2}|/{1,2})([A-Za-z0-9]+)(:\$?[A-Za-z]+)?$`)
-	actionWord = regexp.MustCompile(`^[A-Za-z]+$`)
+	flagShape  = sys.LazyRegexp(`^(-{1,2}|/{1,2})([A-Za-z0-9]+)(:\$?[A-Za-z]+)?$`)
+	actionWord = sys.LazyRegexp(`^[A-Za-z]+$`)
 )
 
 func killed(fields []string) []int {
@@ -94,14 +95,14 @@ func killed(fields []string) []int {
 	var pids []int
 	for at := 1; at < len(fields); at++ {
 		field := strings.Trim(fields[at], `"'`)
-		shape := flagShape.FindStringSubmatch(field)
+		shape := flagShape().FindStringSubmatch(field)
 		if shape != nil && (program == "taskkill" || shape[1][0] == '-') {
 			switch flag := strings.ToLower(shape[2]); {
 			case program == "kill" && flag == "l", program == "stop-process" && flag == "whatif",
 				program == "taskkill" && slices.Contains([]string{"s", "u", "p", "fi"}, flag):
 				return nil
 			case program == "stop-process" && slices.Contains([]string{"erroraction", "ea", "warningaction", "wa", "informationaction", "infa"}, flag):
-				if at+1 >= len(fields) || !actionWord.MatchString(strings.Trim(fields[at+1], `"'`)) {
+				if at+1 >= len(fields) || !actionWord().MatchString(strings.Trim(fields[at+1], `"'`)) {
 					return nil
 				}
 				at++
@@ -133,7 +134,7 @@ func wrappedKill(program string, rest []string) []int {
 		case flag == "-c" || flag == "-command" && (program == "powershell" || program == "pwsh") || flag == "/c" && program == "cmd":
 			return killed(rest[at+1:])
 		case at > 0 && slices.Contains([]string{"-executionpolicy", "-ep"}, strings.ToLower(rest[at-1])):
-		case !flagShape.MatchString(field):
+		case !flagShape().MatchString(field):
 			return nil
 		}
 	}

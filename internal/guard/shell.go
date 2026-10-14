@@ -4,31 +4,33 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"tofu/internal/sys"
 )
 
 var (
-	interpreterReadsScript = lazy(`(?is)\b(python[23]?(\.exe)?|node|perl|ruby|bun|deno|php|powershell|pwsh)\b[^\r\n|]*(<<-?\s*['"]?[A-Za-z_]|\s-\s|\s-[cep]\s|\s-[cep]['"])`)
-	scriptWritesGo         = lazy(`(?is)(\.go['"]\s*,\s*['"][wax]|\.go['"]\s*\)\s*\.\s*write|writeFileSync\s*\(\s*['"][^'"\r\n]*\.go['"]|Set-Content[^\r\n]{0,60}\.go['"]|['"][^'"\r\n]*\.go['"][^\r\n]{0,40}\bmode\s*=\s*['"][wax])`)
-	scriptOpensForWrite    = lazy(`(?is)\bopen\s*\([^)\r\n]{0,120},\s*['"][wax]`)
-	goWord                 = lazy(`(?i)\.go\b`)
-	shellWritesSource      = lazy(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\bsed\s+-i\b[^|]*\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
-	gitChangesTree         = lazy(`(?i)\bgit\s+(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)\b`)
-	gitDiscardsWork        = lazy(`(?i)\bgit\s+(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
-	gitStash               = lazy(`(?i)\bgit\s+stash\b`)
-	tofuRunsAtCommand      = lazy(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
-	exeRuns                = lazy(`(?i)\S+\.exe["']?\s+run\s`)
-	wireOpenrouter         = lazy(`(?i)--wire[=\s]+openrouter`)
-	dryRun                 = lazy(`(?i)--dry-run`)
-	liveCost               = lazy(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
-	gitWorktree            = lazy(`(?i)\bgit\s+worktree\b`)
-	goTestPattern          = lazy(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
-	parallelBound          = lazy(`(?i)-p[= ]\d`)
+	interpreterReadsScript = sys.LazyRegexp(`(?is)\b(python[23]?(\.exe)?|node|perl|ruby|bun|deno|php|powershell|pwsh)\b[^\r\n|]*(<<-?\s*['"]?[A-Za-z_]|\s-\s|\s-[cep]\s|\s-[cep]['"])`)
+	scriptWritesGo         = sys.LazyRegexp(`(?is)(\.go['"]\s*,\s*['"][wax]|\.go['"]\s*\)\s*\.\s*write|writeFileSync\s*\(\s*['"][^'"\r\n]*\.go['"]|Set-Content[^\r\n]{0,60}\.go['"]|['"][^'"\r\n]*\.go['"][^\r\n]{0,40}\bmode\s*=\s*['"][wax])`)
+	scriptOpensForWrite    = sys.LazyRegexp(`(?is)\bopen\s*\([^)\r\n]{0,120},\s*['"][wax]`)
+	goWord                 = sys.LazyRegexp(`(?i)\.go\b`)
+	shellWritesSource      = sys.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\bsed\s+-i\b[^|]*\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
+	gitChangesTree         = sys.LazyRegexp(`(?i)\bgit\s+(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)\b`)
+	gitDiscardsWork        = sys.LazyRegexp(`(?i)\bgit\s+(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
+	gitStash               = sys.LazyRegexp(`(?i)\bgit\s+stash\b`)
+	tofuRunsAtCommand      = sys.LazyRegexp(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
+	exeRuns                = sys.LazyRegexp(`(?i)\S+\.exe["']?\s+run\s`)
+	wireOpenrouter         = sys.LazyRegexp(`(?i)--wire[=\s]+openrouter`)
+	dryRun                 = sys.LazyRegexp(`(?i)--dry-run`)
+	liveCost               = sys.LazyRegexp(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
+	gitWorktree            = sys.LazyRegexp(`(?i)\bgit\s+worktree\b`)
+	goTestPattern          = sys.LazyRegexp(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
+	parallelBound          = sys.LazyRegexp(`(?i)-p[= ]\d`)
 	treeWide               = []func() *regexp.Regexp{
-		lazy(`(?i)go\s+(test|build|vet)\s+\./\.\.\.`),
-		lazy(`(?i)\bgofmt\s+-w\s+\.`),
-		lazy(`(?i)\bgo\s+run\b.*\bserve\b`),
+		sys.LazyRegexp(`(?i)go\s+(test|build|vet)\s+\./\.\.\.`),
+		sys.LazyRegexp(`(?i)\bgofmt\s+-w\s+\.`),
+		sys.LazyRegexp(`(?i)\bgo\s+run\b.*\bserve\b`),
 	}
-	gitPublishes = lazy(`(?i)\bgit\s+(add|commit|push)\b`)
+	gitPublishes = sys.LazyRegexp(`(?i)\bgit\s+(add|commit|push)\b`)
 )
 
 func shell(env Env, ev event) (Answer, error) {

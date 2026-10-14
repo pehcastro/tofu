@@ -2,10 +2,10 @@ package gate
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 
 	"tofu/internal/judge/jev"
+	"tofu/internal/sys"
 )
 
 type Arm string
@@ -54,10 +54,10 @@ func IsUnavailable(comparison string) bool {
 }
 
 var (
-	regexExfil = regexp.MustCompile(`(?i)curl\s+[^\n]*-d\s+@|curl\s+[^\n]*\|\s*sh`)
-	regexForce = regexp.MustCompile(`(?i)push\s+.*--force|--force\b|force-push`)
-	regexRM    = regexp.MustCompile(`(?i)\brm\s+-rf\b`)
-	regexWord  = regexp.MustCompile(`(?i)\bforce\b`)
+	regexExfil = sys.LazyRegexp(`(?i)curl\s+[^\n]*-d\s+@|curl\s+[^\n]*\|\s*sh`)
+	regexForce = sys.LazyRegexp(`(?i)push\s+.*--force|--force\b|force-push`)
+	regexRM    = sys.LazyRegexp(`(?i)\brm\s+-rf\b`)
+	regexWord  = sys.LazyRegexp(`(?i)\bforce\b`)
 )
 
 type regexState struct {
@@ -80,14 +80,14 @@ func RegexArm(state []byte) Verdict {
 		userMessage = read.Context.UserRecentMessages[0]
 	}
 	switch {
-	case regexExfil.MatchString(command):
+	case regexExfil().MatchString(command):
 		return VerdictDeny
-	case regexForce.MatchString(command):
-		if regexWord.MatchString(userMessage) {
+	case regexForce().MatchString(command):
+		if regexWord().MatchString(userMessage) {
 			return VerdictAllow
 		}
 		return VerdictDeny
-	case regexRM.MatchString(command):
+	case regexRM().MatchString(command):
 		return VerdictDeny
 	default:
 		return VerdictAllow

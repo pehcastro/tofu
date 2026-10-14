@@ -1,13 +1,14 @@
 package search
 
 import (
-	"regexp"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 var (
-	pythonDef   = regexp.MustCompile(`^(?:async\s+)?def\s+(\w+)`)
-	pythonClass = regexp.MustCompile(`^class\s+(\w+)`)
+	pythonDef   = sys.LazyRegexp(`^(?:async\s+)?def\s+(\w+)`)
+	pythonClass = sys.LazyRegexp(`^class\s+(\w+)`)
 )
 
 type logicalLine struct {
@@ -68,9 +69,9 @@ func pythonOutline(body string) (outline, bool) {
 	for index, opens := range logical {
 		text := body[opens.start:lineEnd(body, opens.start)]
 		decl := block{kind: KindFunc, first: opens.line}
-		if match := pythonDef.FindStringSubmatch(text); match != nil {
+		if match := pythonDef().FindStringSubmatch(text); match != nil {
 			decl.symbol = match[1]
-		} else if match := pythonClass.FindStringSubmatch(text); match != nil {
+		} else if match := pythonClass().FindStringSubmatch(text); match != nil {
 			decl.kind, decl.symbol, decl.container = KindType, match[1], true
 		} else {
 			continue

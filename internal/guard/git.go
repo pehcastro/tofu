@@ -7,24 +7,26 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 const subjectLimit = 72
 
 var (
-	commentLine = lazy(`^\s*#`)
-	attribution = lazy(`(?i)^\s*(co-authored-by|signed-off-by|assisted-by|generated-by)\s*:`)
+	commentLine = sys.LazyRegexp(`^\s*#`)
+	attribution = sys.LazyRegexp(`(?i)^\s*(co-authored-by|signed-off-by|assisted-by|generated-by)\s*:`)
 	toolCredits = []func() *regexp.Regexp{
-		lazy(`(?i)\b(generated|written|authored|created|produced|assisted|helped|co-?authored|made)\b[^.]{0,40}\b(by|with|using)\b[^.]{0,20}\b(claude|anthropic|copilot|cursor|chatgpt|openai|an? (ai|agent|bot|llm|model))\b`),
-		lazy(`(?i)\b(claude|anthropic|copilot|cursor|chatgpt|openai)\b[^.]{0,20}\b(wrote|generated|authored|made|helped|assisted)\b`),
-		lazy(`(?i)\bwith\s+(claude|copilot|cursor|chatgpt)\s*$`),
+		sys.LazyRegexp(`(?i)\b(generated|written|authored|created|produced|assisted|helped|co-?authored|made)\b[^.]{0,40}\b(by|with|using)\b[^.]{0,20}\b(claude|anthropic|copilot|cursor|chatgpt|openai|an? (ai|agent|bot|llm|model))\b`),
+		sys.LazyRegexp(`(?i)\b(claude|anthropic|copilot|cursor|chatgpt|openai)\b[^.]{0,20}\b(wrote|generated|authored|made|helped|assisted)\b`),
+		sys.LazyRegexp(`(?i)\bwith\s+(claude|copilot|cursor|chatgpt)\s*$`),
 	}
-	conventional     = lazy(`(?i)^(feat|fix|docs|refactor|test|chore|bench|hook)(\([a-z0-9._/-]+\))?!?: .+`)
-	releaseSubject   = lazy(`(?i)^chore\(release\): (\S+)$`)
-	changelogSection = lazy(`(?i)^### (\w+)`)
-	versionHeading   = lazy(`(?i)^## `)
-	quotedName       = lazy("`([A-Za-z_][A-Za-z0-9_.-]*)`")
-	docsWaiver       = lazy(`(?i)^Docs: none, (\S+\s+){2,}\S+`)
+	conventional     = sys.LazyRegexp(`(?i)^(feat|fix|docs|refactor|test|chore|bench|hook)(\([a-z0-9._/-]+\))?!?: .+`)
+	releaseSubject   = sys.LazyRegexp(`(?i)^chore\(release\): (\S+)$`)
+	changelogSection = sys.LazyRegexp(`(?i)^### (\w+)`)
+	versionHeading   = sys.LazyRegexp(`(?i)^## `)
+	quotedName       = sys.LazyRegexp("`([A-Za-z_][A-Za-z0-9_.-]*)`")
+	docsWaiver       = sys.LazyRegexp(`(?i)^Docs: none, (\S+\s+){2,}\S+`)
 )
 
 func CommitMsg(dir, file string) Answer {

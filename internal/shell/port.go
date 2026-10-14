@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 const (
@@ -210,12 +212,12 @@ func (a Address) Holder() string {
 }
 
 var (
-	controlSequence = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
-	localAddress    = regexp.MustCompile(`(?:^|[^\w.-])(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):(\d{1,5})\b`)
+	controlSequence = sys.LazyRegexp(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	localAddress    = sys.LazyRegexp(`(?:^|[^\w.-])(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):(\d{1,5})\b`)
 )
 
 func PortInOutput(text string) int {
-	for _, match := range localAddress.FindAllStringSubmatch(controlSequence.ReplaceAllString(text, ""), -1) {
+	for _, match := range localAddress().FindAllStringSubmatch(controlSequence().ReplaceAllString(text, ""), -1) {
 		if port, _ := strconv.Atoi(match[1]); port > 0 && port <= highestPort {
 			return port
 		}

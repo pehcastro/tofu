@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -158,7 +157,7 @@ func Load(path string) (Rule, error) {
 	return parse(data, path)
 }
 
-var schemaName = regexp.MustCompile(`^[a-z][a-z_0-9]*$`)
+var schemaName = sys.LazyRegexp(`^[a-z][a-z_0-9]*$`)
 
 func declaredSchema(data []byte, path string) (string, error) {
 	schema := SchemaGate
@@ -171,7 +170,7 @@ func declaredSchema(data []byte, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !schemaName.MatchString(schema) {
+	if !schemaName().MatchString(schema) {
 		return "", fmt.Errorf("%s: schema is %q and a schema name is lower case letters, digits and underscores", path, schema)
 	}
 	return schema, nil

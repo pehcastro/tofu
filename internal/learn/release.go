@@ -2,14 +2,15 @@ package learn
 
 import (
 	"cmp"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/sys"
 )
 
 var (
-	releaseHeading = regexp.MustCompile(`^## \[?(\d+\.\d+\.\d+[^\]\s]*)\]? - (\d{4}-\d{2}-\d{2})`)
+	releaseHeading = sys.LazyRegexp(`^## \[?(\d+\.\d+\.\d+[^\]\s]*)\]? - (\d{4}-\d{2}-\d{2})`)
 	noteMarkup     = strings.NewReplacer("**", "", "`", "")
 )
 
@@ -23,7 +24,7 @@ func Releases(markdown string) []Release {
 	var releases []Release
 	for _, text := range strings.Split(strings.ReplaceAll(markdown, "\r\n", "\n"), "\n") {
 		text = strings.TrimSpace(text)
-		if found := releaseHeading.FindStringSubmatch(text); found != nil {
+		if found := releaseHeading().FindStringSubmatch(text); found != nil {
 			releases = append(releases, Release{Version: found[1], Day: found[2]})
 			continue
 		}

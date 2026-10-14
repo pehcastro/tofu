@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 type Claim string
@@ -35,7 +36,7 @@ type Cited struct {
 	Text     string
 }
 
-var citationPattern = regexp.MustCompile(
+var citationPattern = sys.LazyRegexp(
 	`(?:^|[^A-Za-z0-9_./\\-])(\.?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.[A-Za-z][A-Za-z0-9]{0,9})` +
 		`:([1-9][0-9]{0,8})(?:-([1-9][0-9]{0,8}))?` +
 		`(?::([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?))?`)
@@ -48,7 +49,7 @@ type fileBody struct {
 func Cite(root, text string) Cited {
 	read := map[string]fileBody{}
 	var cited Cited
-	for _, match := range citationPattern.FindAllStringSubmatch(text, -1) {
+	for _, match := range citationPattern().FindAllStringSubmatch(text, -1) {
 		one := Citation{Path: filepath.ToSlash(match[1]), Symbol: match[4]}
 		one.FirstLine, _ = strconv.Atoi(match[2])
 		one.LastLine = one.FirstLine

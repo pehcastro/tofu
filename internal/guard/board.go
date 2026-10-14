@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"tofu/internal/boardy"
+	"tofu/internal/sys"
 )
 
 type place int
@@ -93,8 +94,8 @@ func (f folderTickets) find(id string) (ticket, bool, error) {
 func (folderTickets) where(string) string { return ".local/boji/tickets/" }
 
 var (
-	acceptanceHeading = lazy(`(?im)^##\s*Acceptance`)
-	ownerField        = lazy(`(?im)^owner:\s*(\S+)\s*$`)
+	acceptanceHeading = sys.LazyRegexp(`(?im)^##\s*Acceptance`)
+	ownerField        = sys.LazyRegexp(`(?im)^owner:\s*(\S+)\s*$`)
 )
 
 func readFolderTicket(path string) ticket {

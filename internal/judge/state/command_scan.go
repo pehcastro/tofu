@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
 type scan struct {
@@ -51,7 +53,7 @@ func (s *scan) segment(segment []string) {
 				continue
 			}
 			s.sink(segment[i])
-		case assignment.MatchString(token):
+		case assignment().MatchString(token):
 			name, value, _ := strings.Cut(token, "=")
 			s.vars[name] = s.expand(value)
 		default:
@@ -103,10 +105,10 @@ func (s *scan) segment(segment []string) {
 }
 
 func runsCode(args []string) bool {
-	if codeRunner.MatchString(programName(args[0])) {
+	if codeRunner().MatchString(programName(args[0])) {
 		return true
 	}
-	return codeWrapper.MatchString(programName(args[0])) && slices.ContainsFunc(args[1:], func(arg string) bool { return codeRunner.MatchString(programName(arg)) })
+	return codeWrapper().MatchString(programName(args[0])) && slices.ContainsFunc(args[1:], func(arg string) bool { return codeRunner().MatchString(programName(arg)) })
 }
 
 func CodeHash(command, cwd string) (string, bool) {
@@ -173,18 +175,18 @@ func (s *scan) sink(token string) {
 }
 
 var (
-	assignment    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
-	variableRef   = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
-	heredocMarker = regexp.MustCompile(`^<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
-	pythonOpen    = regexp.MustCompile(`open\(\s*([^,()]+?)\s*,\s*['"]([^'"]+)['"]`)
-	pythonString  = regexp.MustCompile(`^['"]([^'"]*)['"]$`)
-	codeRunner    = regexp.MustCompile(`^(python[0-9.]*w?|py|node|deno|bun|ruby|perl|php|pwsh|powershell|sh|bash|zsh|rscript|eval|source|\.)$`)
-	codeWrapper   = regexp.MustCompile(`^(env|uv|uvx|npx|bunx|pnpx|xargs|exec|command|nohup|time|timeout|nice|sudo)$`)
+	assignment    = sys.LazyRegexp(`^[A-Za-z_][A-Za-z0-9_]*=`)
+	variableRef   = sys.LazyRegexp(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+	heredocMarker = sys.LazyRegexp(`^<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?`)
+	pythonOpen    = sys.LazyRegexp(`open\(\s*([^,()]+?)\s*,\s*['"]([^'"]+)['"]`)
+	pythonString  = sys.LazyRegexp(`^['"]([^'"]*)['"]$`)
+	codeRunner    = sys.LazyRegexp(`^(python[0-9.]*w?|py|node|deno|bun|ruby|perl|php|pwsh|powershell|sh|bash|zsh|rscript|eval|source|\.)$`)
+	codeWrapper   = sys.LazyRegexp(`^(env|uv|uvx|npx|bunx|pnpx|xargs|exec|command|nohup|time|timeout|nice|sudo)$`)
 )
 
 func (s *scan) expand(value string) string {
-	return variableRef.ReplaceAllStringFunc(value, func(ref string) string {
-		name := variableRef.FindStringSubmatch(ref)[1]
+	return variableRef().ReplaceAllStringFunc(value, func(ref string) string {
+		name := variableRef().FindStringSubmatch(ref)[1]
 		if known, ok := s.vars[name]; ok {
 			return known
 		}
@@ -193,12 +195,12 @@ func (s *scan) expand(value string) string {
 }
 
 func (s *scan) pythonWrites(body string) {
-	for _, match := range pythonOpen.FindAllStringSubmatch(body, -1) {
+	for _, match := range pythonOpen().FindAllStringSubmatch(body, -1) {
 		if mode := match[2]; !strings.HasPrefix(mode, "w") && !strings.HasPrefix(mode, "a") && !strings.HasPrefix(mode, "x") {
 			continue
 		}
 		argument := strings.TrimSpace(match[1])
-		if literal := pythonString.FindStringSubmatch(argument); literal != nil {
+		if literal := pythonString().FindStringSubmatch(argument); literal != nil {
 			s.sink(literal[1])
 			continue
 		}
@@ -250,7 +252,7 @@ func unquotedMarker(text string) (int, string, int) {
 		case c == '\'' || c == '"':
 			quote = c
 		case c == '<':
-			if found := heredocMarker.FindStringSubmatchIndex(text[i:]); found != nil {
+			if found := heredocMarker().FindStringSubmatchIndex(text[i:]); found != nil {
 				return i, text[i+found[2] : i+found[3]], i + found[1]
 			}
 		}

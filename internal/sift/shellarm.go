@@ -2,17 +2,18 @@ package sift
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
+
+	"tofu/internal/sys"
 )
 
-var errorShaped = regexp.MustCompile(`(?i)\b(errors?|failed|failures?|fatal|panic|traceback|exception|denied|no such file|not found|undefined|unresolved|exited [0-9]+)\b`)
+var errorShaped = sys.LazyRegexp(`(?i)\b(errors?|failed|failures?|fatal|panic|traceback|exception|denied|no such file|not found|undefined|unresolved|exited [0-9]+)\b`)
 
 func ShellCheap(unit Unit) Mark {
 	if unit.Held != NotHeld {
 		return Mark{Keep: true, Reason: string(unit.Held)}
 	}
-	if errorShaped.MatchString(unit.Text) {
+	if errorShaped().MatchString(unit.Text) {
 		return Mark{Keep: true, Reason: "an error-shaped line"}
 	}
 	return Mark{Reason: "neither an end of the output nor error-shaped"}
