@@ -1,0 +1,61 @@
+{
+  "label": "t1366-animoff-app-login",
+  "build": "50aae51d animoff",
+  "command": [
+    "animoff"
+  ],
+  "home": "login",
+  "nominal_mhz": 3187,
+  "settle_s": 5,
+  "window_s": 10,
+  "readings": [
+    {
+      "working_set_mb": 32.9453125,
+      "private_working_set_mb": 14.37109375,
+      "peak_working_set_mb": 37.0703125,
+      "cpu_percent_of_one_core": 0.4661365263219664,
+      "context_switches_per_s": 682.4735957648331,
+      "mcycles_per_s": 59.216935086558244,
+      "threads": 19
+    },
+    {
+      "working_set_mb": 33.3828125,
+      "private_working_set_mb": 14.85546875,
+      "peak_working_set_mb": 37.9453125,
+      "cpu_percent_of_one_core": 0.4659541307696019,
+      "context_switches_per_s": 678.7274250442329,
+      "mcycles_per_s": 59.29284107278258,
+      "threads": 21
+    },
+    {
+      "working_set_mb": 33.21875,
+      "private_working_set_mb": 14.6015625,
+      "peak_working_set_mb": 37.8984375,
+      "cpu_percent_of_one_core": 0.15530444133329752,
+      "context_switches_per_s": 678.9661687985634,
+      "mcycles_per_s": 57.906882180395236,
+      "threads": 20
+    },
+    {
+      "working_set_mb": 33.19140625,
+      "private_working_set_mb": 14.53125,
+      "peak_working_set_mb": 37.9609375,
+      "cpu_percent_of_one_core": 0.7766008556794493,
+      "context_switches_per_s": 679.1343418882557,
+      "mcycles_per_s": 58.98189084102349,
+      "threads": 19
+    },
+    {
+      "working_set_mb": 33.25,
+      "private_working_set_mb": 14.74609375,
+      "peak_working_set_mb": 38.0078125,
+      "cpu_percent_of_one_core": 0.31073414755689777,
+      "context_switches_per_s": 679.6377275364467,
+      "mcycles_per_s": 58.53377830330683,
+      "threads": 21
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read every 100 ms for the window and the median kept, its CPU time over the window divided by the wall time, its threads' context switches and its cycle count read from one NtQuerySystemInformation snapshot at each end of the window, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 14:24"
+}

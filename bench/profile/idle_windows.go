@@ -12,13 +12,52 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
-const idleSamples = 20
+const idleMethod = "the command starts in a 120 by 40 pseudo console, its output kept as screen-<label>-<n>.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read every 100 ms for the window and the median kept, its CPU time over the window divided by the wall time, its threads' context switches and its cycle count read from one NtQuerySystemInformation snapshot at each end of the window, then the tree is killed with its job object"
 
-const idleMethod = "the command starts in a 120 by 40 pseudo console, its output kept as screen-<label>-<n>.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object"
+const (
+	systemProcessInformationSize = 0x100
+	systemThreadInformationSize  = 0x50
+	threadContextSwitchesAt      = 0x40
+	statusInfoLengthMismatch     = 0xC0000004
+)
 
-func idleOnce(cmd *exec.Cmd, settle time.Duration, screen io.Writer) (idleReading, error) {
+type activity struct {
+	switches, cycles uint64
+	threads          int
+}
+
+func processActivity(pid uint32) (activity, error) {
+	buffer := make([]byte, 1<<20)
+	for {
+		err := windows.NtQuerySystemInformation(windows.SystemProcessInformation, unsafe.Pointer(&buffer[0]), uint32(len(buffer)), nil)
+		if err == nil {
+			break
+		}
+		if err != windows.NTStatus(statusInfoLengthMismatch) {
+			return activity{}, err
+		}
+		buffer = make([]byte, 2*len(buffer))
+	}
+	for at := 0; ; {
+		info := (*windows.SYSTEM_PROCESS_INFORMATION)(unsafe.Pointer(&buffer[at]))
+		if uint32(info.UniqueProcessID) == pid {
+			a := activity{cycles: info.CycleTime, threads: int(info.NumberOfThreads)}
+			for thread := range a.threads {
+				a.switches += uint64(*(*uint32)(unsafe.Pointer(&buffer[at+systemProcessInformationSize+thread*systemThreadInformationSize+threadContextSwitchesAt])))
+			}
+			return a, nil
+		}
+		if info.NextEntryOffset == 0 {
+			return activity{}, fmt.Errorf("process %d is not in the system process list", pid)
+		}
+		at += int(info.NextEntryOffset)
+	}
+}
+
+func idleOnce(cmd *exec.Cmd, settle, window time.Duration, screen io.Writer) (idleReading, error) {
 	var inRead, inWrite, outRead, outWrite, console windows.Handle
 	if err := windows.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
 		return idleReading{}, err
@@ -48,8 +87,13 @@ func idleOnce(cmd *exec.Cmd, settle time.Duration, screen io.Writer) (idleReadin
 	time.Sleep(settle)
 	var working, private []float64
 	var peak float64
+	pid, _ := windows.GetProcessId(process)
+	before, err := processActivity(pid)
+	if err != nil {
+		return idleReading{}, err
+	}
 	cpuBefore, windowStarted := processCPU(process), time.Now()
-	for range idleSamples {
+	for range int(window / sampleEvery) {
 		if exited, _ := windows.WaitForSingleObject(process, 0); exited == windows.WAIT_OBJECT_0 {
 			var code uint32
 			_ = windows.GetExitCodeProcess(process, &code)
@@ -65,14 +109,33 @@ func idleOnce(cmd *exec.Cmd, settle time.Duration, screen io.Writer) (idleReadin
 		peak = float64(counters.peakWorkingSet) / mebibyte
 		time.Sleep(sampleEvery)
 	}
-	idleCPU := 100 * (processCPU(process) - cpuBefore) / time.Since(windowStarted).Seconds()
+	after, err := processActivity(pid)
+	if err != nil {
+		return idleReading{}, err
+	}
+	seconds := time.Since(windowStarted).Seconds()
+	idleCPU := 100 * (processCPU(process) - cpuBefore) / seconds
 	_ = windows.TerminateJobObject(job, 1)
 	_, _ = windows.WaitForSingleObject(process, windows.INFINITE)
 	windows.ClosePseudoConsole(console)
 	<-drained
 	slices.Sort(working)
 	slices.Sort(private)
-	return idleReading{WorkingSetMB: working[len(working)/2], PrivateWorkingSetMB: private[len(private)/2], PeakWorkingSetMB: peak, CPUPercent: idleCPU}, nil
+	return idleReading{WorkingSetMB: working[len(working)/2], PrivateWorkingSetMB: private[len(private)/2], PeakWorkingSetMB: peak, CPUPercent: idleCPU,
+		SwitchesPerS: float64(after.switches-before.switches) / seconds, MCyclesPerS: float64(after.cycles-before.cycles) / seconds / 1e6, Threads: after.threads}, nil
+}
+
+func nominalMHz() float64 {
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `HARDWARE\DESCRIPTION\System\CentralProcessor\0`, registry.QUERY_VALUE)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = key.Close() }()
+	mhz, _, err := key.GetIntegerValue("~MHz")
+	if err != nil {
+		return 0
+	}
+	return float64(mhz)
 }
 
 func processCPU(process windows.Handle) float64 {

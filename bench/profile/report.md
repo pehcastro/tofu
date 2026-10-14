@@ -174,3 +174,78 @@ The fresh home's reload of the models.dev catalog (`main.refreshRegistry`, `io.R
 - Five starts per row; one start in five lands mid-collection and reads 9 to 15 MB high, which is why the max column is wide and the median is the number compared.
 - The ultraviolet fix is a change to a dependency: a `replace` to a patched copy or an upstream change. charmbracelet/crush in `.local/sources` pins the same ultraviolet version and the same SQLite driver, so it carries both costs.
 - The idle CPU column is from a 2 s window; the reader's 10 ms poll costs 1 to 4% of a core whether or not the buffer is reused.
+
+## Idle CPU and its wakeups, TOFU-1366
+
+**tldr: idle, the interface takes 3.2% of one core on the set-up screen and 6.4% on a signed-in chat, `tofu serve --stdio` 1.2%; the process-time figures above (0.8 to 4.7%, serve 0.0%) undercount, because Windows charges thread time at the clock tick and these wakeups are shorter than one. Four changes measured together take the chat to 2.2% (-66%), the set-up screen to 0.9% (-73%) and serve to 0.3% (-71%), with typing, resize, the streamed reply and the idle screen unchanged.**
+
+`PROFILE_WORK=<scratch>`, then `profile idle -label <l> -build <b> -work <scratch> -window 10s -home stub|login -- <tofu> [serve --stdio]`, and `profile idles <labels>` for the table. `-home stub` points every URL tofu calls at a local stub, so a fresh home shows the set-up screen with no network; `-home login` adds a mock claude-sub login against that stub and a mock Jev key, so the interface opens a signed-in chat with the welcome art (a fresh session, before its first message). Five fresh starts per row, read for 10 s from 5 s after start, nothing discarded. CPU by cycles is the process's cycle count over the window (one `NtQuerySystemInformation` snapshot at each end) divided by the 3187 MHz nominal clock; context switches are the sum over its threads from the same snapshots. Windows only.
+
+### HEAD, five fresh starts each
+
+Source: 50aae51d, `git archive HEAD`, stripped build, 2026-10-14 14:12 to 14:17, windows/amd64, i9-14900K, 32 logical CPUs, go1.27.1, mock claude-sub login against a local stub, no model called.
+
+| screen | CPU % of one core by cycles | by process times | context switches per s | working set MB |
+|---|---|---|---|---|
+| set-up screen | 3.20 (3.02 to 3.28) | 1.09 (0.31 to 1.86) | 804 (793 to 815) | 35.7 |
+| signed-in chat | 6.45 (6.36 to 6.54) | 4.82 (3.42 to 6.21) | 894 (881 to 909) | 43.7 |
+| `tofu serve --stdio` | 1.17 (1.08 to 1.22) | 0.00 (0.00 to 4.66) | 65 (62 to 66) | 22.0 |
+
+### Every idle wakeup, where it is and what it is for
+
+Source: a goroutine dump and a 20 s CPU profile of each idle process, taken in a scratch build of 50aae51d; rates from the code.
+
+| source | where | what it is for | wakeups per s | runs on |
+|---|---|---|---|---|
+| input reader poll | `third_party/ultraviolet/terminal_reader_windows.go:47`, `time.Sleep(10 * time.Millisecond)` between two empty `PeekConsoleInput` calls | waiting for a key, mouse, resize or focus record | 100 | every interface screen |
+| renderer ticker | `charm.land/bubbletea/v2@v2.0.9/tea.go:1405`, flush at `:1425` | writing the newest view at up to 60 frames a second; an unchanged view returns after a string compare | 60 | every interface screen |
+| welcome wordmark pulse | `interface/tui/welcome/identity.go:73`, 120 ms at `:25` | the mint dot circling the wordmark; each tick is a full `App.Update` and `App.View` | 8.3 | chat before its first message, **and hidden behind the set-up screen** |
+| welcome cat tick | `interface/tui/cat/cat.go:112`, 4 a second at `identity.go:24` | the cat's tail; a full update and view each | 4 | same |
+| set-up recheck | `interface/tui/app.go:466`, 1 s at `:192`, calling `cmd/tofu/app.go:136` `wiring.blockers` | noticing a login or key added from outside | 1 | set-up screen |
+| credential sweep | `internal/llm/cred/keep.go:28`, 60 s | refreshing tokens near expiry | 0.02 | interface and serve |
+| serve shell watch | `internal/host/serve.go:719`, 250 ms; `serve.go:737` calls `sys.LoadKeyRedactor` every tick, which opens the SQLite credential store and compiles a regular expression | streaming shell output to the client | 4 | serve |
+| serve settings watch | `internal/host/settings.go:97`, 250 ms | noticing a settings file edited outside | 4 | serve |
+| serve board watch | `internal/host/boardy.go:90`, 250 ms | noticing a board file edited outside | 4 | serve |
+
+The intro starts in `interface/tui/welcome.go:29` from `App.Init` (`interface/tui/app.go:435`) whenever the session is fresh, set-up or not: the set-up screen's dump holds three timers, the recheck and both welcome ticks. Each Go wakeup costs about four context switches here (the reader arm removes 100 wakeups and 426 switches a second), because the runtime wakes a spinning thread (`runtime.wakep`, `startm`, `stealWork` across 32 Ps): a profile of the set-up screen puts 26% of its samples in `stealWork` and 22% in `semawakeup`.
+
+### Each fix, measured in a scratch clone
+
+Source: 50aae51d plus one change per arm, `git archive HEAD` into the scratch, stripped builds, 2026-10-14 14:12 to 14:34, five fresh starts each, same machine and conditions as HEAD.
+
+| arm | change | set-up screen CPU % | chat CPU % | serve CPU % | context switches per s, set-up / chat |
+|---|---|---|---|---|---|
+| HEAD | | 3.20 | 6.45 | 1.17 | 804 / 894 |
+| reader waits | the reader blocks in `WaitForMultipleObjects` on the console handle and a cancel event set by `Cancel` and by the context, instead of sleeping 10 ms | 2.10 (-34%) | 5.28 (-18%) | | 378 / 438 |
+| renderer on demand | the event loop wakes the renderer after each message, the renderer flushes at most once a frame and sleeps when nothing changed | 2.97 (-7%) | 5.62 (-13%) | | 718 / 806 |
+| welcome ticks merged | one 120 ms tick moves the dot and every second one moves the cat (240 ms a frame, was 250) | 2.44 (-24%) | 3.60 (-44%) | | 782 / 813 |
+| serve redactor lazy | `scanShells` loads the redactor only when a shell other than a one-shot is listed | | | 0.34 (-71%) | serve 65 to 39 |
+| **all four** | | **0.85 (-73%)** | **2.21 (-66%)** | **0.34 (-71%)** | **109 / 161** |
+
+| arm that turns a mechanism off, not a fix | set-up screen CPU % | chat CPU % | working set MB, chat |
+|---|---|---|---|
+| no welcome animation at all | 2.08 | 1.85 | 33.2 (HEAD 43.7) |
+| HEAD with `GOMAXPROCS=4` | 2.22 | 4.07 | 41.0 |
+| all four with `GOMAXPROCS=4` | 0.73 | 2.10 | 41.0 |
+
+The animation is 4.6 points of the chat's 6.45 and 10 MB of its working set; on the set-up screen it is 1.1 points that draw nothing, so starting it only when the set-up screen is gone is a saving with no visible change. `GOMAXPROCS` only matters while the wakeups are there.
+
+### The combined arm, driven
+
+- `tofu drive` (fresh home, 120x40, `--fresh --plain`, a one-reply cassette; type, resize to 100x30, enter, wait for the reply): HEAD and the combined arm print the same 202 lines but for the random session, message and request ids and the spinner glyph, which differs between two HEAD runs too. The drive calls `App.Update` and `App.View` directly, so it does not exercise the reader or the renderer.
+- A scratch console check runs the real binary in a 120x40 pseudo console on a mock login whose stub streams a 40-delta reply over 4 s: 20 typed words, a resize to 100x30, the reply, then 3 s idle; two runs per build. Typed echo median 35.6 and 25.1 ms on HEAD, 24.0 and 24.7 ms on the combined arm, worst 45.0 against 38.7. Screens after typing, after the resize, after the reply and 3 s later match HEAD once the clock, the ids and the spinner are masked; the only other difference is the dot's place on the wordmark, which also differs between two HEAD runs. 51 and 52 distinct screens in the first 3 s of the stream on HEAD, 57 and 59 on the combined arm.
+
+### What round 2 needs
+
+- The reader: `third_party/ultraviolet/terminal_reader_windows.go` and `cancelreader_windows.go`.
+- The renderer: a fork of `charm.land/bubbletea/v2` v2.0.9 under `third_party/bubbletea`, changing only `tea.go` (`startRenderer` and `eventLoop`), with a `replace` in `go.mod`, in the shape TOFU-1352 gave ultraviolet.
+- The welcome ticks: `interface/tui/welcome/identity.go` and `interface/tui/cat/cat.go`; not animating behind set-up: `interface/tui/welcome.go` and `interface/tui/app.go`.
+- Serve: `internal/host/serve.go` (`scanShells`).
+
+### What these numbers cannot say
+
+- Linux and macOS are not measured. The reader and the 10 ms poll are Windows only; the renderer ticker and the welcome ticks are on every OS.
+- Merging the welcome ticks makes the cat 4% faster (240 against 250 ms a frame); no drive or screen read can tell, but it is a change to an animation, and the larger saving, not animating behind set-up, is not measured on its own: the no-animation arm stands in for it on the set-up screen.
+- The chat rows are the welcome screen of a fresh session. After the first message the welcome ticks stop, and HEAD's header clock does not move at idle either (3 s apart, the screen is unchanged on both builds).
+- The serve rows have no shell running; with one, the redactor still loads every 250 ms.
+- The console check is a scratch program that is not in the tree; the screen reader it uses is `bench/startup/frame`'s, which lives in a `main` package and cannot be imported.

@@ -18,9 +18,11 @@ func observe(*exec.Cmd) (observation, error) {
 
 const idleMethod = "not measured: the idle reading starts the command in a Windows pseudo console"
 
-func idleOnce(*exec.Cmd, time.Duration, io.Writer) (idleReading, error) {
+func idleOnce(*exec.Cmd, time.Duration, time.Duration, io.Writer) (idleReading, error) {
 	return idleReading{}, errors.New("bench/profile reads an idle process on Windows only")
 }
+
+func nominalMHz() float64 { return 0 }
 
 func splitCommandLine(line string) []string {
 	return strings.Fields(line)
