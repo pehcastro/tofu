@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,31 +92,23 @@ type standIns struct {
 	readings []frame.Quota
 }
 
-func readingSource(reading frame.Quota) string {
-	source, _, _ := strings.Cut(reading.Label, " ")
-	return source
-}
-
-func (s standIns) idOf(reading frame.Quota) int64 {
-	id, _ := strconv.ParseInt(strings.TrimPrefix(reading.Account, "#"), 10, 64)
-	return id
-}
+func readingSource(reading frame.Quota) string { return reading.Source() }
 
 func (s standIns) mine() []frame.Quota {
-	return slices.DeleteFunc(slices.Clone(s.readings), func(reading frame.Quota) bool { return readingSource(reading) != s.source })
+	return slices.DeleteFunc(slices.Clone(s.readings), func(reading frame.Quota) bool { return reading.Source() != s.source })
 }
 
 func (s standIns) account(ctx context.Context, reading frame.Quota) (turn.Account, error) {
 	account, err := s.held.pick(ctx)
 	_, window, _ := strings.Cut(reading.Label, " ")
-	account.ID, account.Headroom, account.Window = s.idOf(reading), 1-reading.Fraction, window
+	account.ID, account.Headroom, account.Window = reading.AccountID(), 1-reading.Fraction, window
 	return account, err
 }
 
 func (s standIns) forTurn() turn.Accounts {
 	mine := s.mine()
 	at := func(pinned turn.Account) int {
-		return slices.IndexFunc(mine, func(reading frame.Quota) bool { return s.idOf(reading) == pinned.ID })
+		return slices.IndexFunc(mine, func(reading frame.Quota) bool { return reading.AccountID() == pinned.ID })
 	}
 	return turn.Accounts{
 		Pick: func(ctx context.Context) (turn.Account, error) { return s.account(ctx, mine[0]) },
@@ -142,7 +133,7 @@ func (s standIns) others() []host.OtherSource {
 	var serving []host.OtherSource
 	for _, wire := range []string{wireSubscription, wireCodex} {
 		source := string(subscriptionOf(wire))
-		if source != s.source && slices.ContainsFunc(s.readings, func(reading frame.Quota) bool { return readingSource(reading) == source && reading.Fraction < 1 }) {
+		if source != s.source && slices.ContainsFunc(s.readings, func(reading frame.Quota) bool { return reading.Source() == source && reading.Fraction < 1 }) {
 			serving = append(serving, host.OtherSource{Name: source, Pick: host.Pick{Wire: wire}})
 		}
 	}

@@ -88,9 +88,9 @@ func (form quotaLabel) of(quota Quota) string {
 	case fullLabel:
 		return quota.Label
 	case sourceLabel:
-		return sourceOf(quota)
+		return quota.Source()
 	case vendorLabel:
-		return strings.TrimSuffix(sourceOf(quota), subscriptionSuffix)
+		return strings.TrimSuffix(quota.Source(), subscriptionSuffix)
 	case noQuota:
 	}
 	panic("frame: unknown quota label " + strconv.Itoa(int(form)))
@@ -116,7 +116,7 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 		return append(head, panel("0/"+widget.Count(status.Context.Budget), look.Text), panel(footerSeparator+"new session", look.FaintColor)), nil
 	}
 	head = append(head, panel(widget.Count(status.Context.Used)+"/"+widget.Count(status.Context.Budget), look.Text))
-	shown := fullestPerSource(status.Quotas, status.InUse)
+	shown := firstAccountPerSource(status.Quotas, status.InUse)
 	if len(shown) == 0 && form != noQuota {
 		head = append(head, panel(footerSeparator+"quota unread", look.FaintColor))
 	}
@@ -128,7 +128,7 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 			break
 		}
 		name := form.of(quota)
-		if accountsOf(status.Quotas, sourceOf(quota)) > 1 {
+		if accountsOf(status.Quotas, quota.Source()) > 1 {
 			first, rest, _ := strings.Cut(name, " ")
 			name = strings.TrimSpace(first + " " + quota.Account + " " + rest)
 		}
@@ -155,17 +155,17 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 	return head, append(tail, panel(counters+footerSeparator+"jev "+strconv.Itoa(status.Decisions), look.Text))
 }
 
-func fullestPerSource(quotas []Quota, inUse []string) []Quota {
+func firstAccountPerSource(quotas []Quota, inUse []string) []Quota {
 	var shown []Quota
 	for _, quota := range quotas {
-		if !slices.Contains(inUse, sourceOf(quota)) {
+		if !slices.Contains(inUse, quota.Source()) {
 			continue
 		}
-		index := slices.IndexFunc(shown, func(held Quota) bool { return sourceOf(held) == sourceOf(quota) })
+		index := slices.IndexFunc(shown, func(held Quota) bool { return held.Source() == quota.Source() })
 		switch {
 		case index < 0:
 			shown = append(shown, quota)
-		case quota.Reported && (!shown[index].Reported || quota.Fraction > shown[index].Fraction):
+		case quota.Account == shown[index].Account && quota.Reported && (!shown[index].Reported || quota.Fraction > shown[index].Fraction):
 			shown[index] = quota
 		}
 	}
@@ -175,16 +175,21 @@ func fullestPerSource(quotas []Quota, inUse []string) []Quota {
 func accountsOf(quotas []Quota, source string) int {
 	var accounts []string
 	for _, quota := range quotas {
-		if sourceOf(quota) == source && !slices.Contains(accounts, quota.Account) {
+		if quota.Source() == source && !slices.Contains(accounts, quota.Account) {
 			accounts = append(accounts, quota.Account)
 		}
 	}
 	return len(accounts)
 }
 
-func sourceOf(quota Quota) string {
+func (quota Quota) Source() string {
 	source, _, _ := strings.Cut(quota.Label, " ")
 	return source
+}
+
+func (quota Quota) AccountID() int64 {
+	id, _ := strconv.ParseInt(strings.TrimPrefix(quota.Account, "#"), 10, 64)
+	return id
 }
 
 func nextReset(quotas []Quota, at time.Time) time.Duration {

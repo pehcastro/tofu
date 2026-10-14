@@ -280,6 +280,7 @@ type App struct {
 	hits           []frame.Hit
 	listening      atomic.Bool
 	statusWatch    statusWatch
+	serving        map[string]string
 }
 
 type resolvedModel struct {
@@ -351,6 +352,7 @@ func New(options Options) *App {
 		moves:         map[string]movement{},
 		steered:       map[string]string{},
 		happenedIndex: map[string]int{},
+		serving:       map[string]string{},
 		board:         paste.Default(options.Paste),
 	}
 	if options.PromptHistory != "" {
@@ -584,7 +586,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		a.view.Paths = msg
 		return nil
 	case []frame.Quota:
-		a.status.Quotas = msg
+		a.status.Quotas = inSpendOrder(msg, a.serving, a.options.Now())
 		return nil
 	case recheckMsg:
 		recheck := a.options.Recheck

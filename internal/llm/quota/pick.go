@@ -53,6 +53,14 @@ func Spent(report Report, spends []string, now time.Time) bool {
 }
 
 func Pick(candidates []Candidate, provider Provider, spends []string, now time.Time) (Choice, bool) {
+	order := InPickOrder(candidates, provider, spends, now)
+	if len(order) == 0 {
+		return Choice{}, false
+	}
+	return order[0], true
+}
+
+func InPickOrder(candidates []Candidate, provider Provider, spends []string, now time.Time) []Choice {
 	type ranked struct {
 		Choice
 		used time.Time
@@ -63,16 +71,18 @@ func Pick(candidates []Candidate, provider Provider, spends []string, now time.T
 			ranks = append(ranks, ranked{Choice{ID: candidate.ID, Headroom: Left(candidate.Report, spends, now)}, candidate.LastUsed})
 		}
 	}
-	if len(ranks) == 0 {
-		return Choice{}, false
-	}
-	return slices.MinFunc(ranks, func(a, b ranked) int {
+	slices.SortStableFunc(ranks, func(a, b ranked) int {
 		return cmp.Or(
 			cmp.Compare(b.Headroom.Fraction, a.Headroom.Fraction),
 			soonerReset(a.Headroom.ResetsAt, b.Headroom.ResetsAt),
 			a.used.Compare(b.used),
 			cmp.Compare(a.ID, b.ID))
-	}).Choice, true
+	})
+	order := make([]Choice, len(ranks))
+	for index, rank := range ranks {
+		order[index] = rank.Choice
+	}
+	return order
 }
 
 func soonerReset(a, b time.Time) int {
