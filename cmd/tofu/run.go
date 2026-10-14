@@ -112,6 +112,8 @@ type runOpts struct {
 	noInstructions   bool
 	noDocs           bool
 	subAgentList     string
+	leadMayWorkAlone bool
+	leadAlone        bool
 	shell            turn.RunShell
 }
 
@@ -335,7 +337,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 func runUsage() string {
 	return fmt.Sprintf(runUsageText,
 		llm.EffortList(llm.Efforts()), llm.EffortDefault,
-		llm.EffortList(anthropic.ReasoningEfforts()), shellSiftCost(), turn.InstructionsOff)
+		llm.EffortList(anthropic.ReasoningEfforts()), shellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff)
 }
 
 const runUsageText = `tofu run works a task in a directory until it is done.
@@ -366,7 +368,9 @@ Arguments:
                         %s
   --no-subagents        run without the spawn tool for this run, no matter what
                         the turnMaySpawn setting says; there is no flag that
-                        turns spawning on when that setting says off
+                        turns spawning on when that setting says off; a task
+                        naming at most %d files in one folder and no
+                        sub-agent keeps spawn but gets no spawn text or rules
                         the readBeforeEdit setting, on by default, refuses an
                         edit or a write to a file this session has not read;
                         there is no flag for it, set it with
@@ -412,6 +416,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 			}
 		}
 	}
+	opts.leadMayWorkAlone = true
 	opts.readBeforeEdit = settingInt(dir, settingspkg.ReadBeforeEdit, say) != 0
 	opts.planEveryStep = settingInt(dir, settingspkg.PlanEveryStep, say) != 0
 	if opts.showPrompt {
@@ -695,7 +700,13 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	}
 	run.startup.step("memory")
 	discovered := <-found
-	opts.subAgentList = turn.SubAgentList(discovered.Definitions)
+	opts.leadAlone = opts.leadMayWorkAlone && opts.agent == "" && !opts.noSubAgents && opts.toolSet != toolSetThree &&
+		turn.LeadWorksAlone(cmp.Or(opts.dir, "."), opts.task, discovered.Definitions)
+	if opts.leadAlone {
+		say(fmt.Sprintf("the lead works alone: the task names %d or fewer files in one folder and asks for no sub-agent, so the spawn text and the spawn rules are not sent", turn.LeadAloneMostNamedFiles))
+	} else {
+		opts.subAgentList = turn.SubAgentList(discovered.Definitions)
+	}
 	for _, broken := range discovered.Broken {
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
 	}
@@ -740,6 +751,11 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 		spec.Role, spec.ToolGuidance = rule.RoleSubAgent, subAgents.Prompt.ToolGuidance
 	} else if !opts.noSubAgents && opts.toolSet != toolSetThree {
 		spec.Role = rule.RoleOrchestrator
+	}
+	if opts.leadAlone {
+		spec.Rules = slices.DeleteFunc(slices.Clone(rules), func(loaded rule.Rule) bool {
+			return slices.Contains([]string{"orchestrate", verifySubAgentsRule, "plan_before_spawn", "spawn_effort", "research_fan_out", "brief_from_references", "announce_spawn"}, loaded.ID)
+		})
 	}
 	composed, err := turn.Compose(spec)
 	run.startup.step("frameworks and prompt")
@@ -1102,7 +1118,7 @@ func runSystem(opts runOpts) string {
 	if !opts.noDocs {
 		system += " " + docsSentence
 	}
-	if opts.noSubAgents {
+	if opts.noSubAgents || opts.leadAlone {
 		return system
 	}
 	system += " " + turn.SpawnAddendum

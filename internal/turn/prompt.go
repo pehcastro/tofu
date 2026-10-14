@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"tofu/internal/konst"
 	"tofu/internal/settings"
@@ -39,6 +40,39 @@ func SubAgentList(defined []subagent.Definition) string {
 		lines = append(lines, "- "+definition.Name+": "+definition.Description)
 	}
 	return strings.Join(lines, "\n")
+}
+
+const LeadAloneMostNamedFiles = 5
+
+func LeadWorksAlone(dir, task string, defined []subagent.Definition) bool {
+	words := strings.FieldsFunc(strings.ToLower(task), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' })
+	asksForSubAgents := slices.ContainsFunc(words, func(word string) bool {
+		return strings.HasPrefix(word, "sub-agent") || strings.HasPrefix(word, "subagent") || strings.HasPrefix(word, "spawn") ||
+			slices.ContainsFunc(defined, func(definition subagent.Definition) bool { return strings.EqualFold(definition.Name, word) })
+	})
+	if asksForSubAgents {
+		return false
+	}
+	files, packages := 0, map[string]bool{}
+	for _, named := range TaskNamed(task).Paths {
+		if strings.Contains(named, "...") {
+			continue
+		}
+		at := filepath.FromSlash(named)
+		if !filepath.IsAbs(at) {
+			at = filepath.Join(dir, at)
+		}
+		if isDir(at) {
+			packages[at] = true
+			continue
+		}
+		if !isDir(filepath.Dir(at)) {
+			continue
+		}
+		files++
+		packages[filepath.Dir(at)] = true
+	}
+	return files > 0 && files <= LeadAloneMostNamedFiles && len(packages) == 1
 }
 
 const InstructionsOff = "sends no instruction file at all: " +
@@ -182,6 +216,11 @@ func findUp(dir string, name ...string) (string, bool) {
 func isFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func absolute(dir string) string {
