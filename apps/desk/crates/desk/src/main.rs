@@ -85,9 +85,10 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::Instant;
 
-use desk::{Open, Screen};
+use desk::{Desk, NoTofu, Open, Screen};
+use desk_core::first_run::FirstRun;
 use desk_ui::icon::Icon;
-use gpui::{App, AppContext, EmptyView};
+use gpui::{App, AppContext, Context, EmptyView, Window, WindowHandle};
 #[cfg(feature = "module-editor")]
 use modules::editor::{open_dir, open_file};
 #[cfg(feature = "module-git")]
@@ -162,6 +163,15 @@ const SCREENS: [&str; 15] = [
     "onboarding",
     "platforms",
 ];
+
+const FIRST_RUN_VARIABLE: &str = "DESK_FIRST_RUN";
+const NO_TOFU: &str = "no-tofu";
+#[cfg(windows)]
+const INSTALL: &str =
+    "irm https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.ps1 | iex";
+#[cfg(not(windows))]
+const INSTALL: &str =
+    "curl -fsSL https://raw.githubusercontent.com/pehcastro/tofu/release/scripts/install.sh | sh";
 
 enum Target {
     File(PathBuf),
@@ -266,7 +276,83 @@ fn parse(args: &[String]) -> Result<Launch, String> {
     }
 }
 
-fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
+fn forced() -> Result<Option<FirstRun>, String> {
+    let Some(state) = env::var_os(FIRST_RUN_VARIABLE) else {
+        return Ok(None);
+    };
+    match state.to_str() {
+        Some("no-tofu") => Ok(Some(FirstRun::NoTofu {
+            reason: format!("{FIRST_RUN_VARIABLE} forced it"),
+        })),
+        Some("no-account") => Ok(Some(FirstRun::NoAccount)),
+        Some("no-project") => Ok(Some(FirstRun::NoProject)),
+        Some("ready") => Ok(Some(FirstRun::Ready)),
+        _ => Err(format!(
+            "{FIRST_RUN_VARIABLE} is {}, not one of no-tofu no-account no-project ready",
+            state.to_string_lossy()
+        )),
+    }
+}
+
+fn onboarding(
+    board: Option<&str>,
+    desk: &mut Desk,
+    window: &mut Window,
+    cx: &mut Context<Desk>,
+) -> Result<String, String> {
+    let view = screen("onboarding")?(board, window, cx)?;
+    desk.route("onboarding", view, window, cx);
+    Ok(format!("onboarding {}", board.unwrap_or("IONB-1")))
+}
+
+fn route(
+    run: &FirstRun,
+    desk: &mut Desk,
+    window: &mut Window,
+    cx: &mut Context<Desk>,
+) -> Result<String, String> {
+    match desk.open_screens().first() {
+        Some(&"work") => {}
+        Some(shown) => return Ok(format!("{shown}, kept because it changed first")),
+        None => return Err("the desk shows no screen".to_owned()),
+    }
+    let tofu = project::tofu();
+    let looked = match tofu.components().count() {
+        1 => format!("{} on your PATH", tofu.display()),
+        _ => tofu.display().to_string(),
+    };
+    let (title, line, command) = match run {
+        FirstRun::Ready => return Ok("work".to_owned()),
+        FirstRun::NoProject | FirstRun::UnknownStep { .. } => {
+            return onboarding(None, desk, window, cx);
+        }
+        FirstRun::NoAccount => return onboarding(Some("S-ONB-1"), desk, window, cx),
+        FirstRun::NoClassifier => return onboarding(Some("S-ONB-2"), desk, window, cx),
+        FirstRun::NoTofu { reason } => (
+            "tofu was not found",
+            format!(
+                "The desk looked for {looked} and could not start it: {reason}. Install tofu, then open the desk again."
+            ),
+            INSTALL,
+        ),
+        FirstRun::OldTofu { found } => (
+            "This tofu is too old for the desk",
+            format!(
+                "The desk started {looked} and it answered: {found}. Update it, then open the desk again."
+            ),
+            "tofu update",
+        ),
+    };
+    let panel = NoTofu {
+        title: title.into(),
+        line: line.into(),
+        command: command.into(),
+    };
+    desk.route(NO_TOFU, cx.new(|_| panel).into(), window, cx);
+    Ok(NO_TOFU.to_owned())
+}
+
+fn open_launch(launch: Launch, cx: &mut App) -> Result<WindowHandle<Desk>, String> {
     let screens: Vec<Screen> = SCREENS
         .into_iter()
         .filter_map(|name| {
@@ -321,16 +407,14 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
     if let Some(error) = refused {
         return Err(error);
     }
-    window
-        .map(drop)
-        .map_err(|error| format!("tofu desk could not open its window: {error:#}"))
+    window.map_err(|error| format!("tofu desk could not open its window: {error:#}"))
 }
 
 fn main() -> ExitCode {
     let started = Instant::now();
     let args: Vec<String> = env::args().skip(1).collect();
-    let launch = match parse(&args) {
-        Ok(launch) => launch,
+    let (launch, forced) = match parse(&args).and_then(|launch| Ok((launch, forced()?))) {
+        Ok(parsed) => parsed,
         Err(error) => {
             eprintln!("{error}");
             return ExitCode::FAILURE;
@@ -340,14 +424,24 @@ fn main() -> ExitCode {
         eprintln!("desk: home: {error}");
         return ExitCode::FAILURE;
     }
-    std::thread::spawn(|| {
+    let explicit = match &launch {
+        Launch::Desk => None,
+        Launch::Screen(launch) => Some(launch.name.clone()),
+    };
+    let (told, heard) = flume::bounded(1);
+    std::thread::spawn(move || {
         let started = Instant::now();
-        let chosen = project::chosen().ok().flatten().map(|(folder, _)| folder);
-        let run = desk_core::first_run::detect(&project::tofu(), chosen.as_deref());
+        let run = forced.unwrap_or_else(|| {
+            let chosen = project::chosen().ok().flatten().map(|(folder, _)| folder);
+            desk_core::first_run::detect(&project::tofu(), chosen.as_deref())
+        });
         eprintln!(
-            "desk: first run {run} in {} ms",
+            "desk: first run {run} detected in {} ms",
             started.elapsed().as_millis()
         );
+        if told.send(run).is_err() {
+            eprintln!("desk: first run answered after the desk closed");
+        }
     });
     #[cfg(feature = "screen-work")]
     plugins::start();
@@ -387,12 +481,35 @@ fn main() -> ExitCode {
                     pick::set_mode(&chosen.theme, chosen.mode, cx)
                 })
                 .and_then(|()| open_launch(launch, cx));
-            if let Err(error) = opened {
-                eprintln!("{error}");
-                failure.set(true);
-                cx.quit();
-                return;
-            }
+            let opened = match opened {
+                Ok(opened) => opened,
+                Err(error) => {
+                    eprintln!("{error}");
+                    failure.set(true);
+                    cx.quit();
+                    return;
+                }
+            };
+            cx.spawn(async move |cx| {
+                let Ok(run) = heard.recv_async().await else {
+                    return eprintln!("desk: first run never answered");
+                };
+                let routed = match explicit {
+                    Some(name) => Ok(format!("{name}, the screen argument")),
+                    None => opened
+                        .update(cx, |desk, window, cx| route(&run, desk, window, cx))
+                        .map_err(|error| format!("{error:#}"))
+                        .flatten(),
+                };
+                match routed {
+                    Ok(screen) => eprintln!(
+                        "desk: first run {run} routed to {screen} in {} ms",
+                        started.elapsed().as_millis()
+                    ),
+                    Err(error) => eprintln!("desk: first run {run} was not routed: {error}"),
+                }
+            })
+            .detach();
             let Some(window) = cx.windows().first().copied() else {
                 return;
             };

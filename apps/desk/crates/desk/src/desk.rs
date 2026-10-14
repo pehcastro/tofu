@@ -41,6 +41,7 @@ use desk_core::query::Answer;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
+use desk_ui::components::empty::{EmptyAction, empty_state};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
@@ -57,6 +58,7 @@ use desk_ui::components::sidebar::SessionState;
 use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sidebar::{SessionAt, unnamed};
+use desk_ui::components::size::T2;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::status_bar::{
     Account, Branch, ContextUse, Reset, Serving, SessionGroup, Standing, UsageWindow, cron_trigger,
@@ -77,7 +79,7 @@ use desk_ui::metrics::STATUS_BAR_HEIGHT;
 use desk_ui::metrics::{
     TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
 };
-use desk_ui::theme::{ColorToken, Theme};
+use desk_ui::theme::{ColorToken, Theme, WordToken};
 #[cfg(feature = "screen-work")]
 use gpui::EntityInputHandler;
 use gpui::{
@@ -199,6 +201,44 @@ pub type Open = fn(Option<&str>, &mut Window, &mut App) -> Result<AnyView, Strin
 pub struct Screen {
     pub name: &'static str,
     pub open: Open,
+}
+
+pub struct NoTofu {
+    pub title: SharedString,
+    pub line: SharedString,
+    pub command: SharedString,
+}
+
+impl Render for NoTofu {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = ActiveTheme::theme(cx);
+        let command = self.command.clone();
+        let copy = EmptyAction {
+            label: "Copy the command".into(),
+            glyph: None,
+            keys: None,
+        };
+        empty_state(
+            "no-tofu",
+            self.title.clone(),
+            Some(self.line.clone()),
+            &[copy],
+            &[],
+            &theme,
+            move |_, _, cx| {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(command.to_string()));
+                eprintln!("desk: no-tofu copied the command");
+            },
+        )
+        .flex_col()
+        .gap_3()
+        .child(
+            div()
+                .font_family(theme.word(WordToken::ShapeMono))
+                .text_color(ink(&theme, T2))
+                .child(self.command.clone()),
+        )
+    }
 }
 
 enum Body {
@@ -764,6 +804,19 @@ impl Desk {
         eprintln!("desk: palette open");
         self.palette
             .update(cx, |palette, cx| palette.open(window, cx));
+    }
+
+    pub fn route(
+        &mut self,
+        name: &'static str,
+        view: AnyView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let left = std::mem::replace(&mut self.shown, Shown::new(name.into(), view));
+        self.parked.push(left);
+        self.focus_shown(window, cx);
+        cx.notify();
     }
 
     fn show(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
