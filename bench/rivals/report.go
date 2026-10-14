@@ -39,6 +39,7 @@ func writeReport([]string) error {
 	conditions(&b, byArm)
 	runsTable(&b, byArm)
 	turnTable(&b, byArm)
+	wallTable(&b, byArm)
 	toolTable(&b, byArm)
 	return os.WriteFile(filepath.Join(here(), "report.md"), []byte(b.String()), 0o644)
 }
@@ -113,6 +114,52 @@ func turnTable(b *strings.Builder, byArm map[string][]row) {
 			column(func(r row) float64 { return float64(r.Retried) }),
 			column(func(r row) float64 { return float64(r.Score.Added + r.Score.Deleted) }))
 	}
+}
+
+func wallTable(b *strings.Builder, byArm map[string][]row) {
+	b.WriteString("\n## Where the wall time goes\n\nOne row per run whose transcript times each model request: tofu from `tofu session request`, codex from its rollout file. Model wait is every request from sent to its last byte, split at the first token; for codex the first token is the first finished output item, so its share is an upper bound. Own work is the time between requests that no tool call covers; it goes below zero when a tool starts before its request finishes streaming. Outside is the wall clock before the first request and after the last.\n\n| arm | rep | wall s | requests | model wait s | to first token s | after first token s | tools s | own work s | outside s |\n|---|---|---|---|---|---|---|---|---|---|\n")
+	var pooled []string
+	for _, a := range present(byArm) {
+		var times []requestTime
+		for _, r := range byArm[a.Name] {
+			if len(r.Timed) == 0 {
+				continue
+			}
+			times = append(times, r.Timed...)
+			var model, first, tools int64
+			for _, timed := range r.Timed {
+				model, first = model+timed.MS, first+timed.FirstMS
+			}
+			for _, c := range r.Calls {
+				tools += max(c.MS, 0)
+			}
+			last := r.Timed[len(r.Timed)-1]
+			span := last.AtMS + last.MS
+			fmt.Fprintf(b, "| %s | %d | %.1f | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %.1f |\n", r.Arm, r.Rep, seconds(r.WallMS), len(r.Timed), seconds(model), seconds(first),
+				seconds(model-first), seconds(tools), seconds(span-model-tools), seconds(r.WallMS-span))
+		}
+		if len(times) > 1 {
+			fixed, perToken := fitRequests(times)
+			pooled = append(pooled, fmt.Sprintf("| %s | %d | %.1f | %.1f |", a.Name, len(times), fixed/1000, perToken))
+		}
+	}
+	b.WriteString("\nEvery timed request of an arm pooled, fitted as a fixed wait plus a time per output token, least squares.\n\n| arm | requests | fixed s per request | ms per output token |\n|---|---|---|---|\n")
+	b.WriteString(strings.Join(pooled, "\n") + "\n")
+}
+
+func fitRequests(times []requestTime) (float64, float64) {
+	var sumOut, sumMS float64
+	for _, timed := range times {
+		sumOut, sumMS = sumOut+float64(timed.Out), sumMS+float64(timed.MS)
+	}
+	meanOut, meanMS := sumOut/float64(len(times)), sumMS/float64(len(times))
+	var covariance, variance float64
+	for _, timed := range times {
+		covariance += (float64(timed.Out) - meanOut) * (float64(timed.MS) - meanMS)
+		variance += (float64(timed.Out) - meanOut) * (float64(timed.Out) - meanOut)
+	}
+	slope := covariance / variance
+	return meanMS - slope*meanOut, slope
 }
 
 func toolTable(b *strings.Builder, byArm map[string][]row) {

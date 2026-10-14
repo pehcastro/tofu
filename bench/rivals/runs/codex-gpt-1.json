@@ -66,6 +66,50 @@
       "failed": false
     }
   ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 9452,
+      "first_ms": 4747,
+      "out": 220
+    },
+    {
+      "at_ms": 11847,
+      "ms": 5475,
+      "first_ms": 2132,
+      "out": 153
+    },
+    {
+      "at_ms": 19407,
+      "ms": 27801,
+      "first_ms": 7447,
+      "out": 1064
+    },
+    {
+      "at_ms": 53296,
+      "ms": 6941,
+      "first_ms": 2817,
+      "out": 220
+    },
+    {
+      "at_ms": 75985,
+      "ms": 35240,
+      "first_ms": 14535,
+      "out": 1345
+    },
+    {
+      "at_ms": 112060,
+      "ms": 5605,
+      "first_ms": 2167,
+      "out": 167
+    },
+    {
+      "at_ms": 123769,
+      "ms": 4479,
+      "first_ms": 4452,
+      "out": 86
+    }
+  ],
   "retried": 0,
   "score": {
     "hidden": {

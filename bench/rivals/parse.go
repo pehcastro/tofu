@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 type tokens struct {
@@ -35,12 +36,32 @@ type call struct {
 	Failed bool   `json:"failed"`
 }
 
+type requestTime struct {
+	AtMS    int64 `json:"at_ms"`
+	MS      int64 `json:"ms"`
+	FirstMS int64 `json:"first_ms"`
+	Out     int   `json:"out"`
+}
+
+type requestClock struct {
+	origin, sent, first time.Time
+}
+
+func (c *requestClock) done(at time.Time, out int) requestTime {
+	c.origin = cmp.Or(c.origin, c.sent)
+	first := cmp.Or(c.first, at)
+	timed := requestTime{AtMS: c.sent.Sub(c.origin).Milliseconds(), MS: at.Sub(c.sent).Milliseconds(), FirstMS: first.Sub(c.sent).Milliseconds(), Out: out}
+	c.sent, c.first = time.Time{}, time.Time{}
+	return timed
+}
+
 type transcript struct {
 	model, credential string
 	models            []string
 	requests          int
 	tokens            tokens
 	calls             []call
+	timed             []requestTime
 	notes             []string
 }
 
@@ -262,6 +283,7 @@ func codexRollout(thread string, t *transcript) (string, int) {
 	}
 	defer func() { _ = file.Close() }()
 	model, totals := "", map[int]bool{}
+	var clock requestClock
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
@@ -275,6 +297,20 @@ func codexRollout(thread string, t *transcript) (string, int) {
 			if total := num(payload, "info", "total_token_usage", "total_tokens"); total > 0 {
 				totals[total] = true
 			}
+		}
+		at, err := time.Parse(time.RFC3339Nano, str(event, "timestamp"))
+		if err != nil {
+			continue
+		}
+		kind, role, item := str(payload, "type"), str(payload, "role"), str(payload, "item", "type")
+		switch {
+		case str(event, "type") == "token_usage_record" && !clock.sent.IsZero():
+			t.timed = append(t.timed, clock.done(at, num(payload, "usage", "output_tokens")))
+		case kind == "custom_tool_call_output" || kind == "function_call_output" || kind == "message" && role == "user" && clock.first.IsZero():
+			clock.sent = at
+		case clock.first.IsZero() && !clock.sent.IsZero() && (slices.Contains([]string{"reasoning", "custom_tool_call", "function_call"}, kind) ||
+			kind == "message" && role == "assistant" || kind == "item_completed" && (item == "Reasoning" || item == "AgentMessage")):
+			clock.first = at
 		}
 	}
 	return model, len(totals)
@@ -381,7 +417,9 @@ func parseTofu(lines []stamped, repo string, env []string, codexWire bool) trans
 		t.notes = append(t.notes, "no tofu session found in the run folder")
 		return t
 	}
-	trace := decode(toolOutput(repo, env, "tofu", "session", "trace", str(sessions[0], "id"), "--json"))
+	id := str(sessions[0], "id")
+	trace := decode(toolOutput(repo, env, "tofu", "session", "trace", id, "--json"))
+	var clock requestClock
 	for _, request := range list(trace["data"], "requests") {
 		in, read := num(request, "usage", "input_tokens"), num(request, "usage", "cache_read_tokens")
 		if codexWire {
@@ -390,6 +428,14 @@ func parseTofu(lines []stamped, repo string, env []string, codexWire bool) trans
 		t.requests++
 		t.saw(str(request, "model"))
 		t.tokens.add(in, read, num(request, "usage", "cache_write_tokens"), num(request, "usage", "output_tokens"))
+		detail := decode(toolOutput(repo, env, "tofu", "session", "request", id, str(request, "request"), "--json"))["data"]
+		if sent, err := time.Parse(time.RFC3339Nano, str(detail, "at")); err == nil {
+			clock.sent = sent
+			if first := num(detail, "response", "FirstTokenMS"); first > 0 {
+				clock.first = sent.Add(time.Duration(first) * time.Millisecond)
+			}
+			t.timed = append(t.timed, clock.done(sent.Add(time.Duration(num(detail, "duration_ms"))*time.Millisecond), num(request, "usage", "output_tokens")))
+		}
 	}
 	for _, c := range list(trace["data"], "calls") {
 		ms := int64(num(c, "duration_ms"))

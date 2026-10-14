@@ -61,27 +61,28 @@ var arms = []arm{
 }
 
 type row struct {
-	Arm        string    `json:"arm"`
-	Rep        int       `json:"rep"`
-	Tool       string    `json:"tool"`
-	Version    string    `json:"version"`
-	Commit     string    `json:"commit,omitempty"`
-	AskedModel string    `json:"asked_model"`
-	Model      string    `json:"model"`
-	Models     []string  `json:"models"`
-	Credential string    `json:"credential"`
-	Posture    string    `json:"posture"`
-	Date       string    `json:"date"`
-	Machine    string    `json:"machine"`
-	ExitCode   int       `json:"exit_code"`
-	WallMS     int64     `json:"wall_ms"`
-	Tree       treeUsage `json:"tree"`
-	Tokens     tokens    `json:"tokens"`
-	Requests   int       `json:"requests"`
-	Calls      []call    `json:"calls"`
-	Retried    int       `json:"retried"`
-	Score      score     `json:"score"`
-	Notes      []string  `json:"notes,omitempty"`
+	Arm        string        `json:"arm"`
+	Rep        int           `json:"rep"`
+	Tool       string        `json:"tool"`
+	Version    string        `json:"version"`
+	Commit     string        `json:"commit,omitempty"`
+	AskedModel string        `json:"asked_model"`
+	Model      string        `json:"model"`
+	Models     []string      `json:"models"`
+	Credential string        `json:"credential"`
+	Posture    string        `json:"posture"`
+	Date       string        `json:"date"`
+	Machine    string        `json:"machine"`
+	ExitCode   int           `json:"exit_code"`
+	WallMS     int64         `json:"wall_ms"`
+	Tree       treeUsage     `json:"tree"`
+	Tokens     tokens        `json:"tokens"`
+	Requests   int           `json:"requests"`
+	Calls      []call        `json:"calls"`
+	Timed      []requestTime `json:"timed_requests,omitempty"`
+	Retried    int           `json:"retried"`
+	Score      score         `json:"score"`
+	Notes      []string      `json:"notes,omitempty"`
 }
 
 func main() {
@@ -245,7 +246,7 @@ func runArm(args []string) error {
 }
 
 func withTranscript(r row, t transcript) row {
-	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls = t.model, t.models, t.credential, t.requests, t.tokens, t.calls
+	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls, r.Timed = t.model, t.models, t.credential, t.requests, t.tokens, t.calls, t.timed
 	r.Notes = append(slices.DeleteFunc(r.Notes, func(note string) bool {
 		return !strings.HasPrefix(note, "stopped at") && !strings.HasPrefix(note, "wait:")
 	}), t.notes...)

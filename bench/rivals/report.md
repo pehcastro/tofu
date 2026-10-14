@@ -42,6 +42,37 @@ Faster is not always better. Each measure is judged by the rule written beside i
 5. **`tofu run` refuses `--model codex-sub/gpt-5.6-sol` without `--wire codex`**, with "codex-sub/gpt-6-sol belongs to the codex-sub subscription, and --wire anthropic reaches claude-sub". The slug already names the source. **Change**: take the wire from the slug's source when `--wire` is not given.
 6. **The headless default refuses a plain new file.** In a probe before the runs, `tofu run` with the gate at its default of `enforce` refused writing `x.txt` at risk 1.83 over `risk_ask_at` 1.50 because no person was there to answer, and the turn stopped. Every rival has a one-flag headless posture that runs; tofu's is `--gate shadow`, which is what these runs used. **Change**: say in the refusal that `--gate shadow` is the headless posture, or make it the `tofu run` default when no terminal is attached.
 
+## Where tofu-gpt's last 12 s went, 2026-10-14
+
+**After the plan tool was withheld (TOFU-1346), tofu-gpt's median wall was 122.8 s against codex's 110.8 s at the same 7 requests. The gap is model wait, not tofu: 0.1 to 0.3 s of tofu's own work per run, and tofu's tools are 13 s against codex's 24 to 31 s. Every small request (under 400 output tokens) took 7.3 s in tofu against 5.4 s in codex, because tofu asks the codex backend for a reasoning summary on every request and codex asks for none.** Turning the summary off cut the median wall to 103.2 s at quality 10, under codex.
+
+Rows for tofu-gpt after TOFU-1346 at `ba31cca9` plus its patch, 2026-10-14 07:54 to 08:05; codex-gpt rows are the ones in `runs/`. Split from the recorded transcripts, no new run.
+
+| arm | rep | wall s | requests | model wait s | to first token s | after first token s | tools s | own work s | outside s |
+|---|---|---|---|---|---|---|---|---|---|
+| tofu-gpt | 1 | 137.8 | 10 | 119.8 | 75.1 | 44.7 | 13.3 | 0.2 | 4.5 |
+| tofu-gpt | 2 | 122.8 | 7 | 102.8 | 53.4 | 49.4 | 13.3 | 0.1 | 6.6 |
+| tofu-gpt | 3 | 105.2 | 7 | 87.9 | 53.3 | 34.5 | 12.1 | 0.2 | 5.1 |
+| codex-gpt | 1 | 138.9 | 7 | 95.0 | 38.3 | 56.7 | 30.5 | 2.7 | 10.6 |
+| codex-gpt | 2 | 110.8 | 7 | 72.9 | 36.3 | 36.6 | 25.4 | 2.4 | 10.2 |
+| codex-gpt | 3 | 108.0 | 6 | 76.2 | 39.9 | 36.3 | 23.8 | 2.2 | 5.8 |
+
+Request shape, every request of the three runs. Codex's is read from its rollout's `turn_context` and its model cache, which sets `default_reasoning_summary: none` for all nine models it lists.
+
+| arm | requests | output tokens | reasoning effort | reasoning summary | input per request | cache read after the first | median small request s |
+|---|---|---|---|---|---|---|---|
+| tofu-gpt | 24 | 11,789 | medium | auto | 13 k to 21 k | 93% | 7.3 |
+| codex-gpt | 20 | 12,171 | medium | none | 15 k to 21 k | 91% | 5.4 |
+
+The fix, measured: `summary` left out of the codex wire's `reasoning`, built from `e11b9f4f` in a scratch clone, three runs alternating with the same commit unchanged, 2026-10-14 12:29 to 12:41, `tofu version` 0.5.14+dev for both.
+
+| build | walls s | median wall s | requests | quality | median small request s | model wait median s |
+|---|---|---|---|---|---|---|
+| e11b9f4f, summary auto | 125.3, 108.7, 122.1 | 122.1 | 8, 7, 8 | 10, 10, 10 | 7.4 | 89.8 |
+| e11b9f4f, summary off | 114.2, 90.0, 103.2 | 103.2 | 7, 6, 7 | 10, 10, 10 | 6.0 | 84.5 |
+
+The spreads overlap (114.2 against 108.7), so three runs say the direction, not the size. What is left: a small request still waits 6.0 s against codex's 5.4 s. Codex also sends `text.verbosity: low`, puts its tools in the input under Responses Lite, and talks to the backend over a websocket; none of the three was measured here.
+
 ## What these numbers cannot say
 
 - **Three runs is a spread, not a distribution.** Only differences larger than the spread are called above.
@@ -59,10 +90,10 @@ Process tree: a Windows job object holds the whole process tree from its first i
 
 | arm | tool version | asked for | every model the responses reported | credential | posture | machine | dates |
 |---|---|---|---|---|---|---|---|
-| tofu-sonnet | version   0.5.13-fix1+dev | claude-sub/claude-sonnet-5-5 | claude-sonnet-5-5 | tofu's own claude-sub login, spend subscription windows 5h and 7d, no money | --gate shadow --no-instructions, real home for the login, scratch project folder | windows/amd64, 32 logical CPUs | 2026-10-13 16:17 to 2026-10-13 16:50 |
+| tofu-sonnet | version   0.5.13-fix1+dev commit not recorded | claude-sub/claude-sonnet-5-5 | claude-sonnet-5-5 | tofu's own claude-sub login, spend subscription windows 5h and 7d, no money | --gate shadow --no-instructions, real home for the login, scratch project folder | windows/amd64, 32 logical CPUs | 2026-10-13 16:17 to 2026-10-13 16:50 |
 | claude-sonnet | 2.1.296 (Claude Code) | claude-sonnet-5-5 | claude-sonnet-5-5 | apiKeySource none | --permission-mode bypassPermissions --safe-mode | windows/amd64, 32 logical CPUs | 2026-10-13 16:19 to 2026-10-13 16:53 |
 | omp-sonnet | omp/18.3.2 | anthropic/claude-sonnet-5-5 | claude-sonnet-5-5 | provider anthropic through omp's own login, credential 3 | --auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay | windows/amd64, 32 logical CPUs | 2026-10-13 16:21 to 2026-10-13 16:54 |
-| tofu-gpt | version   0.5.13-fix1+dev | codex-sub/gpt-5.6-sol | gpt-5.6-sol | tofu's own codex-sub login, spend subscription windows 5h and 7d, no money | --wire codex --gate shadow --no-instructions, real home for the login, scratch project folder | windows/amd64, 32 logical CPUs | 2026-10-13 16:57 to 2026-10-13 17:09 |
+| tofu-gpt | version   0.5.13-fix1+dev commit not recorded | codex-sub/gpt-5.6-sol | gpt-5.6-sol | tofu's own codex-sub login, spend subscription windows 5h and 7d, no money | --wire codex --gate shadow --no-instructions, real home for the login, scratch project folder | windows/amd64, 32 logical CPUs | 2026-10-13 16:57 to 2026-10-13 17:09 |
 | codex-gpt | codex-cli 0.155.1 | gpt-5.6-sol | gpt-5.6-sol | Logged in using ChatGPT | --sandbox workspace-write with the Go cache added, --ignore-rules | windows/amd64, 32 logical CPUs | 2026-10-13 16:54 to 2026-10-13 17:07 |
 
 ## Every run
@@ -96,6 +127,30 @@ Median of the runs, with the lowest and highest in brackets. Total in is fresh p
 | omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |
 | tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |
 | codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |
+
+## Where the wall time goes
+
+One row per run whose transcript times each model request: tofu from `tofu session request`, codex from its rollout file. Model wait is every request from sent to its last byte, split at the first token; for codex the first token is the first finished output item, so its share is an upper bound. Own work is the time between requests that no tool call covers; it goes below zero when a tool starts before its request finishes streaming. Outside is the wall clock before the first request and after the last.
+
+| arm | rep | wall s | requests | model wait s | to first token s | after first token s | tools s | own work s | outside s |
+|---|---|---|---|---|---|---|---|---|---|
+| tofu-sonnet | 1 | 62.4 | 11 | 34.3 | 22.5 | 11.8 | 21.2 | 0.6 | 6.2 |
+| tofu-sonnet | 2 | 63.1 | 11 | 33.7 | 22.5 | 11.2 | 19.7 | 0.8 | 8.8 |
+| tofu-sonnet | 3 | 66.7 | 11 | 36.6 | 19.4 | 17.3 | 21.5 | 0.5 | 8.0 |
+| tofu-gpt | 1 | 325.8 | 29 | 289.8 | 223.7 | 66.1 | 23.8 | 1.2 | 11.0 |
+| tofu-gpt | 2 | 105.2 | 12 | 84.6 | 70.8 | 13.8 | 14.4 | 0.3 | 5.8 |
+| tofu-gpt | 3 | 333.2 | 27 | 305.2 | 197.5 | 107.7 | 19.3 | 1.0 | 7.7 |
+| codex-gpt | 1 | 138.9 | 7 | 95.0 | 38.3 | 56.7 | 30.5 | 2.7 | 10.6 |
+| codex-gpt | 2 | 110.8 | 7 | 72.9 | 36.3 | 36.6 | 25.4 | 2.4 | 10.2 |
+| codex-gpt | 3 | 108.0 | 6 | 76.2 | 39.9 | 36.3 | 23.8 | 2.2 | 5.8 |
+
+Every timed request of an arm pooled, fitted as a fixed wait plus a time per output token, least squares.
+
+| arm | requests | fixed s per request | ms per output token |
+|---|---|---|---|
+| tofu-sonnet | 33 | 1.5 | 4.3 |
+| tofu-gpt | 68 | 5.4 | 14.5 |
+| codex-gpt | 20 | 2.7 | 15.7 |
 
 ## Tool against tool
 

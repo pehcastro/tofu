@@ -138,6 +138,74 @@
       "failed": false
     }
   ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 2083,
+      "first_ms": 1481,
+      "out": 58
+    },
+    {
+      "at_ms": 4490,
+      "ms": 3914,
+      "first_ms": 1212,
+      "out": 589
+    },
+    {
+      "at_ms": 8449,
+      "ms": 4561,
+      "first_ms": 2601,
+      "out": 574
+    },
+    {
+      "at_ms": 13080,
+      "ms": 3149,
+      "first_ms": 3140,
+      "out": 117
+    },
+    {
+      "at_ms": 16360,
+      "ms": 6726,
+      "first_ms": 1305,
+      "out": 1302
+    },
+    {
+      "at_ms": 23153,
+      "ms": 1747,
+      "first_ms": 1385,
+      "out": 83
+    },
+    {
+      "at_ms": 24964,
+      "ms": 1088,
+      "first_ms": 865,
+      "out": 64
+    },
+    {
+      "at_ms": 26130,
+      "ms": 1599,
+      "first_ms": 1440,
+      "out": 54
+    },
+    {
+      "at_ms": 45208,
+      "ms": 4571,
+      "first_ms": 4563,
+      "out": 555
+    },
+    {
+      "at_ms": 49863,
+      "ms": 1414,
+      "first_ms": 1076,
+      "out": 85
+    },
+    {
+      "at_ms": 52741,
+      "ms": 3434,
+      "first_ms": 3419,
+      "out": 393
+    }
+  ],
   "retried": 4,
   "score": {
     "hidden": {
