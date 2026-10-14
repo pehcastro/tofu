@@ -67,6 +67,38 @@ fn grouped() -> Vec<MenuItem> {
         },
     ]
 }
+const NESTED_PICKS: [&str; 9] = [
+    "Move to",
+    "Project",
+    "Tofu",
+    "Desk",
+    "Book",
+    "Inbox",
+    "Archive",
+    "Duplicate",
+    "Delete",
+];
+
+fn nested() -> Vec<MenuItem> {
+    vec![
+        MenuItem::Submenu {
+            label: "Move to".into(),
+            icon: Some(Glyph::File.into()),
+            items: vec![
+                MenuItem::Submenu {
+                    label: "Project".into(),
+                    icon: None,
+                    items: actions(["Tofu", "Desk", "Book"]),
+                },
+                MenuItem::action("Inbox"),
+                MenuItem::action("Archive"),
+            ],
+        },
+        MenuItem::action("Duplicate"),
+        MenuItem::action("Delete").danger(true),
+    ]
+}
+
 const TOASTS: [(&str, &str, ToastKind, &str); 3] = [
     (
         "toast-success",
@@ -318,6 +350,20 @@ impl ContentState {
                             }
                         }))
                         .child(label("Right click for the grouped menu.", theme)),
+                ),
+            ))
+            .child(block(
+                "Nested: Move to, then Project; cut across Inbox into the open submenu",
+                theme,
+                inner_card(theme).w(px(AREA_WIDTH)).p_3().child(
+                    context_menu(nested())
+                        .id("context-nested")
+                        .on_pick(cx.listener(|this, at: &usize, _, cx| {
+                            if let Some(label) = NESTED_PICKS.get(*at) {
+                                this.tell(format!("Menu: {label}"), cx);
+                            }
+                        }))
+                        .child(label("Right click for the nested menu.", theme)),
                 ),
             ))
             .child(block(

@@ -37,6 +37,9 @@ use crate::theme::{ColorToken, Theme};
 const PLACEMENT_OFFSET: f32 = 6.0;
 const WINDOW_MARGIN: f32 = 8.0;
 const SUBMENU_OFFSET: f32 = 2.0;
+const SUBMENU_DELAY: Duration = Duration::from_millis(100);
+const GRACE_LIFETIME: Duration = Duration::from_millis(300);
+const GRACE_BLEED: f32 = 5.0;
 const CAPTION_GAP: f32 = 6.0;
 const MENU_SHADOW_Y: f32 = 8.0;
 const MENU_SHADOW_BLUR: f32 = 24.0;
@@ -1232,7 +1235,60 @@ enum MenuKey {
 struct Sub {
     at: usize,
     highlighted: Option<usize>,
+    row: Anchor,
+    panel: Anchor,
 }
+
+struct Grace {
+    depth: usize,
+    area: [Point<Pixels>; 6],
+    toward: f32,
+}
+
+impl Grace {
+    fn new(depth: usize, sub: &Sub, exit: Point<Pixels>) -> Self {
+        let (panel, row) = (sub.panel.get(), sub.row.get());
+        let toward = if panel.center().x >= row.center().x {
+            1.0
+        } else {
+            -1.0
+        };
+        let (near, far) = if toward > 0.0 {
+            (panel.left(), panel.right())
+        } else {
+            (panel.right(), panel.left())
+        };
+        let tip = exit.x - px(GRACE_BLEED * toward);
+        Grace {
+            depth,
+            area: [
+                point(tip, exit.y - px(GRACE_BLEED)),
+                point(near, panel.top()),
+                point(far, panel.top()),
+                point(far, panel.bottom()),
+                point(near, panel.bottom()),
+                point(tip, exit.y + px(GRACE_BLEED)),
+            ],
+            toward,
+        }
+    }
+
+    fn holds(&self, at: Point<Pixels>) -> bool {
+        let (x, y) = (at.x.as_f32(), at.y.as_f32());
+        let crossings = self
+            .area
+            .iter()
+            .zip(self.area.iter().cycle().skip(1))
+            .filter(|(a, b)| {
+                let (ax, ay, bx, by) = (a.x.as_f32(), a.y.as_f32(), b.x.as_f32(), b.y.as_f32());
+                (ay > y) != (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax
+            })
+            .count();
+        crossings % 2 == 1
+    }
+}
+
+type Spot = (usize, usize);
 
 struct MenuState {
     items: Vec<MenuItem>,
@@ -1243,9 +1299,12 @@ struct MenuState {
     dismissed_at: Option<Point<Pixels>>,
     focus: FocusHandle,
     return_focus: Option<FocusHandle>,
-    sub: Option<Sub>,
-    sub_row: Anchor,
-    sub_panel: Anchor,
+    path: Vec<Sub>,
+    pointer: Option<Point<Pixels>>,
+    grace: Option<Grace>,
+    held: Option<Spot>,
+    opening: Option<(Spot, Task<gpui::Result<()>>)>,
+    expiry: Option<Task<gpui::Result<()>>>,
 }
 
 impl MenuState {
@@ -1259,16 +1318,27 @@ impl MenuState {
             dismissed_at: None,
             focus: cx.focus_handle(),
             return_focus: None,
-            sub: None,
-            sub_row: Anchor::default(),
-            sub_panel: Anchor::default(),
+            path: Vec::new(),
+            pointer: None,
+            grace: None,
+            held: None,
+            opening: None,
+            expiry: None,
         }
+    }
+
+    fn collapse(&mut self) {
+        self.path.clear();
+        self.grace = None;
+        self.held = None;
+        self.opening = None;
+        self.expiry = None;
     }
 
     fn open(&mut self, at: Opened, window: &mut Window, cx: &mut Context<Self>) {
         self.opened = at;
         self.highlighted = first_pick(&self.items, self.chosen);
-        self.sub = None;
+        self.collapse();
         self.opens += 1;
         let before = window.focused(cx).filter(|focused| *focused != self.focus);
         self.return_focus = before.or(self.return_focus.take());
@@ -1278,7 +1348,7 @@ impl MenuState {
 
     fn close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.opened = Opened::Closed;
-        self.sub = None;
+        self.collapse();
         if let Some(before) = &self.return_focus {
             window.focus(before, cx);
         }
@@ -1286,10 +1356,10 @@ impl MenuState {
     }
 
     fn dismiss(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
-        let in_sub = self.sub.is_some() && self.sub_panel.get().contains(&at);
+        let in_sub = self.path.iter().any(|sub| sub.panel.get().contains(&at));
         if !in_sub && !matches!(self.opened, Opened::Closed) {
             self.opened = Opened::Closed;
-            self.sub = None;
+            self.collapse();
             self.dismissed_at = Some(at);
             cx.notify();
         }
@@ -1309,71 +1379,205 @@ impl MenuState {
         self.close(window, cx);
     }
 
-    fn hover(&mut self, ix: usize, cx: &mut Context<Self>) {
-        let opens = matches!(self.items.get(ix), Some(MenuItem::Submenu { .. })).then_some(ix);
-        if self.highlighted != ix || self.sub.as_ref().map(|sub| sub.at) != opens {
-            self.highlighted = ix;
-            self.sub = opens.map(|at| Sub {
-                at,
-                highlighted: None,
-            });
-            cx.notify();
+    fn level(&self, depth: usize) -> &[MenuItem] {
+        self.path
+            .iter()
+            .take(depth)
+            .fold(self.items.as_slice(), |items, sub| {
+                children_of(items, sub.at)
+            })
+    }
+
+    fn highlight(&self, depth: usize) -> Option<usize> {
+        match depth.checked_sub(1) {
+            None => Some(self.highlighted),
+            Some(parent) => self.path.get(parent).and_then(|sub| sub.highlighted),
         }
     }
 
-    fn hover_sub(&mut self, row: usize, cx: &mut Context<Self>) {
-        if let Some(sub) = &mut self.sub
-            && sub.highlighted != Some(row)
+    fn set_highlight(&mut self, depth: usize, ix: usize) {
+        match depth.checked_sub(1) {
+            None => self.highlighted = ix,
+            Some(parent) => {
+                if let Some(sub) = self.path.get_mut(parent) {
+                    sub.highlighted = Some(ix);
+                }
+            }
+        }
+    }
+
+    fn global(&self, depth: usize, row: usize) -> usize {
+        let (items, base) =
+            self.path
+                .iter()
+                .take(depth)
+                .fold((self.items.as_slice(), 0), |(items, base), sub| {
+                    (
+                        children_of(items, sub.at),
+                        base + preorder(items, sub.at) + 1,
+                    )
+                });
+        base + preorder(items, row)
+    }
+
+    fn hover(&mut self, depth: usize, ix: usize, cx: &mut Context<Self>) {
+        if self
+            .grace
+            .as_ref()
+            .is_some_and(|grace| grace.depth == depth)
         {
-            sub.highlighted = Some(row);
-            cx.notify();
+            self.held = Some((depth, ix));
+            return;
+        }
+        self.held = None;
+        let kept = usize::from(self.path.get(depth).is_some_and(|sub| sub.at == ix));
+        let opens =
+            kept == 0 && matches!(self.level(depth).get(ix), Some(MenuItem::Submenu { .. }));
+        let waiting = self
+            .opening
+            .as_ref()
+            .is_some_and(|(at, _)| *at == (depth, ix));
+        if self.highlight(depth) == Some(ix)
+            && self.path.len() == depth + kept
+            && (waiting || !opens)
+        {
+            return;
+        }
+        self.set_highlight(depth, ix);
+        self.path.truncate(depth + kept);
+        self.opening = opens.then(|| {
+            let since = Instant::now();
+            let task = cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(SUBMENU_DELAY).await;
+                this.update(cx, |menu, cx| menu.open_sub(depth, ix, since, None, cx))
+            });
+            ((depth, ix), task)
+        });
+        cx.notify();
+    }
+
+    fn open_sub(
+        &mut self,
+        depth: usize,
+        ix: usize,
+        since: Instant,
+        highlighted: Option<usize>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(MenuItem::Submenu { label, .. }) = self.level(depth).get(ix) else {
+            return;
+        };
+        let label = label.clone();
+        if self.highlight(depth) != Some(ix) {
+            return;
+        }
+        match self.path.get_mut(depth) {
+            Some(sub) if sub.at == ix => sub.highlighted = highlighted.or(sub.highlighted),
+            _ => {
+                self.path.truncate(depth);
+                eprintln!(
+                    "desk: submenu open {label} after {} ms",
+                    since.elapsed().as_millis()
+                );
+                self.path.push(Sub {
+                    at: ix,
+                    highlighted,
+                    row: Anchor::default(),
+                    panel: Anchor::default(),
+                });
+            }
+        }
+        cx.notify();
+    }
+
+    fn track(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
+        let Some(before) = self.pointer.replace(at) else {
+            return;
+        };
+        match &self.grace {
+            Some(grace) => {
+                let sub = self.path.get(grace.depth);
+                let approach = (at.x - before.x).as_f32() * grace.toward;
+                let verdict = if sub.is_some_and(|sub| sub.panel.get().contains(&at)) {
+                    Some("kept")
+                } else if sub.is_none() || !grace.holds(at) || approach < 0.0 {
+                    Some("dropped")
+                } else {
+                    None
+                };
+                match verdict {
+                    Some(verdict) => {
+                        eprintln!("desk: submenu grace {verdict}");
+                        self.grace = None;
+                        self.held = None;
+                        self.expiry = None;
+                    }
+                    None if approach > 0.0 => self.arm_expiry(cx),
+                    None => {}
+                }
+            }
+            None => {
+                let leaving = self.path.iter().enumerate().rev().find(|(_, sub)| {
+                    let row = sub.row.get();
+                    row.contains(&before) && !row.contains(&at) && !sub.panel.get().contains(&at)
+                });
+                if let Some((depth, sub)) = leaving {
+                    self.grace = Some(Grace::new(depth, sub, at));
+                    self.arm_expiry(cx);
+                }
+            }
+        }
+    }
+
+    fn arm_expiry(&mut self, cx: &mut Context<Self>) {
+        self.expiry = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(GRACE_LIFETIME).await;
+            this.update(cx, |menu, cx| menu.expire(cx))
+        }));
+    }
+
+    fn expire(&mut self, cx: &mut Context<Self>) {
+        if self.grace.take().is_some() {
+            eprintln!("desk: submenu grace dropped");
+            if let Some((depth, ix)) = self.held.take() {
+                self.hover(depth, ix, cx);
+            }
         }
     }
 
     fn key(&mut self, key: &str, cx: &mut Context<Self>) -> MenuKey {
-        let inside = self
-            .sub
-            .as_ref()
-            .and_then(|sub| Some((sub.at, sub.highlighted?)));
-        if let Some((at, row)) = inside {
-            let children = children_of(&self.items, at);
-            let next = match key {
-                "down" | "up" => Some(step_to(children, row, key == "down")),
-                "left" | "escape" => None,
-                "enter" => {
-                    return MenuKey::Pick(preorder(&self.items, at) + 1 + preorder(children, row));
-                }
-                _ => return MenuKey::Ignored,
-            };
-            self.sub = next.map(|row| Sub {
-                at,
-                highlighted: Some(row),
-            });
-        } else {
-            let current = self.items.get(self.highlighted);
-            match key {
-                "down" | "up" => {
-                    self.highlighted = step_to(&self.items, self.highlighted, key == "down");
-                    self.sub = None;
-                }
-                "right" | "enter" if matches!(current, Some(MenuItem::Submenu { .. })) => {
-                    let row = first_pick(children_of(&self.items, self.highlighted), 0);
-                    self.sub = Some(Sub {
-                        at: self.highlighted,
-                        highlighted: Some(row),
-                    });
-                }
-                "enter"
-                    if matches!(
-                        current,
-                        Some(MenuItem::Action { .. } | MenuItem::Danger { .. })
-                    ) =>
-                {
-                    return MenuKey::Pick(preorder(&self.items, self.highlighted));
-                }
-                "escape" => return MenuKey::Close,
-                _ => return MenuKey::Ignored,
+        let depth = self
+            .path
+            .iter()
+            .rposition(|sub| sub.highlighted.is_some())
+            .map_or(0, |parent| parent + 1);
+        let Some(row) = self.highlight(depth) else {
+            return MenuKey::Ignored;
+        };
+        let items = self.level(depth);
+        let current = items.get(row);
+        let opens = matches!(current, Some(MenuItem::Submenu { .. }));
+        let picks = matches!(
+            current,
+            Some(MenuItem::Action { .. } | MenuItem::Danger { .. })
+        );
+        let first = first_pick(children_of(items, row), 0);
+        let next = step_to(items, row, key == "down");
+        match key {
+            "down" | "up" => {
+                self.path.truncate(depth);
+                self.set_highlight(depth, next);
             }
+            "right" | "enter" if opens => {
+                self.open_sub(depth, row, Instant::now(), Some(first), cx);
+            }
+            "enter" if picks => return MenuKey::Pick(self.global(depth, row)),
+            "left" | "escape" if !self.path.is_empty() => {
+                self.path.pop();
+                self.grace = None;
+            }
+            "escape" => return MenuKey::Close,
+            _ => return MenuKey::Ignored,
         }
         cx.notify();
         MenuKey::Handled
@@ -1410,100 +1614,43 @@ fn menu_panel(
     };
     let fill = ink(&theme, HOVER);
     let corners = Corners::all(px(RADIUS_ROW));
-    let marker = Marker {
-        at: menu.highlighted,
-        kind: GlideKind::Eased,
-        fill,
-        corners,
+    let rows = menu_rows(state, 0, &pick, fill, corners, &theme, cx);
+    let beside = Placement {
+        side: Side::Right,
+        align: Align::Start,
+        offset: SUBMENU_OFFSET,
     };
-    let sub_at = menu.sub.as_ref().map(|sub| sub.at);
-    let rows = HoverList::within("menu-rows", div().flex().flex_col(), fill, corners, &theme)
-        .backdrop(opaque_fill(&theme))
-        .keyed(Some(marker));
-    let rows = menu
-        .items
-        .iter()
-        .enumerate()
-        .fold(rows, |rows, (ix, item)| {
-            match menu_entry(("menu-item", ix), item, &theme) {
-                MenuRow::Inert(row) => rows.inert(row),
-                MenuRow::Pick(row) => {
-                    let (hovered, clicked) = (state.clone(), pick.clone());
-                    let at = preorder(&menu.items, ix);
-                    let opens = matches!(item, MenuItem::Submenu { .. });
-                    rows.item(
-                        row.when(sub_at == Some(ix), |row| {
-                            row.relative().child(measure(&menu.sub_row))
-                        })
-                        .on_mouse_move(move |_, _, cx| {
-                            hovered.update(cx, |menu, cx| menu.hover(ix, cx));
-                        })
-                        .when(!opens, |row| {
-                            row.on_click(move |_, window, cx| clicked(&at, window, cx))
-                        }),
-                    )
-                }
-            }
-        });
-    let submenu = menu.sub.as_ref().map(|sub| {
-        let children = children_of(&menu.items, sub.at);
-        let base = preorder(&menu.items, sub.at) + 1;
-        let marker = sub.highlighted.map(|at| Marker {
-            at,
-            kind: GlideKind::Eased,
-            fill,
-            corners,
-        });
-        let list = HoverList::within(
-            "menu-sub-rows",
-            div().flex().flex_col(),
-            fill,
-            corners,
-            &theme,
-        )
-        .backdrop(opaque_fill(&theme))
-        .keyed(marker);
-        let list = children.iter().enumerate().fold(list, |list, (row, item)| {
-            match menu_entry(("menu-sub-item", row), item, &theme) {
-                MenuRow::Inert(entry) => list.inert(entry),
-                MenuRow::Pick(entry) => {
-                    let (hovered, clicked) = (state.clone(), pick.clone());
-                    let at = base + preorder(children, row);
-                    list.item(
-                        entry
-                            .on_mouse_move(move |_, _, cx| {
-                                hovered.update(cx, |menu, cx| menu.hover_sub(row, cx));
-                            })
-                            .on_click(move |_, window, cx| clicked(&at, window, cx)),
-                    )
-                }
-            }
-        });
+    let submenus = menu.path.iter().enumerate().map(|(parent, sub)| {
         let panel = menu_surface(&theme)
-            .id("menu-sub-panel")
+            .id(("menu-sub-panel", parent))
             .relative()
             .w(px(MENU_WIDTH))
             .p(px(MENU_PAD))
             .rounded(px(RADIUS_POP))
             .overflow_hidden()
-            .child(measure(&menu.sub_panel))
-            .child(list);
-        let beside = Placement {
-            side: Side::Right,
-            align: Align::Start,
-            offset: SUBMENU_OFFSET,
-        };
+            .child(measure(&sub.panel))
+            .child(menu_rows(
+                state,
+                parent + 1,
+                &pick,
+                fill,
+                corners,
+                &theme,
+                cx,
+            ));
         open_beside(
-            ("menu-sub", sub.at),
-            menu.sub_row.clone(),
+            SharedString::from(format!("menu-sub-{parent}-{}", sub.at)),
+            sub.row.clone(),
             beside,
             panel,
             cx,
         )
     });
-    let (keys, enter, outside) = (state.clone(), pick.clone(), state.clone());
+    let (keys, enter, outside, tracker) =
+        (state.clone(), pick.clone(), state.clone(), state.clone());
     let panel = menu_surface(&theme)
         .id("menu-panel")
+        .key_context("Menu")
         .track_focus(&menu.focus)
         .w(px(MENU_WIDTH))
         .p(px(MENU_PAD))
@@ -1521,6 +1668,11 @@ fn menu_panel(
         .on_mouse_down_out(move |event: &MouseDownEvent, _, cx| {
             outside.update(cx, |menu, cx| menu.dismiss(event.position, cx));
         })
+        .on_mouse_move_all(move |event, phase, _, _, cx| {
+            if phase == DispatchPhase::Capture {
+                tracker.update(cx, |menu, cx| menu.track(event.position, cx));
+            }
+        })
         .child(rows);
     std::iter::once(open_beside(
         ("menu-open", menu.opens),
@@ -1529,8 +1681,63 @@ fn menu_panel(
         panel,
         cx,
     ))
-    .chain(submenu)
+    .chain(submenus)
     .collect()
+}
+
+fn menu_rows(
+    state: &Entity<MenuState>,
+    depth: usize,
+    pick: &OnPick,
+    fill: Rgba,
+    corners: Corners<Pixels>,
+    theme: &Theme,
+    cx: &App,
+) -> HoverList {
+    let menu = state.read(cx);
+    let (list, entry) = match depth {
+        0 => ("menu-rows", "menu-item"),
+        _ => ("menu-sub-rows", "menu-sub-item"),
+    };
+    let marker = menu.highlight(depth).map(|at| Marker {
+        at,
+        kind: GlideKind::Eased,
+        fill,
+        corners,
+    });
+    let rows = HoverList::within(list, div().flex().flex_col(), fill, corners, theme)
+        .backdrop(opaque_fill(theme))
+        .keyed(marker);
+    let open = menu.path.get(depth);
+    menu.level(depth)
+        .iter()
+        .enumerate()
+        .fold(rows, |rows, (ix, item)| {
+            match menu_entry((entry, ix), item, theme) {
+                MenuRow::Inert(row) => rows.inert(row),
+                MenuRow::Pick(row) => {
+                    let (hovered, clicked, pick) = (state.clone(), state.clone(), pick.clone());
+                    let (at, opens) = (
+                        menu.global(depth, ix),
+                        matches!(item, MenuItem::Submenu { .. }),
+                    );
+                    rows.item(
+                        row.when_some(open.filter(|sub| sub.at == ix), |row, sub| {
+                            row.relative().child(measure(&sub.row))
+                        })
+                        .on_mouse_move(move |_, _, cx| {
+                            hovered.update(cx, |menu, cx| menu.hover(depth, ix, cx));
+                        })
+                        .on_click(move |_, window, cx| match opens {
+                            true => clicked.update(cx, |menu, cx| {
+                                menu.open_sub(depth, ix, Instant::now(), None, cx)
+                            }),
+                            false => pick(&at, window, cx),
+                        }),
+                    )
+                }
+            }
+        })
 }
 
 fn opener(id: &'static str, label: SharedString, open: bool, theme: &Theme) -> Stateful<Div> {
@@ -1552,6 +1759,7 @@ fn opens_menu(trigger: Stateful<Div>, menu: &Entity<MenuState>, anchor: &Anchor)
                     menu.open(Opened::Below, window, cx);
                 }
             });
+            window.prevent_default();
         },
     )
 }
@@ -1765,6 +1973,7 @@ impl RenderOnce for ContextMenu {
                 opener.update(cx, |menu, cx| {
                     menu.open(Opened::At(event.position), window, cx)
                 });
+                window.prevent_default();
             })
             .children(self.children)
             .children(menu_panel(
