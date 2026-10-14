@@ -37,8 +37,8 @@ use desk_ui::motion::reduced_motion;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, AnyView, App, AppContext, ClipboardItem, Context, Entity, Focusable, KeyDownEvent,
-    Pixels, Point, Render, SharedString, Subscription, Task, Window, canvas, div, prelude::*, px,
-    relative,
+    MouseButton, Pixels, Point, Render, SharedString, Subscription, Task, Window, canvas, div,
+    prelude::*, px, relative,
 };
 
 use crate::modules::chat::Find;
@@ -48,6 +48,8 @@ use listing::{Listing, states};
 use watch::Watched;
 
 const BLAME_IDLE: Duration = Duration::from_millis(500);
+const DOUBLE_CLICK: Duration = Duration::from_millis(500);
+const SPLIT_KEY: &str = "\\";
 const SIDE_SHARE: f32 = 0.26;
 const SIDE_LEAST: f32 = 180.0;
 const SIDE_MOST: f32 = 320.0;
@@ -101,7 +103,7 @@ pub fn open_dir(
         .new(|cx| {
             let mut editor = Editor::new(folder, window, cx);
             if let Some(file) = file {
-                editor.open_path(file, window, cx);
+                editor.open_path(file, Open::Pinned, window, cx);
             }
             editor
         })
@@ -109,6 +111,7 @@ pub fn open_dir(
 }
 
 type Opened = Result<Entity<CodeEditor>, SharedString>;
+type Shown<'a> = (&'a [Page], usize, Option<&'a PathBuf>);
 
 struct Repo {
     git: Arc<GitBinary>,
@@ -127,6 +130,55 @@ struct Page {
     dirty: bool,
     stale: bool,
     _changes: Option<Subscription>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Open {
+    Preview,
+    Pinned,
+}
+
+impl Open {
+    fn word(self) -> &'static str {
+        match self {
+            Open::Preview => "preview",
+            Open::Pinned => "pinned",
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Side {
+    Left,
+    Right,
+}
+
+impl Side {
+    fn other(self) -> Side {
+        match self {
+            Side::Left => Side::Right,
+            Side::Right => Side::Left,
+        }
+    }
+
+    fn tabs_id(self) -> &'static str {
+        match self {
+            Side::Left => "editor-file-tabs",
+            Side::Right => "editor-file-tabs-right",
+        }
+    }
+}
+
+struct Pane {
+    pages: Vec<Page>,
+    active: usize,
+    preview: Option<PathBuf>,
+}
+
+struct Opening {
+    path: PathBuf,
+    how: Open,
+    started: Instant,
 }
 
 enum Asking {
@@ -180,6 +232,11 @@ pub struct Editor {
     folder: Folder,
     pages: Vec<Page>,
     active: usize,
+    preview: Option<PathBuf>,
+    side: Side,
+    aside: Option<Pane>,
+    opening: Option<Opening>,
+    peeked: Option<(PathBuf, Instant)>,
     asking: Option<Asking>,
     find_logged: Option<(String, usize, usize)>,
     github: Github,
@@ -211,6 +268,11 @@ impl Editor {
             folder,
             pages: Vec::new(),
             active: 0,
+            preview: None,
+            side: Side::Left,
+            aside: None,
+            opening: None,
+            peeked: None,
             asking: None,
             find_logged: None,
             github: Github::Asking,
@@ -290,8 +352,12 @@ impl Editor {
         eprintln!("desk: editor rooted at {}", folder.listing.root.display());
         self._tree = cx.subscribe_in(&folder.tree, window, Self::tree_event);
         self.folder = folder;
+        let aside = self.aside.take().map(|pane| pane.pages).unwrap_or_default();
+        self.pages.extend(aside);
         self.pages.retain(|page| page.dirty);
         self.active = 0;
+        self.preview = None;
+        self.side = Side::Left;
         self.asking = None;
         self.back.clear();
         self.start_watching(cx);
@@ -338,8 +404,7 @@ impl Editor {
             .filter(|folder| folder.is_empty() || !listing.ignore.ignored(folder))
             .collect();
         let files = self
-            .pages
-            .iter()
+            .all_pages()
             .filter_map(|page| listing.relative(&page.path))
             .collect();
         if watched.send(Watched { folders, files }).is_err() {
@@ -364,8 +429,7 @@ impl Editor {
         let shown: Vec<&str> = changed.iter().map(String::as_str).collect();
         eprintln!("desk: editor saw changes: {}", shown.join(", "));
         let touched: Vec<PathBuf> = self
-            .pages
-            .iter()
+            .all_pages()
             .filter(|page| {
                 self.folder
                     .relative(&page.path)
@@ -436,7 +500,7 @@ impl Editor {
 
     fn indexed(&mut self, index: Index, cx: &mut Context<Self>) {
         let index = Arc::new(index);
-        for page in &self.pages {
+        for page in self.all_pages() {
             if let Ok(code) = &page.code {
                 code.update(cx, |code, _| code.set_symbols(Some(index.clone())));
             }
@@ -526,6 +590,66 @@ impl Editor {
         self.land(&path, row, col, window, cx);
     }
 
+    fn all_pages(&self) -> impl Iterator<Item = &Page> {
+        let aside = self.aside.iter().flat_map(|pane| &pane.pages);
+        self.pages.iter().chain(aside)
+    }
+
+    fn swap_panes(&mut self) {
+        let Some(aside) = &mut self.aside else {
+            return;
+        };
+        std::mem::swap(&mut self.pages, &mut aside.pages);
+        std::mem::swap(&mut self.active, &mut aside.active);
+        std::mem::swap(&mut self.preview, &mut aside.preview);
+        self.side = self.side.other();
+    }
+
+    fn focus_side(&mut self, side: Side, window: &mut Window, cx: &mut Context<Self>) {
+        if side == self.side || self.aside.is_none() {
+            return;
+        }
+        self.swap_panes();
+        self.asking = None;
+        self.focus_changed(cx);
+        self.follow(cx);
+        if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
+            window.focus(&code.focus_handle(cx), cx);
+        }
+        cx.notify();
+    }
+
+    fn split(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.aside.is_some() {
+            return self.focus_side(self.side.other(), window, cx);
+        }
+        self.aside = Some(Pane {
+            pages: Vec::new(),
+            active: 0,
+            preview: None,
+        });
+        self.swap_panes();
+        eprintln!("desk: editor split, the right pane takes the next open");
+        cx.notify();
+    }
+
+    fn preview_at(&self) -> Option<usize> {
+        let preview = self.preview.as_ref()?;
+        self.pages.iter().position(|page| page.path == *preview)
+    }
+
+    fn pin(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(page) = self.pages.get(at) else {
+            return;
+        };
+        if self.preview.as_ref() != Some(&page.path) {
+            return;
+        }
+        eprintln!("desk: editor pinned {}", page.path.display());
+        self.preview = None;
+        cx.notify();
+    }
+
     pub(crate) fn active_code(&self) -> Option<(&Path, &Entity<CodeEditor>)> {
         let page = self.pages.get(self.active)?;
         page.code
@@ -542,7 +666,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_path(path.to_path_buf(), window, cx);
+        self.open_path(path.to_path_buf(), Open::Pinned, window, cx);
         if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
             code.update(cx, |code, cx| code.jump(row, col, cx));
         }
@@ -564,6 +688,16 @@ impl Editor {
     }
 
     fn compare(&mut self, path: &Path, text: std::io::Result<String>, cx: &mut Context<Self>) {
+        let aside_only = !self.pages.iter().any(|page| page.path == path)
+            && self
+                .aside
+                .as_ref()
+                .is_some_and(|aside| aside.pages.iter().any(|page| page.path == path));
+        if aside_only {
+            self.swap_panes();
+            self.compare(path, text, cx);
+            return self.swap_panes();
+        }
         let Some(at) = self.pages.iter().position(|page| page.path == path) else {
             return;
         };
@@ -717,7 +851,18 @@ impl Editor {
             TreeEvent::Unfolded(path) => self.unfold(path.to_string(), cx),
             TreeEvent::Opened(path) => {
                 let target = self.folder.listing.root.join(path.as_str());
-                self.open_path(target, window, cx);
+                let twice = self
+                    .peeked
+                    .take()
+                    .is_some_and(|(peeked, at)| peeked == target && at.elapsed() < DOUBLE_CLICK);
+                let how = match twice {
+                    true => Open::Pinned,
+                    false => {
+                        self.peeked = Some((target.clone(), Instant::now()));
+                        Open::Preview
+                    }
+                };
+                self.open_path(target, how, window, cx);
             }
             TreeEvent::Delete => {
                 let paths = self.folder.tree.read(cx).picked().iter();
@@ -999,7 +1144,7 @@ impl Editor {
             folder: makes_folder,
         });
         match made {
-            Ok(()) if !makes_folder => self.open_path(path, window, cx),
+            Ok(()) if !makes_folder => self.open_path(path, Open::Pinned, window, cx),
             Ok(()) => {}
             Err(error) => eprintln!("desk: editor tree: new {name} failed: {error}"),
         }
@@ -1042,8 +1187,11 @@ impl Editor {
                     Err(error) => eprintln!("desk: editor tree: delete failed: {error}"),
                 }
                 let gone = |page: &Page| full.iter().any(|path| page.path.starts_with(path));
-                while let Some(at) = editor.pages.iter().position(&gone) {
-                    editor.drop_page(at, cx);
+                for _ in 0..2 {
+                    while let Some(at) = editor.pages.iter().position(&gone) {
+                        editor.drop_page(at, cx);
+                    }
+                    editor.swap_panes();
                 }
                 editor.refresh(cx);
             });
@@ -1130,16 +1278,44 @@ impl Editor {
         }
     }
 
-    fn open_path(&mut self, full: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_path(&mut self, full: PathBuf, how: Open, window: &mut Window, cx: &mut Context<Self>) {
+        let started = Instant::now();
         match self.pages.iter().position(|page| page.path == full) {
             Some(at) => self.active = at,
             None => {
-                let page = self.page(full, self.folder.git.clone(), cx);
-                self.pages.push(page);
-                self.active = self.pages.len().saturating_sub(1);
+                let page = self.page(full.clone(), self.folder.git.clone(), cx);
+                let slot = match how {
+                    Open::Preview => self.preview_at(),
+                    Open::Pinned => None,
+                };
+                match slot.and_then(|at| Some((at, self.pages.get_mut(at)?))) {
+                    Some((at, old)) => {
+                        *old = page;
+                        self.active = at;
+                    }
+                    None => {
+                        self.pages.push(page);
+                        self.active = self.pages.len().saturating_sub(1);
+                    }
+                }
+                if how == Open::Preview {
+                    self.preview = Some(full.clone());
+                }
                 self.rewatch(cx);
             }
         }
+        if how == Open::Pinned && self.preview.as_ref() == Some(&full) {
+            self.preview = None;
+        }
+        let how = match self.preview.as_ref() == Some(&full) {
+            true => Open::Preview,
+            false => Open::Pinned,
+        };
+        self.opening = Some(Opening {
+            path: full,
+            how,
+            started,
+        });
         self.focus_changed(cx);
         self.follow(cx);
         if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
@@ -1276,8 +1452,17 @@ impl Editor {
         }
         let page = self.pages.remove(at);
         eprintln!("desk: editor closed {}", page.path.display());
+        if self.preview.as_ref() == Some(&page.path) {
+            self.preview = None;
+        }
         if at < self.active || self.active >= self.pages.len() {
             self.active = self.active.saturating_sub(1);
+        }
+        if self.pages.is_empty() && self.aside.is_some() {
+            self.swap_panes();
+            self.aside = None;
+            self.side = Side::Left;
+            eprintln!("desk: editor pane closed, one pane again");
         }
         self.asking = None;
         self.rewatch(cx);
@@ -1316,6 +1501,10 @@ impl Editor {
             return;
         }
         page.dirty = dirty;
+        if dirty && self.preview.as_ref() == Some(&page.path) {
+            eprintln!("desk: editor pinned {} by an edit", page.path.display());
+            self.preview = None;
+        }
         eprintln!(
             "desk: editor {} {}",
             page.name,
@@ -1553,10 +1742,10 @@ impl Editor {
             .into_any_element()
     }
 
-    fn tabs(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn tabs(&self, pane: Shown, side: Side, cx: &mut Context<Self>) -> AnyElement {
+        let (pages, active, preview) = pane;
         let theme = ActiveTheme::theme(cx);
-        let tabs: Vec<Tab> = self
-            .pages
+        let tabs: Vec<Tab> = pages
             .iter()
             .map(|page| Tab {
                 label: page.name.clone(),
@@ -1569,34 +1758,47 @@ impl Editor {
                 flag: None,
             })
             .collect();
-        let images = self
-            .pages
+        let images = pages
             .iter()
             .map(|page| Some(self.folder.icons.file_image(&page.name)))
             .collect();
-        let editor = cx.weak_entity();
+        let preview_at =
+            preview.and_then(|preview| pages.iter().position(|page| page.path == *preview));
+        let (editor, pinner) = (cx.weak_entity(), cx.weak_entity());
         div()
             .flex_none()
             .min_w_0()
             .child(
                 connected_tabs(
-                    "editor-file-tabs",
+                    side.tabs_id(),
                     &tabs,
-                    self.active,
+                    active,
                     tabs.len().max(1),
                     &theme,
                     move |event, window, cx| {
-                        let done = editor.update(cx, |editor, cx| match event {
-                            TabEvent::Select(at) => editor.select_page(*at, window, cx),
-                            TabEvent::Close(at) => editor.close(*at, cx),
-                            TabEvent::New => {}
+                        let done = editor.update(cx, |editor, cx| {
+                            editor.focus_side(side, window, cx);
+                            match event {
+                                TabEvent::Select(at) => editor.select_page(*at, window, cx),
+                                TabEvent::Close(at) => editor.close(*at, cx),
+                                TabEvent::New => {}
+                            }
                         });
                         if let Err(error) = done {
                             eprintln!("desk: editor is gone before its tab event: {error}");
                         }
                     },
                 )
-                .images(images),
+                .images(images)
+                .preview(preview_at, move |at, window, cx| {
+                    let done = pinner.update(cx, |editor, cx| {
+                        editor.focus_side(side, window, cx);
+                        editor.pin(at, cx);
+                    });
+                    if let Err(error) = done {
+                        eprintln!("desk: editor is gone before its tab pinned: {error}");
+                    }
+                }),
             )
             .into_any_element()
     }
@@ -1656,40 +1858,95 @@ impl Editor {
             .on_pick(cx.listener(|editor, at: &usize, window, cx| editor.choose(*at, window, cx)))
     }
 
-    fn code_area(&self, theme: &Theme) -> AnyElement {
-        match self.pages.get(self.active).map(|page| &page.code) {
-            None => empty_state(
-                "editor-shut",
-                "No file open",
-                Some("Click a file in the tree to open it.".into()),
-                &[],
-                &[],
-                theme,
+    fn pane(
+        &self,
+        pane: Shown,
+        side: Side,
+        opening: Option<Opening>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = ActiveTheme::theme(cx);
+        let (pages, active, _) = pane;
+        let painted = opening.map(|Opening { path, how, started }| {
+            canvas(
                 |_, _, _| {},
+                move |_, (), _, _| {
+                    eprintln!(
+                        "desk: editor opened {} {} in {} ms",
+                        path.display(),
+                        how.word(),
+                        started.elapsed().as_millis()
+                    )
+                },
             )
-            .into_any_element(),
-            Some(Ok(code)) => {
-                let finder = code.clone();
+            .absolute()
+            .size_0()
+        });
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .when(self.aside.is_some() && side == Side::Right, |pane| {
+                pane.border_l_1()
+                    .border_color(theme.color(ColorToken::Separator))
+            })
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |editor, _, window, cx| editor.focus_side(side, window, cx)),
+            )
+            .when(!pages.is_empty(), |main| {
+                main.child(self.tabs(pane, side, cx))
+            })
+            .when(side == self.side, |main| main.children(self.bar(cx)))
+            .child(
                 div()
-                    .size_full()
-                    .on_action(move |_: &Find, window, cx| {
-                        eprintln!("desk: find editor open");
-                        finder.update(cx, |editor, cx| editor.find(window, cx));
-                    })
-                    .child(code.clone())
-                    .into_any_element()
-            }
-            Some(Err(error)) => empty_state(
-                "editor-failure",
-                "Could not open the file",
-                Some(error.clone()),
-                &[],
-                &[],
-                theme,
-                |_, _, _| {},
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(code_area(pages.get(active), &theme))
+                    .children(painted),
             )
-            .into_any_element(),
+            .into_any_element()
+    }
+}
+
+fn code_area(page: Option<&Page>, theme: &Theme) -> AnyElement {
+    match page.map(|page| &page.code) {
+        None => empty_state(
+            "editor-shut",
+            "No file open",
+            Some("Click a file in the tree to open it.".into()),
+            &[],
+            &[],
+            theme,
+            |_, _, _| {},
+        )
+        .into_any_element(),
+        Some(Ok(code)) => {
+            let finder = code.clone();
+            div()
+                .size_full()
+                .on_action(move |_: &Find, window, cx| {
+                    eprintln!("desk: find editor open");
+                    finder.update(cx, |editor, cx| editor.find(window, cx));
+                })
+                .child(code.clone())
+                .into_any_element()
         }
+        Some(Err(error)) => empty_state(
+            "editor-failure",
+            "Could not open the file",
+            Some(error.clone()),
+            &[],
+            &[],
+            theme,
+            |_, _, _| {},
+        )
+        .into_any_element(),
     }
 }
 
@@ -1744,23 +2001,29 @@ impl Render for Editor {
                     .on_key_down(cx.listener(Self::name_key))
                     .child(tree),
             );
+        let opening = self.opening.take().filter(|opening| {
+            self.pages
+                .get(self.active)
+                .is_some_and(|page| page.path == opening.path)
+        });
+        let focused = (self.pages.as_slice(), self.active, self.preview.as_ref());
+        let focused = self.pane(focused, self.side, opening, cx);
+        let aside = self.aside.as_ref().map(|aside| {
+            let shown = (aside.pages.as_slice(), aside.active, aside.preview.as_ref());
+            self.pane(shown, self.side.other(), None, cx)
+        });
+        let panes = match (self.side, aside) {
+            (_, None) => vec![focused],
+            (Side::Left, Some(aside)) => vec![focused, aside],
+            (Side::Right, Some(aside)) => vec![aside, focused],
+        };
         let main = div()
             .flex()
-            .flex_col()
+            .flex_row()
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .when(!self.pages.is_empty(), |main| main.child(self.tabs(cx)))
-            .children(self.bar(cx))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .child(self.code_area(&theme)),
-            )
+            .children(panes)
             .child(self.choices_menu(cx));
         let asking = self.asking.is_some();
         shell(
@@ -1773,6 +2036,12 @@ impl Render for Editor {
             if asking && event.keystroke.key == "escape" {
                 cx.stop_propagation();
                 editor.keep_open(cx);
+            }
+        }))
+        .capture_key_down(cx.listener(|editor, event: &KeyDownEvent, window, cx| {
+            if event.keystroke.modifiers.secondary() && event.keystroke.key == SPLIT_KEY {
+                cx.stop_propagation();
+                editor.split(window, cx);
             }
         }))
         .on_action(cx.listener(|editor, _: &host::CloseTab, _, cx| editor.close(editor.active, cx)))

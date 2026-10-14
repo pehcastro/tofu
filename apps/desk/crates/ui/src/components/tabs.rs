@@ -714,6 +714,7 @@ struct Pick {
     fold: Option<Fold>,
     font: f32,
     dim: Rgba,
+    preview: bool,
 }
 
 fn close(ix: usize, look: Look, theme: &Theme, shut: Shut) -> Stateful<Div> {
@@ -878,7 +879,13 @@ fn tab_frame(
     (tab, image): (&Tab, Option<&Arc<Image>>),
     pick: Pick,
     (theme, window): (&Theme, &Window),
-    (on, shut, press, menu): (&OnTab, &Shut, Option<&Press>, Option<&Press>),
+    (on, shut, press, menu, pin): (
+        &OnTab,
+        &Shut,
+        Option<&Press>,
+        Option<&Press>,
+        Option<&Pointed>,
+    ),
 ) -> Stateful<Div> {
     let Pick {
         ix,
@@ -887,7 +894,9 @@ fn tab_frame(
         fold,
         font,
         dim,
+        preview,
     } = pick;
+    let pin = pin.cloned();
     let look = match chosen {
         true => Look {
             reveal: 1.0,
@@ -914,6 +923,7 @@ fn tab_frame(
         .items_center()
         .min_w_0()
         .pr(px(TAB_PAD_TAIL))
+        .when(preview, |content| content.italic())
         .child(link(tab, image, font, theme, text))
         .children(mark(tab, (ix, look), theme, &ask))
         .when(tab.mark == TabMark::Close, |content| {
@@ -955,7 +965,10 @@ fn tab_frame(
                 .overflow_hidden()
                 .opacity(left)
         })
-        .on_click(move |_, window, cx| select(&TabEvent::Select(ix), window, cx))
+        .on_click(move |event, window, cx| match (&pin, event.click_count()) {
+            (Some(pin), 2) => pin(ix, window, cx),
+            _ => select(&TabEvent::Select(ix), window, cx),
+        })
         .child(content)
 }
 
@@ -1179,6 +1192,7 @@ pub struct TabStrip {
     press: Option<Press>,
     menu: Option<Press>,
     pointed: Option<Pointed>,
+    preview: Option<(usize, Pointed)>,
     focus: Option<FocusHandle>,
     new_button: Option<AnyElement>,
     images: Vec<Option<Arc<Image>>>,
@@ -1240,6 +1254,7 @@ impl TabStrip {
             press: None,
             menu: None,
             pointed: None,
+            preview: None,
             focus: None,
             new_button: None,
             images: Vec::new(),
@@ -1279,6 +1294,16 @@ impl TabStrip {
 
     pub fn on_point(mut self, pointed: impl Fn(usize, &mut Window, &mut App) + 'static) -> Self {
         self.pointed = Some(Rc::new(pointed));
+        self
+    }
+
+    pub fn preview(
+        mut self,
+        at: Option<usize>,
+        pin: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        let pin: Pointed = Rc::new(pin);
+        self.preview = at.map(|at| (at, pin));
         self
     }
 }
@@ -1335,10 +1360,17 @@ impl RenderOnce for TabStrip {
             press,
             menu,
             pointed,
+            preview,
             focus,
             new_button,
             images,
         } = self;
+        let pin = |ix: usize| {
+            preview
+                .as_ref()
+                .filter(|(at, _)| *at == ix)
+                .map(|(_, pin)| pin)
+        };
         let image = |ix: usize| images.get(ix).and_then(Option::as_ref);
         let reduced = reduced_motion(cx);
         let state =
@@ -1453,6 +1485,7 @@ impl RenderOnce for TabStrip {
             font,
             dim,
             chosen: ix == active,
+            preview: pin(ix).is_some(),
             look: looks.get(ix).copied().unwrap_or_default(),
             fold: closing
                 .filter(|closing| closing.ix == ix)
@@ -1519,7 +1552,7 @@ impl RenderOnce for TabStrip {
                         (tab, image(ix)),
                         pick(ix, FONT_TAB, ink(&theme, DIM_TEXT)),
                         (&theme, window),
-                        (&on, &shut, press.as_ref(), menu.as_ref()),
+                        (&on, &shut, press.as_ref(), menu.as_ref(), pin(ix)),
                     )
                     .h_full()
                     .rounded_t(px(RADIUS_TAB))
@@ -1566,7 +1599,7 @@ impl RenderOnce for TabStrip {
                         (tab, image(ix)),
                         pick(ix, FONT_BODY, ink(&theme, SHELL_TEXT)),
                         (&theme, window),
-                        (&on, &shut, press.as_ref(), opens),
+                        (&on, &shut, press.as_ref(), opens, pin(ix)),
                     )
                     .h(px(if screen { NEW_TAB } else { TAB }))
                     .rounded(px(header_radius(screen)))
