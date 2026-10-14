@@ -87,3 +87,90 @@ Not done here: item 2 needs `internal/memory/store.go`, where `Block` asks for t
 - Live rows ran on the owner's real home for the login, so his hooks (rtk) and his project registry applied; the registry's size sets item 6's cost.
 - Linux and macOS are not measured: the tree split uses Windows job objects, and `profile sample` refuses elsewhere.
 - A live row moves with what the model chose to do: the before rivals rows made 25 and 14 tool calls and the after rows 19 and 22, and a 10 sub-agent lead takes two or three turns, each of which snapshots twice.
+
+## Binary size and idle memory, TOFU-1349
+
+**tldr: the SQLite driver is 3.55 MB of the 37.09 MB binary (9.6%) and about 10 MB of the interface's 43 MB idle working set; `go/types`, pulled in for one `ExprString`, is 1.14 MB (3.1%); the terminal library's Windows input reader allocates 8 MB a second at idle, and reusing its buffer takes 4.0 MB (9%) off the idle interface.** Removing the first two sums to 32.4 MB, 12.6% smaller; the two were built apart, not together.
+
+`PROFILE_WORK=<scratch> PROFILE_BUILD_SLOT=<slot dir> bash bench/profile/size.sh`: `git archive HEAD` into the scratch, a stripped (`-trimpath -ldflags=-s -w`) and a symbol build, then `profile size` (top packages by `go tool nm -size`, linker tables excluded) and `profile idle` five fresh starts each. A start runs in a 120x40 pseudo console in a fresh `HOME`, `USERPROFILE`, `APPDATA` and `LOCALAPPDATA` and an empty git project, is read 20 times over 2 s after a 5 s settle, the median kept, and is killed; nothing is discarded or warmed. On a fresh home the interface shows the two-step set-up screen (no subscription, no Jev key), the `screen-*.ansi` files in the work directory hold what it drew. No model is called. A fresh home reloads the models.dev catalog (5.6 MB of JSON) at start, which a real home does once a day; the `noreload` rows point `TOFU_MODELS_REGISTRY_URL` at a refused port, which is what the other 23 hours look like. Windows only.
+
+### HEAD, five fresh starts each
+
+Source: 2292c768, 2026-10-14 09:06, windows/amd64, 32 logical CPUs, go1.27.1. Stripped binary 37.09 MB (38,896,128 bytes); with symbols 50.32 MB.
+
+| reading | min | median | max |
+|---|---|---|---|
+| interface, working set MB | 44.6 | 45.0 | 54.6 |
+| interface, private working set MB | 25.2 | 25.5 | 25.8 |
+| interface, peak working set MB | 63.4 | 64.4 | 74.1 |
+| interface, catalog reload refused, working set MB | 43.2 | 43.3 | 43.8 |
+| interface, catalog reload refused, private MB | 23.8 | 24.0 | 24.5 |
+| interface, idle CPU % of one core | 2.3 | 3.9 | 4.7 |
+| `tofu serve --stdio`, working set MB | 17.7 | 18.9 | 19.4 |
+| `tofu serve --stdio`, private working set MB | 6.4 | 7.5 | 7.9 |
+| `tofu serve --stdio`, idle CPU % of one core | 0.0 | 0.0 | 0.0 |
+
+### Top 15 packages by symbol bytes
+
+Source: 2292c768, `go tool nm -size` on the symbol build. 18.96 MB of symbols in 462 packages; the rest of the file is the pc-line table (8.5 MB), strings and type data, which the linker does not attribute to a package.
+
+| rank | package | KB | of the stripped file | pulled in by |
+|---|---|---|---|---|
+| 1 | modernc.org/sqlite/lib | 1988 | 5.2% | `internal/sys/credential.go:15`, the credential store `agent.db` |
+| 2 | main | 1236 | 3.3% | `cmd/tofu` |
+| 3 | github.com/yuin/goldmark/util | 767 | 2.0% | glamour, `interface/tui/markdown` |
+| 4 | slices | 767 | 2.0% | generic instances across the tree |
+| 5 | tofu/internal/turn | 712 | 1.9% | |
+| 6 | runtime | 665 | 1.8% | |
+| 7 | go/types | 522 | 1.4% | `internal/search/symbols.go:89`, `gounit.go:82`, one `types.ExprString` each |
+| 8 | tofu/internal/host | 521 | 1.4% | |
+| 9 | tofu/internal/turn/tools | 359 | 0.9% | |
+| 10 | crypto/tls | 358 | 0.9% | |
+| 11 | github.com/alecthomas/chroma/v2/lexers | 339 | 0.9% | `interface/tui/edits`, glamour |
+| 12 | net/http | 327 | 0.9% | |
+| 13 | github.com/clipperhouse/uax29/v2/graphemes | 311 | 0.8% | the charm width tables |
+| 14 | tofu/internal/boardy | 255 | 0.7% | |
+| 15 | net | 237 | 0.6% | |
+
+By family: modernc.org 2145 KB, goldmark, chroma, glamour and regexp2 together 1966 KB, crypto 1278 KB, go/ 725 KB, tofu's own packages 4963 KB.
+
+### Each cause, its fix, and the saving measured in a scratch clone
+
+Source: arms built from `git archive 75d2b58b` (37.09 MB, 38,890,496 bytes), 2026-10-14 08:36 to 08:50, five fresh starts each; HEAD rows from the same base: interface 45.1 MB, reload refused 43.6 MB, serve 18.7 MB.
+
+| cause | where | fix | stripped binary | interface idle, reload refused | serve idle |
+|---|---|---|---|---|---|
+| SQLite driver for the credential store | `internal/sys/credential.go:15`, used by `internal/llm/cred/store.go` (credentials, refresh leases, use) and `api_keys` | a file store, owner's call | -3.55 MB (-9.6%) | -10.1 MB (33.5), upper bound | -0.2 MB (18.5) |
+| `go/types` for receiver names | `internal/search/symbols.go:89`, `gounit.go:82` | a 20 line `receiverType` over `go/ast` | -1.14 MB (-3.1%) | -0.5 MB (43.1) | -0.9 MB (17.8) |
+| ultraviolet's Windows reader allocates `4096` input records every 10 ms | `ultraviolet@v0.0.0-20260811164956-006e29f97886/terminal_reader_windows.go:289`, `peekNConsoleInputs` | reuse one buffer across polls | 0 | -4.0 MB (39.6) | 0 |
+| `go/types` and the buffer together | | | -1.14 MB | -4.5 MB (39.1, -10.3%) | |
+
+| refuted or not a cause | measured |
+|---|---|
+| `-buildmode=exe` instead of the default PIE, so relocated pages stay shared | 37.09 to 36.83 MB, interface 43.2, serve 18.8: no change |
+| go-runewidth's 2.2 MB `strictWidthLUT` | BSS, built lazily, not in the file or the idle set |
+| package init | 1.6 MB allocated and 14 ms across every package (`GODEBUG=inittrace=1`, `tofu version`) |
+
+### The catalog reload and the reader interact
+
+The fresh home's reload of the models.dev catalog (`main.refreshRegistry`, `io.ReadAll` in `internal/transport/client.go:164`) puts the interface's peak at 64.4 MB against 43.4 MB without it. At HEAD the reader's 8 MB a second of garbage forces a collection about every second, which happens to return that memory by the 5 s read. With the buffer reused the collections stop and the reload's memory stays: 63.7 MB at 5 s. `debug.FreeOSMemory()` after the reload in `cmd/tofu/app.go` `modelsReload` brings it to 41.1 MB (-4.0 MB, -8.9% against HEAD's 45.1). So the reader fix ships with the reload's memory returned or streamed, never alone.
+
+| interface arm, fresh home with reload | working set median MB | private MB | peak MB |
+|---|---|---|---|
+| HEAD 75d2b58b | 45.1 | 25.6 | 65.6 |
+| `go/types` gone, buffer reused | 63.7 | 44.6 | 63.8 |
+| and `debug.FreeOSMemory()` after the reload | 41.1 | 22.0 | 63.3 |
+
+### What round 2 can reach
+
+- **Binary 10%**: needs the SQLite store gone (9.6%) and `go/types` (3.1%), 12.6% together. Without SQLite the binary target is not reachable from these causes.
+- **Idle working set 10%**: `go/types` gone and the buffer reused, on a home whose catalog is fresh: 43.6 to 39.1 MB, -10.3%. On a fresh home it is -8.9% with the reload's memory returned.
+- `receiverType` agrees with `types.ExprString` on 34,586 of 34,588 receivers across the five roots and the Go 1.27.1 standard library; the two that differ are receivers that do not compile (`[]int`), in `go/types` test data.
+
+### What these numbers cannot say
+
+- The SQLite arm cannot open `agent.db`, so its idle row skips every read of the store; the 10.1 MB is an upper bound and a file store's own cost is not measured. Its first start read 89.3 MB, unexplained.
+- The interface rows are the set-up screen of a fresh home, not a chat with a signed-in model.
+- Five starts per row; one start in five lands mid-collection and reads 9 to 15 MB high, which is why the max column is wide and the median is the number compared.
+- The ultraviolet fix is a change to a dependency: a `replace` to a patched copy or an upstream change. charmbracelet/crush in `.local/sources` pins the same ultraviolet version and the same SQLite driver, so it carries both costs.
+- The idle CPU column is from a 2 s window; the reader's 10 ms poll costs 1 to 4% of a core whether or not the buffer is reused.

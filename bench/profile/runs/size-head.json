@@ -1,0 +1,72 @@
+{
+  "label": "head",
+  "build": "2292c768, git archive HEAD",
+  "stripped_bytes": 38896128,
+  "full_bytes": 52766208,
+  "symbol_bytes": 19877815,
+  "packages": 462,
+  "top": [
+    {
+      "package": "modernc.org/sqlite/lib",
+      "bytes": 2035453
+    },
+    {
+      "package": "main",
+      "bytes": 1265840
+    },
+    {
+      "package": "github.com/yuin/goldmark/util",
+      "bytes": 785696
+    },
+    {
+      "package": "slices",
+      "bytes": 784968
+    },
+    {
+      "package": "tofu/internal/turn",
+      "bytes": 728688
+    },
+    {
+      "package": "runtime",
+      "bytes": 681253
+    },
+    {
+      "package": "go/types",
+      "bytes": 534648
+    },
+    {
+      "package": "tofu/internal/host",
+      "bytes": 533024
+    },
+    {
+      "package": "tofu/internal/turn/tools",
+      "bytes": 367152
+    },
+    {
+      "package": "crypto/tls",
+      "bytes": 366749
+    },
+    {
+      "package": "github.com/alecthomas/chroma/v2/lexers",
+      "bytes": 347024
+    },
+    {
+      "package": "net/http",
+      "bytes": 334474
+    },
+    {
+      "package": "github.com/clipperhouse/uax29/v2/graphemes",
+      "bytes": 318792
+    },
+    {
+      "package": "tofu/internal/boardy",
+      "bytes": 260944
+    },
+    {
+      "package": "net",
+      "bytes": 242624
+    }
+  ],
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 09:06"
+}

@@ -1,0 +1,43 @@
+{
+  "label": "head-app",
+  "build": "2292c768 stripped",
+  "command": [
+    "head-strip"
+  ],
+  "settle_s": 5,
+  "readings": [
+    {
+      "working_set_mb": 54.6171875,
+      "private_working_set_mb": 25.58203125,
+      "peak_working_set_mb": 74.140625,
+      "cpu_percent_of_one_core": 4.665685819236451
+    },
+    {
+      "working_set_mb": 44.84375,
+      "private_working_set_mb": 25.44921875,
+      "peak_working_set_mb": 69.07421875,
+      "cpu_percent_of_one_core": 3.1071437111635003
+    },
+    {
+      "working_set_mb": 44.62890625,
+      "private_working_set_mb": 25.1640625,
+      "peak_working_set_mb": 63.80859375,
+      "cpu_percent_of_one_core": 2.3318915154817446
+    },
+    {
+      "working_set_mb": 45.01171875,
+      "private_working_set_mb": 25.45703125,
+      "peak_working_set_mb": 64.38671875,
+      "cpu_percent_of_one_core": 3.885925637434806
+    },
+    {
+      "working_set_mb": 45.359375,
+      "private_working_set_mb": 25.78515625,
+      "peak_working_set_mb": 63.3828125,
+      "cpu_percent_of_one_core": 3.886774732188161
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 09:06"
+}

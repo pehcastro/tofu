@@ -284,7 +284,7 @@ func sample(args []string) error {
 	}
 	r := run{Label: *label, Command: shown, Version: fields["version"], Commit: fields["commit"],
 		Model: strings.Join(models, "+"), Credential: *credential, Wire: *wire,
-		Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU()), Date: time.Now().Format("2006-01-02 15:04"),
+		Machine: machine(), Date: time.Now().Format("2006-01-02 15:04"),
 		Method: treeMethod, Exit: o.Exit, WallS: o.WallS, JobCPUS: o.JobCPUS, SeenCPUS: seenCPU, JobProcesses: o.JobProcesses, SeenProcesses: len(o.members),
 		PeakTreeMB: o.PeakTreeMB, PeakCommitMB: o.PeakCommitMB, Samples: o.Samples, Kinds: kinds, Changed: strings.TrimSpace(string(changed))}
 	if err := os.MkdirAll(filepath.Join(here(), "runs"), 0o755); err != nil {
@@ -329,9 +329,9 @@ func report([]string) error {
 }
 
 func main() {
-	verbs := map[string]func([]string) error{"stage": stage, "sample": sample, "report": report}
+	verbs := map[string]func([]string) error{"stage": stage, "sample": sample, "report": report, "size": sizes, "idle": idle}
 	if len(os.Args) < 2 || verbs[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "usage: profile stage|sample|report")
+		fmt.Fprintln(os.Stderr, "usage: profile stage|sample|report|size|idle")
 		os.Exit(2)
 	}
 	if err := verbs[os.Args[1]](os.Args[2:]); err != nil {

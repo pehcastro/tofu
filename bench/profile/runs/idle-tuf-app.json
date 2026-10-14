@@ -1,0 +1,43 @@
+{
+  "label": "tuf-app",
+  "build": "arm go/types gone, ultraviolet peek buffer reused, memory returned after the catalog reload",
+  "command": [
+    "tuf-strip"
+  ],
+  "settle_s": 5,
+  "readings": [
+    {
+      "working_set_mb": 51.05078125,
+      "private_working_set_mb": 22.40625,
+      "peak_working_set_mb": 71.4921875,
+      "cpu_percent_of_one_core": 3.1100410137280696
+    },
+    {
+      "working_set_mb": 40.96875,
+      "private_working_set_mb": 21.90234375,
+      "peak_working_set_mb": 57.4375,
+      "cpu_percent_of_one_core": 0.7782582585155275
+    },
+    {
+      "working_set_mb": 41.25390625,
+      "private_working_set_mb": 22.0234375,
+      "peak_working_set_mb": 63.25390625,
+      "cpu_percent_of_one_core": 1.5530615016827485
+    },
+    {
+      "working_set_mb": 41.09765625,
+      "private_working_set_mb": 22.078125,
+      "peak_working_set_mb": 67.4375,
+      "cpu_percent_of_one_core": 2.331795583581652
+    },
+    {
+      "working_set_mb": 40.9453125,
+      "private_working_set_mb": 21.8359375,
+      "peak_working_set_mb": 63.0234375,
+      "cpu_percent_of_one_core": 0.7775623715746884
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 08:50"
+}

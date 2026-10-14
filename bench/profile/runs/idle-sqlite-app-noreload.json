@@ -1,0 +1,43 @@
+{
+  "label": "sqlite-app-noreload",
+  "build": "arm sqlite, catalog reload refused",
+  "command": [
+    "sqlite-strip"
+  ],
+  "settle_s": 5,
+  "readings": [
+    {
+      "working_set_mb": 89.30859375,
+      "private_working_set_mb": 52.3203125,
+      "peak_working_set_mb": 89.4140625,
+      "cpu_percent_of_one_core": 0.7778433185100874
+    },
+    {
+      "working_set_mb": 33.2265625,
+      "private_working_set_mb": 20.421875,
+      "peak_working_set_mb": 33.28125,
+      "cpu_percent_of_one_core": 0.7769165150622857
+    },
+    {
+      "working_set_mb": 33.52734375,
+      "private_working_set_mb": 20.65234375,
+      "peak_working_set_mb": 33.94140625,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 33.9609375,
+      "private_working_set_mb": 21.1328125,
+      "peak_working_set_mb": 34.04296875,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 33.33984375,
+      "private_working_set_mb": 20.43359375,
+      "peak_working_set_mb": 33.41796875,
+      "cpu_percent_of_one_core": 3.110749655826658
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 08:43"
+}

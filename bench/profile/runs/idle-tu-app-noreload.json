@@ -1,0 +1,43 @@
+{
+  "label": "tu-app-noreload",
+  "build": "arm go/types gone and ultraviolet peek buffer reused, catalog reload refused",
+  "command": [
+    "tu-strip"
+  ],
+  "settle_s": 5,
+  "readings": [
+    {
+      "working_set_mb": 48.4609375,
+      "private_working_set_mb": 19.91015625,
+      "peak_working_set_mb": 48.50390625,
+      "cpu_percent_of_one_core": 1.5547121359685065
+    },
+    {
+      "working_set_mb": 38.71875,
+      "private_working_set_mb": 19.84375,
+      "peak_working_set_mb": 38.9609375,
+      "cpu_percent_of_one_core": 1.5551071759960324
+    },
+    {
+      "working_set_mb": 39.08984375,
+      "private_working_set_mb": 20.19140625,
+      "peak_working_set_mb": 39.390625,
+      "cpu_percent_of_one_core": 2.3330570164294495
+    },
+    {
+      "working_set_mb": 39.4140625,
+      "private_working_set_mb": 20.5,
+      "peak_working_set_mb": 39.53515625,
+      "cpu_percent_of_one_core": 4.665212878515468
+    },
+    {
+      "working_set_mb": 38.73046875,
+      "private_working_set_mb": 19.734375,
+      "peak_working_set_mb": 38.96875,
+      "cpu_percent_of_one_core": 2.333546219124943
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 08:47"
+}

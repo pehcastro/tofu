@@ -1,0 +1,45 @@
+{
+  "label": "sqlite-serve",
+  "build": "arm sqlite",
+  "command": [
+    "sqlite-strip",
+    "serve",
+    "--stdio"
+  ],
+  "settle_s": 5,
+  "readings": [
+    {
+      "working_set_mb": 18.5703125,
+      "private_working_set_mb": 7.4453125,
+      "peak_working_set_mb": 18.5859375,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 18.44140625,
+      "private_working_set_mb": 7.25,
+      "peak_working_set_mb": 18.44921875,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 18.546875,
+      "private_working_set_mb": 7.4375,
+      "peak_working_set_mb": 18.5703125,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 17.21484375,
+      "private_working_set_mb": 6.25,
+      "peak_working_set_mb": 17.3125,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 18.7421875,
+      "private_working_set_mb": 7.4921875,
+      "peak_working_set_mb": 18.75,
+      "cpu_percent_of_one_core": 0
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 08:44"
+}

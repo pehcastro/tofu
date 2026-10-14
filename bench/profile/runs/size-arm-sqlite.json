@@ -1,0 +1,24 @@
+{
+  "label": "arm-sqlite",
+  "build": "75d2b58b, without the modernc.org/sqlite driver (credential store cannot open)",
+  "stripped_bytes": 35167744,
+  "full_bytes": 46980096,
+  "symbol_bytes": 17686328,
+  "packages": 446,
+  "top": [
+    {
+      "package": "main",
+      "bytes": 1265840
+    },
+    {
+      "package": "github.com/yuin/goldmark/util",
+      "bytes": 786208
+    },
+    {
+      "package": "slices",
+      "bytes": 784376
+    }
+  ],
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 09:08"
+}

@@ -1,0 +1,45 @@
+{
+  "label": "types-serve",
+  "build": "arm types",
+  "command": [
+    "types-strip",
+    "serve",
+    "--stdio"
+  ],
+  "settle_s": 5,
+  "readings": [
+    {
+      "working_set_mb": 17.37890625,
+      "private_working_set_mb": 6.40625,
+      "peak_working_set_mb": 17.484375,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 17.78515625,
+      "private_working_set_mb": 6.86328125,
+      "peak_working_set_mb": 17.890625,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 18.50390625,
+      "private_working_set_mb": 7.37109375,
+      "peak_working_set_mb": 18.55078125,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 18.01171875,
+      "private_working_set_mb": 7.015625,
+      "peak_working_set_mb": 18.11328125,
+      "cpu_percent_of_one_core": 0
+    },
+    {
+      "working_set_mb": 17.57421875,
+      "private_working_set_mb": 6.62109375,
+      "peak_working_set_mb": 17.671875,
+      "cpu_percent_of_one_core": 0
+    }
+  ],
+  "method": "the command starts in a 120 by 40 pseudo console, its output kept as screen-\u003clabel\u003e-\u003cn\u003e.ansi in the work directory and its input left open, in a fresh home and an empty git project; after the settle time its own working set and private working set are read 20 times 100 ms apart and the median kept, its CPU time over those 2 s divided by the wall time, then the tree is killed with its job object",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "date": "2026-10-14 08:43"
+}
