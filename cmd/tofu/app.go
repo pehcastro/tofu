@@ -212,6 +212,7 @@ func modelsReload(dir string, reload func(context.Context, io.Writer) int) func(
 	return func() string {
 		before, unreadBefore := modelLibrary(dir)
 		stampReload(reload(context.Background(), io.Discard))
+		debug.FreeOSMemory()
 		after, err := modelLibrary(dir)
 		if err != nil {
 			return models.ReloadVerb + ": " + err.Error()

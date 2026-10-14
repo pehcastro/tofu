@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
@@ -86,7 +85,7 @@ func (g *Graph) read(rel string, parsed *token.File, decl ast.Decl, name string)
 		within = shape.Name.Name
 		if shape.Recv != nil && len(shape.Recv.List) > 0 {
 			kind = KindMethod
-			within = strings.TrimPrefix(types.ExprString(shape.Recv.List[0].Type), "*") + "." + within
+			within = receiverName(shape.Recv.List[0]) + "." + within
 		}
 		if shape.Name.Name == name {
 			g.Definitions = append(g.Definitions, Definition{

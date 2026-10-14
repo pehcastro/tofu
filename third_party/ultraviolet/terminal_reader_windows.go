@@ -1,0 +1,318 @@
+//go:build windows
+
+package uv
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"strings"
+	"time"
+	"unicode/utf16"
+
+	"github.com/charmbracelet/x/ansi"
+	xwindows "github.com/charmbracelet/x/windows"
+	"github.com/muesli/cancelreader"
+	"golang.org/x/sys/windows"
+)
+
+func (d *TerminalReader) streamData(ctx context.Context, readc chan []byte) error {
+	cc, ok := d.r.(*conInputReader)
+	if !ok {
+		d.logf("streamData: reader is not a conInputReader, falling back to default implementation")
+		return d.sendBytes(ctx, readc)
+	}
+
+	d.vtInput = cc.newMode&windows.ENABLE_VIRTUAL_TERMINAL_INPUT != 0
+
+	var buf bytes.Buffer
+	var records []xwindows.InputRecord
+	var err error
+	peeked := make([]xwindows.InputRecord, readBufSize)
+	for {
+		for {
+			var n uint32
+			n, err = peekConsoleInput(cc.conin, peeked)
+			records = peeked[:n]
+			if cc.isCanceled() {
+				return cancelreader.ErrCanceled
+			}
+			if err != nil {
+				return err
+			}
+			if len(records) > 0 {
+				break
+			}
+
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		records, err = readNConsoleInputs(cc.conin, uint32(len(records)))
+		if cc.isCanceled() {
+			return cancelreader.ErrCanceled
+		}
+		if err != nil {
+			return err
+		}
+
+		d.serializeWin32InputRecords(records, &buf)
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case readc <- buf.Bytes():
+		}
+
+		buf.Reset()
+	}
+}
+
+func (d *TerminalReader) serializeWin32InputRecords(records []xwindows.InputRecord, buf *bytes.Buffer) {
+	for _, record := range records {
+		switch record.EventType {
+		case xwindows.KEY_EVENT:
+			kevent := record.KeyEvent()
+
+			var kd int
+			if kevent.KeyDown {
+				kd = 1
+			}
+			if d.vtInput {
+
+				if d.utf16Half[kd] {
+
+					d.utf16Half[kd] = false
+					d.utf16Buf[kd][1] = kevent.Char
+					r := utf16.DecodeRune(d.utf16Buf[kd][0], d.utf16Buf[kd][1])
+					buf.WriteRune(r)
+				} else if utf16.IsSurrogate(kevent.Char) {
+
+					d.utf16Half[kd] = true
+					d.utf16Buf[kd][0] = kevent.Char
+				} else if kevent.KeyDown {
+
+					buf.WriteRune(kevent.Char)
+				}
+			} else {
+
+				if kevent.VirtualKeyCode == 0 {
+					d.eventScanner.storeGraphemeRune(kd, kevent.Char)
+				} else {
+					buf.Write(d.eventScanner.encodeGraphemeBufs())
+					fmt.Fprintf(buf,
+						"\x1b[%d;%d;%d;%d;%d;%d_",
+						kevent.VirtualKeyCode,
+						kevent.VirtualScanCode,
+						kevent.Char,
+						kd,
+						kevent.ControlKeyState,
+						kevent.RepeatCount)
+				}
+			}
+
+		case xwindows.MOUSE_EVENT:
+			if d.MouseMode == nil || *d.MouseMode == 0 {
+				continue
+			}
+			mouseMode := *d.MouseMode
+			mevent := record.MouseEvent()
+
+			var isRelease bool
+			var isMotion bool
+			var button MouseButton
+			alt := mevent.ControlKeyState&(xwindows.LEFT_ALT_PRESSED|xwindows.RIGHT_ALT_PRESSED) != 0
+			ctrl := mevent.ControlKeyState&(xwindows.LEFT_CTRL_PRESSED|xwindows.RIGHT_CTRL_PRESSED) != 0
+			shift := mevent.ControlKeyState&(xwindows.SHIFT_PRESSED) != 0
+			wheelDirection := int16(highWord(mevent.ButtonState))
+			switch mevent.EventFlags {
+			case 0, xwindows.DOUBLE_CLICK:
+				button, isRelease = mouseEventButton(d.lastMouseBtns, mevent.ButtonState)
+			case xwindows.MOUSE_WHEELED:
+				if wheelDirection > 0 {
+					button = MouseWheelUp
+				} else {
+					button = MouseWheelDown
+				}
+			case xwindows.MOUSE_HWHEELED:
+				if wheelDirection > 0 {
+					button = MouseWheelRight
+				} else {
+					button = MouseWheelLeft
+				}
+			case xwindows.MOUSE_MOVED:
+				button, _ = mouseEventButton(d.lastMouseBtns, mevent.ButtonState)
+				isMotion = true
+			}
+
+			if button == MouseNone && mouseMode&MouseModeMotion == 0 ||
+				(button != MouseNone && mouseMode&MouseModeDrag == 0) {
+				continue
+			}
+
+			buf.WriteString(ansi.MouseSgr(
+				ansi.EncodeMouseButton(button, isMotion, shift, alt, ctrl),
+				int(mevent.MousePositon.X), int(mevent.MousePositon.Y), isRelease,
+			))
+
+			d.lastMouseBtns = mevent.ButtonState
+
+		case xwindows.WINDOW_BUFFER_SIZE_EVENT:
+			wevent := record.WindowBufferSizeEvent()
+			if wevent.Size.X != d.lastWinsizeX || wevent.Size.Y != d.lastWinsizeY {
+				d.lastWinsizeX, d.lastWinsizeY = wevent.Size.X, wevent.Size.Y
+
+				buf.WriteString(
+					ansi.WindowOp(
+						8,
+						int(wevent.Size.Y),
+						int(wevent.Size.X),
+					),
+				)
+			}
+
+		case xwindows.FOCUS_EVENT:
+			fevent := record.FocusEvent()
+			if fevent.SetFocus {
+				buf.WriteString(ansi.Focus)
+			} else {
+				buf.WriteString(ansi.Blur)
+			}
+
+		case xwindows.MENU_EVENT:
+
+		}
+	}
+
+	buf.Write(d.eventScanner.encodeGraphemeBufs())
+}
+
+func mouseEventButton(p, s uint32) (MouseButton, bool) {
+	var isRelease bool
+	button := MouseNone
+	btn := p ^ s
+	if btn&s == 0 {
+		isRelease = true
+	}
+
+	if btn == 0 {
+		switch {
+		case s&xwindows.FROM_LEFT_1ST_BUTTON_PRESSED > 0:
+			button = MouseLeft
+		case s&xwindows.FROM_LEFT_2ND_BUTTON_PRESSED > 0:
+			button = MouseMiddle
+		case s&xwindows.RIGHTMOST_BUTTON_PRESSED > 0:
+			button = MouseRight
+		case s&xwindows.FROM_LEFT_3RD_BUTTON_PRESSED > 0:
+			button = MouseBackward
+		case s&xwindows.FROM_LEFT_4TH_BUTTON_PRESSED > 0:
+			button = MouseForward
+		}
+		return button, isRelease
+	}
+
+	switch btn {
+	case xwindows.FROM_LEFT_1ST_BUTTON_PRESSED:
+		button = MouseLeft
+	case xwindows.RIGHTMOST_BUTTON_PRESSED:
+		button = MouseRight
+	case xwindows.FROM_LEFT_2ND_BUTTON_PRESSED:
+		button = MouseMiddle
+	case xwindows.FROM_LEFT_3RD_BUTTON_PRESSED:
+		button = MouseBackward
+	case xwindows.FROM_LEFT_4TH_BUTTON_PRESSED:
+		button = MouseForward
+	}
+
+	return button, isRelease
+}
+
+func highWord(data uint32) uint16 {
+	return uint16((data & 0xFFFF0000) >> 16)
+}
+
+func readNConsoleInputs(console windows.Handle, maxEvents uint32) ([]xwindows.InputRecord, error) {
+	if maxEvents == 0 {
+		return nil, fmt.Errorf("maxEvents cannot be zero")
+	}
+
+	records := make([]xwindows.InputRecord, maxEvents)
+	n, err := readConsoleInput(console, records)
+	return records[:n], err
+}
+
+func readConsoleInput(console windows.Handle, inputRecords []xwindows.InputRecord) (uint32, error) {
+	if len(inputRecords) == 0 {
+		return 0, fmt.Errorf("size of input record buffer cannot be zero")
+	}
+
+	var read uint32
+
+	err := xwindows.ReadConsoleInput(console, &inputRecords[0], uint32(len(inputRecords)), &read)
+
+	return read, err
+}
+
+func peekConsoleInput(console windows.Handle, inputRecords []xwindows.InputRecord) (uint32, error) {
+	if len(inputRecords) == 0 {
+		return 0, fmt.Errorf("size of input record buffer cannot be zero")
+	}
+
+	var read uint32
+
+	err := xwindows.PeekConsoleInput(console, &inputRecords[0], uint32(len(inputRecords)), &read)
+
+	return read, err
+}
+
+func peekNConsoleInputs(console windows.Handle, maxEvents uint32) ([]xwindows.InputRecord, error) {
+	if maxEvents == 0 {
+		return nil, fmt.Errorf("maxEvents cannot be zero")
+	}
+
+	records := make([]xwindows.InputRecord, maxEvents)
+	n, err := peekConsoleInput(console, records)
+	return records[:n], err
+}
+
+func keyEventString(vkc, sc uint16, r rune, keyDown bool, cks uint32, repeatCount uint16) string {
+	var s strings.Builder
+	s.WriteString("vkc: ")
+	fmt.Fprintf(&s, "%d, 0x%02x", vkc, vkc)
+	s.WriteString(", sc: ")
+	fmt.Fprintf(&s, "%d, 0x%02x", sc, sc)
+	s.WriteString(", r: ")
+	fmt.Fprintf(&s, "%q 0x%x", r, r)
+	s.WriteString(", down: ")
+	fmt.Fprintf(&s, "%v", keyDown)
+	s.WriteString(", cks: [")
+	if cks&xwindows.LEFT_ALT_PRESSED != 0 {
+		s.WriteString("left alt, ")
+	}
+	if cks&xwindows.RIGHT_ALT_PRESSED != 0 {
+		s.WriteString("right alt, ")
+	}
+	if cks&xwindows.LEFT_CTRL_PRESSED != 0 {
+		s.WriteString("left ctrl, ")
+	}
+	if cks&xwindows.RIGHT_CTRL_PRESSED != 0 {
+		s.WriteString("right ctrl, ")
+	}
+	if cks&xwindows.SHIFT_PRESSED != 0 {
+		s.WriteString("shift, ")
+	}
+	if cks&xwindows.CAPSLOCK_ON != 0 {
+		s.WriteString("caps lock, ")
+	}
+	if cks&xwindows.NUMLOCK_ON != 0 {
+		s.WriteString("num lock, ")
+	}
+	if cks&xwindows.SCROLLLOCK_ON != 0 {
+		s.WriteString("scroll lock, ")
+	}
+	if cks&xwindows.ENHANCED_KEY != 0 {
+		s.WriteString("enhanced key, ")
+	}
+	s.WriteString("], repeat count: ")
+	fmt.Fprintf(&s, "%d", repeatCount)
+	return s.String()
+}

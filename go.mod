@@ -250,6 +250,8 @@ replace github.com/alecthomas/chroma/v2 => ./third_party/chroma
 
 replace github.com/atotto/clipboard => ./third_party/clipboard
 
+replace github.com/charmbracelet/ultraviolet => ./third_party/ultraviolet
+
 replace github.com/gorilla/css => ./third_party/gorilla-css
 
 replace github.com/microcosm-cc/bluemonday => ./third_party/bluemonday

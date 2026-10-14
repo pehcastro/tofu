@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"strings"
 )
 
@@ -79,7 +78,7 @@ func declarationAt(file *ast.File, parsed *token.File, at token.Pos) (declaratio
 			kind, name := KindFunc, shape.Name.Name
 			if shape.Recv != nil && len(shape.Recv.List) > 0 {
 				kind = KindMethod
-				name = strings.TrimPrefix(types.ExprString(shape.Recv.List[0].Type), "*") + "." + name
+				name = receiverName(shape.Recv.List[0]) + "." + name
 			}
 			return span(parsed, kind, name, shape.Pos(), shape.End()), true
 		case *ast.GenDecl:
