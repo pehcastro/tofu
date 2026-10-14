@@ -1,18 +1,21 @@
 mod instance;
 
-use desk_control::{ErrorCode, Method};
-use instance::{CONNECT_TIMEOUT, Found};
+use desk_control::transport::Reply;
+use desk_control::{ErrorCode, Id, JsonRpc, Method, Success, WireRequest};
+use instance::Found;
 use schemars::SchemaGenerator;
 use serde_json::{Map, Value, json};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::process::ExitCode;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 enum Exit {
     Done,
     Failure,
     Usage,
     NotRunning,
+    Denied,
+    Timeout,
 }
 
 impl Exit {
@@ -22,6 +25,8 @@ impl Exit {
             Exit::Failure => 1,
             Exit::Usage => 2,
             Exit::NotRunning => 3,
+            Exit::Denied => 4,
+            Exit::Timeout => 5,
         })
     }
 }
@@ -34,7 +39,6 @@ struct Outcome {
 }
 
 fn main() -> ExitCode {
-    let started = Instant::now();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let json = args.iter().any(|a| a == "--json");
     let args: Vec<&str> = args
@@ -51,53 +55,120 @@ fn main() -> ExitCode {
             Err(e) => print_plain(&e.to_string(), Exit::Failure),
         };
     }
-    let outcome = run(verb, rest, started);
-    let line = if json {
-        envelope(verb, &outcome).to_string()
-    } else {
-        format!("✗ {}: {} → {}", outcome.code, outcome.message, outcome.hint)
+    let (verb, rest) = alias(verb, rest);
+    let (line, exit) = match run(&verb, rest) {
+        Ok(reply) => replied(reply, json),
+        Err(outcome) if json => (envelope(&verb, &outcome).to_string(), outcome.exit),
+        Err(o) => (format!("✗ {}: {} → {}", o.code, o.message, o.hint), o.exit),
     };
-    print_plain(&line, outcome.exit)
+    print_plain(&line, exit)
 }
 
-fn run(verb: &str, rest: &[&str], started: Instant) -> Outcome {
+fn alias<'a>(verb: &str, rest: &'a [&'a str]) -> (String, &'a [&'a str]) {
+    let known = |name: &str| Method::ALL.iter().any(|m| m.name() == name);
+    match rest.split_first() {
+        Some((second, tail)) if !known(verb) && known(&format!("{verb}.{second}")) => {
+            (format!("{verb}.{second}"), tail)
+        }
+        _ => (verb.to_owned(), rest),
+    }
+}
+
+fn replied(reply: Reply, json: bool) -> (String, Exit) {
+    let (text, exit) = match reply {
+        Ok(result) if json => (
+            serde_json::to_string(&Success {
+                jsonrpc: JsonRpc::V2,
+                id: Id::Number(1),
+                result,
+            }),
+            Exit::Done,
+        ),
+        Ok(result) => (serde_json::to_string_pretty(&result), Exit::Done),
+        Err(failure) => {
+            let exit = match failure.error.data.kind {
+                ErrorCode::DeniedByConsent | ErrorCode::DeniedByGate | ErrorCode::Refused => {
+                    Exit::Denied
+                }
+                ErrorCode::Busy | ErrorCode::Timeout => Exit::Timeout,
+                _ => Exit::Failure,
+            };
+            if json {
+                (serde_json::to_string(&failure), exit)
+            } else {
+                let kind = failure.error.data.kind.name();
+                (Ok(format!("✗ {kind}: {}", failure.error.message)), exit)
+            }
+        }
+    };
+    match text {
+        Ok(text) => (text, exit),
+        Err(e) => (e.to_string(), Exit::Failure),
+    }
+}
+
+fn io_outcome(e: &std::io::Error) -> Outcome {
+    let (exit, code, hint) = match e.kind() {
+        ErrorKind::TimedOut | ErrorKind::WouldBlock => (
+            Exit::Timeout,
+            ErrorCode::Timeout.name(),
+            "the desk did not answer in time",
+        ),
+        ErrorKind::ConnectionReset
+        | ErrorKind::ConnectionAborted
+        | ErrorKind::UnexpectedEof
+        | ErrorKind::PermissionDenied => (
+            Exit::Denied,
+            ErrorCode::Refused.name(),
+            "the desk closed the connection: its token may have changed",
+        ),
+        _ => (
+            Exit::Failure,
+            "instance_unreadable",
+            "check ~/.tofu/desk/runtime",
+        ),
+    };
+    Outcome {
+        exit,
+        code,
+        message: e.to_string(),
+        hint: hint.to_owned(),
+    }
+}
+
+fn run(verb: &str, rest: &[&str]) -> Result<Reply, Outcome> {
     let Some(&method) = Method::ALL.iter().find(|m| m.name() == verb) else {
-        return Outcome {
+        return Err(Outcome {
             exit: Exit::Usage,
             code: ErrorCode::UnknownMethod.name(),
             message: format!("unknown verb `{verb}`"),
             hint: "run tofu-desk with no arguments for the verbs".to_owned(),
-        };
+        });
     };
     let (fields, required) = fields(method);
     let usage = usage(method, &fields, &required);
-    let params = match params(&fields, rest) {
-        Ok(params) => params,
-        Err(message) => return usage_outcome(message, usage),
+    let params = params(&fields, rest).map_err(|m| usage_outcome(m, usage.clone()))?;
+    method
+        .call(params.clone())
+        .map_err(|e| usage_outcome(e.to_string(), usage))?;
+    let mut client = match instance::connect().map_err(|e| io_outcome(&e))? {
+        Found::Connected(client) => client,
+        Found::NotRunning => {
+            return Err(Outcome {
+                exit: Exit::NotRunning,
+                code: ErrorCode::DeskNotRunning.name(),
+                message: "no desk is running".to_owned(),
+                hint: "start the desk, or use tofu for non-desk work".to_owned(),
+            });
+        }
     };
-    if let Err(e) = method.call(params) {
-        return usage_outcome(e.to_string(), usage);
-    }
-    match instance::find(started + CONNECT_TIMEOUT) {
-        Ok(Found::Running) => Outcome {
-            exit: Exit::Failure,
-            code: "transport_not_built",
-            message: "transport not built".to_owned(),
-            hint: "a desk is running but this tofu-desk cannot reach it yet".to_owned(),
-        },
-        Ok(Found::NotRunning) => Outcome {
-            exit: Exit::NotRunning,
-            code: ErrorCode::DeskNotRunning.name(),
-            message: "no desk is running".to_owned(),
-            hint: "start the desk, or use tofu for non-desk work".to_owned(),
-        },
-        Err(e) => Outcome {
-            exit: Exit::Failure,
-            code: "instance_unreadable",
-            message: e.to_string(),
-            hint: "check ~/.tofu/desk/runtime".to_owned(),
-        },
-    }
+    let request = WireRequest {
+        jsonrpc: JsonRpc::V2,
+        id: Id::Number(1),
+        method: verb.to_owned(),
+        params: Some(params),
+    };
+    client.call(&request).map_err(|e| io_outcome(&e))
 }
 
 fn usage_outcome(message: String, usage: String) -> Outcome {

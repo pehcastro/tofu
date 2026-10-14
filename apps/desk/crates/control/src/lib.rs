@@ -3,6 +3,7 @@ mod error;
 pub mod params;
 pub mod replies;
 pub mod shapes;
+pub mod transport;
 mod verbs;
 
 pub use envelope::{

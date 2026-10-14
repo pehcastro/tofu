@@ -26,5 +26,10 @@ name = "corpus"
 test = true
 harness = false
 
+[[example]]
+name = "roundtrip"
+test = true
+harness = false
+
 [lints]
 workspace = true
