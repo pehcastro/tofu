@@ -323,7 +323,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     #[cfg(feature = "screen-work")]
-    let (_server, asked) = match control::start() {
+    let (mut server, asked) = match control::start() {
         Ok((server, asked)) => (Some(server), Some(asked)),
         Err(error) => {
             eprintln!("desk: control is off: {error}");
@@ -339,6 +339,12 @@ fn main() -> ExitCode {
                 if cx.windows().is_empty() {
                     cx.quit();
                 }
+            })
+            .detach();
+            #[cfg(feature = "screen-work")]
+            cx.on_app_quit(move |_| {
+                drop(server.take());
+                async {}
             })
             .detach();
             let opened = pick::chosen()
