@@ -90,6 +90,7 @@ type Spawned struct {
 type SubAgents struct {
 	Defined []subagent.Definition
 	Open    func(subagent.Definition, llm.Effort) (SubAgentModel, error)
+	Takes   func(subagent.Definition) ([]llm.Effort, error)
 	Prompt  ComposeSpec
 	Root    string
 	Brief   func(definition subagent.Definition, task string) string
@@ -299,12 +300,9 @@ func (t *SpawnTool) Definition() llm.Tool {
 	if t.base.Board != nil {
 		properties["ticket"] = map[string]any{"type": "string", "description": "the board ticket this sub-agent works, such as DEMO-2: its owns become the sub-agent's paths and owns given here are ignored"}
 	}
-	var levels []string
-	for _, level := range llm.Efforts() {
-		levels = append(levels, string(level))
+	if effort, offered := t.SubAgents.effortProperty(); offered {
+		properties["effort"] = effort
 	}
-	properties["effort"] = map[string]any{"type": "string", "enum": levels,
-		"description": "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do"}
 	if names := t.SubAgents.enabledNames(); len(names) > 0 {
 		properties["agent"] = map[string]any{"type": "string", "enum": names,
 			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
@@ -489,7 +487,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	started = true
 	t.Inbox.hold(held, site.log)
 	go t.background(runCtx, cancel, held, opened, site, task, llm.Origin{}, warm)
-	return Result{Content: narrowed + held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
+	return Result{Content: narrowed + clampedWords(effort, opened) + held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
 func (t *SpawnTool) proseStore() *recall.Store {
@@ -625,20 +623,6 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		}
 	}
 	return subAgent
-}
-
-func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (SubAgentModel, error) {
-	switch {
-	case t.SubAgents.Open == nil && effort != "":
-		return SubAgentModel{}, fmt.Errorf("effort %s: this run opens no model of its own for a sub-agent, so the level would be dropped without a word", effort)
-	case t.SubAgents.Open == nil:
-		return SubAgentModel{}, nil
-	}
-	opened, err := t.SubAgents.Open(definition, effort)
-	if err != nil {
-		return SubAgentModel{}, fmt.Errorf("the model for %s did not open: %w", cmp.Or(definition.Name, "the sub-agent"), err)
-	}
-	return opened, nil
 }
 
 func (m SubAgentModel) onto(subAgent Config) Config {

@@ -242,37 +242,61 @@ func boundSubAgent(opts runOpts) (string, error) {
 	return bound[models.RoleSubAgent].Model.Slug(), nil
 }
 
+type subAgentTarget struct {
+	named   string
+	wire    string
+	offered []llm.Effort
+}
+
+func (r runtime) subAgentTarget(opts runOpts, definition subagent.Definition) (subAgentTarget, error) {
+	target := subAgentTarget{named: definition.Model, wire: opts.wire, offered: r.orchestrator.Efforts}
+	if definition.Name == "" {
+		bound, err := boundSubAgent(opts)
+		if err != nil {
+			return subAgentTarget{}, err
+		}
+		target.named = bound
+	}
+	if target.named != "" {
+		library, err := modelLibrary(opts.dir)
+		if err != nil {
+			return subAgentTarget{}, err
+		}
+		model, err := library.Select(target.named)
+		if err != nil {
+			return subAgentTarget{}, err
+		}
+		target.wire, target.offered = library.WireOf(model), model.Efforts
+	}
+	if target.wire == wireKey {
+		target.offered = nil
+	}
+	return target, nil
+}
+
+func (r runtime) subAgentTakes(opts runOpts) func(subagent.Definition) ([]llm.Effort, error) {
+	if r.open == nil {
+		return nil
+	}
+	return func(definition subagent.Definition) ([]llm.Effort, error) {
+		target, err := r.subAgentTarget(opts, definition)
+		return target.offered, err
+	}
+}
+
 func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effort) (turn.SubAgentModel, error) {
 	if r.open == nil {
 		return nil
 	}
 	var told sync.Map
 	return func(definition subagent.Definition, wanted llm.Effort) (turn.SubAgentModel, error) {
+		target, err := r.subAgentTarget(opts, definition)
+		if err != nil {
+			return turn.SubAgentModel{}, err
+		}
 		subAgent := opts
-		named := definition.Model
-		if definition.Name == "" {
-			bound, err := boundSubAgent(opts)
-			if err != nil {
-				return turn.SubAgentModel{}, err
-			}
-			named = bound
-		}
-		asked := cmp.Or(named, r.orchestrator.Slug())
-		offered := r.orchestrator.Efforts
-		if named != "" {
-			library, err := modelLibrary(opts.dir)
-			if err != nil {
-				return turn.SubAgentModel{}, err
-			}
-			model, err := library.Select(named)
-			if err != nil {
-				return turn.SubAgentModel{}, err
-			}
-			subAgent.model, subAgent.wire, offered = named, library.WireOf(model), model.Efforts
-		}
-		if subAgent.wire == wireKey {
-			offered = nil
-		}
+		subAgent.model, subAgent.wire = cmp.Or(target.named, opts.model), target.wire
+		named, offered, asked := target.named, target.offered, cmp.Or(target.named, r.orchestrator.Slug())
 		switch {
 		case wanted != "" && len(offered) == 0:
 			return turn.SubAgentModel{}, fmt.Errorf("effort %s for %s: it sends no reasoning effort, so the level would be dropped without a word", wanted, asked)
@@ -837,7 +861,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	subAgentBase.Instructions, subAgentBase.Memory = "", ""
 	spawner := turn.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagent.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
-	spawner.SubAgents.Open = run.subAgentOpener(opts)
+	spawner.SubAgents.Open, spawner.SubAgents.Takes = run.subAgentOpener(opts), run.subAgentTakes(opts)
 	if opts.agent == "" && memoryOn(dir) {
 		spawner.Remembered = func() (map[string]string, error) {
 			shelves, err := memory.Open(dir)
