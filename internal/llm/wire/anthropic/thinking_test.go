@@ -84,10 +84,10 @@ func TestOpusFiveAsksForSummarizedThinkingOnlyWhenItThinks(t *testing.T) {
 	}
 }
 
-func TestThinkingSummarySettingDecidesTheDisplayField(t *testing.T) {
+func TestThinkingSummarySettingDecidesTheDisplayFieldAndThinkingTokensAreKept(t *testing.T) {
 	for omit, want := range map[bool]string{
 		false: `{"type":"adaptive","display":"summarized"}`,
-		true:  "",
+		true:  `{"type":"adaptive"}`,
 	} {
 		var sent map[string]json.RawMessage
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +98,8 @@ func TestThinkingSummarySettingDecidesTheDisplayField(t *testing.T) {
 				`{"type":"content_block_start","index":0,"content_block":{"type":"text"}}`,
 				`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}`,
 				`{"type":"content_block_stop","index":0}`,
-				`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`,
+				`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":40,"output_tokens_details":{"thinking_tokens":31}}}`,
+				`{"type":"message_delta","delta":{},"usage":{"output_tokens":41}}`,
 				`{"type":"message_stop"}`,
 			} {
 				_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
@@ -113,7 +114,7 @@ func TestThinkingSummarySettingDecidesTheDisplayField(t *testing.T) {
 		if err != nil {
 			t.Fatalf("new wire: %v", err)
 		}
-		_, err = turn.Subscription{Wire: wire, Effort: llm.EffortMedium}.Ask(context.Background(), llm.Request{
+		decision, err := turn.Subscription{Wire: wire, Effort: llm.EffortMedium}.Ask(context.Background(), llm.Request{
 			Messages:            []llm.Message{{Role: llm.RoleUser, Content: "hi"}},
 			OmitThinkingSummary: omit,
 		})
@@ -123,6 +124,9 @@ func TestThinkingSummarySettingDecidesTheDisplayField(t *testing.T) {
 		}
 		if got := string(sent["thinking"]); got != want {
 			t.Fatalf("with omit %v the thinking field is %q, not %q", omit, got, want)
+		}
+		if decision.Usage.ReasoningTokens != 31 {
+			t.Fatalf("with omit %v the decision kept %d thinking tokens, not 31", omit, decision.Usage.ReasoningTokens)
 		}
 	}
 }

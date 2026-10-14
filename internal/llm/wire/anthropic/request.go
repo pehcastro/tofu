@@ -45,8 +45,8 @@ const (
 	historyCacheCommittedMinChars = 4096
 	cacheBreakpointsPerRequest    = 4
 
-	summarizedThinkingMajor = 4
-	summarizedThinkingMinor = 7
+	adaptiveThinkingMajor = 4
+	adaptiveThinkingMinor = 7
 )
 
 type cacheControl struct {
@@ -99,7 +99,7 @@ type wireMetadata struct {
 
 type wireThinking struct {
 	Type    string `json:"type"`
-	Display string `json:"display"`
+	Display string `json:"display,omitempty"`
 }
 
 type wireOutput struct {
@@ -196,7 +196,7 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 		ToolChoice: r.toolChoice(),
 		MaxTokens:  maxTokens,
 		Metadata:   metadata,
-		Thinking:   r.summarizedThinking(),
+		Thinking:   r.adaptiveThinking(),
 		Output:     output,
 		Stream:     true,
 	}); err != nil {
@@ -227,15 +227,18 @@ func (r Request) outputConfig() (*wireOutput, error) {
 	return &wireOutput{Effort: string(r.Effort)}, nil
 }
 
-func (r Request) summarizedThinking() *wireThinking {
+func (r Request) adaptiveThinking() *wireThinking {
 	version := regexp.MustCompile(`^claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?:-|$)`).FindStringSubmatch(r.Model)
-	if r.OmitThinkingSummary || !r.Effort.Thinks() || version == nil {
+	if !r.Effort.Thinks() || version == nil {
 		return nil
 	}
 	major, _ := strconv.Atoi(version[1])
 	minor, _ := strconv.Atoi(version[2])
-	if major < summarizedThinkingMajor || major == summarizedThinkingMajor && minor < summarizedThinkingMinor {
+	if major < adaptiveThinkingMajor || major == adaptiveThinkingMajor && minor < adaptiveThinkingMinor {
 		return nil
+	}
+	if r.OmitThinkingSummary {
+		return &wireThinking{Type: "adaptive"}
 	}
 	return &wireThinking{Type: "adaptive", Display: "summarized"}
 }

@@ -49,7 +49,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		Content:          result.Content,
 		Thinking:         llm.Thinking{Text: result.Thinking, Signature: result.ThinkingSignature},
 		ToolCalls:        result.ToolCalls,
-		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output},
+		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output, ReasoningTokens: result.Usage.Thinking},
 		PromptAccounting: llm.PromptAccountingFor(anthropic.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
 		CacheWriteTokens: result.Usage.CacheWrite,

@@ -31,6 +31,7 @@ type Usage struct {
 	CacheWrite   int
 	CacheWrite5m int
 	CacheWrite1h int
+	Thinking     int
 }
 
 type Result struct {
@@ -87,6 +88,9 @@ type wireUsage struct {
 		FiveMinutes *int `json:"ephemeral_5m_input_tokens"`
 		OneHour     *int `json:"ephemeral_1h_input_tokens"`
 	} `json:"cache_creation"`
+	OutputDetails *struct {
+		Thinking *int `json:"thinking_tokens"`
+	} `json:"output_tokens_details"`
 }
 
 func (u wireUsage) applyTo(usage *Usage) {
@@ -107,6 +111,9 @@ func (u wireUsage) applyTo(usage *Usage) {
 	}
 	if u.Lifetimes != nil && u.Lifetimes.OneHour != nil {
 		usage.CacheWrite1h = *u.Lifetimes.OneHour
+	}
+	if u.OutputDetails != nil && u.OutputDetails.Thinking != nil {
+		usage.Thinking = *u.OutputDetails.Thinking
 	}
 }
 

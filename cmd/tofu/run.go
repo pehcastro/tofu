@@ -155,6 +155,10 @@ func (s summaryOmitted) Ask(ctx context.Context, request llm.Request) (llm.Decis
 	return s.inner.Ask(ctx, request)
 }
 
+func thinkingSummaryOff(dir string, say func(string)) bool {
+	return settingText(dir, settingspkg.ThinkingSummary, say) == settingspkg.ThinkingOmitted
+}
+
 func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
 	if !r.omitThinkingSummary || accounts.Pick == nil || accounts.Next == nil {
 		return accounts
@@ -763,7 +767,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
 	dir := cmp.Or(opts.dir, ".")
-	run.omitThinkingSummary = settingText(dir, settingspkg.ThinkingSummary, run.notify) == settingspkg.ThinkingOmitted
+	run.omitThinkingSummary = thinkingSummaryOff(dir, run.notify)
 	references := map[string]string{}
 	for _, definition := range prompt.subAgents.Defined {
 		for _, reference := range definition.References {
@@ -979,15 +983,16 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 		}
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
+	summaryOff := thinkingSummaryOff(cmp.Or(opts.dir, "."), nil)
 	switch opts.wire {
 	case wireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)
 		return llm.Request{Messages: system, Tools: tools}.Encode(model)
 	case wireCodex, wireMeta:
-		return codex.Request{Model: model, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.effort}.Encode(nil)
+		return codex.Request{Model: model, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.effort, SummaryOff: summaryOff}.Encode(nil)
 	}
 	versions, _ := subFingerprint(opts.dir)
-	return anthropic.Request{Model: model, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode}.Encode(true)
+	return anthropic.Request{Model: model, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode, OmitThinkingSummary: summaryOff}.Encode(true)
 }
 
 func turnTransportConfig() transport.Config {
@@ -1045,6 +1050,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		Tools:        request.Tools,
 		ToolChoice:   request.ToolChoice.OpenAIValue(),
 		Effort:       c.effort,
+		SummaryOff:   request.OmitThinkingSummary,
 		OnThinking:   request.OnThinking,
 		OnRetry:      request.OnRetry,
 	})
