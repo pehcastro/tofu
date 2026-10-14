@@ -2,36 +2,19 @@ use std::env;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use desk_terminal::{Palette, Terminal, TerminalEvent, shells};
+use super::shells::palette;
+use desk_terminal::{Terminal, TerminalEvent, shells};
 use desk_ui::live::ActiveTheme;
-use desk_ui::theme::{ColorToken, Theme};
+use desk_ui::theme::ColorToken;
 use gpui::{
     AnyElement, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, SharedString,
-    Subscription, Task, Window, div, prelude::*, rgb_to_hsla,
+    Subscription, Task, Window, div, prelude::*,
 };
 
 const FRAME_LOG: &str = "DESK_FRAME_LOG";
 const BELL: Duration = Duration::from_millis(450);
 const QUIET: Duration = Duration::from_millis(2000);
 const SLOW_FRAME_MS: f64 = 16.7;
-const ANSI: [ColorToken; 16] = [
-    ColorToken::AnsiBlack,
-    ColorToken::AnsiRed,
-    ColorToken::AnsiGreen,
-    ColorToken::AnsiYellow,
-    ColorToken::AnsiBlue,
-    ColorToken::AnsiMagenta,
-    ColorToken::AnsiCyan,
-    ColorToken::AnsiWhite,
-    ColorToken::AnsiBrightBlack,
-    ColorToken::AnsiBrightRed,
-    ColorToken::AnsiBrightGreen,
-    ColorToken::AnsiBrightYellow,
-    ColorToken::AnsiBrightBlue,
-    ColorToken::AnsiBrightMagenta,
-    ColorToken::AnsiBrightCyan,
-    ColorToken::AnsiBrightWhite,
-];
 
 struct FrameLog {
     output_at: Option<Instant>,
@@ -142,17 +125,6 @@ pub fn mount(project: &Path, number: usize, cx: &mut App) -> Entity<TerminalModu
             _events: events,
         }
     })
-}
-
-fn palette(theme: &Theme) -> Palette {
-    let color = |token| rgb_to_hsla(theme.color(token));
-    Palette {
-        foreground: color(ColorToken::TextBase),
-        background: color(ColorToken::CardsInnerFill),
-        cursor: color(ColorToken::TextStrong),
-        selection: color(ColorToken::Selection),
-        ansi: ANSI.map(color),
-    }
 }
 
 impl FrameLog {

@@ -1,4 +1,5 @@
 mod font;
+mod kept;
 mod keys;
 mod links;
 mod mouse;
@@ -8,12 +9,14 @@ mod pty;
 mod scrollbar;
 pub mod shells;
 
+pub use crate::kept::{Attachment, Kept};
 use crate::keys::{KeyInput, key_input};
 use crate::links::Link;
 use crate::mouse::Cell;
 use crate::paint::{Frame, Look};
 pub use crate::palette::Palette;
-use crate::pty::{Output, Pty};
+use crate::pty::Pty;
+pub use crate::pty::{ByteSink, Output};
 use crate::scrollbar::Scrollback;
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
 use alacritty_terminal::grid::{Dimensions, Scroll};
@@ -65,11 +68,34 @@ pub enum TerminalEvent {
     Bell,
 }
 
+enum Process {
+    Owned(Pty),
+    Attached(Box<dyn ByteSink>),
+}
+
+impl Process {
+    fn send(&self, bytes: Vec<u8>) -> bool {
+        match self {
+            Process::Owned(pty) => pty.send(bytes),
+            Process::Attached(sink) => sink.send(bytes),
+        }
+    }
+
+    fn resize(&self, cols: u16, rows: u16) -> std::result::Result<(), String> {
+        match self {
+            Process::Owned(pty) => pty.resize(cols, rows),
+            Process::Attached(sink) => sink.resize(cols, rows),
+        }
+    }
+}
+
 pub struct Terminal {
     term: Term<Events>,
     parser: Processor,
     events: Events,
-    pty: Option<Pty>,
+    process: Option<Process>,
+    attached: bool,
+    replayed: Option<(usize, Instant)>,
     shell: PathBuf,
     cwd: PathBuf,
     title: Option<SharedString>,
@@ -123,7 +149,9 @@ impl Terminal {
             term: blank_term(grid, events.clone()),
             parser: Processor::new(),
             events,
-            pty: None,
+            process: None,
+            attached: false,
+            replayed: None,
             shell: shells::current(),
             cwd: cwd.to_path_buf(),
             title: None,
@@ -154,6 +182,23 @@ impl Terminal {
         }
     }
 
+    pub fn attach(attachment: Attachment, cx: &mut Context<Self>) -> Self {
+        let Attachment {
+            sink,
+            output,
+            replay,
+        } = attachment;
+        let mut terminal = Terminal::new(Path::new("."), cx);
+        let at = Instant::now();
+        terminal.started = true;
+        terminal.attached = true;
+        terminal.feed(&replay, cx);
+        terminal.replayed = Some((replay.len(), at));
+        terminal.process = Some(Process::Attached(sink));
+        terminal.pump(output, cx);
+        terminal
+    }
+
     pub fn set_palette(&mut self, palette: Palette, cx: &mut Context<Self>) {
         if self.palette != palette {
             self.palette = palette;
@@ -162,7 +207,10 @@ impl Terminal {
     }
 
     pub fn pid(&self) -> Option<u32> {
-        self.pty.as_ref().and_then(Pty::pid)
+        match &self.process {
+            Some(Process::Owned(pty)) => pty.pid(),
+            Some(Process::Attached(_)) | None => None,
+        }
     }
 
     pub fn shell(&self) -> &Path {
@@ -196,27 +244,40 @@ impl Terminal {
     fn start(&mut self, cx: &mut Context<Self>) {
         self.started = true;
         let (cols, rows) = self.grid;
-        match Pty::spawn(&self.shell, &self.cwd, cols, rows) {
+        match Pty::spawn(&self.shell, &[], &self.cwd, (cols, rows)) {
             Ok((pty, output)) => {
                 eprintln!("terminal: pty opened at {cols}x{rows}");
-                self.pty = Some(pty);
+                self.process = Some(Process::Owned(pty));
                 cx.emit(TerminalEvent::Started);
-                self._pump = Some(cx.spawn(async move |this, cx| {
-                    while let Some(batch) = next_batch(&output).await {
-                        if this
-                            .update(cx, |terminal, cx| terminal.receive(batch, cx))
-                            .is_err()
-                        {
-                            return;
-                        }
-                    }
-                }));
+                self.pump(output, cx);
             }
             Err(error) => {
-                self.pty = None;
+                self.process = None;
                 self._pump = None;
                 self.feed(format!("{error}\r\n").as_bytes(), cx);
             }
+        }
+    }
+
+    fn pump(&mut self, output: Receiver<Output>, cx: &mut Context<Self>) {
+        self._pump = Some(cx.spawn(async move |this, cx| {
+            while let Some(batch) = next_batch(&output).await {
+                if this
+                    .update(cx, |terminal, cx| terminal.receive(batch, cx))
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }));
+    }
+
+    fn replay_painted(&mut self) {
+        if let Some((bytes, at)) = self.replayed.take() {
+            eprintln!(
+                "desk: terminal replay {bytes} bytes painted in {} ms",
+                at.elapsed().as_millis()
+            );
         }
     }
 
@@ -226,13 +287,15 @@ impl Terminal {
             match output {
                 Output::Bytes(bytes) => self.parser.advance(&mut self.term, &bytes),
                 Output::Exited(code) => {
-                    self.pty = None;
+                    self.process = None;
                     let shown = code.map_or_else(|| "unknown".to_owned(), |code| code.to_string());
+                    let next = if self.attached {
+                        ""
+                    } else {
+                        ", press Enter for a new shell"
+                    };
                     self.feed(
-                        format!(
-                            "\r\n[shell exited with code {shown}, press Enter for a new shell]"
-                        )
-                        .as_bytes(),
+                        format!("\r\n[shell exited with code {shown}{next}]").as_bytes(),
                         cx,
                     );
                     cx.emit(TerminalEvent::Exited(code));
@@ -349,10 +412,10 @@ impl Terminal {
     }
 
     fn send(&mut self, bytes: Vec<u8>) {
-        if let Some(pty) = &self.pty
-            && !pty.send(bytes)
+        if let Some(process) = &self.process
+            && !process.send(bytes)
         {
-            self.pty = None;
+            self.process = None;
         }
     }
 
@@ -372,8 +435,8 @@ impl Terminal {
             self.grid = (cols, rows);
             self.drawn = None;
             self.term.resize(TermSize::new(cols.into(), rows.into()));
-            if let Some(pty) = &self.pty {
-                match pty.resize(cols, rows) {
+            if let Some(process) = &self.process {
+                match process.resize(cols, rows) {
                     Ok(()) => eprintln!("terminal: grid and pty resized to {cols}x{rows}"),
                     Err(error) => eprintln!("{error}"),
                 }
@@ -457,7 +520,11 @@ impl Terminal {
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if self.started && self.pty.is_none() && event.keystroke.key == "enter" {
+        if self.started
+            && !self.attached
+            && self.process.is_none()
+            && event.keystroke.key == "enter"
+        {
             self.restart(cx);
             return cx.stop_propagation();
         }
@@ -768,7 +835,7 @@ impl EntityInputHandler for Terminal {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !text.is_empty() && self.pty.is_some() {
+        if !text.is_empty() && self.process.is_some() {
             self.type_bytes(text.as_bytes().to_vec(), cx);
             self.redraw(cx);
         }
@@ -812,6 +879,7 @@ impl Render for Terminal {
         let terminal = cx.entity();
         let typed = terminal.clone();
         let dragged = terminal.clone();
+        let painted_by = terminal.clone();
         let focus = self.focus.clone();
         let palette = self.palette;
         let font = px(f32::from(self.font));
@@ -848,6 +916,7 @@ impl Render for Terminal {
                             }
                         });
                         painted.paint(window, cx);
+                        painted_by.update(cx, |terminal, _| terminal.replay_painted());
                     },
                 )
                 .size_full(),

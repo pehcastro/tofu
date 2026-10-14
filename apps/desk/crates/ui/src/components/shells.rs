@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 
 use desk_motion::tokens::{EASE_OUT, HOVER_MS};
 use gpui::{
-    Animation, AnimationExt, AnyElement, App, Div, ElementId, FontWeight, MouseButton, Rgba,
-    SharedString, Stateful, Window, div, prelude::*, px,
+    Animation, AnimationExt, AnyElement, AnyView, App, Div, ElementId, FontWeight, Motion,
+    MouseButton, Rgba, SharedString, Stateful, Window, div, prelude::*, px,
 };
 
 use crate::component::icon;
@@ -37,6 +37,7 @@ const PANEL_PAD_BOTTOM: f32 = 4.0;
 const LIST_WIDTH: f32 = 440.0;
 const LIST_INSET: f32 = 16.0;
 const META_GAP: f32 = 10.0;
+const HELD_HEIGHT: f32 = 320.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShellState {
@@ -138,13 +139,19 @@ pub enum ShellEvent {
 }
 
 type OnShell = Rc<dyn Fn(&ShellEvent, &mut Window, &mut App)>;
-type OnKill = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
+type OnAt = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 
 #[derive(Clone, Copy)]
 enum Ending<'a> {
     Hidden,
     Offered,
-    Asking(&'a OnKill),
+    Asking(&'a OnAt),
+}
+
+enum Hold<'a> {
+    Unavailable,
+    Offered(&'a OnAt),
+    Held(AnyView, &'a OnAt),
 }
 
 #[derive(IntoElement)]
@@ -154,9 +161,11 @@ pub struct Shells {
     active: usize,
     listing: bool,
     on: OnShell,
-    kill: Option<OnKill>,
+    kill: Option<OnAt>,
     asking: Option<usize>,
     traced: Option<Vec<bool>>,
+    take: Option<(Vec<bool>, OnAt)>,
+    held: Option<(usize, AnyView, OnAt)>,
 }
 
 impl Shells {
@@ -176,7 +185,28 @@ impl Shells {
             kill: None,
             asking: None,
             traced: None,
+            take: None,
+            held: None,
         }
+    }
+
+    pub fn on_take_over(
+        mut self,
+        takeable: Vec<bool>,
+        take: impl Fn(&usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.take = Some((takeable, Rc::new(take)));
+        self
+    }
+
+    pub fn held(
+        mut self,
+        at: usize,
+        terminal: AnyView,
+        release: impl Fn(&usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.held = Some((at, terminal, Rc::new(release)));
+        self
     }
 
     pub fn on_kill(mut self, kill: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
@@ -378,13 +408,53 @@ fn panel(
     on: &OnShell,
     ending: Ending<'_>,
     traced: bool,
-) -> Div {
+    hold: Hold<'_>,
+) -> Stateful<Div> {
     let (offered, asked) = match ending {
         Ending::Hidden => (false, None),
         Ending::Offered => (shell.state.endable(), None),
         Ending::Asking(kill) => (false, Some(kill.clone())),
     };
     let wide = fit == Fit::Wide;
+    let group = SharedString::from(format!("{id}-panel-{ix}"));
+    let (hold_action, terminal) = match hold {
+        Hold::Unavailable => (None, None),
+        Hold::Offered(take) => {
+            let take = take.clone();
+            let button = action(
+                format!("{id}-take").into(),
+                "take over",
+                theme,
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    take(&ix, window, cx)
+                },
+            );
+            let shown_on_hover = div()
+                .id(ElementId::Name(format!("{id}-take-fade-{ix}").into()))
+                .flex_none()
+                .opacity(0.0)
+                .group_hover(group.clone(), |shown| shown.opacity(1.0))
+                .transitions(|transitions| {
+                    transitions.opacity(Motion::new(HOVER_MS).with_easing(EASE_OUT))
+                })
+                .child(button);
+            (Some(shown_on_hover.into_any_element()), None)
+        }
+        Hold::Held(terminal, release) => {
+            let release = release.clone();
+            let button = action(
+                format!("{id}-release").into(),
+                "release",
+                theme,
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    release(&ix, window, cx)
+                },
+            );
+            (Some(button), Some(terminal))
+        }
+    };
     let header = div()
         .flex()
         .items_center()
@@ -420,6 +490,7 @@ fn panel(
             theme,
             emit(on, ShellEvent::Open(ix)),
         ))
+        .children(hold_action)
         .children(offered.then(|| {
             action(
                 format!("{id}-kill").into(),
@@ -500,7 +571,24 @@ fn panel(
                 |confirm, t| confirm.opacity(t),
             )
     });
+    let body = match terminal {
+        Some(terminal) => div()
+            .h(px(HELD_HEIGHT))
+            .overflow_hidden()
+            .rounded(px(RADIUS_TAB))
+            .child(terminal)
+            .into_any_element(),
+        None => TermCard::new(
+            ElementId::Name(format!("{id}-term-{ix}").into()),
+            shell.command.clone(),
+            shell.lines.clone(),
+            shell.status(),
+        )
+        .into_any_element(),
+    };
     div()
+        .id(ElementId::Name(group.clone()))
+        .group(group)
         .flex()
         .flex_col()
         .min_w_0()
@@ -509,12 +597,7 @@ fn panel(
         .child(header)
         .child(facts)
         .children(confirm)
-        .child(div().p(px(BADGE_PAD_X)).child(TermCard::new(
-            ElementId::Name(format!("{id}-term-{ix}").into()),
-            shell.command.clone(),
-            shell.lines.clone(),
-            shell.status(),
-        )))
+        .child(div().p(px(BADGE_PAD_X)).child(body))
 }
 
 impl RenderOnce for Shells {
@@ -528,6 +611,8 @@ impl RenderOnce for Shells {
             kill,
             asking,
             traced,
+            take,
+            held,
         } = self;
         let theme = ActiveTheme::theme(cx);
         let width = Width::of(format!("{id}-width"), window, cx);
@@ -602,7 +687,18 @@ impl RenderOnce for Shells {
             let traced = traced
                 .as_ref()
                 .is_none_or(|traced| traced.get(active).copied().unwrap_or(false));
-            panel(&id, active, shell, fit, &theme, &on, ending, traced)
+            let hold = match (&held, &take) {
+                (Some((at, terminal, release)), _) if *at == active => {
+                    Hold::Held(terminal.clone(), release)
+                }
+                (_, Some((takeable, take)))
+                    if shell.state.endable() && takeable.get(active).copied().unwrap_or(false) =>
+                {
+                    Hold::Offered(take)
+                }
+                _ => Hold::Unavailable,
+            };
+            panel(&id, active, shell, fit, &theme, &on, ending, traced, hold)
         });
         div()
             .relative()

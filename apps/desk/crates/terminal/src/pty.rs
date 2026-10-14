@@ -5,6 +5,7 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -16,9 +17,14 @@ const BYTES_LOG_VARIABLE: &str = "DESK_TERMINAL_BYTES";
 const BYTES_LOG_FILE: &str = "terminal-bytes.log";
 const POWERSHELLS: [&str; 2] = ["pwsh", "powershell"];
 
-pub(crate) enum Output {
+pub enum Output {
     Bytes(Vec<u8>),
     Exited(Option<u32>),
+}
+
+pub trait ByteSink {
+    fn send(&self, bytes: Vec<u8>) -> bool;
+    fn resize(&self, cols: u16, rows: u16) -> Result<(), String>;
 }
 
 pub(crate) struct Pty {
@@ -77,16 +83,20 @@ fn log_bytes(log: &mut Option<File>, started: Instant, bytes: &[u8]) {
 impl Pty {
     pub(crate) fn spawn(
         shell: &Path,
+        args: &[&str],
         cwd: &Path,
-        cols: u16,
-        rows: u16,
+        (cols, rows): (u16, u16),
     ) -> Result<(Self, Receiver<Output>), String> {
         let pair = native_pty_system()
             .openpty(size(cols, rows))
             .map_err(|error| format!("could not open a pty: {error:#}"))?;
+        let mut built = command(shell, cwd);
+        for arg in args {
+            built.arg(arg);
+        }
         let mut child = pair
             .slave
-            .spawn_command(command(shell, cwd))
+            .spawn_command(built)
             .map_err(|error| format!("could not start {}: {error:#}", shell.display()))?;
         drop(pair.slave);
         let killer = child.clone_killer();
@@ -155,8 +165,16 @@ impl Pty {
         self.pid
     }
 
+    pub(crate) fn input(&self) -> flume::Sender<Vec<u8>> {
+        self.input.clone()
+    }
+
+    pub(crate) fn alive(&self) -> bool {
+        !self.exited.load(Ordering::Acquire)
+    }
+
     fn kill(&mut self) -> Result<(), String> {
-        if self.exited.load(Ordering::Acquire) {
+        if !self.alive() {
             return Ok(());
         }
         terminated(self.killer.kill())
@@ -170,6 +188,16 @@ impl Pty {
         self.master
             .resize(size(cols, rows))
             .map_err(|error| format!("could not resize the pty: {error:#}"))
+    }
+}
+
+impl ByteSink for Rc<Pty> {
+    fn send(&self, bytes: Vec<u8>) -> bool {
+        Pty::send(self, bytes)
+    }
+
+    fn resize(&self, cols: u16, rows: u16) -> Result<(), String> {
+        Pty::resize(self, cols, rows)
     }
 }
 
