@@ -10,6 +10,7 @@ use gpui::{AnyWindowHandle, App};
 use serde_json::Value;
 
 use super::change::{self, Answered, json};
+use super::workspace::{self, Step};
 use super::{capture, editor};
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
@@ -27,6 +28,7 @@ pub fn answer(
     request: Request,
     window: AnyWindowHandle,
     screens: &[(&'static str, bool)],
+    journal: &mut Vec<Step>,
     cx: &mut App,
 ) -> Reply {
     let Request { id, call } = request;
@@ -55,7 +57,11 @@ pub fn answer(
             "a dialog is open in the desk".to_owned(),
         ));
     }
+    if let Some(changed) = workspace::answer(&call, work.as_ref(), journal, cx) {
+        return changed.map_err(|(kind, message)| fail(kind, message));
+    }
     if let Some(changed) = change::answer(&call, work.as_ref(), cx) {
+        workspace::record(&call, &changed, work.as_ref(), journal, cx);
         return changed.map_err(|(kind, message)| fail(kind, message));
     }
     let routed = match &call {

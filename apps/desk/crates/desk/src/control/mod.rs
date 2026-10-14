@@ -4,6 +4,7 @@ mod dispatch;
 #[cfg(feature = "plugin-draw")]
 mod draw;
 mod editor;
+mod workspace;
 
 use std::io;
 use std::time::{Duration, Instant};
@@ -64,9 +65,11 @@ pub fn serve(
     cx: &mut App,
 ) {
     cx.spawn(async move |cx| {
+        let mut journal = Vec::new();
         while let Ok(Asked { request, reply }) = asked.recv_async().await {
             let verb = dispatch::verb(&request.call);
-            let answer = cx.update(|cx| dispatch::answer(request, window, &screens, cx));
+            let answer =
+                cx.update(|cx| dispatch::answer(request, window, &screens, &mut journal, cx));
             match &answer {
                 Ok(_) => eprintln!("desk: control {verb} ok"),
                 Err(failure) => eprintln!("desk: control {verb} refused {}", failure.error.message),
