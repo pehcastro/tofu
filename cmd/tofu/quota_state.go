@@ -124,6 +124,10 @@ func pollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poll
 		return nil, err
 	}
 	defer func() { _ = store.Close() }()
+	return pollStore(ctx, store, now, kept)
+}
+
+func pollStore(ctx context.Context, store *cred.Store, now func() time.Time, kept *quota.Poller) ([]pollResult, error) {
 	rows, err := store.List()
 	if err != nil {
 		return nil, err

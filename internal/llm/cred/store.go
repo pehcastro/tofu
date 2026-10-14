@@ -116,6 +116,10 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+func (s *Store) Keys() (map[string]string, error) {
+	return sys.ReadStoredKeys(s.db)
+}
+
 func (s *Store) Save(credential Credential, now time.Time) error {
 	data, err := json.Marshal(credential)
 	if err != nil {

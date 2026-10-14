@@ -16,7 +16,7 @@ const promptHistoryName = "prompts.jsonl"
 
 type PromptHistory struct {
 	path   string
-	redact sys.KeyRedactor
+	redact *sys.KeyRedactor
 	newest string
 }
 
@@ -25,7 +25,7 @@ type promptLine struct {
 }
 
 func OpenPromptHistory(dir string) *PromptHistory {
-	return &PromptHistory{path: filepath.Join(dir, promptHistoryName), redact: sys.LoadKeyRedactor()}
+	return &PromptHistory{path: filepath.Join(dir, promptHistoryName)}
 }
 
 func encodedPrompt(prompt string) ([]byte, error) {
@@ -34,6 +34,10 @@ func encodedPrompt(prompt string) ([]byte, error) {
 }
 
 func (h *PromptHistory) Add(prompt string) error {
+	if h.redact == nil {
+		loaded := sys.LoadKeyRedactor()
+		h.redact = &loaded
+	}
 	prompt = h.redact.Redact(prompt)
 	if prompt == "" || prompt == h.newest || len(prompt) > konst.PromptHistoryEntryBytes {
 		return nil

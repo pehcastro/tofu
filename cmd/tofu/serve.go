@@ -120,7 +120,9 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			polled = nil
 		}
 	} else {
-		stopKeeping = keepAccountsAlive(func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) })
+		held := holdStore()
+		defer held.close()
+		stopKeeping = keepAccountsAlive(held, func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) })
 	}
 	launch := launchOf(dir, sessionResume{}, true)
 	say := func(line string) {
@@ -322,8 +324,10 @@ func serveLedger(p host.LedgerParams) (host.LedgerReport, error) {
 }
 
 func serveSetup() []host.Requirement {
+	held := holdStore()
+	defer held.close()
 	var steps []host.Requirement
-	for _, needed := range appRequirements() {
+	for _, needed := range held.requirements() {
 		step := host.Requirement{Step: needed.Step, What: needed.What, Fix: needed.Fix, Done: needed.Done}
 		for _, choice := range needed.Choices {
 			step.Choices = append(step.Choices, host.RequirementChoice{Label: choice.Label, Key: choice.Key})
@@ -359,8 +363,10 @@ func wireSources() map[string]string {
 }
 
 func signedInWires() []string {
+	held := holdStore()
+	defer held.close()
 	var names []string
-	for _, wire := range appWires() {
+	for _, wire := range held.wires() {
 		names = append(names, wire.Name)
 	}
 	return names

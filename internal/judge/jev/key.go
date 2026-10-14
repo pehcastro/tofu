@@ -30,21 +30,37 @@ const (
 	TypeSafeVariable   = sys.TypeSafeKeyName
 )
 
+type Keyring struct {
+	Stored  map[string]string
+	Path    string
+	ReadErr error
+}
+
+func ReadKeyring() Keyring {
+	stored, err := sys.StoredKeys()
+	path, _ := sys.CredentialStorePath()
+	return Keyring{Stored: stored, Path: path, ReadErr: err}
+}
+
 func Key(envPath string) (string, error) {
 	return KeyFor(envPath, OpenRouterVariable)
 }
 
 func KeyFor(envPath, variable string) (string, error) {
-	value, _, err := find(envPath, variable)
-	return value, err
+	return ReadKeyring().KeyFor(envPath, variable)
 }
 
 func Locate(envPath string) (Located, error) {
-	return LocateFor(envPath, OpenRouterVariable)
+	return ReadKeyring().LocateFor(envPath, OpenRouterVariable)
 }
 
-func LocateFor(envPath, variable string) (Located, error) {
-	value, located, err := find(envPath, variable)
+func (k Keyring) KeyFor(envPath, variable string) (string, error) {
+	value, _, err := k.find(envPath, variable)
+	return value, err
+}
+
+func (k Keyring) LocateFor(envPath, variable string) (Located, error) {
+	value, located, err := k.find(envPath, variable)
 	located.Length = len(value)
 	return located, err
 }
@@ -73,14 +89,12 @@ func noKey(name, path string, why Why, cause error, format string, args ...any) 
 	return "", Located{Name: name, Source: SourceMissing, Path: path}, MissingKey{Why: why, wrapped: failure}
 }
 
-func find(envPath, name string) (string, Located, error) {
-	stored, err := sys.StoredKeys()
-	if err != nil {
-		return noKey(name, "", WhyStoreUnreadable, err, "reading the credential store")
+func (k Keyring) find(envPath, name string) (string, Located, error) {
+	if k.ReadErr != nil {
+		return noKey(name, "", WhyStoreUnreadable, k.ReadErr, "reading the credential store")
 	}
-	if value := stored[name]; value != "" {
-		path, _ := sys.CredentialStorePath()
-		return value, Located{Name: name, Source: SourceDatabase, Path: path}, nil
+	if value := k.Stored[name]; value != "" {
+		return value, Located{Name: name, Source: SourceDatabase, Path: k.Path}, nil
 	}
 	hidden := sys.CredentialsHiddenFromTests()
 	value := strings.TrimSpace(os.Getenv(name))

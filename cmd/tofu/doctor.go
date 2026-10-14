@@ -101,7 +101,7 @@ func doctorState(now time.Time) doctorReport {
 	if err != nil {
 		root = "."
 	}
-	located, _ := locateGateKey()
+	located, _ := locateGateKey(jev.ReadKeyring())
 	library, rules := readLibrary()
 	for i, point := range rules {
 		if point.Point == shellSiftPoint {
@@ -163,8 +163,10 @@ func shellSiftRule(point doctorRule) doctorRule {
 }
 
 func doctorBlockers() []doctorBlocker {
+	held := holdStore()
+	defer held.close()
 	var blockers []doctorBlocker
-	for _, blocker := range startBlockers() {
+	for _, blocker := range held.startBlockers() {
 		blockers = append(blockers, doctorBlocker{Label: blocker.label, What: blocker.what, Command: blocker.command})
 	}
 	return blockers

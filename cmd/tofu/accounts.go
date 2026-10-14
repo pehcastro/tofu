@@ -14,7 +14,6 @@ import (
 	"tofu/interface/tui/frame"
 	"tofu/internal/host"
 	"tofu/internal/judge/jev"
-	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -308,30 +307,16 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
 }
 
-func keepAccountsAlive(note func(string)) (stop func()) {
+func keepAccountsAlive(held heldStore, note func(string)) (stop func()) {
+	if held.err != nil {
+		note("signed-in accounts are not kept alive: " + held.err.Error())
+		return func() {}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		waiting := time.NewTicker(konst.CredSweepSeconds * time.Second)
-		defer waiting.Stop()
-		for {
-			store, err := openStoredCredentials()
-			if err != nil {
-				note("signed-in accounts are not kept alive: " + err.Error())
-				return
-			}
-			if store != nil {
-				cred.NewKeeper(store, note).Run(ctx)
-				_ = store.Close()
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-waiting.C:
-			}
-		}
+		cred.NewKeeper(held.store, note).Run(ctx)
 	}()
 	return func() {
 		cancel()

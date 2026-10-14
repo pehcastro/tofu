@@ -200,7 +200,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 
 func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *testing.T) {
 	_, project := metaHome(t)
-	if wires := keyWires(); len(wires) != 0 {
+	if wires := keyWires(heldForTest(t).keys()); len(wires) != 0 {
 		t.Errorf("with no meta key the app lists %+v", wires)
 	}
 	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
@@ -223,7 +223,7 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if opts := pickedOpts(project, host.Turn{Task: "say ok", Pick: host.Pick{Wire: wireSubscription}}, 1); opts.wire != wireMeta || opts.model != "meta/muse-spark-1.3-contributor" {
 		t.Errorf("the app runs a bound meta orchestrator on wire %q model %q", opts.wire, opts.model)
 	}
-	wires := keyWires()
+	wires := keyWires(heldForTest(t).keys())
 	if len(wires) != 1 || wires[0].Name != wireMeta || wires[0].Model != "muse-spark-1.3" {
 		t.Errorf("with a meta key the app lists %+v, want the meta wire on muse-spark-1.3", wires)
 	}

@@ -122,7 +122,9 @@ func modelsVerb(args []string, out, errOut io.Writer) int {
 		}
 	}
 	if reload {
-		report, err := reloadSignedIn(context.Background())
+		held := holdStore()
+		defer held.close()
+		report, err := reloadSignedIn(context.Background(), held)
 		code := showReload(out, errOut, asJSON, report, err)
 		stampReload(code)
 		return code
@@ -326,21 +328,16 @@ func failedSource(s reloadSource, what string, err error) reloadSource {
 	return s
 }
 
-func reloadAccounts(ctx context.Context, out io.Writer) int {
-	report, err := reloadSignedIn(ctx)
+func (h heldStore) reload(ctx context.Context, out io.Writer) int {
+	report, err := reloadSignedIn(ctx, h)
 	return showReload(out, out, false, report, err)
 }
 
-func reloadSignedIn(ctx context.Context) (modelReload, error) {
-	path, err := cred.Path()
-	var store *cred.Store
-	if err == nil {
-		store, err = cred.Open(path)
+func reloadSignedIn(ctx context.Context, held heldStore) (modelReload, error) {
+	if held.err != nil {
+		return modelReload{}, held.err
 	}
-	if err != nil {
-		return modelReload{}, err
-	}
-	defer func() { _ = store.Close() }()
+	store := held.store
 	client, err := reloadClient()
 	if err != nil {
 		return modelReload{}, err

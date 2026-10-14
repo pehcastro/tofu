@@ -213,6 +213,10 @@ func StoredKeys() (map[string]string, error) {
 		return nil, err
 	}
 	defer func() { _ = db.Close() }()
+	return ReadStoredKeys(db)
+}
+
+func ReadStoredKeys(db *sql.DB) (map[string]string, error) {
 	rows, err := db.Query(`SELECT name, value FROM api_keys`)
 	if err != nil {
 		return nil, err

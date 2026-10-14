@@ -127,6 +127,10 @@ func newJevClient(concurrency int) (*jev.Client, error) {
 }
 
 func boundClassifier() (models.Model, error) {
+	return classifierFrom(jev.ReadKeyring())
+}
+
+func classifierFrom(keys jev.Keyring) (models.Model, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return models.Model{}, err
@@ -136,15 +140,11 @@ func boundClassifier() (models.Model, error) {
 	if err != nil && !errors.As(err, &broken) {
 		return models.Model{}, err
 	}
-	return loaded.Classifier(jevKeys())
-}
-
-func jevKeys() map[string]string {
-	keys := map[string]string{}
+	found := map[string]string{}
 	for _, provider := range []models.Provider{models.OpenRouter, models.TypeSafe} {
-		keys[provider.KeyName()], _ = jev.KeyFor(sys.CredentialFileName, provider.KeyName())
+		found[provider.KeyName()], _ = keys.KeyFor(sys.CredentialFileName, provider.KeyName())
 	}
-	return keys
+	return loaded.Classifier(found)
 }
 
 func failoverOf(provider models.Provider) models.Provider {
@@ -155,7 +155,8 @@ func failoverOf(provider models.Provider) models.Provider {
 }
 
 func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	classifier, err := boundClassifier()
+	keys := jev.ReadKeyring()
+	classifier, err := classifierFrom(keys)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +166,7 @@ func jevClientOn(key string, concurrency int) (*jev.Client, error) {
 	}
 	config := jev.Config{Wire: primary, OnFailover: recordFailover}
 	other := failoverOf(classifier.Provider)
-	if otherKey, keyErr := jev.KeyFor(sys.CredentialFileName, other.KeyName()); keyErr == nil {
+	if otherKey, keyErr := keys.KeyFor(sys.CredentialFileName, other.KeyName()); keyErr == nil {
 		if config.Fallback, err = jevWire(other, otherKey, concurrency); err != nil {
 			return nil, err
 		}
@@ -204,11 +205,15 @@ func jevWire(provider models.Provider, key string, concurrency int) (*jevwire.Wi
 }
 
 func gateKey() (string, error) {
-	classifier, err := boundClassifier()
+	return gateKeyFrom(jev.ReadKeyring())
+}
+
+func gateKeyFrom(keys jev.Keyring) (string, error) {
+	classifier, err := classifierFrom(keys)
 	if err != nil {
 		return "", err
 	}
-	return jev.KeyFor(sys.CredentialFileName, classifier.Provider.KeyName())
+	return keys.KeyFor(sys.CredentialFileName, classifier.Provider.KeyName())
 }
 
 const jevFailoverFile = "jev-failover.json"

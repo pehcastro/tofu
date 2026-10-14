@@ -117,6 +117,13 @@ func TestBareTofuWithoutATerminalSaysSo(t *testing.T) {
 
 const gateKeyForTests = "sk-or-v1-000000000000000000Q9W4"
 
+func heldForTest(t *testing.T) heldStore {
+	t.Helper()
+	held := holdStore()
+	t.Cleanup(held.close)
+	return held
+}
+
 func setupScreen(t *testing.T, required []tui.Requirement) string {
 	t.Helper()
 	app := tui.New(tui.Options{Repo: "scratch", Requirements: required})
@@ -131,7 +138,7 @@ func setupScreen(t *testing.T, required []tui.Requirement) string {
 
 func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	emptyHome(t)
-	required := appRequirements()
+	required := heldForTest(t).requirements()
 	if len(required) != 2 || required[0].Done != "" || required[1].Done != "" {
 		t.Fatalf("requirements %+v, want two steps, neither done", required)
 	}
@@ -147,11 +154,11 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 	t.Log("\n" + setupScreen(t, required))
 
 	storeGateKey(t, gateKeyForTests)
-	left := appRequirements()
+	left := heldForTest(t).requirements()
 	if left[0].Done != "" || !strings.HasSuffix(left[1].Done, "····Q9W4") {
 		t.Fatalf("after the key was stored the steps are %+v, want step 2 done by the key's last four", left)
 	}
-	if blockers := startBlockers(); len(blockers) != 1 || blockers[0].label != string(cred.ClaudeSub) {
+	if blockers := heldForTest(t).startBlockers(); len(blockers) != 1 || blockers[0].label != string(cred.ClaudeSub) {
 		t.Fatalf("doctor's blockers are %+v, want the language model step alone", blockers)
 	}
 	t.Log("\n" + setupScreen(t, left))
@@ -159,11 +166,11 @@ func TestSetupAsksForBothLoginsAndTheSecondOneStoresTheKey(t *testing.T) {
 
 func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 	emptyHome(t)
-	if wires := appWires(); len(wires) != 0 {
+	if wires := heldForTest(t).wires(); len(wires) != 0 {
 		t.Fatalf("wires %+v with nothing signed in", wires)
 	}
 	storeCredential(t, cred.CodexSub)
-	codexAlone := appWires()
+	codexAlone := heldForTest(t).wires()
 	if len(codexAlone) != 1 || codexAlone[0].Name != "codex" || codexAlone[0].Model != "gpt-5.6-sol" {
 		t.Fatalf("wires %+v with only codex signed in, want codex and its default model alone", codexAlone)
 	}
@@ -171,7 +178,7 @@ func TestAWireWithNoCredentialIsNeverOffered(t *testing.T) {
 		t.Fatalf("the codex wire reports provider %q, want codex-sub, the subscription form the frame header composes", codexAlone[0].Provider)
 	}
 	storeCredential(t, cred.ClaudeSub)
-	both := appWires()
+	both := heldForTest(t).wires()
 	if len(both) != 2 || both[0].Name != "anthropic" || both[0].Model != "claude-opus-5" || both[1].Name != "codex" {
 		t.Fatalf("wires %+v with both signed in", both)
 	}
@@ -185,7 +192,7 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 	if key, err := jev.Key("../../.env"); err == nil {
 		t.Setenv("OPENROUTER_KEY", key)
 	}
-	offered := appWires()
+	offered := heldForTest(t).wires()
 	if len(offered) != 2 {
 		t.Fatalf("wires %+v, want both subscriptions signed in", offered)
 	}
@@ -196,11 +203,11 @@ func TestLiveAppRunsATurnOnEachWire(t *testing.T) {
 				Repo:   filepath.Base(dir),
 				Branch: "scratch",
 				Wires:  func() []tui.Wire { return []tui.Wire{wire} },
-				Quota:  appQuota,
+				Quota:  heldForTest(t).quota,
 			})
 			app.Init()
 			app.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-			app.Update(appQuota())
+			app.Update(heldForTest(t).quota())
 
 			task := "create notes.txt holding the single word ready, then read it back and say what it holds"
 			app.Update(tui.Event{Kind: tui.EventText, Text: task})
@@ -451,7 +458,7 @@ func TestSettingsNamesEveryProviderAndTheSourceThatDecidedIt(t *testing.T) {
 	storeCredential(t, cred.CodexSub)
 	storeGateKey(t, gateKeyForTests)
 
-	providers := appProviders()
+	providers := heldForTest(t).providers()
 	if len(providers) != 4 {
 		t.Fatalf("providers %+v, want four rows", providers)
 	}
@@ -475,7 +482,7 @@ func TestProvidersHoldNoMoreOfTheKeyThanItsTail(t *testing.T) {
 	storeGateKey(t, key)
 
 	var held string
-	for _, provider := range appProviders() {
+	for _, provider := range heldForTest(t).providers() {
 		held += provider.Name + provider.State + provider.Key + provider.Fix + provider.Source
 	}
 	if !strings.Contains(held, key[len(key)-4:]) {
@@ -497,7 +504,7 @@ func TestAProviderThatCannotBeReadSaysSo(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("OPENROUTER_KEY", "")
 
-	providers := appProviders()
+	providers := heldForTest(t).providers()
 	if len(providers) != 4 {
 		t.Fatalf("providers %+v, want four rows", providers)
 	}

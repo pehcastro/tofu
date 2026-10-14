@@ -97,13 +97,13 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	return launch
 }
 
-func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tui.Options {
+func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, held heldStore) tui.Options {
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, quota: wiring.quota, tabs: launch.tabs, places: places}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted()})
 	notes := append([]string{launch.note}, troubles...)
-	if _, err := gateKey(); err != nil {
+	if _, err := gateKeyFrom(held.keys()); err != nil {
 		notes = append(notes, gateOffNote)
 	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
@@ -138,7 +138,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch) tu
 		SaveKey:      storeKeyFor,
 		Wires:        wiring.wires,
 		Models:       func() (models.Library, error) { return modelLibrary(dir) },
-		Providers:    appProviders(),
+		Providers:    held.providers(),
 		Quota:        wiring.quota,
 		Settings:     settingsStore,
 		Reload:       appReload(dir),
@@ -258,14 +258,16 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 		return exitVerdict
 	}
 	stopRestoring := restoring(out, resumed)
-	live := appWiring{open: openAppWire, wires: appWires, blockers: appRequirements, quota: appQuota, reload: reloadAccounts}
+	held := holdStore()
+	defer held.close()
+	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
-	stopKeeping := keepAccountsAlive(func(string) {})
+	stopKeeping := keepAccountsAlive(held, func(string) {})
 	var identity sync.WaitGroup
 	var identityErr error
 	identity.Go(func() { identityErr = sys.RecordIdentity(dir) })
-	err = tui.Run(appOptions(dir, runOpts{}, live, launch))
+	err = tui.Run(appOptions(dir, runOpts{}, live, launch, held))
 	stopKeeping()
 	identity.Wait()
 	if identityErr != nil {
@@ -330,20 +332,14 @@ type subscriptionSource struct {
 	wire   string
 }
 
-func appWires() []tui.Wire {
-	path, err := cred.Path()
-	if err != nil {
+func (h heldStore) wires() []tui.Wire {
+	if h.err != nil {
 		return nil
 	}
-	store, err := cred.Open(path)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = store.Close() }()
 	now := time.Now()
 	var wires []tui.Wire
 	for _, known := range []subscriptionSource{{cred.ClaudeSub, wireSubscription}, {cred.CodexSub, wireCodex}} {
-		row, present, err := store.RowAt(known.source, now)
+		row, present, err := h.store.RowAt(known.source, now)
 		if err != nil || !present || row.Unusable(now) != "" {
 			continue
 		}
@@ -358,11 +354,11 @@ func appWires() []tui.Wire {
 			Efforts:  wireEfforts(known.wire),
 		})
 	}
-	return append(wires, keyWires()...)
+	return append(wires, keyWires(h.keys())...)
 }
 
-func keyWires() []tui.Wire {
-	if _, err := jev.KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
+func keyWires(keys jev.Keyring) []tui.Wire {
+	if _, err := keys.KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
 		return nil
 	}
 	library, err := modelLibrary("")
@@ -385,7 +381,7 @@ type startStep struct {
 	choices []tui.Choice
 }
 
-func startSteps() []startStep {
+func (h heldStore) startSteps() []startStep {
 	model := startStep{
 		label:   string(cred.ClaudeSub),
 		step:    modelStep,
@@ -397,7 +393,7 @@ func startSteps() []startStep {
 			{Label: "Meta API key", Key: sys.MetaMuseKeyName},
 		},
 	}
-	if wires := appWires(); len(wires) > 0 {
+	if wires := h.wires(); len(wires) > 0 {
 		model.done = wires[0].Provider + " · " + wires[0].Model
 	}
 	classifier := startStep{
@@ -410,19 +406,20 @@ func startSteps() []startStep {
 			{Label: "TypeSafe key", Key: sys.TypeSafeKeyName},
 		},
 	}
-	if key, err := gateKey(); err == nil {
-		bound, _ := boundClassifier()
+	keys := h.keys()
+	if key, err := gateKeyFrom(keys); err == nil {
+		bound, _ := classifierFrom(keys)
 		classifier.done = bound.Provider.Display() + " key " + widget.Mask(key)
 	}
 	return []startStep{model, classifier}
 }
 
-func startBlockers() []startStep {
-	return slices.DeleteFunc(startSteps(), func(step startStep) bool { return step.done != "" })
+func (h heldStore) startBlockers() []startStep {
+	return slices.DeleteFunc(h.startSteps(), func(step startStep) bool { return step.done != "" })
 }
 
-func appRequirements() []tui.Requirement {
-	steps := startSteps()
+func (h heldStore) requirements() []tui.Requirement {
+	steps := h.startSteps()
 	needed := make([]tui.Requirement, 0, len(steps))
 	for _, step := range steps {
 		needed = append(needed, tui.Requirement{Step: step.step, What: step.what, Fix: step.command, Done: step.done, Choices: step.choices})
@@ -430,31 +427,23 @@ func appRequirements() []tui.Requirement {
 	return needed
 }
 
-func appProviders() []settings.Provider {
-	path, err := cred.Path()
-	var store *cred.Store
-	if err == nil {
-		store, err = cred.Open(path)
-	}
-	if store != nil {
-		defer func() { _ = store.Close() }()
-	}
+func (h heldStore) providers() []settings.Provider {
 	return []settings.Provider{
-		subscriptionProvider(cred.ClaudeSub, store, path, err),
-		openRouterProvider(),
+		h.subscriptionProvider(cred.ClaudeSub),
+		openRouterProvider(h.keys()),
 		jevProvider(),
-		subscriptionProvider(cred.CodexSub, store, path, err),
+		h.subscriptionProvider(cred.CodexSub),
 	}
 }
 
-func subscriptionProvider(provider cred.Provider, store *cred.Store, path string, openErr error) settings.Provider {
-	row := settings.Provider{Name: string(provider), Source: path}
-	if openErr != nil {
-		row.Fix = unreadableSource + openErr.Error()
+func (h heldStore) subscriptionProvider(provider cred.Provider) settings.Provider {
+	row := settings.Provider{Name: string(provider), Source: h.path}
+	if h.err != nil {
+		row.Fix = unreadableSource + h.err.Error()
 		return row
 	}
 	now := time.Now()
-	stored, present, err := store.RowAt(provider, now)
+	stored, present, err := h.store.RowAt(provider, now)
 	switch {
 	case err != nil:
 		row.Fix = unreadableSource + err.Error()
@@ -468,13 +457,13 @@ func subscriptionProvider(provider cred.Provider, store *cred.Store, path string
 	return row
 }
 
-func openRouterProvider() settings.Provider {
-	located, err := locateGateKey()
+func openRouterProvider(keys jev.Keyring) settings.Provider {
+	located, err := locateGateKey(keys)
 	row := settings.Provider{Name: openRouterName, Source: located.Path}
 	if located.Source == jev.SourceEnvironment {
 		row.Source = located.Name + " in the environment"
 	}
-	key, keyErr := jev.Key(sys.CredentialFileName)
+	key, keyErr := keys.KeyFor(sys.CredentialFileName, jev.OpenRouterVariable)
 	if err != nil || keyErr != nil {
 		row.Fix = openRouterFix
 		return row
@@ -565,8 +554,11 @@ func appKillShell(registry *shell.Registry, openErr error) func(string) error {
 	}
 }
 
-func appQuota() []frame.Quota {
-	return quotaFrames(pollCredentials(context.Background(), time.Now, nil))
+func (h heldStore) quota() []frame.Quota {
+	if h.err != nil {
+		return nil
+	}
+	return quotaFrames(pollStore(context.Background(), h.store, time.Now, nil))
 }
 
 func quotaFrames(results []pollResult, err error) []frame.Quota {

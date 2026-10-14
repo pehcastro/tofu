@@ -25,12 +25,13 @@ import (
 
 func firstRunApp(t *testing.T, width, height int) *tui.App {
 	t.Helper()
+	held := heldForTest(t)
 	app := tui.New(tui.Options{
 		Repo:         "scratch",
 		Branch:       "develop",
-		Requirements: appRequirements(),
-		Recheck:      appRequirements,
-		Providers:    appProviders(),
+		Requirements: held.requirements(),
+		Recheck:      held.requirements,
+		Providers:    held.providers(),
 	})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
@@ -116,7 +117,8 @@ func drive(t *testing.T, app *tui.App, cmd tea.Cmd) {
 
 func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 	scratchProject(t)
-	app := tui.New(tui.Options{Repo: "scratch", Requirements: appRequirements(), Recheck: appRequirements})
+	held := heldForTest(t)
+	app := tui.New(tui.Options{Repo: "scratch", Requirements: held.requirements(), Recheck: held.requirements})
 	start := app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if !strings.Contains(plainFrame(app), noCredential) {
@@ -152,7 +154,7 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 		{"the credential too", func() { storeCredential(t, cred.ClaudeSub) }},
 	} {
 		step.store()
-		required := slices.DeleteFunc(appRequirements(), func(step tui.Requirement) bool { return step.Done != "" })
+		required := slices.DeleteFunc(heldForTest(t).requirements(), func(step tui.Requirement) bool { return step.Done != "" })
 		report := doctorState(time.Now())
 		appReady, doctorSaysReady := len(required) == 0, report.Verdict == doctorReady
 		t.Logf("%s: the app lists %d blockers, doctor says %s", step.what, len(required), report.Verdict)

@@ -332,6 +332,35 @@ func openStoredCredentials() (*cred.Store, error) {
 	return cred.Open(path)
 }
 
+type heldStore struct {
+	store *cred.Store
+	path  string
+	err   error
+}
+
+func holdStore() heldStore {
+	path, err := cred.Path()
+	if err != nil {
+		return heldStore{err: err}
+	}
+	store, err := cred.Open(path)
+	return heldStore{store: store, path: path, err: err}
+}
+
+func (h heldStore) close() {
+	if h.store != nil {
+		_ = h.store.Close()
+	}
+}
+
+func (h heldStore) keys() jev.Keyring {
+	if h.err != nil {
+		return jev.ReadKeyring()
+	}
+	stored, err := h.store.Keys()
+	return jev.Keyring{Stored: stored, Path: h.path, ReadErr: err}
+}
+
 func maskedAccount(identity cred.Identity) string {
 	account := cmp.Or(identity.Email, identity.AccountID)
 	if account == "" {
@@ -507,12 +536,12 @@ func reachesJev(ctx context.Context, provider models.Provider, key string) error
 	return err
 }
 
-func locateGateKey() (jev.Located, error) {
-	classifier, err := boundClassifier()
+func locateGateKey(keys jev.Keyring) (jev.Located, error) {
+	classifier, err := classifierFrom(keys)
 	if err != nil {
 		return jev.Located{}, err
 	}
-	return jev.LocateFor(sys.CredentialFileName, classifier.Provider.KeyName())
+	return keys.LocateFor(sys.CredentialFileName, classifier.Provider.KeyName())
 }
 
 func promptPaste(in io.Reader, prompts io.Writer) (string, error) {

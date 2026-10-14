@@ -467,9 +467,9 @@ type quotaReading struct {
 	ResetsIn string `json:"resetsIn"`
 }
 
-func readQuotas(path string) (func() []frame.Quota, error) {
+func readQuotas(path string, held heldStore) (func() []frame.Quota, error) {
 	if path == "" {
-		return appQuota, nil
+		return held.quota, nil
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -501,7 +501,7 @@ func readQuotas(path string) (func() []frame.Quota, error) {
 	}, nil
 }
 
-func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, quotas func() []frame.Quota) *tui.App {
+func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -531,7 +531,7 @@ func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, quo
 		},
 		quota: quotas,
 	}
-	return tui.New(appOptions(dir, plan.arms, recorded, launch))
+	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
 
 func readScript(path string, in io.Reader) ([]filmstrip.Step, error) {
@@ -740,7 +740,9 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
-	quotas, err := readQuotas(plan.quota)
+	held := holdStore()
+	defer held.close()
+	quotas, err := readQuotas(plan.quota, held)
 	if err != nil {
 		return driveFail(errOut, err)
 	}
@@ -750,7 +752,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, quotas), plan.width, plan.height)
+	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, held, quotas), plan.width, plan.height)
 	defer driver.Close()
 	defer (*launch.release)()
 	defer func() {
