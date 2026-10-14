@@ -180,6 +180,31 @@ type SpawnTool struct {
 	warmups        map[string]*warmup
 	naming         *namingOrder
 	plans          map[string]agentPlan
+	built          *builtOncePerTurn
+}
+
+type builtOncePerTurn struct {
+	offer       sync.Once
+	effort      map[string]any
+	agent       map[string]any
+	tools       sync.Once
+	definitions []llm.Tool
+}
+
+func (b *builtOncePerTurn) offered(s SubAgents) (effort, agent map[string]any) {
+	b.offer.Do(func() {
+		b.effort = s.effortProperty()
+		if names := s.enabledNames(); len(names) > 0 {
+			b.agent = map[string]any{"type": "string", "enum": names,
+				"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
+		}
+	})
+	return b.effort, b.agent
+}
+
+func (b *builtOncePerTurn) defined(tools Registry) []llm.Tool {
+	b.tools.Do(func() { b.definitions = tools.Definitions() })
+	return b.definitions
 }
 
 type agentPlan struct {
@@ -241,7 +266,7 @@ func (t *spawnTree) retain(rows []Row) {
 }
 
 func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
-	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}}
+	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}}
 }
 
 func (t *SpawnTool) Name() string { return "spawn" }
@@ -300,12 +325,12 @@ func (t *SpawnTool) Definition() llm.Tool {
 	if t.base.Board != nil {
 		properties["ticket"] = map[string]any{"type": "string", "description": "the board ticket this sub-agent works, such as DEMO-2: its owns become the sub-agent's paths and owns given here are ignored"}
 	}
-	if effort, offered := t.SubAgents.effortProperty(); offered {
+	effort, agent := t.built.offered(t.SubAgents)
+	if effort != nil {
 		properties["effort"] = effort
 	}
-	if names := t.SubAgents.enabledNames(); len(names) > 0 {
-		properties["agent"] = map[string]any{"type": "string", "enum": names,
-			"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
+	if agent != nil {
+		properties["agent"] = agent
 	}
 	return llm.Tool{
 		Name: "spawn",
@@ -566,19 +591,24 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	var owned []Tool
 	var plan agentPlan
-	for _, tool := range t.base.Tools.tools {
+	defined := t.built.defined(t.base.Tools)
+	for i, tool := range t.base.Tools.tools {
+		definition := defined[i]
 		if own, isPlan := t.ownPlan(held.agent.ID, tool); isPlan {
 			tool, plan = own.tool, own
+			definition = tool.Definition()
 		}
 		switch {
 		case !offered(tool.Name()) && !strings.HasPrefix(tool.Name(), "scratch_"):
 			continue
 		case tool.Name() == "write" || tool.Name() == "edit":
 			tool = ownedTool{tool: tool, boundary: held.boundary}
+			definition = tool.Definition()
 		case tool.Name() == "bash":
 			tool = ownedShell{tool: tool, boundary: held.boundary}
+			definition = tool.Definition()
 		}
-		owned = append(owned, watchedTool{tool: tool, held: held})
+		owned = append(owned, watchedTool{tool: tool, held: held, definition: definition})
 	}
 	if held.agent.Ticket != "" && t.base.Board != nil {
 		if ticketTools, err := t.base.TicketTools(*t.base.Board, t.ticketActor(held.agent.Ticket)); err == nil {
@@ -587,14 +617,15 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: func() SubAgentLimits { return limits }, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
-			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree})
+			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built})
 	}
+	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
 	subAgent := t.base
 	subAgent.Memory = ""
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
 	}
-	subAgent.Tools = claimedTools(NewRegistry(append(owned, watchedTool{tool: askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}, held: held})...), t.base.Sessions, t.base.Session)
+	subAgent.Tools = claimedTools(NewRegistry(append(owned, watchedTool{tool: ask, held: held, definition: ask.Definition()})...), t.base.Sessions, t.base.Session)
 	subAgent.Caps.MaxSteps, subAgent.Caps.MaxForks = cmp.Or(subAgent.Caps.MaxSteps, konst.SubAgentMaxSteps), konst.SubAgentMaxForks
 	subAgent.Caps.WallClock = cmp.Or(limits.WallClock, konst.SubAgentWallClockSeconds*time.Second)
 	held.kept.Lock()

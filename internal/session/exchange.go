@@ -64,7 +64,10 @@ func (l *Log) Keep(value any) (string, error) {
 }
 
 func (l *Log) keep(raw []byte) (string, error) {
-	masked := []byte(l.redact.Redact(string(raw)))
+	text, masked := string(raw), raw
+	if redacted := l.redact.Redact(text); redacted != text {
+		masked = []byte(redacted)
+	}
 	hash := BlobHash(masked)
 	if l.blobs == nil {
 		kept, err := l.store.Blobs(l.header.ID)

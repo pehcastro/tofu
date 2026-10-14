@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -428,6 +429,13 @@ type record struct {
 	undo      *snapshot.Repo
 	undoBegun chan struct{}
 	undoErr   error
+	lastTools toolsKept
+}
+
+type toolsKept struct {
+	log   *session.Log
+	tools []llm.Tool
+	hash  string
 }
 
 type resultRow struct {
@@ -585,10 +593,7 @@ func (r *record) exchange(id, why, wire string, request llm.Request, started tim
 		return
 	}
 	exchange := session.Exchange{Request: id, Agent: r.agent, Turn: r.turn, At: started, Why: why, Wire: wire, Model: decision.Build,
-		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: r.keptList(request.Messages), DurationMS: time.Since(started).Milliseconds()}
-	var err error
-	exchange.Tools, err = r.log.Keep(request.Tools)
-	r.note(err)
+		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: r.keptList(request.Messages), Tools: r.keptTools(request.Tools), DurationMS: time.Since(started).Milliseconds()}
 	for _, attempt := range attempts {
 		body, err := r.log.KeepBody(attempt.Body)
 		r.note(err)
@@ -599,10 +604,23 @@ func (r *record) exchange(id, why, wire string, request llm.Request, started tim
 	if failed != nil {
 		exchange.Error = failed.Error()
 	} else {
-		exchange.Response, err = r.log.Keep(decision)
+		response, err := r.log.Keep(decision)
 		r.note(err)
+		exchange.Response = response
 	}
 	r.note(r.log.Exchanged(exchange))
+}
+
+func (r *record) keptTools(tools []llm.Tool) string {
+	if r.lastTools.log == r.log && reflect.DeepEqual(tools, r.lastTools.tools) {
+		return r.lastTools.hash
+	}
+	hash, err := r.log.Keep(tools)
+	r.note(err)
+	if err == nil {
+		r.lastTools = toolsKept{log: r.log, tools: tools, hash: hash}
+	}
+	return hash
 }
 
 func (r *record) listChange(kind, why string, before, after []llm.Message) {

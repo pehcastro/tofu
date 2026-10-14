@@ -109,13 +109,14 @@ func (h *heldSubAgent) conversation() ([]llm.Message, error) {
 }
 
 type watchedTool struct {
-	tool Tool
-	held *heldSubAgent
+	tool       Tool
+	held       *heldSubAgent
+	definition llm.Tool
 }
 
 func (w watchedTool) Name() string { return w.tool.Name() }
 
-func (w watchedTool) Definition() llm.Tool { return w.tool.Definition() }
+func (w watchedTool) Definition() llm.Tool { return w.definition }
 
 func (w watchedTool) refusal(raw json.RawMessage) error {
 	if checked, checks := w.tool.(bounded); checks {

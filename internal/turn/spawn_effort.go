@@ -56,10 +56,10 @@ func clampedWords(asked llm.Effort, opened SubAgentModel) string {
 	return fmt.Sprintf("effort %s is not one %s takes, so it runs at %s. ", asked, opened.Slug, opened.Effort)
 }
 
-func (s SubAgents) effortProperty() (map[string]any, bool) {
+func (s SubAgents) effortProperty() map[string]any {
 	const told = "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do"
 	if s.Takes == nil {
-		return map[string]any{"type": "string", "enum": llm.Efforts(), "description": told}, true
+		return map[string]any{"type": "string", "enum": llm.Efforts(), "description": told}
 	}
 	var offered, each []string
 	var union []llm.Effort
@@ -75,11 +75,11 @@ func (s SubAgents) effortProperty() (map[string]any, bool) {
 	}
 	levels := slices.DeleteFunc(llm.Efforts(), func(effort llm.Effort) bool { return !slices.Contains(union, effort) })
 	if len(levels) == 0 {
-		return nil, false
+		return nil
 	}
 	said := told + ". " + strings.Join(each, "; ")
 	if slices.IndexFunc(offered, func(listed string) bool { return listed != offered[0] }) < 0 {
 		said = told + ". the model takes " + offered[0]
 	}
-	return map[string]any{"type": "string", "enum": levels, "description": said}, true
+	return map[string]any{"type": "string", "enum": levels, "description": said}
 }
