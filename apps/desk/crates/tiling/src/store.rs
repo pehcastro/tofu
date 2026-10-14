@@ -15,7 +15,6 @@ const ICON: &str = "icon";
 const EMPTY: &str = "(empty)";
 const NO_FOCUS: &str = "-";
 const PLUGIN_PREFIX: &str = "plugin:";
-const FOLDER: &str = "tofu-desk";
 const LAYOUTS: &str = "layouts";
 const EXTENSION: &str = "layout";
 const STATES: &str = "projects";
@@ -61,24 +60,13 @@ pub struct Store {
     path: PathBuf,
 }
 
-fn config_home() -> Result<PathBuf, StoreError> {
-    let from = |name: &str| {
-        env::var_os(name)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    if cfg!(windows) {
-        from("APPDATA").ok_or(StoreError::NoHome("APPDATA"))
-    } else {
-        from("XDG_CONFIG_HOME")
-            .or_else(|| from("HOME").map(|home| home.join(".config")))
-            .ok_or(StoreError::NoHome("neither XDG_CONFIG_HOME nor HOME"))
-    }
-}
-
 impl Store {
     pub fn home() -> Result<PathBuf, StoreError> {
-        Ok(config_home()?.join(FOLDER))
+        let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+        env::var_os(name)
+            .filter(|value| !value.is_empty())
+            .map(|home| PathBuf::from(home).join(".tofu").join("desk").join("state"))
+            .ok_or(StoreError::NoHome(name))
     }
 
     pub fn for_project(project: &Path) -> Result<Store, StoreError> {

@@ -77,6 +77,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::rc::Rc;
+use std::time::Instant;
 
 use desk::{Open, Screen};
 use desk_ui::icon::Icon;
@@ -297,6 +298,7 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
+    let started = Instant::now();
     let args: Vec<String> = env::args().skip(1).collect();
     let launch = match parse(&args) {
         Ok(launch) => launch,
@@ -305,6 +307,10 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if let Err(error) = desk_core::home::Home::find().and_then(|home| home.migrate()) {
+        eprintln!("desk: home: {error}");
+        return ExitCode::FAILURE;
+    }
     let mut assets = Icon::registry();
     if let Err(duplicates) = assets.extend(desk_ui::components::glyph::Glyph::entries()) {
         eprintln!("the desk has two assets under one path: {duplicates:?}");
@@ -331,6 +337,21 @@ fn main() -> ExitCode {
                 eprintln!("{error}");
                 failure.set(true);
                 cx.quit();
+                return;
+            }
+            let Some(window) = cx.windows().first().copied() else {
+                return;
+            };
+            let painted = window.update(cx, |_, window, _| {
+                window.on_next_frame(move |_, _| {
+                    eprintln!(
+                        "desk: first paint after {} ms",
+                        started.elapsed().as_millis()
+                    );
+                });
+            });
+            if let Err(error) = painted {
+                eprintln!("desk: first paint is not timed: {error:#}");
             }
         });
     if failed.get() {

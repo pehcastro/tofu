@@ -46,7 +46,6 @@ pub use mention::{Trace, mention};
 
 const CLIENT: &str = "tofu-desk";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
-const DESK_FOLDER: &str = "tofu-desk";
 const EMAILS_FILE: &str = "emails.json";
 const SIGN_IN_POLL: Duration = Duration::from_millis(500);
 const ANCHOR_HOLD: Duration = Duration::from_millis(1600);
@@ -191,19 +190,9 @@ pub fn fed(store: Entity<Store>, window: &mut Window, cx: &mut App) -> Entity<Ch
 }
 
 fn emails_at() -> Result<PathBuf, String> {
-    let home = |name: &str| {
-        env::var_os(name)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    let config = if cfg!(windows) {
-        home("APPDATA")
-    } else {
-        home("XDG_CONFIG_HOME").or_else(|| home("HOME").map(|home| home.join(".config")))
-    };
-    config
-        .map(|config| config.join(DESK_FOLDER).join(EMAILS_FILE))
-        .ok_or_else(|| "the desk has no app data folder for filled emails".to_owned())
+    desk_core::home::Home::find()
+        .map(|home| home.state.join(EMAILS_FILE))
+        .map_err(|error| error.to_string())
 }
 
 fn load_emails() -> Result<FilledEmails, String> {

@@ -2,12 +2,12 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::{env, fs};
 
+use desk_core::home::Home;
 use desk_ui::live::{self, ActiveTheme, THEME_VARIABLE};
 use desk_ui::theme::Mode;
 use gpui::App;
 
 const DEFAULT_THEME: &str = "tofu-glass";
-const FOLDER: &str = "tofu-desk";
 const FILE: &str = "theme";
 
 pub struct Pick {
@@ -20,19 +20,9 @@ pub fn folder() -> PathBuf {
 }
 
 fn saved_at() -> Result<PathBuf, String> {
-    let home = |name: &str| {
-        env::var_os(name)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-    };
-    let config = if cfg!(windows) {
-        home("APPDATA")
-    } else {
-        home("XDG_CONFIG_HOME").or_else(|| home("HOME").map(|home| home.join(".config")))
-    };
-    config
-        .map(|config| config.join(FOLDER).join(FILE))
-        .ok_or_else(|| "the desk has no config folder for its theme pick".to_owned())
+    Home::find()
+        .map(|home| home.config.join(FILE))
+        .map_err(|error| error.to_string())
 }
 
 pub fn chosen() -> Result<Pick, String> {

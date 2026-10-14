@@ -2,6 +2,7 @@ pub mod bridge;
 pub mod buffer;
 pub mod control;
 pub mod git;
+pub mod home;
 pub mod limits;
 pub mod model;
 pub mod protocol;
