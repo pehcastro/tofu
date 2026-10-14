@@ -9,13 +9,14 @@ use std::time::Instant;
 
 use desk_plugin::{
     Capability, GRANT_FILE, GRANT_VERSION, Home, Host, MANIFEST_FILE, Manifest, Mode, Origin,
+    ScanReport, WASM_FILE,
 };
 use desk_ui::components::card::caption;
 use desk_ui::components::paint::ink;
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::size::{FONT_BODY, FONT_SMALL, T1, T2, T3};
 use desk_ui::theme::{ColorToken, Theme};
-use gpui::{FontWeight, SharedString, canvas, div, prelude::*, px};
+use gpui::{Div, FontWeight, Rgba, SharedString, canvas, div, prelude::*, px};
 use serde::Deserialize;
 
 use super::Plugin;
@@ -24,6 +25,8 @@ pub const ACTIVITY_KEPT: usize = 50;
 const SHORT_HASH: usize = 12;
 const LINE_GAP: f32 = 2.0;
 const GROUP_GAP: f32 = 10.0;
+const KB: u64 = 1 << 10;
+const MB: u64 = 1 << 20;
 
 pub type Modes = BTreeMap<Capability, Mode>;
 
@@ -267,6 +270,14 @@ pub struct Pending {
     pub dir: PathBuf,
     pub provenance: Provenance,
     pub asked: Instant,
+    pub scanned: Scanned,
+}
+
+pub enum Scanned {
+    Waiting,
+    BuiltIn,
+    Read(ScanReport),
+    Failed(String),
 }
 
 pub fn manifest_of(plugin: &Plugin) -> Result<Manifest, String> {
@@ -274,6 +285,138 @@ pub fn manifest_of(plugin: &Plugin) -> Result<Manifest, String> {
         Some(text) => Manifest::parse(text).map_err(|error| format!("{}: {error}", plugin.id)),
         None => manifest_at(&plugin.folder()?),
     }
+}
+
+pub fn scan(dir: &Path, manifest: &Manifest) -> Scanned {
+    let path = dir.join(WASM_FILE);
+    let started = Instant::now();
+    let scanned = fs::read(&path)
+        .map_err(|error| format!("{}: {error}", path.display()))
+        .and_then(|wasm| desk_plugin::scan(&wasm, manifest).map_err(|error| error.to_string()));
+    let took = started.elapsed().as_secs_f64() * 1000.0;
+    match scanned {
+        Ok(report) => {
+            eprintln!(
+                "desk: plugin {} scanned in {took:.1} ms: {} imports, hosts [{}], {} key-like",
+                manifest.id,
+                report.imports.len(),
+                report.hosts.join(", "),
+                report.key_like_total
+            );
+            Scanned::Read(report)
+        }
+        Err(problem) => {
+            eprintln!("desk: plugin {} scan failed: {problem}", manifest.id);
+            Scanned::Failed(problem)
+        }
+    }
+}
+
+pub fn scan_of(plugin: &Plugin) -> Scanned {
+    if plugin.built_in().is_some() {
+        return Scanned::BuiltIn;
+    }
+    match plugin
+        .folder()
+        .and_then(|dir| manifest_at(&dir).map(|manifest| (dir, manifest)))
+    {
+        Ok((dir, manifest)) => scan(&dir, &manifest),
+        Err(problem) => Scanned::Failed(problem),
+    }
+}
+
+fn size(bytes: u64) -> String {
+    match bytes {
+        0..KB => format!("{bytes} bytes"),
+        KB..MB => format!("{} KB", bytes.div_ceil(KB)),
+        _ => format!("{:.1} MB", bytes as f64 / MB as f64),
+    }
+}
+
+fn found(report: &ScanReport, theme: &Theme) -> Vec<(String, Rgba)> {
+    let warn = theme.color(ColorToken::StatusWarn);
+    let mut lines: Vec<(String, Rgba)> = report
+        .imports
+        .iter()
+        .filter(|import| !import.declared)
+        .map(|import| {
+            let call = if import.name.is_empty() {
+                &import.module
+            } else {
+                &import.name
+            };
+            let said = match import.capability {
+                Some(_) => format!("calls {call} without asking for it"),
+                None => format!("calls {call}, which this desk does not offer"),
+            };
+            (said, warn)
+        })
+        .collect();
+    if !report.hosts.is_empty() {
+        lines.push((
+            format!("names these hosts: {}", report.hosts.join(", ")),
+            ink(theme, T2),
+        ));
+    }
+    lines.extend(report.key_like.iter().map(|key| {
+        (
+            format!(
+                "looks like a secret at offset {} (starts {})",
+                key.offset, key.prefix
+            ),
+            ink(theme, T2),
+        )
+    }));
+    let unshown = report.key_like_total.saturating_sub(report.key_like.len());
+    if unshown > 0 {
+        lines.push((
+            format!("and {unshown} more that look like secrets"),
+            ink(theme, T2),
+        ));
+    }
+    if lines.is_empty() {
+        lines.push((
+            "No call it did not ask for, no host and nothing that looks like a secret.".to_owned(),
+            ink(theme, T2),
+        ));
+    }
+    let producer = report.producer.as_deref().unwrap_or("an unknown toolchain");
+    lines.push((
+        format!("{}, built with {producer}", size(report.size)),
+        ink(theme, T3),
+    ));
+    lines
+}
+
+pub fn contains(scanned: &Scanned, theme: &Theme) -> Div {
+    let lines = match scanned {
+        Scanned::Waiting => vec![("Reading its WASM…".to_owned(), ink(theme, T3))],
+        Scanned::BuiltIn => vec![(
+            "Built into the desk, so there is no WASM to read.".to_owned(),
+            ink(theme, T2),
+        )],
+        Scanned::Failed(problem) => vec![(
+            format!("Its WASM could not be read: {problem}"),
+            theme.color(ColorToken::StatusWarn),
+        )],
+        Scanned::Read(report) => found(report, theme),
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(LINE_GAP))
+        .child(
+            div()
+                .text_size(px(FONT_BODY))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child("What it contains"),
+        )
+        .children(lines.into_iter().map(|(text, color)| {
+            div()
+                .text_size(px(FONT_SMALL))
+                .text_color(color)
+                .child(text)
+        }))
 }
 
 pub fn install(folder: &Path) -> Result<Pending, String> {
@@ -288,6 +431,7 @@ pub fn install(folder: &Path) -> Result<Pending, String> {
         report.version,
         report.dir.display()
     );
+    let scanned = scan(&report.dir, &manifest);
     Ok(Pending {
         manifest,
         dir: report.dir,
@@ -295,6 +439,7 @@ pub fn install(folder: &Path) -> Result<Pending, String> {
             sha256: report.sha256,
         },
         asked: Instant::now(),
+        scanned,
     })
 }
 
@@ -306,6 +451,7 @@ pub fn enable(plugin: &Plugin) -> Result<Pending, String> {
         dir: plugin.folder()?,
         provenance: Provenance::BuiltIn,
         asked: Instant::now(),
+        scanned: Scanned::BuiltIn,
     })
 }
 
@@ -460,5 +606,6 @@ pub fn sheet(
                 T3,
             )),
     )
+    .child(contains(&pending.scanned, theme).pb(px(GROUP_GAP)))
     .children(timed)
 }

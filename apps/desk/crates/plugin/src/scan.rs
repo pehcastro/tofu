@@ -8,6 +8,7 @@ use crate::{Capability, Error, Manifest, capability_of};
 pub const MIN_KEY_LEN: usize = 20;
 pub const KEY_ENTROPY_BITS: f64 = 4.0;
 pub const KEY_PREFIXES: [&str; 5] = ["sk-", "ghp_", "xox", "AKIA", "AIza"];
+const KEY_LIKE_KEPT: usize = 20;
 const SCHEMES: [&str; 2] = ["http://", "https://"];
 const SHOWN_PREFIX: usize = 4;
 
@@ -32,6 +33,7 @@ pub struct ScanReport {
     pub hosts: Vec<String>,
     pub urls: Vec<String>,
     pub key_like: Vec<KeyLike>,
+    pub key_like_total: usize,
     pub size: u64,
     pub producer: Option<String>,
     pub exports: Vec<String>,
@@ -112,7 +114,7 @@ pub fn scan(wasm: &[u8], manifest: &Manifest) -> Result<ScanReport, Error> {
                     let data = data.map_err(Error::Scan)?;
                     let start = data.range.end.saturating_sub(data.data.len());
                     links(data.data, &mut urls);
-                    keys(data.data, start, &mut report.key_like);
+                    keys(data.data, start, &mut report);
                 }
             }
             Payload::CustomSection(custom) => {
@@ -182,7 +184,7 @@ fn host(url: &str) -> Option<String> {
 }
 
 fn is_key_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_')
+    b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'/' | b'+' | b'=')
 }
 
 fn is_mixed(token: &[u8]) -> bool {
@@ -195,7 +197,7 @@ fn is_mixed(token: &[u8]) -> bool {
     .all(|class| token.iter().any(class))
 }
 
-fn keys(bytes: &[u8], base: usize, into: &mut Vec<KeyLike>) {
+fn keys(bytes: &[u8], base: usize, report: &mut ScanReport) {
     let mut start = None;
     for (at, byte) in bytes.iter().map(Some).chain([None]).enumerate() {
         match (start, byte.is_some_and(|&b| is_key_byte(b))) {
@@ -203,7 +205,13 @@ fn keys(bytes: &[u8], base: usize, into: &mut Vec<KeyLike>) {
             (Some(from), false) => {
                 start = None;
                 let token = bytes.get(from..at).unwrap_or_default();
-                into.extend(key_like(token, base.saturating_add(from)));
+                let Some(key) = key_like(token, base.saturating_add(from)) else {
+                    continue;
+                };
+                report.key_like_total = report.key_like_total.saturating_add(1);
+                if report.key_like.len() < KEY_LIKE_KEPT {
+                    report.key_like.push(key);
+                }
             }
             _ => {}
         }

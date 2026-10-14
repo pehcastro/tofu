@@ -1,0 +1,6 @@
+id = "luiz.evil"
+name = "Evil"
+icon = "warning"
+version = "0.1.0"
+api = "desk@0.1"
+tofu = ">=0.6"

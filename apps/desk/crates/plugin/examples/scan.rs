@@ -3,11 +3,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use desk_plugin::{Import, MANIFEST_FILE, Manifest, ScanReport, scan};
+use desk_plugin::{Import, MANIFEST_FILE, Manifest, ScanReport, WASM_FILE, scan};
 use wasm_encoder::{
-    ConstExpr, DataSection, EntityType, ExportKind, ExportSection, ImportSection, MemorySection,
-    MemoryType, Module, TypeSection,
+    ConstExpr, DataCountSection, DataSection, EntityType, ExportKind, ExportSection, ImportSection,
+    MemorySection, MemoryType, Module, RawSection, TypeSection,
 };
+use wasmparser::{Parser, Payload};
 use wit_component::ComponentEncoder;
 
 const RUNS: usize = 10;
@@ -22,6 +23,11 @@ const EVIL: &[&[u8]] = &[
 const KEY: &[&[u8]] = &[b"sk-Zq8vT3nW0xLk5RmB7yHc2JdF9sGp4Ae6Uo1Ni"];
 const EVIL_TOML: &str = "id = \"luiz.evil\"\nname = \"Evil\"\nicon = \"warning\"\nversion = \"0.1.0\"\napi = \"desk@0.1\"\ntofu = \">=0.6\"\n";
 const KEY_TOML: &str = "id = \"luiz.key\"\nname = \"Key\"\nicon = \"warning\"\nversion = \"0.1.0\"\napi = \"desk@0.1\"\ntofu = \">=0.6\"\n\n[capabilities]\nnotify = true\n";
+const ROGUE_CORE: &str = "guests/rogue/target/wasm32-unknown-unknown/release/rogue.wasm";
+const EVIL_PLUGINS: [(&str, &str); 2] = [
+    ("luiz.evil", ""),
+    ("luiz.evil-declared", "\n[capabilities]\nnotify = true\n"),
+];
 
 fn guest(imports: &[(&str, &str)], strings: &[&[u8]], pad: &[u8]) -> Vec<u8> {
     let mut data: Vec<u8> = strings.join(&0u8).into_iter().chain([0]).collect();
@@ -54,12 +60,62 @@ fn guest(imports: &[(&str, &str)], strings: &[&[u8]], pad: &[u8]) -> Vec<u8> {
     module.finish()
 }
 
+fn salted(core: &[u8], salt: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut module = Module::new();
+    let mut salt = Some(salt);
+    for payload in Parser::new(0).parse_all(core) {
+        match payload? {
+            Payload::DataCountSection { count, .. } => {
+                let count = count.checked_add(1).ok_or("too many data segments")?;
+                module.section(&DataCountSection { count });
+            }
+            Payload::DataSection(reader) => {
+                let mut segments = DataSection::new();
+                for data in reader {
+                    segments.raw(core.get(data?.range).ok_or("a data segment out of range")?);
+                }
+                segments.passive(salt.take().ok_or("two data sections")?);
+                module.section(&segments);
+            }
+            other => {
+                if let Some((id, range)) = other.as_section() {
+                    let data = core.get(range).ok_or("a section out of range")?;
+                    module.section(&RawSection { id, data });
+                }
+            }
+        }
+    }
+    if salt.is_some() {
+        return Err("the core module has no data section to salt".into());
+    }
+    Ok(module.finish())
+}
+
+fn write_evil_plugins(dir: &Path) -> Result<(), Box<dyn Error>> {
+    let core = fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(ROGUE_CORE))?;
+    let salt = [EVIL, KEY].concat().join(&0u8);
+    let wasm = ComponentEncoder::default()
+        .validate(true)
+        .module(&salted(&core, salt)?)?
+        .encode()?;
+    for (id, capabilities) in EVIL_PLUGINS {
+        let folder = dir.join(id);
+        fs::create_dir_all(&folder)?;
+        let manifest = EVIL_TOML.replacen("luiz.evil", id, 1) + capabilities;
+        fs::write(folder.join(MANIFEST_FILE), manifest)?;
+        fs::write(folder.join(WASM_FILE), &wasm)?;
+        println!("plugin {id} written to {}", folder.display());
+    }
+    Ok(())
+}
+
 fn write_fixtures(dir: &Path) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(dir)?;
     fs::write(dir.join("evil.wasm"), guest(&[NOTIFY, SOCKET], EVIL, &[]))?;
     fs::write(dir.join("evil.toml"), EVIL_TOML)?;
     fs::write(dir.join("key.wasm"), guest(&[NOTIFY], KEY, &[]))?;
     fs::write(dir.join("key.toml"), KEY_TOML)?;
+    write_evil_plugins(&dir.join("evil-plugin"))?;
     println!("fixtures written to {}", dir.display());
     Ok(())
 }
@@ -115,6 +171,11 @@ fn print(report: &ScanReport) {
             key.offset, key.prefix, key.entropy
         );
     }
+    println!(
+        "key-like kept: {} of {} found",
+        report.key_like.len(),
+        report.key_like_total
+    );
 }
 
 fn median_ms(wasm: &[u8], manifest: &Manifest) -> Result<(f64, Vec<f64>), Box<dyn Error>> {
@@ -190,10 +251,11 @@ fn report(path: &Path, given: Option<PathBuf>, component: bool) -> Result<(), Bo
     let padded = guest(&[NOTIFY], EVIL, &pad);
     let padded_report = scan(&padded, &manifest)?;
     println!(
-        "padded guest: {} bytes, hosts [{}], {} key-like",
+        "padded guest: {} bytes, hosts [{}], {} key-like kept of {} found",
         padded_report.size,
         padded_report.hosts.join(", "),
-        padded_report.key_like.len()
+        padded_report.key_like.len(),
+        padded_report.key_like_total
     );
     bench(
         "a guest padded with a 5 MB data segment",

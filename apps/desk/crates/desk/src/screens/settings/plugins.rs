@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::thread;
@@ -15,7 +16,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use crate::plugins::consent::{self, Pending};
+use crate::plugins::consent::{self, Pending, Scanned};
 use crate::plugins::{self, Plugin};
 use crate::screens::frame;
 
@@ -49,6 +50,7 @@ pub struct PluginsPage {
     tab: Tab,
     problem: Option<SharedString>,
     consent: Option<Consenting>,
+    scans: HashMap<String, Scanned>,
 }
 
 impl PluginsPage {
@@ -58,7 +60,33 @@ impl PluginsPage {
             tab: Tab::Consent,
             problem: None,
             consent: None,
+            scans: HashMap::new(),
         }
+    }
+
+    fn scanned(&mut self, plugin: &'static Plugin, cx: &mut Context<Self>) -> &Scanned {
+        self.scans.entry(plugin.id.clone()).or_insert_with(|| {
+            cx.spawn(async move |page, cx| {
+                let (sent, reply) = flume::bounded(1);
+                thread::spawn(move || {
+                    if sent.send(consent::scan_of(plugin)).is_err() {
+                        eprintln!("desk: plugins: settings closed before the scan finished");
+                    }
+                });
+                let Ok(scanned) = reply.recv_async().await else {
+                    return eprintln!("desk: plugins: the scan stopped without an answer");
+                };
+                let landed = page.update(cx, |page, cx| {
+                    page.scans.insert(plugin.id.clone(), scanned);
+                    cx.notify();
+                });
+                if landed.is_err() {
+                    eprintln!("desk: plugins: settings closed before the scan landed");
+                }
+            })
+            .detach();
+            Scanned::Waiting
+        })
     }
 
     pub fn show(&mut self, shown: Option<SharedString>) {
@@ -293,7 +321,11 @@ impl PluginsPage {
             ),
             Ok((dir, manifest)) => match self.tab {
                 Tab::Options => frame::note(format!("{} declares no options.", plugin.name), theme),
-                Tab::Consent => self.consent_tab(plugin, &dir, &manifest, theme, cx),
+                Tab::Consent => {
+                    let grants = self.consent_tab(plugin, &dir, &manifest, theme, cx);
+                    let scanned = consent::contains(self.scanned(plugin, cx), theme);
+                    div().child(grants).child(scanned.mt_3())
+                }
                 Tab::Agents => agents_tab(plugin, &manifest, theme),
                 Tab::Activity => activity_tab(plugin, theme),
             },
