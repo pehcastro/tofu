@@ -37,10 +37,12 @@ func TestIdentityKeepsChosenPoseWhileAnimating(t *testing.T) {
 }
 
 func TestWordmarkAndOrbitAreStable(t *testing.T) {
-	if width, height := lipgloss.Size(wordmark(0)); width != 30 || height != 6 {
+	identity := NewIdentity()
+	first := halfBlocks(wordmarkCanvas(0), identity.pixel)
+	if width, height := lipgloss.Size(first); width != 30 || height != 6 {
 		t.Fatalf("wordmark = %dx%d, want 30x6", width, height)
 	}
-	if wordmark(0) == wordmark(1) {
+	if first == halfBlocks(wordmarkCanvas(1), identity.pixel) {
 		t.Fatal("orbit pixel did not move")
 	}
 }

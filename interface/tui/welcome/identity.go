@@ -1,7 +1,9 @@
 package welcome
 
 import (
+	"math"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,12 +19,12 @@ const mint = "#40d294"
 var silver = [...]string{"#aeb4bc", "#9ca3ad", "#8a929d", "#78818d", "#666f7c"}
 
 const (
-	stageWidth    = 68
-	stageHeight   = 14
-	canvasWidth   = 30
-	canvasHeight  = 12
-	catFPS        = 4
-	pulseInterval = 120 * time.Millisecond
+	stageWidth        = 68
+	stageHeight       = 14
+	canvasWidth       = 30
+	canvasHeight      = 12
+	pulseInterval     = 120 * time.Millisecond
+	pulsesPerCatFrame = 2
 )
 
 type pose struct {
@@ -51,36 +53,31 @@ var canonicalTofu = [9]string{
 type pulseMsg struct{}
 
 type Identity struct {
-	cat   cat.Model
-	pose  int
-	pulse int
-	ascii bool
+	cat    cat.Model
+	pose   int
+	pulse  int
+	ascii  bool
+	pixels map[[2]string]string
 }
 
 func NewIdentity() Identity {
 	ascii := os.Getenv("TOFU_ASCII") != "" || os.Getenv("TERM") == "dumb"
-	return Identity{ascii: ascii, cat: cat.New(
-		cat.WithFPS(catFPS),
-		cat.WithPlain(ascii || os.Getenv("NO_COLOR") != ""),
-	)}
+	return Identity{ascii: ascii, cat: cat.New(ascii || os.Getenv("NO_COLOR") != ""), pixels: map[[2]string]string{}}
 }
 
 func (i Identity) Init() tea.Cmd {
-	return tea.Batch(i.cat.Init(), pulse())
-}
-
-func pulse() tea.Cmd {
 	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })
 }
 
 func (i Identity) Update(msg tea.Msg) (Identity, tea.Cmd) {
-	var pulseCommand, catCommand tea.Cmd
-	if _, ok := msg.(pulseMsg); ok {
-		i.pulse++
-		pulseCommand = pulse()
+	if _, ok := msg.(pulseMsg); !ok {
+		return i, nil
 	}
-	i.cat, catCommand = i.cat.Update(msg)
-	return i, tea.Batch(pulseCommand, catCommand)
+	i.pulse++
+	if i.pulse%pulsesPerCatFrame == 0 {
+		i.cat.Step()
+	}
+	return i, i.Init()
 }
 
 func (i *Identity) TogglePose() {
@@ -93,17 +90,45 @@ func (i Identity) PoseName() string { return poses[i.pose].name }
 func (i Identity) View(width int) string {
 	current := poses[i.pose]
 	stage := place(width, stageHeight, i.cat.View(), current.x, current.y)
-	return stage + "\n" + lipgloss.PlaceHorizontal(width, lipgloss.Center, i.logo())
+	return stage + "\n" + strings.Join(centered(width, 0, i.logo()), "\n")
 }
 
 func (i Identity) Fit(width, rows int) []string {
-	whole := i.View(min(stageWidth, width))
-	for _, art := range []string{whole, compactIdentity(whole), i.logo()} {
-		if lipgloss.Width(art) <= width && lipgloss.Height(art) <= rows {
-			return strings.Split(lipgloss.Place(width, rows, lipgloss.Center, lipgloss.Center, art), "\n")
-		}
+	fits := func(art string) bool { return lipgloss.Width(art) <= width && lipgloss.Height(art) <= rows }
+	art := i.View(min(stageWidth, width))
+	if !fits(art) {
+		art = compactIdentity(art)
 	}
-	return nil
+	if !fits(art) {
+		art = i.logo()
+	}
+	if !fits(art) {
+		return nil
+	}
+	return centered(width, rows, art)
+}
+
+func centered(width, rows int, art string) []string {
+	lines := strings.Split(art, "\n")
+	widths, block := make([]int, len(lines)), 0
+	for n, line := range lines {
+		widths[n] = ansi.StringWidth(line)
+		block = max(block, widths[n])
+	}
+	if block < width {
+		for n, line := range lines {
+			gap := width - widths[n]
+			right := int(math.Round(float64(gap) / 2))
+			lines[n] = strings.Repeat(" ", gap-right) + line + strings.Repeat(" ", right)
+		}
+		block = width
+	}
+	if gap := rows - len(lines); gap > 0 {
+		bottom := int(math.Round(float64(gap) / 2))
+		blank := []string{strings.Repeat(" ", block)}
+		lines = slices.Concat(slices.Repeat(blank, gap-bottom), lines, slices.Repeat(blank, bottom))
+	}
+	return lines
 }
 
 func compactIdentity(view string) string {
@@ -120,7 +145,15 @@ func (i Identity) logo() string {
 	if i.ascii {
 		return asciiWordmark(i.pulse)
 	}
-	return wordmark(i.pulse)
+	return halfBlocks(wordmarkCanvas(i.pulse), i.pixel)
+}
+
+func (i Identity) pixel(upper, lower string) string {
+	key := [2]string{upper, lower}
+	if _, ok := i.pixels[key]; !ok {
+		i.pixels[key] = pixelPair(upper, lower)
+	}
+	return i.pixels[key]
 }
 
 func place(width, height int, content string, offsetX, offsetY int) string {
@@ -171,10 +204,6 @@ func orbit(width, height int) [][2]int {
 		path = append(path, [2]int{0, y})
 	}
 	return path
-}
-
-func wordmark(frame int) string {
-	return halfBlocks(wordmarkCanvas(frame), pixelPair)
 }
 
 func asciiWordmark(frame int) string {

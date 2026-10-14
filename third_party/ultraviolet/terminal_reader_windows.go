@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 	"unicode/utf16"
 
 	"github.com/charmbracelet/x/ansi"
@@ -29,6 +28,10 @@ func (d *TerminalReader) streamData(ctx context.Context, readc chan []byte) erro
 	var records []xwindows.InputRecord
 	var err error
 	peeked := make([]xwindows.InputRecord, readBufSize)
+	defer cc.closeEvent()
+	stopWaiting := context.AfterFunc(ctx, cc.signal)
+	defer stopWaiting()
+	waitOn := []windows.Handle{cc.conin, cc.cancelEvent}
 	for {
 		for {
 			var n uint32
@@ -43,8 +46,12 @@ func (d *TerminalReader) streamData(ctx context.Context, readc chan []byte) erro
 			if len(records) > 0 {
 				break
 			}
-
-			time.Sleep(10 * time.Millisecond)
+			if _, err := windows.WaitForMultipleObjects(waitOn, false, windows.INFINITE); err != nil {
+				return err
+			}
+			if ctx.Err() != nil {
+				return nil
+			}
 		}
 
 		records, err = readNConsoleInputs(cc.conin, uint32(len(records)))

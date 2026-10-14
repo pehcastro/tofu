@@ -8,7 +8,7 @@ import (
 )
 
 func posed(pose Pose) Model {
-	cat := New(WithPlain(true))
+	cat := New(true)
 	cat.SetPose(pose)
 	return cat
 }
@@ -73,7 +73,7 @@ func TestSpritesMatchApprovedRootCapture(t *testing.T) {
 }
 
 func TestPlainFallbackIsVisible(t *testing.T) {
-	view := New(WithPlain(true)).View()
+	view := New(true).View()
 	if !strings.Contains(view, "##") || !strings.Contains(view, "oo") {
 		t.Fatal("plain fallback has no visible body or eyes")
 	}

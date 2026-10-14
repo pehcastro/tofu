@@ -246,6 +246,8 @@ require (
 	mvdan.cc/unparam v0.0.0-20251027182757-5beb8c8f8f15 // indirect
 )
 
+replace charm.land/bubbletea/v2 => ./third_party/bubbletea
+
 replace github.com/alecthomas/chroma/v2 => ./third_party/chroma
 
 replace github.com/atotto/clipboard => ./third_party/clipboard

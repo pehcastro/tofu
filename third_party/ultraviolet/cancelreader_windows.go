@@ -16,6 +16,8 @@ import (
 type conInputReader struct {
 	cancelMixin
 	conin        windows.Handle
+	cancelEvent  windows.Handle
+	eventLock    sync.Mutex
 	originalMode uint32
 	newMode      uint32
 }
@@ -49,13 +51,20 @@ func NewCancelReader(r io.Reader) (cancelreader.CancelReader, error) {
 		windows.ENABLE_EXTENDED_FLAGS,
 	}
 
+	cancelEvent, err := windows.CreateEvent(nil, 1, 0, nil)
+	if err != nil {
+		return fallback(r)
+	}
+
 	originalMode, newMode, err := prepareConsole(conin, modes...)
 	if err != nil {
+		_ = windows.CloseHandle(cancelEvent)
 		return nil, fmt.Errorf("failed to prepare console input: %w", err)
 	}
 
 	return &conInputReader{
 		conin:        conin,
+		cancelEvent:  cancelEvent,
 		originalMode: originalMode,
 		newMode:      newMode,
 	}, nil
@@ -63,11 +72,30 @@ func NewCancelReader(r io.Reader) (cancelreader.CancelReader, error) {
 
 func (r *conInputReader) Cancel() bool {
 	r.setCanceled()
+	r.signal()
 
 	return windows.CancelIoEx(r.conin, nil) == nil || windows.CancelIo(r.conin) == nil
 }
 
+func (r *conInputReader) signal() {
+	r.eventLock.Lock()
+	defer r.eventLock.Unlock()
+	if r.cancelEvent != 0 {
+		_ = windows.SetEvent(r.cancelEvent)
+	}
+}
+
+func (r *conInputReader) closeEvent() {
+	r.eventLock.Lock()
+	defer r.eventLock.Unlock()
+	if r.cancelEvent != 0 {
+		_ = windows.CloseHandle(r.cancelEvent)
+		r.cancelEvent = 0
+	}
+}
+
 func (r *conInputReader) Close() error {
+	r.closeEvent()
 	if r.originalMode != 0 {
 		err := windows.SetConsoleMode(r.conin, r.originalMode)
 		if err != nil {

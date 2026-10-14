@@ -2,9 +2,7 @@ package cat
 
 import (
 	"strings"
-	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -47,69 +45,31 @@ var (
 	}
 )
 
-type clock struct{ interval time.Duration }
-
-type tickMsg struct{ clock *clock }
-
 type Model struct {
-	clock   *clock
-	frame   int
-	pose    Pose
-	running bool
-	plain   bool
+	frame  int
+	pose   Pose
+	cycles map[Pose][]string
 }
 
-type Option func(*Model)
-
-func WithFPS(fps int) Option {
-	return func(m *Model) {
-		if fps > 0 {
-			m.clock.interval = time.Second / time.Duration(fps)
-		}
-	}
-}
-
-func WithPlain(plain bool) Option { return func(m *Model) { m.plain = plain } }
-
-func New(options ...Option) Model {
-	m := Model{clock: &clock{interval: 250 * time.Millisecond}, running: true}
-	for _, option := range options {
-		option(&m)
-	}
-	return m
-}
-
-func (m Model) Init() tea.Cmd { return m.tick() }
-
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	tick, ok := msg.(tickMsg)
-	if !ok || tick.clock != m.clock || !m.running {
-		return m, nil
-	}
-	m.frame++
-	return m, m.tick()
+func New(plain bool) Model {
+	sit, tail, lie, lieTail := render(sitting, plain), render(tailRight, plain), render(lying, plain), render(lyingTail, plain)
+	return Model{cycles: map[Pose][]string{
+		Sitting: {sit, sit, sit, tail, sit, sit},
+		Lying:   {lie, lie, lieTail, lie},
+	}}
 }
 
 func (m *Model) SetPose(pose Pose) { m.pose, m.frame = pose, 0 }
-func (m *Model) Pause()            { m.running = false }
+func (m *Model) Step()             { m.frame++ }
 
-func (m Model) View() string { return m.render(m.currentFrame()) }
+func (m Model) View() string {
+	cycle := m.cycles[m.pose]
+	return cycle[m.frame%len(cycle)]
+}
 
 func (m Model) ViewFrame(frame int) string {
 	m.frame = frame
 	return m.View()
-}
-
-func (m Model) currentFrame() sprite {
-	if m.pose == Lying {
-		return []sprite{lying, lying, lyingTail, lying}[m.frame%4]
-	}
-	return []sprite{sitting, sitting, sitting, tailRight, sitting, sitting}[m.frame%6]
-}
-
-func (m Model) tick() tea.Cmd {
-	owner := m.clock
-	return tea.Tick(owner.interval, func(time.Time) tea.Msg { return tickMsg{clock: owner} })
 }
 
 func colorOf(symbol byte) string {
@@ -136,14 +96,14 @@ func plainOf(symbol byte) string {
 	}
 }
 
-func (m Model) render(frame sprite) string {
+func render(frame sprite, plain bool) string {
 	var output strings.Builder
 	for y, row := range frame {
 		for _, symbol := range []byte(row) {
 			switch {
 			case symbol == '.':
 				output.WriteString("  ")
-			case m.plain:
+			case plain:
 				output.WriteString(plainOf(symbol))
 			default:
 				output.WriteString(lipgloss.NewStyle().Background(lipgloss.Color(colorOf(symbol))).Render("  "))

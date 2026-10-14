@@ -734,12 +734,17 @@ func (s *server) scanShells(first bool) {
 	if err != nil {
 		return
 	}
-	mask, listening := sys.LoadKeyRedactor().Redact, s.listenersOf(found)
+	listening := s.listenersOf(found)
+	background := slices.DeleteFunc(found, shell.Shell.OneShot)
+	mask := func(text string) string { return text }
+	if len(background) > 0 {
+		mask = sys.LoadKeyRedactor().Redact
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	focus := s.focus()
 	listed := map[string]bool{}
-	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
+	for _, one := range background {
 		listed[one.Name] = true
 		watched := s.watched(one.Name)
 		watched.owner, watched.command, watched.exitCode = one.Owner, mask(one.Command), one.ExitCode
