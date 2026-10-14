@@ -73,6 +73,8 @@ type Entry struct {
 	rendered  []string
 	tail      []string
 	stable    int
+	boundary  int
+	undrawn   bool
 	width     int
 	wraps     map[int][]string
 	drawn     drawn
@@ -204,6 +206,9 @@ func (m *Model) SetFrame(frame int) { m.frame = frame }
 func (m *Model) Insert(text string) { m.composer.InsertString(text) }
 
 func (m *Model) SetSize(width, height int) {
+	if last := len(m.entries) - 1; last >= 0 && m.entries[last].undrawn {
+		m.rerender(&m.entries[last])
+	}
 	m.width, m.height = max(width, minimumColumns), height
 	m.composer.SetWidth(max(m.width-composerSideCells, 1))
 }
@@ -212,6 +217,9 @@ func (m *Model) textWidth() int { return max(m.width-2*messageInset, 1) }
 
 func (m *Model) wrapped(entry *Entry) bool {
 	room := m.textWidth()
+	if entry.undrawn {
+		m.rerender(entry)
+	}
 	if !entry.assistant() || entry.width == room {
 		return true
 	}
@@ -242,6 +250,7 @@ func (m *Model) rerender(entry *Entry) {
 	}
 	m.revision++
 	room := m.textWidth()
+	entry.undrawn = false
 	if !entry.streaming {
 		lines, known := entry.wraps[room]
 		if !known {
@@ -254,13 +263,10 @@ func (m *Model) rerender(entry *Entry) {
 		entry.rendered, entry.stable, entry.width, entry.tail = lines, len(entry.Body), room, nil
 		return
 	}
-	boundary := max(markdown.Boundary(entry.Body), entry.stable)
-	if boundary != entry.stable || room != entry.width {
-		entry.width = room
-		if boundary == 0 {
-			entry.rendered, entry.stable = nil, 0
-		} else {
-			entry.rendered, entry.stable = m.prose(entry.Body[:boundary], room), boundary
+	if entry.boundary != entry.stable || room != entry.width {
+		entry.width, entry.stable, entry.rendered = room, entry.boundary, nil
+		if entry.boundary > 0 {
+			entry.rendered = m.prose(entry.Body[:entry.boundary], room)
 		}
 	}
 	if trailing := entry.Body[entry.stable:]; trailing != "" {
@@ -272,12 +278,15 @@ func (m *Model) rerender(entry *Entry) {
 
 func (m *Model) Stream(text string) {
 	last := len(m.entries) - 1
-	if last >= 0 && m.entries[last].streaming {
-		m.entries[last].Body += text
-		m.rerender(&m.entries[last])
+	if last < 0 || !m.entries[last].streaming {
+		m.Append(Entry{Kind: Assistant, Body: text, streaming: true, boundary: markdown.Boundary(text)})
 		return
 	}
-	m.Append(Entry{Kind: Assistant, Body: text, streaming: true})
+	entry := &m.entries[last]
+	entry.Body += text
+	entry.boundary = max(markdown.Boundary(entry.Body), entry.boundary)
+	entry.undrawn = true
+	m.revision++
 }
 
 func (m *Model) seal() {
