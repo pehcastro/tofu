@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
@@ -72,11 +73,11 @@ func summary(text *strings.Builder, groups [][]row) {
 func toolSection(text *strings.Builder, rows []row) {
 	first := rows[0]
 	fmt.Fprintf(text, "## %s, %s arm, %s credential\n\n", first.Tool, first.Arm, first.Credential)
-	text.WriteString("| agents | answered | wall s | peak RSS MB | steady RSS MB | peak commit MB | CPU s | cores | processes | exit | model | wire | date |\n")
-	text.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	text.WriteString("| agents | answered | wall s | peak RSS MB | steady RSS MB | peak commit MB | CPU s | cores | processes | exit | model | wire | version | date |\n")
+	text.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rows {
-		fmt.Fprintf(text, "| %d | %d/%d | %.1f | %.0f | %.0f | %.0f | %.2f | %.2f | %d | %d | %s | %s | %s |\n",
-			r.Agents, r.Answered, max(r.Agents, 1), r.WallS, r.PeakRSSMB, r.SteadyRSSMB, r.PeakCommitMB, r.CPUS, cores(r), r.PeakProcesses, r.Exit, r.Model, r.Wire, r.Date)
+		fmt.Fprintf(text, "| %d | %d/%d | %.1f | %.0f | %.0f | %.0f | %.2f | %.2f | %d | %d | %s | %s | %s | %s |\n",
+			r.Agents, r.Answered, max(r.Agents, 1), r.WallS, r.PeakRSSMB, r.SteadyRSSMB, r.PeakCommitMB, r.CPUS, cores(r), r.PeakProcesses, r.Exit, r.Model, r.Wire, cmp.Or(r.Version, "not recorded"), r.Date)
 	}
 	f, measuredTo := fitGroup(rows), rows[len(rows)-1].Agents
 	fmt.Fprintf(text, "\n- peak RSS: base %.0f MB, %.1f MB per agent; agents that fit in 2 GB: %s\n", f.peak.base, f.peak.perAgent, fitsIn(memoryBudgetMB, f.peak, measuredTo))

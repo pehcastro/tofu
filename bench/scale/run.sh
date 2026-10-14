@@ -15,6 +15,7 @@ scale=$work/scale.exe
 project=$work/project
 "$scale" fixture "$project"
 dir=$(native "$project")
+built=$(tofu version | awk '$1 == "version" || $1 == "commit" { printf "%s ", $2 }')
 
 take() { until mkdir "$slot" 2>/dev/null; do sleep 30; done; }
 give() { rmdir "$slot"; }
@@ -41,11 +42,11 @@ measure() {
       home=$(mktemp -d "$work/home-XXXX")
       "$scale" cassette "$dir" "$agents" "$work/cassette-$agents.jsonl"
       HOME=$(native "$home") USERPROFILE=$(native "$home") TOFU_DRIVE_CASSETTE=$(native "$work/cassette-$agents.jsonl") \
-        "$scale" sample -tool tofu -arm cassette -credential none -wire cassette -model cassette "${common[@]}" -- \
+        "$scale" sample -tool tofu -version "$built" -arm cassette -credential none -wire cassette -model cassette "${common[@]}" -- \
         tofu run --dir "$dir" --model claude-sub/claude-sonnet-5 --no-instructions --no-gate --sift free "spawn $agents"
       rm -rf "$home" ;;
     tofu)
-      "$scale" sample -tool tofu -wire anthropic -model-from ' model (\S+) asked_as' "${common[@]}" -- \
+      "$scale" sample -tool tofu -version "$built" -wire anthropic -model-from ' model (\S+) asked_as' "${common[@]}" -- \
         tofu run --dir "$dir" --model claude-sub/claude-sonnet-5-5 --no-instructions --no-gate --sift free "$(ask "$agents" spawn)" ;;
     claude)
       "$scale" sample -tool claude -wire anthropic -model-from '"canonicalModel":"([^"]+)"' "${common[@]}" -- \

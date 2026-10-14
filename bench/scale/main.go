@@ -25,6 +25,7 @@ const (
 
 type row struct {
 	Tool          string
+	Version       string
 	Arm           string
 	Agents        int
 	Answered      int
@@ -109,6 +110,7 @@ func sample(args []string) error {
 	flags := flag.NewFlagSet("sample", flag.ExitOnError)
 	var measured row
 	flags.StringVar(&measured.Tool, "tool", "", "the tool measured")
+	flags.StringVar(&measured.Version, "version", "", "the tool's version and commit")
 	flags.StringVar(&measured.Arm, "arm", "live", "live or cassette")
 	flags.IntVar(&measured.Agents, "agents", 0, "sub-agents asked for")
 	flags.StringVar(&measured.Model, "model", "", "the model asked for, kept when -model-from is not given")
@@ -292,9 +294,9 @@ func readRows(path string) ([]row, error) {
 }
 
 func main() {
-	verbs := map[string]func([]string) error{"sample": sample, "fixture": fixture, "cassette": cassette, "alloc": alloc, "check": check, "report": report}
+	verbs := map[string]func([]string) error{"sample": sample, "fixture": fixture, "cassette": cassette, "alloc": alloc, "check": check, "report": report, "wall": wall, "retrace": retrace, "wallreport": wallreport}
 	if len(os.Args) < 2 || verbs[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "usage: scale sample|fixture|cassette|alloc|check|report")
+		fmt.Fprintln(os.Stderr, "usage: scale sample|fixture|cassette|alloc|check|report|wall|retrace|wallreport")
 		os.Exit(2)
 	}
 	if err := verbs[os.Args[1]](os.Args[2:]); err != nil {
