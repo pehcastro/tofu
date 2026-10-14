@@ -40,8 +40,10 @@ type Request struct {
 
 const SourceAfterTheCachedPrefix = "after the cached prefix"
 
+const CacheTTLFiveMinutes = "5m"
+
 const (
-	historyCacheMinPrefixChars    = 4096
+	historyCacheMinPrefixChars    = 1
 	historyCacheCommittedMinChars = 4096
 	cacheBreakpointsPerRequest    = 4
 

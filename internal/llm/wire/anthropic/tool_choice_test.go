@@ -36,17 +36,17 @@ func cappedTurnRequest(step int) Request {
 }
 
 func TestTheLastStepOfACappedTurnAddsOnlyToolChoiceNoneToTheBodySentBefore(t *testing.T) {
-	sentAt21f4d95 := []string{
-		"6da976c4eb531dd795bebfa7c5a860ba3ee28b813147d6e15928dc2d4a197154",
-		"52650ccfc3834c118e9c53fa29f4dd769adf2c4da81dabe56c6e308e7e197a10",
+	pinnedBodies := []string{
+		"539879c131014c8e00217c78c726d8c26da1cd1cfb253c7ef9edf8d36f9be9e9",
+		"72059059022a48b9d698d68a5af5c862669f9080b0d44ce069841360a0e07c62",
 		"a0e7be4602242ef5a8c463a074ba30e63b7dc17a0c34deb27fc5a1ad9526130e",
 		"42a2b6d24493749b891f0504297037602ffad0c3fc0f6398c015bd2c2a696aa8",
 		"b413a92247eb694ea1ea814b9ed11d4865d353eed7f93d3071103c89a5299003",
 	}
-	bodies := make([][]byte, len(sentAt21f4d95))
-	for step := range sentAt21f4d95 {
+	bodies := make([][]byte, len(pinnedBodies))
+	for step := range pinnedBodies {
 		request := cappedTurnRequest(step + 1)
-		if step == len(sentAt21f4d95)-1 {
+		if step == len(pinnedBodies)-1 {
 			request.ToolChoice = llm.ToolChoiceNone
 		}
 		body, err := request.Encode(true)
@@ -55,12 +55,12 @@ func TestTheLastStepOfACappedTurnAddsOnlyToolChoiceNoneToTheBodySentBefore(t *te
 		}
 		bodies[step] = body
 		asBefore := bytes.Replace(body, []byte(`"tool_choice":{"type":"none"},`), nil, 1)
-		if step == len(sentAt21f4d95)-1 && bytes.Equal(asBefore, body) {
+		if step == len(pinnedBodies)-1 && bytes.Equal(asBefore, body) {
 			t.Errorf("request %d carries no tool_choice none", step+1)
 		}
 		sum := sha256.Sum256(asBefore)
-		if got := hex.EncodeToString(sum[:]); got != sentAt21f4d95[step] {
-			t.Errorf("request %d hashes to %s with tool_choice taken out, and to %s at 21f4d95", step+1, got, sentAt21f4d95[step])
+		if got := hex.EncodeToString(sum[:]); got != pinnedBodies[step] {
+			t.Errorf("request %d hashes to %s with tool_choice taken out, and was pinned at %s", step+1, got, pinnedBodies[step])
 		}
 	}
 	var fourth, fifth struct {

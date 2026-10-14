@@ -110,10 +110,19 @@ func (s *Store) before(ref Ref) string {
 		}
 		lines = append(lines, s.line(line))
 	}
-	start, size := len(lines), 0
-	for start > 0 && size+len(lines[start-1])+1 <= konst.MemtreeContextBytes {
-		start--
-		size += len(lines[start]) + 1
+	offsets := make([]int, len(lines)+1)
+	for i, line := range lines {
+		offsets[i+1] = offsets[i] + len(line) + 1
+	}
+	fits := 0
+	for offsets[len(lines)]-offsets[fits] > konst.MemtreeContextBytes {
+		fits++
+	}
+	startStep := konst.MemtreeCompactionsAtOnce * konst.MemtreeLineBytes
+	alignedOffset := (offsets[fits] + startStep - 1) / startStep * startStep
+	start := fits
+	for start < len(lines) && offsets[start] < alignedOffset {
+		start++
 	}
 	return strings.Join(lines[start:], "\n")
 }

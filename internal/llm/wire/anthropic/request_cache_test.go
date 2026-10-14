@@ -314,7 +314,10 @@ func TestTwoSessionsInOneProjectSendTheSameCachedPrefix(t *testing.T) {
 		}
 		bodies = append(bodies, server.bodies[0])
 	}
-	assertCachedPrefixCarriesOver(t, inCacheOrder(t, bodies[0]), inCacheOrder(t, bodies[1]))
+	head := func(body []byte) []cachedPiece {
+		return slices.DeleteFunc(inCacheOrder(t, body), func(piece cachedPiece) bool { return piece.history })
+	}
+	assertCachedPrefixCarriesOver(t, head(bodies[0]), head(bodies[1]))
 }
 
 const subAgentInstructions = "you write typescript for bun and hono"

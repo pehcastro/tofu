@@ -13,6 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
+	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/memtree"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/turn"
@@ -97,10 +98,18 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	if err != nil {
 		return o.fail(err)
 	}
-	var asked atomic.Int64
+	var asked, hits, fresh, read, written, writtenForAnHour atomic.Int64
 	compact, slug, release := memoryCompactor(dir, func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
 		asked.Add(1)
-		return model.Ask(ctx, request)
+		decision, err := model.Ask(ctx, request)
+		if decision.CacheReadTokens > 0 {
+			hits.Add(1)
+		}
+		fresh.Add(int64(decision.Usage.InputTokens))
+		read.Add(int64(decision.CacheReadTokens))
+		written.Add(int64(decision.CacheWriteTokens))
+		writtenForAnHour.Add(int64(decision.CacheWrite1h))
+		return decision, err
 	})
 	defer release()
 	built, err := store.Build(context.Background(), compact)
@@ -114,6 +123,8 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	_, _ = io.WriteString(o.out, view)
 	_, _ = fmt.Fprintf(o.errOut, "%d nodes built now: %d by %d model calls on %s, %d free, %d failed; the view is %d lines, %d bytes of a %d byte budget\n",
 		compacted+built.Free, compacted, asked.Load(), slug, built.Free, len(built.Failed), strings.Count(view, "\n"), len(view), budget)
+	_, _ = fmt.Fprintf(o.errOut, "input tokens: %d fresh, %d read from the cache by %d of %d calls, %d written to it, %d of them for an hour\n",
+		fresh.Load(), read.Load(), hits.Load(), asked.Load(), written.Load(), writtenForAnHour.Load())
 	if len(built.Failed) > 0 {
 		return o.fail(fmt.Errorf("%d compactions failed and are tried again on the next build, the first: %w", len(built.Failed), built.Failed[0]))
 	}
@@ -155,12 +166,15 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 	if err != nil {
 		return func(context.Context, string, string, string) (string, error) { return "", err }, slug, release
 	}
-	var picking sync.Mutex
+	var mu sync.Mutex
+	chatsBeingWritten := map[string]bool{}
 	ruler := strings.Repeat("-", len(compactionExample))
 	return func(ctx context.Context, before, left, right string) (string, error) {
-		picking.Lock()
+		mu.Lock()
 		account, err := opened.held.forTurn().Pick(ctx)
-		picking.Unlock()
+		anotherCallWritesThisChat := chatsBeingWritten[before]
+		chatsBeingWritten[before] = true
+		mu.Unlock()
 		if err != nil {
 			return "", err
 		}
@@ -168,20 +182,38 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		if right != "" {
 			task, input = "merge these two adjacent lines", left+"\n"+right
 		}
-		asked := fmt.Sprintf("<chat>\n%s\n</chat>\n\nCompaction: %s into one line of about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\n<input>\n%s\n</input>\n<input> is %d words. Your line has at most %d: rewrite it shorter, never join or copy it.",
-			before, task, len(compactionExample), konst.MemtreeLineBytes, ruler, compactionExample, input, len(strings.Fields(input)), len(strings.Fields(compactionExample)))
-		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}, {Role: llm.RoleUser, Content: asked}}
+		asked := fmt.Sprintf("\n</chat>\n\nCompaction: %s into one line of about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\n<input>\n%s\n</input>\n<input> is %d words. Your line has at most %d: rewrite it shorter, never join or copy it.",
+			task, len(compactionExample), konst.MemtreeLineBytes, ruler, compactionExample, input, len(strings.Fields(input)), len(strings.Fields(compactionExample)))
+		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}}
+		if anotherCallWritesThisChat {
+			messages = append(messages, afterTheCachedPrefix(llm.RoleUser, "<chat>\n"+before))
+		} else {
+			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "<chat>\n"})
+			for line := range strings.Lines(before) {
+				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: line})
+			}
+		}
+		messages = append(messages, afterTheCachedPrefix(llm.RoleUser, asked))
 		asking := func(why string, messages []llm.Message) (string, error) {
-			decision, err := ask(ctx, why, wire, account.Model, llm.Request{Messages: messages})
+			decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, wire, account.Model, llm.Request{Messages: messages})
 			return compactionLine(decision, err)
 		}
 		line, err := asking("memory model: "+task, messages)
+		if !anotherCallWritesThisChat {
+			mu.Lock()
+			delete(chatsBeingWritten, before)
+			mu.Unlock()
+		}
 		if err != nil || len(line) <= konst.MemtreeLineBytes {
 			return line, err
 		}
 		retry := fmt.Sprintf("Too long: your line is %d bytes, over the %d-byte limit. Write the whole line again for the same <input>, cutting just enough of the least valuable items to fit before this cut:\n%s| <- LIMIT", len(line), konst.MemtreeLineBytes, line[:konst.MemtreeLineBytes])
-		return asking("memory model: the same line again, under the limit", append(messages, llm.Message{Role: llm.RoleAssistant, Content: line}, llm.Message{Role: llm.RoleUser, Content: retry}))
+		return asking("memory model: the same line again, under the limit", append(messages, afterTheCachedPrefix(llm.RoleAssistant, line), afterTheCachedPrefix(llm.RoleUser, retry)))
 	}, slug, release
+}
+
+func afterTheCachedPrefix(role llm.Role, text string) llm.Message {
+	return llm.Message{Role: role, Content: text, Origin: llm.Origin{Source: anthropic.SourceAfterTheCachedPrefix}}
 }
 
 func compactionLine(decision llm.Decision, err error) (string, error) {
