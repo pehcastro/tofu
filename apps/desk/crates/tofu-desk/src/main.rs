@@ -56,7 +56,12 @@ fn main() -> ExitCode {
         };
     }
     let (verb, rest) = alias(verb, rest);
-    let (line, exit) = match run(&verb, rest) {
+    let (out, rest): (Vec<&str>, Vec<&str>) = rest
+        .iter()
+        .copied()
+        .partition(|arg| verb == "capture" && arg.ends_with(".png"));
+    let (line, exit) = match run(&verb, &rest).and_then(|reply| saved(reply, out.first().copied()))
+    {
         Ok(reply) => replied(reply, json),
         Err(outcome) if json => (envelope(&verb, &outcome).to_string(), outcome.exit),
         Err(o) => (format!("✗ {}: {} → {}", o.code, o.message, o.hint), o.exit),
@@ -66,11 +71,32 @@ fn main() -> ExitCode {
 
 fn alias<'a>(verb: &str, rest: &'a [&'a str]) -> (String, &'a [&'a str]) {
     let known = |name: &str| Method::ALL.iter().any(|m| m.name() == name);
-    match rest.split_first() {
-        Some((second, tail)) if !known(verb) && known(&format!("{verb}.{second}")) => {
-            (format!("{verb}.{second}"), tail)
+    let mut joined = verb.to_owned();
+    let mut tail = rest;
+    while !known(&joined) {
+        let Some((next, after)) = tail.split_first() else {
+            return (verb.to_owned(), rest);
+        };
+        joined = format!("{joined}.{next}");
+        tail = after;
+    }
+    (joined, tail)
+}
+
+fn saved(reply: Reply, out: Option<&str>) -> Result<Reply, Outcome> {
+    match (reply, out) {
+        (Ok(mut result), Some(out)) => {
+            let taken = result["path"].as_str().unwrap_or_default().to_owned();
+            std::fs::copy(&taken, out).map_err(|e| Outcome {
+                exit: Exit::Failure,
+                code: "capture_unsaved",
+                message: format!("{taken} did not copy to {out}: {e}"),
+                hint: "check the folder exists and is writable".to_owned(),
+            })?;
+            result["path"] = Value::String(out.to_owned());
+            Ok(Ok(result))
         }
-        _ => (verb.to_owned(), rest),
+        (reply, _) => Ok(reply),
     }
 }
 

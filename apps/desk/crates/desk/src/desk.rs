@@ -767,25 +767,34 @@ impl Desk {
     }
 
     fn show(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if let Err(error) = self.open_screen(name, window, cx) {
+            eprintln!("desk: {error}");
+        }
+    }
+
+    pub fn open_screen(
+        &mut self,
+        name: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
         if self.shown.name == name {
-            return eprintln!("desk: screen {name} already shows");
+            eprintln!("desk: screen {name} already shows");
+            return Ok(());
         }
         let next = match self.parked.iter().position(|parked| parked.name == name) {
             Some(at) => self.parked.swap_remove(at),
             None => {
                 let Some(screen) = self.screens.iter().find(|screen| screen.name == name) else {
-                    return eprintln!("desk: screen {name} is not in this build");
+                    return Err(format!("screen {name} is not in this build"));
                 };
-                match (screen.open)(None, window, cx) {
-                    Ok(view) => {
-                        #[cfg(feature = "screen-work")]
-                        if screen.name != WORK_SCREEN {
-                            self.tabbed.push(screen.name);
-                        }
-                        Shown::new(screen.name.into(), view)
-                    }
-                    Err(error) => return eprintln!("desk: screen {name} did not open: {error}"),
+                let view = (screen.open)(None, window, cx)
+                    .map_err(|error| format!("screen {name} did not open: {error}"))?;
+                #[cfg(feature = "screen-work")]
+                if screen.name != WORK_SCREEN {
+                    self.tabbed.push(screen.name);
                 }
+                Shown::new(screen.name.into(), view)
             }
         };
         let left = std::mem::replace(&mut self.shown, next);
@@ -812,6 +821,7 @@ impl Desk {
         #[cfg(feature = "screen-work")]
         self.remember_state(cx);
         cx.notify();
+        Ok(())
     }
 
     fn focus_shown(&self, window: &mut Window, cx: &mut App) {
@@ -1306,6 +1316,18 @@ impl Desk {
             .find_map(|shown| match &shown.body {
                 Body::Work(work) => Some(work),
                 Body::View(_) | Body::Whole(_) => None,
+            })
+    }
+
+    #[cfg(feature = "module-editor")]
+    pub fn editor(&self) -> Option<Entity<crate::modules::editor::Editor>> {
+        std::iter::once(&self.shown)
+            .chain(&self.parked)
+            .filter(|shown| shown.name == EDITOR_SCREEN)
+            .find_map(|shown| match &shown.body {
+                Body::View(view) | Body::Whole(view) => view.clone().downcast().ok(),
+                #[cfg(feature = "screen-work")]
+                Body::Work(_) => None,
             })
     }
 

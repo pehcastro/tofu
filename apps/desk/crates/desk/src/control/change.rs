@@ -197,7 +197,7 @@ fn refused(refusal: Refusal) -> (ErrorCode, String) {
     (kind, refusal.to_string())
 }
 
-fn json(reply: &impl Serialize) -> Answered {
+pub(super) fn json(reply: &impl Serialize) -> Answered {
     serde_json::to_value(reply).map_err(|error| (ErrorCode::Refused, error.to_string()))
 }
 

@@ -1,6 +1,6 @@
-use desk_control::params::{ScreenList, WorkspaceScope};
+use desk_control::params::{ScreenList, ScreenOpen, WorkspaceScope};
 use desk_control::replies::{
-    Focus, Layout, ModuleInfo, Screen, ScreenCurrent, Tile, Workspace as Listed,
+    Focus, Layout, ModuleInfo, Screen, ScreenCurrent, ScreenOpened, Tile, Workspace as Listed,
 };
 use desk_control::shapes::{self, FocusKind};
 use desk_control::transport::Reply;
@@ -9,7 +9,8 @@ use desk_tiling::{Axis, Module, Node, Rect, Size, Workspace, readout, solve};
 use gpui::{AnyWindowHandle, App};
 use serde_json::Value;
 
-use super::change;
+use super::change::{self, Answered, json};
+use super::editor;
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
@@ -56,6 +57,18 @@ pub fn answer(
     }
     if let Some(changed) = change::answer(&call, work.as_ref(), cx) {
         return changed.map_err(|(kind, message)| fail(kind, message));
+    }
+    let routed = match &call {
+        Call::ScreenOpen(open) => Some(screen_open(open, window, screens, cx)),
+        Call::FileOpen(_) | Call::EditorSelectionGet(_) => Some(editor::answer(&call, window, cx)),
+        Call::Capture(_) => Some(Err((
+            ErrorCode::Refused,
+            "capture needs desk_perf to export a one-window PNG grab: its windows-capture Capture and its PNG writer are pub(crate)".to_owned(),
+        ))),
+        _ => None,
+    };
+    if let Some(routed) = routed {
+        return routed.map_err(|(kind, message)| fail(kind, message));
     }
     window
         .read::<Desk, _, _>(cx, |desk, cx| {
@@ -139,6 +152,65 @@ pub fn answer(
             }
         })
         .unwrap_or_else(|error| Err(gone(format!("{error:#}"))))
+}
+
+fn screen_open(
+    open: &ScreenOpen,
+    window: AnyWindowHandle,
+    screens: &[(&'static str, bool)],
+    cx: &mut App,
+) -> Answered {
+    let ScreenOpen {
+        name,
+        workspace,
+        board,
+        file,
+        dir,
+        repo,
+    } = open;
+    if workspace.is_some() || board.is_some() || file.is_some() || dir.is_some() || repo.is_some() {
+        return Err((
+            ErrorCode::BadParams,
+            "screen.open takes only a name in this desk; --workspace, --board, --file, --dir and --repo are not built yet".to_owned(),
+        ));
+    }
+    match screens.iter().find(|(known, _)| known == name) {
+        None => Err((ErrorCode::NotFound, format!("no screen is called {name}"))),
+        Some((_, false)) => Err((
+            ErrorCode::Refused,
+            format!("screen {name} is not in this build"),
+        )),
+        Some(_) => {
+            let gone = |error: String| {
+                (
+                    ErrorCode::DeskNotRunning,
+                    format!("the desk window is gone: {error}"),
+                )
+            };
+            let desk = window
+                .downcast::<Desk>()
+                .ok_or_else(|| gone("its root view is not the desk".to_owned()))?;
+            let workspace = desk
+                .update(cx, |desk, window, cx| {
+                    desk.open_screen(name, window, cx)?;
+                    Ok(desk
+                        .work()
+                        .and_then(|work| {
+                            let board = work.read(cx).board();
+                            board.workspaces().get(board.active())
+                        })
+                        .map(|held| held.name.clone())
+                        .unwrap_or_default())
+                })
+                .map_err(|error| gone(format!("{error:#}")))?
+                .map_err(|error| (ErrorCode::Refused, error))?;
+            json(&ScreenOpened {
+                screen: name.clone(),
+                workspace,
+                tile: None,
+            })
+        }
+    }
 }
 
 fn screen(name: &str, built: bool, open: bool) -> Screen {

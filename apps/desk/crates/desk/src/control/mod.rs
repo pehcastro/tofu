@@ -1,5 +1,6 @@
 mod change;
 mod dispatch;
+mod editor;
 
 use std::io;
 use std::time::{Duration, Instant};

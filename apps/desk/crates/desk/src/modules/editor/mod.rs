@@ -526,7 +526,15 @@ impl Editor {
         self.land(&path, row, col, window, cx);
     }
 
-    fn land(
+    pub(crate) fn active_code(&self) -> Option<(&Path, &Entity<CodeEditor>)> {
+        let page = self.pages.get(self.active)?;
+        page.code
+            .as_ref()
+            .ok()
+            .map(|code| (page.path.as_path(), code))
+    }
+
+    pub(crate) fn land(
         &mut self,
         path: &Path,
         row: usize,
