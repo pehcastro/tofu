@@ -691,5 +691,15 @@
     "skips": "the two fix runs have separate heads and are not multiplied; the 1.86x of TOFU-1350 is a scratch clone, not a commit",
     "commit": "41427b0a",
     "version": "0.5.14"
+  },
+  {
+    "report": "bench/minimal/report-2026-10-14.md",
+    "figure": "0.7 MB per sub-agent",
+    "says": "Under one vCPU and 128 MB tofu finishes 0 to 10 sub-agents and idles as tofu serve, at 9 to 16 MB of private memory and about 0.7 MB per sub-agent; Claude Code and omp do not start under 256 MB, and codex dies at 4 sub-agents under 256 MB and at 0 under 128 MB.",
+    "from": "prose",
+    "sample": "one run per rung, 0, 1, 4 and 10 sub-agents, at 256 and 128 MB, on a WSL2 cgroup and a Windows job object; rivals live on Windows, one at a time",
+    "skips": "tofu ran on a cassette and the rivals live, so only starting and finishing compare; one run per row",
+    "commit": "3827a25d",
+    "version": "0.5.14"
   }
 ]
