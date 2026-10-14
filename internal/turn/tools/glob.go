@@ -36,10 +36,8 @@ func NewGlob(dir string) (Glob, error) {
 
 func (g Glob) Name() string { return "glob" }
 
-const ignoredWalkDescription = "it never descends into node_modules, .git or .tofu, " +
-	"and it skips every path a .gitignore excludes, reading the one in the working directory and the one in any directory it enters. " +
-	"a project instruction file, AGENTS.md or CLAUDE.md, is always listed even when an ignore file excludes it. " +
-	"set include_ignored to true to walk the ignored paths too, and the result says the walk was unfiltered"
+const ignoredWalkDescription = "it skips node_modules, .git, .tofu and every path a .gitignore excludes, but always lists AGENTS.md and CLAUDE.md; " +
+	"include_ignored true walks everything"
 
 func (g Glob) Definition() llm.Tool {
 	return llm.Tool{

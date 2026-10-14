@@ -7,10 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 
-	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/search"
 	"tofu/internal/turn"
@@ -30,22 +28,11 @@ func (s Search) Name() string { return "search" }
 func (s Search) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "search",
-		Description: "finds text anywhere under the turn's working directory and is the only tool that reads file contents to find something: there is no grep tool. " +
-			"the pattern is go regexp syntax, which is the same as perl for everything short of backreferences, and it is matched against every line of every text file. " +
-			"it returns the whole declaration each match sits inside, " +
-			"so a match in a .go, .ts, .tsx, .js, .jsx, .py or .rs file comes back as the entire function, method, class or type rather than the line. " +
-			"it says whether each match is in code, in a comment or in a string literal, which the parser knows and a line does not. " +
-			"a file it cannot parse, which is every file in any other language and any of those files with unbalanced brackets or a syntax error, " +
-			"comes back as the lines around the match and is counted as a fallback, " +
-			"and a fallback line longer than " + strconv.Itoa(konst.SearchLineWidth) + " bytes, such as a minified file, is cut to that width around the match " +
-			"with how many characters were cut on each side. " +
-			"a file over " + strconv.Itoa(konst.SearchFileByteCap>>20) + " MB is not read, and the result counts it. " +
-			"it spends a token budget rather than a line count: over the budget it returns fewer units and never cuts a declaration short, " +
-			"and it says how many matched and how many came back so a short answer is never mistaken for the whole. " +
-			ignoredWalkDescription + ". " +
-			"when it returned less than you needed, narrow path or raise max_tokens rather than running a shell search, " +
-			"which descends into every ignored directory and hands back every matching line instead of a bounded answer. " +
-			"read is for when you already know which file and which lines you want",
+		Description: "the only content search: matches a go regexp against every text file under the working directory. " +
+			"a match in .go, .ts, .tsx, .js, .jsx, .py or .rs returns its whole declaration, marked code, comment or string; other files return the lines around it. " +
+			"spends max_tokens, not lines, and says how many matched. " +
+			"skips what .gitignore skips unless include_ignored. " +
+			"when it returns less than you need, narrow path or raise max_tokens",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

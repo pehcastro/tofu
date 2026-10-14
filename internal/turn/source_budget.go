@@ -39,10 +39,10 @@ func (e SourceBudgetError) Error() string {
 		return fmt.Sprintf("%s: %s is source code written by hand through the shell, which the orchestrator never does: use edit or write within your budget of %d lines in one directory, or spawn %s. a rename is edit with replace_all in each file, and a program's own output redirected into a file, such as a generator or a schema printer, is not counted and runs",
 			e.Tool, e.Path, konst.OrchestratorSourceLinesPerTurn, spawn)
 	case RefusedSecondSlice:
-		return fmt.Sprintf("%s: %s is source in a second directory, and this turn already changed source in %s: work in one directory is yours, a second is a separate piece, so spawn %s with it",
+		return fmt.Sprintf("%s: %s is source in a second directory, and this turn already changed source in %s: work in one directory is yours, a second is a separate piece, so spawn %s with it rather than another route to the same file, such as sed or a redirect",
 			e.Tool, e.Path, e.Slice, spawn)
 	case RefusedOverLines:
-		return fmt.Sprintf("%s: %s is source code, and this change of %d lines would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent: spawn %s with this work instead",
+		return fmt.Sprintf("%s: %s is source code, and this change of %d lines would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent: spawn %s with this work instead, rather than another route to the same file, such as sed or a redirect",
 			e.Tool, e.Path, e.Lines, konst.OrchestratorSourceLinesPerTurn, e.Spent, spawn)
 	}
 	panic("tofu: unknown source budget refusal " + string(e.Reason))
@@ -104,10 +104,9 @@ func (t budgetedTool) Name() string { return t.tool.Name() }
 
 func (t budgetedTool) Definition() llm.Tool {
 	definition := t.tool.Definition()
-	definition.Description += fmt.Sprintf(". as the orchestrator you change source code yourself, through write and edit, when the work stays in one directory and within %d changed lines in one turn: "+
-		"do that work without spawning. source in a second directory, or past the lines, is refused and goes to a sub-agent. never write source by hand through the shell, sed -i and a heredoc included: "+
-		"a rename is edit with replace_all in each file, and a program's own output redirected into a file is not counted. an exact edit of a small file applies without a read, so edit straight from what search or a shell command showed you, every file in one call. "+
-		"markdown, notes, plans, configuration and data are free", konst.OrchestratorSourceLinesPerTurn)
+	if definition.Name == "edit" {
+		definition.Description += fmt.Sprintf(". your source budget as the orchestrator is %d changed lines in one directory a turn", konst.OrchestratorSourceLinesPerTurn)
+	}
 	return definition
 }
 

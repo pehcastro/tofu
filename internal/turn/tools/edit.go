@@ -44,21 +44,15 @@ func (e Edit) Name() string { return "edit" }
 func (e Edit) Definition() llm.Tool {
 	return llm.Tool{
 		Name: "edit",
-		Description: "replaces one exact stretch of text inside a file that already exists and leaves the rest of it untouched. " +
-			"old_string is copied from the file character for character, including indentation and line breaks, " +
-			"and it has to appear exactly once: when it appears more than once the result lists every occurrence with its line number, " +
-			"so add the lines above or below it until it is unique. " +
-			"replace_all true replaces every exact occurrence of old_string instead and says how many, which is how a name is renamed through a file: never sed -i. " +
-			"new_string is what it becomes, and an empty new_string deletes it. " +
-			"a path that does not exist, or a stretch of text that differs from the file in whitespace alone, is repaired when there is exactly one candidate and refused when there are two, " +
-			"and a repair is named at the top of the result. " +
-			"the result is a unified diff of what changed, and on a .ts or .tsx file it ends with the errors the project's own tsc finds in that file, or on a project too large to recheck at once, with the line saying the check runs in the background and the errors its last check found: fix them before moving on. " +
-			"symbol is the other way to say what is replaced, on a go file only: it names one declaration, spelled Resolve for a function, a type or a value and Root.Resolve for a method, " +
-			"and new_string becomes the whole of it, so the old text is never copied. " +
-			"use symbol when a whole declaration is being rewritten and old_string when part of one is or the file is not go. " +
-			"exactly one of the two is given. a symbol that does not name exactly one declaration in that file is refused with what was found, " +
-			"and an edit that would leave a go file unable to parse is refused with nothing written. " +
-			"use write instead to create a file or to replace the whole of one",
+		Description: "replaces one exact stretch of an existing file. " +
+			"old_string is copied from the file character for character and appears exactly once; " +
+			"a small file needs no read first, so edit from what search showed you. " +
+			"replace_all true replaces every occurrence instead, which is how a name is renamed through a file. " +
+			"an empty new_string deletes. " +
+			"on a go file, symbol names one whole declaration instead, Resolve or Root.Resolve for a method, and new_string becomes all of it. " +
+			"give old_string or symbol, not both. " +
+			"returns a unified diff, ending on a .ts or .tsx file with tsc's errors: fix them before moving on. " +
+			"write creates a file or replaces a whole one",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -109,7 +103,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error)
 	if errors.Is(err, fs.ErrNotExist) {
 		repaired, note, refusal := repairPath(e.root, args.Path, false)
 		if refusal != nil {
-			return turn.Result{}, fmt.Errorf("edit: %w", refusal)
+			return turn.Result{}, fmt.Errorf("edit: %w. edit changes a file that exists: write creates one", refusal)
 		}
 		target, repairs = repaired, append(repairs, note)
 		if resolved, err = e.root.Resolve(target); err == nil {

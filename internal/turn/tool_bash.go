@@ -308,20 +308,12 @@ func (t *BashTool) Name() string { return bashToolName }
 
 func (t *BashTool) Definition() llm.Tool {
 	description := fmt.Sprintf(
-		"runs one command in %s and waits for it to exit. cwd is already the working directory named in the environment block: spell paths that way, no cd. a nonzero exit is reported with its code. "+
-			"a command still running after %d ms, such as a long build or test run, moves to a background shell and keeps running: the call returns its name, such as bash-1, and the output so far, and the shell tool's wait reads it back until it ends. "+
-			"never wait on a running command with another bash call, such as sleep, Wait-Process or a polling loop: use shell wait. a timeout_ms at or under %d is a hard limit instead: the command is killed there and returns what it printed. "+
-			"do not use it to walk the tree: find, ls -R and wc descend into every ignored directory and take minutes here, "+
-			"while glob, search and project_report skip what .gitignore skips and answer in milliseconds. "+
-			"background: true is for long work that keeps running and nothing else: a dev server, a watcher, a long-running script. "+
-			"a test, a build, an install, a version check or any other command that ends runs here without background, never in it. "+
-			"a background start waits up to %d ms: a command that ends by then comes back with its output and exit code like any other and is not kept, "+
-			"and one still running is kept on the shells screen and the call returns its name, pid and output so far, as soon as its port opens or it prints a ready line. "+
-			"a start whose command, env or package script names a port that another process holds on 127.0.0.1 or ::1 is refused, naming the holder and a free port. "+
-			"start the server itself as the whole command, with no & and no nohup, so the process kept is the one that serves. "+
-			"stop, restart and read a kept process with the shell tool by its name, never with kill, taskkill or pkill: a kill of a pid tofu started runs as shell stop. "+
-			"check whether a port is taken with check_port, which dials it on 127.0.0.1 and ::1 and names the process holding it, no http request needed.",
-		t.choice.Label, t.softLimit.Milliseconds(), t.softLimit.Milliseconds(), konst.BackgroundYieldMillis)
+		"runs one command in %s for the project's own package manager, build and tests. cwd is the working directory: no cd. "+
+			"a command still running after %d ms moves to a background shell and returns its name: read it back with shell wait, never sleep or poll. "+
+			"timeout_ms at or under %[2]d kills it there instead. "+
+			"background true is only for a server or watcher that never ends: run the server itself, no & or nohup, and stop it with the shell tool, never kill. "+
+			"check_port names what holds a port",
+		t.choice.Label, t.softLimit.Milliseconds())
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
 	}
@@ -331,10 +323,10 @@ func (t *BashTool) Definition() llm.Tool {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"command":    map[string]any{"type": "string", "description": "required unless check_port is set"},
-				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("only for a command that must be killed early: at or under %d it is killed at this limit. a larger value, or none, lets a command still running at %d ms move to a background shell", t.softLimit.Milliseconds(), t.softLimit.Milliseconds())},
-				"background": map[string]any{"type": "boolean", "description": fmt.Sprintf("only for long work that keeps running: a dev server, a watcher, a long-running script. never a test or a one-shot command. waits up to %d ms, returns the output if it ended by then, and otherwise keeps it running on the shells screen, where it outlives the turn", konst.BackgroundYieldMillis)},
-				"check_port": map[string]any{"type": "integer", "description": "skip command and report whether this port is free or held on 127.0.0.1 and ::1, with the pid and command line of its holder, without any http request"},
+				"command":    map[string]any{"type": "string"},
+				"timeout_ms": map[string]any{"type": "integer"},
+				"background": map[string]any{"type": "boolean"},
+				"check_port": map[string]any{"type": "integer"},
 			},
 			"required": []string{},
 		},
