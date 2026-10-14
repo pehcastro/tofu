@@ -15,7 +15,7 @@ scale=$work/scale.exe
 project=$work/project
 "$scale" fixture "$project"
 dir=$(native "$project")
-built=$(tofu version | awk '$1 == "version" || $1 == "commit" { printf "%s ", $2 }')
+built=$(tofu version | awk '$1 == "version" { v = $2 } $1 == "commit" { c = substr($2, 1, 8) } END { print v, c }')
 
 take() { until mkdir "$slot" 2>/dev/null; do sleep 30; done; }
 give() { rmdir "$slot"; }

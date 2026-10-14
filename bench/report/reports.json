@@ -979,15 +979,26 @@
         "better": "lower",
         "tofu": [
           {
-            "label": "1 run per rung",
+            "label": "1 run per rung, 0.5.13-fix1",
             "date": "2026-10-13",
             "commit": "b7c52479",
             "version": "0.5.13-fix1",
             "build": "not recorded by bench/scale, the tree at b7c52479",
             "figure": "42",
             "value": 42,
-            "source": "bench/scale/report.md",
+            "source": "bench/report/runs/scale-2026-10-13.md",
             "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 |"
+          },
+          {
+            "label": "1 run per rung, 0.5.14",
+            "date": "2026-10-14",
+            "commit": "75d2b58b",
+            "version": "0.5.14",
+            "build": "a clean clone of HEAD, live claude-sub",
+            "figure": "37",
+            "value": 37,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 |"
           }
         ],
         "rivals": [
@@ -1038,15 +1049,26 @@
         "better": "lower",
         "tofu": [
           {
-            "label": "1 run per rung",
+            "label": "1 run per rung, 0.5.13-fix1",
             "date": "2026-10-13",
             "commit": "b7c52479",
             "version": "0.5.13-fix1",
             "build": "not recorded by bench/scale, the tree at b7c52479",
             "figure": "0.4",
             "value": 0.4,
-            "source": "bench/scale/report.md",
+            "source": "bench/report/runs/scale-2026-10-13.md",
             "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 |"
+          },
+          {
+            "label": "1 run per rung, 0.5.14",
+            "date": "2026-10-14",
+            "commit": "75d2b58b",
+            "version": "0.5.14",
+            "build": "a clean clone of HEAD, live claude-sub",
+            "figure": "0.7",
+            "value": 0.7,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 |"
           }
         ],
         "rivals": [
@@ -1097,15 +1119,26 @@
         "better": "lower",
         "tofu": [
           {
-            "label": "1 run per rung",
+            "label": "1 run per rung, 0.5.13-fix1",
             "date": "2026-10-13",
             "commit": "b7c52479",
             "version": "0.5.13-fix1",
             "build": "not recorded by bench/scale, the tree at b7c52479",
             "figure": "0.12",
             "value": 0.12,
-            "source": "bench/scale/report.md",
+            "source": "bench/report/runs/scale-2026-10-13.md",
             "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 |"
+          },
+          {
+            "label": "1 run per rung, 0.5.14",
+            "date": "2026-10-14",
+            "commit": "75d2b58b",
+            "version": "0.5.14",
+            "build": "a clean clone of HEAD, live claude-sub",
+            "figure": "0.06",
+            "value": 0.06,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 |"
           }
         ],
         "rivals": [
@@ -1156,15 +1189,26 @@
         "better": "higher",
         "tofu": [
           {
-            "label": "1 run per rung",
+            "label": "1 run per rung, 0.5.13-fix1",
             "date": "2026-10-13",
             "commit": "b7c52479",
             "version": "0.5.13-fix1",
             "build": "not recorded by bench/scale, the tree at b7c52479",
             "figure": "over 100",
             "value": 100,
-            "source": "bench/scale/report.md",
+            "source": "bench/report/runs/scale-2026-10-13.md",
             "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 | over 100, a straight line past 10 measured |"
+          },
+          {
+            "label": "1 run per rung, 0.5.14",
+            "date": "2026-10-14",
+            "commit": "75d2b58b",
+            "version": "0.5.14",
+            "build": "a clean clone of HEAD, live claude-sub",
+            "figure": "over 100",
+            "value": 100,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 37 | 0.7 | 95 | 0.8 | 0.81 | 0.06 | over 100, a straight line past 10 measured |"
           }
         ],
         "rivals": [
@@ -1953,7 +1997,7 @@
             "figure": "15.77",
             "value": 15.77,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 2 | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
+            "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
           },
           {
             "label": "4 sub-agents",
@@ -1964,7 +2008,7 @@
             "figure": "17.40",
             "value": 17.4,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 4 | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
+            "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
           },
           {
             "label": "10 sub-agents",
@@ -1975,7 +2019,7 @@
             "figure": "20.94",
             "value": 20.94,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 10 | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
+            "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
           }
         ]
       },
@@ -1999,7 +2043,7 @@
             "figure": "3.10",
             "value": 3.1,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 2 | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
+            "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
           },
           {
             "label": "4 sub-agents",
@@ -2010,7 +2054,7 @@
             "figure": "3.81",
             "value": 3.81,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 4 | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
+            "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
           },
           {
             "label": "10 sub-agents",
@@ -2021,7 +2065,7 @@
             "figure": "9.11",
             "value": 9.11,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 10 | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
+            "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
           }
         ]
       },
@@ -2045,7 +2089,7 @@
             "figure": "5.44",
             "value": 5.44,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 2 | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
+            "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
           },
           {
             "label": "4 sub-agents",
@@ -2056,7 +2100,7 @@
             "figure": "6.47",
             "value": 6.47,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 4 | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
+            "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
           },
           {
             "label": "10 sub-agents",
@@ -2067,7 +2111,7 @@
             "figure": "7.01",
             "value": 7.01,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 10 | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
+            "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
           }
         ]
       },
@@ -2091,7 +2135,7 @@
             "figure": "3.61",
             "value": 3.61,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 2 | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
+            "evidence": "| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |"
           },
           {
             "label": "4 sub-agents",
@@ -2102,7 +2146,7 @@
             "figure": "5.75",
             "value": 5.75,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 4 | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
+            "evidence": "| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |"
           },
           {
             "label": "10 sub-agents",
@@ -2113,7 +2157,7 @@
             "figure": "3.42",
             "value": 3.42,
             "source": "bench/scale/wall.md",
-            "evidence": "| live | 10 | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
+            "evidence": "| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |"
           }
         ]
       },

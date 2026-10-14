@@ -129,16 +129,16 @@ func wallreport(args []string) error {
 			median(g.spawned, func(r wallRow) float64 { return r.ReadMS })/1000, slowest.ReadMS/1000, g.answered, g.want)
 	}
 	text.WriteString("\n## Per run\n\n")
-	header(&text, "arm | agents", runColumns, "")
+	header(&text, "arm | agents | commit", runColumns, "")
 	for _, g := range groups {
-		fmt.Fprintf(&text, "| %s | %d |", g.first.Arm, g.first.Agents)
+		fmt.Fprintf(&text, "| %s | %d | %.8s |", g.first.Arm, g.first.Agents, g.first.Commit)
 		for _, column := range runColumns {
 			fmt.Fprintf(&text, " %.2f |", median(g.runs, column.value)/1000)
 		}
 		text.WriteString("\n")
 	}
 	text.WriteString("\n## Share of read, by step\n\n")
-	header(&text, "arm | agents", agentColumns, "")
+	header(&text, "arm | agents | commit", agentColumns, "")
 	for _, g := range groups {
 		if len(g.spawned) == 0 {
 			continue
@@ -147,7 +147,7 @@ func wallreport(args []string) error {
 		for _, r := range g.spawned {
 			whole += r.ReadMS
 		}
-		fmt.Fprintf(&text, "| %s | %d |", g.first.Arm, g.first.Agents)
+		fmt.Fprintf(&text, "| %s | %d | %.8s |", g.first.Arm, g.first.Agents, g.first.Commit)
 		for _, column := range agentColumns {
 			var part float64
 			for _, r := range g.spawned {
@@ -168,12 +168,12 @@ func wallreport(args []string) error {
 			}
 		}
 	}
-	header(&text, "arm | agents", parts, "")
+	header(&text, "arm | agents | commit", parts, "")
 	for _, g := range groups {
 		if len(g.spawned) == 0 {
 			continue
 		}
-		fmt.Fprintf(&text, "| %s | %d |", g.first.Arm, g.first.Agents)
+		fmt.Fprintf(&text, "| %s | %d | %.8s |", g.first.Arm, g.first.Agents, g.first.Commit)
 		for _, part := range parts {
 			fmt.Fprintf(&text, " %.0f |", median(g.spawned, part.value))
 		}

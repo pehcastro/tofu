@@ -14,39 +14,47 @@ Per sub-agent, from the end of the lead request that asked for the spawn to the 
 | live | 2 | 2 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.03 | 1.71 | 0.00 | 3.15 | 0.00 | 0.01 | 0.25 | 1.73 | 2 | 5.44 | 5.44 | 4/4 |
 | live | 4 | 3 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.03 | 1.41 | 0.00 | 2.39 | 0.00 | 0.01 | 0.68 | 1.67 | 2 | 6.47 | 7.37 | 12/12 |
 | live | 10 | 3 | 0.5.14+dev 4009ae9f | claude-sonnet-5-5 | 0.04 | 1.68 | 0.01 | 2.52 | 0.00 | 0.00 | 1.59 | 2.29 | 2 | 7.01 | 9.19 | 30/30 |
+| live | 4 | 3 | 0.5.14 75d2b58b | claude-sonnet-5-5 | 0.04 | 1.82 | 0.01 | 3.23 | 0.00 | 0.00 | 0.85 | 2.05 | 2 | 7.37 | 7.78 | 12/12 |
+| live | 10 | 3 | 0.5.14 75d2b58b | claude-sonnet-5-5 | 0.05 | 1.79 | 0.01 | 3.07 | 0.00 | 0.01 | 1.91 | 2.65 | 2 | 9.68 | 14.87 | 30/30 |
 
 ## Per run
 
-| arm | agents | startup | ask | fan | memory | exit | wall | lead turns |
-|---|---|---|---|---|---|---|---|---|
-| cassette | 2 | 0.20 | 0.04 | 0.31 | 0.04 | 0.10 | 0.69 | 2.00 |
-| cassette | 4 | 0.19 | 0.04 | 0.31 | 0.04 | 0.09 | 0.68 | 2.00 |
-| cassette | 10 | 0.21 | 0.04 | 0.36 | 0.04 | 0.11 | 0.77 | 2.00 |
-| live | 2 | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |
-| live | 4 | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |
-| live | 10 | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |
+| arm | agents | commit | startup | ask | fan | memory | exit | wall | lead turns |
+|---|---|---|---|---|---|---|---|---|---|
+| cassette | 2 | 4009ae9f | 0.20 | 0.04 | 0.31 | 0.04 | 0.10 | 0.69 | 2.00 |
+| cassette | 4 | 4009ae9f | 0.19 | 0.04 | 0.31 | 0.04 | 0.09 | 0.68 | 2.00 |
+| cassette | 10 | 4009ae9f | 0.21 | 0.04 | 0.36 | 0.04 | 0.11 | 0.77 | 2.00 |
+| live | 2 | 4009ae9f | 3.73 | 3.10 | 5.44 | 3.61 | 0.16 | 15.77 | 2.00 |
+| live | 4 | 4009ae9f | 0.29 | 3.81 | 6.47 | 5.75 | 0.11 | 17.40 | 2.00 |
+| live | 10 | 4009ae9f | 0.34 | 9.11 | 7.01 | 3.42 | 0.11 | 20.94 | 2.00 |
+| live | 4 | 75d2b58b | 0.42 | 3.98 | 7.37 | 4.54 | 0.09 | 15.71 | 2.00 |
+| live | 10 | 75d2b58b | 0.39 | 7.73 | 12.40 | 6.39 | 0.08 | 23.03 | 2.00 |
 
 ## Share of read, by step
 
-| arm | agents | notice | wait | start | model | tools | between | gather | lead |
-|---|---|---|---|---|---|---|---|---|---|
-| cassette | 2 | 2% | 34% | 1% | 28% | 0% | 3% | 5% | 27% |
-| cassette | 4 | 3% | 33% | 1% | 28% | 0% | 4% | 6% | 24% |
-| cassette | 10 | 6% | 31% | 1% | 24% | 0% | 6% | 9% | 23% |
-| live | 2 | 0% | 17% | 0% | 50% | 0% | 0% | 3% | 30% |
-| live | 4 | 0% | 18% | 0% | 38% | 0% | 0% | 14% | 29% |
-| live | 10 | 1% | 19% | 0% | 30% | 0% | 0% | 20% | 30% |
+| arm | agents | commit | notice | wait | start | model | tools | between | gather | lead |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cassette | 2 | 4009ae9f | 2% | 34% | 1% | 28% | 0% | 3% | 5% | 27% |
+| cassette | 4 | 4009ae9f | 3% | 33% | 1% | 28% | 0% | 4% | 6% | 24% |
+| cassette | 10 | 4009ae9f | 6% | 31% | 1% | 24% | 0% | 6% | 9% | 23% |
+| live | 2 | 4009ae9f | 0% | 17% | 0% | 50% | 0% | 0% | 3% | 30% |
+| live | 4 | 4009ae9f | 0% | 18% | 0% | 38% | 0% | 0% | 14% | 29% |
+| live | 10 | 4009ae9f | 1% | 19% | 0% | 30% | 0% | 0% | 20% | 30% |
+| live | 4 | 75d2b58b | 0% | 19% | 0% | 42% | 0% | 0% | 12% | 27% |
+| live | 10 | 75d2b58b | 1% | 15% | 0% | 30% | 0% | 0% | 18% | 36% |
 
 ## The spawn notice's own steps, median ms
 
-| arm | agents | account pick | brief | earlier siblings | hook | memory | prompt | scratch | ticket grant | total |
-|---|---|---|---|---|---|---|---|---|---|---|
-| cassette | 2 | 1 | 1 | 0 | 1 | 0 | 1 | 2 | 0 | 8 |
-| cassette | 4 | 1 | 1 | 4 | 0 | 0 | 2 | 2 | 0 | 11 |
-| cassette | 10 | 1 | 1 | 15 | 0 | 0 | 2 | 3 | 0 | 23 |
-| live | 2 | 14 | 8 | 0 | 1 | 0 | 1 | 3 | 0 | 28 |
-| live | 4 | 10 | 2 | 4 | 1 | 0 | 1 | 3 | 0 | 28 |
-| live | 10 | 12 | 1 | 16 | 1 | 0 | 1 | 3 | 0 | 38 |
+| arm | agents | commit | account pick | brief | earlier siblings | hook | memory | prompt | scratch | ticket grant | total |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| cassette | 2 | 4009ae9f | 1 | 1 | 0 | 1 | 0 | 1 | 2 | 0 | 8 |
+| cassette | 4 | 4009ae9f | 1 | 1 | 4 | 0 | 0 | 2 | 2 | 0 | 11 |
+| cassette | 10 | 4009ae9f | 1 | 1 | 15 | 0 | 0 | 2 | 3 | 0 | 23 |
+| live | 2 | 4009ae9f | 14 | 8 | 0 | 1 | 0 | 1 | 3 | 0 | 28 |
+| live | 4 | 4009ae9f | 10 | 2 | 4 | 1 | 0 | 1 | 3 | 0 | 28 |
+| live | 10 | 4009ae9f | 12 | 1 | 16 | 1 | 0 | 1 | 3 | 0 | 38 |
+| live | 4 | 75d2b58b | 13 | 12 | 2 | 1 | 0 | 1 | 6 | 0 | 36 |
+| live | 10 | 75d2b58b | 8 | 11 | 25 | 1 | 0 | 1 | 3 | 0 | 48 |
 
 ## How these runs were made
 
@@ -54,6 +62,7 @@ Per sub-agent, from the end of the lead request that asked for the spawn to the 
 - Credential: the cassette arm has none; the live arm is the claude-sub subscription. The two are not compared cell by cell: the cassette arm is tofu's own overhead, the live arm is where the time goes.
 - The live rows were taken before `wall.sh` gave each run its own project, so all eight live runs shared one project directory, and the episode memory of every earlier run sat in the next run's prompt and in its memory compaction. The merges the memory model ran after a turn grew from one to four across the runs for that reason. `wall.sh` now makes a fresh project per run.
 - Live, 2 agents: the first run was a probe made before the startup, ask and memory columns existed; its row was rebuilt from its session with `scale retrace` and is counted as run 1. A second run answered 0 of 2 without spawning: its lead read the probe's markers from the episode memory and printed them, so it has no sub-agent and no row, and it counts against the three run cap. A median of two runs is the larger of the two, so the live 2 per run row is the probe's: the other run took 9.98 s, with 0.30 s startup, 2.75 s ask and 1.39 s memory.
+- Rows at 75d2b58b: `go build ./cmd/tofu` in a clean clone of HEAD, so `tofu version` says `0.5.14`, commit `75d2b58b`. Live only, 4 and 10 agents, three runs each, each in a fresh project, taken live by `wall.sh` rather than rebuilt. Date 2026-10-14. Per-run walls: 4 agents 16.89, 13.70, 15.71 s against 17.40, 14.45, 17.44 s at 4009ae9f; 10 agents 22.61, 28.65, 23.03 s against 29.90, 18.01, 20.94 s. The medians moved by less than the spread of either build's three runs, so neither direction is a finding. Live 10 run 2 had a 7.2 s report turn that read nine reports at once, which is most of its 28.65 s.
 - Live, 4 and 10 agents: three runs each, rebuilt from their sessions with `scale retrace` after the memory column was narrowed to the requests that start after the final answer.
 
 ## What the numbers say
