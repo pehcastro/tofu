@@ -1,0 +1,21 @@
+package hiddencheck
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestHiddenQueue(t *testing.T) {
+	body, err := os.ReadFile("../ANSWER.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("%d lines, want 2", len(lines))
+	}
+	if got := strings.Trim(strings.TrimSpace(lines[1]), "\"`"); got != "orders-express" {
+		t.Fatalf("queue line %q", lines[1])
+	}
+}

@@ -62,6 +62,7 @@ var arms = []arm{
 }
 
 type row struct {
+	Task         string        `json:"task,omitempty"`
 	Arm          string        `json:"arm"`
 	Rep          int           `json:"rep"`
 	Setting      string        `json:"setting,omitempty"`
@@ -80,17 +81,20 @@ type row struct {
 	Tree         treeUsage     `json:"tree"`
 	Tokens       tokens        `json:"tokens"`
 	Requests     int           `json:"requests"`
+	Auxiliary    int           `json:"auxiliary_requests,omitempty"`
 	Calls        []call        `json:"calls"`
+	Agents       int           `json:"agents,omitempty"`
 	Timed        []requestTime `json:"timed_requests,omitempty"`
 	ThinkingSent string        `json:"thinking_sent,omitempty"`
 	Retried      int           `json:"retried"`
 	Score        score         `json:"score"`
 	Notes        []string      `json:"notes,omitempty"`
+	Work         string        `json:"work,omitempty"`
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		fail(errors.New("usage: rivals check | run -arm <name> -rep <n> -slot <dir> | reparse | report"))
+		fail(errors.New("usage: rivals check [-task <name>] [-prompt <file>] | run [-task <name>] -arm <name> -rep <n> -slot <dir> | reparse | report"))
 	}
 	switch os.Args[1] {
 	case "check":
@@ -121,12 +125,17 @@ func here() string {
 func check(args []string) error {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
+	name := flags.String("task", "", "task folder under testdata/tasks; empty is the first task in testdata")
+	promptFile := flags.String("prompt", "", "check this prompt for leakage instead of the task's own")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+	t, _, err := unleakedTask(*name, *promptFile)
+	if err != nil {
+		return err
+	}
 	for _, withReference := range []bool{false, true} {
-		dir := filepath.Join(*work, fmt.Sprintf("check-reference-%t", withReference))
-		dirs, err := stage(dir, withReference)
+		dirs, err := stage(filepath.Join(*work, fmt.Sprintf("check-%s-reference-%t", cmp.Or(t.Name, "first"), withReference)), t, withReference)
 		if err != nil {
 			return err
 		}
@@ -135,19 +144,19 @@ func check(args []string) error {
 			label = "seed plus reference solution"
 		}
 		fmt.Println(label + ":")
-		fmt.Print(scoreRepo(dirs.repo, goEnv(dirs)).text())
+		fmt.Print(scoreRepo(dirs.repo, goEnv(dirs), t).text())
 	}
 	return nil
 }
 
-func stage(dir string, withReference bool) (runDirs, error) {
+func stage(dir string, t task, withReference bool) (runDirs, error) {
 	if err := os.RemoveAll(dir); err != nil {
 		return runDirs{}, err
 	}
 	dirs := runDirs{repo: filepath.Join(dir, "repo"), goDir: filepath.Join(dir, "go"), sessions: filepath.Join(dir, "sessions")}
-	sources := []string{filepath.Join(here(), "testdata", "seed")}
+	sources := []string{filepath.Join(t.dir(), "seed")}
 	if withReference {
-		sources = append(sources, filepath.Join(here(), "testdata", "reference"))
+		sources = append(sources, filepath.Join(t.dir(), "reference"))
 	}
 	for _, made := range []string{dirs.repo, filepath.Join(dirs.goDir, "cache"), filepath.Join(dirs.goDir, "tmp"), dirs.sessions} {
 		if err := os.MkdirAll(made, 0o755); err != nil {
@@ -155,7 +164,12 @@ func stage(dir string, withReference bool) (runDirs, error) {
 		}
 	}
 	for _, source := range sources {
-		if err := overlay(source, dirs.repo); err != nil {
+		if err := copyTree(source, dirs.repo); err != nil {
+			return runDirs{}, err
+		}
+	}
+	if t.Sea != nil {
+		if err := writeSea(*t.Sea, dirs.repo); err != nil {
 			return runDirs{}, err
 		}
 	}
@@ -166,23 +180,6 @@ func stage(dir string, withReference bool) (runDirs, error) {
 		}
 	}
 	return dirs, nil
-}
-
-func overlay(source, repo string) error {
-	entries, err := os.ReadDir(source)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		body, err := os.ReadFile(filepath.Join(source, entry.Name()))
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(repo, entry.Name()), body, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func goEnv(d runDirs) []string {
@@ -203,7 +200,12 @@ func runArm(args []string) error {
 	limit := flags.Duration("limit", 20*time.Minute, "wall clock cap")
 	patience := flags.Duration("patience", 30*time.Minute, "how long to wait for the slot")
 	setting := flags.String("setting", "", "the build or setting under test, either shipped or rival; its rows go to the setting table, not the arm tables")
+	taskName := flags.String("task", "", "task folder under testdata/tasks; empty is the first task in testdata")
 	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	t, prompt, err := unleakedTask(*taskName, "")
+	if err != nil {
 		return err
 	}
 	index := slices.IndexFunc(arms, func(a arm) bool { return a.Name == *name })
@@ -221,14 +223,10 @@ func runArm(args []string) error {
 		time.Sleep(15 * time.Second)
 	}
 	defer func() { _ = os.Remove(*slot) }()
-	r := row{Arm: chosen.Name, Rep: *rep, Setting: *setting, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
+	r := row{Task: t.Name, Arm: chosen.Name, Rep: *rep, Setting: *setting, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
 		Date: time.Now().Format("2006-01-02 15:04"), Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU())}
-	dir := filepath.Join(*work, r.name())
-	dirs, err := stage(dir, false)
-	if err != nil {
-		return err
-	}
-	prompt, err := os.ReadFile(filepath.Join(here(), "testdata", "prompt.txt"))
+	r.Work = filepath.Join(*work, r.name())
+	dirs, err := stage(r.Work, t, false)
 	if err != nil {
 		return err
 	}
@@ -238,22 +236,22 @@ func runArm(args []string) error {
 	} else {
 		r.Version = firstLine(toolOutput(dirs.repo, env, chosen.Tool, "--version"))
 	}
-	lines, stderr, err := drive(chosen, dirs, env, strings.TrimSpace(string(prompt)), *limit, &r)
+	lines, stderr, err := drive(chosen, dirs, env, prompt, *limit, &r)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "stdout.txt"), []byte(joinLines(lines)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(r.Work, "stdout.txt"), []byte(joinLines(lines)), 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "stderr.txt"), []byte(stderr), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(r.Work, "stderr.txt"), []byte(stderr), 0o644); err != nil {
 		return err
 	}
-	r.Score = scoreRepo(dirs.repo, env)
+	r.Score = scoreRepo(dirs.repo, env, t)
 	return save(withTranscript(r, parse(chosen, lines, dirs, env)))
 }
 
 func withTranscript(r row, t transcript) row {
-	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls, r.Timed, r.ThinkingSent = t.model, t.models, t.credential, t.requests, t.tokens, t.calls, t.timed, t.thinkingSent
+	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls, r.Timed, r.ThinkingSent, r.Agents, r.Auxiliary = t.model, t.models, t.credential, t.requests, t.tokens, t.calls, t.timed, t.thinkingSent, t.agents, t.auxiliary
 	r.Notes = append(slices.DeleteFunc(r.Notes, func(note string) bool {
 		return !strings.HasPrefix(note, "stopped at") && !strings.HasPrefix(note, "wait:")
 	}), t.notes...)
@@ -262,10 +260,8 @@ func withTranscript(r row, t transcript) row {
 }
 
 func (r row) name() string {
-	if r.Setting == "" {
-		return fmt.Sprintf("%s-%d", r.Arm, r.Rep)
-	}
-	return fmt.Sprintf("%s-%s-%d", r.Arm, r.Setting, r.Rep)
+	parts := slices.DeleteFunc([]string{r.Task, r.Arm, r.Setting, strconv.Itoa(r.Rep)}, func(part string) bool { return part == "" })
+	return strings.Join(parts, "-")
 }
 
 func save(r row) error {
@@ -273,22 +269,24 @@ func save(r row) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(here(), "runs", r.name()+".json")
+	path := filepath.Join(here(), "runs", r.Task, r.name()+".json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	fmt.Printf("%s: %s %s, exit %d, %.1f s wall, %.1f s CPU, %s, %d requests, %d calls, out %d, reasoning %d, thinking sent %s, hidden %d of 5, rubric %d of 5\n", r.name(), r.Tool, r.build(), r.ExitCode, float64(r.WallMS)/1000,
-		float64(r.Tree.CPUMS)/1000, r.Model, r.Requests, len(r.Calls), r.Tokens.Out, r.Tokens.Reasoning, cmp.Or(r.ThinkingSent, "not read"), r.Score.hiddenPassed(), r.Score.rubricPassed())
+	fmt.Printf("%s: %s %s, exit %d, %.1f s wall, %.1f s CPU, %s, %d requests, %d calls, %d sub-agents, out %d, reasoning %d, thinking sent %s, hidden %d of %d, rubric %d of %d\n", r.name(), r.Tool, r.build(), r.ExitCode, float64(r.WallMS)/1000,
+		float64(r.Tree.CPUMS)/1000, r.Model, r.Requests, len(r.Calls), r.Agents, r.Tokens.Out, r.Tokens.Reasoning, cmp.Or(r.ThinkingSent, "not read"),
+		r.Score.hiddenPassed(), len(r.Score.Hidden), r.Score.rubricPassed(), len(r.Score.Rubric))
 	return os.WriteFile(path, append(body, '\n'), 0o644)
 }
 
 func reparse(args []string) error {
 	flags := flag.NewFlagSet("reparse", flag.ContinueOnError)
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
+	taskName := flags.String("task", "", "reparse only this task's rows; empty is the first task")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	paths, err := filepath.Glob(filepath.Join(here(), "runs", "*.json"))
+	paths, err := filepath.Glob(filepath.Join(here(), "runs", *taskName, "*.json"))
 	if err != nil {
 		return err
 	}
@@ -302,7 +300,7 @@ func reparse(args []string) error {
 			return err
 		}
 		chosen := arms[slices.IndexFunc(arms, func(a arm) bool { return a.Name == r.Arm })]
-		dir := filepath.Join(*work, r.name())
+		dir := cmp.Or(r.Work, filepath.Join(*work, r.name()))
 		raw, err := os.ReadFile(filepath.Join(dir, "stdout.txt"))
 		if err != nil {
 			return err

@@ -1,0 +1,35 @@
+package transfer
+
+import (
+	"errors"
+	"testing"
+
+	"example.com/ledger/account"
+	"example.com/ledger/store"
+)
+
+func TestHiddenCurrency(t *testing.T) {
+	s := store.New()
+	a := account.New("a1", "Ada", "EUR")
+	a.Balance = 1000
+	s.Put(a)
+	s.Put(account.New("u1", "Uma", "USD"))
+	s.Put(account.New("e2", "Eli", "EUR"))
+	if err := Move(s, "a1", "u1", 100); !errors.Is(err, ErrCurrency) {
+		t.Fatalf("EUR to USD gave %v", err)
+	}
+	from, _ := s.Get("a1")
+	to, _ := s.Get("u1")
+	if from.Balance != 1000 || to.Balance != 0 {
+		t.Fatalf("balances moved: %d, %d", from.Balance, to.Balance)
+	}
+	if err := Move(s, "a1", "e2", 100); err != nil {
+		t.Fatalf("EUR to EUR gave %v", err)
+	}
+	if err := Move(s, "a1", "zz", 1); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("missing target gave %v", err)
+	}
+	if _, err := Exposure(s, []Transfer{{From: "zz", To: "a1", Cents: 1}}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("missing source gave %v", err)
+	}
+}

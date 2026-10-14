@@ -1,0 +1,373 @@
+{
+  "task": "subagents",
+  "arm": "omp-sonnet",
+  "rep": 3,
+  "tool": "omp",
+  "version": "omp/18.3.2",
+  "asked_model": "anthropic/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "credential": "provider anthropic through omp's own login, credential 3",
+  "posture": "--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay",
+  "date": "2026-10-14 17:46",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 82920,
+  "tree": {
+    "cpu_ms": 51968,
+    "peak_tree_rss_bytes": 1132498944,
+    "peak_commit_bytes": 1973755904,
+    "processes": 333,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 2895,
+    "cache_read": 387604,
+    "cache_write": 65005,
+    "out": 14501
+  },
+  "requests": 37,
+  "auxiliary_requests": 6,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": 260,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "task",
+      "ms": 255,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "wait",
+      "ms": 20389,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "wait",
+      "ms": 20,
+      "failed": true
+    },
+    {
+      "kind": "other",
+      "name": "wait",
+      "ms": 23,
+      "failed": true
+    },
+    {
+      "kind": "other",
+      "name": "wait",
+      "ms": 2842,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "wait",
+      "ms": 311,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 10,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 58,
+      "failed": true
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 9,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 24,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 33895,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "todo",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "yield",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "todo",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "yield",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "todo",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "yield",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "todo",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "yield",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "todo",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "yield",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "todo",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": -1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "yield",
+      "ms": -1,
+      "failed": false
+    }
+  ],
+  "agents": 6,
+  "retried": 3,
+  "score": {
+    "hidden": {
+      "limit": true,
+      "retries": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "visible tests pass": true
+    },
+    "files_changed": 2,
+    "lines_added": 7,
+    "lines_deleted": 1
+  },
+  "notes": [
+    "21 model requests came from sub-agent session files, their tool calls are not timed"
+  ]
+}

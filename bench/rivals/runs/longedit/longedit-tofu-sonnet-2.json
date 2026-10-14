@@ -1,0 +1,389 @@
+{
+  "task": "longedit",
+  "arm": "tofu-sonnet",
+  "rep": 2,
+  "tool": "tofu",
+  "version": "0.5.14",
+  "commit": "b0e2401da41ca104c23caa1af3a9591bddd00bae",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-14 17:37",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 146413,
+  "tree": {
+    "cpu_ms": 50015,
+    "peak_tree_rss_bytes": 364392448,
+    "peak_commit_bytes": 494641152,
+    "processes": 528,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 11296,
+    "cache_read": 466108,
+    "cache_write": 35919,
+    "out": 13270
+  },
+  "requests": 26,
+  "auxiliary_requests": 8,
+  "calls": [
+    {
+      "kind": "other",
+      "name": "project_report",
+      "ms": 44,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 5852,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 85,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 546,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 3700,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 156,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 25,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 19,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 12,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 5,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 30,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 8,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 13,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 13,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 30145,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 176,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "shell",
+      "ms": 22,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 8063,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 4307,
+      "failed": false
+    }
+  ],
+  "agents": 1,
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 1504,
+      "first_ms": 1008,
+      "out": 27
+    },
+    {
+      "at_ms": 1664,
+      "ms": 1213,
+      "first_ms": 928,
+      "out": 78
+    },
+    {
+      "at_ms": 8765,
+      "ms": 6419,
+      "first_ms": 5600,
+      "out": 1002
+    },
+    {
+      "at_ms": 15199,
+      "ms": 6648,
+      "first_ms": 3463,
+      "out": 859
+    },
+    {
+      "at_ms": 21947,
+      "ms": 1994,
+      "first_ms": 1150,
+      "out": 92
+    },
+    {
+      "at_ms": 24513,
+      "ms": 1559,
+      "first_ms": 1048,
+      "out": 132
+    },
+    {
+      "at_ms": 29992,
+      "ms": 3874,
+      "first_ms": 3388,
+      "out": 494
+    },
+    {
+      "at_ms": 33871,
+      "ms": 5087,
+      "first_ms": 4550,
+      "out": 475
+    },
+    {
+      "at_ms": 39052,
+      "ms": 6580,
+      "first_ms": 3393,
+      "out": 1163
+    },
+    {
+      "at_ms": 45644,
+      "ms": 14247,
+      "first_ms": 1319,
+      "out": 3089
+    },
+    {
+      "at_ms": 60165,
+      "ms": 13243,
+      "first_ms": 3907,
+      "out": 2587
+    },
+    {
+      "at_ms": 73463,
+      "ms": 3691,
+      "first_ms": 3668,
+      "out": 446
+    },
+    {
+      "at_ms": 107696,
+      "ms": 1288,
+      "first_ms": 1080,
+      "out": 61
+    },
+    {
+      "at_ms": 109412,
+      "ms": 1690,
+      "first_ms": 952,
+      "out": 191
+    },
+    {
+      "at_ms": 111135,
+      "ms": 1211,
+      "first_ms": 994,
+      "out": 68
+    },
+    {
+      "at_ms": 120501,
+      "ms": 5989,
+      "first_ms": 5796,
+      "out": 917
+    },
+    {
+      "at_ms": 126682,
+      "ms": 1693,
+      "first_ms": 1244,
+      "out": 115
+    },
+    {
+      "at_ms": 132749,
+      "ms": 3552,
+      "first_ms": 3546,
+      "out": 377
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 6,
+  "score": {
+    "hidden": {
+      "currency": true,
+      "notfound": true,
+      "rename": true,
+      "service": true,
+      "statement": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 14,
+    "lines_added": 149,
+    "lines_deleted": 64
+  },
+  "notes": [
+    "turn outcome stopped",
+    "1 sub-agents"
+  ]
+}

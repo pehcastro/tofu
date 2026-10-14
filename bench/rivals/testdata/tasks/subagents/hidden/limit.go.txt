@@ -1,0 +1,23 @@
+package shipping
+
+import (
+	"errors"
+	"testing"
+)
+
+type downCarrier struct{ sends int }
+
+func (c *downCarrier) Send(Label) error {
+	c.sends++
+	return errors.New("carrier down")
+}
+
+func TestHiddenLimit(t *testing.T) {
+	carrier := &downCarrier{}
+	if _, err := NewDispatcher(carrier).Ship(Parcel{Order: "o1", Grams: 100, Country: "DE"}); err == nil {
+		t.Fatal("a carrier that is down shipped the parcel")
+	}
+	if carrier.sends != 5 {
+		t.Fatalf("%d attempts, want 5", carrier.sends)
+	}
+}

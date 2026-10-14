@@ -1,0 +1,90 @@
+{
+  "task": "longedit",
+  "arm": "omp-sonnet",
+  "rep": 3,
+  "tool": "omp",
+  "version": "omp/18.3.2",
+  "asked_model": "anthropic/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "credential": "provider anthropic through omp's own login, credential 3",
+  "posture": "--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay",
+  "date": "2026-10-14 17:50",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 91407,
+  "tree": {
+    "cpu_ms": 59187,
+    "peak_tree_rss_bytes": 816046080,
+    "peak_commit_bytes": 1345900544,
+    "processes": 494,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 16,
+    "cache_read": 114697,
+    "cache_write": 12016,
+    "out": 6210
+  },
+  "requests": 7,
+  "calls": [
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 616,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 164,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 37584,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 185,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "eval",
+      "ms": 1311,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 9354,
+      "failed": false
+    }
+  ],
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "currency": true,
+      "notfound": true,
+      "rename": true,
+      "service": true,
+      "statement": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 13,
+    "lines_added": 97,
+    "lines_deleted": 60
+  }
+}

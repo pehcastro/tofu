@@ -1,0 +1,13 @@
+package account
+
+import "testing"
+
+func TestHiddenRename(t *testing.T) {
+	var a Account = New("a1", "Ada", "USD")
+	if a.ID != "a1" || a.Owner != "Ada" || a.Currency != "USD" || a.Balance != 0 {
+		t.Fatalf("New gave %+v", a)
+	}
+	if over := Overdrawn([]Account{{ID: "x", Balance: -1}}); len(over) != 1 {
+		t.Fatalf("over %v", over)
+	}
+}

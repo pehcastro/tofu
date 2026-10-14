@@ -1,0 +1,38 @@
+package api
+
+import (
+	"errors"
+	"testing"
+
+	"example.com/ledger/store"
+	"example.com/ledger/transfer"
+)
+
+func TestHiddenService(t *testing.T) {
+	sv := Service{Store: store.New()}
+	a, err := sv.Open("a1", "Ada")
+	if err != nil || a.Currency != "EUR" {
+		t.Fatalf("open gave %+v, %v", a, err)
+	}
+	if _, err := sv.Open("b2", "Bo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sv.Transfer("a1", "b2", 300); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := sv.Balance("b2"); err != nil || got != 300 {
+		t.Fatalf("balance %d, %v", got, err)
+	}
+	if err := sv.Transfer("a1", "a1", 1); !errors.Is(err, transfer.ErrSameAccount) {
+		t.Fatalf("same account gave %v", err)
+	}
+	for name, err := range map[string]error{
+		"Balance":  func() error { _, err := sv.Balance("zz"); return err }(),
+		"Freeze":   sv.Freeze("zz"),
+		"Transfer": sv.Transfer("zz", "a1", 1),
+	} {
+		if !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("%s of a missing id gave %v", name, err)
+		}
+	}
+}

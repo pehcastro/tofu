@@ -1,0 +1,29 @@
+package report
+
+import (
+	"errors"
+	"testing"
+
+	"example.com/ledger/account"
+	"example.com/ledger/store"
+)
+
+func TestHiddenStatement(t *testing.T) {
+	s := store.New()
+	a := account.New("a1", "Ada", "EUR")
+	a.Balance = 1250
+	s.Put(a)
+	b := account.New("b2", "Bo", "USD")
+	b.Balance = -705
+	b.Frozen = true
+	s.Put(b)
+	for id, want := range map[string]string{"a1": "Ada (a1): 12.50 EUR", "b2": "Bo (b2): -7.05 USD frozen"} {
+		got, err := Statement(s, id)
+		if err != nil || got != want {
+			t.Fatalf("Statement(%s) = %q, %v, want %q", id, got, err, want)
+		}
+	}
+	if _, err := Statement(s, "zz"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("missing id gave %v", err)
+	}
+}

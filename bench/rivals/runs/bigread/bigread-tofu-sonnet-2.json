@@ -1,0 +1,125 @@
+{
+  "task": "bigread",
+  "arm": "tofu-sonnet",
+  "rep": 2,
+  "tool": "tofu",
+  "version": "0.5.14",
+  "commit": "b0e2401da41ca104c23caa1af3a9591bddd00bae",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-14 17:42",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 20755,
+  "tree": {
+    "cpu_ms": 2937,
+    "peak_tree_rss_bytes": 73707520,
+    "peak_commit_bytes": 130318336,
+    "processes": 30,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 5149,
+    "cache_read": 121263,
+    "cache_write": 3445,
+    "out": 1085
+  },
+  "requests": 9,
+  "auxiliary_requests": 3,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3489,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 26,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 968,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 309,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 46,
+      "failed": false
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 1647,
+      "first_ms": 1014,
+      "out": 54
+    },
+    {
+      "at_ms": 5151,
+      "ms": 1214,
+      "first_ms": 968,
+      "out": 65
+    },
+    {
+      "at_ms": 6408,
+      "ms": 1575,
+      "first_ms": 1148,
+      "out": 116
+    },
+    {
+      "at_ms": 8994,
+      "ms": 2031,
+      "first_ms": 2008,
+      "out": 92
+    },
+    {
+      "at_ms": 11344,
+      "ms": 1164,
+      "first_ms": 906,
+      "out": 76
+    },
+    {
+      "at_ms": 12569,
+      "ms": 3534,
+      "first_ms": 3532,
+      "out": 428
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "function": true,
+      "queue": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "visible tests pass": true
+    },
+    "files_changed": 1,
+    "lines_added": 2,
+    "lines_deleted": 0
+  },
+  "notes": [
+    "turn outcome stopped"
+  ]
+}

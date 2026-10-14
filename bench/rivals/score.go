@@ -2,19 +2,24 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 )
 
-var hiddenParts = []string{"bug", "feature", "rename", "search", "newfile"}
-
-var rubricChecks = []string{"visible tests pass", "gofmt clean", "go vet clean", "old name gone", "no stray files"}
-
-var expectedFiles = []string{"page.go", "inventory.go", "cart.go", "discount.go", "report.go", "cart_test.go", "export.go", "ANSWER.txt"}
+const (
+	checkTests = "visible tests pass"
+	checkGofmt = "gofmt clean"
+	checkVet   = "go vet clean"
+	checkGone  = "old name gone"
+	checkStray = "no stray files"
+)
 
 var harnessDirs = []string{".tofu/", ".omp/", ".claude/", ".codex/", ".agents/"}
 
@@ -37,6 +42,10 @@ func (s score) rubricPassed() int {
 	return countTrue(s.Rubric)
 }
 
+func (s score) quality() (int, int) {
+	return s.hiddenPassed() + s.rubricPassed(), len(s.Hidden) + len(s.Rubric)
+}
+
 func countTrue(checks map[string]bool) int {
 	n := 0
 	for _, passed := range checks {
@@ -49,13 +58,15 @@ func countTrue(checks map[string]bool) int {
 
 func (s score) text() string {
 	var b strings.Builder
-	for _, part := range hiddenParts {
-		fmt.Fprintf(&b, "  hidden %-8s %s\n", part, verdict(s.Hidden[part]))
+	for _, part := range slices.Sorted(maps.Keys(s.Hidden)) {
+		fmt.Fprintf(&b, "  hidden %-10s %s\n", part, verdict(s.Hidden[part]))
 	}
-	for _, check := range rubricChecks {
-		fmt.Fprintf(&b, "  rubric %-18s %s\n", check, verdict(s.Rubric[check]))
+	for _, check := range []string{checkTests, checkGofmt, checkVet, checkGone, checkStray} {
+		if passed, scored := s.Rubric[check]; scored {
+			fmt.Fprintf(&b, "  rubric %-18s %s\n", check, verdict(passed))
+		}
 	}
-	fmt.Fprintf(&b, "  hidden %d of %d, rubric %d of %d\n", s.hiddenPassed(), len(hiddenParts), s.rubricPassed(), len(rubricChecks))
+	fmt.Fprintf(&b, "  hidden %d of %d, rubric %d of %d\n", s.hiddenPassed(), len(s.Hidden), s.rubricPassed(), len(s.Rubric))
 	for _, failure := range s.Failures {
 		fmt.Fprintf(&b, "  %s\n", failure)
 	}
@@ -69,7 +80,7 @@ func verdict(passed bool) string {
 	return "FAIL"
 }
 
-func scoreRepo(repo string, env []string) score {
+func scoreRepo(repo string, env []string, t task) score {
 	s := score{Hidden: map[string]bool{}, Rubric: map[string]bool{}}
 	run := func(name string, args ...string) (string, bool) {
 		cmd := exec.Command(name, args...)
@@ -92,35 +103,47 @@ func scoreRepo(repo string, env []string) score {
 		added, _ := strconv.Atoi(fields[0])
 		deleted, _ := strconv.Atoi(fields[1])
 		s.Added, s.Deleted = s.Added+added, s.Deleted+deleted
-		if !slices.Contains(expectedFiles, fields[2]) && !strings.HasSuffix(fields[2], "_test.go") {
+		if !t.expects(fields[2]) {
 			s.Stray = append(s.Stray, fields[2])
 		}
 	}
 	out, passed := run("go", "test", "-count=1", "./...")
-	s.Rubric["visible tests pass"] = passed
+	s.Rubric[checkTests] = passed
 	keepFailure(&s, "visible tests", out, passed)
 	unformatted, _ := run("gofmt", "-l", ".")
-	s.Rubric["gofmt clean"] = strings.TrimSpace(unformatted) == ""
+	s.Rubric[checkGofmt] = strings.TrimSpace(unformatted) == ""
 	out, passed = run("go", "vet", "./...")
-	s.Rubric["go vet clean"] = passed
+	s.Rubric[checkVet] = passed
 	keepFailure(&s, "go vet", out, passed)
-	s.Rubric["old name gone"] = !anyGoFileContains(repo, "CalcTotal")
-	s.Rubric["no stray files"] = len(s.Stray) == 0
-	for _, part := range hiddenParts {
-		body, err := os.ReadFile(filepath.Join(here(), "testdata", "hidden", part+".go.txt"))
+	if len(t.Gone) > 0 {
+		s.Rubric[checkGone] = !anyGoFileMatches(repo, t.Gone)
+	}
+	s.Rubric[checkStray] = len(s.Stray) == 0
+	for _, h := range t.Hidden {
+		s.Hidden[h.Part] = false
+		body, err := os.ReadFile(filepath.Join(t.dir(), "hidden", h.Part+".go.txt"))
 		if err != nil {
 			s.Failures = append(s.Failures, err.Error())
 			continue
 		}
-		placed := filepath.Join(repo, "hidden_"+part+"_test.go")
+		dir := filepath.Join(repo, h.Into)
+		_, statErr := os.Stat(dir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			s.Failures = append(s.Failures, err.Error())
+			continue
+		}
+		placed := filepath.Join(dir, "hidden_"+h.Part+"_test.go")
 		if err := os.WriteFile(placed, body, 0o644); err != nil {
 			s.Failures = append(s.Failures, err.Error())
 			continue
 		}
-		out, passed := run("go", "test", "-count=1", "-run", "TestHidden", ".")
-		s.Hidden[part] = passed
-		keepFailure(&s, "hidden "+part, out, passed)
+		out, passed := run("go", "test", "-count=1", "-run", "TestHidden", "./"+filepath.ToSlash(h.Into))
+		s.Hidden[h.Part] = passed
+		keepFailure(&s, "hidden "+h.Part, out, passed)
 		_ = os.Remove(placed)
+		if os.IsNotExist(statErr) {
+			_ = os.RemoveAll(dir)
+		}
 	}
 	return s
 }
@@ -143,10 +166,25 @@ func isHarness(path string) bool {
 	return slices.ContainsFunc(harnessDirs, func(dir string) bool { return strings.HasPrefix(path, dir) })
 }
 
-func anyGoFileContains(repo, needle string) bool {
-	matches, _ := filepath.Glob(filepath.Join(repo, "*.go"))
-	return slices.ContainsFunc(matches, func(path string) bool {
+func anyGoFileMatches(repo string, patterns []string) bool {
+	gone := regexp.MustCompile(strings.Join(patterns, "|"))
+	found := false
+	_ = filepath.WalkDir(repo, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return fs.SkipDir
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
 		body, err := os.ReadFile(path)
-		return err == nil && strings.Contains(string(body), needle)
+		found = err == nil && gone.Match(body)
+		if found {
+			return fs.SkipAll
+		}
+		return nil
 	})
+	return found
 }

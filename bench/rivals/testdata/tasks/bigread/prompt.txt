@@ -1,0 +1,5 @@
+This is a large Go module, example.com/atlas. Answer one question by reading the code, and change nothing.
+
+When api.HandleOrder receives an order with the request header X-Priority: high, the order is written to exactly one queue. Which function or method returns that queue's name, and what is the name? Follow the code as it runs from the handler; many packages have functions with similar names.
+
+Write ANSWER.txt at the repository root with exactly two lines: first the function as package.Function, or package.Type.Method for a method, then the queue name. Add or change no other file.

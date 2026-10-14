@@ -1,0 +1,14 @@
+{
+  "hidden": [
+    {"part": "function", "into": "hiddencheck"},
+    {"part": "queue", "into": "hiddencheck"}
+  ],
+  "expected": ["ANSWER.txt"],
+  "answers": ["byClass", "orders-express", "queueExpress", "Urgent"],
+  "sea": {
+    "module": "example.com/atlas",
+    "lane_each": 6,
+    "test_each": 5,
+    "packages": ["accounts", "alerts", "archive", "audit", "banners", "billing", "bundles", "cache", "carts", "catalog", "coupons", "credits", "customers", "delivery", "devices", "disputes", "docs", "events", "exports", "feeds", "fraud", "geo", "gifts", "imports", "invoices", "ledger", "loyalty", "mail", "media", "metrics", "notices", "offers", "partners", "payments", "payouts", "pricing", "profiles", "promos", "quotas", "ratings", "refunds", "reports", "returns", "reviews", "schedule", "search", "sessions", "shipments", "stock", "suppliers", "surveys", "taxes", "tickets", "tracking", "vendors", "vouchers", "warehouse", "webhooks", "wishlist", "zones"]
+  }
+}

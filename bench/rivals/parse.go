@@ -59,7 +59,8 @@ func (c *requestClock) done(at time.Time, out int) requestTime {
 type transcript struct {
 	model, credential string
 	models            []string
-	requests          int
+	requests, agents  int
+	auxiliary         int
 	tokens            tokens
 	calls             []call
 	timed             []requestTime
@@ -367,13 +368,25 @@ func parseOmp(lines []stamped, sessions string) transcript {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
 			return nil
 		}
+		child := filepath.Dir(path) != filepath.Clean(sessions)
+		if child {
+			t.agents++
+		}
 		body, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
 		for _, line := range strings.Split(string(body), "\n") {
-			if entry := decode(line); entry != nil {
-				addAssistant(entry["message"])
+			entry := decode(line)
+			addAssistant(entry["message"])
+			if str(entry, "type") == "model_usage" {
+				t.auxiliary++
+				t.saw(str(entry, "model"))
+				t.tokens.add(num(entry, "usage", "input"), num(entry, "usage", "cacheRead"), num(entry, "usage", "cacheWrite"), num(entry, "usage", "output"))
+			}
+			if result := entry["message"]; child && str(result, "role") == "toolResult" {
+				failed, _ := result.(map[string]any)["isError"].(bool)
+				open.calls = append(open.calls, call{Kind: ompKind(str(result, "toolName")), Name: str(result, "toolName"), MS: -1, Failed: failed})
 			}
 		}
 		return nil
@@ -381,7 +394,7 @@ func parseOmp(lines []stamped, sessions string) transcript {
 	if len(seen) > fromStream {
 		t.notes = append(t.notes, fmt.Sprintf("%d model requests came from sub-agent session files, their tool calls are not timed", len(seen)-fromStream))
 	}
-	t.requests, t.calls = len(seen), open.calls
+	t.requests, t.calls = len(seen)+t.auxiliary, open.calls
 	return t
 }
 
@@ -450,7 +463,14 @@ func parseTofu(lines []stamped, repo string, env []string, codexWire bool) trans
 		}
 		t.calls = append(t.calls, call{Kind: tofuKind(str(c, "tool")), Name: str(c, "tool"), MS: ms, Failed: str(c, "outcome") != "ran"})
 	}
+	for _, m := range list(trace["data"], "memory") {
+		t.requests++
+		t.auxiliary++
+		t.saw(str(m, "model"))
+		t.tokens.add(num(m, "usage", "input_tokens"), num(m, "usage", "cache_read_tokens"), num(m, "usage", "cache_write_tokens"), num(m, "usage", "output_tokens"))
+	}
 	if agents := list(trace["data"], "agents"); len(agents) > 0 {
+		t.agents = len(agents)
 		t.notes = append(t.notes, fmt.Sprintf("%d sub-agents", len(agents)))
 	}
 	return t

@@ -13,21 +13,33 @@ import (
 
 var kinds = []string{"read", "edit", "write", "search", "bash", "spawn", "other"}
 
+func readRows(pattern string) ([]row, error) {
+	paths, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]row, 0, len(paths))
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var r row
+		if err := json.Unmarshal(body, &r); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		rows = append(rows, r)
+	}
+	return rows, nil
+}
+
 func writeReport([]string) error {
-	paths, err := filepath.Glob(filepath.Join(here(), "runs", "*.json"))
+	rows, err := readRows(filepath.Join(here(), "runs", "*.json"))
 	if err != nil {
 		return err
 	}
 	byArm, bySetting := map[string][]row{}, map[string][]row{}
-	for _, path := range paths {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		var r row
-		if err := json.Unmarshal(body, &r); err != nil {
-			return fmt.Errorf("%s: %w", path, err)
-		}
+	for _, r := range rows {
 		if r.Setting != "" {
 			bySetting[r.Arm] = append(bySetting[r.Arm], r)
 			continue
@@ -46,6 +58,9 @@ func writeReport([]string) error {
 	wallTable(&b, byArm)
 	toolTable(&b, byArm)
 	settingTable(&b, bySetting)
+	if err := taskTables(&b); err != nil {
+		return err
+	}
 	return os.WriteFile(filepath.Join(here(), "report.md"), []byte(b.String()), 0o644)
 }
 
@@ -85,17 +100,10 @@ func runsTable(b *strings.Builder, byArm map[string][]row) {
 	b.WriteString("\n## Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MB | peak commit MB | processes | requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		for _, r := range byArm[a.Name] {
-			notes := append(slices.Clone(r.Notes), r.Score.Failures...)
-			if len(r.Score.Stray) > 0 {
-				notes = append(notes, "stray: "+strings.Join(r.Score.Stray, ", "))
-			}
-			if len(r.Score.HarnessFiles) > 0 {
-				notes = append(notes, "harness files left in the repo: "+strings.Join(r.Score.HarnessFiles, ", "))
-			}
 			fmt.Fprintf(b, "| %s | %d | %d | %.1f | %.1f | %.0f | %.0f | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | +%d/-%d | %s |\n",
 				r.Arm, r.Rep, r.ExitCode, seconds(r.WallMS), seconds(r.Tree.CPUMS), megabytes(r.Tree.PeakTreeRSS), megabytes(r.Tree.PeakCommit), r.Tree.Processes,
 				r.Requests, r.Tokens.FreshIn, r.Tokens.CacheRead, r.Tokens.CacheWrite, r.Tokens.Out, len(r.Calls), failedCalls(r), r.Retried,
-				r.Score.hiddenPassed(), r.Score.rubricPassed(), r.Score.Added, r.Score.Deleted, strings.ReplaceAll(strings.Join(notes, "; "), "|", "/"))
+				r.Score.hiddenPassed(), r.Score.rubricPassed(), r.Score.Added, r.Score.Deleted, r.notes())
 		}
 	}
 }
@@ -261,6 +269,67 @@ func percentOver(shipped, rival float64) string {
 		return "no rival value"
 	}
 	return fmt.Sprintf("%+.1f%%", (shipped-rival)/rival*100)
+}
+
+func taskTables(b *strings.Builder) error {
+	names, err := taskNames()
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		rows, err := readRows(filepath.Join(here(), "runs", name, "*.json"))
+		if err != nil {
+			return err
+		}
+		if len(rows) > 0 {
+			taskTable(b, name, rows)
+		}
+	}
+	return nil
+}
+
+func taskTable(b *strings.Builder, name string, rows []row) {
+	byArm := map[string][]row{}
+	for _, r := range rows {
+		byArm[r.Arm] = append(byArm[r.Arm], r)
+	}
+	_, outOf := rows[0].Score.quality()
+	fmt.Fprintf(b, "\n## Task %s\n\nPrompt, rubric and seed in `testdata/tasks/%s`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Requests count every model call of the run and every sub-agent; auxiliary is the part outside the conversation, tofu's memory model and omp's auto-thinking judge, whose tokens are in the token columns too. Sub-agents is the count the tool's own transcript reports.\n\n", name, name)
+	b.WriteString("| arm | tool version | runs | quality of " + fmt.Sprint(outOf) + " | requests | auxiliary | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	for _, a := range present(byArm) {
+		armRows := byArm[a.Name]
+		column := func(value func(row) float64) string { return spread(armRows, value) }
+		fmt.Fprintf(b, "| %s | %s | %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", a.Name, distinct(armRows, row.build), len(armRows),
+			column(func(r row) float64 { got, _ := r.Score.quality(); return float64(got) }),
+			column(func(r row) float64 { return float64(r.Requests) }),
+			column(func(r row) float64 { return float64(r.Auxiliary) }),
+			column(func(r row) float64 { return float64(r.Tokens.FreshIn) }),
+			column(func(r row) float64 { return float64(r.Tokens.CacheRead) }),
+			column(func(r row) float64 { return float64(r.Tokens.CacheWrite) }),
+			column(func(r row) float64 { return float64(r.Tokens.in()) }),
+			column(func(r row) float64 { return float64(r.Tokens.Out) }),
+			column(func(r row) float64 { return seconds(r.WallMS) }),
+			column(func(r row) float64 { return megabytes(r.Tree.PeakTreeRSS) }),
+			column(func(r row) float64 { return float64(failedCalls(r)) }),
+			column(func(r row) float64 { return float64(r.Agents) }))
+	}
+	b.WriteString("\n| arm | rep | date | models the responses reported | quality | requests | auxiliary | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	for _, r := range slices.SortedFunc(slices.Values(rows), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
+		got, _ := r.Score.quality()
+		fmt.Fprintf(b, "| %s | %d | %s | %s | %d | %d | %d | %d | %d | %d | %.1f | %.0f | %d | %d | %d | %s |\n", r.Arm, r.Rep, r.Date, strings.Join(r.Models, ", "), got, r.Requests, r.Auxiliary, r.Tokens.in(), r.Tokens.CacheRead,
+			r.Tokens.Out, seconds(r.WallMS), megabytes(r.Tree.PeakTreeRSS), len(r.Calls), failedCalls(r), r.Agents, r.notes())
+	}
+}
+
+func (r row) notes() string {
+	notes := append(slices.Clone(r.Notes), r.Score.Failures...)
+	if len(r.Score.Stray) > 0 {
+		notes = append(notes, "stray: "+strings.Join(r.Score.Stray, ", "))
+	}
+	if len(r.Score.HarnessFiles) > 0 {
+		notes = append(notes, "harness files left in the repo: "+strings.Join(r.Score.HarnessFiles, ", "))
+	}
+	return strings.ReplaceAll(strings.Join(notes, "; "), "|", "/")
 }
 
 func failedCalls(r row) int {

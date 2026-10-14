@@ -1,0 +1,10 @@
+This is a Go module, example.com/ledger. Make all six changes, then make sure go test ./... passes and gofmt reports nothing.
+
+1. store.Store.Get returns (account.Acct, error) instead of (account.Acct, bool). Add an exported store.ErrNotFound and return an error that errors.Is matches to it when the id is missing. Every function that reports a missing account must now return an error that still matches store.ErrNotFound with errors.Is.
+2. Rename the type account.Acct to account.Account everywhere, tests included.
+3. Accounts get a currency: add a field Currency string to the account type, and give account.New a third parameter, New(id, owner, currency string). Every existing caller passes "EUR".
+4. transfer.Move refuses to move money between two accounts of different currencies. It returns a new exported error transfer.ErrCurrency, which errors.Is must match, and changes neither balance.
+5. A report statement prints the currency after the amount, separated by one space, for example: Ada (a1): 12.50 EUR. A frozen account still ends in " frozen" after the currency.
+6. api.Service gets a method Transfer(from, to string, cents int64) error that moves the money with transfer.Move.
+
+Keep the change to what these six steps need, and add no files except tests.

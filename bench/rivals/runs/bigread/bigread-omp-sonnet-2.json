@@ -1,0 +1,86 @@
+{
+  "task": "bigread",
+  "arm": "omp-sonnet",
+  "rep": 2,
+  "tool": "omp",
+  "version": "omp/18.3.2",
+  "asked_model": "anthropic/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "credential": "provider anthropic through omp's own login, credential 3",
+  "posture": "--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay",
+  "date": "2026-10-14 17:40",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 23222,
+  "tree": {
+    "cpu_ms": 7406,
+    "peak_tree_rss_bytes": 563699712,
+    "peak_commit_bytes": 980357120,
+    "processes": 5,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 16,
+    "cache_read": 91850,
+    "cache_write": 4662,
+    "out": 982
+  },
+  "requests": 7,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": 1479,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 189,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 530,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 401,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 338,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 91,
+      "failed": false
+    }
+  ],
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "function": true,
+      "queue": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "visible tests pass": true
+    },
+    "files_changed": 1,
+    "lines_added": 2,
+    "lines_deleted": 0
+  }
+}

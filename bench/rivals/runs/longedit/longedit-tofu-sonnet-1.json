@@ -1,0 +1,437 @@
+{
+  "task": "longedit",
+  "arm": "tofu-sonnet",
+  "rep": 1,
+  "tool": "tofu",
+  "version": "0.5.14",
+  "commit": "b0e2401da41ca104c23caa1af3a9591bddd00bae",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-14 17:21",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 143482,
+  "tree": {
+    "cpu_ms": 49312,
+    "peak_tree_rss_bytes": 363991040,
+    "peak_commit_bytes": 491458560,
+    "processes": 488,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 10118,
+    "cache_read": 277977,
+    "cache_write": 52822,
+    "out": 14937
+  },
+  "requests": 19,
+  "auxiliary_requests": 7,
+  "calls": [
+    {
+      "kind": "other",
+      "name": "project_report",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 6231,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 5,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 9,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 425,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 4,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 107,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 26,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 17,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 14,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 30309,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "shell",
+      "ms": 8400,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 3052,
+      "failed": true
+    }
+  ],
+  "agents": 1,
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 1844,
+      "first_ms": 1322,
+      "out": 27
+    },
+    {
+      "at_ms": 2047,
+      "ms": 1614,
+      "first_ms": 1380,
+      "out": 78
+    },
+    {
+      "at_ms": 9937,
+      "ms": 21832,
+      "first_ms": 3919,
+      "out": 4685
+    },
+    {
+      "at_ms": 32128,
+      "ms": 7287,
+      "first_ms": 2688,
+      "out": 899
+    },
+    {
+      "at_ms": 39857,
+      "ms": 3668,
+      "first_ms": 3165,
+      "out": 53
+    },
+    {
+      "at_ms": 43534,
+      "ms": 5138,
+      "first_ms": 2728,
+      "out": 598
+    },
+    {
+      "at_ms": 48683,
+      "ms": 26693,
+      "first_ms": 4308,
+      "out": 5802
+    },
+    {
+      "at_ms": 75619,
+      "ms": 3501,
+      "first_ms": 3470,
+      "out": 130
+    },
+    {
+      "at_ms": 109572,
+      "ms": 1226,
+      "first_ms": 987,
+      "out": 72
+    },
+    {
+      "at_ms": 119262,
+      "ms": 6653,
+      "first_ms": 6041,
+      "out": 973
+    },
+    {
+      "at_ms": 126163,
+      "ms": 1634,
+      "first_ms": 1219,
+      "out": 94
+    },
+    {
+      "at_ms": 130880,
+      "ms": 4746,
+      "first_ms": 4735,
+      "out": 611
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 13,
+  "score": {
+    "hidden": {
+      "currency": true,
+      "notfound": true,
+      "rename": true,
+      "service": true,
+      "statement": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 14,
+    "lines_added": 163,
+    "lines_deleted": 65
+  },
+  "notes": [
+    "turn outcome stopped",
+    "1 sub-agents"
+  ]
+}

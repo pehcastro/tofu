@@ -1,0 +1,12 @@
+{
+  "hidden": [
+    {"part": "bug", "into": "."},
+    {"part": "feature", "into": "."},
+    {"part": "rename", "into": "."},
+    {"part": "search", "into": "."},
+    {"part": "newfile", "into": "."}
+  ],
+  "gone": ["CalcTotal"],
+  "expected": ["page.go", "inventory.go", "cart.go", "discount.go", "report.go", "export.go", "ANSWER.txt", "*_test.go"],
+  "answers": ["note"]
+}

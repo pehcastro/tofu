@@ -1,0 +1,12 @@
+{
+  "hidden": [
+    {"part": "notfound", "into": "store"},
+    {"part": "rename", "into": "account"},
+    {"part": "currency", "into": "transfer"},
+    {"part": "statement", "into": "report"},
+    {"part": "service", "into": "api"}
+  ],
+  "gone": ["\\bAcct\\b"],
+  "expected": ["account/*.go", "store/*.go", "transfer/*.go", "report/*.go", "api/*.go", "cmd/ledgerctl/*.go", "*_test.go"],
+  "answers": ["Exposure", "ledgerctl", "setFrozen", "Overdrawn", "Totals", "batch.go", "admin.go", "handlers.go"]
+}

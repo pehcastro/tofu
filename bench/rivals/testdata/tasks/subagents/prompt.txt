@@ -1,0 +1,8 @@
+This is a Go module, example.com/depot. Six packages in it call retry.Do from the retry package outside their tests.
+
+Do the research through sub-agents, not yourself: start six sub-agents in parallel, one per package, each told to find that package's function and attempt count and report back. Do not read the packages' source yourself. Make the change once they have reported.
+
+1. For every package that calls retry.Do outside its tests, find the function or method that makes the call and the number of attempts it passes, following constants, fields and variables to their value, as the code stands before you change anything. Write RETRIES.txt at the repository root with one line per package, sorted by package name, in the form: package function attempts. Use the bare function or method name without its receiver, for example: alpha Fetch 2
+2. No package may retry more than 5 times. Change the one package that does so that it makes exactly 5 attempts. Do not change the retry package or any other package.
+
+Then make sure go test ./... passes. Add no file other than RETRIES.txt.

@@ -1,0 +1,20 @@
+package store
+
+import (
+	"errors"
+	"testing"
+
+	"example.com/ledger/account"
+)
+
+func TestHiddenNotFound(t *testing.T) {
+	s := New()
+	s.Put(account.New("a1", "Ada", "EUR"))
+	got, err := s.Get("a1")
+	if err != nil || got.Owner != "Ada" {
+		t.Fatalf("got %+v, err %v", got, err)
+	}
+	if _, err := s.Get("zz"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id gave %v", err)
+	}
+}

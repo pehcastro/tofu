@@ -1,0 +1,8 @@
+{
+  "hidden": [
+    {"part": "retries", "into": "hiddencheck"},
+    {"part": "limit", "into": "shipping"}
+  ],
+  "expected": ["RETRIES.txt", "shipping/*.go"],
+  "answers": ["Collect", "Ship", "Deliver", "Pull", "store", "Refresh", "shipping", "carrierAttempts", "captureAttempts", "syncAttempts", "refreshAttempts", "defaultRefresh"]
+}
