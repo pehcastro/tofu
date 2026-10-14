@@ -229,16 +229,7 @@ func (s Store) Tickets(key string) ([]Ticket, error) {
 	}
 	paths, err := s.TicketFiles(key)
 	read, readErrs := make([]Ticket, len(paths)), make([]error, len(paths))
-	var readers sync.WaitGroup
-	var next atomic.Int64
-	for range min(konst.BoardReadersMost, len(paths)) {
-		readers.Go(func() {
-			for at := int(next.Add(1)) - 1; at < len(paths); at = int(next.Add(1)) - 1 {
-				read[at], readErrs[at] = ReadTicket(paths[at])
-			}
-		})
-	}
-	readers.Wait()
+	eachInParallel(len(paths), func(at int) { read[at], readErrs[at] = ReadTicket(paths[at]) })
 	tickets := make([]Ticket, 0, len(paths))
 	for at, ticket := range read {
 		if readErrs[at] != nil {
@@ -248,6 +239,19 @@ func (s Store) Tickets(key string) ([]Ticket, error) {
 		tickets = append(tickets, ticket)
 	}
 	return tickets, err
+}
+
+func eachInParallel(count int, do func(at int)) {
+	var workers sync.WaitGroup
+	var next atomic.Int64
+	for range min(konst.BoardReadersMost, count) {
+		workers.Go(func() {
+			for at := int(next.Add(1)) - 1; at < count; at = int(next.Add(1)) - 1 {
+				do(at)
+			}
+		})
+	}
+	workers.Wait()
 }
 
 func (s Store) Create(key string, ticket Ticket) (Ticket, error) {

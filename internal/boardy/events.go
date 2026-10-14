@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -88,18 +89,25 @@ func (s Store) Events(key string, from int) ([]Event, error) {
 		return nil, err
 	}
 	defer func() { _ = file.Close() }()
-	var events []Event
+	var lines [][]byte
+	var skipped int
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(nil, 1<<24)
-	for line := 1; scanner.Scan(); line++ {
-		if line <= from {
+	for scanner.Scan() {
+		if skipped < from {
+			skipped++
 			continue
 		}
-		var event Event
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return events, fmt.Errorf("%s line %d: %w", EventsFileName, line, err)
-		}
-		events = append(events, event)
+		lines = append(lines, slices.Clone(scanner.Bytes()))
 	}
-	return events, scanner.Err()
+	events, decodeErrs := make([]Event, len(lines)), make([]error, len(lines))
+	eachInParallel(len(lines), func(at int) { decodeErrs[at] = json.Unmarshal(lines[at], &events[at]) })
+	decoded, err := len(lines), scanner.Err()
+	if at := slices.IndexFunc(decodeErrs, func(err error) bool { return err != nil }); at >= 0 {
+		decoded, err = at, fmt.Errorf("%s line %d: %w", EventsFileName, skipped+at+1, decodeErrs[at])
+	}
+	if decoded == 0 {
+		return nil, err
+	}
+	return events[:decoded], err
 }
