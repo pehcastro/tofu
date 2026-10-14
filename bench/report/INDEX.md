@@ -276,7 +276,7 @@ Why the rest are not compared:
 
 ## Every dated report, newest first
 
-66 dated reports over 41 benches. 16 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
+66 dated reports over 41 benches. 17 benches carry none. 20 are withdrawn whole or in part, 1 is stale, and 2 reports name no conclusion a reader can find. A withdrawal declared from outside a report lives in `bench/report/withdrawals.json`; every other state is declared by the report's own first lines.
 
 | Bench | Date | Report | What it found | Sample | State | Commit and version | Run before it |
 |---|---|---|---|---|---|---|---|
@@ -386,6 +386,7 @@ Why the rest are not compared:
 - `bench/report`, runner: this package: the reader over every dated report, the viewer and its data. Measures 0 things of its own; bench/report/runs holds the 3 records it quotes that no other bench writes to disk.
 - `bench/rivals`, measurement with no dated report: report.md, undated by name, 15 live runs of 2026-10-13 at f360965a: tofu 0.5.13-fix1+dev, Claude Code 2.1.296, omp 18.3.2 and codex-cli 0.155.1, 3 runs each. runs/ holds every run as JSON.
 - `bench/scale`, measurement with no dated report: report.md, undated by name, 1 run per rung of 0 to 10 sub-agents on 2026-10-13, committed at b7c52479 (tofu 0.5.13-fix1). results.jsonl names no tofu version.
+- `bench/searchlarge`, measurement with no dated report: TOFU-1336, 2026-10-14, moved out of bench/search under TOFU-1364 so its source cannot answer a recorded search pattern. read, glob and search on a golang/go checkout at go1.23.0, 13,226 files, GOMAXPROCS 2: glob 2.98x and search 1.69x faster at p50 cold after c5999050, outputs byte-identical; it prints its table and writes 0 files, so 0 numbers from it are on this page.
 - `bench/serve`, measurement with no dated report: times tofu serve's query methods for 2 or more tofu builds, 50 calls of each method a round over 2 rounds by default, on a cassette session of 200 steps; it prints its table and writes 0 files, so 0 numbers from it are on this page.
 - `bench/sessiontime`, measurement with no dated report: prints to the terminal and writes no file. Run 2026-10-13 at 7624da00 (TOFU-1313) and 2026-10-14 at 9586ec60; the second output is in bench/report/runs/sessiontime-2026-10-14.txt.
 - `bench/stat`, library: median, p95 and p99 over a slice of floats, called by every bench that reports a spread.

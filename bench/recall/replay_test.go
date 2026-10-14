@@ -4,8 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"tofu/bench/corpus"
 	"tofu/internal/konst"
 	rc "tofu/internal/recall"
+	"tofu/internal/sys"
 )
 
 var (
@@ -37,6 +39,41 @@ func replay(t *testing.T, cfg rc.Config, bands rc.Bands, session Session, arm Ar
 	return result
 }
 
+func widestWorkingSet(t *testing.T, cfg rc.Config, bands rc.Bands) rc.Occupancy {
+	t.Helper()
+	walked, err := corpus.WalkSessions(sys.RecordedStateDir("sessions"))
+	if err != nil {
+		t.Fatalf("no recorded sessions to measure the working set band against at the %d ceiling: %v", konst.ContextCeilingTokens, err)
+	}
+	var widest rc.Occupancy
+	widestID := ""
+	crossed, under, filled, over := 0, 0, 0, 0
+	for _, turn := range walked.Turns {
+		session := CorpusSession(turn.RecordedTurn)
+		if len(session.Steps) == 0 {
+			continue
+		}
+		peak := replay(t, cfg, bands, session, armNothing).Peak
+		if peak.Total() > bands.Target() {
+			crossed++
+			continue
+		}
+		under++
+		if peak.WorkingSet > 0 {
+			filled++
+		}
+		if peak.WorkingSet > bands.WorkingSet {
+			over++
+		}
+		if peak.WorkingSet > widest.WorkingSet {
+			widest, widestID = peak, session.ID
+		}
+	}
+	t.Logf("%d recorded turns replayed at the %d ceiling: %d cross the %d target and would fork, %d stay under it, %d of those put tokens in the working set band and %d past its %d cap; the most was %d tokens, in %s\n%s",
+		len(walked.Turns), konst.ContextCeilingTokens, crossed, bands.Target(), under, filled, over, bands.WorkingSet, widest.WorkingSet, widestID, rc.OccupancyTable(widest))
+	return widest
+}
+
 func TestOccupancyOfARecordedTurnAgainstTheFourBands(t *testing.T) {
 	cfg, session := recordedTurn(t)
 	bands := rc.ShippedBands()
@@ -48,18 +85,20 @@ func TestOccupancyOfARecordedTurnAgainstTheFourBands(t *testing.T) {
 	if result.Final.Identity == 0 {
 		t.Fatal("the identity band measured as empty, so the task and the cached prefix were never counted")
 	}
+	widest := widestWorkingSet(t, cfg, bands)
 	for _, band := range []struct {
 		name     string
+		filled   int
 		occupied int
 		cap      int
 	}{
-		{"identity", result.Peak.Identity, bands.Identity},
-		{"facts", result.Peak.Facts, bands.Facts},
-		{"working set", result.Peak.WorkingSet, bands.WorkingSet},
-		{"recent", result.Peak.Recent, bands.Recent},
+		{"identity", result.Peak.Identity, result.Peak.Identity, bands.Identity},
+		{"facts", result.Peak.Facts, result.Peak.Facts, bands.Facts},
+		{"working set", widest.WorkingSet, result.Peak.WorkingSet, bands.WorkingSet},
+		{"recent", result.Peak.Recent, result.Peak.Recent, bands.Recent},
 	} {
-		if band.occupied == 0 && band.cap != 0 {
-			t.Fatalf("the %s band reserves %d tokens and the only turn measured never put a single one in it: either give it a producer or set its cap to zero",
+		if band.filled == 0 && band.cap != 0 {
+			t.Fatalf("the %s band reserves %d tokens and no turn measured ever put a single one in it: either give it a producer or set its cap to zero",
 				band.name, band.cap)
 		}
 		if band.occupied > band.cap {
