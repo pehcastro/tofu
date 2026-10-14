@@ -23,7 +23,7 @@ use crate::components::glyph::Glyph;
 use crate::components::hovercard::{hover, link_card, link_key};
 use crate::components::math::{self, Math};
 use crate::components::paint::{glyph, ink, ring, tint};
-use crate::components::rich::{self, Rich};
+use crate::components::rich::{self, Rich, Tone};
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
     FAIL_TINT, FIELD, FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_TAB, FONT_WHO, FOOT_GAP, FOOT_TEXT,
@@ -175,17 +175,32 @@ impl Span {
     }
 }
 
+#[derive(Clone)]
 pub struct ListItem {
     pub task: Option<bool>,
     pub blocks: Vec<Block>,
 }
 
+#[derive(Clone)]
 pub struct Code {
     pub text: SharedString,
     pub label: Option<SharedString>,
     pub paints: Vec<(Range<usize>, Kind)>,
 }
 
+impl Clone for Rich {
+    fn clone(&self) -> Self {
+        match self {
+            Rich::Card(title) => Rich::Card(title.clone()),
+            Rich::Callout(Tone::Info) => Rich::Callout(Tone::Info),
+            Rich::Callout(Tone::Warn) => Rich::Callout(Tone::Warn),
+            Rich::Callout(Tone::Error) => Rich::Callout(Tone::Error),
+            Rich::FileLink(path) => Rich::FileLink(path.clone()),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum Block {
     Para(Vec<Span>),
     Heading(Vec<Span>),
@@ -348,6 +363,7 @@ pub struct Streaming {
     stream: md::Stream,
     text: String,
     registry: Registry,
+    stable: Vec<Vec<Block>>,
 }
 
 impl Default for Streaming {
@@ -356,6 +372,7 @@ impl Default for Streaming {
             stream: md::Stream::new(Options::ALL),
             text: String::new(),
             registry: rich::registry(),
+            stable: Vec::new(),
         }
     }
 }
@@ -373,13 +390,27 @@ impl Streaming {
                 self.text.push_str(text);
             }
         }
-        let document = self.stream.snapshot();
-        Reader {
+        let (document, changed) = self.stream.snapshot();
+        let reader = Reader {
             source: md::visible_prefix(&self.text),
             painted: false,
             registry: &self.registry,
+        };
+        self.stable.truncate(changed.start);
+        let settled = document.blocks.get(changed.clone()).unwrap_or_default();
+        self.stable.extend(
+            settled
+                .iter()
+                .map(|block| reader.blocks(std::slice::from_ref(block))),
+        );
+        let tail = reader.blocks(document.blocks.get(changed.end..).unwrap_or_default());
+        let mut out =
+            Vec::with_capacity(self.stable.iter().map(Vec::len).sum::<usize>() + tail.len());
+        for blocks in &self.stable {
+            out.extend_from_slice(blocks);
         }
-        .blocks(&document.blocks)
+        out.extend(tail);
+        out
     }
 }
 

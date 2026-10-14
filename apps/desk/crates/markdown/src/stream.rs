@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::ast::Document;
 use crate::block::{self, Def, RawBlock, Refs};
 use crate::{Options, component, resolve};
@@ -89,7 +91,7 @@ impl Stream {
         self.stable_end = last_line;
     }
 
-    pub fn snapshot(&mut self) -> &Document {
+    pub fn snapshot(&mut self) -> (&Document, Range<usize>) {
         let visible = visible_from(&self.text, self.stable_end);
         let tail = block::parse(visible, self.stable_end.min(visible.len()), self.options);
         let refs = block::refs(self.stable_defs.iter().chain(&tail.defs));
@@ -97,8 +99,9 @@ impl Stream {
             self.refs = refs;
             self.resolved = 0;
         }
-        self.doc.blocks.truncate(self.resolved);
-        let fresh = self.stable.get(self.resolved..).unwrap_or_default();
+        let changed = self.resolved;
+        self.doc.blocks.truncate(changed);
+        let fresh = self.stable.get(changed..).unwrap_or_default();
         self.doc
             .blocks
             .extend(resolve::blocks(fresh, &self.refs, self.options));
@@ -106,6 +109,6 @@ impl Stream {
         self.doc
             .blocks
             .extend(resolve::blocks(&tail.blocks, &self.refs, self.options));
-        &self.doc
+        (&self.doc, changed..self.resolved)
     }
 }

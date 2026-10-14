@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut leaked = 0usize;
         for (step, ch) in case.chars().enumerate() {
             stream.push(ch.encode_utf8(&mut [0; 4]));
-            let html = to_html(stream.snapshot());
+            let html = to_html(stream.snapshot().0);
             let leak = ["&lt;", "<Card", "<Chart", "</Card", "</Chart"]
                 .iter()
                 .any(|raw| html.contains(raw));
@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         writeln!(
             out,
             "  steps with a partial tag as text: {leaked}; components at the end: {}",
-            components(&stream.snapshot().blocks)
+            components(&stream.snapshot().0.blocks)
         )?;
     }
 
@@ -105,7 +105,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         out,
         "timing: {} bytes, {} components, {deltas} deltas of {DELTA} bytes, {micros:.1} us per delta",
         message.len(),
-        components(&stream.snapshot().blocks)
+        components(&stream.snapshot().0.blocks)
     )?;
     out.flush()?;
     Ok(())
