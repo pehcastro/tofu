@@ -38,7 +38,7 @@ mean the genius, smart and worker tiers when those are set.
   `tofu models reload` found on your accounts that tofu does not ship.
   Each carries `from`, what listed it, and `found`, the day it was found
 - `~/.tofu/models/<provider>/<model>.yaml`, `.tofu/models/...`: your
-  changes to one model, field by field, over the list tofu ships
+  changes to one model, field by field, over the list tofu ships. `plan: no` takes the plan tool away from a model; `codex-sub/gpt-5.6-sol` ships with it, since GPT spent requests on replies holding only a plan call
 - the `modelTier.genius`, `modelTier.smart`, `modelTier.worker` and
   `modelTier.dumb` settings: the model each tier names
 - `~/.tofu/model-windows.json`: the models.dev table `tofu models reload`

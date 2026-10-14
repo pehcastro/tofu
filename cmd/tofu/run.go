@@ -434,6 +434,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	built, plan = planAsOffered(selected, built, plan)
 	clock.step("shell and tools")
 	budget, err := contextBudget(opts, selected)
 	if err != nil {
@@ -1193,6 +1194,13 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 	plan := tools.NewPlan()
 	full := append([]turn.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers), typecheckTool, testTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
+}
+
+func planAsOffered(model models.Model, built []turn.Tool, plan *tools.Plan) ([]turn.Tool, *tools.Plan) {
+	if model.Plan != models.PlanWithheld {
+		return built, plan
+	}
+	return slices.DeleteFunc(built, func(tool turn.Tool) bool { return tool.Name() == tools.PlanToolName }), nil
 }
 
 type subscriptionModel struct{ opts runOpts }

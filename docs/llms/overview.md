@@ -17,7 +17,7 @@ such as `meta`. A model is named `source/model`:
 Each model in the catalog carries what it can do: its kind (`llm` or
 `classifier`), its context window, the thinking efforts it accepts, and
 whether it reads images. Each one is `default` (one per subscription),
-`allowed`, or `excluded` with a reason.
+`allowed`, or `excluded` with a reason. A model file with `plan: no` runs without the plan tool; `codex-sub/gpt-5.6-sol` ships that way, which cut its median requests on the rivals task from 11 to 7.
 
 ## Which model does which job
 

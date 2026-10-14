@@ -115,7 +115,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "efforts", "from", "found"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "plan", "efforts", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -321,6 +321,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Use:          Use(from.values["use"]),
 		Kind:         Kind(cmp.Or(from.values["kind"], string(KindLLM))),
 		Vision:       Vision(from.values["vision"]),
+		Plan:         PlanTool(from.values["plan"]),
 		Reason:       from.values["reason"],
 		Notice:       from.values["notice"],
 		File:         from.file,
@@ -336,6 +337,9 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	}
 	if !model.Vision.valid() {
 		return model, &Broken{File: from.file, Field: "vision", Why: fmt.Sprintf("vision is %s or %s, or left out when nobody has checked, found %q", VisionSees, VisionBlind, model.Vision)}
+	}
+	if !model.Plan.valid() {
+		return model, &Broken{File: from.file, Field: "plan", Why: fmt.Sprintf("plan is %s or %s, or left out to offer the plan tool, found %q", PlanOffered, PlanWithheld, model.Plan)}
 	}
 	for _, raw := range commas(from.values["efforts"]) {
 		effort, err := llm.ParseEffort(raw)

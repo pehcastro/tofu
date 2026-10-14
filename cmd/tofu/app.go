@@ -750,6 +750,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		return prepared, err
 	}
+	built, plan = planAsOffered(opened.selected, built, plan)
 	if start.Pick.Fired != "" {
 		built = withoutPush(built)
 	}

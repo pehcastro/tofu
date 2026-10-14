@@ -140,6 +140,22 @@ func (v Vision) valid() bool {
 	return false
 }
 
+type PlanTool string
+
+const (
+	PlanUnstated PlanTool = ""
+	PlanOffered  PlanTool = "yes"
+	PlanWithheld PlanTool = "no"
+)
+
+func (p PlanTool) valid() bool {
+	switch p {
+	case PlanUnstated, PlanOffered, PlanWithheld:
+		return true
+	}
+	return false
+}
+
 type SubscriptionSpec struct {
 	ID        Subscription
 	Provider  Provider
@@ -157,6 +173,7 @@ type Model struct {
 	Use          Use
 	Kind         Kind
 	Vision       Vision
+	Plan         PlanTool
 	Efforts      []llm.Effort
 	Reason       string
 	Notice       string
