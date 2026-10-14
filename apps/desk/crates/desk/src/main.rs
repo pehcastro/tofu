@@ -89,8 +89,9 @@ use std::time::Instant;
 
 use desk::{Desk, NoTofu, Open, Screen};
 use desk_core::first_run::FirstRun;
+use desk_ui::components::title_bar::focused_name;
 use desk_ui::icon::Icon;
-use gpui::{App, AppContext, Context, EmptyView, Window, WindowHandle};
+use gpui::{App, AppContext, Context, EmptyView, KeystrokeEvent, Window, WindowHandle};
 #[cfg(feature = "module-editor")]
 use modules::editor::{open_dir, open_file};
 #[cfg(feature = "module-git")]
@@ -167,6 +168,8 @@ const SCREENS: [&str; 15] = [
 ];
 
 const FIRST_RUN_VARIABLE: &str = "DESK_FIRST_RUN";
+const TAB_WALK_LIMIT: usize = 512;
+const FOCUS_TRACE: &str = "DESK_FOCUS_TRACE";
 const NO_TOFU: &str = "no-tofu";
 #[cfg(windows)]
 const INSTALL: &str =
@@ -354,6 +357,70 @@ fn route(
     Ok(NO_TOFU.to_owned())
 }
 
+fn walk_focus(event: &KeystrokeEvent, trace: bool, window: &mut Window, cx: &mut App) {
+    let stroke = &event.keystroke;
+    let held = stroke.modifiers;
+    if stroke.key != "tab"
+        || event.action.is_some()
+        || held.control
+        || held.alt
+        || held.platform
+        || held.function
+    {
+        return;
+    }
+    let pressed = Instant::now();
+    let start = window.focused(cx);
+    if focused_name(window).is_none() {
+        window.blur(cx);
+    }
+    for step in 1..=TAB_WALK_LIMIT {
+        if held.shift {
+            window.focus_prev(cx);
+        } else {
+            window.focus_next(cx);
+        }
+        if let Some(name) = focused_name(window) {
+            if trace {
+                trace_order(window, cx);
+            }
+            return window.on_next_frame(move |_, _| {
+                eprintln!(
+                    "desk: focus {name} in {:.2} ms after {step} steps",
+                    pressed.elapsed().as_secs_f64() * 1000.0
+                )
+            });
+        }
+    }
+    match start {
+        Some(start) => window.focus(&start, cx),
+        None => window.blur(cx),
+    }
+    eprintln!("desk: focus stays, no control on screen takes Tab");
+}
+
+fn trace_order(window: &mut Window, cx: &mut App) {
+    let here = window.focused(cx);
+    window.blur(cx);
+    let mut seen = Vec::new();
+    while seen.len() < TAB_WALK_LIMIT {
+        window.focus_next(cx);
+        let Some(focused) = window.focused(cx) else {
+            break;
+        };
+        if seen.contains(&focused) {
+            break;
+        }
+        let name = focused_name(window).unwrap_or_else(|| "unnamed".into());
+        eprintln!("desk: focus order {} {name} {focused:?}", seen.len());
+        seen.push(focused);
+    }
+    match here {
+        Some(here) => window.focus(&here, cx),
+        None => window.blur(cx),
+    }
+}
+
 fn open_launch(launch: Launch, cx: &mut App) -> Result<WindowHandle<Desk>, String> {
     let screens: Vec<Screen> = SCREENS
         .into_iter()
@@ -471,6 +538,9 @@ fn main() -> ExitCode {
                 }
             })
             .detach();
+            let trace = env::var_os(FOCUS_TRACE).is_some();
+            cx.observe_keystrokes(move |event, window, cx| walk_focus(event, trace, window, cx))
+                .detach();
             #[cfg(feature = "screen-work")]
             cx.on_app_quit(move |_| {
                 drop(server.take());

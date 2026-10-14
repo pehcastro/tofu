@@ -3,7 +3,7 @@ use std::rc::Rc;
 use desk_core::control::Control;
 use gpui::{
     AnyElement, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, ImageSource,
-    SharedString, Window, WindowControlArea, div, prelude::*, px,
+    KeyContext, SharedString, Stateful, Window, WindowControlArea, div, prelude::*, px,
 };
 
 use crate::component::{control, icon, icon_button};
@@ -14,7 +14,7 @@ use crate::components::empty::empty_state;
 use crate::components::glyph::Glyph;
 use crate::components::list::bare_row;
 use crate::components::overlay::{Align, Placement, Popover, Side};
-use crate::components::paint::{glyph, ink};
+use crate::components::paint::{focus_ring, glyph, ink};
 use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T2, T3};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -42,6 +42,25 @@ const NO_NOTICES: &str = "No notices";
 const ASKING: &str = "Asking gh who is signed in";
 const SIGNED_OUT: &str = "Not signed in to GitHub";
 const SIGN_IN: &str = "gh auth login";
+const FOCUS_NAME: &str = "focus";
+
+pub fn named_stop(
+    element: Stateful<Div>,
+    name: impl Into<SharedString>,
+    theme: &Theme,
+) -> Stateful<Div> {
+    let mut context = KeyContext::default();
+    context.set(FOCUS_NAME, name);
+    focus_ring(element, theme).key_context(context)
+}
+
+pub fn focused_name(window: &Window) -> Option<SharedString> {
+    window
+        .context_stack()
+        .iter()
+        .rev()
+        .find_map(|context| context.get(FOCUS_NAME).cloned())
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TitlePick {
@@ -452,13 +471,17 @@ impl RenderOnce for TitleBar {
                 .flex_1()
                 .flex()
                 .child(
-                    control("new-workspace", Control::NewWorkspace.label(), &theme)
-                        .occlude()
-                        .h(px(TAB_HEIGHT))
-                        .px_2p5()
-                        .rounded(px(RADIUS_TAB))
-                        .child(icon(Icon::Plus, ICON_SMALL, tab))
-                        .on_click(self.picked(TitlePick::NewWorkspace)),
+                    named_stop(
+                        control("new-workspace", Control::NewWorkspace.label(), &theme),
+                        "new-workspace",
+                        &theme,
+                    )
+                    .occlude()
+                    .h(px(TAB_HEIGHT))
+                    .px_2p5()
+                    .rounded(px(RADIUS_TAB))
+                    .child(icon(Icon::Plus, ICON_SMALL, tab))
+                    .on_click(self.picked(TitlePick::NewWorkspace)),
                 )
                 .into_any_element(),
         };
@@ -500,10 +523,14 @@ impl RenderOnce for TitleBar {
         let column = title.tabs_x.max(SIDEBAR_CLOSED_WIDTH + TITLE_GAP) - TITLE_GAP;
         let warn = theme.color(ColorToken::StatusWarn);
         let unread = title.unread;
-        let bell = icon_button(
-            "notifications",
-            Icon::Bell,
-            Control::Notifications.label(),
+        let bell = named_stop(
+            icon_button(
+                "notifications",
+                Icon::Bell,
+                Control::Notifications.label(),
+                &theme,
+            ),
+            "bell",
             &theme,
         )
         .occlude()
@@ -519,19 +546,23 @@ impl RenderOnce for TitleBar {
             )
         })
         .on_click(toggle(TitlePop::Notifications));
-        let account = control("account", Control::Account.label(), &theme)
-            .occlude()
-            .size(px(CONTROL))
-            .rounded_full()
-            .child(person_avatar(
-                title.github.face(),
-                PersonSize::Title,
-                &theme,
-            ))
-            .when_some(title.github.tip(), |account, tip| {
-                account.tooltip(move |_, cx| cx.new(|_| NameTip(tip.clone())).into())
-            })
-            .on_click(toggle(TitlePop::Account));
+        let account = named_stop(
+            control("account", Control::Account.label(), &theme),
+            "account",
+            &theme,
+        )
+        .occlude()
+        .size(px(CONTROL))
+        .rounded_full()
+        .child(person_avatar(
+            title.github.face(),
+            PersonSize::Title,
+            &theme,
+        ))
+        .when_some(title.github.tip(), |account, tip| {
+            account.tooltip(move |_, cx| cx.new(|_| NameTip(tip.clone())).into())
+        })
+        .on_click(toggle(TitlePop::Account));
         bar.child(
             div()
                 .w(px(column))
@@ -542,9 +573,13 @@ impl RenderOnce for TitleBar {
                 .gap_1()
                 .pl_2p5()
                 .child(
-                    icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme)
-                        .occlude()
-                        .on_click(self.picked(TitlePick::Sidebar)),
+                    named_stop(
+                        icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme),
+                        "sidebar-toggle",
+                        &theme,
+                    )
+                    .occlude()
+                    .on_click(self.picked(TitlePick::Sidebar)),
                 )
                 .when(title.sidebar_open, |name| {
                     name.child(product_name(&theme).pl_1p5())
@@ -552,20 +587,24 @@ impl RenderOnce for TitleBar {
         )
         .child(tabs)
         .child(
-            control("palette", "Command palette", &theme)
-                .occlude()
-                .h(px(CONTROL))
-                .px_2p5()
-                .gap_2()
-                .rounded(px(RADIUS_TAB))
-                .child(icon(Icon::Search, ICON_SMALL, tab))
-                .child(
-                    div()
-                        .text_size(px(TEXT))
-                        .text_color(theme.color(ColorToken::TextMuted))
-                        .child(title.palette_keys.clone()),
-                )
-                .on_click(self.picked(TitlePick::Palette)),
+            named_stop(
+                control("palette", "Command palette", &theme),
+                "palette",
+                &theme,
+            )
+            .occlude()
+            .h(px(CONTROL))
+            .px_2p5()
+            .gap_2()
+            .rounded(px(RADIUS_TAB))
+            .child(icon(Icon::Search, ICON_SMALL, tab))
+            .child(
+                div()
+                    .text_size(px(TEXT))
+                    .text_color(theme.color(ColorToken::TextMuted))
+                    .child(title.palette_keys.clone()),
+            )
+            .on_click(self.picked(TitlePick::Palette)),
         )
         .child(
             Popover::new("title-bell-pop", bell)

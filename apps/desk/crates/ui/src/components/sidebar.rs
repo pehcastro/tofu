@@ -17,6 +17,7 @@ use crate::components::size::{
     FONT_CAP, FONT_CAP2, FONT_CHAT, FONT_SMALL, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO,
     RADIUS_BADGE, RADIUS_LIST, RADIUS_ROW, ROW_GAP, ROW_PAD_X, SPINNER, T1, T2, T3,
 };
+use crate::components::title_bar::named_stop;
 use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -137,6 +138,14 @@ impl SessionAt {
         };
         ElementId::NamedChild(Arc::new((list, ix).into()), part.into())
     }
+
+    fn name(self) -> SharedString {
+        match self {
+            SessionAt::Active(ix) => format!("session-active-{ix}"),
+            SessionAt::Inactive(ix) => format!("session-inactive-{ix}"),
+        }
+        .into()
+    }
 }
 
 type MenuRow = (&'static str, MenuIcon, fn(SessionAt) -> SidebarPick);
@@ -226,7 +235,7 @@ impl Sidebar {
             (SessionAt::Active(_), false) => T2,
             (SessionAt::Inactive(_), false) => T3,
         };
-        let session_row = row(at.key("row"), selected, alpha, theme)
+        let session_row = row((at.key("row"), at.name()), selected, alpha, theme)
             .when(matches!(at, SessionAt::Inactive(_)), |row| {
                 row.child(div().flex_none().w(px(INACTIVE_INDENT)))
             })
@@ -304,7 +313,7 @@ fn picker(
     detail: SharedString,
     theme: &Theme,
 ) -> Stateful<Div> {
-    control(id, label, theme)
+    named_stop(control(id, label, theme), id, theme)
         .w_full()
         .justify_start()
         .gap(px(ROW_GAP))
@@ -352,8 +361,13 @@ fn chevron(open: bool, theme: &Theme) -> impl IntoElement {
         .with_transformation(Transformation::rotate(radians(turn)))
 }
 
-fn row(id: impl Into<ElementId>, selected: bool, alpha: f32, theme: &Theme) -> Stateful<Div> {
-    bare_row(id, selected, false, theme)
+fn row(
+    (id, name): (impl Into<ElementId>, impl Into<SharedString>),
+    selected: bool,
+    alpha: f32,
+    theme: &Theme,
+) -> Stateful<Div> {
+    named_stop(bare_row(id, selected, false, theme), name, theme)
         .gap(px(SESSION_GAP))
         .line_height(px(LINE_WHO))
         .text_color(ink(theme, alpha))
@@ -383,7 +397,7 @@ impl RenderOnce for Sidebar {
             Corners::all(px(RADIUS_ROW)),
             &theme,
         );
-        let docs = row("docs", false, T2, &theme)
+        let docs = row(("docs", "docs"), false, T2, &theme)
             .child("Docs")
             .on_click(self.picked(SidebarPick::Docs));
         let project = self.project.take();
@@ -427,11 +441,15 @@ impl RenderOnce for Sidebar {
                     .text_color(ink(&theme, T3))
                     .child(div().flex_1().child("Active"))
                     .child(
-                        control("new-session", "New session", &theme)
-                            .size(px(NEW_SESSION))
-                            .rounded(px(RADIUS_BADGE))
-                            .child(icon(Icon::Plus, ICON_SMALL, ink(&theme, T3)))
-                            .on_click(self.picked(SidebarPick::NewSession)),
+                        named_stop(
+                            control("new-session", "New session", &theme),
+                            "new-session",
+                            &theme,
+                        )
+                        .size(px(NEW_SESSION))
+                        .rounded(px(RADIUS_BADGE))
+                        .child(icon(Icon::Plus, ICON_SMALL, ink(&theme, T3)))
+                        .on_click(self.picked(SidebarPick::NewSession)),
                     );
                 let active: Vec<Stateful<Div>> = project
                     .active
@@ -444,7 +462,7 @@ impl RenderOnce for Sidebar {
                     })
                     .collect();
                 let toggle = open.clone();
-                let header = row("inactive", false, T3, &theme)
+                let header = row(("inactive", "inactive"), false, T3, &theme)
                     .mt(px(INACTIVE_GAP))
                     .child(chevron(inactive_open, &theme))
                     .child(div().flex_1().child("Inactive"))

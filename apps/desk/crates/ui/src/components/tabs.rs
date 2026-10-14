@@ -22,6 +22,7 @@ use crate::components::size::{
     RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON, SCREEN_RING, SHELL_TEXT, T1, TAB,
     TAB_GAP, TAB_IN_HEADER, TAB_MAX_WIDTH, TAB_PAD_LEFT, TAB_PAD_LINK, TAB_PAD_TAIL, TAB_SEPARATOR,
 };
+use crate::components::title_bar::named_stop;
 use crate::components::tooltip::{Edge, tooltip};
 use crate::components::width::Width;
 use crate::icon::Icon;
@@ -715,10 +716,16 @@ struct Pick {
     font: f32,
     dim: Rgba,
     preview: bool,
+    stop: bool,
 }
 
-fn close(ix: usize, look: Look, theme: &Theme, shut: Shut) -> Stateful<Div> {
-    round(("close", ix).into(), Icon::Close, ix, look, theme, shut)
+fn close(ix: usize, look: Look, theme: &Theme, (shut, stop): (Shut, bool)) -> Stateful<Div> {
+    let button = round(("close", ix).into(), Icon::Close, ix, look, theme, shut);
+    if stop && look.reveal > 0.0 {
+        named_stop(button, format!("close-{ix}"), theme)
+    } else {
+        button
+    }
 }
 
 fn round(
@@ -798,7 +805,12 @@ pub(crate) fn tile_control(
     .when(reveal <= 0.0, |close| close.invisible())
 }
 
-fn mark(tab: &Tab, (ix, look): (usize, Look), theme: &Theme, ask: &Shut) -> Option<Div> {
+fn mark(
+    tab: &Tab,
+    (ix, look): (usize, Look),
+    theme: &Theme,
+    (ask, stop): (&Shut, bool),
+) -> Option<Div> {
     let slot = div()
         .relative()
         .flex()
@@ -821,7 +833,7 @@ fn mark(tab: &Tab, (ix, look): (usize, Look), theme: &Theme, ask: &Shut) -> Opti
                         .opacity(1.0 - look.reveal),
                 )
                 .child(
-                    close(ix, look, theme, ask.clone())
+                    close(ix, look, theme, (ask.clone(), stop))
                         .absolute()
                         .top_0()
                         .left_0()
@@ -833,14 +845,14 @@ fn mark(tab: &Tab, (ix, look): (usize, Look), theme: &Theme, ask: &Shut) -> Opti
     Some(slot.child(inner))
 }
 
-fn room(ix: usize, look: Look, theme: &Theme, shut: &Shut) -> Div {
+fn room(ix: usize, look: Look, theme: &Theme, (shut, stop): (&Shut, bool)) -> Div {
     div()
         .flex()
         .flex_none()
         .justify_end()
         .overflow_hidden()
         .w(px(CLOSE_BOX * look.reveal))
-        .child(close(ix, look, theme, shut.clone()))
+        .child(close(ix, look, theme, (shut.clone(), stop)))
 }
 
 fn link(tab: &Tab, image: Option<&Arc<Image>>, font: f32, theme: &Theme, color: Rgba) -> Div {
@@ -895,6 +907,7 @@ fn tab_frame(
         font,
         dim,
         preview,
+        stop,
     } = pick;
     let pin = pin.cloned();
     let look = match chosen {
@@ -925,15 +938,20 @@ fn tab_frame(
         .pr(px(TAB_PAD_TAIL))
         .when(preview, |content| content.italic())
         .child(link(tab, image, font, theme, text))
-        .children(mark(tab, (ix, look), theme, &ask))
+        .children(mark(tab, (ix, look), theme, (&ask, stop)))
         .when(tab.mark == TabMark::Close, |content| {
-            content.child(room(ix, look, theme, shut))
+            content.child(room(ix, look, theme, (shut, stop)))
         })
         .when_some(fold, |content, fold| content.w(fold.width).flex_none());
     let (press, menu) = (press.cloned(), menu.cloned());
     let grown = px(CLOSE_BOX * look.reveal);
-    div()
-        .id((id.clone(), ix))
+    let frame = div().id((id.clone(), ix));
+    let frame = if stop {
+        named_stop(frame, format!("tab-{ix}"), theme)
+    } else {
+        frame
+    };
+    frame
         .flex()
         .items_center()
         .min_w(px(TAB_MIN_WIDTH) + grown)
@@ -1154,7 +1172,10 @@ pub fn new_tab_glyph(id: impl Into<SharedString>, theme: &Theme) -> Stateful<Div
         .rounded(px(RADIUS_TAB))
         .cursor_pointer()
         .child(icon(Icon::Plus, ICON, ink(theme, SHELL_TEXT)));
-    pressed(glyph, theme.color(ColorToken::CardsOuterFill))
+    pressed(
+        named_stop(glyph, "new-workspace", theme),
+        theme.color(ColorToken::CardsOuterFill),
+    )
 }
 
 fn separator(theme: &Theme) -> Div {
@@ -1480,10 +1501,12 @@ impl RenderOnce for TabStrip {
             Shape::Connected { .. } => theme.color(ColorToken::TabsFill),
             Shape::Header { .. } => header_fill(active >= tabs.len(), &theme),
         };
+        let stop = matches!(shape, Shape::Header { .. });
         let pick = |ix: usize, font: f32, dim: Rgba| Pick {
             ix,
             font,
             dim,
+            stop,
             chosen: ix == active,
             preview: pin(ix).is_some(),
             look: looks.get(ix).copied().unwrap_or_default(),
