@@ -671,5 +671,25 @@
     "skips": "one run per wording, so no rate and no spread; the 16.9% is a single pair of sums",
     "commit": "024ef6ef",
     "version": "0.5.0"
+  },
+  {
+    "report": "bench/boardy/report-2026-10-14.md",
+    "figure": "1.64x faster",
+    "says": "On a generated board of 1,500 tickets, boardy list, report and catchup run 1.64x, 1.63x and 1.70x faster after TOFU-1358 and the serve calls 1.81x to 2.03x; boardy report runs another 1.11x faster after TOFU-1359. show and epic list are level, and every output is byte-identical between head and fix.",
+    "from": "prose",
+    "sample": "3 runs of 8 probes on a generated board of 1,500 tickets and 24,390 events, seed 1356: 60 calls at bd4b0480, then 20 calls x 3 rounds per arm for TOFU-1358 and TOFU-1359, on DESKTOP-AHUN9RO",
+    "skips": "the serve, show and epic rows of TOFU-1358 were logged as ratios with no milliseconds; the two fix runs have separate heads and are not multiplied",
+    "commit": "fe3ff472",
+    "version": "0.5.14"
+  },
+  {
+    "report": "bench/startup/frame/report-2026-10-14.md",
+    "figure": "1.45x faster",
+    "says": "The first typeable frame on a fresh project draws 1.45x faster after TOFU-1354 and 1.38x faster after TOFU-1357; resuming a 2,130 event session draws 1.49x and then 1.19x faster, with drive screens identical to head.",
+    "from": "prose",
+    "sample": "10 interleaved runs per case and arm in a pseudo console against a local stub, a fresh home per run, at fd65de06, bd4b0480 and 0cd38be0, on DESKTOP-AHUN9RO",
+    "skips": "the two fix runs have separate heads and are not multiplied; the 1.86x of TOFU-1350 is a scratch clone, not a commit",
+    "commit": "41427b0a",
+    "version": "0.5.14"
   }
 ]

@@ -63,6 +63,8 @@ var DeliberatelyUnread = []UnreadKey{
 	{"message", "origin", "where a message came from, such as a memory view or a fork carry; no bench point reads it from the corpus yet"},
 	{"message", "posted_at", "when a person posted a message while the turn ran; no bench point reads queue timing from the corpus yet"},
 	{"message", "taken_at", "when the turn took a posted message into the conversation; no bench point reads queue timing from the corpus yet"},
+	{"step", "phase", "explore, edit, verify or report, derived from the step's own tool calls, which are already read; no bench point reads it from the corpus yet"},
+	{"call", "hooks", "the hooks that ran on a call and what they said; no bench point reads hook outcomes from the corpus yet"},
 	{"message_call", "arguments", "the raw arguments an assistant message's tool call carried; no bench point reads it from the corpus yet"},
 }
 

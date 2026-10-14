@@ -1,6 +1,6 @@
 {
   "read_on": "2026-10-14",
-  "tree": "585200b2 with TOFU-1328 uncommitted",
+  "tree": "974a51bb with TOFU-1362 uncommitted",
   "version": "0.5.14",
   "level_rule": "Level means the spread of tofu's latest 3 runs overlaps the other harness's, the rule bench/rivals judges by; where a measure has 1 run, the figures are compared as they are.",
   "headlines": [
@@ -2881,6 +2881,312 @@
       "corpus_moved": true,
       "better_word": "less",
       "worse_word": "more"
+    },
+    {
+      "bench": "boardy",
+      "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
+      "measure": "boardy list, tickets read in parallel",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1358",
+          "date": "2026-10-14",
+          "commit": "d6833978",
+          "version": "0.5.14",
+          "build": "archive build of d6833978, 0.5.14+dev",
+          "figure": "194.40",
+          "value": 194.4,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "list 194.40/118.31 1.64x"
+        },
+        {
+          "label": "after TOFU-1358",
+          "date": "2026-10-14",
+          "commit": "8e7367e0",
+          "version": "0.5.14",
+          "build": "the tree committed as 8e7367e0, 0.5.14+dev",
+          "figure": "118.31",
+          "value": 118.31,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "list 194.40/118.31 1.64x"
+        }
+      ],
+      "short": "boardy list, TOFU-1358",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "boardy",
+      "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
+      "measure": "boardy report, tickets read in parallel",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1358",
+          "date": "2026-10-14",
+          "commit": "d6833978",
+          "version": "0.5.14",
+          "build": "archive build of d6833978, 0.5.14+dev",
+          "figure": "249.79",
+          "value": 249.79,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "report 249.79/152.83 1.63x"
+        },
+        {
+          "label": "after TOFU-1358",
+          "date": "2026-10-14",
+          "commit": "8e7367e0",
+          "version": "0.5.14",
+          "build": "the tree committed as 8e7367e0, 0.5.14+dev",
+          "figure": "152.83",
+          "value": 152.83,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "report 249.79/152.83 1.63x"
+        }
+      ],
+      "short": "boardy report, TOFU-1358",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "boardy",
+      "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
+      "measure": "boardy catchup, tickets read in parallel",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1358",
+          "date": "2026-10-14",
+          "commit": "d6833978",
+          "version": "0.5.14",
+          "build": "archive build of d6833978, 0.5.14+dev",
+          "figure": "188.87",
+          "value": 188.87,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "catchup 188.87/111.05 1.70x"
+        },
+        {
+          "label": "after TOFU-1358",
+          "date": "2026-10-14",
+          "commit": "8e7367e0",
+          "version": "0.5.14",
+          "build": "the tree committed as 8e7367e0, 0.5.14+dev",
+          "figure": "111.05",
+          "value": 111.05,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "catchup 188.87/111.05 1.70x"
+        }
+      ],
+      "short": "boardy catchup, TOFU-1358",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "boardy",
+      "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
+      "measure": "boardy report, events decoded in parallel",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1359",
+          "date": "2026-10-14",
+          "commit": "8e7367e0",
+          "version": "0.5.14",
+          "build": "archive build of 8e7367e0, 0.5.14+dev",
+          "figure": "146.41",
+          "value": 146.41,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "report 146.41/131.52 1.11x"
+        },
+        {
+          "label": "after TOFU-1359",
+          "date": "2026-10-14",
+          "commit": "fe3ff472",
+          "version": "0.5.14",
+          "build": "the tree committed as fe3ff472, 0.5.14+dev",
+          "figure": "131.52",
+          "value": 131.52,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "report 146.41/131.52 1.11x"
+        }
+      ],
+      "short": "boardy report, TOFU-1359",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "boardy",
+      "task": "a generated board of 1,500 tickets and 24,390 events, GOMAXPROCS=2, 20 calls x 3 rounds, p50",
+      "measure": "serve boardy.report, events decoded in parallel",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1359",
+          "date": "2026-10-14",
+          "commit": "8e7367e0",
+          "version": "0.5.14",
+          "build": "archive build of 8e7367e0, 0.5.14+dev",
+          "figure": "110.30",
+          "value": 110.3,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "serve boardy.report 110.30/92.06 1.20x"
+        },
+        {
+          "label": "after TOFU-1359",
+          "date": "2026-10-14",
+          "commit": "fe3ff472",
+          "version": "0.5.14",
+          "build": "the tree committed as fe3ff472, 0.5.14+dev",
+          "figure": "92.06",
+          "value": 92.06,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "serve boardy.report 110.30/92.06 1.20x"
+        }
+      ],
+      "short": "serve boardy.report, TOFU-1359",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "startup/frame",
+      "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
+      "measure": "first frame on a fresh project",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1354",
+          "date": "2026-10-14",
+          "commit": "bd4b0480",
+          "version": "0.5.14",
+          "build": "build of bd4b0480, 0.5.14+dev",
+          "figure": "177",
+          "value": 177.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "fresh 177->122 ms p50 (1.45x)"
+        },
+        {
+          "label": "after TOFU-1354",
+          "date": "2026-10-14",
+          "commit": "0cd38be0",
+          "version": "0.5.14",
+          "build": "bd4b0480 with TOFU-1354, committed as 0cd38be0, 0.5.14+dev",
+          "figure": "122",
+          "value": 122.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "fresh 177->122 ms p50 (1.45x)"
+        }
+      ],
+      "short": "first frame fresh, TOFU-1354",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "startup/frame",
+      "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
+      "measure": "first frame resuming a 2,130 event session",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1354",
+          "date": "2026-10-14",
+          "commit": "bd4b0480",
+          "version": "0.5.14",
+          "build": "build of bd4b0480, 0.5.14+dev",
+          "figure": "278",
+          "value": 278.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "resume 278->186 (1.49x)"
+        },
+        {
+          "label": "after TOFU-1354",
+          "date": "2026-10-14",
+          "commit": "0cd38be0",
+          "version": "0.5.14",
+          "build": "bd4b0480 with TOFU-1354, committed as 0cd38be0, 0.5.14+dev",
+          "figure": "186",
+          "value": 186.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "resume 278->186 (1.49x)"
+        }
+      ],
+      "short": "first frame resume, TOFU-1354",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "startup/frame",
+      "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
+      "measure": "first frame on a fresh project",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1357",
+          "date": "2026-10-14",
+          "commit": "0cd38be0",
+          "version": "0.5.14",
+          "build": "build of 0cd38be0, 0.5.14+dev",
+          "figure": "127",
+          "value": 127.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "fresh p50 127 -> 92 ms (-35, 1.38x)"
+        },
+        {
+          "label": "after TOFU-1357",
+          "date": "2026-10-14",
+          "commit": "41427b0a",
+          "version": "0.5.14",
+          "build": "0cd38be0 with TOFU-1357, committed as 41427b0a, 0.5.14+dev",
+          "figure": "92",
+          "value": 92.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "fresh p50 127 -> 92 ms (-35, 1.38x)"
+        }
+      ],
+      "short": "first frame fresh, TOFU-1357",
+      "better_word": "faster",
+      "worse_word": "slower"
+    },
+    {
+      "bench": "startup/frame",
+      "task": "the first typeable frame in a pseudo console, local stub, GOMAXPROCS=2, 10 interleaved runs, p50",
+      "measure": "first frame resuming a 2,130 event session",
+      "unit": "ms",
+      "better": "lower",
+      "tofu": [
+        {
+          "label": "before TOFU-1357",
+          "date": "2026-10-14",
+          "commit": "0cd38be0",
+          "version": "0.5.14",
+          "build": "build of 0cd38be0, 0.5.14+dev",
+          "figure": "175",
+          "value": 175.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "resume 175 -> 147 (-28, 1.19x)"
+        },
+        {
+          "label": "after TOFU-1357",
+          "date": "2026-10-14",
+          "commit": "41427b0a",
+          "version": "0.5.14",
+          "build": "0cd38be0 with TOFU-1357, committed as 41427b0a, 0.5.14+dev",
+          "figure": "147",
+          "value": 147.0,
+          "source": "bench/report/runs/board-2026-10-14.md",
+          "evidence": "resume 175 -> 147 (-28, 1.19x)"
+        }
+      ],
+      "short": "first frame resume, TOFU-1357",
+      "better_word": "faster",
+      "worse_word": "slower"
     }
   ]
 }
