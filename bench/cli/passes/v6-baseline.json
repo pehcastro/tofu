@@ -1,0 +1,281 @@
+{
+  "Name": "v6-baseline",
+  "Against": "v5",
+  "Note": "HEAD from git archive, run alternately with v6",
+  "Version": "0.5.14+dev",
+  "Commit": "ba31cca9-archive",
+  "Recorded": "2026-10-14T10:42:11.5320132Z",
+  "Platform": "windows/amd64",
+  "Method": "CPU is QueryProcessCycleTime at a cycle rate calibrated by spinning one locked thread, because Windows user and kernel times move in 15.6 ms ticks; RSS is the peak working set",
+  "Runs": 11,
+  "InitMs": 6.970000000000001,
+  "InitMB": 2.599224,
+  "Rows": [
+    {
+      "Command": "version",
+      "WallMs": 16.114,
+      "WallP90Ms": 17.494,
+      "CPUMs": 14.869,
+      "RSSMB": 14.680064
+    },
+    {
+      "Command": "help",
+      "WallMs": 16.147,
+      "WallP90Ms": 18.31,
+      "CPUMs": 14.729,
+      "RSSMB": 14.594048
+    },
+    {
+      "Command": "docs",
+      "WallMs": 20.796,
+      "WallP90Ms": 22,
+      "CPUMs": 19.68,
+      "RSSMB": 16.9984
+    },
+    {
+      "Command": "changelog",
+      "WallMs": 20.231,
+      "WallP90Ms": 21.998,
+      "CPUMs": 19.65,
+      "RSSMB": 16.723968
+    },
+    {
+      "Command": "settings",
+      "WallMs": 17.086,
+      "WallP90Ms": 18.943,
+      "CPUMs": 15.46,
+      "RSSMB": 14.97088
+    },
+    {
+      "Command": "memory",
+      "WallMs": 21.185,
+      "WallP90Ms": 23.61,
+      "CPUMs": 19.371,
+      "RSSMB": 14.917632
+    },
+    {
+      "Command": "agents",
+      "WallMs": 25.999,
+      "WallP90Ms": 29.992,
+      "CPUMs": 24.751,
+      "RSSMB": 17.965056
+    },
+    {
+      "Command": "models",
+      "WallMs": 19.069,
+      "WallP90Ms": 21.638,
+      "CPUMs": 17.766,
+      "RSSMB": 16.60928
+    },
+    {
+      "Command": "library",
+      "WallMs": 30,
+      "WallP90Ms": 34,
+      "CPUMs": 30.243,
+      "RSSMB": 20.434944
+    },
+    {
+      "Command": "hooks",
+      "WallMs": 17.001,
+      "WallP90Ms": 19,
+      "CPUMs": 15.559,
+      "RSSMB": 14.737408
+    },
+    {
+      "Command": "context",
+      "WallMs": 17.001,
+      "WallP90Ms": 18.13,
+      "CPUMs": 15.474,
+      "RSSMB": 14.80704
+    },
+    {
+      "Command": "scratch",
+      "WallMs": 18.608,
+      "WallP90Ms": 21,
+      "CPUMs": 16.009,
+      "RSSMB": 14.729216
+    },
+    {
+      "Command": "learn",
+      "WallMs": 37.64,
+      "WallP90Ms": 40.003,
+      "CPUMs": 37.845,
+      "RSSMB": 18.948096
+    },
+    {
+      "Command": "usage",
+      "WallMs": 50.25,
+      "WallP90Ms": 53.293,
+      "CPUMs": 30.918,
+      "RSSMB": 17.395712
+    },
+    {
+      "Command": "doctor",
+      "WallMs": 99.225,
+      "WallP90Ms": 102.352,
+      "CPUMs": 72.19,
+      "RSSMB": 23.6544
+    },
+    {
+      "Command": "frame",
+      "WallMs": 48.964,
+      "WallP90Ms": 51.37,
+      "CPUMs": 49.585,
+      "RSSMB": 21.03296
+    },
+    {
+      "Command": "reload",
+      "WallMs": 33.391,
+      "WallP90Ms": 36.044,
+      "CPUMs": 34.259,
+      "RSSMB": 20.680704
+    },
+    {
+      "Command": "migrate --dry-run",
+      "WallMs": 18.358,
+      "WallP90Ms": 19.372,
+      "CPUMs": 16.836,
+      "RSSMB": 14.778368
+    },
+    {
+      "Command": "preview",
+      "WallMs": 17.896,
+      "WallP90Ms": 23.13,
+      "CPUMs": 16.404,
+      "RSSMB": 14.761984
+    },
+    {
+      "Command": "serve --schema",
+      "WallMs": 24.68,
+      "WallP90Ms": 28.003,
+      "CPUMs": 24.83,
+      "RSSMB": 21.05344
+    },
+    {
+      "Command": "drive",
+      "WallMs": 87.727,
+      "WallP90Ms": 97.003,
+      "CPUMs": 73.533,
+      "RSSMB": 22.28224
+    },
+    {
+      "Command": "update --check",
+      "WallMs": 20.235,
+      "WallP90Ms": 23.428,
+      "CPUMs": 18.342,
+      "RSSMB": 15.68768
+    },
+    {
+      "Command": "browser",
+      "WallMs": 18.808,
+      "WallP90Ms": 21.47,
+      "CPUMs": 17.091,
+      "RSSMB": 15.192064
+    },
+    {
+      "Command": "session list",
+      "WallMs": 74.109,
+      "WallP90Ms": 76.626,
+      "CPUMs": 29.777,
+      "RSSMB": 17.854464
+    },
+    {
+      "Command": "shells list",
+      "WallMs": 18.051,
+      "WallP90Ms": 23.293,
+      "CPUMs": 15.116,
+      "RSSMB": 14.757888
+    },
+    {
+      "Command": "rules list",
+      "WallMs": 25.767,
+      "WallP90Ms": 28.999,
+      "CPUMs": 24.237,
+      "RSSMB": 19.218432
+    },
+    {
+      "Command": "lint comments",
+      "WallMs": 16,
+      "WallP90Ms": 18.551,
+      "CPUMs": 14.64,
+      "RSSMB": 14.749696
+    },
+    {
+      "Command": "boardy",
+      "WallMs": 17.911,
+      "WallP90Ms": 18.941,
+      "CPUMs": 14.717,
+      "RSSMB": 14.692352
+    },
+    {
+      "Command": "why --last",
+      "WallMs": 17.642,
+      "WallP90Ms": 19.051,
+      "CPUMs": 14.945,
+      "RSSMB": 14.716928
+    },
+    {
+      "Command": "label",
+      "WallMs": 16.999,
+      "WallP90Ms": 19,
+      "CPUMs": 14.96,
+      "RSSMB": 14.692352
+    },
+    {
+      "Command": "replay",
+      "WallMs": 17.028,
+      "WallP90Ms": 20.001,
+      "CPUMs": 14.724,
+      "RSSMB": 14.708736
+    },
+    {
+      "Command": "undo",
+      "WallMs": 17.996,
+      "WallP90Ms": 19,
+      "CPUMs": 15.087,
+      "RSSMB": 14.802944
+    },
+    {
+      "Command": "check",
+      "WallMs": 18,
+      "WallP90Ms": 19.17,
+      "CPUMs": 14.963,
+      "RSSMB": 14.692352
+    },
+    {
+      "Command": "judge",
+      "WallMs": 16.138,
+      "WallP90Ms": 17.403,
+      "CPUMs": 14.564,
+      "RSSMB": 14.741504
+    },
+    {
+      "Command": "sift",
+      "WallMs": 16.556,
+      "WallP90Ms": 18.21,
+      "CPUMs": 14.416,
+      "RSSMB": 14.729216
+    },
+    {
+      "Command": "run",
+      "WallMs": 71.539,
+      "WallP90Ms": 74.091,
+      "CPUMs": 28.824,
+      "RSSMB": 17.641472
+    },
+    {
+      "Command": "logout",
+      "WallMs": 15.68,
+      "WallP90Ms": 16.697,
+      "CPUMs": 14.134,
+      "RSSMB": 14.68416
+    },
+    {
+      "Command": "login --status",
+      "WallMs": 26.859,
+      "WallP90Ms": 27.973,
+      "CPUMs": 26.36,
+      "RSSMB": 16.95744
+    }
+  ]
+}

@@ -29,7 +29,7 @@ func render() error {
 		}
 		passes = append(passes, p)
 	}
-	slices.SortFunc(passes, func(a, b pass) int { return a.Recorded.Compare(b.Recorded) })
+	slices.SortStableFunc(passes, func(a, b pass) int { return a.Recorded.Compare(b.Recorded) })
 	base := slices.IndexFunc(passes, func(p pass) bool { return p.Name == "v0" })
 	if base < 0 {
 		return fmt.Errorf("no v0 pass under %s", filepath.Join(benchDir, "passes"))

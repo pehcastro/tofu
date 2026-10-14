@@ -63,6 +63,7 @@ func main() {
 	note := flag.String("note", "", "what changed in this pass")
 	runs := flag.Int("n", 7, "runs per command")
 	modfile := flag.String("modfile", "", "build against this go.mod instead of the tree's, to measure an earlier dependency set")
+	baseline := flag.String("baseline", "", "a git revision built from its archive and run alternately with the tree, each run of each command, recorded as the pass <name>-baseline")
 	renderOnly := flag.Bool("render", false, "rewrite passes.md from the recorded passes and measured.json without running a pass")
 	flag.Parse()
 	if *renderOnly {
@@ -76,70 +77,140 @@ func main() {
 		fmt.Fprintln(os.Stderr, "bench/cli: -pass is required")
 		os.Exit(2)
 	}
-	if err := record(pass{Name: *name, Against: *against, Note: *note, Runs: *runs, Recorded: time.Now().UTC(), Platform: runtime.GOOS + "/" + runtime.GOARCH, Method: cpuMethod}, *modfile); err != nil {
+	result := pass{Name: *name, Against: *against, Note: *note, Runs: *runs, Recorded: time.Now().UTC(), Platform: runtime.GOOS + "/" + runtime.GOARCH, Method: cpuMethod}
+	if err := record(result, *modfile, *baseline); err != nil {
 		fmt.Fprintln(os.Stderr, "bench/cli:", err)
 		os.Exit(1)
 	}
 }
 
-func record(result pass, modfile string) error {
+type arm struct {
+	result *pass
+	binary string
+}
+
+func record(result pass, modfile, baseline string) error {
 	work, err := os.MkdirTemp("", "benchcli")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(work) }()
-	binary := filepath.Join(work, "tofu")
-	if runtime.GOOS == "windows" {
-		binary += ".exe"
+	arms := []arm{{&result, filepath.Join(work, "tofu"+exeSuffix())}}
+	if err := build(arms[0].binary, ".", modfile); err != nil {
+		return err
 	}
-	build := exec.Command("go", "build", "-modfile="+cmp.Or(modfile, "go.mod"), "-o", binary, "./cmd/tofu")
-	build.Env = append(os.Environ(), "GOMAXPROCS=2")
-	build.Stdout, build.Stderr = os.Stderr, os.Stderr
-	if err := build.Run(); err != nil {
-		return fmt.Errorf("building tofu: %w", err)
-	}
-	meter := newMeter()
-	var initMs, initBytes []float64
-	for range result.Runs {
-		r, err := execute(meter, binary, work, []string{"version"}, "inittrace=1")
+	if baseline != "" {
+		source := filepath.Join(work, "baseline")
+		commit, err := archive(baseline, source)
 		if err != nil {
 			return err
 		}
-		for line := range strings.Lines(r.stdout) {
-			if commit, ok := strings.CutPrefix(line, "commit"); ok {
-				result.Commit = strings.TrimSpace(commit)
-			}
-			if version, ok := strings.CutPrefix(line, "version"); ok {
-				result.Version = strings.TrimSpace(version)
-			}
+		base := result
+		base.Name, base.Note, base.Commit = result.Name+"-baseline", baseline+" from git archive, run alternately with "+result.Name, commit+"-archive"
+		arms = append([]arm{{&base, filepath.Join(work, "baseline"+exeSuffix())}}, arms...)
+		if err := build(arms[0].binary, source, ""); err != nil {
+			return err
 		}
-		ms, bytes := initCost(r.stderr)
-		initMs, initBytes = append(initMs, ms), append(initBytes, bytes)
 	}
-	result.InitMs, result.InitMB = rank(initMs, 50), rank(initBytes, 50)/1e6
-	for _, command := range commands() {
-		var wall, cpu, rss []float64
-		for range result.Runs {
-			r, err := execute(meter, binary, work, command, "")
-			if err != nil {
-				return fmt.Errorf("%s: %w", strings.Join(command, " "), err)
+	meter := newMeter()
+	samples, err := sample(meter, arms, work, []string{"version"}, "inittrace=1")
+	if err != nil {
+		return err
+	}
+	for i, a := range arms {
+		var initMs, initBytes []float64
+		for _, r := range samples[i] {
+			for line := range strings.Lines(r.stdout) {
+				if commit, ok := strings.CutPrefix(line, "commit"); ok && a.result.Commit == "" {
+					a.result.Commit = strings.TrimSpace(commit)
+				}
+				if version, ok := strings.CutPrefix(line, "version"); ok {
+					a.result.Version = strings.TrimSpace(version)
+				}
 			}
-			wall, cpu, rss = append(wall, ms(r.elapsed)), append(cpu, ms(r.used.cpu)), append(rss, float64(r.used.peakRSS)/1e6)
+			ms, bytes := initCost(r.stderr)
+			initMs, initBytes = append(initMs, ms), append(initBytes, bytes)
 		}
-		result.Rows = append(result.Rows, row{Command: strings.Join(command, " "), WallMs: rank(wall, 50), WallP90Ms: rank(wall, 90), CPUMs: rank(cpu, 50), RSSMB: rank(rss, 50)})
-		fmt.Fprintf(os.Stderr, "%-18s cpu %6.1f ms  wall %6.1f ms\n", strings.Join(command, " "), rank(cpu, 50), rank(wall, 50))
+		a.result.InitMs, a.result.InitMB = rank(initMs, 50), rank(initBytes, 50)/1e6
+	}
+	for _, command := range commands() {
+		samples, err := sample(meter, arms, work, command, "")
+		if err != nil {
+			return fmt.Errorf("%s: %w", strings.Join(command, " "), err)
+		}
+		for i, a := range arms {
+			var wall, cpu, rss []float64
+			for _, r := range samples[i] {
+				wall, cpu, rss = append(wall, ms(r.elapsed)), append(cpu, ms(r.used.cpu)), append(rss, float64(r.used.peakRSS)/1e6)
+			}
+			a.result.Rows = append(a.result.Rows, row{Command: strings.Join(command, " "), WallMs: rank(wall, 50), WallP90Ms: rank(wall, 90), CPUMs: rank(cpu, 50), RSSMB: rank(rss, 50)})
+			fmt.Fprintf(os.Stderr, "%-18s %-12s cpu %6.1f ms  wall %6.1f ms\n", strings.Join(command, " "), a.result.Name, rank(cpu, 50), rank(wall, 50))
+		}
 	}
 	if err := os.MkdirAll(filepath.Join(benchDir, "passes"), 0o755); err != nil {
 		return err
 	}
-	encoded, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(benchDir, "passes", result.Name+".json"), append(encoded, '\n'), 0o644); err != nil {
-		return err
+	for _, a := range arms {
+		encoded, err := json.MarshalIndent(a.result, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(benchDir, "passes", a.result.Name+".json"), append(encoded, '\n'), 0o644); err != nil {
+			return err
+		}
 	}
 	return render()
+}
+
+func sample(m meter, arms []arm, work string, command []string, godebug string) ([][]run, error) {
+	samples := make([][]run, len(arms))
+	for range arms[0].result.Runs {
+		for i, a := range arms {
+			r, err := execute(m, a.binary, work, command, godebug)
+			if err != nil {
+				return nil, err
+			}
+			samples[i] = append(samples[i], r)
+		}
+	}
+	return samples, nil
+}
+
+func build(binary, dir, modfile string) error {
+	cmd := exec.Command("go", "build", "-modfile="+cmp.Or(modfile, "go.mod"), "-o", binary, "./cmd/tofu")
+	cmd.Dir, cmd.Env = dir, append(os.Environ(), "GOMAXPROCS=2")
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("building tofu in %s: %w", dir, err)
+	}
+	return nil
+}
+
+func archive(revision, dir string) (string, error) {
+	commit, err := exec.Command("git", "rev-parse", "--short=8", revision).Output()
+	if err != nil {
+		return "", fmt.Errorf("resolving %s: %w", revision, err)
+	}
+	tarball, err := exec.Command("git", "archive", revision, "go.mod", "go.sum", "bench", "cmd", "interface", "internal", "library", "third_party").Output()
+	if err != nil {
+		return "", fmt.Errorf("archiving %s: %w", revision, err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	extract := exec.Command("tar", "-x", "-f", "-")
+	extract.Dir, extract.Stdin, extract.Stderr = dir, bytes.NewReader(tarball), os.Stderr
+	if err := extract.Run(); err != nil {
+		return "", fmt.Errorf("extracting %s: %w", revision, err)
+	}
+	return strings.TrimSpace(string(commit)), nil
+}
+
+func exeSuffix() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
 }
 
 type usage struct {
