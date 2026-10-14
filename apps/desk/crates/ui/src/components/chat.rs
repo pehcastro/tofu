@@ -9,10 +9,10 @@ use desk_markdown::{
     Registry,
 };
 use gpui::{
-    AnyElement, App, Bounds, Div, ElementId, FontStyle, FontWeight, HighlightStyle,
-    InteractiveText, Rgba, SharedString, Stateful, StrikethroughStyle, StyledText, TextLayout,
-    TextRun, Transformation, TransformationMatrix, UnderlineStyle, Window, canvas, div, font,
-    point, prelude::*, px, radians, rgb_to_hsla, rgba, size,
+    AnyElement, App, Axis, Bounds, Div, ElementId, FontStyle, FontWeight, HighlightStyle,
+    InteractiveText, Rgba, ScrollHandle, SharedString, Stateful, StrikethroughStyle, StyledText,
+    TextLayout, TextRun, Transformation, TransformationMatrix, UnderlineStyle, Window, canvas, div,
+    font, point, prelude::*, px, radians, rgb_to_hsla, rgba, size,
 };
 
 use crate::components::avatar::spinner;
@@ -24,11 +24,12 @@ use crate::components::hovercard::{hover, link_card, link_key};
 use crate::components::math::{self, Math};
 use crate::components::paint::{glyph, ink, ring, tint};
 use crate::components::rich::{self, Rich, Tone};
+use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
     FAIL_TINT, FIELD, FONT_BODY, FONT_CHAT, FONT_SMALL, FONT_TAB, FONT_WHO, FOOT_GAP, FOOT_TEXT,
-    HOVER_TEXT, LEAD_GAP, MENU_PAD, NOTE_GAP, RADIUS_BUBBLE, RADIUS_CHIP_SMALL, SHELL_TEXT, T1, T2,
-    T3, TOOL_GAP, YOU_GAP, YOU_MAX, YOU_PAD_BOTTOM, YOU_PAD_TOP, YOU_PAD_X,
+    GRID_GAP, HOVER_TEXT, LEAD_GAP, MENU_PAD, NOTE_GAP, RADIUS_BUBBLE, RADIUS_CHIP_SMALL,
+    SHELL_TEXT, T1, T2, T3, TOOL_GAP, YOU_GAP, YOU_MAX, YOU_PAD_BOTTOM, YOU_PAD_TOP, YOU_PAD_X,
 };
 use crate::metrics::ICON_SMALL;
 use crate::theme::{ColorToken, Theme, WordToken};
@@ -59,7 +60,6 @@ const MENTION_FILL: u32 = 0xb9a6ea1f;
 const MENTION_TEXT: u32 = 0xd6cbf5ff;
 const PILL_PAD_X: f32 = 7.0;
 const PILL_PAD_Y: f32 = 3.0;
-const BLOCK_GAP: f32 = 12.0;
 const ITEM_GAP: f32 = 4.0;
 const BULLET_INDENT: f32 = 20.0;
 const CODE_PAD: &str = "\u{202f}\u{202f}";
@@ -77,6 +77,9 @@ const RULE_HEIGHT: f32 = 1.0;
 const TEXT_LINE: f32 = 1.0;
 const CELL_PAD_X: f32 = 10.0;
 const CELL_PAD_Y: f32 = 4.0;
+const RAIL_THICK: f32 = 3.0;
+const RAIL_INSET: f32 = 3.0;
+const RAIL_THUMB_MIN: f32 = 24.0;
 const TASK_BOX: f32 = 11.0;
 const TASK_RADIUS: f32 = 3.0;
 const LINK_SCHEMES: [&str; 3] = ["https://", "http://", "mailto:"];
@@ -213,6 +216,7 @@ pub enum Block {
     Table {
         alignments: Vec<Alignment>,
         rows: Vec<Vec<Vec<Span>>>,
+        scroll: ScrollHandle,
     },
     Rule,
     Source {
@@ -552,6 +556,7 @@ impl Reader<'_> {
                             .collect()
                     })
                     .collect(),
+                scroll: ScrollHandle::new(),
             },
             BlockKind::Math(tex) => self.display(tex, &block.range),
             BlockKind::Html(_) => Block::Source {
@@ -727,32 +732,7 @@ fn fence_language(info: &str) -> Option<Language> {
 }
 
 fn fence_label(info: &str) -> Option<SharedString> {
-    let word = info.split_whitespace().next()?;
-    let known = match word.to_ascii_lowercase().as_str() {
-        "go" | "golang" => "Go",
-        "rust" | "rs" => "Rust",
-        "ts" | "typescript" => "TypeScript",
-        "tsx" => "TSX",
-        "js" | "javascript" | "mjs" => "JavaScript",
-        "jsx" => "JSX",
-        "py" | "python" => "Python",
-        "json" => "JSON",
-        "toml" => "TOML",
-        "yaml" | "yml" => "YAML",
-        "md" | "markdown" => "Markdown",
-        "sh" | "bash" | "shell" | "zsh" => "Shell",
-        "ps1" | "powershell" | "pwsh" => "PowerShell",
-        "html" => "HTML",
-        "css" => "CSS",
-        "sql" => "SQL",
-        "diff" | "patch" => "Diff",
-        "c" => "C",
-        "cpp" | "c++" | "cc" => "C++",
-        "java" => "Java",
-        "rb" | "ruby" => "Ruby",
-        _ => return Some(word.to_owned().into()),
-    };
-    Some(known.into())
+    Some(info.split_whitespace().next()?.to_lowercase().into())
 }
 
 fn looks_like_path(text: &str) -> bool {
@@ -1253,7 +1233,11 @@ impl<'a> Draw<'a> {
                         )
                     })
             }
-            Block::Table { alignments, rows } => {
+            Block::Table {
+                alignments,
+                rows,
+                scroll,
+            } => {
                 let columns = rows.iter().map(Vec::len).max().unwrap_or_default();
                 let widths: Vec<f32> = (0..columns)
                     .map(|column| {
@@ -1299,25 +1283,44 @@ impl<'a> Draw<'a> {
                             }))
                     })
                     .collect();
-                div().child(
-                    div()
-                        .id(("chat-table", table))
-                        .flex()
-                        .rounded(px(ROW_RADIUS))
-                        .border_1()
-                        .border_color(ink(theme, RULE_INK))
-                        .overflow_x_scroll()
-                        .restrict_scroll_to_axis()
-                        .child(
-                            div()
-                                .flex_none()
-                                .min_w_full()
-                                .w(px(widths.iter().sum()))
-                                .flex()
-                                .flex_col()
-                                .children(lines),
-                        ),
-                )
+                let wheel = scroll.clone();
+                div()
+                    .relative()
+                    .min_w_0()
+                    .rounded(px(ROW_RADIUS))
+                    .border_1()
+                    .border_color(ink(theme, RULE_INK))
+                    .child(
+                        div()
+                            .id(("chat-table", table))
+                            .flex()
+                            .rounded(px(ROW_RADIUS))
+                            .overflow_x_scroll()
+                            .restrict_scroll_to_axis()
+                            .track_scroll(scroll)
+                            .on_scroll_wheel(move |event, window, cx| {
+                                let sideways = event.delta.pixel_delta(window.line_height()).x;
+                                if sideways == px(0.0) || wheel.max_offset().x <= px(0.0) {
+                                    return;
+                                }
+                                cx.stop_propagation();
+                                eprintln!(
+                                    "desk: chat table {columns} cols scroll_x {}",
+                                    f32::from(-wheel.offset().x)
+                                );
+                            })
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .min_w_full()
+                                    .w(px(widths.iter().sum()))
+                                    .flex()
+                                    .flex_col()
+                                    .children(lines),
+                            ),
+                    )
+                    .child(table_rail(scroll.clone(), theme))
+                    .child(scrollbar(("chat-table-bar", table), scroll).axis(Axis::Horizontal))
             }
             Block::Rule => div().h(px(RULE_HEIGHT)).bg(ink(theme, RULE_INK)),
             Block::Source { text, refused } => {
@@ -1356,6 +1359,47 @@ impl<'a> Draw<'a> {
     }
 }
 
+fn table_rail(scroll: ScrollHandle, theme: &Theme) -> impl IntoElement {
+    let track = ink(theme, RULE_INK);
+    let thumb = theme.color(ColorToken::Scrollbar);
+    canvas(
+        |_, _, _| {},
+        move |_, (), window, _| {
+            let max = scroll.max_offset().x;
+            if max <= px(0.0) {
+                return;
+            }
+            let view = scroll.bounds();
+            let top = view.bottom() - px(RAIL_INSET + RAIL_THICK);
+            let left = view.left() + px(RAIL_INSET);
+            let length = view.size.width - px(RAIL_INSET * 2.0);
+            let bar = (length * (view.size.width / (view.size.width + max)))
+                .max(px(RAIL_THUMB_MIN))
+                .min(length);
+            let travel = (length - bar) * (-scroll.offset().x / max).clamp(0.0, 1.0);
+            let radius = px(RAIL_THICK / 2.0);
+            window.paint_quad(
+                gpui::fill(
+                    Bounds::new(point(left, top), size(length, px(RAIL_THICK))),
+                    track,
+                )
+                .corner_radii(radius),
+            );
+            window.paint_quad(
+                gpui::fill(
+                    Bounds::new(point(left + travel, top), size(bar, px(RAIL_THICK))),
+                    thumb,
+                )
+                .corner_radii(radius),
+            );
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+}
+
 fn boxed(theme: &Theme) -> Div {
     div()
         .min_w_0()
@@ -1379,7 +1423,7 @@ pub fn lead(
         theme,
         piece: 0,
         tables: 0,
-        gap: BLOCK_GAP,
+        gap: GRID_GAP,
         quoted: false,
     };
     div()
@@ -1676,7 +1720,8 @@ pub fn foot(text: impl Into<SharedString>, theme: &Theme) -> Div {
 
 #[cfg(test)]
 mod tests {
-    use super::{Block, Face, Streaming, markdown, pieces};
+    use super::{Block, Face, Streaming, lead, markdown, pieces};
+    use crate::theme::{build, parse_layer};
 
     #[test]
     fn math_reaches_chat_as_math_and_prices_stay_text() {
@@ -1756,6 +1801,61 @@ mod tests {
         println!(
             "chat stream bench: {} bytes, 50 components, {deltas} deltas of one char, {micros:.1} us per delta",
             message.len()
+        );
+        let mut problems = Vec::new();
+        let Ok(layer) = parse_layer(
+            "tofu-glass.json",
+            include_str!("../../../../themes/tofu-glass.json"),
+            &mut problems,
+        ) else {
+            panic!("built-in theme does not parse: {problems:?}");
+        };
+        let Ok(theme) = build(&[layer.layer], &mut problems) else {
+            panic!("built-in theme does not build: {problems:?}");
+        };
+        let header: Vec<String> = (1..=12).map(|n| format!("col {n}")).collect();
+        let tables = [
+            "| Key | Value |\n| --- | --- |\n| mode | dark |".to_owned(),
+            format!(
+                "| {} |\n|{}\n| {} |",
+                header.join(" | "),
+                " --- |".repeat(12),
+                header.join(" | ")
+            ),
+            "| Step | What |\n| --- | --- |\n| plan | The lead reads the ticket and every caller before it writes. |".to_owned(),
+            "| L | C | R |\n| :--- | :---: | ---: |\n| a | 3 | 1.20 |".to_owned(),
+            "| Command | Does |\n| --- | --- |\n| `cargo check -p desk_ui` | checks one crate |".to_owned(),
+            "| A | B | C |\n| --- | --- | --- |\n| x |  | z |".to_owned(),
+        ];
+        let mut message = String::new();
+        for (at, table) in tables.iter().cycle().enumerate() {
+            if message.len() >= 40_000 {
+                break;
+            }
+            message.push_str(table);
+            message.push_str("\n\n");
+            while message.len() < (at + 1) * 40_000 / tables.len() {
+                message.push_str("A paragraph line with `code` and *emphasis* to fill it.\n");
+            }
+            message.push('\n');
+        }
+        let mut runs: Vec<f64> = (0..5)
+            .map(|_| {
+                let started = std::time::Instant::now();
+                let body = markdown(&message);
+                std::hint::black_box(lead("bench", "now", &body, &[], &theme));
+                started.elapsed().as_secs_f64() * 1e3
+            })
+            .collect();
+        runs.sort_by(f64::total_cmp);
+        println!(
+            "chat table bench: {} bytes, {} tables, lower and build element tree, median of 5 {:.2} ms, runs {runs:.2?}",
+            message.len(),
+            markdown(&message)
+                .iter()
+                .filter(|block| matches!(block, Block::Table { .. }))
+                .count(),
+            runs[2]
         );
     }
 

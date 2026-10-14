@@ -1,6 +1,7 @@
 mod agents;
 mod charts;
 mod chat;
+mod chat_markdown;
 mod chrome;
 mod code;
 mod composer;
@@ -54,6 +55,7 @@ use crate::themes::{self, Choice};
 use agents::AgentsPage;
 use charts::ChartsPage;
 use chat::{AskPage, ChatPage};
+use chat_markdown::ChatMarkdownPage;
 use code::CodePage;
 use composer::ComposerPage;
 use content::ContentState;
@@ -96,6 +98,7 @@ pub struct Book {
     diff: DiffPage,
     code: CodePage,
     chat: ChatPage,
+    chat_markdown: ChatMarkdownPage,
     ask: AskPage,
     tree: TreePage,
     history: HistoryPage,
@@ -140,6 +143,7 @@ impl Book {
             diff: DiffPage::new(cx),
             code: CodePage::new(),
             chat: ChatPage::new(window, cx),
+            chat_markdown: ChatMarkdownPage::new(),
             ask: AskPage::new(cx),
             tree: TreePage::new(cx),
             history: HistoryPage::new(cx),
@@ -473,6 +477,7 @@ impl Book {
             Page::Diff => self.diff.render(theme, window, cx),
             Page::Code => self.code.render(theme, window),
             Page::ChatRows => self.chat.render(theme, window, cx),
+            Page::ChatMarkdown => self.chat_markdown.render(theme),
             Page::AskBar => self.ask.render(theme, window, cx),
             Page::FileTree => self.tree.render(theme, window, cx),
             Page::History => self.history.render(theme, window, cx),

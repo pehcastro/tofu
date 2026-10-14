@@ -65,6 +65,7 @@ pub enum Page {
     Diff,
     Code,
     ChatRows,
+    ChatMarkdown,
     FileTree,
     History,
     Shells,
@@ -101,7 +102,7 @@ pub const UNBUILT: [(Group, &str); 7] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 45] = [
+    pub const ALL: [Page; 46] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -112,6 +113,7 @@ impl Page {
         Page::Feed,
         Page::Sidebar,
         Page::ChatRows,
+        Page::ChatMarkdown,
         Page::FileTree,
         Page::History,
         Page::Agents,
@@ -483,6 +485,16 @@ impl Page {
                 "IWY-4 ICHAT-1 ICHAT-2 ICHAT-3 ICHAT-4 ICHAT-5",
                 "components/chat.rs",
                 "you, lead, tools folded and open, sub-agent summary, failed command, pending ask, note, foot; board width and 320 px",
+                "",
+            ),
+            Page::ChatMarkdown => sheet(
+                "chat-markdown",
+                "Chat markdown",
+                Group::Lists,
+                "A lead reply drawn from markdown: one gap between blocks, tables wider than the column scroll sideways inside their own frame, fences name their language top right.",
+                "DESK-347",
+                "components/chat.rs",
+                "narrow table, 12 columns, long cell text, alignment row, inline code in cells, empty cells, go fence; 560 px column",
                 "",
             ),
             Page::FileTree => sheet(
