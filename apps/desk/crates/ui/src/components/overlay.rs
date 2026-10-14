@@ -35,6 +35,7 @@ use crate::metrics::{ICON_SMALL, ICON_TINY, RADIUS_CONTROL, TOAST_DISMISS};
 use crate::theme::{ColorToken, Theme};
 
 const PLACEMENT_OFFSET: f32 = 6.0;
+const WINDOW_MARGIN: f32 = 8.0;
 const SUBMENU_OFFSET: f32 = 2.0;
 const CAPTION_GAP: f32 = 6.0;
 const MENU_SHADOW_Y: f32 = 8.0;
@@ -202,19 +203,37 @@ impl Placement {
                 (anchor.top(), anchor.size.height, size.height, room.height)
             }
         };
+        let edge = px(WINDOW_MARGIN);
+        let ends = start + extent - span;
         let cross = match self.align {
+            Align::Start if start + span > limit - edge && ends >= edge => ends,
+            Align::End if ends < edge && start + span <= limit - edge => start,
             Align::Start => start,
             Align::Center => start + (extent - span) / 2.0,
-            Align::End => start + extent - span,
+            Align::End => ends,
         }
-        .min(limit - span)
-        .max(px(0.0));
+        .min(limit - span - edge)
+        .max(edge);
         let slide = px(RISE * rest);
+        let inside =
+            |at: Pixels, length: Pixels, room: Pixels| at.min(room - length - edge).max(edge);
         match side {
-            Side::Top => point(cross, anchor.top() - gap - size.height + slide),
-            Side::Right => point(anchor.right() + gap - slide, cross),
-            Side::Bottom => point(cross, anchor.bottom() + gap - slide),
-            Side::Left => point(anchor.left() - gap - size.width + slide, cross),
+            Side::Top => point(
+                cross,
+                inside(anchor.top() - gap - size.height, size.height, room.height) + slide,
+            ),
+            Side::Right => point(
+                inside(anchor.right() + gap, size.width, room.width) - slide,
+                cross,
+            ),
+            Side::Bottom => point(
+                cross,
+                inside(anchor.bottom() + gap, size.height, room.height) - slide,
+            ),
+            Side::Left => point(
+                inside(anchor.left() - gap - size.width, size.width, room.width) + slide,
+                cross,
+            ),
         }
     }
 }
@@ -475,6 +494,11 @@ pub enum MenuItem {
         label: SharedString,
         icon: Option<MenuIcon>,
     },
+    Danger {
+        label: SharedString,
+        keys: Option<SharedString>,
+        icon: Option<MenuIcon>,
+    },
     Separator,
     Caption(SharedString),
     Submenu {
@@ -509,25 +533,49 @@ impl MenuItem {
                 label,
                 icon: Some(leading.into()),
             },
+            MenuItem::Danger { label, keys, .. } => MenuItem::Danger {
+                label,
+                keys,
+                icon: Some(leading.into()),
+            },
             MenuItem::Separator | MenuItem::Caption(_) => self,
         }
     }
 
     pub fn enabled(self, enabled: bool) -> Self {
         match (self, enabled) {
-            (MenuItem::Action { label, icon, .. }, false) => MenuItem::Disabled { label, icon },
+            (
+                MenuItem::Action { label, icon, .. } | MenuItem::Danger { label, icon, .. },
+                false,
+            ) => MenuItem::Disabled { label, icon },
+            (item, _) => item,
+        }
+    }
+
+    pub fn danger(self, danger: bool) -> Self {
+        match (self, danger) {
+            (MenuItem::Action { label, keys, icon }, true) => {
+                MenuItem::Danger { label, keys, icon }
+            }
+            (MenuItem::Danger { label, keys, icon }, false) => {
+                MenuItem::Action { label, keys, icon }
+            }
             (item, _) => item,
         }
     }
 
     fn picks(&self) -> bool {
-        matches!(self, MenuItem::Action { .. } | MenuItem::Submenu { .. })
+        matches!(
+            self,
+            MenuItem::Action { .. } | MenuItem::Danger { .. } | MenuItem::Submenu { .. }
+        )
     }
 
     fn span(&self) -> usize {
         match self {
             MenuItem::Submenu { items, .. } => 1 + items.iter().map(MenuItem::span).sum::<usize>(),
             MenuItem::Action { .. }
+            | MenuItem::Danger { .. }
             | MenuItem::Disabled { .. }
             | MenuItem::Separator
             | MenuItem::Caption(_) => 1,
@@ -548,6 +596,7 @@ fn children_of(items: &[MenuItem], at: usize) -> &[MenuItem] {
         Some(MenuItem::Submenu { items, .. }) => items,
         Some(
             MenuItem::Action { .. }
+            | MenuItem::Danger { .. }
             | MenuItem::Disabled { .. }
             | MenuItem::Separator
             | MenuItem::Caption(_),
@@ -592,6 +641,21 @@ fn menu_entry(id: impl Into<ElementId>, item: &MenuItem, theme: &Theme) -> MenuR
                 .child(div().flex_1().child(label.clone()))
                 .children(keys.clone().map(|keys| kbd(keys, theme))),
         ),
+        MenuItem::Danger {
+            label,
+            keys,
+            icon: lead,
+        } => {
+            let danger = theme.color(ColorToken::StatusDanger);
+            MenuRow::Pick(
+                menu_row(id, theme)
+                    .aria_label(label.clone())
+                    .text_color(danger)
+                    .children(lead.map(|lead| leading_in(lead, danger)))
+                    .child(div().flex_1().child(label.clone()))
+                    .children(keys.clone().map(|keys| kbd(keys, theme))),
+            )
+        }
         MenuItem::Submenu {
             label, icon: lead, ..
         } => MenuRow::Pick(
@@ -653,7 +717,10 @@ pub fn menu(
 }
 
 fn leading(lead: MenuIcon, theme: &Theme) -> Div {
-    let color = ink(theme, CAPTION_TEXT);
+    leading_in(lead, ink(theme, CAPTION_TEXT))
+}
+
+fn leading_in(lead: MenuIcon, color: Rgba) -> Div {
     let mark = match lead {
         MenuIcon::Icon(mark) => icon(mark, ICON_SMALL, color),
         MenuIcon::Glyph(mark) => glyph(mark, ICON_SMALL, color),
@@ -1231,7 +1298,10 @@ impl MenuState {
     fn choose(&mut self, pick: usize, window: &mut Window, cx: &mut Context<Self>) {
         let top = (0..self.items.len()).find(|top| {
             preorder(&self.items, *top) == pick
-                && matches!(self.items.get(*top), Some(MenuItem::Action { .. }))
+                && matches!(
+                    self.items.get(*top),
+                    Some(MenuItem::Action { .. } | MenuItem::Danger { .. })
+                )
         });
         if let Some(top) = top {
             self.chosen = top;
@@ -1293,7 +1363,12 @@ impl MenuState {
                         highlighted: Some(row),
                     });
                 }
-                "enter" if matches!(current, Some(MenuItem::Action { .. })) => {
+                "enter"
+                    if matches!(
+                        current,
+                        Some(MenuItem::Action { .. } | MenuItem::Danger { .. })
+                    ) =>
+                {
                     return MenuKey::Pick(preorder(&self.items, self.highlighted));
                 }
                 "escape" => return MenuKey::Close,
@@ -1592,7 +1667,7 @@ impl Render for Dropdown {
         let theme = ActiveTheme::theme(cx);
         let menu = self.menu.read(cx);
         let label = match menu.items.get(menu.chosen) {
-            Some(MenuItem::Action { label, .. }) => label.clone(),
+            Some(MenuItem::Action { label, .. } | MenuItem::Danger { label, .. }) => label.clone(),
             Some(
                 MenuItem::Disabled { .. }
                 | MenuItem::Separator
