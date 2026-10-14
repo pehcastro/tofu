@@ -25,6 +25,7 @@ use crate::theme::{ColorToken, Theme};
 const CODE_PAD_TOP: f32 = 2.0;
 const MARK_INSET: f32 = 6.0;
 const MARK_WIDTH: f32 = 3.0;
+const STRIPE_FILL: f32 = 0.08;
 const MARK_RADIUS: f32 = 2.0;
 const MARK_TOP: f32 = 3.0;
 const REMOVED_SIZE: f32 = 6.0;
@@ -350,6 +351,7 @@ fn row_top(bounds: Bounds<Pixels>, top: Pixels, row: usize) -> Pixels {
 
 fn backgrounds(
     marks: Rc<Marks>,
+    stripe: Option<Stripe>,
     count: usize,
     rows: RowMap,
     base: ScrollHandle,
@@ -361,12 +363,17 @@ fn backgrounds(
             let top = px(CODE_PAD_TOP) + base.offset().y;
             for row in shown_rows(bounds, top, count) {
                 let (line, _) = rows.line_at(row);
+                let area = Bounds::new(
+                    point(bounds.origin.x, row_top(bounds, top, row)),
+                    size(bounds.size.width, px(CODE_LINE)),
+                );
                 if let Some(token) = marks.get(&line).and_then(|mark| mark.background) {
-                    let area = Bounds::new(
-                        point(bounds.origin.x, row_top(bounds, top, row)),
-                        size(bounds.size.width, px(CODE_LINE)),
-                    );
                     window.paint_quad(fill(area, theme.color(token)));
+                }
+                if let Some(stripe) = stripe.as_ref().filter(|s| s.lines.contains(&line)) {
+                    let mut colour = theme.color(stripe.token);
+                    colour.alpha = STRIPE_FILL * stripe.opacity;
+                    window.paint_quad(fill(area, colour));
                 }
             }
         },
@@ -673,9 +680,10 @@ impl RenderOnce for CodeView {
         div()
             .relative()
             .size_full()
-            .when(!self.marks.is_empty(), |view| {
+            .when(!self.marks.is_empty() || self.stripe.is_some(), |view| {
                 view.child(backgrounds(
                     self.marks.clone(),
+                    self.stripe.clone(),
                     count,
                     self.rows.clone(),
                     base.clone(),
@@ -760,7 +768,7 @@ fn gutter(
                                 size(px(MARK_WIDTH), px(CODE_LINE)),
                             );
                             let mut colour = theme.color(stripe.token);
-                            colour.alpha *= stripe.opacity;
+                            colour.alpha = stripe.opacity;
                             window.paint_quad(fill(bar, colour));
                         }
                         let Some(shaped) = shaped else {

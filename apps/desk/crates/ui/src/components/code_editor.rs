@@ -758,12 +758,17 @@ impl CodeEditor {
         let old = before.read(cx);
         let caret = old.carets.last().and_then(|caret| old.place(caret.head));
         let lines = self.changed_since(old);
+        let at_end = old.at_end(caret.map(|(line, _)| line));
         self.scroll = old.scroll.clone();
         self.focus = old.focus.clone();
+        let last = self.buffer.line_count().saturating_sub(1);
         if let Some((line, column)) = caret {
-            let line = line.min(self.buffer.line_count().saturating_sub(1));
-            self.carets = vec![Caret::at(self.at_place((line, column)))];
+            self.carets = vec![Caret::at(self.at_place((line.min(last), column)))];
             self.vim_clamp();
+        }
+        if at_end {
+            self.scroll
+                .scroll_to_item(self.row_of(last), ScrollStrategy::Nearest);
         }
         let fade = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(STRIPE_SOLID).await;
@@ -778,6 +783,13 @@ impl CodeEditor {
             unlogged: Some((logged, seen)),
             _fade: fade,
         });
+    }
+
+    fn at_end(&self, caret_line: Option<usize>) -> bool {
+        let last = self.buffer.line_count().saturating_sub(1);
+        let offset = self.scroll.0.borrow().base_handle.offset().y;
+        let seen = -offset + self.bounds.get().size.height;
+        caret_line == Some(last) || seen > px(CODE_LINE) * self.row_of(last) as f32
     }
 
     fn changed_since(&self, before: &CodeEditor) -> Range<usize> {
@@ -2055,7 +2067,7 @@ impl CodeEditor {
             Action::DeleteRight => self.erase(false),
             Action::Newline => self.insert("\n"),
             Action::Tab if self.spans_lines() => self.indent(),
-            Action::Tab => self.insert(self.tab()),
+            Action::Tab => self.insert(&self.to_tab_stop()),
             Action::DeleteLine => self.delete_lines(),
             Action::DuplicateLine => self.duplicate_lines(),
             Action::MoveLineUp => self.shift_lines(true),
@@ -2322,19 +2334,31 @@ impl CodeEditor {
     }
 
     fn tab(&self) -> &'static str {
-        let tabbed = self
-            .buffer
-            .rope()
-            .lines()
-            .find_map(|line| match line.chars().next() {
-                Some('\t') => Some(true),
-                Some(' ') => Some(false),
-                _ => None,
-            });
-        match tabbed.unwrap_or(self.language == Some(Language::Go)) {
+        let (mut tabs, mut spaces) = (0usize, 0usize);
+        for line in self.buffer.rope().lines() {
+            match line.chars().next() {
+                Some('\t') => tabs += 1,
+                Some(' ') => spaces += 1,
+                _ => {}
+            }
+        }
+        match self.language == Some(Language::Go) || tabs > spaces {
             true => "\t",
             false => TAB,
         }
+    }
+
+    fn to_tab_stop(&self) -> String {
+        let tab = self.tab();
+        if tab == "\t" {
+            return tab.to_owned();
+        }
+        let column = self.carets.last().and_then(|caret| {
+            let (line, column) = self.place(caret.head)?;
+            let drawn = self.drawn(line);
+            Some(drawn.text.get(..drawn.byte(column))?.chars().count())
+        });
+        " ".repeat(TAB_STOP - column.unwrap_or(0) % TAB_STOP)
     }
 
     fn indent(&mut self) {
