@@ -61,10 +61,11 @@ pub enum Glyph {
     Relative,
     ExpandAll,
     CollapseAll,
+    Trash,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 45] = [
+    const ALL: [Glyph; 46] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -110,6 +111,7 @@ impl Glyph {
         Glyph::Relative,
         Glyph::ExpandAll,
         Glyph::CollapseAll,
+        Glyph::Trash,
     ];
 
     pub const WORKSPACE: [(&'static str, Glyph); 12] = [
@@ -181,6 +183,7 @@ impl Glyph {
             Glyph::Relative => "glyphs/relative.svg",
             Glyph::ExpandAll => "glyphs/expand-all.svg",
             Glyph::CollapseAll => "glyphs/collapse-all.svg",
+            Glyph::Trash => "glyphs/trash.svg",
         }
     }
 
@@ -253,6 +256,9 @@ impl Glyph {
             }
             Glyph::ExpandAll => stroked!(r#"<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>"#),
             Glyph::CollapseAll => stroked!(r#"<path d="m7 20 5-5 5 5M7 4l5 5 5-5"/>"#),
+            Glyph::Trash => stroked!(
+                r#"<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 11.5A2.5 2.5 0 0 0 9.5 21h5a2.5 2.5 0 0 0 2.5-2.5L18 7"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/>"#
+            ),
         }
     }
 

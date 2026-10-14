@@ -1,10 +1,10 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fmt::Display;
 use std::fs;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use desk_core::buffer::Buffer;
 use desk_core::syntax::{Kind, Span, Syntax};
@@ -27,6 +27,7 @@ use crate::theme::ColorToken;
 
 const TAB: &str = "    ";
 const FAILURE_INSET: f32 = 12.0;
+const CURRENT_LINE: ColorToken = ColorToken::StateHover;
 pub const READ_ONLY_BYTES: u64 = 1024 * 1024;
 const REFUSED_BYTES: u64 = 64 * 1024 * 1024;
 const LONG_LINE_BYTES: usize = 64 * 1024;
@@ -314,6 +315,29 @@ pub struct CodeEditor {
     wrapping: bool,
     wrap: Rc<Wrap>,
     wrap_stale: bool,
+    frames: Option<Rc<RefCell<TypingFrames>>>,
+    frames_flush: Option<Task<()>>,
+}
+
+#[derive(Default)]
+struct TypingFrames {
+    painted: Option<Instant>,
+    edited: bool,
+    intervals: Vec<f64>,
+}
+
+impl TypingFrames {
+    fn report(&mut self) {
+        let mut intervals = std::mem::take(&mut self.intervals);
+        intervals.sort_by(f64::total_cmp);
+        if let (Some(median), Some(worst)) = (intervals.get(intervals.len() / 2), intervals.last())
+        {
+            eprintln!(
+                "desk: editor typing {} frames, median {median:.2} ms, worst {worst:.2} ms",
+                intervals.len()
+            );
+        }
+    }
 }
 
 impl CodeEditor {
@@ -346,6 +370,8 @@ impl CodeEditor {
             wrapping: false,
             wrap: Rc::default(),
             wrap_stale: true,
+            frames: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
+            frames_flush: None,
         };
         editor.widest = editor.widest_line();
         editor
@@ -771,6 +797,9 @@ impl CodeEditor {
             Ok(()) => {
                 self.marks = marks;
                 self.settle(lines);
+                if let Some(frames) = &self.frames {
+                    frames.borrow_mut().edited = true;
+                }
             }
             Err(error) => self.report("Could not edit", Err(error)),
         }
@@ -1050,6 +1079,30 @@ impl CodeEditor {
         lines.into_iter().map(|(line, _)| line).collect()
     }
 
+    fn lit_marks(&self) -> Rc<Marks> {
+        let lines: Vec<usize> = self
+            .carets
+            .iter()
+            .filter_map(|caret| {
+                let range = caret.range();
+                let line = self.buffer.char_to_line(range.start).ok()?;
+                (self.buffer.char_to_line(range.end).ok()? == line).then_some(line)
+            })
+            .collect();
+        if lines.is_empty() {
+            return self.marks.clone();
+        }
+        let mut marks = (*self.marks).clone();
+        for line in lines {
+            marks
+                .entry(line)
+                .or_default()
+                .background
+                .get_or_insert(CURRENT_LINE);
+        }
+        Rc::new(marks)
+    }
+
     fn chars(&self, units: Range<usize>) -> Range<usize> {
         let rope = self.buffer.rope();
         let char_of = |unit: usize| self.snap(rope.utf16_cu_to_char(unit.min(rope.len_utf16_cu())));
@@ -1205,6 +1258,14 @@ impl Render for CodeEditor {
         }
         let shown = focused && caret_shown(self.since);
         self.rewrap(cx);
+        let frames = self.frames.clone();
+        if let Some(log) = frames.as_ref().filter(|log| log.borrow().edited) {
+            let log = log.clone();
+            self.frames_flush = Some(cx.spawn(async move |_, cx| {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                log.borrow_mut().report();
+            }));
+        }
         let entity = cx.entity();
         let source = entity.clone();
         let bounds = self.bounds.clone();
@@ -1218,7 +1279,7 @@ impl Render for CodeEditor {
         )
         .widest(self.widest)
         .wrap(self.wrapped().map(|_| self.wrap.clone()))
-        .marks(self.marks.clone());
+        .marks(self.lit_marks());
         let failure = self.failure.clone().map(|(what, error)| {
             div()
                 .absolute()
@@ -1244,6 +1305,16 @@ impl Render for CodeEditor {
                     |_, _, _| {},
                     move |area, _, window, cx| {
                         bounds.set(area);
+                        if let Some(frames) = &frames {
+                            let mut frames = frames.borrow_mut();
+                            let now = Instant::now();
+                            if let (true, Some(painted)) = (frames.edited, frames.painted) {
+                                let interval = now.duration_since(painted).as_secs_f64() * 1000.0;
+                                frames.intervals.push(interval);
+                            }
+                            frames.edited = false;
+                            frames.painted = Some(now);
+                        }
                         if wrapped_at.is_some_and(|width| width != wrap_width(area)) {
                             cx.notify(entity.entity_id());
                         }

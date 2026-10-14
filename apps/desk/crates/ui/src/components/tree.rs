@@ -10,20 +10,21 @@ use desk_motion::reduced_motion;
 use desk_motion::tokens::{EASE_OUT, HOVER_MS, TOGGLE_MS};
 use desk_tiling::{Store, StoreError};
 use gpui::{
-    AnyElement, App, ClickEvent, Context, ElementId, EventEmitter, Global, Image, ImageFormat,
-    ListSizingBehavior, MouseButton, MouseDownEvent, Pixels, Point, ScrollStrategy,
-    ScrollWheelEvent, SharedString, UniformListScrollHandle, Window, div, img, prelude::*, px,
-    uniform_list,
+    AnyElement, App, ClickEvent, Context, ElementId, Entity, EventEmitter, FocusHandle, Global,
+    Image, ImageFormat, KeyDownEvent, ListSizingBehavior, MouseButton, MouseDownEvent, Pixels,
+    Point, ScrollStrategy, ScrollWheelEvent, SharedString, UniformListScrollHandle, Window, div,
+    img, prelude::*, px, uniform_list,
 };
 use serde_json::Value;
 
 use crate::components::chip::{GitStatus, git_name};
+use crate::components::form::TextInput;
 use crate::components::paint::ink;
 use crate::components::size::{
     FONT_TREE, HOVER, RADIUS_CHIP, ROW_ON, ROW_PAD_X, TREE_GAP, TREE_ROW,
 };
 use crate::live::ActiveTheme;
-use crate::theme::Theme;
+use crate::theme::{ColorToken, Theme};
 
 const INDENT: f32 = 20.0;
 const GUIDE_X: f32 = 17.0;
@@ -32,6 +33,7 @@ const IGNORED_FADE: f32 = 0.42;
 const ICON_SIZE: f32 = 16.0;
 const DOT: f32 = 6.0;
 const LABEL_FONT: f32 = 11.0;
+const DRAFT_ERROR_WIDTH: f32 = 140.0;
 const UNHOVER_MS: Duration = Duration::from_millis(100);
 const FRAME_LOG_VAR: &str = "DESK_TREE_FRAMES";
 const FRAME_WATCH: Duration = Duration::from_millis(1000);
@@ -378,6 +380,26 @@ pub enum TreeEvent {
     Opened(SharedString),
     Unfolded(SharedString),
     Menu(TreeSpot, Point<Pixels>),
+    Delete,
+}
+
+pub struct Draft {
+    pub folder: SharedString,
+    pub makes_folder: bool,
+    pub input: Entity<TextInput>,
+    pub error: Option<SharedString>,
+}
+
+#[derive(Clone, Copy)]
+enum Shown {
+    Row(usize),
+    Draft,
+}
+
+enum Pick {
+    One,
+    Range,
+    Toggle,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -686,11 +708,14 @@ pub struct FileTree {
     id: SharedString,
     frames: FrameLog,
     rows: Vec<Row>,
-    shown: Vec<usize>,
+    shown: Vec<Shown>,
     expanded: BTreeSet<SharedString>,
     folds: HashMap<SharedString, Fold>,
     hovers: Vec<Fade>,
-    selected: Option<SharedString>,
+    selected: Vec<SharedString>,
+    anchor: Option<SharedString>,
+    draft: Option<(Draft, Arc<Image>)>,
+    focus: Option<FocusHandle>,
     scroll: UniformListScrollHandle,
     badges: bool,
 }
@@ -708,7 +733,10 @@ impl FileTree {
             shown: Vec::new(),
             folds: HashMap::new(),
             hovers: Vec::new(),
-            selected: None,
+            selected: Vec::new(),
+            anchor: None,
+            draft: None,
+            focus: None,
             scroll: UniformListScrollHandle::new(),
             badges: false,
         };
@@ -723,8 +751,50 @@ impl FileTree {
     }
 
     pub fn selected(mut self, path: &'static str) -> Self {
-        self.selected = Some(path.into());
+        self.selected = vec![path.into()];
         self
+    }
+
+    pub fn focusable(mut self, cx: &mut App) -> Self {
+        self.focus = Some(cx.focus_handle());
+        self
+    }
+
+    pub fn picked(&self) -> &[SharedString] {
+        &self.selected
+    }
+
+    pub fn draft(&mut self, draft: Draft, icons: &IconTheme, cx: &mut Context<Self>) {
+        let icon = match draft.makes_folder {
+            true => icons.folder.image.clone(),
+            false => icons.file.image.clone(),
+        };
+        if !draft.folder.is_empty() {
+            self.expanded.insert(draft.folder.clone());
+        }
+        self.draft = Some((draft, icon));
+        self.reshow();
+        if let Some(at) = self
+            .shown
+            .iter()
+            .position(|slot| matches!(slot, Shown::Draft))
+        {
+            self.scroll.scroll_to_item(at, ScrollStrategy::Nearest);
+        }
+        cx.notify();
+    }
+
+    pub fn draft_error(&mut self, error: Option<SharedString>, cx: &mut Context<Self>) {
+        if let Some((draft, _)) = &mut self.draft {
+            draft.error = error;
+        }
+        cx.notify();
+    }
+
+    pub fn end_draft(&mut self, cx: &mut Context<Self>) {
+        self.draft = None;
+        self.reshow();
+        cx.notify();
     }
 
     pub fn badges(mut self) -> Self {
@@ -734,14 +804,38 @@ impl FileTree {
 
     fn reshow(&mut self) {
         let mut hidden_below = None;
+        let drafted = self.draft.as_ref().map(|(draft, _)| draft.folder.clone());
         self.shown.clear();
+        if drafted.as_ref().is_some_and(|folder| folder.is_empty()) {
+            self.shown.push(Shown::Draft);
+        }
         for (at, row) in self.rows.iter().enumerate() {
             if hidden_below.is_some_and(|depth| row.depth > depth) {
                 continue;
             }
             hidden_below = (row.folder && !self.expanded.contains(&row.path)).then_some(row.depth);
-            self.shown.push(at);
+            self.shown.push(Shown::Row(at));
+            if hidden_below.is_none() && drafted.as_ref() == Some(&row.path) {
+                self.shown.push(Shown::Draft);
+            }
         }
+    }
+
+    fn draft_depth(&self) -> usize {
+        let Some((draft, _)) = &self.draft else {
+            return 0;
+        };
+        self.rows
+            .iter()
+            .find(|row| row.folder && row.path == draft.folder)
+            .map_or(0, |row| row.depth.saturating_add(1))
+    }
+
+    fn shown_paths(&self) -> impl Iterator<Item = &SharedString> {
+        self.shown.iter().filter_map(|slot| match slot {
+            Shown::Row(at) => self.rows.get(*at).map(|row| &row.path),
+            Shown::Draft => None,
+        })
     }
 
     pub fn load(&mut self, folder: &str, children: Vec<TreeNode>, icons: &IconTheme) -> bool {
@@ -788,19 +882,48 @@ impl FileTree {
     }
 
     pub fn select(&mut self, path: SharedString, cx: &mut Context<Self>) {
-        if self.selected.as_ref() == Some(&path) {
+        if self.selected.contains(&path) {
             return;
         }
         self.hover(path.clone(), false, Instant::now());
-        if let Some(at) = self
-            .shown
-            .iter()
-            .position(|row| self.rows.get(*row).is_some_and(|row| row.path == path))
-        {
+        if let Some(at) = self.shown.iter().position(|slot| match slot {
+            Shown::Row(at) => self.rows.get(*at).is_some_and(|row| row.path == path),
+            Shown::Draft => false,
+        }) {
             self.scroll.scroll_to_item(at, ScrollStrategy::Nearest);
         }
-        self.selected = Some(path);
+        self.anchor = Some(path.clone());
+        self.selected = vec![path];
         cx.notify();
+    }
+
+    fn pick(&mut self, path: SharedString, pick: Pick) {
+        match pick {
+            Pick::One => self.selected = vec![path.clone()],
+            Pick::Toggle => match self.selected.iter().position(|picked| *picked == path) {
+                Some(at) => {
+                    self.selected.remove(at);
+                }
+                None => self.selected.push(path.clone()),
+            },
+            Pick::Range => {
+                let anchor = self.anchor.clone().unwrap_or_else(|| path.clone());
+                let ends = [&anchor, &path];
+                let mut inside = false;
+                self.selected = self
+                    .shown_paths()
+                    .filter(|shown| {
+                        let edge = ends.contains(shown);
+                        let kept = inside || edge;
+                        inside ^= edge && anchor != path;
+                        kept
+                    })
+                    .cloned()
+                    .collect();
+                return;
+            }
+        }
+        self.anchor = Some(path);
     }
 
     pub fn collapse_all(&mut self, folder: &str, cx: &mut Context<Self>) {
@@ -854,9 +977,31 @@ impl FileTree {
         }
     }
 
-    fn click(&mut self, path: SharedString, folder: bool, unread: bool, cx: &mut Context<Self>) {
+    fn click(
+        &mut self,
+        path: SharedString,
+        folder: bool,
+        unread: bool,
+        event: &ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let modifiers = event.modifiers();
+        let pick = match (modifiers.shift, modifiers.secondary()) {
+            (true, _) => Pick::Range,
+            (false, true) => Pick::Toggle,
+            (false, false) => Pick::One,
+        };
+        let plain = matches!(pick, Pick::One);
+        self.pick(path.clone(), pick);
+        cx.notify();
+        if let Some(focus) = self.focus.as_ref().filter(|_| !plain || folder) {
+            window.focus(focus, cx);
+        }
+        if !plain {
+            return;
+        }
         if !folder {
-            self.select(path.clone(), cx);
             cx.emit(TreeEvent::Opened(path));
             return;
         }
@@ -910,7 +1055,7 @@ impl FileTree {
             (false, true) => row.rolled.map(|_| GitStatus::Modified),
             (false, false) => row.git,
         };
-        let picked = self.selected.as_ref() == Some(&row.path);
+        let picked = self.selected.contains(&row.path);
         let lit = self
             .hovers
             .iter()
@@ -937,6 +1082,7 @@ impl FileTree {
         });
         let clicked = row.path.clone();
         let hovered = row.path.clone();
+        let menued = row.path.clone();
         let spot = match folder {
             true => TreeSpot::Folder(row.path.clone()),
             false => TreeSpot::File(row.path.clone()),
@@ -985,27 +1131,72 @@ impl FileTree {
                 this.hover(hovered.clone(), *on, Instant::now());
                 cx.notify();
             }))
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                this.click(clicked.clone(), folder, unread, cx);
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                this.click(clicked.clone(), folder, unread, event, window, cx);
             }))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |_, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                     cx.stop_propagation();
+                    if !this.selected.contains(&menued) {
+                        this.pick(menued.clone(), Pick::One);
+                        cx.notify();
+                    }
                     cx.emit(TreeEvent::Menu(spot.clone(), event.position));
                 }),
             )
             .into_any_element()
     }
 
+    fn draft_row(&self, draft: &Draft, icon: &Arc<Image>, theme: &Theme) -> AnyElement {
+        div()
+            .id("tree-draft")
+            .flex()
+            .w_full()
+            .min_w_0()
+            .h(px(TREE_ROW))
+            .items_center()
+            .gap(px(TREE_GAP))
+            .pl(px(ROW_PAD_X + self.draft_depth() as f32 * INDENT))
+            .pr(px(ROW_PAD_X))
+            .overflow_hidden()
+            .text_size(px(FONT_TREE))
+            .child(img(icon.clone()).flex_none().size(px(ICON_SIZE)))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(TREE_ROW))
+                    .items_center()
+                    .overflow_hidden()
+                    .child(draft.input.clone()),
+            )
+            .children(draft.error.clone().map(|error| {
+                div()
+                    .flex_none()
+                    .max_w(px(DRAFT_ERROR_WIDTH))
+                    .truncate()
+                    .text_size(px(LABEL_FONT))
+                    .text_color(theme.color(ColorToken::StatusDanger))
+                    .child(error)
+            }))
+            .into_any_element()
+    }
+
     fn visible(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let theme = ActiveTheme::theme(cx);
         let now = Instant::now();
-        let picked: Vec<usize> = self.shown.get(range).unwrap_or_default().to_vec();
+        let picked: Vec<Shown> = self.shown.get(range).unwrap_or_default().to_vec();
         let rows = picked
             .into_iter()
-            .filter_map(|at| self.rows.get(at))
-            .map(|row| self.row(row, now, &theme, cx))
+            .filter_map(|slot| match slot {
+                Shown::Row(at) => self.rows.get(at).map(|row| self.row(row, now, &theme, cx)),
+                Shown::Draft => self
+                    .draft
+                    .as_ref()
+                    .map(|(draft, icon)| self.draft_row(draft, icon, &theme)),
+            })
             .collect();
         if let FrameLog::Watching(watch) = &mut self.frames {
             let ms = now.elapsed().as_secs_f32() * 1000.0;
@@ -1032,6 +1223,14 @@ impl Render for FileTree {
         )
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .track_scroll(&self.scroll)
+        .when_some(self.focus.as_ref(), |list, focus| list.track_focus(focus))
+        .on_key_down(cx.listener(|tree, event: &KeyDownEvent, _, cx| {
+            let deleting = event.keystroke.key == "delete";
+            if deleting && tree.draft.is_none() && !tree.selected.is_empty() {
+                cx.stop_propagation();
+                cx.emit(TreeEvent::Delete);
+            }
+        }))
         .w_full()
         .flex_1()
         .min_h_0()

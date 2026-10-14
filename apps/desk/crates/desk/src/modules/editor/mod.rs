@@ -24,7 +24,7 @@ use desk_ui::components::sheet::Sheet;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::components::title_bar::Github;
 use desk_ui::components::tree::{
-    EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
+    Draft, EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
     TreeSpot, picked_pack,
 };
 use desk_ui::live::ActiveTheme;
@@ -48,7 +48,6 @@ const SIDE_LEAST: f32 = 180.0;
 const SIDE_MOST: f32 = 320.0;
 const PATH_HEIGHT: f32 = 30.0;
 const BAR_GAP: f32 = 8.0;
-const NAMING_TEXT: f32 = 12.0;
 const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
@@ -124,6 +123,9 @@ enum Asking {
         path: PathBuf,
         failed: Option<String>,
     },
+    Delete {
+        paths: Vec<String>,
+    },
 }
 
 struct Folder {
@@ -139,7 +141,9 @@ impl Folder {
     fn new(root: PathBuf, cx: &mut App) -> Result<Self, String> {
         let pack = picked_pack(cx);
         let icons = IconTheme::pack(pack).map_err(|error| error.to_string())?;
-        let tree = FileTree::new("editor-files", Vec::new(), &icons).badges();
+        let tree = FileTree::new("editor-files", Vec::new(), &icons)
+            .badges()
+            .focusable(cx);
         Ok(Folder {
             git: repository(&root),
             listing: Arc::new(Listing::new(root)),
@@ -503,6 +507,11 @@ impl Editor {
                 let target = self.folder.listing.root.join(path.as_str());
                 self.open_path(target, window, cx);
             }
+            TreeEvent::Delete => {
+                let paths = self.folder.tree.read(cx).picked().iter();
+                let paths = paths.map(SharedString::to_string).collect();
+                self.ask_delete(paths, cx);
+            }
             TreeEvent::Menu(spot, at) => {
                 eprintln!("desk: editor tree menu on /{}", spot_path(spot));
                 self.menu.spot = spot.clone();
@@ -521,8 +530,12 @@ impl Editor {
                 None => MenuItem::Separator,
                 Some(action) => MenuItem::action(action.label())
                     .icon(action.glyph())
+                    .danger(*action == TreeAction::Delete)
                     .enabled(match action {
-                        TreeAction::Cut | TreeAction::Copy | TreeAction::Duplicate => picked,
+                        TreeAction::Cut
+                        | TreeAction::Copy
+                        | TreeAction::Duplicate
+                        | TreeAction::Delete => picked,
                         TreeAction::Paste => self.menu.clip.is_some(),
                         TreeAction::Undo => !self.menu.done.is_empty(),
                         TreeAction::Redo => !self.menu.undone.is_empty(),
@@ -557,7 +570,19 @@ impl Editor {
             TreeSpot::File(file) => parent_of(file).to_owned(),
             TreeSpot::Empty => String::new(),
         };
-        eprintln!("desk: editor tree: {} on /{path}", action.label());
+        let picked = self.folder.tree.read(cx).picked();
+        let targets: Vec<String> = match path.as_str() {
+            "" => Vec::new(),
+            spot if picked.iter().any(|picked| picked == spot) => {
+                picked.iter().map(SharedString::to_string).collect()
+            }
+            spot => vec![spot.to_owned()],
+        };
+        eprintln!(
+            "desk: editor tree: {} on /{path}, {} selected",
+            action.label(),
+            targets.len()
+        );
         let done = match action {
             TreeAction::NewFile | TreeAction::NewFolder => {
                 let makes_folder = *action == TreeAction::NewFolder;
@@ -570,23 +595,34 @@ impl Editor {
                     TreeAction::Cut => Held::Cut,
                     _ => Held::Copied,
                 };
-                eprintln!("desk: editor tree: holds /{path} as {held:?}");
-                self.menu.clip = Some(Clip { held, path });
+                eprintln!("desk: editor tree: holds {targets:?} as {held:?}");
+                self.menu.clip = Some(Clip {
+                    held,
+                    paths: targets,
+                });
                 Ok(())
             }
-            TreeAction::Duplicate => {
-                let from = self.full(&path);
-                let to = free_name(&self.full(parent_of(&path)), name_of(&path));
+            TreeAction::Duplicate => targets.iter().try_for_each(|path| {
+                let from = self.full(path);
+                let to = free_name(&self.full(parent_of(path)), name_of(path));
                 self.run(FileOp::Copied { from, to })
+            }),
+            TreeAction::Delete => {
+                self.ask_delete(targets, cx);
+                Ok(())
             }
             TreeAction::Paste => self.paste(&folder),
             TreeAction::Undo => self.step_back(),
             TreeAction::Redo => self.step_forward(),
             TreeAction::CopyPath | TreeAction::CopyRelative => {
-                let copied = match action {
-                    TreeAction::CopyPath => self.full(&path).display().to_string(),
-                    _ => path,
-                };
+                let copied = targets
+                    .iter()
+                    .map(|path| match action {
+                        TreeAction::CopyPath => self.full(path).display().to_string(),
+                        _ => path.clone(),
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 eprintln!("desk: editor tree: clipboard holds {copied}");
                 cx.write_to_clipboard(ClipboardItem::new_string(copied));
                 Ok(())
@@ -648,21 +684,20 @@ impl Editor {
         let Some(clip) = self.menu.clip.clone() else {
             return Ok(());
         };
-        let from = self.full(&clip.path);
         let into = self.full(folder);
-        if clip.held == Held::Cut && from.parent() == Some(into.as_path()) {
-            self.menu.clip = None;
-            return Ok(());
-        }
-        let to = free_name(&into, name_of(&clip.path));
-        match clip.held {
-            Held::Copied => self.run(FileOp::Copied { from, to }),
-            Held::Cut => {
-                self.run(FileOp::Moved { from, to })?;
-                self.menu.clip = None;
-                Ok(())
+        for path in &clip.paths {
+            let from = self.full(path);
+            let to = free_name(&into, name_of(path));
+            match clip.held {
+                Held::Copied => self.run(FileOp::Copied { from, to })?,
+                Held::Cut if from.parent() == Some(into.as_path()) => {}
+                Held::Cut => self.run(FileOp::Moved { from, to })?,
             }
         }
+        if clip.held == Held::Cut {
+            self.menu.clip = None;
+        }
+        Ok(())
     }
 
     fn name_new(
@@ -681,53 +716,130 @@ impl Editor {
             window,
             cx,
         );
-        window.focus(&input.focus_handle(cx), cx);
-        if !folder.is_empty() {
-            let opened = SharedString::from(folder.clone());
-            self.folder
-                .tree
-                .update(cx, |tree, cx| tree.expand([opened], cx));
-        }
+        let focus = input.focus_handle(cx);
+        window.focus(&focus, cx);
+        let blurred = cx.on_blur(&focus, window, |editor, _, cx| {
+            editor.drop_naming("left", cx);
+        });
+        let draft = Draft {
+            folder: folder.clone().into(),
+            makes_folder,
+            input: input.clone(),
+            error: None,
+        };
+        let icons = &self.folder.icons;
+        self.folder
+            .tree
+            .update(cx, |tree, cx| tree.draft(draft, icons, cx));
         self.menu.naming = Some(Naming {
             folder,
             makes_folder,
             input,
+            _blurred: blurred,
         });
     }
 
-    fn name_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let entered = match event.keystroke.key.as_str() {
-            "enter" => true,
-            "escape" => false,
-            _ => return,
-        };
-        cx.stop_propagation();
+    fn drop_naming(&mut self, why: &str, cx: &mut Context<Self>) {
         let Some(naming) = self.menu.naming.take() else {
             return;
         };
+        eprintln!("desk: editor tree: new entry in /{} {why}", naming.folder);
+        self.folder.tree.update(cx, |tree, cx| tree.end_draft(cx));
         cx.notify();
+    }
+
+    fn name_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(naming) = &self.menu.naming else {
+            return;
+        };
+        match event.keystroke.key.as_str() {
+            "enter" => {}
+            "escape" => {
+                cx.stop_propagation();
+                return self.drop_naming("cancelled", cx);
+            }
+            _ => return,
+        }
+        cx.stop_propagation();
         let name = naming.input.read(cx).text().trim().to_owned();
+        let path = self.full(&naming.folder).join(&name);
         let single = Path::new(&name).components().count() == 1
             && Path::new(&name)
                 .components()
                 .all(|part| matches!(part, Component::Normal(_)));
-        if !entered || !single {
-            return eprintln!(
-                "desk: editor tree: new entry {name:?} in /{} dropped",
-                naming.folder
-            );
+        let refused = match (single, path.exists()) {
+            (false, _) => Some(format!("{name:?} is not a name")),
+            (true, true) => Some(format!("{name} already exists")),
+            (true, false) => None,
+        };
+        if let Some(refused) = refused {
+            eprintln!("desk: editor tree: new entry refused: {refused}");
+            return self
+                .folder
+                .tree
+                .update(cx, |tree, cx| tree.draft_error(Some(refused.into()), cx));
         }
-        let path = self.full(&naming.folder).join(&name);
+        let makes_folder = naming.makes_folder;
+        self.menu.naming = None;
+        self.folder.tree.update(cx, |tree, cx| tree.end_draft(cx));
         let made = self.run(FileOp::Made {
             path: path.clone(),
-            folder: naming.makes_folder,
+            folder: makes_folder,
         });
         match made {
-            Ok(()) if !naming.makes_folder => self.open_path(path, window, cx),
+            Ok(()) if !makes_folder => self.open_path(path, window, cx),
             Ok(()) => {}
             Err(error) => eprintln!("desk: editor tree: new {name} failed: {error}"),
         }
         self.refresh(cx);
+        cx.notify();
+    }
+
+    fn ask_delete(&mut self, paths: Vec<String>, cx: &mut Context<Self>) {
+        self.alerted = match paths.as_slice() {
+            [] => return,
+            [one] => format!("Delete {}?", name_of(one)),
+            many => format!("Delete {} items?", many.len()),
+        }
+        .into();
+        eprintln!("desk: editor tree: asks before deleting {paths:?}");
+        self.asking = Some(Asking::Delete { paths });
+        cx.notify();
+    }
+
+    fn recycle(&mut self, cx: &mut Context<Self>) {
+        let Some(Asking::Delete { paths }) = self.asking.take() else {
+            return;
+        };
+        cx.notify();
+        let full: Vec<PathBuf> = paths.iter().map(|path| self.full(path)).collect();
+        let started = Instant::now();
+        let sent = full.clone();
+        let moved = cx
+            .background_executor()
+            .spawn(async move { send_to_recycle_bin(&sent) });
+        cx.spawn(async move |this, cx| {
+            let moved = moved.await;
+            let done = this.update(cx, |editor, cx| {
+                match moved {
+                    Ok(()) => eprintln!(
+                        "desk: editor tree: recycled {} items in {} ms: {paths:?}",
+                        full.len(),
+                        started.elapsed().as_millis()
+                    ),
+                    Err(error) => eprintln!("desk: editor tree: delete failed: {error}"),
+                }
+                let gone = |page: &Page| full.iter().any(|path| page.path.starts_with(path));
+                while let Some(at) = editor.pages.iter().position(&gone) {
+                    editor.drop_page(at, cx);
+                }
+                editor.refresh(cx);
+            });
+            if let Err(error) = done {
+                eprintln!("desk: editor is gone before its delete finished: {error}");
+            }
+        })
+        .detach();
     }
 
     fn expand_all(&mut self, folder: String, cx: &mut Context<Self>) {
@@ -849,8 +961,10 @@ impl Editor {
     }
 
     fn keep_open(&mut self, cx: &mut Context<Self>) {
-        if let Some(Asking::Close { path, .. }) = self.asking.take() {
-            eprintln!("desk: editor kept {}", path.display());
+        match self.asking.take() {
+            Some(Asking::Close { path, .. }) => eprintln!("desk: editor kept {}", path.display()),
+            Some(Asking::Delete { paths }) => eprintln!("desk: editor tree: kept {paths:?}"),
+            None => {}
         }
         cx.notify();
     }
@@ -890,15 +1004,27 @@ impl Editor {
         }
     }
 
-    fn alert(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn alerts(&self, cx: &mut Context<Self>) -> [AnyElement; 2] {
         let theme = ActiveTheme::theme(cx);
-        let failed = match &self.asking {
-            Some(Asking::Close { failed, .. }) => failed.clone(),
-            None => None,
+        let (closing, deleting, failed) = match &self.asking {
+            Some(Asking::Close { failed, .. }) => (true, None, failed.clone()),
+            Some(Asking::Delete { paths }) => (false, Some(paths.len()), None),
+            None => (false, None, None),
         };
-        Sheet::new("editor-unsaved", self.alerted.clone())
+        let recycled = match deleting {
+            Some(1) => "It goes to the Recycle Bin.",
+            _ => "They go to the Recycle Bin.",
+        };
+        let delete = Sheet::new("editor-delete", self.alerted.clone())
             .modal()
-            .open(self.asking.is_some())
+            .open(deleting.is_some())
+            .confirm("Delete")
+            .on_confirm(answered(cx, Self::recycle))
+            .on_cancel(answered(cx, Self::keep_open))
+            .child(div().truncate().child(recycled));
+        let unsaved = Sheet::new("editor-unsaved", self.alerted.clone())
+            .modal()
+            .open(closing)
             .confirm("Save")
             .on_confirm(answered(cx, Self::save_and_close))
             .aside("Close without saving", answered(cx, Self::close_unsaved))
@@ -909,8 +1035,8 @@ impl Editor {
                     .truncate()
                     .text_color(theme.color(ColorToken::StatusDanger))
                     .child(failed)
-            }))
-            .into_any_element()
+            }));
+        [unsaved.into_any_element(), delete.into_any_element()]
     }
 
     fn drop_page(&mut self, at: usize, cx: &mut Context<Self>) {
@@ -1339,28 +1465,6 @@ impl Render for Editor {
         )
         .absolute()
         .size_0();
-        let naming = self.menu.naming.as_ref().map(|naming| {
-            let place = match naming.folder.as_str() {
-                "" => "the root".to_owned(),
-                folder => format!("/{folder}"),
-            };
-            let kind = if naming.makes_folder {
-                "folder"
-            } else {
-                "file"
-            };
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .px_2()
-                .py_1()
-                .text_size(px(NAMING_TEXT))
-                .text_color(theme.color(ColorToken::TextBase))
-                .on_key_down(cx.listener(Self::name_key))
-                .child(format!("New {kind} in {place}"))
-                .child(naming.input.clone())
-        });
         let tree = context_menu(self.tree_items())
             .id("editor-tree-menu")
             .flex()
@@ -1392,7 +1496,7 @@ impl Render for Editor {
                     .min_h_0()
                     .px_1()
                     .py_1()
-                    .children(naming)
+                    .on_key_down(cx.listener(Self::name_key))
                     .child(tree),
             );
         let main = div()
@@ -1433,7 +1537,7 @@ impl Render for Editor {
                 .child(side)
                 .child(main),
         )
-        .child(self.alert(cx))
+        .children(self.alerts(cx))
     }
 }
 
@@ -1464,9 +1568,10 @@ enum TreeAction {
     CopyRelative,
     ExpandAll,
     CollapseAll,
+    Delete,
 }
 
-const TREE_MENU: [Option<TreeAction>; 17] = [
+const TREE_MENU: [Option<TreeAction>; 19] = [
     Some(TreeAction::NewFile),
     Some(TreeAction::NewFolder),
     None,
@@ -1484,6 +1589,8 @@ const TREE_MENU: [Option<TreeAction>; 17] = [
     None,
     Some(TreeAction::ExpandAll),
     Some(TreeAction::CollapseAll),
+    None,
+    Some(TreeAction::Delete),
 ];
 
 impl TreeAction {
@@ -1502,6 +1609,7 @@ impl TreeAction {
             TreeAction::CopyRelative => "Copy Relative Path",
             TreeAction::ExpandAll => "Expand All",
             TreeAction::CollapseAll => "Collapse All",
+            TreeAction::Delete => "Delete",
         }
     }
 
@@ -1520,6 +1628,7 @@ impl TreeAction {
             TreeAction::CopyRelative => Glyph::Relative,
             TreeAction::ExpandAll => Glyph::ExpandAll,
             TreeAction::CollapseAll => Glyph::CollapseAll,
+            TreeAction::Delete => Glyph::Trash,
         }
     }
 }
@@ -1533,13 +1642,14 @@ enum Held {
 #[derive(Clone)]
 struct Clip {
     held: Held,
-    path: String,
+    paths: Vec<String>,
 }
 
 struct Naming {
     folder: String,
     makes_folder: bool,
     input: Entity<TextInput>,
+    _blurred: Subscription,
 }
 
 enum FileOp {
@@ -1662,6 +1772,32 @@ fn reveal(path: &Path) -> std::io::Result<()> {
     );
     Ok(())
 }
+
+fn send_to_recycle_bin(paths: &[PathBuf]) -> std::io::Result<()> {
+    let listed = paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut command = std::process::Command::new("powershell");
+    command
+        .args(["-NoProfile", "-NonInteractive", "-Command", RECYCLE_SCRIPT])
+        .env(RECYCLE_VAR, listed);
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+    let output = command.output()?;
+    match output.status.success() {
+        true => Ok(()),
+        false => Err(std::io::Error::other(
+            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        )),
+    }
+}
+
+const RECYCLE_VAR: &str = "DESK_RECYCLE";
+const RECYCLE_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName Microsoft.VisualBasic; foreach ($p in $env:DESK_RECYCLE -split \"`n\") { if (Test-Path -LiteralPath $p -PathType Container) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, 'OnlyErrorDialogs', 'SendToRecycleBin') } else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin') } }";
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[cfg(windows)]
 const REVEALER: &str = "explorer";
