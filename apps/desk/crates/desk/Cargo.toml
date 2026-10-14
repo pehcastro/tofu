@@ -10,6 +10,7 @@ publish.workspace = true
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 desk_control = { path = "../control" }
 desk_core.workspace = true
+desk_plugin.workspace = true
 desk_ui.workspace = true
 desk_terminal.workspace = true
 desk_tiling.workspace = true

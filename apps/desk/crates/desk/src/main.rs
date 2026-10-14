@@ -326,6 +326,8 @@ fn main() -> ExitCode {
             started.elapsed().as_millis()
         );
     });
+    #[cfg(feature = "screen-work")]
+    plugins::start();
     let mut assets = Icon::registry();
     if let Err(duplicates) = assets.extend(desk_ui::components::glyph::Glyph::entries()) {
         eprintln!("the desk has two assets under one path: {duplicates:?}");

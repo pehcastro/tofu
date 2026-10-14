@@ -2,8 +2,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::LazyLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use desk_core::model::Store;
 use desk_tiling::{
@@ -39,6 +38,7 @@ use crate::project;
 
 const BOARD: &str = "36-agents";
 const WORK_NAME: &str = "work";
+const PLUGINS_POLL: Duration = Duration::from_millis(50);
 const OPENABLE: [Module; 5] = [
     Module::Chat,
     Module::SubAgents,
@@ -209,6 +209,15 @@ fn build(
                 },
             ),
         ];
+        cx.spawn(async move |work, cx| {
+            while !plugins::settled() {
+                cx.background_executor().timer(PLUGINS_POLL).await;
+            }
+            if work.update(cx, |_, cx| cx.notify()).is_err() {
+                eprintln!("desk: work: the screen closed before the plugins loaded");
+            }
+        })
+        .detach();
         let bodies = mounted.clone();
         let titles = mounted.clone();
         let badges = mounted.clone();
@@ -335,10 +344,14 @@ fn screen_row(mark: &ScreenMark) -> MenuItem {
 }
 
 fn module_row(module: &Module) -> MenuItem {
-    let row = MenuItem::action(name(module));
-    match glyph(module) {
-        Some(mark) => row.icon(mark),
-        None => row,
+    let state = match module {
+        Module::Plugin(id) => plugins::find(id).and_then(Plugin::state),
+        _ => None,
+    };
+    MenuItem::Action {
+        label: name(module),
+        keys: state.map(SharedString::from),
+        icon: glyph(module).map(Into::into),
     }
 }
 
@@ -546,12 +559,22 @@ impl EventEmitter<Expanded> for Work {}
 
 const SUB_AGENTS: &str = "Sub-agents";
 
-pub static EXPANDABLE: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-    ["Chat", SUB_AGENTS, "File edits", "Shells", "Terminal"]
-        .into_iter()
-        .chain(plugins::all().iter().map(|plugin| plugin.name.as_str()))
-        .collect()
-});
+pub struct Expandable;
+
+pub static EXPANDABLE: Expandable = Expandable;
+
+impl Expandable {
+    pub fn contains(&self, name: &&str) -> bool {
+        self.find(name).is_some()
+    }
+
+    fn find(&self, name: &str) -> Option<&'static str> {
+        ["Chat", SUB_AGENTS, "File edits", "Shells", "Terminal"]
+            .into_iter()
+            .chain(plugins::all().map(|plugin| plugin.name.as_str()))
+            .find(|tab| *tab == name)
+    }
+}
 
 struct Tiled {
     glyph: Option<Glyph>,
@@ -634,7 +657,7 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
         }
     };
     let shown = name(module);
-    match EXPANDABLE.iter().copied().find(|tab| *tab == &*shown) {
+    match EXPANDABLE.find(&shown) {
         Some(name) => cx.emit(Expanded {
             name,
             workspace: workspace.to_owned().into(),

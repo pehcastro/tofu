@@ -1,5 +1,9 @@
+mod view;
+mod wasm;
+
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
+use std::thread;
 
 use desk_core::home::Home;
 use desk_tiling::Module;
@@ -13,6 +17,7 @@ pub type Mount = fn(&'static Plugin, &mut App) -> AnyView;
 
 enum Kind {
     Native(Mount),
+    Wasm(wasm::Guest),
 }
 
 pub struct Plugin {
@@ -46,29 +51,60 @@ static FIRST_PARTY: LazyLock<Result<Vec<Plugin>, String>> = LazyLock::new(|| {
         .collect()
 });
 
+static INSTALLED: OnceLock<Vec<Plugin>> = OnceLock::new();
+
+pub fn start() {
+    thread::spawn(|| {
+        let project = crate::project::launch()
+            .map_err(|error| eprintln!("desk: plugins: no project plugins: {error}"))
+            .ok()
+            .map(|folder| folder.join(".tofu").join("plugins"));
+        if INSTALLED.set(wasm::discover(project.as_deref())).is_err() {
+            eprintln!("desk: plugins: discovered twice, the first list stays");
+        }
+    });
+}
+
+pub fn settled() -> bool {
+    INSTALLED.get().is_some()
+}
+
 pub fn check() -> Result<usize, String> {
     FIRST_PARTY.as_ref().map(Vec::len).map_err(Clone::clone)
 }
 
-pub fn all() -> &'static [Plugin] {
-    FIRST_PARTY.as_deref().unwrap_or_default()
+pub fn all() -> impl Iterator<Item = &'static Plugin> {
+    let installed: &'static [Plugin] = INSTALLED.get().map_or(&[], Vec::as_slice);
+    FIRST_PARTY
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .chain(installed)
 }
 
 pub fn find(id: &str) -> Option<&'static Plugin> {
-    all().iter().find(|plugin| plugin.id == id)
+    all().find(|plugin| plugin.id == id)
 }
 
 pub fn modules() -> impl Iterator<Item = Module> {
-    all().iter().map(|plugin| Module::Plugin(plugin.id.clone()))
+    all().map(|plugin| Module::Plugin(plugin.id.clone()))
 }
 
 impl Plugin {
     pub fn mount(&'static self, cx: &mut App) -> AnyView {
-        let view = match self.kind {
+        let view = match &self.kind {
             Kind::Native(mount) => mount(self, cx),
+            Kind::Wasm(guest) => view::mount(self, guest, cx),
         };
         eprintln!("desk: plugin {} mounted", self.id);
         view
+    }
+
+    pub fn state(&self) -> Option<&'static str> {
+        match &self.kind {
+            Kind::Native(_) => None,
+            Kind::Wasm(guest) => Some(guest.state()),
+        }
     }
 
     pub fn folder(&self) -> Result<PathBuf, String> {
