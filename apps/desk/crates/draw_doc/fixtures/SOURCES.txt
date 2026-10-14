@@ -1,0 +1,3 @@
+real-liarsdice.excalidraw: https://github.com/ardanlabs/liarsdice/blob/9c5d972139a5013f1ff3391b60b3fcaf9565d019/.excalidraw (Apache-2.0)
+real-excalirender.excalidraw: https://github.com/JonRC/excalirender/blob/379c9566b4e0f9a3bf18710eb5e6f87228c5c9e7/sample.excalidraw (MIT)
+flow-modern.excalidraw, sketch-legacy.excalidraw: written for this crate
