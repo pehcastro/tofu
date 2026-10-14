@@ -14,9 +14,8 @@ import (
 )
 
 type recordedCall struct {
-	call   llm.ToolCall
-	result llm.Message
-	spawn  SubAgentRow
+	call, result session.Event
+	spawn        SubAgentRow
 }
 
 type recordedReport struct {
@@ -60,7 +59,12 @@ func resumedChat(carry Carry, dir string) []Event {
 		return nil
 	}
 	var chat []Event
-	mask := sys.LoadKeyRedactor().Redact
+	keys := carry.Keys
+	if keys == nil {
+		loaded := sys.LoadKeyRedactor()
+		keys = &loaded
+	}
+	mask := keys.Redact
 	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}}
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn = lead.turn
@@ -160,9 +164,9 @@ func (l *resumedLead) note(event session.Event) {
 	}
 	switch event.Kind {
 	case session.EventToolCall:
-		recorded.call = callOf(event)
+		recorded.call = event
 	case session.EventToolResult:
-		recorded.result = resultOf(event)
+		recorded.result = event
 	case session.EventSpawn:
 		var body session.SpawnBody
 		_ = json.Unmarshal(event.Body, &body)
@@ -286,9 +290,9 @@ func (l *resumedLead) linked(agent string) bool {
 		return true
 	}
 	for _, recorded := range l.calls {
-		if recorded.spawn.Name == agent && recorded.call.ID != "" {
-			l.watch.called(recorded.call, "")
-			l.watch.result(recorded.result, "")
+		if recorded.spawn.Name == agent && recorded.call.Call != "" {
+			l.watch.called(callOf(recorded.call), "")
+			l.watch.result(resultOf(recorded.result), "")
 			l.spawned(recorded.spawn)
 			return true
 		}

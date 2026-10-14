@@ -364,13 +364,28 @@ func (s *Store) Body(handle string) ([]Event, error) {
 }
 
 func (s *Store) Part(events []Event, part string) ([]Event, error) {
+	return s.settings.view(partOf(events, part))
+}
+
+func (s *Store) Said(events []Event) (said []Event, steps int, err error) {
+	kept := partOf(events, "")
+	for _, event := range kept {
+		if event.Kind == EventRequest || event.Kind == EventStep {
+			steps++
+		}
+	}
+	said, err = s.settings.shown(kept, withoutSteps)
+	return said, steps, err
+}
+
+func partOf(events []Event, part string) []Event {
 	var kept []Event
 	for _, event := range events {
 		if event.Agent == part || (part != "" && event.Agent == "" && event.Turn == part) {
 			kept = append(kept, event)
 		}
 	}
-	return s.settings.view(kept)
+	return kept
 }
 
 func parseEvents(raw []byte, id string) ([]Event, error) {

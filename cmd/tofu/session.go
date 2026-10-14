@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/interface/cli"
@@ -74,6 +75,7 @@ type sessionResume struct {
 	messages []llm.Message
 	tasks    []string
 	read     *session.Store
+	keys     *sys.KeyRedactor
 }
 
 func sessionOperands(subcommand string) (string, int, bool) {
@@ -149,7 +151,7 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		report.Sessions = slices.DeleteFunc(report.Sessions, func(row sessionRow) bool { return !all && row.sideOf != "" })
 		return o.done(true, report, func(page cli.Page) []string { return sessionListLines(page, report, now) })
 	case "info":
-		row, _, err := sessionDetail(store, handles[0])
+		row, err := sessionDetail(store, handles[0])
 		if err != nil {
 			return o.fail(err)
 		}
@@ -246,8 +248,20 @@ func continueCarry(store *session.Store) sessionResume {
 }
 
 func resumeOf(store *session.Store, id string) (sessionResume, error) {
+	var keys sys.KeyRedactor
+	var loaded sync.WaitGroup
+	loaded.Go(func() { keys = sys.LoadKeyRedactor() })
+	defer loaded.Wait()
 	store = store.ReadOnce()
-	row, messages, err := sessionDetail(store, id)
+	row, recorded, err := sessionSummary(store, id)
+	if err != nil {
+		return sessionResume{}, err
+	}
+	said, steps, err := store.Said(recorded)
+	if err != nil {
+		return sessionResume{}, err
+	}
+	messages, err := turn.ConversationFrom(said)
 	if err != nil {
 		return sessionResume{}, err
 	}
@@ -257,11 +271,12 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 		Handle:   row.Handle,
 		Task:     row.Task,
 		Outcome:  row.Outcome,
-		Steps:    row.Steps,
-		Carried:  row.Carried,
+		Steps:    steps,
+		Carried:  len(messages),
 		messages: messages,
 		tasks:    row.tasks,
 		read:     store,
+		keys:     &keys,
 	}
 	var busy session.BusyError
 	switch err := store.Busy(row.ID); {
@@ -274,11 +289,11 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 }
 
 func (carry sessionResume) hosted() host.Carry {
-	return host.Carry{Session: carry.Session, Name: carry.Name, Messages: carry.messages, Tasks: carry.tasks, Store: carry.read}
+	return host.Carry{Session: carry.Session, Name: carry.Name, Messages: carry.messages, Tasks: carry.tasks, Store: carry.read, Keys: carry.keys}
 }
 
 func sessionRenamed(store *session.Store, handle, to string) (sessionRow, error) {
-	row, _, err := sessionDetail(store, handle)
+	row, err := sessionDetail(store, handle)
 	if err != nil {
 		return sessionRow{}, err
 	}
@@ -324,31 +339,35 @@ func sessionReads(store *session.Store, handle string) (sessionReadsReport, erro
 	return report, nil
 }
 
-func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Message, error) {
+func sessionDetail(store *session.Store, handle string) (sessionRow, error) {
 	row, recorded, err := sessionSummary(store, handle)
 	if err != nil {
-		return sessionRow{}, nil, err
+		return sessionRow{}, err
 	}
 	events, err := store.Part(recorded, "")
 	if err != nil {
-		return sessionRow{}, nil, err
+		return sessionRow{}, err
 	}
 	messages, err := turn.ConversationFrom(events)
 	if err != nil {
-		return sessionRow{}, nil, err
+		return sessionRow{}, err
 	}
-	reading, err := session.ReadEvents(events)
-	if err != nil {
-		return sessionRow{}, nil, err
+	for _, event := range events {
+		switch event.Kind {
+		case session.EventStep:
+			row.Steps++
+		case session.EventRead:
+			row.Reads++
+		}
 	}
-	row.Steps, row.Reads, row.Carried = len(reading.Steps), len(reading.Reads), len(messages)
+	row.Carried = len(messages)
 	if row.ForkedInto != "" {
 		if into, err := store.Header(row.ForkedInto); err == nil {
 			row.ForkIntoKind = into.ForkKind
 		}
 		steps, err := contextSteps(events)
 		if err != nil {
-			return sessionRow{}, nil, err
+			return sessionRow{}, err
 		}
 		for _, step := range steps {
 			if step.Fork != nil {
@@ -356,7 +375,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, []llm.Messa
 			}
 		}
 	}
-	return row, messages, nil
+	return row, nil
 }
 
 func sessionSummary(store *session.Store, handle string) (sessionRow, []session.Event, error) {
@@ -416,10 +435,7 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 }
 
 func sessionListing(store *session.Store, lifetime session.Lifetime, now time.Time) (sessionListReport, error) {
-	return sessionListingOf(store, lifetime, now, func(store *session.Store, handle string) (sessionRow, error) {
-		row, _, err := sessionDetail(store, handle)
-		return row, err
-	})
+	return sessionListingOf(store, lifetime, now, sessionDetail)
 }
 
 func sessionListingOf(store *session.Store, lifetime session.Lifetime, now time.Time, rowOf func(*session.Store, string) (sessionRow, error)) (sessionListReport, error) {

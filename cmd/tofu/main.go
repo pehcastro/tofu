@@ -87,7 +87,10 @@ Verbs:
 Every verb that reports state takes --json and prints one JSON document.
 `
 
+func loadLocalTimeZone() { _ = time.Local.String() }
+
 func main() {
+	go loadLocalTimeZone()
 	stopProfile := sys.StartProfile()
 	opensTheApp := len(os.Args) < 2 || os.Args[1] == "--continue"
 	if opensTheApp || os.Args[1] == "migrate" {

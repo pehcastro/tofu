@@ -58,6 +58,7 @@ type Carry struct {
 	Messages []llm.Message
 	Tasks    []string
 	Store    *session.Store
+	Keys     *sys.KeyRedactor
 }
 
 type Config struct {

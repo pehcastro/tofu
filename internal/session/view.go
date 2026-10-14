@@ -8,7 +8,16 @@ import (
 	"sync"
 )
 
-func (s Settings) view(events []Event) ([]Event, error) {
+type viewDepth int
+
+const (
+	withSteps viewDepth = iota
+	withoutSteps
+)
+
+func (s Settings) view(events []Event) ([]Event, error) { return s.shown(events, withSteps) }
+
+func (s Settings) shown(events []Event, depth viewDepth) ([]Event, error) {
 	calls := map[string]Event{}
 	asked := map[string][]string{}
 	madeBy := map[string][]string{}
@@ -61,6 +70,9 @@ func (s Settings) view(events []Event) ([]Event, error) {
 					ToolResultBytes: cmp.Or(result.ResultBytes, len(result.Content))}
 				shown = append(shown, Event{ID: event.ID, Author: author, Attempt: FirstAttempt, Kind: EventMessage, Body: marshalled(message)})
 			case EventRequest:
+				if depth == withoutSteps {
+					continue
+				}
 				request := cmp.Or(event.Request, event.ID)
 				step := objectOf(event.Body)
 				var rows []json.RawMessage
@@ -87,8 +99,9 @@ func (s Settings) view(events []Event) ([]Event, error) {
 						step[key] = value
 					}
 				}
-				shown = append(shown, Event{ID: event.ID, Author: author, Attempt: max(event.Attempt, FirstAttempt), Kind: EventStep, Body: marshalled(step)})
-				reads, err := s.readsOf(event.ID, author, marshalled(step))
+				stepBody := marshalled(step)
+				shown = append(shown, Event{ID: event.ID, Author: author, Attempt: max(event.Attempt, FirstAttempt), Kind: EventStep, Body: stepBody})
+				reads, err := s.readsOf(event.ID, author, stepBody)
 				if err != nil {
 					return nil, err
 				}
