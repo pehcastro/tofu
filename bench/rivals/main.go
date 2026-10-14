@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -61,28 +62,30 @@ var arms = []arm{
 }
 
 type row struct {
-	Arm        string        `json:"arm"`
-	Rep        int           `json:"rep"`
-	Tool       string        `json:"tool"`
-	Version    string        `json:"version"`
-	Commit     string        `json:"commit,omitempty"`
-	AskedModel string        `json:"asked_model"`
-	Model      string        `json:"model"`
-	Models     []string      `json:"models"`
-	Credential string        `json:"credential"`
-	Posture    string        `json:"posture"`
-	Date       string        `json:"date"`
-	Machine    string        `json:"machine"`
-	ExitCode   int           `json:"exit_code"`
-	WallMS     int64         `json:"wall_ms"`
-	Tree       treeUsage     `json:"tree"`
-	Tokens     tokens        `json:"tokens"`
-	Requests   int           `json:"requests"`
-	Calls      []call        `json:"calls"`
-	Timed      []requestTime `json:"timed_requests,omitempty"`
-	Retried    int           `json:"retried"`
-	Score      score         `json:"score"`
-	Notes      []string      `json:"notes,omitempty"`
+	Arm          string        `json:"arm"`
+	Rep          int           `json:"rep"`
+	Setting      string        `json:"setting,omitempty"`
+	Tool         string        `json:"tool"`
+	Version      string        `json:"version"`
+	Commit       string        `json:"commit,omitempty"`
+	AskedModel   string        `json:"asked_model"`
+	Model        string        `json:"model"`
+	Models       []string      `json:"models"`
+	Credential   string        `json:"credential"`
+	Posture      string        `json:"posture"`
+	Date         string        `json:"date"`
+	Machine      string        `json:"machine"`
+	ExitCode     int           `json:"exit_code"`
+	WallMS       int64         `json:"wall_ms"`
+	Tree         treeUsage     `json:"tree"`
+	Tokens       tokens        `json:"tokens"`
+	Requests     int           `json:"requests"`
+	Calls        []call        `json:"calls"`
+	Timed        []requestTime `json:"timed_requests,omitempty"`
+	ThinkingSent string        `json:"thinking_sent,omitempty"`
+	Retried      int           `json:"retried"`
+	Score        score         `json:"score"`
+	Notes        []string      `json:"notes,omitempty"`
 }
 
 func main() {
@@ -199,12 +202,16 @@ func runArm(args []string) error {
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
 	limit := flags.Duration("limit", 20*time.Minute, "wall clock cap")
 	patience := flags.Duration("patience", 30*time.Minute, "how long to wait for the slot")
+	setting := flags.String("setting", "", "the build or setting under test, either shipped or rival; its rows go to the setting table, not the arm tables")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	index := slices.IndexFunc(arms, func(a arm) bool { return a.Name == *name })
 	if index < 0 || *rep < 1 || *slot == "" {
 		return errors.New("run needs -arm, -rep and -slot")
+	}
+	if !slices.Contains([]string{"", settingShipped, settingRival}, *setting) {
+		return fmt.Errorf("-setting is %s or %s, not %q", settingShipped, settingRival, *setting)
 	}
 	chosen := arms[index]
 	for waited := time.Duration(0); os.Mkdir(*slot, 0o755) != nil; waited += 15 * time.Second {
@@ -214,7 +221,9 @@ func runArm(args []string) error {
 		time.Sleep(15 * time.Second)
 	}
 	defer func() { _ = os.Remove(*slot) }()
-	dir := filepath.Join(*work, fmt.Sprintf("%s-%d", chosen.Name, *rep))
+	r := row{Arm: chosen.Name, Rep: *rep, Setting: *setting, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
+		Date: time.Now().Format("2006-01-02 15:04"), Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU())}
+	dir := filepath.Join(*work, r.name())
 	dirs, err := stage(dir, false)
 	if err != nil {
 		return err
@@ -224,8 +233,6 @@ func runArm(args []string) error {
 		return err
 	}
 	env := goEnv(dirs)
-	r := row{Arm: chosen.Name, Rep: *rep, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
-		Date: time.Now().Format("2006-01-02 15:04"), Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU())}
 	if chosen.Tool == "tofu" {
 		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
 	} else {
@@ -246,7 +253,7 @@ func runArm(args []string) error {
 }
 
 func withTranscript(r row, t transcript) row {
-	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls, r.Timed = t.model, t.models, t.credential, t.requests, t.tokens, t.calls, t.timed
+	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls, r.Timed, r.ThinkingSent = t.model, t.models, t.credential, t.requests, t.tokens, t.calls, t.timed, t.thinkingSent
 	r.Notes = append(slices.DeleteFunc(r.Notes, func(note string) bool {
 		return !strings.HasPrefix(note, "stopped at") && !strings.HasPrefix(note, "wait:")
 	}), t.notes...)
@@ -254,8 +261,11 @@ func withTranscript(r row, t transcript) row {
 	return r
 }
 
-func runPath(armName string, rep int) string {
-	return filepath.Join(here(), "runs", fmt.Sprintf("%s-%d.json", armName, rep))
+func (r row) name() string {
+	if r.Setting == "" {
+		return fmt.Sprintf("%s-%d", r.Arm, r.Rep)
+	}
+	return fmt.Sprintf("%s-%s-%d", r.Arm, r.Setting, r.Rep)
 }
 
 func save(r row) error {
@@ -263,12 +273,13 @@ func save(r row) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(runPath(r.Arm, r.Rep)), 0o755); err != nil {
+	path := filepath.Join(here(), "runs", r.name()+".json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	fmt.Printf("%s rep %d: %s %s, exit %d, %.1f s wall, %.1f s CPU, %s, %d requests, %d calls, hidden %d of 5, rubric %d of 5\n", r.Arm, r.Rep, r.Tool, r.build(), r.ExitCode, float64(r.WallMS)/1000,
-		float64(r.Tree.CPUMS)/1000, r.Model, r.Requests, len(r.Calls), r.Score.hiddenPassed(), r.Score.rubricPassed())
-	return os.WriteFile(runPath(r.Arm, r.Rep), append(body, '\n'), 0o644)
+	fmt.Printf("%s: %s %s, exit %d, %.1f s wall, %.1f s CPU, %s, %d requests, %d calls, out %d, reasoning %d, thinking sent %s, hidden %d of 5, rubric %d of 5\n", r.name(), r.Tool, r.build(), r.ExitCode, float64(r.WallMS)/1000,
+		float64(r.Tree.CPUMS)/1000, r.Model, r.Requests, len(r.Calls), r.Tokens.Out, r.Tokens.Reasoning, cmp.Or(r.ThinkingSent, "not read"), r.Score.hiddenPassed(), r.Score.rubricPassed())
+	return os.WriteFile(path, append(body, '\n'), 0o644)
 }
 
 func reparse(args []string) error {
@@ -291,7 +302,7 @@ func reparse(args []string) error {
 			return err
 		}
 		chosen := arms[slices.IndexFunc(arms, func(a arm) bool { return a.Name == r.Arm })]
-		dir := filepath.Join(*work, fmt.Sprintf("%s-%d", r.Arm, r.Rep))
+		dir := filepath.Join(*work, r.name())
 		raw, err := os.ReadFile(filepath.Join(dir, "stdout.txt"))
 		if err != nil {
 			return err

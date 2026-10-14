@@ -19,6 +19,7 @@ type tokens struct {
 	CacheRead  int `json:"cache_read"`
 	CacheWrite int `json:"cache_write"`
 	Out        int `json:"out"`
+	Reasoning  int `json:"reasoning,omitempty"`
 }
 
 func (t tokens) in() int {
@@ -63,6 +64,7 @@ type transcript struct {
 	calls             []call
 	timed             []requestTime
 	notes             []string
+	thinkingSent      string
 }
 
 func (t *transcript) saw(model string) {
@@ -429,6 +431,10 @@ func parseTofu(lines []stamped, repo string, env []string, codexWire bool) trans
 		t.saw(str(request, "model"))
 		t.tokens.add(in, read, num(request, "usage", "cache_write_tokens"), num(request, "usage", "output_tokens"))
 		detail := decode(toolOutput(repo, env, "tofu", "session", "request", id, str(request, "request"), "--json"))["data"]
+		t.tokens.Reasoning += num(detail, "response", "Usage", "ReasoningTokens")
+		if t.thinkingSent == "" {
+			t.thinkingSent = thinkingField(detail)
+		}
 		if sent, err := time.Parse(time.RFC3339Nano, str(detail, "at")); err == nil {
 			clock.sent = sent
 			if first := num(detail, "response", "FirstTokenMS"); first > 0 {
@@ -448,4 +454,23 @@ func parseTofu(lines []stamped, repo string, env []string, codexWire bool) trans
 		t.notes = append(t.notes, fmt.Sprintf("%d sub-agents", len(agents)))
 	}
 	return t
+}
+
+func thinkingField(detail any) string {
+	attempts := list(detail, "attempts")
+	if len(attempts) == 0 {
+		return ""
+	}
+	last, _ := attempts[len(attempts)-1].(map[string]any)
+	body, _ := last["body"].(map[string]any)
+	if text, isText := last["body"].(string); isText {
+		body = decode(text)
+	}
+	for _, field := range []string{"thinking", "reasoning"} {
+		if value, sent := body[field]; sent {
+			shape, _ := json.Marshal(value)
+			return field + " " + string(shape)
+		}
+	}
+	return "no thinking or reasoning field"
 }

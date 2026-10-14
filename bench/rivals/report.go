@@ -18,7 +18,7 @@ func writeReport([]string) error {
 	if err != nil {
 		return err
 	}
-	byArm := map[string][]row{}
+	byArm, bySetting := map[string][]row{}, map[string][]row{}
 	for _, path := range paths {
 		body, err := os.ReadFile(path)
 		if err != nil {
@@ -27,6 +27,10 @@ func writeReport([]string) error {
 		var r row
 		if err := json.Unmarshal(body, &r); err != nil {
 			return fmt.Errorf("%s: %w", path, err)
+		}
+		if r.Setting != "" {
+			bySetting[r.Arm] = append(bySetting[r.Arm], r)
+			continue
 		}
 		byArm[r.Arm] = append(byArm[r.Arm], r)
 	}
@@ -41,6 +45,7 @@ func writeReport([]string) error {
 	turnTable(&b, byArm)
 	wallTable(&b, byArm)
 	toolTable(&b, byArm)
+	settingTable(&b, bySetting)
 	return os.WriteFile(filepath.Join(here(), "report.md"), []byte(b.String()), 0o644)
 }
 
@@ -197,6 +202,67 @@ func toolTable(b *strings.Builder, byArm map[string][]row) {
 	}
 }
 
+const (
+	settingShipped = "shipped"
+	settingRival   = "rival"
+)
+
+var settingMeasures = []func(row) float64{
+	func(r row) float64 { return seconds(r.WallMS) },
+	func(r row) float64 { return float64(r.Requests) },
+	func(r row) float64 { return float64(r.Tokens.in()) },
+	func(r row) float64 { return float64(r.Tokens.Out) },
+	func(r row) float64 { return float64(r.Tokens.Reasoning) },
+	func(r row) float64 { return float64(r.Score.hiddenPassed() + r.Score.rubricPassed()) },
+}
+
+func settingTable(b *strings.Builder, bySetting map[string][]row) {
+	if len(bySetting) == 0 {
+		return
+	}
+	b.WriteString("\n## Shipped thinking setting against the rival's\n\nOne row per run, alternating. Shipped is tofu as built; rival is the same commit sending what the rival on that wire sends. Thinking sent is read from the first request body tofu recorded. Total in is fresh plus cache read plus cache write; reasoning is the wire's own count and is part of out.\n\n| arm | setting | rep | date | thinking sent | wall s | requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+	for _, a := range present(bySetting) {
+		for _, r := range slices.SortedFunc(slices.Values(bySetting[a.Name]), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
+			fmt.Fprintf(b, "| %s | %s | %d | %s | `%s` | %.1f | %d | %d | %d | %d | %d |\n", r.Arm, r.Setting, r.Rep, r.Date, r.ThinkingSent, seconds(r.WallMS), r.Requests,
+				r.Tokens.in(), r.Tokens.Out, r.Tokens.Reasoning, r.Score.hiddenPassed()+r.Score.rubricPassed())
+		}
+	}
+	b.WriteString("\nMedians per setting, and what shipped costs over rival in percent of the rival's median.\n\n| arm | setting | runs | wall s | requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|\n")
+	for _, a := range present(bySetting) {
+		shipped, rival := settingMedians(b, a.Name, settingShipped, bySetting[a.Name]), settingMedians(b, a.Name, settingRival, bySetting[a.Name])
+		if len(shipped) == 0 || len(rival) == 0 {
+			continue
+		}
+		cells := []string{a.Name, "shipped over rival", ""}
+		for i := range settingMeasures {
+			cells = append(cells, percentOver(shipped[i], rival[i]))
+		}
+		b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
+	}
+}
+
+func settingMedians(b *strings.Builder, armName, setting string, rows []row) []float64 {
+	chosen := slices.DeleteFunc(slices.Clone(rows), func(r row) bool { return r.Setting != setting })
+	if len(chosen) == 0 {
+		return nil
+	}
+	cells := []string{armName, setting, fmt.Sprint(len(chosen))}
+	var medians []float64
+	for _, measure := range settingMeasures {
+		cells = append(cells, spread(chosen, measure))
+		medians = append(medians, median(valuesOf(chosen, measure)))
+	}
+	b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
+	return medians
+}
+
+func percentOver(shipped, rival float64) string {
+	if rival == 0 {
+		return "no rival value"
+	}
+	return fmt.Sprintf("%+.1f%%", (shipped-rival)/rival*100)
+}
+
 func failedCalls(r row) int {
 	n := 0
 	for _, c := range r.Calls {
@@ -207,11 +273,16 @@ func failedCalls(r row) int {
 	return n
 }
 
-func spread(rows []row, value func(row) float64) string {
+func valuesOf(rows []row, value func(row) float64) []float64 {
 	values := make([]float64, 0, len(rows))
 	for _, r := range rows {
 		values = append(values, value(r))
 	}
+	return values
+}
+
+func spread(rows []row, value func(row) float64) string {
+	values := valuesOf(rows, value)
 	return fmt.Sprintf("%s [%s to %s]", trim(median(values)), trim(slices.Min(values)), trim(slices.Max(values)))
 }
 

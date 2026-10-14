@@ -73,6 +73,50 @@ The fix, measured: `summary` left out of the codex wire's `reasoning`, built fro
 
 The spreads overlap (114.2 against 108.7), so three runs say the direction, not the size. What is left: a small request still waits 6.0 s against codex's 5.4 s. Codex also sends `text.verbosity: low`, puts its tools in the input under Responses Lite, and talks to the backend over a websocket; none of the three was measured here.
 
+## What the thinking summary costs, 2026-10-14
+
+**The summary costs no measurable tokens on either wire: reasoning stays inside the spread and output moves by 1 to 5 percent. Its wall cost is inside the upstream noise on gpt-5.6-sol, and on Sonnet 5.5 it shows per request: the median request takes 3.73 s with `display: summarized` against 2.35 s without, and the first token 2.43 s against 1.25 s.** One to one parity means no summary on codex-sub, as codex sends, and `thinking: {type: adaptive}` with no display on claude-sub, as Claude Code sends; omp is the one rival that asks for summaries on both wires.
+
+What each arm sends for thinking, read from source or from the recorded request body. No arm sends a token budget: every Sonnet arm uses adaptive thinking.
+
+| arm | wire | effort | thinking or reasoning field | summary or display | read from |
+|---|---|---|---|---|---|
+| tofu-sonnet | claude-sub | `output_config.effort` medium | `thinking: {type: adaptive, display: summarized}` | summarized | `internal/llm/wire/anthropic/request.go` `summarizedThinking()`, and every recorded body below |
+| tofu-sonnet, `thinkingSummary omitted` | claude-sub | medium | no `thinking` field at all | none, and possibly no thinking | same function, TOFU-793; not run here |
+| claude-sonnet, Claude Code 2.1.299 | claude-sub | `--effort medium` | `thinking: {type: adaptive}` | none sent: `-p` with `stream-json --verbose` and the interactive app both leave `display` unset unless `showThinkingSummaries` is on (it is not set here); `-p` with text output and every non-interactive sub-agent send `omitted` | the bundle in `claude.exe`, functions `Gko`, `Vko` and `qOs` and the request builder that sets `{type:"adaptive",display:Rk}` |
+| omp-sonnet, omp 18.3.2 | claude-sub (omp's anthropic login) | `--thinking medium` | `thinking: {type: adaptive, display: summarized}` | summarized unless `omitThinking` | `@oh-my-pi/pi-ai/src/providers/anthropic.ts:4616-4624`, gate `pi-catalog/src/compat/resolve.ts:1154` (adaptive 4.7 and later) |
+| tofu-gpt | codex-sub | `reasoning.effort` medium | `reasoning: {effort: medium, summary: auto}` | auto | `internal/llm/wire/codex/request.go` `reasoning()`, and every recorded body below |
+| codex-gpt, codex-cli 0.155.1 | codex-sub | `model_reasoning_effort` medium | `reasoning: {effort: medium, summary: none}` | none | `~/.codex/models_cache.json` `default_reasoning_summary: none` for gpt-5.6-sol, used by `codex-rs/core/src/session/step_settings.rs:62`; rollout `turn_context` (TOFU-1361) |
+| omp on codex | codex-sub | its own | `reasoning.summary` | auto | `@oh-my-pi/pi-ai/src/providers/openai-codex/request-transformer.ts:167` |
+
+The measurement: twelve live tofu runs, three per setting, alternating shipped and rival, 2026-10-14 16:01 to 16:31, on scratch builds of `bd46f834` in the session scratchpad, `tofu version` 0.5.14+dev for all three binaries. Shipped is the commit as it is. Rival for tofu-gpt leaves `summary` out of `reasoning()`; rival for tofu-sonnet sends `thinking: {type: adaptive}` with no display. All three builds also read `usage.output_tokens_details.thinking_tokens` on the anthropic wire, which tofu does not record today, so the Sonnet reasoning column exists; that patch changes no request. The table and the per-run rows are in the report under *Shipped thinking setting against the rival's*.
+
+Per request, every timed request of the three runs pooled:
+
+| arm | setting | requests | model wait per run, median s | per request median s | first token median s | small request median s | out per request | reasoning per request |
+|---|---|---|---|---|---|---|---|---|
+| tofu-gpt | shipped, summary auto | 28 | 88.8 | 6.49 | 5.73 | 5.41 | 402 | 126 |
+| tofu-gpt | rival, no summary | 31 | 110.0 | 8.35 | 7.58 | 6.56 | 381 | 121 |
+| tofu-sonnet | shipped, summarized | 16 | 19.9 | 3.73 | 2.43 | 2.56 | 449 | 15 |
+| tofu-sonnet | rival, no display | 17 | 18.7 | 2.35 | 1.25 | 1.94 | 415 | 11 |
+
+What the summary costs, shipped over rival in percent of the rival's median:
+
+| wire | out tokens | reasoning tokens | total in | wall | model wait per run | per request |
+|---|---|---|---|---|---|---|
+| codex-sub, this run | -4.9% | -14.4% | -11.5% | +23.6% | -19.3% | -22.3% |
+| codex-sub, TOFU-1361 at e11b9f4f | not recorded | not recorded | not recorded | +18.3% | +6.3% | small request +23.3% |
+| claude-sub, this run | +1.2% | +185% of 34 tokens | -17.6% | +7.1% | +6.4% | +58.7%, first token +94% |
+
+- **gpt-5.6-sol: the two sessions disagree on wall.** TOFU-1361 found the summary slower, this run found it faster per request and slower on wall, and the wall difference this time sits outside model wait. Upstream variance is larger than the summary. Tokens do not move, so the summary is free in tokens and unproven in time.
+- **Sonnet 5.5 thinks very little on this task at medium**, 31 to 125 thinking tokens a run, so the summary has almost nothing to summarize and costs no tokens. The first-token gap over the pooled requests is the only clear signal; the wall spreads overlap (64.8 to 84.1 against 64.2 to 67.9). Total in and requests differ because one setting ran 5 requests and the other 6, which is the model's choice, not the summary's.
+- **Quality is 10 of 10 in all twelve runs.**
+
+Recommendation per wire, one to one with the rival on it:
+
+1. **codex-sub: send no summary, as codex does.** Measured cost of the change: none in tokens; wall within noise across two sessions (+18.3% then +23.6% for keeping it, -19.3% model wait for keeping it in the second). Lost: GPT thinking text in the interface, which codex also does not show. Files: `internal/llm/wire/codex/request.go` `reasoning()` default, or `cmd/tofu/run.go` and `cmd/tofu/accounts.go` (the two `codexTurn` constructors) passing `SummaryOff`, as TOFU-1361 named.
+2. **claude-sub: send `thinking: {type: adaptive}` with no display, as Claude Code does.** Measured cost of the change: none in tokens (+1.2% out for keeping summarized), first token 1.2 s earlier per request and 6.4% less model wait per run. Lost: Sonnet thinking text in the interface, which Claude Code also hides unless `showThinkingSummaries` is set. omp parity would be the opposite choice, keeping summarized. Files: `internal/llm/wire/anthropic/request.go` (`wireThinking.Display` gains `omitempty`, `summarizedThinking()` returns adaptive with no display), and the `thinkingSummary` setting in `internal/settings/table.go` and `cmd/tofu/run.go`, whose `omitted` today drops the whole field rather than sending Claude Code's body.
+
 ## What these numbers cannot say
 
 - **Three runs is a spread, not a distribution.** Only differences larger than the spread are called above.

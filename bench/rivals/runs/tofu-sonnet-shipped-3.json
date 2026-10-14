@@ -1,0 +1,164 @@
+{
+  "arm": "tofu-sonnet",
+  "rep": 3,
+  "setting": "shipped",
+  "tool": "tofu",
+  "version": "0.5.14+dev",
+  "commit": "unknown",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-14 16:27",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 70092,
+  "tree": {
+    "cpu_ms": 44328,
+    "peak_tree_rss_bytes": 357126144,
+    "peak_commit_bytes": 494329856,
+    "processes": 397,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 1259,
+    "cache_read": 108652,
+    "cache_write": 6619,
+    "out": 2646,
+    "reasoning": 99
+  },
+  "requests": 5,
+  "calls": [
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 2321,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 91,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 30028,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "shell",
+      "ms": 7437,
+      "failed": true
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 1744,
+      "first_ms": 1097,
+      "out": 63
+    },
+    {
+      "at_ms": 4085,
+      "ms": 5024,
+      "first_ms": 1768,
+      "out": 716
+    },
+    {
+      "at_ms": 9132,
+      "ms": 6896,
+      "first_ms": 3217,
+      "out": 1257
+    },
+    {
+      "at_ms": 46250,
+      "ms": 4372,
+      "first_ms": 4370,
+      "out": 112
+    },
+    {
+      "at_ms": 58088,
+      "ms": 3657,
+      "first_ms": 2544,
+      "out": 498
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 1,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 8,
+    "lines_added": 41,
+    "lines_deleted": 6
+  },
+  "notes": [
+    "turn outcome stopped"
+  ]
+}
