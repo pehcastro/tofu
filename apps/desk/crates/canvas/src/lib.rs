@@ -8,17 +8,20 @@ use std::time::Instant;
 use desk_ui::live::ActiveTheme;
 use draw_doc::{BoundKind, DocError, Element, Rect, Scene};
 use gpui::{
-    App, Bounds, ContentMask, Context, FocusHandle, Focusable, KeyDownEvent, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollWheelEvent, SharedString,
-    TextRun, Window, canvas, div, fill, prelude::*, px,
+    App, Bounds, ContentMask, Context, ElementInputHandler, EntityInputHandler, FocusHandle,
+    Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
+    Point, ScrollWheelEvent, SharedString, TextRun, UTF16Selection, Window, canvas, div, fill,
+    prelude::*, px,
 };
+use std::ops::Range;
 
-use edit::Corner;
+use edit::Handle;
 use paint::{Frame, Palette};
 use shape::Kind;
 pub use view::View;
 
 const HIT_SLACK: f64 = 6.0;
+const HANDLE_REACH: f32 = 8.0;
 const ZOOM_STEP: f64 = 0.002;
 const PAINT_WINDOW: usize = 120;
 
@@ -31,7 +34,7 @@ enum Gesture {
     Idle,
     Pan(Point<Pixels>),
     Move { from: Box<Element>, at: (f64, f64) },
-    Resize { from: Box<Element>, corner: Corner },
+    Resize { from: Box<Element>, grip: Handle },
 }
 
 struct Editing {
@@ -114,17 +117,20 @@ impl Canvas {
             .map(|bound| bound.id)
     }
 
-    fn grabbed_corner(&self, at: Point<Pixels>) -> Option<(Element, Corner)> {
+    fn grabbed(&self, at: Point<Pixels>) -> Option<(Element, Handle)> {
         let element = self.selected.as_deref().and_then(|id| self.scene.get(id))?;
         if !Kind::of(element).resizable() {
             return None;
         }
-        Corner::ALL
+        let reach = px(HANDLE_REACH);
+        Handle::ALL
             .into_iter()
-            .find(|corner| {
-                paint::handle(&self.view, self.bounds.origin, element, *corner).contains(&at)
+            .find(|grip| {
+                let (x, y) = grip.of(element);
+                let middle = self.view.screen(self.bounds.origin, x, y);
+                (at.x - middle.x).abs() <= reach && (at.y - middle.y).abs() <= reach
             })
-            .map(|corner| (element.clone(), corner))
+            .map(|grip| (element.clone(), grip))
     }
 
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -134,20 +140,16 @@ impl Canvas {
         if event.click_count >= 2 {
             let label = self.hit(x, y).and_then(|element| self.label_of(element));
             self.editing = label.and_then(|id| {
-                let text = self
-                    .scene
-                    .get(&id)
-                    .and_then(shape::label)?
-                    .replace('\n', " ");
+                let text = self.scene.get(&id).and_then(shape::label)?.to_owned();
                 Some(Editing { id, text })
             });
             cx.notify();
             return;
         }
-        self.gesture = match self.grabbed_corner(event.position) {
-            Some((from, corner)) => Gesture::Resize {
+        self.gesture = match self.grabbed(event.position) {
+            Some((from, grip)) => Gesture::Resize {
                 from: Box::new(from),
-                corner,
+                grip,
             },
             None => match self.hit(x, y).cloned() {
                 Some(element) => {
@@ -177,7 +179,9 @@ impl Canvas {
                 return;
             }
             Gesture::Move { from, at } => edit::moved(&self.scene, from, (x - at.0, y - at.1)),
-            Gesture::Resize { from, corner } => edit::resized(&self.scene, from, *corner, (x, y)),
+            Gesture::Resize { from, grip } => {
+                edit::resized(&self.scene, from, *grip, (x, y), event.modifiers.shift)
+            }
         };
         match previewed {
             Ok(preview) => self.preview = preview,
@@ -187,8 +191,16 @@ impl Canvas {
     }
 
     fn mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
-        self.gesture = Gesture::Idle;
+        let gesture = std::mem::replace(&mut self.gesture, Gesture::Idle);
         let preview = std::mem::take(&mut self.preview);
+        if let Gesture::Resize { from, .. } = gesture
+            && let Some(sized) = preview.iter().find(|element| element.id == from.id)
+        {
+            eprintln!(
+                "desk: canvas resize {} {}x{}",
+                sized.id, sized.width, sized.height
+            );
+        }
         if !preview.is_empty()
             && let Err(error) = self.scene.apply(edit::updates(preview))
         {
@@ -200,11 +212,15 @@ impl Canvas {
     fn scroll(&mut self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut Context<Self>) {
         let delta = event.delta.pixel_delta(window.line_height());
         self.view = match event.modifiers.secondary() {
-            true => self.view.zoomed(
-                self.bounds.origin,
-                event.position,
-                (-f64::from(delta.y) * ZOOM_STEP).exp(),
-            ),
+            true => {
+                let zoomed = self.view.zoomed(
+                    self.bounds.origin,
+                    event.position,
+                    (f64::from(delta.y) * ZOOM_STEP).exp(),
+                );
+                eprintln!("desk: canvas zoom {:.2}", zoomed.zoom());
+                zoomed
+            }
             false => self.view.panned(delta),
         };
         cx.stop_propagation();
@@ -215,6 +231,10 @@ impl Canvas {
         let keys = &event.keystroke;
         let used = match &mut self.editing {
             Some(editing) => match keys.key.as_str() {
+                "enter" if keys.modifiers.shift => {
+                    editing.text.push('\n');
+                    true
+                }
                 "enter" => {
                     self.commit(window);
                     true
@@ -227,13 +247,7 @@ impl Canvas {
                     editing.text.pop();
                     true
                 }
-                _ => match (&keys.key_char, keys.modifiers.secondary()) {
-                    (Some(typed), false) => {
-                        editing.text.push_str(typed);
-                        true
-                    }
-                    _ => false,
-                },
+                _ => false,
             },
             None => {
                 let redo = keys.key == "y" || (keys.key == "z" && keys.modifiers.shift);
@@ -266,19 +280,25 @@ impl Canvas {
             return;
         };
         let size = px(shape::font_size(&from) as f32);
-        let run = TextRun {
-            len: text.len(),
-            font: window.text_style().font(),
-            color: gpui::black(),
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-            letter_spacing: None,
-        };
-        let width = window
-            .text_system()
-            .shape_line(SharedString::from(text.clone()), size, &[run], None)
-            .width();
+        let font = window.text_style().font();
+        let width = text
+            .split('\n')
+            .map(|line| {
+                let run = TextRun {
+                    len: line.len(),
+                    font: font.clone(),
+                    color: gpui::black(),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                    letter_spacing: None,
+                };
+                window
+                    .text_system()
+                    .shape_line(SharedString::from(line.to_owned()), size, &[run], None)
+                    .width()
+            })
+            .fold(px(0.0), Pixels::max);
         let committed = edit::retexted(&self.scene, &from, &text, f64::from(width))
             .and_then(|changed| self.scene.apply(edit::updates(changed)));
         if let Err(error) = committed {
@@ -353,8 +373,9 @@ impl Canvas {
                 .get(PAINT_WINDOW / 2)
                 .copied()
                 .unwrap_or_default();
+            let worst = self.paints.last().copied().unwrap_or_default();
             eprintln!(
-                "desk: canvas paint {} shapes {median:.2} ms",
+                "desk: canvas paint {} shapes median {median:.2} ms worst {worst:.2} ms",
                 self.scene.elements().len()
             );
             self.paints.clear();
@@ -369,6 +390,81 @@ impl Canvas {
     }
 }
 
+impl EntityInputHandler for Canvas {
+    fn text_for_range(
+        &mut self,
+        _: Range<usize>,
+        _: &mut Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn selected_text_range(
+        &mut self,
+        _: bool,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
+        None
+    }
+
+    fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
+        None
+    }
+
+    fn unmark_text(&mut self, _: &mut Window, _: &mut Context<Self>) {}
+
+    fn replace_text_in_range(
+        &mut self,
+        _: Option<Range<usize>>,
+        text: &str,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(editing) = &mut self.editing {
+            editing
+                .text
+                .extend(text.chars().filter(|typed| !typed.is_control()));
+            cx.notify();
+        }
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        _: Option<Range<usize>>,
+        _: &str,
+        _: Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) {
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        _: Range<usize>,
+        element_bounds: Bounds<Pixels>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<Bounds<Pixels>> {
+        Some(element_bounds)
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        _: Point<Pixels>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<usize> {
+        None
+    }
+
+    fn accepts_text_input(&self, _: &mut Window, _: &mut Context<Self>) -> bool {
+        self.editing.is_some()
+    }
+}
+
 impl Focusable for Canvas {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -378,6 +474,7 @@ impl Focusable for Canvas {
 impl Render for Canvas {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let this = cx.entity();
+        let focus = self.focus.clone();
         div()
             .id("draw-canvas")
             .track_focus(&self.focus)
@@ -394,6 +491,11 @@ impl Render for Canvas {
                 canvas(
                     |_, _, _| (),
                     move |bounds, (), window, cx| {
+                        window.handle_input(
+                            &focus,
+                            ElementInputHandler::new(bounds, this.clone()),
+                            cx,
+                        );
                         this.update(cx, |canvas, cx| canvas.paint(bounds, window, cx))
                     },
                 )

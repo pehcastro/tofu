@@ -3,42 +3,69 @@ use serde_json::Value;
 
 use crate::shape::{self, Kind};
 
-const LEAST_SIDE: f64 = 1.0;
+const LEAST_SIDE: f64 = 8.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Corner {
-    TopLeft,
-    TopRight,
-    BottomLeft,
-    BottomRight,
+pub enum Pull {
+    Least,
+    Middle,
+    Most,
 }
 
-impl Corner {
-    pub const ALL: [Corner; 4] = [
-        Corner::TopLeft,
-        Corner::TopRight,
-        Corner::BottomLeft,
-        Corner::BottomRight,
-    ];
-
-    pub fn of(self, element: &Element) -> (f64, f64) {
-        let (left, top) = (element.x, element.y);
-        let (right, bottom) = (left + element.width, top + element.height);
+impl Pull {
+    fn share(self) -> f64 {
         match self {
-            Corner::TopLeft => (left, top),
-            Corner::TopRight => (right, top),
-            Corner::BottomLeft => (left, bottom),
-            Corner::BottomRight => (right, bottom),
+            Pull::Least => 0.0,
+            Pull::Middle => 0.5,
+            Pull::Most => 1.0,
         }
     }
 
-    fn opposite(self) -> Corner {
-        match self {
-            Corner::TopLeft => Corner::BottomRight,
-            Corner::TopRight => Corner::BottomLeft,
-            Corner::BottomLeft => Corner::TopRight,
-            Corner::BottomRight => Corner::TopLeft,
+    fn reach(self, start: f64, span: f64, to: f64) -> Option<(f64, f64)> {
+        let fixed = match self {
+            Pull::Least => start + span,
+            Pull::Most => start,
+            Pull::Middle => return None,
+        };
+        Some((fixed, to - fixed))
+    }
+
+    fn place(self, start: f64, span: f64, side: f64, to: f64) -> f64 {
+        match self.reach(start, span, to) {
+            Some((fixed, toward)) if toward < 0.0 => fixed - side,
+            Some((fixed, _)) => fixed,
+            None => start + (span - side) / 2.0,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Handle {
+    across: Pull,
+    down: Pull,
+}
+
+impl Handle {
+    pub const ALL: [Handle; 8] = [
+        Handle::new(Pull::Least, Pull::Least),
+        Handle::new(Pull::Middle, Pull::Least),
+        Handle::new(Pull::Most, Pull::Least),
+        Handle::new(Pull::Most, Pull::Middle),
+        Handle::new(Pull::Most, Pull::Most),
+        Handle::new(Pull::Middle, Pull::Most),
+        Handle::new(Pull::Least, Pull::Most),
+        Handle::new(Pull::Least, Pull::Middle),
+    ];
+
+    const fn new(across: Pull, down: Pull) -> Handle {
+        Handle { across, down }
+    }
+
+    pub fn of(self, element: &Element) -> (f64, f64) {
+        (
+            element.x + element.width * self.across.share(),
+            element.y + element.height * self.down.share(),
+        )
     }
 }
 
@@ -61,15 +88,29 @@ pub fn moved(scene: &Scene, from: &Element, by: (f64, f64)) -> Result<Vec<Elemen
 pub fn resized(
     scene: &Scene,
     from: &Element,
-    corner: Corner,
+    handle: Handle,
     to: (f64, f64),
+    keep_aspect: bool,
 ) -> Result<Vec<Element>, DocError> {
-    let (fixed_x, fixed_y) = corner.opposite().of(from);
+    let pulled = |pull: Pull, start: f64, span: f64, to: f64| {
+        pull.reach(start, span, to)
+            .map(|(_, toward)| toward.abs() / span.max(f64::EPSILON))
+    };
+    let across = pulled(handle.across, from.x, from.width, to.0);
+    let down = pulled(handle.down, from.y, from.height, to.1);
+    let (scale_x, scale_y) = match (keep_aspect, across, down) {
+        (true, Some(x), Some(y)) => (x.max(y), x.max(y)),
+        (true, Some(x), None) => (x, x),
+        (true, None, Some(y)) => (y, y),
+        (_, x, y) => (x.unwrap_or(1.0), y.unwrap_or(1.0)),
+    };
+    let width = (from.width * scale_x).max(LEAST_SIDE);
+    let height = (from.height * scale_y).max(LEAST_SIDE);
     let element = Element {
-        x: fixed_x.min(to.0),
-        y: fixed_y.min(to.1),
-        width: (fixed_x - to.0).abs().max(LEAST_SIDE),
-        height: (fixed_y - to.1).abs().max(LEAST_SIDE),
+        x: handle.across.place(from.x, from.width, width, to.0),
+        y: handle.down.place(from.y, from.height, height, to.1),
+        width,
+        height,
         ..from.clone()
     };
     follow(scene, vec![element])

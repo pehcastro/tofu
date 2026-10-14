@@ -6,7 +6,7 @@ use gpui::{
     Window, fill, outline, point, px, rgb, rgb_to_hsla, size,
 };
 
-use crate::edit::Corner;
+use crate::edit::Handle;
 use crate::shape::{self, Kind};
 use crate::view::View;
 
@@ -62,9 +62,9 @@ pub fn handle(
     view: &View,
     origin: Point<Pixels>,
     element: &Element,
-    corner: Corner,
+    grip: Handle,
 ) -> Bounds<Pixels> {
-    let (x, y) = corner.of(element);
+    let (x, y) = grip.of(element);
     let middle = view.screen(origin, x, y);
     let half = px(HANDLE / 2.0);
     Bounds::new(
@@ -343,8 +343,8 @@ impl Frame<'_> {
         if !Kind::of(element).resizable() {
             return;
         }
-        for corner in Corner::ALL {
-            let handle = handle(&self.view, self.origin, element, corner);
+        for grip in Handle::ALL {
+            let handle = handle(&self.view, self.origin, element, grip);
             window.paint_quad(fill(handle, self.palette.ground));
             window.paint_quad(outline(handle, self.palette.accent, BorderStyle::Solid));
         }
@@ -354,37 +354,49 @@ impl Frame<'_> {
         let origin = self.view.screen(self.origin, element.x, element.y);
         let font_size = self.view.length(shape::font_size(element));
         let step = self.view.length(shape::line_step(element));
-        let run = TextRun {
-            len: text.len(),
-            font: window.text_style().font(),
-            color: rgb_to_hsla(self.palette.ink),
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-            letter_spacing: None,
-        };
-        let shaped = window.text_system().shape_line(
-            SharedString::from(text.to_owned()),
-            font_size,
-            &[run],
-            None,
-        );
+        let font = window.text_style().font();
+        let lines: Vec<_> = text
+            .split('\n')
+            .map(|line| {
+                let run = TextRun {
+                    len: line.len(),
+                    font: font.clone(),
+                    color: rgb_to_hsla(self.palette.ink),
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                    letter_spacing: None,
+                };
+                window.text_system().shape_line(
+                    SharedString::from(line.to_owned()),
+                    font_size,
+                    &[run],
+                    None,
+                )
+            })
+            .collect();
         let pad = px(FIELD_PAD);
-        let wide = shaped
-            .width()
-            .max(self.view.length(element.width))
+        let wide = lines
+            .iter()
+            .map(|line| line.width())
+            .fold(self.view.length(element.width), Pixels::max)
             .max(px(FIELD_LEAST));
         let area = Bounds::new(
             point(origin.x - pad, origin.y - pad),
-            size(wide + pad * 2.0, step + pad * 2.0),
+            size(wide + pad * 2.0, step * lines.len() as f32 + pad * 2.0),
         );
         window.paint_quad(fill(area, self.palette.field));
         window.paint_quad(outline(area, self.palette.accent, BorderStyle::Solid));
-        if let Err(error) = shaped.paint(origin, step, TextAlign::Left, None, window, cx) {
-            eprintln!("desk: canvas text failed: {error}");
+        let mut at = origin;
+        for line in &lines {
+            if let Err(error) = line.paint(at, step, TextAlign::Left, None, window, cx) {
+                eprintln!("desk: canvas text failed: {error}");
+            }
+            at.y += step;
         }
+        let last = lines.last().map_or(px(0.0), |line| line.width());
         let caret = Bounds::new(
-            point(origin.x + shaped.width(), origin.y),
+            point(origin.x + last, at.y - step),
             size(px(CARET_WIDTH), step),
         );
         window.paint_quad(fill(caret, self.palette.ink));
