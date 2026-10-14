@@ -96,6 +96,18 @@ replies! {
         activity: Vec<Activity>,
         frame_ms: f64,
         input_ms: f64,
+        scan: Option<Scan>,
+    }
+    ScanImport { module: String, name: String, capability: Option<String>, declared: bool }
+    KeyLike { offset: u64, prefix: String, entropy: f64 }
+    Scan {
+        imports: Vec<ScanImport>,
+        hosts: Vec<String>,
+        urls: Vec<String>,
+        key_like: Vec<KeyLike>,
+        size: u64,
+        producer: Option<String>,
+        exports: Vec<String>,
     }
     PluginStateReply { state: PluginState }
     Reloaded { state: PluginState, load_ms: u64 }

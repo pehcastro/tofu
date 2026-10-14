@@ -1570,6 +1570,8 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "toml",
+ "wasm-encoder 0.254.2",
+ "wasmparser 0.254.2",
  "wasmtime",
  "wit-component 0.254.2",
 ]
@@ -1707,6 +1709,14 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "draw_doc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "dunce"

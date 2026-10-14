@@ -1,5 +1,6 @@
 mod install;
 mod manifest;
+mod scan;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -20,6 +21,7 @@ pub use install::{Home, Origin, Refusal, Report};
 pub use manifest::{
     Api, Capability, Command, Contributes, GRANT_VERSION, Id, IdRule, MAX_ID_LEN, Manifest, Mode,
 };
+pub use scan::{Import, KEY_ENTROPY_BITS, KEY_PREFIXES, KeyLike, MIN_KEY_LEN, ScanReport, scan};
 pub use since_v0_1_0::tofu::desk::types::{Badge, Choice, Event, Kind, Node, Table, Toggle, Tone};
 
 mod since_v0_1_0 {
@@ -118,6 +120,7 @@ pub enum Error {
         capability: Option<Capability>,
     },
     Engine(wasmtime::Error),
+    Scan(wasmparser::BinaryReaderError),
     Load {
         plugin: Id,
         source: wasmtime::Error,
@@ -196,6 +199,7 @@ impl fmt::Display for Error {
                 "plugin {plugin}: refused, it imports {import}, which this desk does not offer"
             ),
             Error::Engine(e) => write!(f, "plugin engine: {e:?}"),
+            Error::Scan(e) => write!(f, "plugin wasm does not parse: {e}"),
             Error::Load { plugin, source } => write!(f, "plugin {plugin}: load failed: {source:?}"),
             Error::Deadline { plugin, export } => write!(
                 f,
