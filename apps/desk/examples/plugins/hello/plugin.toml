@@ -1,0 +1,9 @@
+id = "luiz.hello"
+name = "Hello"
+icon = "window"
+version = "0.1.0"
+api = "desk@0.1"
+tofu = ">=0.6"
+
+[contributes]
+tile = true

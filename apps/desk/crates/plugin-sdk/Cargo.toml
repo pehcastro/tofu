@@ -1,0 +1,17 @@
+[package]
+name = "desk_plugin_sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+wit-bindgen = "0.57.1"
+
+[dev-dependencies]
+wit-component = { version = "=0.254.2", default-features = false }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
