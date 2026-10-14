@@ -10,8 +10,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
@@ -205,9 +208,12 @@ func (s Store) TicketFiles(key string) ([]string, error) {
 		}
 		return nil
 	})
+	refs := make(map[string]Ref, len(paths))
+	for _, path := range paths {
+		refs[path] = fileRef(path)
+	}
 	slices.SortFunc(paths, func(a, b string) int {
-		x, y := fileRef(a), fileRef(b)
-		return cmp.Or(cmp.Compare(x.Number, y.Number), cmp.Compare(x.Child, y.Child))
+		return cmp.Or(cmp.Compare(refs[a].Number, refs[b].Number), cmp.Compare(refs[a].Child, refs[b].Child))
 	})
 	return paths, err
 }
@@ -222,11 +228,21 @@ func (s Store) Tickets(key string) ([]Ticket, error) {
 		return nil, err
 	}
 	paths, err := s.TicketFiles(key)
+	read, readErrs := make([]Ticket, len(paths)), make([]error, len(paths))
+	var readers sync.WaitGroup
+	var next atomic.Int64
+	for range min(konst.BoardReadersMost, len(paths)) {
+		readers.Go(func() {
+			for at := int(next.Add(1)) - 1; at < len(paths); at = int(next.Add(1)) - 1 {
+				read[at], readErrs[at] = ReadTicket(paths[at])
+			}
+		})
+	}
+	readers.Wait()
 	tickets := make([]Ticket, 0, len(paths))
-	for _, path := range paths {
-		ticket, readErr := ReadTicket(path)
-		if readErr != nil {
-			err = errors.Join(err, readErr)
+	for at, ticket := range read {
+		if readErrs[at] != nil {
+			err = errors.Join(err, readErrs[at])
 			continue
 		}
 		tickets = append(tickets, ticket)

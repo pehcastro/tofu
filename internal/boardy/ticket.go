@@ -320,11 +320,15 @@ func (t *Ticket) set(key, value string) error {
 func (t *Ticket) readSections(body string) error {
 	sections := map[string]string{}
 	var heading string
+	var at, from int
 	for line := range strings.Lines(body) {
 		name, isHeading := strings.CutPrefix(strings.TrimRight(line, "\n"), "## ")
 		switch {
 		case isHeading:
-			heading = strings.TrimSpace(name)
+			if heading != "" {
+				sections[heading] = body[from:at]
+			}
+			heading, from = strings.TrimSpace(name), at+len(line)
 			if _, twice := sections[heading]; twice {
 				return fmt.Errorf("the section %s appears twice", heading)
 			}
@@ -336,11 +340,13 @@ func (t *Ticket) readSections(body string) error {
 			default:
 				return fmt.Errorf("the section %q is not Problem, Scope, Acceptance, Acceptance <n> in order, Questions, or Log", heading)
 			}
-		case heading != "":
-			sections[heading] += line
-		case strings.TrimSpace(line) != "":
+		case heading == "" && strings.TrimSpace(line) != "":
 			return fmt.Errorf("text before the first section: %q", strings.TrimSpace(line))
 		}
+		at += len(line)
+	}
+	if heading != "" {
+		sections[heading] = body[from:]
 	}
 	for _, name := range []string{"Problem", "Scope", "Acceptance", "Log"} {
 		if _, found := sections[name]; !found {

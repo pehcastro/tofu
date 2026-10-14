@@ -3,6 +3,7 @@ package boardy
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -89,8 +90,12 @@ func (a API) Report(request ReportRequest) (ReportAnswer, error) {
 		return ReportAnswer{}, err
 	}
 	store := a.Board.Store
+	var events []Event
+	var eventsErr error
+	var reading sync.WaitGroup
+	reading.Go(func() { events, eventsErr = store.Events(key, 0) })
 	tickets, ticketsErr := store.Tickets(key)
-	events, eventsErr := store.Events(key, 0)
+	reading.Wait()
 	epics, epicsErr := store.Epics(key)
 	sprints, sprintsErr := store.Sprints(key)
 	return ReportAnswer{Report: BuildReport(key, request.Since, time.Now(), tickets, events, epics, sprints), Words: a.Words}, errors.Join(ticketsErr, eventsErr, epicsErr, sprintsErr)

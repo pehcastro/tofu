@@ -470,4 +470,5 @@ const (
 	AskPersonLabelWordsMost = 5
 	BoardTLDRRunesMost      = 120
 	BoardELI5LinesMost      = 3
+	BoardReadersMost        = 8
 )
