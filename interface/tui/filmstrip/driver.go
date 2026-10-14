@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui"
+	"tofu/interface/tui/welcome"
 	"tofu/internal/konst"
 )
 
@@ -51,6 +52,11 @@ type delivery struct {
 func (d delivery) rearmedTimer() bool {
 	kind := reflect.TypeOf(d.message)
 	return kind == reflect.TypeOf(d.cause) && kind.Comparable()
+}
+
+func (d delivery) repeatedWelcomePulse() bool {
+	kind := reflect.TypeOf(d.message)
+	return d.rearmedTimer() && kind.PkgPath() == reflect.TypeFor[welcome.Identity]().PkgPath() && kind.Name() == "pulseMsg"
 }
 
 type Driver struct {
@@ -106,12 +112,14 @@ func (d *Driver) settle(within time.Duration) error {
 	for {
 		select {
 		case got := <-d.deliveries:
-			if got.rearmedTimer() {
+			switch {
+			case got.repeatedWelcomePulse():
+			case got.rearmedTimer():
 				timers = append(timers, got)
-				continue
+			default:
+				d.feed(got.message, got.cause)
+				quiet.Reset(settleQuiet)
 			}
-			d.feed(got.message, got.cause)
-			quiet.Reset(settleQuiet)
 		case <-quiet.C:
 			for _, timer := range timers {
 				d.feed(timer.message, timer.cause)
@@ -208,7 +216,9 @@ func (d *Driver) Await(text string, within time.Duration) error {
 		}
 		select {
 		case got := <-d.deliveries:
-			d.feed(got.message, got.cause)
+			if !got.repeatedWelcomePulse() {
+				d.feed(got.message, got.cause)
+			}
 		case <-poll.C:
 		case <-deadline.C:
 			return errors.New("waited " + within.String() + " for " + text + " and it never appeared")
