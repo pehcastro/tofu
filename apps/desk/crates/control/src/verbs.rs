@@ -49,6 +49,18 @@ macro_rules! verbs {
     };
 }
 
+impl Method {
+    pub fn wire(self, params: Value) -> (&'static str, Value) {
+        match self {
+            Method::DrawList | Method::DrawOpen | Method::DrawRead | Method::DrawDiagram => (
+                Method::CommandRun.name(),
+                json!({ "name": self.name(), "args": params }),
+            ),
+            _ => (self.name(), params),
+        }
+    }
+}
+
 verbs! {
     DeskInitialize "desk.initialize" p::Initialize => r::Initialized, [UnsupportedVersion, BadParams];
     DeskPing "desk.ping" p::Empty => r::Pong, [DeskNotRunning];
@@ -140,6 +152,10 @@ verbs! {
     CommandList "command.list" p::CommandList => r::CommandPage, [];
     CommandDescribe "command.describe" p::CommandName => r::Command, [UnknownCommand];
     CommandRun "command.run" p::CommandRun => r::CommandResult, [UnknownCommand, BadParams, DeniedByConsent, DeniedByGate, NeedsApproval, Busy, Timeout, PluginTrapped];
+    DrawList "draw.list" p::Empty => r::CommandResult, [Refused];
+    DrawOpen "draw.open" p::DrawBoard => r::CommandResult, [NotFound, BadParams];
+    DrawRead "draw.read" p::DrawBoard => r::CommandResult, [NotFound, Refused];
+    DrawDiagram "draw.diagram" p::DrawDiagram => r::CommandResult, [BadParams, NotFound, Refused];
     TaskList "task.list" p::Empty => Vec<r::Task>, [];
     TaskGet "task.get" p::IdRef => r::Task, [NotFound];
     TaskCancel "task.cancel" p::IdRef => r::Task, [NotFound];

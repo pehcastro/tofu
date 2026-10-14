@@ -79,6 +79,10 @@ params! {
     PluginStateQuery { id: String, uri: Option<String> }
     CommandList { plugin: Option<String>, #[serde(default)] agent_only: bool, cursor: Option<String> }
     CommandName { name: String }
+    DrawBoard { board: String }
+    DrawNode { key: String, label: String }
+    DrawEdge { from: String, to: String, #[serde(default, skip_serializing_if = "Option::is_none")] label: Option<String> }
+    DrawDiagram { board: String, nodes: Vec<DrawNode>, edges: Vec<DrawEdge> }
     CommandRun {
         name: String,
         args: Option<Map<String, Value>>,

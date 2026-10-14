@@ -59,19 +59,32 @@ pub fn diagram(graph: &Graph) -> Result<Scene, DocError> {
     let mut arrows = Vec::with_capacity(graph.edges.len() * 2);
     for (at, (edge, &(from, to))) in graph.edges.iter().zip(&pairs).enumerate() {
         let id = format!("e{at}");
-        let (Some(&start), Some(&end)) = (placed.get(from), placed.get(to)) else {
+        let (Some(&start), Some(&end)) = (placed.boxes.get(from), placed.boxes.get(to)) else {
             return Err(DocError::OutOfRange {
                 at: from.max(to),
-                len: placed.len(),
+                len: placed.boxes.len(),
             });
         };
         let down = end.1 > start.1;
         let (leave, enter) = if down { (1.0, 0.0) } else { (0.0, 1.0) };
         let tail = (start.0 + BOX.0 / 2.0, start.1 + BOX.1 * leave);
         let head = (end.0 + BOX.0 / 2.0, end.1 + BOX.1 * enter);
-        let (dx, dy) = (head.0 - tail.0, head.1 - tail.1);
-        let mut arrow = shape(&id, "arrow", tail, (dx.abs(), dy.abs()), at);
-        arrow.points = Some(vec![[0.0, 0.0], [dx, dy]]);
+        let route: Vec<[f64; 2]> = std::iter::once(tail)
+            .chain(placed.bends.get(at).into_iter().flatten().copied())
+            .chain(std::iter::once(head))
+            .map(|(x, y)| [x - tail.0, y - tail.1])
+            .collect();
+        let span = |axis: usize| {
+            let (low, high) = route.iter().fold((0.0_f64, 0.0_f64), |(low, high), point| {
+                (low.min(point[axis]), high.max(point[axis]))
+            });
+            high - low
+        };
+        let mut arrow = shape(&id, "arrow", tail, (span(0), span(1)), at);
+        let middle = route
+            .get(route.len() / 2)
+            .map_or(tail, |point| (tail.0 + point[0], tail.1 + point[1]));
+        arrow.points = Some(route);
         let ends = [
             (ArrowEnd::Start, from, [0.5, leave]),
             (ArrowEnd::End, to, [0.5, enter]),
@@ -95,14 +108,15 @@ pub fn diagram(graph: &Graph) -> Result<Scene, DocError> {
                 "boundElements".to_owned(),
                 json!([{ "id": format!("{id}-label"), "type": "text" }]),
             );
-            let middle = (tail.0 + dx / 2.0, tail.1 + dy / 2.0);
             text_in(&format!("{id}-label"), text, &id, middle, at)
         });
         arrows.push(arrow);
         arrows.extend(label);
     }
     let mut elements = Vec::with_capacity(graph.nodes.len() * 2 + arrows.len());
-    for (at, ((node, &corner), list)) in graph.nodes.iter().zip(&placed).zip(bound).enumerate() {
+    for (at, ((node, &corner), list)) in
+        graph.nodes.iter().zip(&placed.boxes).zip(bound).enumerate()
+    {
         let id = format!("n{at}");
         let mut rect = shape(&id, "rectangle", corner, BOX, at);
         rect.extra

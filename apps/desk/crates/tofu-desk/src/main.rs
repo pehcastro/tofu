@@ -214,10 +214,11 @@ fn run(verb: &str, rest: &[&str]) -> Result<Reply, Outcome> {
             });
         }
     };
+    let (wire, params) = method.wire(params);
     let request = WireRequest {
         jsonrpc: JsonRpc::V2,
         id: Id::Number(1),
-        method: verb.to_owned(),
+        method: wire.to_owned(),
         params: Some(params),
     };
     client.call(&request).map_err(|e| io_outcome(&e))
@@ -270,8 +271,26 @@ fn params(fields: &[String], rest: &[&str]) -> Result<Value, String> {
                 (name.clone(), arg)
             }
         };
+        let piped = match (name.as_str(), raw) {
+            ("args", "-") => Some(
+                std::io::read_to_string(std::io::stdin())
+                    .map_err(|e| format!("--args - did not read stdin: {e}"))?,
+            ),
+            _ => None,
+        };
+        let raw = piped.as_deref().unwrap_or(raw);
         let value = serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_owned()));
-        params.insert(name, value);
+        match value {
+            Value::Object(whole) if name == "args" && !fields.iter().any(|f| f == "args") => {
+                params.extend(whole)
+            }
+            value if name == "args" && piped.is_some() && !value.is_object() => {
+                return Err("--args - needs a JSON object on stdin".to_owned());
+            }
+            value => {
+                params.insert(name, value);
+            }
+        }
     }
     Ok(Value::Object(params))
 }

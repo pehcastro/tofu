@@ -4,30 +4,57 @@ pub const BOX: (f64, f64) = (180.0, 60.0);
 pub const GAP: (f64, f64) = (60.0, 100.0);
 const SWEEPS: usize = 4;
 
-pub fn layered(count: usize, edges: &[(usize, usize)]) -> Vec<(f64, f64)> {
+pub struct Placed {
+    pub boxes: Vec<(f64, f64)>,
+    pub bends: Vec<Vec<(f64, f64)>>,
+}
+
+pub fn layered(count: usize, edges: &[(usize, usize)]) -> Placed {
+    let real = |&&(from, to): &&(usize, usize)| from < count && to < count && from != to;
     let mut below = vec![Vec::new(); count];
     let mut above = vec![Vec::new(); count];
-    for &(from, to) in edges {
-        if from < count && to < count && from != to {
-            below[from].push(to);
-            above[to].push(from);
-        }
+    for &(from, to) in edges.iter().filter(real) {
+        below[from].push(to);
+        above[to].push(from);
     }
-    let rank = ranks(&below, &above);
+    let mut rank = ranks(&below, &above);
+    let mut below = vec![Vec::new(); count];
+    let mut above = vec![Vec::new(); count];
+    let mut chains = Vec::with_capacity(edges.len());
+    for &(from, to) in edges {
+        let mut chain = Vec::new();
+        if real(&&(from, to)) {
+            let (start, end) = (rank[from], rank[to]);
+            let steps: Vec<usize> = if end > start {
+                (start + 1..end).collect()
+            } else {
+                (end + 1..start).rev().collect()
+            };
+            let mut previous = from;
+            for layer in steps {
+                let dummy = rank.len();
+                rank.push(layer);
+                below.push(Vec::new());
+                above.push(Vec::new());
+                link(&rank, &mut below, &mut above, previous, dummy);
+                chain.push(dummy);
+                previous = dummy;
+            }
+            link(&rank, &mut below, &mut above, previous, to);
+        }
+        chains.push(chain);
+    }
     let height = rank.iter().max().map_or(0, |top| top + 1);
     let mut layers = vec![Vec::new(); height];
     for (node, &at) in rank.iter().enumerate() {
         layers[at].push(node);
     }
-    let mut slot = vec![0.0; count];
-    let place = |layers: &[Vec<usize>], slot: &mut [f64]| {
-        for layer in layers {
-            for (at, &node) in layer.iter().enumerate() {
-                slot[node] = at as f64;
-            }
+    let mut slot = vec![0.0; rank.len()];
+    for layer in &layers {
+        for (at, &node) in layer.iter().enumerate() {
+            slot[node] = at as f64;
         }
-    };
-    place(&layers, &mut slot);
+    }
     for sweep in 0..SWEEPS {
         let (order, neighbours): (Vec<usize>, _) = if sweep % 2 == 0 {
             ((1..height).collect(), &above)
@@ -36,7 +63,7 @@ pub fn layered(count: usize, edges: &[(usize, usize)]) -> Vec<(f64, f64)> {
         };
         for at in order {
             let layer = &mut layers[at];
-            let keys: Vec<(f64, usize)> = layer
+            let mut keyed: Vec<(f64, usize)> = layer
                 .iter()
                 .map(|&node| {
                     let seen = &neighbours[node];
@@ -48,7 +75,6 @@ pub fn layered(count: usize, edges: &[(usize, usize)]) -> Vec<(f64, f64)> {
                     (key, node)
                 })
                 .collect();
-            let mut keyed = keys;
             keyed.sort_by(|a, b| a.0.total_cmp(&b.0));
             *layer = keyed.into_iter().map(|(_, node)| node).collect();
             for (at, &node) in layer.iter().enumerate() {
@@ -57,17 +83,47 @@ pub fn layered(count: usize, edges: &[(usize, usize)]) -> Vec<(f64, f64)> {
         }
     }
     let widest = layers.iter().map(Vec::len).max().unwrap_or(0) as f64;
-    let mut placed = vec![(0.0, 0.0); count];
+    let mut corner = vec![(0.0, 0.0); rank.len()];
     for (row, layer) in layers.iter().enumerate() {
         let indent = (widest - layer.len() as f64) / 2.0 * (BOX.0 + GAP.0);
         for (at, &node) in layer.iter().enumerate() {
-            placed[node] = (
+            corner[node] = (
                 indent + at as f64 * (BOX.0 + GAP.0),
                 row as f64 * (BOX.1 + GAP.1),
             );
         }
     }
-    placed
+    let bends = edges
+        .iter()
+        .zip(chains)
+        .map(|(&(from, to), chain)| {
+            let down = from < count && to < count && rank[to] > rank[from];
+            chain
+                .into_iter()
+                .flat_map(|dummy| {
+                    let (x, y) = corner[dummy];
+                    let middle = x + BOX.0 / 2.0;
+                    let (top, bottom) = ((middle, y), (middle, y + BOX.1));
+                    if down { [top, bottom] } else { [bottom, top] }
+                })
+                .collect()
+        })
+        .collect();
+    corner.truncate(count);
+    Placed {
+        boxes: corner,
+        bends,
+    }
+}
+
+fn link(rank: &[usize], below: &mut [Vec<usize>], above: &mut [Vec<usize>], a: usize, b: usize) {
+    let (upper, lower) = match rank[a].cmp(&rank[b]) {
+        std::cmp::Ordering::Less => (a, b),
+        std::cmp::Ordering::Greater => (b, a),
+        std::cmp::Ordering::Equal => return,
+    };
+    below[upper].push(lower);
+    above[lower].push(upper);
 }
 
 fn ranks(below: &[Vec<usize>], above: &[Vec<usize>]) -> Vec<usize> {
