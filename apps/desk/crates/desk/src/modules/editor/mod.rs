@@ -17,7 +17,7 @@ use desk_core::syntax::Language;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
-use desk_ui::components::code_editor::{CodeEditor, Highlight, Jump};
+use desk_ui::components::code_editor::{CodeEditor, Highlight, Jump, open_phase};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
@@ -1284,6 +1284,7 @@ impl Editor {
             Some(at) => self.active = at,
             None => {
                 let page = self.page(full.clone(), self.folder.git.clone(), cx);
+                open_phase("page", started);
                 let slot = match how {
                     Open::Preview => self.preview_at(),
                     Open::Pinned => None,
@@ -1316,8 +1317,12 @@ impl Editor {
             how,
             started,
         });
+        let blamed = Instant::now();
         self.focus_changed(cx);
+        open_phase("marks and blame", blamed);
+        let followed = Instant::now();
         self.follow(cx);
+        open_phase("tree follow", followed);
         if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
             window.focus(&code.focus_handle(cx), cx);
         }
@@ -2487,5 +2492,9 @@ fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened 
             }
         }
     });
-    Ok(cx.new(|_| editor))
+    Ok(cx.new(|cx| {
+        let mut editor = editor;
+        editor.colour_rest(cx);
+        editor
+    }))
 }

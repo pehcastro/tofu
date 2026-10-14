@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fs;
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -78,6 +78,19 @@ const LINK_DROP: f32 = 4.0;
 const LINK_THICKNESS: f32 = 1.0;
 const LINK: ColorToken = ColorToken::SyntaxLinkUri;
 const GUIDE_REACH: usize = 1000;
+const FIRST_SCREEN_LINES: usize = 128;
+
+struct Rest {
+    path: PathBuf,
+    _colouring: Option<Task<()>>,
+}
+
+pub fn open_phase(name: &str, started: Instant) {
+    eprintln!(
+        "desk: editor open phase {name} {:.1} ms",
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+}
 const PAINT_SAMPLES: usize = 120;
 
 fn indent_levels(chars: impl Iterator<Item = char>) -> Option<usize> {
@@ -480,6 +493,7 @@ pub struct CodeEditor {
     guides: bool,
     active_guide: Option<(usize, Range<usize>)>,
     paints: Option<Rc<PaintFrames>>,
+    rest: Option<Rest>,
 }
 
 #[derive(Default)]
@@ -558,21 +572,42 @@ impl CodeEditor {
             guides: std::env::var_os("DESK_GUIDES").is_none_or(|on| on != "0"),
             active_guide: None,
             paints: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
+            rest: None,
         };
         editor.widest = editor.widest_line();
         editor
     }
 
     pub fn open(path: &Path, cx: &mut App) -> Result<Self, String> {
+        let started = Instant::now();
         let mut editor = Self::read(path, cx)?;
+        open_phase("read", started);
         if editor.kind != FileKind::Text {
             return Ok(editor);
         }
-        if let Some(syntax) = Syntax::for_path(path, &editor.buffer) {
+        let started = Instant::now();
+        let rope = editor.buffer.rope();
+        let whole = rope.len_lines() <= FIRST_SCREEN_LINES;
+        let first = match whole {
+            true => None,
+            false => Some(Buffer::from_text(
+                &rope
+                    .slice(..rope.line_to_char(FIRST_SCREEN_LINES))
+                    .to_string(),
+            )),
+        };
+        if let Some(syntax) = Syntax::for_path(path, first.as_ref().unwrap_or(&editor.buffer)) {
             let syntax = syntax.map_err(|error| error.to_string())?;
             eprintln!("desk: syntax {} {}", path.display(), syntax.report());
             editor.syntax = Highlight::Tree(syntax);
+            if !whole {
+                editor.rest = Some(Rest {
+                    path: path.to_path_buf(),
+                    _colouring: None,
+                });
+            }
         }
+        open_phase("highlight", started);
         editor.wrapping = prose(path);
         editor.language = Language::from_path(path);
         let extension = path.extension().and_then(|extension| extension.to_str());
@@ -581,6 +616,35 @@ impl CodeEditor {
             .find(|(known, _)| extension.is_some_and(|ext| ext.eq_ignore_ascii_case(known)))
             .map(|(_, token)| *token);
         Ok(editor)
+    }
+
+    pub fn colour_rest(&mut self, cx: &mut Context<Self>) {
+        let Some(rest) = &mut self.rest else {
+            return;
+        };
+        let (path, rope) = (rest.path.clone(), self.buffer.rope().clone());
+        let built = cx.background_executor().spawn(async move {
+            let started = Instant::now();
+            let syntax = Syntax::for_path(&path, &Buffer::from_text(&rope.to_string()));
+            open_phase("highlight rest", started);
+            syntax
+        });
+        rest._colouring = Some(cx.spawn(async move |this, cx| {
+            let syntax = built.await;
+            let applied = this.update(cx, |editor, cx| {
+                editor.rest = None;
+                match syntax {
+                    Some(Ok(syntax)) => editor.syntax = Highlight::Tree(syntax),
+                    Some(Err(error)) => editor.report("Could not colour", Err(error)),
+                    None => {}
+                }
+                editor.refold();
+                cx.notify();
+            });
+            if let Err(error) = applied {
+                eprintln!("desk: editor is gone before its colours: {error}");
+            }
+        }));
     }
 
     pub fn plain(path: &Path, cx: &mut App) -> Result<Self, String> {
@@ -981,10 +1045,15 @@ impl CodeEditor {
         if !self.wrapping || width <= px(0.0) || fresh {
             return;
         }
+        let started = Instant::now();
+        let first = self.wrap.rows() == 0;
         let texts = (0..self.buffer.line_count()).map(|line| self.drawn(line).text);
         let theme = ActiveTheme::theme(cx);
         self.wrap = Rc::new(Wrap::new(&self.wrap, texts, width, &theme, cx));
         self.wrap_stale = false;
+        if first {
+            open_phase("wrap", started);
+        }
     }
 
     fn toggle_wrap(&mut self) {
@@ -1315,7 +1384,14 @@ impl CodeEditor {
     fn settle(&mut self, lines: usize) {
         self.wrap_stale = true;
         self.link = None;
-        if let Highlight::Tree(syntax) = &mut self.syntax {
+        if let Some(rest) = self.rest.take() {
+            self.buffer.take_applied();
+            match Syntax::for_path(&rest.path, &self.buffer) {
+                Some(Ok(syntax)) => self.syntax = Highlight::Tree(syntax),
+                Some(Err(error)) => self.report("Could not colour", Err(error)),
+                None => {}
+            }
+        } else if let Highlight::Tree(syntax) = &mut self.syntax {
             let synced = syntax.sync(&mut self.buffer);
             self.report("Could not colour", synced);
         }
