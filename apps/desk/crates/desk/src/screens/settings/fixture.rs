@@ -12,7 +12,7 @@ pub enum DeskPage {
 impl DeskPage {
     pub fn name(self) -> &'static str {
         match self {
-            DeskPage::Keys => "Keyboard",
+            DeskPage::Keys => "Keys",
             DeskPage::Editor => "Editor",
             DeskPage::Terminal => "Terminal",
             DeskPage::Git => "Git",
@@ -143,12 +143,10 @@ const GIT: Page = Page {
 };
 
 const KEYS: Page = Page {
-    title: "Keyboard",
-    desc: "The keys the desk answers to. Rebinding comes later.",
+    title: "Keys",
+    desc: "Click a binding and press the new chord. Changes go to ~/.tofu/desk/config/keymap.json.",
     groups: &[],
 };
-
-pub const KEYS_GROUP: &str = "Tiles and tabs";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Effect {

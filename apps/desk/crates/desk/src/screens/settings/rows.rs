@@ -7,16 +7,13 @@ use desk_core::protocol::request::{QuerySettings, SettingsSet};
 use desk_core::protocol::{self, NoParams, Request, SettingsReport, SettingsSetParams};
 use desk_core::query::{Answer, QueryError, Read};
 use desk_core::settings::{self as wire, Settings, Value};
-use desk_tiling::SHORTCUTS;
 use desk_ui::components::chip::flat_chip;
 use desk_ui::components::form::{TextInput, input, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::paint::{ms, presented, tint};
 use desk_ui::components::scroll::ScrollArea;
-use desk_ui::components::settings::{
-    SettingRow, Source, key_binding, page_title, setting_group, setting_group_clickable,
-};
+use desk_ui::components::settings::{SettingRow, Source, page_title, setting_group_clickable};
 use desk_ui::components::skeleton::skeleton_lines;
 use desk_ui::components::tree::{IconPack, IconTheme, pick_pack, picked_pack};
 use desk_ui::live::ActiveTheme;
@@ -29,9 +26,10 @@ use gpui::{
 };
 
 use super::fixture::{
-    Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, KEYS_GROUP, PLUGINS_GENERAL, PLUGINS_NAV, PageId,
-    Scope, Setting, TOFU_NAV,
+    Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, PLUGINS_GENERAL, PLUGINS_NAV, PageId, Scope,
+    Setting, TOFU_NAV,
 };
+use super::keys::KeysPage;
 use super::plugins::PluginsPage;
 use super::terminal::TerminalPage;
 use crate::modules::chat::Chat;
@@ -74,6 +72,7 @@ pub struct Rows {
     problems: HashMap<String, SharedString>,
     fields: HashMap<String, Field>,
     shells: Option<Entity<TerminalPage>>,
+    keys: Option<Entity<KeysPage>>,
     plugins: Option<(Entity<PluginsPage>, Subscription)>,
 }
 
@@ -101,6 +100,7 @@ impl Rows {
             problems: HashMap::new(),
             fields: HashMap::new(),
             shells: None,
+            keys: None,
             plugins: None,
         }
     }
@@ -620,22 +620,11 @@ impl Rows {
             return div().child(title).child(shells);
         }
         if page == DeskPage::Keys {
-            let keys = SHORTCUTS.iter().map(|shortcut| SettingRow {
-                id: shortcut.label.into(),
-                name: shortcut.label.into(),
-                about: SharedString::default(),
-                source: Source::Default,
-                control: key_binding(
-                    shortcut.keys.split(' ').map(SharedString::from).collect(),
-                    None,
-                    theme,
-                )
-                .into_any_element(),
-            });
-            self.log_page(page.name(), keys.len());
-            return div()
-                .child(title)
-                .child(setting_group(KEYS_GROUP, keys.collect(), theme));
+            let keys = self
+                .keys
+                .get_or_insert_with(|| cx.new(|cx| KeysPage::new(window, cx)))
+                .clone();
+            return div().child(title).child(keys);
         }
         let groups: Vec<(&str, Vec<SettingRow>)> = shown
             .groups

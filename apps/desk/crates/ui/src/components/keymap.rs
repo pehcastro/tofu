@@ -1,9 +1,11 @@
 use std::fmt;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use desk_core::home::Home;
+use desk_tiling::{Key, Mods, SHORTCUTS};
 use gpui::{App, FocusHandle, Global, KeyDownEvent, Keystroke, Window};
 use serde_json::{Map, Value};
 
@@ -486,8 +488,19 @@ impl Keymap {
                 return keymap;
             }
         };
+        let rebound: Vec<Action> = entries
+            .values()
+            .filter_map(Value::as_str)
+            .filter_map(Action::named)
+            .collect();
+        keymap
+            .bindings
+            .retain(|(_, action)| !rebound.contains(action));
         let mut bound = 0;
-        for (keys, value) in &entries {
+        let mine = entries
+            .iter()
+            .filter(|(_, value)| !value.as_str().is_some_and(|name| name.contains('.')));
+        for (keys, value) in mine {
             let action = match value.as_str() {
                 Some(name) => Action::named(name).ok_or(format!("{keys}: unknown action {name}")),
                 None => Err(format!("{keys}: the action is {value}, not a name")),
@@ -535,4 +548,335 @@ impl Keymap {
         }
         exact.map_or(Resolved::Miss, Resolved::Run)
     }
+}
+
+pub const KEYMAP_FILE: &str = "keymap.json";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Group {
+    App,
+    Workspace,
+    Editor,
+    Terminal,
+    Draw,
+}
+
+impl Group {
+    pub const ALL: [Group; 5] = [
+        Group::App,
+        Group::Workspace,
+        Group::Editor,
+        Group::Terminal,
+        Group::Draw,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Group::App => "App",
+            Group::Workspace => "Workspace",
+            Group::Editor => "Editor",
+            Group::Terminal => "Terminal",
+            Group::Draw => "Draw",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppKey {
+    Palette,
+    Sidebar,
+    Find,
+    Settings,
+}
+
+impl AppKey {
+    const ALL: [AppKey; 4] = [
+        AppKey::Palette,
+        AppKey::Sidebar,
+        AppKey::Find,
+        AppKey::Settings,
+    ];
+
+    fn row(self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            AppKey::Palette => ("app.palette", "Command palette", "ctrl+k"),
+            AppKey::Sidebar => ("app.sidebar", "Toggle the sidebar", "ctrl+b"),
+            AppKey::Find => ("app.find", "Find in the focused module", "ctrl+f"),
+            AppKey::Settings => ("app.settings", "Open settings", "ctrl+,"),
+        }
+    }
+}
+
+const TERMINAL_KEYS: [(&str, &str, &[&str]); 5] = [
+    ("terminal.copy", "Copy", &["ctrl+shift+c"]),
+    ("terminal.paste", "Paste", &["ctrl+v", "shift+insert"]),
+    ("terminal.larger", "Larger text", &["ctrl+="]),
+    ("terminal.smaller", "Smaller text", &["ctrl+-"]),
+    ("terminal.default_size", "Default text size", &["ctrl+0"]),
+];
+
+const DRAW_KEYS: [(&str, &str, &[&str]); 1] = [("draw.save", "Save the drawing", &["ctrl+s"])];
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shortcut {
+    pub id: String,
+    pub group: Group,
+    pub label: String,
+    pub defaults: Vec<String>,
+    pub fixed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    Held(String),
+    Fixed,
+    Written(String),
+    Unknown,
+}
+
+impl fmt::Display for Refusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Refusal::Held(holder) => write!(f, "held by {holder}"),
+            Refusal::Fixed => f.write_str("this key cannot be rebound"),
+            Refusal::Written(other) => write!(f, "the keymap file already gives it to {other}"),
+            Refusal::Unknown => f.write_str("no such action"),
+        }
+    }
+}
+
+fn sentence_case(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
+fn chord(mods: Mods, key: &str) -> String {
+    Stroke {
+        ctrl: mods.ctrl,
+        shift: mods.shift,
+        alt: mods.alt,
+        key: key.to_owned(),
+    }
+    .to_string()
+}
+
+fn catalog() -> Vec<Shortcut> {
+    let row = |id: &str, group, label: &str, defaults: &[&str]| Shortcut {
+        id: id.to_owned(),
+        group,
+        label: label.to_owned(),
+        defaults: defaults.iter().map(|keys| (*keys).to_owned()).collect(),
+        fixed: false,
+    };
+    let mut rows: Vec<Shortcut> = AppKey::ALL
+        .into_iter()
+        .map(|key| {
+            let (id, label, keys) = key.row();
+            row(id, Group::App, label, &[keys])
+        })
+        .collect();
+    rows.extend(SHORTCUTS.iter().map(|shortcut| {
+        let (keys, fixed) = match shortcut.key {
+            Key::Named(name) => (chord(shortcut.mods, name), false),
+            Key::Digit => (chord(shortcut.mods, "1-9"), true),
+        };
+        Shortcut {
+            fixed,
+            ..row(
+                &format!("workspace.{}", shortcut.label.replace(' ', "_")),
+                Group::Workspace,
+                &sentence_case(shortcut.label),
+                &[&keys],
+            )
+        }
+    }));
+    for (keys, action) in DEFAULTS {
+        let id = action.to_string();
+        match rows.iter_mut().find(|shortcut| shortcut.id == id) {
+            Some(shortcut) => shortcut.defaults.push(keys.to_owned()),
+            None => rows.push(row(
+                &id,
+                Group::Editor,
+                &sentence_case(&id.replace('_', " ")),
+                &[keys],
+            )),
+        }
+    }
+    let fixed = TERMINAL_KEYS
+        .map(|keys| (Group::Terminal, keys))
+        .into_iter()
+        .chain(DRAW_KEYS.map(|keys| (Group::Draw, keys)));
+    rows.extend(fixed.map(|(group, (id, label, keys))| row(id, group, label, keys)));
+    rows
+}
+
+pub struct Keys {
+    file: Option<PathBuf>,
+    overrides: Vec<(String, String)>,
+    shortcuts: Vec<Shortcut>,
+    capturing: bool,
+}
+
+impl Global for Keys {}
+
+impl Keys {
+    fn load() -> Keys {
+        let mut keys = Keys {
+            file: None,
+            overrides: Vec::new(),
+            shortcuts: catalog(),
+            capturing: false,
+        };
+        let file = match Home::find() {
+            Ok(home) => home.config.join(KEYMAP_FILE),
+            Err(error) => {
+                eprintln!("desk: keys have no home, so the defaults stand: {error}");
+                return keys;
+            }
+        };
+        let text = match fs::read_to_string(&file) {
+            Ok(text) => Some(text),
+            Err(error) if error.kind() == ErrorKind::NotFound => None,
+            Err(error) => {
+                eprintln!("desk: keys {} could not be read: {error}", file.display());
+                None
+            }
+        };
+        let entries = text.map(|text| serde_json::from_str::<Map<String, Value>>(&text));
+        match entries {
+            Some(Ok(entries)) => {
+                keys.overrides = entries
+                    .into_iter()
+                    .filter_map(|(chord, id)| Some((chord, id.as_str()?.to_owned())))
+                    .collect();
+                keys.file = Some(file);
+            }
+            Some(Err(error)) => eprintln!(
+                "desk: keys {} is not a keymap, the desk will not write over it: {error}",
+                file.display()
+            ),
+            None => keys.file = Some(file),
+        }
+        keys
+    }
+
+    pub fn of(cx: &mut App) -> &mut Keys {
+        if !cx.has_global::<Keys>() {
+            cx.set_global(Keys::load());
+        }
+        cx.global_mut::<Keys>()
+    }
+
+    pub fn shortcuts(&self) -> &[Shortcut] {
+        &self.shortcuts
+    }
+
+    pub fn chords(&self, shortcut: &Shortcut) -> Vec<String> {
+        let written: Vec<String> = self
+            .overrides
+            .iter()
+            .filter(|(_, id)| *id == shortcut.id)
+            .map(|(chord, _)| chord.clone())
+            .collect();
+        match written.is_empty() {
+            true => shortcut.defaults.clone(),
+            false => written,
+        }
+    }
+
+    pub fn rebound(&self, id: &str) -> bool {
+        self.overrides.iter().any(|(_, held)| held == id)
+    }
+
+    pub fn set_capturing(&mut self, on: bool) {
+        self.capturing = on;
+    }
+
+    fn holds(&self, shortcut: &Shortcut, typed: &Stroke) -> bool {
+        self.chords(shortcut).iter().any(|keys| {
+            Stroke::parse(keys).is_ok_and(|bound| bound.matches(typed) || typed.matches(&bound))
+        })
+    }
+
+    pub fn rebind(&mut self, id: &str, keystroke: &Keystroke) -> Result<String, Refusal> {
+        let typed = Stroke::typed(keystroke);
+        let keys = typed.to_string();
+        let shortcut = self
+            .shortcuts
+            .iter()
+            .find(|shortcut| shortcut.id == id)
+            .ok_or(Refusal::Unknown)?;
+        if shortcut.fixed {
+            return Err(Refusal::Fixed);
+        }
+        let holder = self.shortcuts.iter().find(|other| {
+            other.group == shortcut.group && other.id != id && self.holds(other, &typed)
+        });
+        if let Some(holder) = holder {
+            return Err(Refusal::Held(holder.label.clone()));
+        }
+        let written = self
+            .overrides
+            .iter()
+            .find(|(chord, held)| *chord == keys && held != id);
+        if let Some((_, other)) = written {
+            return Err(Refusal::Written(other.clone()));
+        }
+        self.overrides.retain(|(_, held)| held != id);
+        self.overrides.push((keys.clone(), id.to_owned()));
+        self.save();
+        eprintln!("desk: keys rebound {id} {keys}");
+        Ok(keys)
+    }
+
+    pub fn reset(&mut self, id: Option<&str>) {
+        self.overrides
+            .retain(|(_, held)| id.is_some_and(|id| held != id));
+        self.save();
+        eprintln!("desk: keys reset {}", id.unwrap_or("all"));
+    }
+
+    fn save(&self) {
+        let Some(file) = &self.file else {
+            return eprintln!("desk: keys are kept for this run only, the keymap file is unread");
+        };
+        let entries: Map<String, Value> = self
+            .overrides
+            .iter()
+            .map(|(chord, id)| (chord.clone(), Value::String(id.clone())))
+            .collect();
+        let written = serde_json::to_string_pretty(&entries)
+            .map_err(|error| error.to_string())
+            .and_then(|text| {
+                if let Some(folder) = file.parent() {
+                    fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+                }
+                fs::write(file, text).map_err(|error| error.to_string())
+            });
+        if let Err(error) = written {
+            eprintln!(
+                "desk: keys are kept for this run only, {} was not written: {error}",
+                file.display()
+            );
+        }
+    }
+}
+
+pub fn holds(id: &str, keystroke: &Keystroke, cx: &mut App) -> bool {
+    let keys = Keys::of(cx);
+    let typed = Stroke::typed(keystroke);
+    !keys.capturing
+        && keys
+            .shortcuts
+            .iter()
+            .find(|shortcut| shortcut.id == id)
+            .is_some_and(|shortcut| keys.holds(shortcut, &typed))
+}
+
+pub fn app_key(keystroke: &Keystroke, cx: &mut App) -> Option<AppKey> {
+    AppKey::ALL
+        .into_iter()
+        .find(|key| holds(key.row().0, keystroke, cx))
 }

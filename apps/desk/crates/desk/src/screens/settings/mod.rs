@@ -1,6 +1,7 @@
 pub mod board;
 mod fixture;
 mod intro;
+mod keys;
 mod plugins;
 mod rows;
 mod terminal;

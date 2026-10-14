@@ -1255,13 +1255,14 @@ impl Desk {
         if !held.control || held.alt || held.platform || editor_claims(event, window, cx) {
             return;
         }
-        match (held.shift, stroke.key.as_str()) {
+        use desk_ui::components::keymap::{AppKey, app_key};
+        match (app_key(stroke, cx), held.shift, stroke.key.as_str()) {
             #[cfg(feature = "screen-work")]
-            (true, "t") => self.reopen(window, cx),
-            (false, "b") => self.toggle_sidebar(cx),
-            (false, "k") => self.open_palette(window, cx),
-            (false, "f") => window.dispatch_action(Box::new(Find), cx),
-            (false, ",") => self.show(SETTINGS, window, cx),
+            (None, true, "t") => self.reopen(window, cx),
+            (Some(AppKey::Sidebar), ..) => self.toggle_sidebar(cx),
+            (Some(AppKey::Palette), ..) => self.open_palette(window, cx),
+            (Some(AppKey::Find), ..) => window.dispatch_action(Box::new(Find), cx),
+            (Some(AppKey::Settings), ..) => self.show(SETTINGS, window, cx),
             _ => return,
         }
         cx.stop_propagation();
