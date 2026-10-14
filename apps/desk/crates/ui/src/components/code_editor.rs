@@ -377,6 +377,26 @@ impl CodeEditor {
     }
 
     pub fn open(path: &Path, cx: &mut App) -> Result<Self, String> {
+        let mut editor = Self::read(path, cx)?;
+        if editor.kind != FileKind::Text {
+            return Ok(editor);
+        }
+        if let Some(syntax) = Syntax::for_path(path, &editor.buffer) {
+            let syntax = syntax.map_err(|error| error.to_string())?;
+            eprintln!("desk: syntax {} {}", path.display(), syntax.report());
+            editor.syntax = Highlight::Tree(syntax);
+        }
+        editor.wrapping = prose(path);
+        Ok(editor)
+    }
+
+    pub fn plain(path: &Path, cx: &mut App) -> Result<Self, String> {
+        let mut editor = Self::read(path, cx)?;
+        editor.wrapping = true;
+        Ok(editor)
+    }
+
+    fn read(path: &Path, cx: &mut App) -> Result<Self, String> {
         let shown = path.display();
         let size = fs::metadata(path)
             .map_err(|error| format!("{shown}: {error}"))?
@@ -408,17 +428,7 @@ impl CodeEditor {
                 cx,
             ));
         }
-        let syntax = match Syntax::for_path(path, &buffer) {
-            Some(syntax) => {
-                let syntax = syntax.map_err(|error| error.to_string())?;
-                eprintln!("desk: syntax {shown} {}", syntax.report());
-                Highlight::Tree(syntax)
-            }
-            None => Highlight::Plain,
-        };
-        let mut editor = Self::shown(buffer, syntax, FileKind::Text, cx);
-        editor.wrapping = prose(path);
-        Ok(editor)
+        Ok(Self::shown(buffer, Highlight::Plain, FileKind::Text, cx))
     }
 
     pub fn kind(&self) -> FileKind {

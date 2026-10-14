@@ -57,6 +57,8 @@ mod modules {
     pub mod file_edits;
     #[cfg(feature = "module-git")]
     pub mod git;
+    #[cfg(feature = "plugin-notepad")]
+    pub mod notepad;
     #[cfg(any(
         feature = "module-subagents",
         feature = "module-file-edits",
@@ -71,6 +73,8 @@ mod modules {
     #[cfg(feature = "screen-work")]
     pub mod terminal;
 }
+#[cfg(feature = "screen-work")]
+mod plugins;
 
 use std::cell::Cell;
 use std::env;

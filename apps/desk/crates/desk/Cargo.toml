@@ -15,7 +15,9 @@ desk_tiling.workspace = true
 flume = { version = "0.11.1", default-features = false, features = ["async"] }
 gpui.workspace = true
 gpui_platform.workspace = true
+serde.workspace = true
 serde_json = "1.0.149"
+toml = { version = "1.1.6", default-features = false, features = ["std", "serde", "parse"] }
 
 [features]
 default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-usage"]
@@ -40,7 +42,8 @@ module-data-studio = []
 screen-platforms = []
 screen-intro = []
 screen-onboarding = ["screen-intro"]
-all-screens = ["screen-work", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "module-subagents", "module-file-edits", "module-shells", "module-git", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
+plugin-notepad = ["screen-work"]
+all-screens = ["plugin-notepad", "screen-work", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "module-subagents", "module-file-edits", "module-shells", "module-git", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
 
 [lints]
 workspace = true

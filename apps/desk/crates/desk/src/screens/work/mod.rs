@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use desk_core::model::Store;
@@ -33,6 +34,7 @@ use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
 use crate::modules::subagents::{self, ExpandAgent, Subagents};
 use crate::modules::terminal::{self, TabChanged, TerminalModule};
+use crate::plugins::{self, Plugin};
 use crate::project;
 
 const BOARD: &str = "36-agents";
@@ -44,6 +46,19 @@ const OPENABLE: [Module; 5] = [
     Module::Shells,
     Module::Terminal,
 ];
+
+fn tile_modules() -> Vec<Module> {
+    OPENABLE.into_iter().chain(plugins::modules()).collect()
+}
+
+fn name(module: &Module) -> SharedString {
+    match module {
+        Module::Plugin(id) => plugins::find(id).map_or(id.as_str(), |plugin| plugin.name.as_str()),
+        other => other.name(),
+    }
+    .to_owned()
+    .into()
+}
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let replay = match board {
@@ -80,7 +95,27 @@ struct Mounted {
     file_edits: Entity<FileEdits>,
     shells: Entity<Shells>,
     terminals: Terminals,
+    plugins: Mounts,
     project: PathBuf,
+}
+
+#[derive(Clone, Default)]
+struct Mounts(Rc<RefCell<Vec<(&'static str, AnyView)>>>);
+
+impl Mounts {
+    fn view(&self, plugin: &'static Plugin, cx: &mut App) -> AnyView {
+        let mounted = self
+            .0
+            .borrow()
+            .iter()
+            .find(|(id, _)| *id == plugin.id)
+            .map(|(_, view)| view.clone());
+        mounted.unwrap_or_else(|| {
+            let view = plugin.mount(cx);
+            self.0.borrow_mut().push((&plugin.id, view.clone()));
+            view
+        })
+    }
 }
 
 struct OpenTerminal {
@@ -124,6 +159,7 @@ fn build(
     window: &mut Window,
     cx: &mut App,
 ) -> Result<Entity<Work>, String> {
+    plugins::check()?;
     let layouts = Layouts::for_project(&project).map_err(|error| error.to_string())?;
     let mut workspaces = layouts
         .load()
@@ -151,6 +187,7 @@ fn build(
         file_edits: file_edits::mount(store.clone(), cx),
         shells: shells::mount(store.clone(), kill, cx),
         terminals: Terminals::default(),
+        plugins: Mounts::default(),
         project,
         store,
         chat,
@@ -183,7 +220,7 @@ fn build(
                 board: |work: &mut Work| &mut work.board,
                 body: Box::new(
                     move |stack, _, theme, cx| match stack.modules.get(stack.active) {
-                        Some(module) => body(&bodies, module, stack.id, theme),
+                        Some(module) => body(&bodies, module, stack.id, theme, cx),
                         None => empty_tile(stack.id, theme, cx),
                     },
                 ),
@@ -195,7 +232,7 @@ fn build(
                     Tab {
                         label: terminal
                             .and_then(|terminal| terminal.label(cx))
-                            .unwrap_or_else(|| module.name().to_owned().into()),
+                            .unwrap_or_else(|| name(module)),
                         icon: glyph(module),
                         count: count(&titles, module, cx),
                         mark,
@@ -217,8 +254,8 @@ fn build(
                         .map(|terminal| terminal.read(cx).badge(cx)),
                     _ => None,
                 }),
-                spawnable: OPENABLE.to_vec(),
-                spawns: OPENABLE.to_vec(),
+                spawnable: tile_modules(),
+                spawns: tile_modules(),
                 settled: settled(layouts),
                 expand: Box::new(move |module, workspace, _, cx| {
                     expand(&expandable, module, workspace, cx)
@@ -283,7 +320,8 @@ fn glyph(module: &Module) -> Option<Glyph> {
         Module::SubAgents => Some(Glyph::Agents),
         Module::FileEdits => Some(Glyph::File),
         Module::Shells | Module::Terminal => Some(Glyph::Terminal),
-        Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => None,
+        Module::Plugin(id) => plugins::find(id).map(|plugin| plugin.glyph),
+        Module::Editor | Module::Browser | Module::SourceControl => None,
     }
 }
 
@@ -297,7 +335,7 @@ fn screen_row(mark: &ScreenMark) -> MenuItem {
 }
 
 fn module_row(module: &Module) -> MenuItem {
-    let row = MenuItem::action(module.name());
+    let row = MenuItem::action(name(module));
     match glyph(module) {
         Some(mark) => row.icon(mark),
         None => row,
@@ -456,7 +494,13 @@ fn find_groups(
     (groups, found)
 }
 
-fn body(mounted: &Mounted, module: &Module, tile: TileId, theme: &Theme) -> AnyElement {
+fn body(
+    mounted: &Mounted,
+    module: &Module,
+    tile: TileId,
+    theme: &Theme,
+    cx: &mut App,
+) -> AnyElement {
     match module {
         Module::Chat => mounted.chat.clone().into_any_element(),
         Module::SubAgents => mounted.subagents.clone().into_any_element(),
@@ -466,18 +510,29 @@ fn body(mounted: &Mounted, module: &Module, tile: TileId, theme: &Theme) -> AnyE
             .terminals
             .at(tile)
             .map_or_else(|| div().into_any_element(), IntoElement::into_any_element),
-        Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
-            empty_state(
-                SharedString::from(format!("work-empty-{}", module.name())),
-                module.name().to_owned(),
-                Some("not mounted in the work screen yet".into()),
+        Module::Plugin(id) => match plugins::find(id) {
+            Some(plugin) => mounted.plugins.view(plugin, cx).into_any_element(),
+            None => empty_state(
+                SharedString::from(format!("work-missing-plugin-{id}")),
+                format!("plugin {id} is not installed"),
+                Some("this build of the desk does not carry it".into()),
                 &[],
                 &[],
                 theme,
                 |_, _, _| {},
             )
-            .into_any_element()
-        }
+            .into_any_element(),
+        },
+        Module::Editor | Module::Browser | Module::SourceControl => empty_state(
+            SharedString::from(format!("work-empty-{}", module.name())),
+            module.name().to_owned(),
+            Some("not mounted in the work screen yet".into()),
+            &[],
+            &[],
+            theme,
+            |_, _, _| {},
+        )
+        .into_any_element(),
     }
 }
 
@@ -491,7 +546,12 @@ impl EventEmitter<Expanded> for Work {}
 
 const SUB_AGENTS: &str = "Sub-agents";
 
-pub const EXPANDABLE: [&str; 5] = ["Chat", SUB_AGENTS, "File edits", "Shells", "Terminal"];
+pub static EXPANDABLE: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    ["Chat", SUB_AGENTS, "File edits", "Shells", "Terminal"]
+        .into_iter()
+        .chain(plugins::all().iter().map(|plugin| plugin.name.as_str()))
+        .collect()
+});
 
 struct Tiled {
     glyph: Option<Glyph>,
@@ -534,7 +594,7 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
     let tiled = |view: AnyView, chat: Option<Entity<Chat>>, cx: &mut Context<Work>| -> AnyView {
         cx.new(|cx| Tiled {
             glyph: glyph(module),
-            name: module.name().to_owned().into(),
+            name: name(module),
             view,
             chat: chat.map(|chat| {
                 let watch = cx.observe(&chat, |_, _, cx| cx.notify());
@@ -555,28 +615,41 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
             Some(terminal) => tiled(terminal.clone().into(), None, cx),
             None => return eprintln!("desk: work: no terminal is open, so none expands"),
         },
-        Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
+        Module::Plugin(id) => match plugins::find(id) {
+            Some(plugin) => {
+                let view = mounted.plugins.view(plugin, cx);
+                tiled(view, None, cx)
+            }
+            None => {
+                return eprintln!(
+                    "desk: work: plugin {id} is not installed, so it does not expand"
+                );
+            }
+        },
+        Module::Editor | Module::Browser | Module::SourceControl => {
             return eprintln!(
                 "desk: work: {} is not mounted, so it does not expand",
                 module.name()
             );
         }
     };
-    match EXPANDABLE.into_iter().find(|name| *name == module.name()) {
+    let shown = name(module);
+    match EXPANDABLE.iter().copied().find(|tab| *tab == &*shown) {
         Some(name) => cx.emit(Expanded {
             name,
             workspace: workspace.to_owned().into(),
             view,
         }),
-        None => eprintln!("desk: work: {} has no tab name", module.name()),
+        None => eprintln!("desk: work: {shown} has no tab name"),
     }
 }
 
 fn empty_tile(tile: TileId, theme: &Theme, cx: &mut Context<Work>) -> AnyElement {
-    let actions: Vec<EmptyAction> = OPENABLE
+    let modules = tile_modules();
+    let actions: Vec<EmptyAction> = modules
         .iter()
         .map(|module| EmptyAction {
-            label: module.name().to_owned().into(),
+            label: name(module),
             glyph: glyph(module),
             keys: None,
         })
@@ -590,7 +663,7 @@ fn empty_tile(tile: TileId, theme: &Theme, cx: &mut Context<Work>) -> AnyElement
         &[],
         theme,
         move |at, _, cx| {
-            let Some(module) = OPENABLE.get(at).cloned() else {
+            let Some(module) = modules.get(at).cloned() else {
                 return;
             };
             this.update(cx, |work, cx| {
@@ -932,7 +1005,7 @@ impl Work {
         };
         std::iter::once(new)
             .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
-            .chain(OPENABLE.iter().map(module_row))
+            .chain(tile_modules().iter().map(module_row).collect::<Vec<_>>())
             .chain([MenuItem::Caption("Screens, open as a tab".into())])
             .chain(
                 Self::screen_rows(openable)
@@ -999,7 +1072,7 @@ impl Work {
             Some(MenuItem::Submenu {
                 label: "Spawn".into(),
                 icon: Some(Icon::Plus.into()),
-                items: OPENABLE.iter().map(module_row).collect(),
+                items: tile_modules().iter().map(module_row).collect(),
             }),
         ]
         .into_iter()
@@ -1008,11 +1081,12 @@ impl Work {
     }
 
     fn picked_plus(&mut self, pick: usize, openable: &[&'static str]) -> Option<Strip> {
-        let tiles = 2..2 + OPENABLE.len();
+        let modules = tile_modules();
+        let tiles = 2..2 + modules.len();
         match pick {
             0 => self.board.add(),
             at if tiles.contains(&at) => {
-                self.board.spawn(OPENABLE.get(at - tiles.start)?.clone());
+                self.board.spawn(modules.get(at - tiles.start)?.clone());
             }
             at => {
                 let picks = Self::screen_picks(openable);
@@ -1048,9 +1122,12 @@ impl Work {
             }
             at if at == rest + 3 => self.board.close_workspace(index),
             at => {
-                if let Some(module) = at.checked_sub(rest + 6).and_then(|row| OPENABLE.get(row)) {
+                if let Some(module) = at
+                    .checked_sub(rest + 6)
+                    .and_then(|row| tile_modules().get(row).cloned())
+                {
                     self.board.switch(index);
-                    self.board.spawn(module.clone());
+                    self.board.spawn(module);
                 }
             }
         }

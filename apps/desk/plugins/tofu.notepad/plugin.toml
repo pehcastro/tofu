@@ -1,0 +1,13 @@
+id = "tofu.notepad"
+name = "Notepad"
+icon = "pencil"
+version = "0.1.0"
+api = "desk@0.1"
+tofu = ">=0.6"
+
+[capabilities]
+fs.read = ["picked"]
+fs.write = ["picked"]
+
+[contributes]
+tile = true

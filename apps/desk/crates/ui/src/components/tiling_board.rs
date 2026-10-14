@@ -32,6 +32,7 @@ use crate::theme::{ColorToken, NumberToken, Theme};
 
 pub const SIDE_WIDTH: f32 = 290.0;
 const MENU_WIDTH: f32 = 200.0;
+const UNPLACED: TileId = TileId(u32::MAX);
 const MENU_TOP: f32 = 36.0;
 const TILE_PLUS_BOX: f32 = 16.0;
 const TILE_PLUS_GLYPH: f32 = ICON_SMALL * 0.8;
@@ -875,14 +876,20 @@ impl<V: 'static> TilingBoard<V> {
         cx: &mut Context<V>,
     ) -> Deferred {
         let lens = self.host.board;
+        let names: Vec<SharedString> = self
+            .host
+            .spawnable
+            .iter()
+            .map(|module| (self.host.title)(UNPLACED, module, TabMark::Close, cx).label)
+            .collect();
         let rows = self
             .host
             .spawnable
             .iter()
             .cloned()
+            .zip(names)
             .enumerate()
-            .map(|(index, module)| {
-                let name = module.name().to_owned();
+            .map(|(index, (module, name))| {
                 div()
                     .id(("tiling-spawn", index))
                     .px_2()
@@ -1025,8 +1032,9 @@ impl<V: 'static> TilingBoard<V> {
             .spawnable
             .iter()
             .map(|module| {
-                let row = MenuItem::action(module.name().to_owned());
-                match (self.host.title)(tile, module, TabMark::Close, cx).icon {
+                let tab = (self.host.title)(tile, module, TabMark::Close, cx);
+                let row = MenuItem::action(tab.label);
+                match tab.icon {
                     Some(mark) => row.icon(mark),
                     None => row,
                 }
@@ -1369,10 +1377,13 @@ impl<V: 'static> TilingBoard<V> {
         modules.sort_by_key(|module| elsewhere(module));
         let actions: Vec<EmptyAction> = modules
             .iter()
-            .map(|module| EmptyAction {
-                label: module.name().to_owned().into(),
-                glyph: None,
-                keys: None,
+            .map(|module| {
+                let tab = (self.host.title)(UNPLACED, module, TabMark::Close, cx);
+                EmptyAction {
+                    label: tab.label,
+                    glyph: tab.icon,
+                    keys: None,
+                }
             })
             .collect();
         let hints: Vec<EmptyHint> = SHORTCUTS
