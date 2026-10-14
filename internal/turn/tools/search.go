@@ -87,6 +87,7 @@ func (s Search) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	result, err := search.Find(search.Request{
 		Root:      string(s.root),
 		Files:     listed.files,
+		Sizes:     listed.sizes,
 		Pattern:   expression,
 		MaxTokens: args.MaxTokens,
 	})

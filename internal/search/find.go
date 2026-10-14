@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -83,6 +84,7 @@ type Result struct {
 type Request struct {
 	Root      string
 	Files     []string
+	Sizes     []int64
 	Pattern   *regexp.Regexp
 	MaxTokens int
 }
@@ -96,6 +98,9 @@ func Find(req Request) (Result, error) {
 	if req.Pattern == nil {
 		return Result{}, errors.New("search: a pattern is required")
 	}
+	if req.Sizes != nil && len(req.Sizes) != len(req.Files) {
+		return Result{}, fmt.Errorf("search: %d sizes for %d files", len(req.Sizes), len(req.Files))
+	}
 	budget := req.MaxTokens
 	if budget <= 0 {
 		budget = konst.SearchTokenBudget
@@ -103,18 +108,19 @@ func Find(req Request) (Result, error) {
 
 	source := req.Pattern.String()
 	matched := make(map[string]string)
+	declared := make(map[string][]Unit)
 	var stats Stats
 	stats.TotalFiles = len(req.Files)
 
 	literal := &sweep{candidate: Literal, pattern: req.Pattern, hits: map[string][]hit{}}
-	scanTree(req, literal, matched, &stats)
+	scanTree(req, literal, matched, declared, &stats)
 	insensitive := caseInsensitiveSweep(source)
 	answering := literal
 	switch {
 	case literal.lines > 0:
 		insensitive.notRun = "the literal answered, and a case insensitive form can only add lines that differ from it in case"
 	case insensitive.pattern != nil:
-		scanTree(req, insensitive, matched, &stats)
+		scanTree(req, insensitive, matched, declared, &stats)
 		answering = insensitive
 	}
 
@@ -123,9 +129,7 @@ func Find(req Request) (Result, error) {
 	if answering.lines > 0 {
 		answered, pattern, stats.Candidates = answering.candidate, answering.pattern, answering.lines
 		for _, rel := range req.Files {
-			if hits, ok := answering.hits[rel]; ok {
-				found = append(found, unitsIn(rel, matched[rel], hits)...)
-			}
+			found = append(found, declared[rel]...)
 		}
 	}
 
@@ -167,6 +171,7 @@ func Find(req Request) (Result, error) {
 type scannedFile struct {
 	source   string
 	hits     []hit
+	units    []Unit
 	binary   bool
 	tooLarge bool
 	read     time.Duration
@@ -174,7 +179,7 @@ type scannedFile struct {
 	err      error
 }
 
-func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats) {
+func scanTree(req Request, into *sweep, matched map[string]string, declared map[string][]Unit, stats *Stats) {
 	stats.Scanned, stats.Skipped, stats.TooLarge, stats.Unreadable, stats.FirstFailed, stats.ScanStopped = 0, 0, 0, 0, "", false
 	scanned := make([]chan scannedFile, len(req.Files))
 	for index := range scanned {
@@ -185,12 +190,19 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 	defer stop.Store(true)
 	for range min(runtime.GOMAXPROCS(0), len(req.Files)) {
 		go func() {
+			var buffer []byte
 			for !stop.Load() {
 				index := int(next.Add(1)) - 1
 				if index >= len(req.Files) {
 					return
 				}
-				scanned[index] <- scanFile(filepath.Join(req.Root, filepath.FromSlash(req.Files[index])), into.pattern)
+				size := int64(-1)
+				if req.Sizes != nil {
+					size = req.Sizes[index]
+				}
+				var file scannedFile
+				file, buffer = scanFile(req.Root, req.Files[index], size, into.pattern, buffer)
+				scanned[index] <- file
 			}
 		}()
 	}
@@ -220,6 +232,7 @@ func scanTree(req Request, into *sweep, matched map[string]string, stats *Stats)
 		if len(file.hits) > 0 {
 			into.record(rel, file.hits)
 			matched[rel] = file.source
+			declared[rel] = file.units
 		}
 	}
 }
@@ -228,34 +241,56 @@ func failedRead(rel string, err error) string {
 	return rel + ": " + strings.TrimSuffix(cmp.Or(errors.Unwrap(err), err).Error(), ".")
 }
 
-func scanFile(full string, pattern *regexp.Regexp) scannedFile {
+func scanFile(root, rel string, size int64, pattern *regexp.Regexp, buffer []byte) (scannedFile, []byte) {
 	started := time.Now()
-	opened, err := os.Open(full)
+	opened, err := os.Open(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
-		return scannedFile{err: err}
+		return scannedFile{err: err}, buffer
 	}
 	defer func() { _ = opened.Close() }()
-	info, err := opened.Stat()
-	if err != nil {
-		return scannedFile{err: err}
+	if size < 0 || size > konst.SearchFileByteCap {
+		info, err := opened.Stat()
+		if err != nil {
+			return scannedFile{err: err}, buffer
+		}
+		size = info.Size()
 	}
-	if info.Size() > konst.SearchFileByteCap {
-		return scannedFile{tooLarge: true}
+	if size > konst.SearchFileByteCap {
+		return scannedFile{tooLarge: true}, buffer
 	}
-	var body bytes.Buffer
-	body.Grow(int(info.Size()) + bytes.MinRead)
-	_, err = body.ReadFrom(opened)
-	file := scannedFile{read: time.Since(started), err: err, binary: bytes.IndexByte(body.Bytes(), 0) >= 0}
+	body, err := readSized(opened, size, buffer)
+	if len(body) > konst.SearchFileByteCap {
+		return scannedFile{tooLarge: true}, body
+	}
+	file := scannedFile{read: time.Since(started), err: err, binary: bytes.IndexByte(body, 0) >= 0}
 	if err != nil || file.binary {
-		return file
+		return file, body
 	}
 	started = time.Now()
-	if prefix, _ := pattern.LiteralPrefix(); bytes.Contains(body.Bytes(), []byte(prefix)) {
-		file.source = body.String()
+	if prefix, _ := pattern.LiteralPrefix(); bytes.Contains(body, []byte(prefix)) {
+		file.source = string(body)
 		file.hits = hitLines(file.source, pattern)
 	}
 	file.match = time.Since(started)
-	return file
+	if len(file.hits) > 0 {
+		file.units = unitsIn(rel, file.source, file.hits)
+	}
+	return file, body
+}
+
+func readSized(opened *os.File, size int64, buffer []byte) ([]byte, error) {
+	body := slices.Grow(buffer[:0], int(size)+bytes.MinRead)
+	read, err := opened.Read(body[:size+1])
+	body = body[:read]
+	if errors.Is(err, io.EOF) || err == nil && int64(read) == size {
+		return body, nil
+	}
+	if err != nil {
+		return body, err
+	}
+	rest := bytes.NewBuffer(body)
+	_, err = rest.ReadFrom(opened)
+	return rest.Bytes(), err
 }
 
 func sourceLines(body string) []string {

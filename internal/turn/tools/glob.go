@@ -12,6 +12,8 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -246,12 +248,16 @@ func withNote(content, note string) string {
 type listing struct {
 	under string
 	files []string
+	sizes []int64
 	bytes int64
 	note  string
 }
 
 type ignoreRule struct {
 	expression *regexp.Regexp
+	nameOnly   bool
+	head       string
+	tail       string
 	literal    string
 	anchored   bool
 	negated    bool
@@ -265,9 +271,14 @@ type ignoreScope struct {
 
 type walk struct {
 	root        turn.Root
+	from        string
+	unfiltered  bool
+	ahead       map[string]chan dirListing
+	readers     chan struct{}
 	scopes      []ignoreScope
 	notes       []string
 	files       []string
+	sizes       []int64
 	bytes       int64
 	unsized     int
 	notFollowed int
@@ -278,7 +289,8 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 	if err != nil {
 		return listing{}, err
 	}
-	walked := walk{root: root}
+	walked := walk{root: root, unfiltered: includeIgnored,
+		ahead: map[string]chan dirListing{}, readers: make(chan struct{}, runtime.GOMAXPROCS(0))}
 	if _, err := os.Stat(from); err != nil {
 		repaired, note, refusal := repairPath(root, under, true)
 		if refusal != nil {
@@ -299,56 +311,11 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 	if info, err := os.Stat(from); err == nil && info.IsDir() {
 		from = strings.TrimSuffix(from, enter) + enter
 	}
-	walkErr := filepath.WalkDir(from, func(full string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			switch entry.Name() {
-			case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
-				return fs.SkipDir
-			}
-			if full == from {
-				return nil
-			}
-		}
-		rel, err := filepath.Rel(string(root), full)
-		if err != nil {
-			return err
-		}
-		slash := filepath.ToSlash(rel)
-		walked.prune(slash)
-		if entry.IsDir() {
-			if walked.ignored(slash, true) {
-				return fs.SkipDir
-			}
-			if !includeIgnored {
-				walked.load(full, slash+"/")
-			}
-			return nil
-		}
-		if !projectInstructions(entry.Name()) && walked.ignored(slash, false) {
-			return nil
-		}
-		info, infoErr := entry.Info()
-		if entry.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
-			info, infoErr = os.Stat(full)
-			if infoErr == nil && info.IsDir() {
-				return nil
-			}
-			if _, refused := root.Resolve(rel); infoErr != nil || refused != nil {
-				walked.notFollowed++
-				return nil
-			}
-		}
-		walked.files = append(walked.files, slash)
-		if infoErr != nil {
-			walked.unsized++
-		} else {
-			walked.bytes += info.Size()
-		}
-		return nil
-	})
+	walked.from = from
+	start, walkErr := os.Lstat(from)
+	if walkErr == nil {
+		walkErr = walked.visit(from, fs.FileInfoToDirEntry(start))
+	}
 	if walked.notFollowed > 0 {
 		walked.notes = append(walked.notes, fmt.Sprintf("links not followed: %d, because each leads outside the working directory or nowhere.", walked.notFollowed))
 	}
@@ -356,7 +323,111 @@ func filesUnder(root turn.Root, under string, includeIgnored bool) (listing, err
 		walked.notes = append(walked.notes, search.Note(search.Partial,
 			fmt.Sprintf("%d of the %d files listed could not be measured, so the total size is lower than the real one", walked.unsized, len(walked.files))))
 	}
-	return listing{under: under, files: walked.files, bytes: walked.bytes, note: strings.Join(walked.notes, " ")}, walkErr
+	return listing{under: under, files: walked.files, sizes: walked.sizes, bytes: walked.bytes, note: strings.Join(walked.notes, " ")}, walkErr
+}
+
+func (w *walk) visit(full string, entry fs.DirEntry) error {
+	if entry.IsDir() {
+		if neverWalked(entry.Name()) {
+			return nil
+		}
+		if full == w.from {
+			return w.descend(full, "")
+		}
+	}
+	rel, err := filepath.Rel(string(w.root), full)
+	if err != nil {
+		return err
+	}
+	slash := filepath.ToSlash(rel)
+	w.prune(slash)
+	if entry.IsDir() {
+		if w.ignored(slash, true) {
+			return nil
+		}
+		return w.descend(full, slash+"/")
+	}
+	if !projectInstructions(entry.Name()) && w.ignored(slash, false) {
+		return nil
+	}
+	info, infoErr := entry.Info()
+	if entry.Type()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
+		info, infoErr = os.Stat(full)
+		if infoErr == nil && info.IsDir() {
+			return nil
+		}
+		if _, refused := w.root.Resolve(rel); infoErr != nil || refused != nil {
+			w.notFollowed++
+			return nil
+		}
+	}
+	w.files = append(w.files, slash)
+	if infoErr != nil {
+		w.unsized++
+		w.sizes = append(w.sizes, -1)
+	} else {
+		w.bytes += info.Size()
+		w.sizes = append(w.sizes, info.Size())
+	}
+	return nil
+}
+
+func (w *walk) descend(dir, base string) error {
+	entries, err := w.list(dir)
+	if err != nil {
+		return err
+	}
+	mayHoldIgnoreFile := slices.ContainsFunc(entries, func(entry fs.DirEntry) bool {
+		return strings.EqualFold(entry.Name(), ".gitignore")
+	})
+	if mayHoldIgnoreFile && base != "" && !w.unfiltered {
+		w.load(dir, base)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && !neverWalked(entry.Name()) {
+			w.readAhead(filepath.Join(dir, entry.Name()))
+		}
+	}
+	for _, entry := range entries {
+		if err := w.visit(filepath.Join(dir, entry.Name()), entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type dirListing struct {
+	entries []fs.DirEntry
+	err     error
+}
+
+func (w *walk) readAhead(dir string) {
+	listed := make(chan dirListing, 1)
+	w.ahead[dir] = listed
+	go func() {
+		w.readers <- struct{}{}
+		entries, err := os.ReadDir(dir)
+		<-w.readers
+		listed <- dirListing{entries: entries, err: err}
+	}()
+}
+
+func (w *walk) list(dir string) ([]fs.DirEntry, error) {
+	listed, ok := w.ahead[dir]
+	if !ok {
+		return os.ReadDir(dir)
+	}
+	delete(w.ahead, dir)
+	read := <-listed
+	return read.entries, read.err
+}
+
+func neverWalked(dir string) bool {
+	switch dir {
+	case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
+		return true
+	}
+	return false
 }
 
 func projectInstructions(name string) bool {
@@ -431,19 +502,25 @@ func parseIgnoreLine(line string) (ignoreRule, error) {
 	if !strings.ContainsAny(pattern, "*?[") {
 		return ignoreRule{literal: pattern, anchored: anchored, negated: negated, dirOnly: dirOnly}, nil
 	}
-	expression, err := ignoreExpression(pattern, anchored)
+	expression, nameOnly, err := ignoreExpression(pattern, anchored)
 	if err != nil {
 		return ignoreRule{}, err
 	}
-	return ignoreRule{expression: expression, negated: negated, dirOnly: dirOnly}, nil
+	rule := ignoreRule{expression: expression, nameOnly: nameOnly, negated: negated, dirOnly: dirOnly,
+		tail: pattern[strings.LastIndexAny(pattern, "*?]")+1:]}
+	if anchored || nameOnly {
+		rule.head = pattern[:strings.IndexAny(pattern, "*?[")]
+	}
+	return rule, nil
 }
 
-func ignoreExpression(pattern string, anchored bool) (*regexp.Regexp, error) {
+func (r ignoreRule) matches(path string) bool {
+	return strings.HasPrefix(path, r.head) && strings.HasSuffix(path, r.tail) && r.expression.MatchString(path)
+}
+
+func ignoreExpression(pattern string, anchored bool) (*regexp.Regexp, bool, error) {
 	var built strings.Builder
-	built.WriteString("^")
-	if !anchored {
-		built.WriteString("(?:.*/)?")
-	}
+	crossesSlash := false
 	segments := strings.Split(pattern, "/")
 	for i, segment := range segments {
 		last := i == len(segments)-1
@@ -453,17 +530,24 @@ func ignoreExpression(pattern string, anchored bool) (*regexp.Regexp, error) {
 		case segment == "**":
 			built.WriteString("(?:[^/]+/)*")
 		default:
-			built.WriteString(segmentExpression(segment))
+			expression, crosses := segmentExpression(segment)
+			crossesSlash = crossesSlash || crosses
+			built.WriteString(expression)
 			if !last {
 				built.WriteString("/")
 			}
 		}
 	}
-	built.WriteString("$")
-	return regexp.Compile(built.String())
+	nameOnly, start := !anchored && !crossesSlash, "^"
+	if !anchored && crossesSlash {
+		start = "^(?:.*/)?"
+	}
+	expression, err := regexp.Compile(start + built.String() + "$")
+	return expression, nameOnly, err
 }
 
-func segmentExpression(segment string) string {
+func segmentExpression(segment string) (string, bool) {
+	crossesSlash := false
 	var built strings.Builder
 	for i := 0; i < len(segment); i++ {
 		switch segment[i] {
@@ -477,18 +561,19 @@ func segmentExpression(segment string) string {
 				built.WriteString(`\[`)
 				continue
 			}
-			class, negated := strings.CutPrefix(segment[i+1:i+end], "!")
-			built.WriteString("[")
+			members, negated := strings.CutPrefix(segment[i+1:i+end], "!")
 			if negated {
-				built.WriteString("^")
+				members = "^" + members
 			}
-			built.WriteString(class + "]")
+			class, err := regexp.Compile("[" + members + "]")
+			crossesSlash = crossesSlash || err != nil || class.MatchString("/")
+			built.WriteString("[" + members + "]")
 			i += end
 		default:
 			built.WriteString(regexp.QuoteMeta(segment[i : i+1]))
 		}
 	}
-	return built.String()
+	return built.String(), crossesSlash
 }
 
 func (w *walk) prune(rel string) {
@@ -508,9 +593,15 @@ func (w *walk) ignored(rel string, isDir bool) bool {
 			if rule.dirOnly && !isDir {
 				continue
 			}
-			matched := rule.expression != nil && rule.expression.MatchString(within)
-			if rule.literal != "" {
+			var matched bool
+			switch {
+			case rule.literal != "":
 				matched = within == rule.literal || (!rule.anchored && strings.HasSuffix(within, "/"+rule.literal))
+			case rule.nameOnly:
+				parent := strings.LastIndexByte(within, '/')
+				matched = !strings.Contains(within[:max(parent, 0)], "\n") && rule.matches(within[parent+1:])
+			default:
+				matched = rule.matches(within)
 			}
 			if matched {
 				excluded = !rule.negated
