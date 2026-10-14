@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use flume::RecvTimeoutError;
 
@@ -15,6 +15,7 @@ pub struct Watched {
 }
 
 type Stamp = Option<(SystemTime, u64)>;
+type Seen = (Instant, BTreeSet<String>);
 
 fn stamp(path: &Path) -> Stamp {
     let found = fs::metadata(path).ok()?;
@@ -39,9 +40,7 @@ fn stamps(
         .collect()
 }
 
-pub fn watch(
-    root: PathBuf,
-) -> Result<(flume::Sender<Watched>, flume::Receiver<BTreeSet<String>>), String> {
+pub fn watch(root: PathBuf) -> Result<(flume::Sender<Watched>, flume::Receiver<Seen>), String> {
     let (watch, wanted) = flume::unbounded::<Watched>();
     let (sender, changes) = flume::unbounded();
     thread::Builder::new()
@@ -63,7 +62,7 @@ pub fn watch(
                                 })
                             })
                             .collect();
-                        if !changed.is_empty() && sender.send(changed).is_err() {
+                        if !changed.is_empty() && sender.send((Instant::now(), changed)).is_err() {
                             return;
                         }
                     }

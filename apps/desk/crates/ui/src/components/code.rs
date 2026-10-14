@@ -91,6 +91,13 @@ pub struct LineMarks {
 
 pub type Marks = BTreeMap<usize, LineMarks>;
 
+#[derive(Clone)]
+pub struct Stripe {
+    pub lines: Range<usize>,
+    pub token: ColorToken,
+    pub opacity: f32,
+}
+
 type LineSource = Rc<dyn Fn(Range<usize>, &mut App) -> Vec<CodeLine>>;
 
 #[derive(Clone)]
@@ -282,6 +289,7 @@ pub struct CodeView {
     scroll: UniformListScrollHandle,
     lines: LineSource,
     marks: Rc<Marks>,
+    stripe: Option<Stripe>,
     rows: RowMap,
 }
 
@@ -298,6 +306,7 @@ pub fn code_view(
         scroll: scroll.clone(),
         lines: Rc::new(lines),
         marks: Rc::default(),
+        stripe: None,
         rows: RowMap::default(),
     }
 }
@@ -320,6 +329,11 @@ impl CodeView {
 
     pub fn marks(mut self, marks: Rc<Marks>) -> Self {
         self.marks = marks;
+        self
+    }
+
+    pub fn stripe(mut self, stripe: Option<Stripe>) -> Self {
+        self.stripe = stripe;
         self
     }
 }
@@ -671,6 +685,7 @@ impl RenderOnce for CodeView {
             .child(gutter(
                 count,
                 self.marks.clone(),
+                self.stripe,
                 self.rows.clone(),
                 base.clone(),
                 window,
@@ -686,6 +701,7 @@ impl RenderOnce for CodeView {
 fn gutter(
     count: usize,
     marks: Rc<Marks>,
+    stripe: Option<Stripe>,
     rows: RowMap,
     base: ScrollHandle,
     window: &mut Window,
@@ -737,6 +753,15 @@ fn gutter(
                     for (line, first, y, shaped) in rows {
                         if let Some(mark) = marks.get(&line) {
                             paint_marks(mark, first, bounds.origin.x, y, &theme, window);
+                        }
+                        if let Some(stripe) = stripe.as_ref().filter(|s| s.lines.contains(&line)) {
+                            let bar = Bounds::new(
+                                point(bounds.origin.x, y),
+                                size(px(MARK_WIDTH), px(CODE_LINE)),
+                            );
+                            let mut colour = theme.color(stripe.token);
+                            colour.alpha *= stripe.opacity;
+                            window.paint_quad(fill(bar, colour));
                         }
                         let Some(shaped) = shaped else {
                             continue;

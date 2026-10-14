@@ -376,9 +376,9 @@ impl Editor {
         };
         self.folder.watched = Some(watched);
         self._watching = Some(cx.spawn(async move |this, cx| {
-            while let Ok(changed) = changes.recv_async().await {
+            while let Ok((seen, changed)) = changes.recv_async().await {
                 if this
-                    .update(cx, |editor, cx| editor.changed(&changed, cx))
+                    .update(cx, |editor, cx| editor.changed(&changed, seen, cx))
                     .is_err()
                 {
                     return;
@@ -422,10 +422,10 @@ impl Editor {
             return;
         };
         eprintln!("desk: editor heard tofu edit {relative}");
-        self.changed(&BTreeSet::from([relative]), cx);
+        self.changed(&BTreeSet::from([relative]), Instant::now(), cx);
     }
 
-    fn changed(&mut self, changed: &BTreeSet<String>, cx: &mut Context<Self>) {
+    fn changed(&mut self, changed: &BTreeSet<String>, seen: Instant, cx: &mut Context<Self>) {
         let shown: Vec<&str> = changed.iter().map(String::as_str).collect();
         eprintln!("desk: editor saw changes: {}", shown.join(", "));
         let touched: Vec<PathBuf> = self
@@ -438,7 +438,7 @@ impl Editor {
             .map(|page| page.path.clone())
             .collect();
         for path in touched {
-            self.reread(path, cx);
+            self.reread(path, seen, cx);
         }
         self.retag(changed, cx);
         self.refresh(cx);
@@ -672,14 +672,14 @@ impl Editor {
         }
     }
 
-    fn reread(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+    fn reread(&mut self, path: PathBuf, seen: Instant, cx: &mut Context<Self>) {
         let read = path.clone();
         let text = cx
             .background_executor()
             .spawn(async move { fs::read_to_string(&read) });
         cx.spawn(async move |this, cx| {
             let text = text.await;
-            let done = this.update(cx, |editor, cx| editor.compare(&path, text, cx));
+            let done = this.update(cx, |editor, cx| editor.compare(&path, text, seen, cx));
             if let Err(error) = done {
                 eprintln!("desk: editor is gone before a reread: {error}");
             }
@@ -687,7 +687,13 @@ impl Editor {
         .detach();
     }
 
-    fn compare(&mut self, path: &Path, text: std::io::Result<String>, cx: &mut Context<Self>) {
+    fn compare(
+        &mut self,
+        path: &Path,
+        text: std::io::Result<String>,
+        seen: Instant,
+        cx: &mut Context<Self>,
+    ) {
         let aside_only = !self.pages.iter().any(|page| page.path == path)
             && self
                 .aside
@@ -695,7 +701,7 @@ impl Editor {
                 .is_some_and(|aside| aside.pages.iter().any(|page| page.path == path));
         if aside_only {
             self.swap_panes();
-            self.compare(path, text, cx);
+            self.compare(path, text, seen, cx);
             return self.swap_panes();
         }
         let Some(at) = self.pages.iter().position(|page| page.path == path) else {
@@ -721,15 +727,20 @@ impl Editor {
             return cx.notify();
         }
         eprintln!("desk: editor reloads {}", path.display());
-        self.reload(at, cx);
+        self.reload(at, seen, cx);
     }
 
-    fn reload(&mut self, at: usize, cx: &mut Context<Self>) {
+    fn reload(&mut self, at: usize, seen: Instant, cx: &mut Context<Self>) {
         let git = self.folder.git.clone();
         let Some(page) = self.pages.get(at) else {
             return;
         };
+        let before = page.code.as_ref().ok().cloned();
         let fresh = self.page(page.path.clone(), git, cx);
+        if let (Some(before), Ok(code)) = (before, &fresh.code) {
+            let path = fresh.path.display().to_string();
+            code.update(cx, |code, cx| code.follow(&before, path, seen, cx));
+        }
         if let Some(page) = self.pages.get_mut(at) {
             *page = fresh;
         }
@@ -1830,7 +1841,7 @@ impl Editor {
                     button("editor-reload", "Reload", None, ButtonKind::Text, &theme).on_click(
                         cx.listener(|editor, _, _, cx| {
                             let at = editor.active;
-                            editor.reload(at, cx);
+                            editor.reload(at, Instant::now(), cx);
                         }),
                     ),
                 )

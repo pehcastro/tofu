@@ -21,8 +21,8 @@ use gpui::{
 
 use crate::components::chat::fail;
 use crate::components::code::{
-    Blank, CodeLine, FoldMark, Guides, Marks, TAB_STOP, Wrap, code_origin, code_place, code_shape,
-    code_view, wrap_width,
+    Blank, CodeLine, FoldMark, Guides, Marks, Stripe, TAB_STOP, Wrap, code_origin, code_place,
+    code_shape, code_view, wrap_width,
 };
 use crate::components::find::{FindBar, Matching, Replace, find_matching};
 use crate::components::form::{blinker, caret_shown};
@@ -32,6 +32,7 @@ use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN, NUMBER_PAD,
 use crate::components::vim::{self, Mode, Vim};
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
+use desk_motion::tokens::EASE_OUT;
 
 const TAB: &str = "    ";
 const FAILURE_INSET: f32 = 12.0;
@@ -79,6 +80,20 @@ const LINK_THICKNESS: f32 = 1.0;
 const LINK: ColorToken = ColorToken::SyntaxLinkUri;
 const GUIDE_REACH: usize = 1000;
 const FIRST_SCREEN_LINES: usize = 128;
+const STRIPE_SOLID: Duration = Duration::from_secs(6);
+const STRIPE_FADE: Duration = Duration::from_secs(2);
+const STRIPE: ColorToken = ColorToken::StatusAccent;
+
+struct Wrote {
+    lines: Range<usize>,
+    at: Instant,
+    unlogged: Option<(String, Instant)>,
+    _fade: Task<()>,
+}
+
+fn bare(chars: impl Iterator<Item = char>) -> impl Iterator<Item = char> {
+    chars.filter(|ch| !matches!(ch, '\n' | '\r'))
+}
 
 struct Rest {
     path: PathBuf,
@@ -494,6 +509,7 @@ pub struct CodeEditor {
     active_guide: Option<(usize, Range<usize>)>,
     paints: Option<Rc<PaintFrames>>,
     rest: Option<Rest>,
+    wrote: Option<Wrote>,
 }
 
 #[derive(Default)]
@@ -573,6 +589,7 @@ impl CodeEditor {
             active_guide: None,
             paints: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
             rest: None,
+            wrote: None,
         };
         editor.widest = editor.widest_line();
         editor
@@ -729,6 +746,71 @@ impl CodeEditor {
         self.vim_clamp();
         self.reveal();
         self.touch(cx);
+    }
+
+    pub fn follow(
+        &mut self,
+        before: &Entity<CodeEditor>,
+        path: String,
+        seen: Instant,
+        cx: &mut Context<Self>,
+    ) {
+        let old = before.read(cx);
+        let caret = old.carets.last().and_then(|caret| old.place(caret.head));
+        let lines = self.changed_since(old);
+        self.scroll = old.scroll.clone();
+        self.focus = old.focus.clone();
+        if let Some((line, column)) = caret {
+            let line = line.min(self.buffer.line_count().saturating_sub(1));
+            self.carets = vec![Caret::at(self.at_place((line, column)))];
+            self.vim_clamp();
+        }
+        let fade = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(STRIPE_SOLID).await;
+            if let Err(error) = this.update(cx, |_, cx| cx.notify()) {
+                eprintln!("desk: editor is gone before its stripe fades: {error}");
+            }
+        });
+        let logged = format!("desk: editor reloaded {path} {} lines changed", lines.len());
+        self.wrote = Some(Wrote {
+            lines,
+            at: Instant::now(),
+            unlogged: Some((logged, seen)),
+            _fade: fade,
+        });
+    }
+
+    fn changed_since(&self, before: &CodeEditor) -> Range<usize> {
+        let (old, new) = (before.buffer.rope(), self.buffer.rope());
+        let same = |a: usize, b: usize| match (old.get_line(a), new.get_line(b)) {
+            (Some(a), Some(b)) => bare(a.chars()).eq(bare(b.chars())),
+            _ => false,
+        };
+        let (old_lines, new_lines) = (old.len_lines(), new.len_lines());
+        let shared = old_lines.min(new_lines);
+        let top = (0..shared).take_while(|&line| same(line, line)).count();
+        let bottom = (1..=shared - top)
+            .take_while(|&back| same(old_lines - back, new_lines - back))
+            .count();
+        top..new_lines - bottom
+    }
+
+    fn stripe(&mut self, window: &mut Window) -> Option<Stripe> {
+        let wrote = self.wrote.as_ref()?;
+        let fading = wrote.at.elapsed().saturating_sub(STRIPE_SOLID);
+        let faded = fading.as_secs_f32() / STRIPE_FADE.as_secs_f32();
+        if faded >= 1.0 {
+            self.wrote = None;
+            return None;
+        }
+        if faded > 0.0 {
+            window.request_animation_frame();
+        }
+        Some(Stripe {
+            lines: wrote.lines.clone(),
+            token: STRIPE,
+            opacity: 1.0 - EASE_OUT(faded),
+        })
     }
 
     fn word_at(&self, at: usize) -> Option<Range<usize>> {
@@ -1382,6 +1464,7 @@ impl CodeEditor {
     }
 
     fn settle(&mut self, lines: usize) {
+        self.wrote = None;
         self.wrap_stale = true;
         self.link = None;
         if let Some(rest) = self.rest.take() {
@@ -1972,7 +2055,7 @@ impl CodeEditor {
             Action::DeleteRight => self.erase(false),
             Action::Newline => self.insert("\n"),
             Action::Tab if self.spans_lines() => self.indent(),
-            Action::Tab => self.insert(TAB),
+            Action::Tab => self.insert(self.tab()),
             Action::DeleteLine => self.delete_lines(),
             Action::DuplicateLine => self.duplicate_lines(),
             Action::MoveLineUp => self.shift_lines(true),
@@ -2238,8 +2321,25 @@ impl CodeEditor {
         });
     }
 
+    fn tab(&self) -> &'static str {
+        let tabbed = self
+            .buffer
+            .rope()
+            .lines()
+            .find_map(|line| match line.chars().next() {
+                Some('\t') => Some(true),
+                Some(' ') => Some(false),
+                _ => None,
+            });
+        match tabbed.unwrap_or(self.language == Some(Language::Go)) {
+            true => "\t",
+            false => TAB,
+        }
+    }
+
     fn indent(&mut self) {
-        self.edit_lines(|text| (!text.is_empty()).then(|| (0, 0, TAB.to_owned())));
+        let tab = self.tab();
+        self.edit_lines(|text| (!text.is_empty()).then(|| (0, 0, tab.to_owned())));
     }
 
     fn comment_lines(&mut self) {
@@ -2670,7 +2770,9 @@ impl Render for CodeEditor {
         .widest(self.widest)
         .wrap(self.wrapped().map(|_| self.wrap.clone()))
         .shown(self.shown_lines.clone())
-        .marks(self.lit_marks(&entity.downgrade()));
+        .marks(self.lit_marks(&entity.downgrade()))
+        .stripe(self.stripe(window));
+        let reloaded = self.wrote.as_mut().and_then(|wrote| wrote.unlogged.take());
         let failure = self.failure.clone().map(|(what, error)| {
             div()
                 .absolute()
@@ -2736,6 +2838,10 @@ impl Render for CodeEditor {
                                 let line = Bounds::new(start, size(to - from, px(LINK_THICKNESS)));
                                 window.paint_quad(fill(line, link_ink));
                             }
+                        }
+                        if let Some((logged, seen)) = reloaded {
+                            let ms = seen.elapsed().as_secs_f64() * 1000.0;
+                            eprintln!("{logged} in {ms:.1} ms");
                         }
                         if let Some(clicked) = folded_at.take() {
                             let ms = clicked.elapsed().as_secs_f64() * 1000.0;
