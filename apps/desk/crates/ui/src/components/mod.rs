@@ -19,6 +19,8 @@ pub mod form;
 pub mod glyph;
 pub mod graph;
 pub mod history;
+pub mod hovercard;
+pub mod linkmeta;
 pub mod list;
 pub mod overlay;
 pub mod paint;

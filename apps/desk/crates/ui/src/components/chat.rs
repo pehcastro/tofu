@@ -19,6 +19,7 @@ use crate::components::chip::{file_chip, mono};
 use crate::components::code_editor::syntax_token;
 use crate::components::find::{find_ranges, match_highlights};
 use crate::components::glyph::Glyph;
+use crate::components::hovercard::{hover, link_card, link_key};
 use crate::components::paint::{glyph, ink, ring, tint};
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
@@ -918,7 +919,9 @@ impl<'a> Draw<'a> {
             .zip(&pieces)
             .map(|(span, piece)| run(span, piece.len(), base, self.theme))
             .collect();
-        let text = StyledText::new(pieces.concat()).with_runs(mark_runs(runs, marks));
+        let joined = pieces.concat();
+        let key = link_key(&joined, at);
+        let text = StyledText::new(joined).with_runs(mark_runs(runs, marks));
         let decor = decor(spans, &pieces, self.theme);
         let layout = text.layout().clone();
         let (mut ranges, mut urls, mut start) = (Vec::new(), Vec::new(), 0);
@@ -931,13 +934,44 @@ impl<'a> Draw<'a> {
         }
         let drawn = match ranges.is_empty() {
             true => text.into_any_element(),
-            false => InteractiveText::new(("chat-text", at), text)
-                .on_click(ranges, move |picked, _, cx| {
-                    if let Some(url) = urls.get(picked) {
-                        open(url, cx);
-                    }
-                })
-                .into_any_element(),
+            false => {
+                let (hovered, clicked, placed) =
+                    (ranges.clone(), urls.clone(), text.layout().clone());
+                div()
+                    .child(
+                        InteractiveText::new(("chat-text", at), text)
+                            .on_click(ranges, move |picked, _, cx| {
+                                if let Some(url) = clicked.get(picked) {
+                                    open(url, cx);
+                                }
+                            })
+                            .on_hover(move |index, _, window, cx| {
+                                let link = index
+                                    .and_then(|index| {
+                                        hovered.iter().position(|range| range.contains(&index))
+                                    })
+                                    .and_then(|picked| {
+                                        let url = urls.get(picked)?.clone();
+                                        let range = hovered.get(picked)?;
+                                        let start = placed.position_for_index(range.start)?;
+                                        let end = placed.position_for_index(range.end)?;
+                                        let whole = placed.bounds();
+                                        let (left, right) = match start.y == end.y {
+                                            true => (start.x, end.x),
+                                            false => (whole.left(), whole.right()),
+                                        };
+                                        let line = Bounds::from_corners(
+                                            point(left, start.y),
+                                            point(right, end.y + placed.line_height()),
+                                        );
+                                        Some((url, line))
+                                    });
+                                hover(key, link, window, cx);
+                            }),
+                    )
+                    .child(link_card(key))
+                    .into_any_element()
+            }
         };
         match decor.is_empty() {
             true => drawn,
