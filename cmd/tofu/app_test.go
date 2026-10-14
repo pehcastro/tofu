@@ -1090,7 +1090,7 @@ func TestATurnStartedInTheAppOffersSpawnWhenTurnMaySpawnIsOn(t *testing.T) {
 
 func TestTheAppResolvesReadBeforeEditFromSettingsAndRefusesABlindEditByDefault(t *testing.T) {
 	dir := scratchProject(t)
-	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note\n"+strings.Repeat("a longer line\n", 500)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	driver := driveApp(t)
