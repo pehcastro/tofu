@@ -79,25 +79,42 @@ struct Mounted {
     subagents: Entity<Subagents>,
     file_edits: Entity<FileEdits>,
     shells: Entity<Shells>,
-    terminal: TerminalSlot,
+    terminals: Terminals,
     project: PathBuf,
 }
 
-#[derive(Clone, Default)]
-struct TerminalSlot(Rc<RefCell<Option<Entity<TerminalModule>>>>);
-
-impl TerminalSlot {
-    fn current(&self) -> AnyElement {
-        self.0
-            .borrow()
-            .clone()
-            .map_or_else(|| div().into_any_element(), IntoElement::into_any_element)
-    }
+struct OpenTerminal {
+    at: (usize, TileId),
+    module: Entity<TerminalModule>,
+    _tab: Subscription,
 }
 
-impl Render for TerminalSlot {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.current())
+#[derive(Default)]
+struct TerminalTabs {
+    open: Vec<OpenTerminal>,
+    workspace: usize,
+    opened: usize,
+}
+
+#[derive(Clone, Default)]
+struct Terminals(Rc<RefCell<TerminalTabs>>);
+
+impl Terminals {
+    fn in_view(&self) -> Vec<Entity<TerminalModule>> {
+        let tabs = self.0.borrow();
+        tabs.open
+            .iter()
+            .filter(|open| open.at.0 == tabs.workspace)
+            .map(|open| open.module.clone())
+            .collect()
+    }
+
+    fn at(&self, tile: TileId) -> Option<Entity<TerminalModule>> {
+        let tabs = self.0.borrow();
+        tabs.open
+            .iter()
+            .find(|open| open.at == (tabs.workspace, tile))
+            .map(|open| open.module.clone())
     }
 }
 
@@ -133,7 +150,7 @@ fn build(
         subagents: subagents::mount(store.clone(), cx),
         file_edits: file_edits::mount(store.clone(), cx),
         shells: shells::mount(store.clone(), kill, cx),
-        terminal: TerminalSlot::default(),
+        terminals: Terminals::default(),
         project,
         store,
         chat,
@@ -166,13 +183,13 @@ fn build(
                 board: |work: &mut Work| &mut work.board,
                 body: Box::new(
                     move |stack, _, theme, cx| match stack.modules.get(stack.active) {
-                        Some(module) => body(&bodies, module, theme),
+                        Some(module) => body(&bodies, module, stack.id, theme),
                         None => empty_tile(stack.id, theme, cx),
                     },
                 ),
-                title: Box::new(move |module, mark, cx| {
+                title: Box::new(move |tile, module, mark, cx| {
                     let terminal = (*module == Module::Terminal)
-                        .then(|| titles.terminal.0.borrow().clone())
+                        .then(|| titles.terminals.at(tile))
                         .flatten();
                     let terminal = terminal.as_ref().map(|terminal| terminal.read(cx));
                     Tab {
@@ -190,15 +207,13 @@ fn build(
                             }),
                     }
                 }),
-                subtitle: Box::new(move |module, cx| match module {
+                subtitle: Box::new(move |tile, module, cx| match module {
                     Module::Chat => {
                         session(&sessions, cx).map(|name| div().child(name).into_any_element())
                     }
                     Module::Terminal => badges
-                        .terminal
-                        .0
-                        .borrow()
-                        .as_ref()
+                        .terminals
+                        .at(tile)
                         .map(|terminal| terminal.read(cx).badge(cx)),
                     _ => None,
                 }),
@@ -242,7 +257,6 @@ fn build(
             find,
             found: Vec::new(),
             query: String::new(),
-            _terminal_tab: None,
             _watched: watched,
         }
     }))
@@ -260,7 +274,6 @@ pub struct Work {
     focus: FocusHandle,
     mounted: Mounted,
     replay: Option<Replay>,
-    _terminal_tab: Option<Subscription>,
     _watched: [Subscription; 2],
 }
 
@@ -443,13 +456,16 @@ fn find_groups(
     (groups, found)
 }
 
-fn body(mounted: &Mounted, module: &Module, theme: &Theme) -> AnyElement {
+fn body(mounted: &Mounted, module: &Module, tile: TileId, theme: &Theme) -> AnyElement {
     match module {
         Module::Chat => mounted.chat.clone().into_any_element(),
         Module::SubAgents => mounted.subagents.clone().into_any_element(),
         Module::FileEdits => mounted.file_edits.clone().into_any_element(),
         Module::Shells => mounted.shells.clone().into_any_element(),
-        Module::Terminal => mounted.terminal.current(),
+        Module::Terminal => mounted
+            .terminals
+            .at(tile)
+            .map_or_else(|| div().into_any_element(), IntoElement::into_any_element),
         Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
             empty_state(
                 SharedString::from(format!("work-empty-{}", module.name())),
@@ -535,7 +551,10 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
             .into(),
         Module::FileEdits => tiled(mounted.file_edits.clone().into(), None, cx),
         Module::Shells => tiled(mounted.shells.clone().into(), None, cx),
-        Module::Terminal => tiled(cx.new(|_| mounted.terminal.clone()).into(), None, cx),
+        Module::Terminal => match mounted.terminals.in_view().first() {
+            Some(terminal) => tiled(terminal.clone().into(), None, cx),
+            None => return eprintln!("desk: work: no terminal is open, so none expands"),
+        },
         Module::Editor | Module::Browser | Module::SourceControl | Module::Plugin(_) => {
             return eprintln!(
                 "desk: work: {} is not mounted, so it does not expand",
@@ -641,24 +660,39 @@ impl Work {
         &self.mounted.chat
     }
 
-    fn keep_terminal(&mut self, cx: &mut Context<Self>) {
-        let open = self.board.workspaces().iter().any(|workspace| {
-            workspace
-                .tiles(EVERYWHERE)
-                .iter()
-                .any(|(stack, _)| stack.modules.contains(&Module::Terminal))
-        });
-        let held = self.mounted.terminal.0.borrow().is_some();
-        if open && !held {
-            let mounted = terminal::mount(&self.mounted.project, cx);
-            self._terminal_tab = Some(cx.subscribe(&mounted, |_, _, _: &TabChanged, cx| {
-                cx.notify();
-            }));
-            self.mounted.terminal.0.replace(Some(mounted));
-        } else if !open && held {
+    fn keep_terminals(&mut self, cx: &mut Context<Self>) {
+        let wanted: Vec<(usize, TileId)> = self
+            .board
+            .workspaces()
+            .iter()
+            .enumerate()
+            .flat_map(|(at, workspace)| {
+                workspace
+                    .tiles(EVERYWHERE)
+                    .into_iter()
+                    .filter(|(stack, _)| stack.modules.contains(&Module::Terminal))
+                    .map(move |(stack, _)| (at, stack.id))
+            })
+            .collect();
+        let mut tabs = self.mounted.terminals.0.borrow_mut();
+        tabs.workspace = self.board.active();
+        let before = tabs.open.len();
+        tabs.open.retain(|open| wanted.contains(&open.at));
+        if tabs.open.len() < before {
             eprintln!("desk: terminal: its tile closed, so its shell ends");
-            self._terminal_tab = None;
-            self.mounted.terminal.0.replace(None);
+        }
+        for at in wanted {
+            if tabs.open.iter().any(|open| open.at == at) {
+                continue;
+            }
+            tabs.opened = tabs.opened.saturating_add(1);
+            let module = terminal::mount(&self.mounted.project, tabs.opened, cx);
+            let tab = cx.subscribe(&module, |_, _, _: &TabChanged, cx| cx.notify());
+            tabs.open.push(OpenTerminal {
+                at,
+                module,
+                _tab: tab,
+            });
         }
     }
 
@@ -1137,7 +1171,7 @@ impl Focusable for Work {
 impl Render for Work {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
-        self.keep_terminal(cx);
+        self.keep_terminals(cx);
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));

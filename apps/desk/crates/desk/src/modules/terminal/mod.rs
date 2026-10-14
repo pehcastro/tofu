@@ -44,6 +44,7 @@ pub struct TabChanged;
 
 pub struct TerminalModule {
     terminal: Entity<Terminal>,
+    number: usize,
     frame_log: Option<FrameLog>,
     ringing: Option<Task<()>>,
     _events: Subscription,
@@ -60,7 +61,10 @@ fn log_pid(terminal: &Terminal) {
 
 impl TerminalModule {
     pub fn label(&self, cx: &App) -> Option<SharedString> {
-        self.terminal.read(cx).title()
+        self.terminal
+            .read(cx)
+            .title()
+            .or_else(|| (self.number > 1).then(|| format!("Terminal {}", self.number).into()))
     }
 
     pub fn badge(&self, cx: &App) -> AnyElement {
@@ -105,7 +109,7 @@ impl TerminalModule {
     }
 }
 
-pub fn mount(project: &Path, cx: &mut App) -> Entity<TerminalModule> {
+pub fn mount(project: &Path, number: usize, cx: &mut App) -> Entity<TerminalModule> {
     eprintln!("desk: terminal: a shell starts in {}", project.display());
     cx.new(|cx| {
         let terminal = cx.new(|cx| Terminal::new(project, cx));
@@ -132,6 +136,7 @@ pub fn mount(project: &Path, cx: &mut App) -> Entity<TerminalModule> {
         });
         TerminalModule {
             terminal,
+            number,
             frame_log,
             ringing: None,
             _events: events,

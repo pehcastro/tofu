@@ -95,14 +95,14 @@ impl TilingPage {
                 Host {
                     board: |book| &mut book.tiling.board,
                     body: Box::new(demo),
-                    title: Box::new(|module, mark, _| Tab {
+                    title: Box::new(|_, module, mark, _| Tab {
                         label: module.name().to_owned().into(),
                         icon: Some(glyph_of(module)),
                         count: None,
                         mark,
                         flag: None,
                     }),
-                    subtitle: Box::new(|_, _| None),
+                    subtitle: Box::new(|_, _, _| None),
                     spawnable: spawnable(),
                     spawns: EMPTY_SPAWNS.to_vec(),
                     settled: Box::new(|_, _, _| {}),

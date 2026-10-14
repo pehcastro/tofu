@@ -11,7 +11,6 @@ use gpui::{
 use std::mem;
 use std::ops::RangeInclusive;
 
-const FONT_SIZE: f32 = 14.;
 const LINE_HEIGHT: f32 = 1.3;
 const FALLBACK_ADVANCE: f32 = 0.6;
 const BAR_WIDTH: f32 = 2.;
@@ -54,6 +53,7 @@ pub(crate) struct Frame {
     cursor: Option<Cursor>,
     rows: usize,
     cols: usize,
+    font: Pixels,
 }
 
 pub(crate) struct Painted {
@@ -70,13 +70,16 @@ fn mono() -> Font {
     mono
 }
 
-pub(crate) fn cell_size(window: &Window) -> Size<Pixels> {
+pub(crate) fn cell_size(window: &Window, font: Pixels) -> Size<Pixels> {
     let text = window.text_system();
     let width = text
-        .em_advance(text.resolve_font(&mono()), px(FONT_SIZE))
-        .unwrap_or(px(FONT_SIZE * FALLBACK_ADVANCE));
+        .em_advance(text.resolve_font(&mono()), font)
+        .unwrap_or(font * FALLBACK_ADVANCE);
     let scale = window.scale_factor();
-    size(width, px((FONT_SIZE * LINE_HEIGHT * scale).round() / scale))
+    size(
+        width,
+        px((f32::from(font) * LINE_HEIGHT * scale).round() / scale),
+    )
 }
 
 struct Layout {
@@ -234,12 +237,22 @@ fn drawn_alone(ch: char) -> bool {
     BOX_DRAWING.contains(&ch) || POWERLINE.contains(&ch)
 }
 
-pub(crate) fn frame(
-    content: RenderableContent<'_>,
-    palette: &Palette,
-    focused: bool,
-    cursor_lit: bool,
-) -> Frame {
+pub(crate) struct Look<'a> {
+    pub palette: &'a Palette,
+    pub focused: bool,
+    pub cursor_lit: bool,
+    pub font: Pixels,
+    pub link: Option<(usize, RangeInclusive<usize>)>,
+}
+
+pub(crate) fn frame(content: RenderableContent<'_>, look: Look<'_>) -> Frame {
+    let Look {
+        palette,
+        focused,
+        cursor_lit,
+        font,
+        link,
+    } = look;
     let offset = content.display_offset;
     let cursor = point_to_viewport(offset, content.cursor.point)
         .filter(|_| cursor_lit)
@@ -285,13 +298,14 @@ pub(crate) fn frame(
             Some(cursor) if cursor.row == at.line && cursor.col == col => palette.background,
             _ => fg,
         };
-        layout.glyph(
-            col,
-            indexed.cell.c,
-            indexed.cell.zerowidth(),
-            color,
-            indexed.cell.flags,
-        );
+        let mut flags = indexed.cell.flags;
+        if link
+            .as_ref()
+            .is_some_and(|(row, cols)| *row == at.line && cols.contains(&col))
+        {
+            flags.insert(Flags::UNDERLINE);
+        }
+        layout.glyph(col, indexed.cell.c, indexed.cell.zerowidth(), color, flags);
     }
     layout.end_row(end);
     Frame {
@@ -300,6 +314,7 @@ pub(crate) fn frame(
         cursor,
         rows: layout.row + 1,
         cols: end,
+        font,
     }
 }
 
@@ -352,7 +367,7 @@ pub(crate) fn prepare(
         .map(|span| {
             let shaped = window.text_system().shape_line(
                 span.text.clone(),
-                px(FONT_SIZE),
+                frame.font,
                 &span.runs,
                 Some(cell.width),
             );

@@ -3,8 +3,10 @@ use flume::Receiver;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{self, ErrorKind, Read, Write};
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Instant;
 
@@ -24,6 +26,7 @@ pub(crate) struct Pty {
     input: flume::Sender<Vec<u8>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pid: Option<u32>,
+    exited: Arc<AtomicBool>,
 }
 
 fn command(shell: &Path, cwd: &Path) -> CommandBuilder {
@@ -129,8 +132,11 @@ impl Pty {
                 }
             }
         });
+        let exited = Arc::new(AtomicBool::new(false));
+        let ended = exited.clone();
         thread::spawn(move || {
             let code = child.wait().ok().map(|status| status.exit_code());
+            ended.store(true, Ordering::Release);
             exits.send(Output::Exited(code))
         });
         Ok((
@@ -139,6 +145,7 @@ impl Pty {
                 input,
                 killer,
                 pid,
+                exited,
             },
             received,
         ))
@@ -148,10 +155,11 @@ impl Pty {
         self.pid
     }
 
-    pub(crate) fn kill(&mut self) -> Result<(), String> {
-        self.killer
-            .kill()
-            .map_err(|error| format!("could not kill the shell: {error:#}"))
+    fn kill(&mut self) -> Result<(), String> {
+        if self.exited.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        terminated(self.killer.kill())
     }
 
     pub(crate) fn send(&self, bytes: Vec<u8>) -> bool {
@@ -171,6 +179,19 @@ impl Drop for Pty {
             eprintln!("{error}");
         }
     }
+}
+
+#[cfg(windows)]
+fn terminated(said: io::Result<()>) -> Result<(), String> {
+    match said {
+        Err(_) => Ok(()),
+        Ok(()) => Err("could not kill the shell: TerminateProcess refused".to_owned()),
+    }
+}
+
+#[cfg(not(windows))]
+fn terminated(said: io::Result<()>) -> Result<(), String> {
+    said.map_err(|error| format!("could not kill the shell: {error:#}"))
 }
 
 fn size(cols: u16, rows: u16) -> PtySize {

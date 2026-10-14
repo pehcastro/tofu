@@ -1,4 +1,6 @@
+mod font;
 mod keys;
+mod links;
 mod mouse;
 mod paint;
 mod palette;
@@ -7,8 +9,9 @@ mod scrollbar;
 pub mod shells;
 
 use crate::keys::{KeyInput, key_input};
+use crate::links::Link;
 use crate::mouse::Cell;
-use crate::paint::Frame;
+use crate::paint::{Frame, Look};
 pub use crate::palette::Palette;
 use crate::pty::{Output, Pty};
 use crate::scrollbar::Scrollback;
@@ -18,15 +21,16 @@ use alacritty_terminal::index::{Column, Line, Point as GridPoint};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::color::COUNT;
 use alacritty_terminal::term::test::TermSize;
-use alacritty_terminal::term::{Config, Term, TermMode};
+use alacritty_terminal::term::{Config, Term, TermMode, point_to_viewport};
 use alacritty_terminal::vte::ansi::Processor;
 use desk_core::limits::{TERMINAL_CURSOR_BLINK, TERMINAL_SCROLLBACK_LINES};
 use flume::Receiver;
 use gpui::{
     App, Bounds, ClipboardItem, Context, DispatchPhase, ElementInputHandler, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render, Result, ScrollWheelEvent,
-    SharedString, Size, Task, UTF16Selection, Window, canvas, div, prelude::*, px, size,
+    EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, ModifiersChangedEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render,
+    Result, ScrollWheelEvent, SharedString, Size, Task, UTF16Selection, Window, canvas, div,
+    prelude::*, px, size,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -81,6 +85,10 @@ pub struct Terminal {
     pressed_at: Option<Point<Pixels>>,
     grabbed: Option<Pixels>,
     hovered: Option<Cell>,
+    pointer: Option<Point<Pixels>>,
+    control: bool,
+    link: Option<Link>,
+    font: u8,
     scrolled: f32,
     last_output: Option<Instant>,
     sync_at: Option<Instant>,
@@ -131,6 +139,10 @@ impl Terminal {
             pressed_at: None,
             grabbed: None,
             hovered: None,
+            pointer: None,
+            control: false,
+            link: None,
+            font: font::saved(),
             scrolled: 0.,
             last_output: None,
             sync_at: None,
@@ -376,11 +388,20 @@ impl Terminal {
         if let Some(frame) = &self.drawn {
             return frame.clone();
         }
+        let offset = self.term.grid().display_offset();
+        let link = self.link.as_ref().and_then(|link| {
+            point_to_viewport(offset, GridPoint::new(link.line, Column(0)))
+                .map(|at| (at.line, link.columns.clone()))
+        });
         let frame = Rc::new(paint::frame(
             self.term.renderable_content(),
-            &self.palette,
-            self.focused,
-            self.cursor_lit,
+            Look {
+                palette: &self.palette,
+                focused: self.focused,
+                cursor_lit: self.cursor_lit,
+                font: px(f32::from(self.font)),
+                link,
+            },
         ));
         self.drawn = Some(frame.clone());
         frame
@@ -440,6 +461,10 @@ impl Terminal {
             self.restart(cx);
             return cx.stop_propagation();
         }
+        let held = event.keystroke.modifiers;
+        if held.control && !held.alt && self.zoom(&event.keystroke.key, cx) {
+            return cx.stop_propagation();
+        }
         match key_input(&event.keystroke, *self.term.mode(), self.selected()) {
             Some(KeyInput::Scroll(scroll)) => self.scroll(scroll, cx),
             Some(KeyInput::Send(bytes)) => self.type_bytes(bytes, cx),
@@ -449,6 +474,46 @@ impl Terminal {
         }
         cx.stop_propagation();
         self.redraw(cx);
+    }
+
+    fn zoom(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        let font = match key {
+            "=" | "+" => self.font.saturating_add(1),
+            "-" => self.font.saturating_sub(1),
+            "0" => font::DEFAULT,
+            _ => return false,
+        };
+        let font = font::clamped(font);
+        if font != self.font {
+            self.font = font;
+            match font::save(font) {
+                Ok(()) => eprintln!("desk: terminal font {font}"),
+                Err(error) => eprintln!("terminal: font {font} not kept: {error}"),
+            }
+            self.redraw(cx);
+        }
+        true
+    }
+
+    fn point_link(&mut self, cx: &mut Context<Self>) {
+        let link = self
+            .pointer
+            .filter(|_| self.control)
+            .and_then(|at| links::link_at(&self.term, self.grid_point(self.cell_at(at))));
+        if link != self.link {
+            self.link = link;
+            self.redraw(cx);
+        }
+    }
+
+    fn modifiers_changed(
+        &mut self,
+        event: &ModifiersChangedEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.control = event.modifiers.control;
+        self.point_link(cx);
     }
 
     fn type_bytes(&mut self, bytes: Vec<u8>, cx: &mut Context<Self>) {
@@ -494,6 +559,14 @@ impl Terminal {
         window.focus(&self.focus, cx);
         let mode = *self.term.mode();
         let at = self.cell_at(event.position);
+        if event.button == MouseButton::Left
+            && event.modifiers.control
+            && let Some(link) = links::link_at(&self.term, self.grid_point(at))
+        {
+            eprintln!("desk: terminal opened {}", link.url);
+            cx.open_url(&link.url);
+            return;
+        }
         if mouse::reporting(mode, event.modifiers.shift) {
             if let Some(report) =
                 mouse::button_report(at, event.button, event.modifiers, true, mode)
@@ -546,7 +619,10 @@ impl Terminal {
         }
     }
 
-    fn mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, _: &mut Context<Self>) {
+    fn mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+        self.pointer = Some(event.position);
+        self.control = event.modifiers.control;
+        self.point_link(cx);
         let mode = *self.term.mode();
         let at = self.cell_at(event.position);
         if mouse::reporting(mode, event.modifiers.shift)
@@ -738,11 +814,14 @@ impl Render for Terminal {
         let dragged = terminal.clone();
         let focus = self.focus.clone();
         let palette = self.palette;
+        let font = px(f32::from(self.font));
         div()
             .size_full()
             .bg(palette.background)
+            .when(self.link.is_some(), |div| div.cursor_pointer())
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
+            .on_modifiers_changed(cx.listener(Self::modifiers_changed))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::mouse_down))
             .on_mouse_down(MouseButton::Middle, cx.listener(Self::mouse_down))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::mouse_down))
@@ -755,7 +834,7 @@ impl Render for Terminal {
             .child(
                 canvas(
                     move |bounds, window, cx| {
-                        let cell = paint::cell_size(window);
+                        let cell = paint::cell_size(window, font);
                         let (frame, thumb) = terminal.update(cx, |terminal, cx| {
                             (terminal.frame(bounds, cell, cx), terminal.thumb())
                         });

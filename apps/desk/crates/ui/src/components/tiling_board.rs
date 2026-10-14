@@ -37,13 +37,14 @@ const TILE_PLUS_BOX: f32 = 16.0;
 const TILE_PLUS_GLYPH: f32 = ICON_SMALL * 0.8;
 const DIVIDER_LINE: f32 = 2.0;
 const BADGE_OFFSET: f32 = 12.0;
+const BADGE_WIDTH: f32 = 72.0;
 const SHRINK_SLACK: f32 = 0.5;
 const PREVIEW_OPACITY: f32 = 0.3;
 
 pub type Lens<V> = fn(&mut V) -> &mut TilingBoard<V>;
 pub type Body<V> = Box<dyn Fn(&Stack, Rect, &Theme, &mut Context<V>) -> AnyElement>;
-pub type Title = Box<dyn Fn(&Module, TabMark, &App) -> Tab>;
-pub type Subtitle = Box<dyn Fn(&Module, &App) -> Option<AnyElement>>;
+pub type Title = Box<dyn Fn(TileId, &Module, TabMark, &App) -> Tab>;
+pub type Subtitle = Box<dyn Fn(TileId, &Module, &App) -> Option<AnyElement>>;
 pub type Settled = Box<dyn Fn(&[Workspace], usize, Rect)>;
 pub type Expand<V> = Box<dyn Fn(&Module, &str, &mut Window, &mut Context<V>)>;
 
@@ -964,29 +965,21 @@ impl<V: 'static> TilingBoard<V> {
                 }
             },
         );
-        let close = div()
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .right(relative(1.0))
-            .flex()
-            .items_center()
-            .child(expand)
-            .child(close);
+        let controls = div().flex().items_center().child(expand).child(close);
         if let [module] = shown.modules.as_slice() {
-            let tab = (self.host.title)(module, mark, cx);
+            let tab = (self.host.title)(tile, module, mark, cx);
             let trailing = div()
                 .relative()
                 .flex()
                 .items_center()
-                .children((self.host.subtitle)(module, cx))
-                .child(close);
+                .children((self.host.subtitle)(tile, module, cx))
+                .child(controls.absolute().top_0().bottom_0().right(relative(1.0)));
             return Header::Title(tab.icon, tab.label, Some(trailing.into_any_element()));
         }
         let tabs: Vec<Tab> = shown
             .modules
             .iter()
-            .map(|module| (self.host.title)(module, mark, cx))
+            .map(|module| (self.host.title)(tile, module, mark, cx))
             .collect();
         let (pressing, pointing) = (cx.entity().downgrade(), cx.entity().downgrade());
         let strip = connected_tabs(
@@ -1033,7 +1026,7 @@ impl<V: 'static> TilingBoard<V> {
             .iter()
             .map(|module| {
                 let row = MenuItem::action(module.name().to_owned());
-                match (self.host.title)(module, TabMark::Close, cx).icon {
+                match (self.host.title)(tile, module, TabMark::Close, cx).icon {
                     Some(mark) => row.icon(mark),
                     None => row,
                 }
@@ -1073,6 +1066,7 @@ impl<V: 'static> TilingBoard<V> {
                             .and_then(|workspace| workspace.stack(tile))
                             .and_then(|stack| stack.modules.iter().position(|at| *at == module));
                         match open {
+                            Some(_) if module == Module::Terminal => page.spawn(module),
                             Some(index) => {
                                 page.apply(false, |workspace, _| workspace.activate(tile, index))
                             }
@@ -1093,13 +1087,21 @@ impl<V: 'static> TilingBoard<V> {
             .modules
             .get(shown.active)
             .filter(|module| **module == Module::Terminal)
-            .and_then(|module| (self.host.subtitle)(module, cx));
+            .and_then(|module| (self.host.subtitle)(tile, module, cx))
+            .map(|badge| {
+                div()
+                    .min_w_0()
+                    .max_w(px(BADGE_WIDTH))
+                    .overflow_hidden()
+                    .truncate()
+                    .child(badge)
+            });
         let trailing = div()
-            .relative()
             .flex()
             .items_center()
+            .gap_1()
             .children(badge)
-            .child(close);
+            .child(controls);
         Header::Tabs(
             strip.new_button(plus).into_any_element(),
             Some(trailing.into_any_element()),
