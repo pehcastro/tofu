@@ -1,3 +1,4 @@
+mod find;
 mod font;
 mod kept;
 mod keys;
@@ -9,6 +10,7 @@ mod pty;
 mod scrollbar;
 pub mod shells;
 
+use crate::find::Find;
 pub use crate::kept::{Attachment, Kept};
 use crate::keys::{KeyInput, key_input};
 use crate::links::Link;
@@ -20,7 +22,7 @@ pub use crate::pty::{ByteSink, Output};
 use crate::scrollbar::Scrollback;
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
 use alacritty_terminal::grid::{Dimensions, Scroll};
-use alacritty_terminal::index::{Column, Line, Point as GridPoint};
+use alacritty_terminal::index::{Column, Line, Point as GridPoint, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::color::COUNT;
 use alacritty_terminal::term::test::TermSize;
@@ -30,10 +32,10 @@ use desk_core::limits::{TERMINAL_CURSOR_BLINK, TERMINAL_SCROLLBACK_LINES};
 use flume::Receiver;
 use gpui::{
     App, Bounds, ClipboardItem, Context, DispatchPhase, ElementInputHandler, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, ModifiersChangedEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, Render,
-    Result, ScrollWheelEvent, SharedString, Size, Task, UTF16Selection, Window, canvas, div,
-    prelude::*, px, size,
+    EventEmitter, FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, Modifiers,
+    ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad,
+    Pixels, Point, Render, Result, ScrollWheelEvent, SharedString, Size, Task, UTF16Selection,
+    Window, canvas, div, prelude::*, px, size,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -114,6 +116,7 @@ pub struct Terminal {
     pointer: Option<Point<Pixels>>,
     control: bool,
     link: Option<Link>,
+    find: Option<Find>,
     font: u8,
     scrolled: f32,
     last_output: Option<Instant>,
@@ -170,6 +173,7 @@ impl Terminal {
             pointer: None,
             control: false,
             link: None,
+            find: None,
             font: font::saved(),
             scrolled: 0.,
             last_output: None,
@@ -283,6 +287,9 @@ impl Terminal {
 
     fn receive(&mut self, batch: Vec<Output>, cx: &mut Context<Self>) {
         self.end_sync_when_due(cx);
+        if let Some(find) = &mut self.find {
+            find.forget();
+        }
         for output in batch {
             match output {
                 Output::Bytes(bytes) => self.parser.advance(&mut self.term, &bytes),
@@ -456,6 +463,13 @@ impl Terminal {
             point_to_viewport(offset, GridPoint::new(link.line, Column(0)))
                 .map(|at| (at.line, link.columns.clone()))
         });
+        let top = Line(0) - offset;
+        let bottom = top + self.term.grid().screen_lines().saturating_sub(1);
+        let found = self
+            .find
+            .as_ref()
+            .map(|find| find.visible(top, bottom))
+            .unwrap_or_default();
         let frame = Rc::new(paint::frame(
             self.term.renderable_content(),
             Look {
@@ -464,6 +478,7 @@ impl Terminal {
                 cursor_lit: self.cursor_lit,
                 font: px(f32::from(self.font)),
                 link,
+                found,
             },
         ));
         self.drawn = Some(frame.clone());
@@ -499,8 +514,9 @@ impl Terminal {
     }
 
     fn copy(&mut self, cx: &mut Context<Self>) {
-        let text = self.term.selection_to_string();
-        if let Some(text) = text.filter(|text| !text.is_empty()) {
+        let text = self.term.selection_to_string().unwrap_or_default();
+        eprintln!("desk: terminal copy {} chars", text.chars().count());
+        if !text.is_empty() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         self.term.selection = None;
@@ -510,6 +526,10 @@ impl Terminal {
         let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
             return;
         };
+        if let Some(find) = &mut self.find {
+            let line = text.lines().next().unwrap_or_default();
+            return find.edit(|query| query.push_str(line));
+        }
         let text = text.replace("\r\n", "\r").replace('\n', "\r");
         let text = if self.term.mode().contains(TermMode::BRACKETED_PASTE) {
             format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', ""))
@@ -519,28 +539,77 @@ impl Terminal {
         self.type_bytes(text.into_bytes(), cx);
     }
 
-    fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if self.started
-            && !self.attached
-            && self.process.is_none()
-            && event.keystroke.key == "enter"
-        {
+    fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let mut keystroke = event.keystroke.clone();
+        keystroke.modifiers |= window.modifiers();
+        if self.press(&keystroke, cx) {
+            cx.stop_propagation();
+        }
+    }
+
+    fn press(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        if self.started && !self.attached && self.process.is_none() && keystroke.key == "enter" {
             self.restart(cx);
-            return cx.stop_propagation();
+            return true;
         }
-        let held = event.keystroke.modifiers;
-        if held.control && !held.alt && self.zoom(&event.keystroke.key, cx) {
-            return cx.stop_propagation();
+        let held = keystroke.modifiers;
+        if (held.control && !held.alt && self.zoom(&keystroke.key, cx))
+            || self.find_key(keystroke, cx)
+        {
+            return true;
         }
-        match key_input(&event.keystroke, *self.term.mode(), self.selected()) {
+        match key_input(keystroke, *self.term.mode(), self.selected()) {
             Some(KeyInput::Scroll(scroll)) => self.scroll(scroll, cx),
             Some(KeyInput::Send(bytes)) => self.type_bytes(bytes, cx),
             Some(KeyInput::Paste) => self.paste(cx),
             Some(KeyInput::Copy) => self.copy(cx),
-            None => return,
+            Some(KeyInput::Find) => {
+                eprintln!("desk: terminal find opened by {keystroke}");
+                self.find.get_or_insert_with(Find::default);
+            }
+            None => return false,
         }
-        cx.stop_propagation();
         self.redraw(cx);
+        true
+    }
+
+    fn find_key(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let Some(find) = &mut self.find else {
+            return false;
+        };
+        match keystroke.key.as_str() {
+            "escape" => self.find = None,
+            "enter" => self.search(!keystroke.modifiers.shift),
+            "backspace" => find.edit(|query| {
+                query.pop();
+            }),
+            _ => return false,
+        }
+        self.redraw(cx);
+        true
+    }
+
+    fn search(&mut self, older: bool) {
+        let Some(find) = self.find.as_mut().filter(|find| !find.query.is_empty()) else {
+            return;
+        };
+        let started = Instant::now();
+        let picked = match find.run(&self.term, older) {
+            Ok(picked) => picked,
+            Err(error) => return eprintln!("terminal: find {:?} failed: {error}", find.query),
+        };
+        eprintln!(
+            "desk: terminal find {:?} {} matches in {:.2} ms",
+            find.query,
+            find.count(),
+            started.elapsed().as_secs_f64() * 1000.
+        );
+        if let Some(found) = picked {
+            let mut selection = Selection::new(SelectionType::Simple, *found.start(), Side::Left);
+            selection.update(*found.end(), Side::Right);
+            self.term.selection = Some(selection);
+            self.term.scroll_to_point(*found.start());
+        }
     }
 
     fn zoom(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
@@ -651,7 +720,6 @@ impl Terminal {
                 self.press_rail(event.position.y, cx)
             }
             MouseButton::Left => self.press_text(event, at),
-            MouseButton::Right if self.selected() => self.copy(cx),
             MouseButton::Right | MouseButton::Middle => self.paste(cx),
             MouseButton::Navigate(_) => return,
         }
@@ -832,9 +900,28 @@ impl EntityInputHandler for Terminal {
         &mut self,
         _: Option<Range<usize>>,
         text: &str,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let held = window.modifiers();
+        if held.control && !held.alt {
+            let chord = Keystroke {
+                modifiers: Modifiers {
+                    shift: held.shift || text.chars().any(char::is_uppercase),
+                    ..held
+                },
+                key: text.to_lowercase(),
+                key_char: None,
+            };
+            if !self.press(&chord, cx) {
+                eprintln!("desk: terminal dropped {text:?}, typed while Ctrl was held");
+            }
+            return;
+        }
+        if let Some(find) = &mut self.find {
+            find.edit(|query| query.push_str(text));
+            return self.redraw(cx);
+        }
         if !text.is_empty() && self.process.is_some() {
             self.type_bytes(text.as_bytes().to_vec(), cx);
             self.redraw(cx);
@@ -884,6 +971,7 @@ impl Render for Terminal {
         let palette = self.palette;
         let font = px(f32::from(self.font));
         div()
+            .relative()
             .size_full()
             .bg(palette.background)
             .when(self.link.is_some(), |div| div.cursor_pointer())
@@ -921,5 +1009,6 @@ impl Render for Terminal {
                 )
                 .size_full(),
             )
+            .children(self.find.as_ref().map(|find| find.bar(&palette, font)))
     }
 }

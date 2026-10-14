@@ -10,6 +10,7 @@ pub(crate) enum KeyInput {
     Scroll(Scroll),
     Paste,
     Copy,
+    Find,
 }
 
 pub(crate) fn key_input(keystroke: &Keystroke, mode: TermMode, selected: bool) -> Option<KeyInput> {
@@ -17,6 +18,7 @@ pub(crate) fn key_input(keystroke: &Keystroke, mode: TermMode, selected: bool) -
     let key = keystroke.key.to_ascii_lowercase();
     let only_shift = held.shift && !held.control && !held.alt;
     match (key.as_str(), held.control, held.alt, held.shift) {
+        ("f", true, false, true) => return Some(KeyInput::Find),
         ("c", true, false, true) => return Some(KeyInput::Copy),
         ("c", true, false, false) if selected => return Some(KeyInput::Copy),
         ("v", true, false, _) => return Some(KeyInput::Paste),

@@ -12,6 +12,7 @@ const CURSOR: u32 = 0xd8dadb;
 const SELECTION: u32 = 0x81a2be;
 const SELECTION_ALPHA: f32 = 0.35;
 const DIM_ALPHA: f32 = 0.66;
+const FOUND_ALPHA: f32 = 0.4;
 const CUBE_FIRST: u8 = 16;
 const GREY_FIRST: u8 = 232;
 
@@ -55,6 +56,10 @@ impl Palette {
             g: byte(channels.green),
             b: byte(channels.blue),
         }
+    }
+
+    pub(crate) fn found(&self) -> Hsla {
+        self.named_color(NamedColor::Yellow).opacity(FOUND_ALPHA)
     }
 
     pub(crate) fn cell_colors(&self, cell: &Cell) -> (Hsla, Option<Hsla>) {

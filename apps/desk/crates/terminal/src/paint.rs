@@ -2,6 +2,7 @@ use crate::palette::Palette;
 use alacritty_terminal::term::RenderableContent;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::point_to_viewport;
+use alacritty_terminal::term::search::Match;
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui::{
     App, BorderStyle, Bounds, Font, FontFeatures, FontStyle, FontWeight, Hsla, PaintQuad, Pixels,
@@ -17,7 +18,7 @@ const BAR_WIDTH: f32 = 2.;
 const DECORATION: f32 = 1.;
 const BOX_DRAWING: RangeInclusive<char> = '\u{2500}'..='\u{259F}';
 const POWERLINE: RangeInclusive<char> = '\u{E0B0}'..='\u{E0D7}';
-const FAMILY: &str = if cfg!(target_os = "windows") {
+pub(crate) const FAMILY: &str = if cfg!(target_os = "windows") {
     "Consolas"
 } else if cfg!(target_os = "macos") {
     "Menlo"
@@ -243,6 +244,7 @@ pub(crate) struct Look<'a> {
     pub cursor_lit: bool,
     pub font: Pixels,
     pub link: Option<(usize, RangeInclusive<usize>)>,
+    pub found: &'a [Match],
 }
 
 pub(crate) fn frame(content: RenderableContent<'_>, look: Look<'_>) -> Frame {
@@ -252,6 +254,7 @@ pub(crate) fn frame(content: RenderableContent<'_>, look: Look<'_>) -> Frame {
         cursor_lit,
         font,
         link,
+        found,
     } = look;
     let offset = content.display_offset;
     let cursor = point_to_viewport(offset, content.cursor.point)
@@ -289,8 +292,14 @@ pub(crate) fn frame(content: RenderableContent<'_>, look: Look<'_>) -> Frame {
         let selected = content.selection.is_some_and(|selection| {
             selection.contains_cell(&indexed, content.cursor.point, content.cursor.shape)
         });
+        let matched = found.iter().any(|found| found.contains(&indexed.point));
         let (fg, bg) = palette.cell_colors(indexed.cell);
-        layout.back(col, selected.then_some(palette.selection).or(bg));
+        let highlight = match (selected, matched) {
+            (true, _) => Some(palette.selection),
+            (false, true) => Some(palette.found()),
+            (false, false) => bg,
+        };
+        layout.back(col, highlight);
         if indexed.cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
             continue;
         }
