@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
@@ -6,9 +6,11 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use desk_plugin::{Error, Event, Kind, Node, Pending};
+use desk_plugin::{Editor, Error, Event, Folder, Kind, Node, Op, Pending};
 use desk_ui::components::button::{ButtonKind, button};
+use desk_ui::components::chat::{self, Block};
 use desk_ui::components::chip::{badge, chip};
+use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::form::{TextArea, segmented, switch_bare};
 use desk_ui::components::list::{CellKind, Column, Width, row, table};
@@ -18,7 +20,7 @@ use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, AnyView, App, AppContext, ClickEvent, Context, ElementId, Entity, FocusHandle,
     IntoElement, KeyDownEvent, MouseButton, Render, ScrollStrategy, SharedString, Subscription,
-    Task, UniformListScrollHandle, WeakEntity, Window, canvas, div, prelude::*, uniform_list,
+    Task, UniformListScrollHandle, WeakEntity, Window, canvas, div, prelude::*, px, uniform_list,
 };
 
 use super::Plugin;
@@ -28,6 +30,7 @@ const FIRST_WINDOW: u64 = 30;
 const MIN_PAGE: u64 = 16;
 const MAX_CACHED: usize = 4096;
 const MAX_DEPTH: usize = 32;
+const EDITOR_MIN_HEIGHT: f32 = 160.0;
 
 enum Ask {
     View(Pending<Vec<Node>>),
@@ -43,12 +46,20 @@ enum Reply {
 
 type Cells = Rc<RefCell<HashMap<u64, Rc<[SharedString]>>>>;
 
+struct Lent {
+    path: String,
+    opened: Result<(Entity<CodeEditor>, Subscription), String>,
+}
+
 struct Parts {
     entry: &'static Plugin,
+    folder: Option<Folder>,
     this: WeakEntity<GuestView>,
     cells: Cells,
     scroll: UniformListScrollHandle,
     inputs: HashMap<String, (Entity<TextArea>, Subscription)>,
+    editors: HashMap<String, Lent>,
+    prose: HashMap<String, (String, Rc<[Block]>)>,
     columns: Vec<(Vec<String>, &'static [Column])>,
     words: HashMap<String, &'static str>,
 }
@@ -87,10 +98,13 @@ pub fn mount(entry: &'static Plugin, guest: &'static Guest, cx: &mut App) -> Any
             fault,
             parts: Parts {
                 entry,
+                folder: guest.running().map(|plugin| plugin.folder().clone()),
                 this: cx.weak_entity(),
                 cells: Cells::default(),
                 scroll: UniformListScrollHandle::new(),
                 inputs: HashMap::new(),
+                editors: HashMap::new(),
+                prose: HashMap::new(),
                 columns: Vec::new(),
                 words: HashMap::new(),
             },
@@ -465,6 +479,8 @@ fn kind_name(kind: &Kind) -> &'static str {
         Kind::Text(_) => "text",
         Kind::Stack => "stack",
         Kind::Grid(_) => "grid",
+        Kind::Editor(_) => "editor",
+        Kind::Markdown(_) => "markdown",
     }
 }
 
@@ -586,6 +602,21 @@ impl Parts {
                     .into_any_element()
             }
             Kind::Input(placeholder) => self.input(key, placeholder, window, cx).into_any_element(),
+            Kind::Editor(lent) => match self.editor(key, lent, cx) {
+                Ok(editor) => div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h(px(EDITOR_MIN_HEIGHT))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(editor)
+                    .into_any_element(),
+                Err(reason) => error_part(id, "the editor did not open", reason, theme),
+            },
+            Kind::Markdown(text) => {
+                let blocks = self.prose(&key, text);
+                chat::lead(id, "", &blocks, &[], theme).into_any_element()
+            }
             Kind::Table(shape) if !*windowed => {
                 *windowed = true;
                 let columns = self.columns(&shape.columns);
@@ -692,6 +723,90 @@ impl Parts {
         });
         self.inputs.insert(key, (field.clone(), watch));
         field
+    }
+
+    fn editor(
+        &mut self,
+        key: String,
+        lent: &Editor,
+        cx: &mut Context<GuestView>,
+    ) -> Result<Entity<CodeEditor>, String> {
+        let shown = |opened: &Result<(Entity<CodeEditor>, Subscription), String>| match opened {
+            Ok((editor, _)) => Ok(editor.clone()),
+            Err(reason) => Err(reason.clone()),
+        };
+        if let Some(open) = self.editors.get(&key)
+            && open.path == lent.path
+        {
+            return shown(&open.opened);
+        }
+        let opened = self.lend(lent, cx);
+        let editor = shown(&opened);
+        let path = lent.path.clone();
+        self.editors.insert(key, Lent { path, opened });
+        editor
+    }
+
+    fn lend(
+        &self,
+        lent: &Editor,
+        cx: &mut Context<GuestView>,
+    ) -> Result<(Entity<CodeEditor>, Subscription), String> {
+        let folder = self
+            .folder
+            .clone()
+            .ok_or_else(|| format!("{} is not running", self.entry.id))?;
+        let path = folder
+            .path(Op::Read, &lent.path)
+            .map_err(|error| error.to_string())?;
+        let editor = match lent.syntax {
+            true => CodeEditor::open(&path, cx)?,
+            false => CodeEditor::plain(&path, cx)?,
+        };
+        let saved = Rc::new(RefCell::new(editor.buffer().text()));
+        let dirty = Rc::new(Cell::new(false));
+        let (asked, written, cleaned, this) = (
+            lent.path.clone(),
+            saved.clone(),
+            dirty.clone(),
+            self.this.clone(),
+        );
+        let editor = editor.on_save(move |buffer, _, cx| {
+            let text = buffer.text();
+            folder
+                .write(&asked, text.as_bytes())
+                .map_err(|error| error.to_string())?;
+            *written.borrow_mut() = text;
+            cleaned.set(false);
+            deliver(&this, Event::Saved(asked.clone()), cx);
+            Ok(())
+        });
+        let editor = cx.new(|cx| {
+            let mut editor = editor;
+            editor.colour_rest(cx);
+            editor
+        });
+        let changed = lent.path.clone();
+        let watch = cx.observe(&editor, move |view, editor, cx| {
+            if dirty.get() || *editor.read(cx).buffer().rope() == *saved.borrow() {
+                return;
+            }
+            dirty.set(true);
+            view.send(Event::Changed(changed.clone()), cx);
+        });
+        Ok((editor, watch))
+    }
+
+    fn prose(&mut self, key: &str, text: &str) -> Rc<[Block]> {
+        match self.prose.get(key) {
+            Some((seen, blocks)) if seen == text => blocks.clone(),
+            _ => {
+                let blocks: Rc<[Block]> = chat::markdown(text).into();
+                self.prose
+                    .insert(key.to_owned(), (text.to_owned(), blocks.clone()));
+                blocks
+            }
+        }
     }
 
     fn word(&mut self, word: &str) -> &'static str {

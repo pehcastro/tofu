@@ -3,15 +3,16 @@ use std::ops::Range;
 
 pub mod bindings {
     wit_bindgen::generate!({
-        path: "../../wit/since_v0.1.0",
+        path: "../../wit/since_v0.2.0",
         world: "plugin",
         pub_export_macro: true,
         default_bindings_module: "desk_plugin_sdk::bindings",
     });
 }
 
+pub use bindings::tofu::desk::fs;
 pub use bindings::tofu::desk::host::{Denied, notify};
-pub use bindings::tofu::desk::types::{Badge, Choice, Kind, Node, Table, Toggle, Tone};
+pub use bindings::tofu::desk::types::{Badge, Choice, Editor, Kind, Node, Table, Toggle, Tone};
 pub use bindings::{Event, Guest, Tree};
 
 pub trait Plugin: Default {
@@ -48,6 +49,15 @@ pub fn text(key: impl Into<String>, text: impl Into<String>) -> Part {
 
 pub fn button(key: impl Into<String>, label: impl Into<String>) -> Part {
     part(key, Kind::Button(label.into()), [])
+}
+
+pub fn editor(key: impl Into<String>, path: impl Into<String>, wrap: bool, syntax: bool) -> Part {
+    let path = path.into();
+    part(key, Kind::Editor(Editor { path, wrap, syntax }), [])
+}
+
+pub fn markdown(key: impl Into<String>, text: impl Into<String>) -> Part {
+    part(key, Kind::Markdown(text.into()), [])
 }
 
 pub fn table(

@@ -1,0 +1,17 @@
+[package]
+name = "notes-lite"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+desk_plugin_sdk = { path = "../../../crates/plugin-sdk" }
+
+[profile.release]
+opt-level = "s"
+strip = true
+
+[workspace]

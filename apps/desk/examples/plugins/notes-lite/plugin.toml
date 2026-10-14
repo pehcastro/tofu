@@ -1,0 +1,9 @@
+id = "local.notes-lite"
+name = "Notes lite"
+icon = "file"
+version = "0.1.0"
+api = "desk@0.2"
+tofu = ">=0.6"
+
+[contributes]
+tile = true

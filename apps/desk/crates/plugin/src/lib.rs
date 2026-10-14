@@ -1,4 +1,6 @@
+mod folder;
 mod install;
+mod ladder;
 mod manifest;
 mod scan;
 
@@ -17,18 +19,18 @@ use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder, Trap};
 
+pub use folder::{Entry, Folder, FsError, Op, Outcome, PathRefusal};
 pub use install::{Home, Origin, Refusal, Report};
+pub use ladder::since_v0_2_0::tofu::desk::types::{
+    Badge, Choice, Editor, Event, Kind, Node, Table, Toggle, Tone,
+};
 pub use manifest::{
     Api, Capability, Command, Contributes, GRANT_VERSION, Id, IdRule, MAX_ID_LEN, Manifest, Mode,
 };
 pub use scan::{Import, KEY_ENTROPY_BITS, KEY_PREFIXES, KeyLike, MIN_KEY_LEN, ScanReport, scan};
-pub use since_v0_1_0::tofu::desk::types::{Badge, Choice, Event, Kind, Node, Table, Toggle, Tone};
 
-mod since_v0_1_0 {
-    wasmtime::component::bindgen!({ path: "../../wit/since_v0.1.0", world: "plugin" });
-}
-
-use since_v0_1_0::tofu::desk::host::Denied;
+use ladder::{since_v0_1_0, since_v0_2_0};
+use since_v0_2_0::tofu::desk::fs as guest_fs;
 
 pub const TICK: Duration = Duration::from_millis(1);
 pub const RENDER_TICKS: u64 = 50;
@@ -167,7 +169,10 @@ impl fmt::Display for Error {
                 f,
                 "plugin {plugin}: disabled, a plugin from a project folder never enables itself"
             ),
-            Error::Api(api) => write!(f, "api {api} is not supported, this desk speaks desk@0.1"),
+            Error::Api(api) => write!(
+                f,
+                "api {api} is not supported, this desk speaks desk@0.1 and desk@0.2"
+            ),
             Error::Id(id, rule) => write!(f, "id {id} is refused: {rule}"),
             Error::Capability(c) => write!(f, "unknown capability {c}"),
             Error::CapabilityValue(c) => {
@@ -240,28 +245,102 @@ impl std::error::Error for Error {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Activity {
-    Notice { title: String, body: String },
+    Notice {
+        title: String,
+        body: String,
+    },
     Denied(Capability),
+    Fs {
+        op: Op,
+        path: String,
+        outcome: Outcome,
+    },
 }
 
 struct State {
     limits: StoreLimits,
     granted: BTreeSet<Capability>,
+    folder: Folder,
     activity: Vec<Activity>,
+}
+
+impl State {
+    fn notice(&mut self, title: String, body: String) -> Result<(), String> {
+        if !self.granted.contains(&Capability::Notify) {
+            self.activity.push(Activity::Denied(Capability::Notify));
+            return Err(Capability::Notify.name().to_owned());
+        }
+        self.activity.push(Activity::Notice { title, body });
+        Ok(())
+    }
+
+    fn fs<T>(
+        &mut self,
+        op: Op,
+        path: String,
+        run: impl FnOnce(&Folder, &str) -> Result<T, FsError>,
+    ) -> Result<T, guest_fs::FsError> {
+        let done = run(&self.folder, &path);
+        let outcome = Outcome::of(&done);
+        self.activity.push(Activity::Fs { op, path, outcome });
+        done.map_err(|error| match error {
+            FsError::Denied(refusal) => guest_fs::FsError::Denied(refusal.to_string()),
+            FsError::Missing => guest_fs::FsError::Missing,
+            FsError::TooLarge(bytes) => guest_fs::FsError::TooLarge(bytes),
+            FsError::Io(error) => guest_fs::FsError::Failed(error.to_string()),
+        })
+    }
 }
 
 impl since_v0_1_0::tofu::desk::types::Host for State {}
 
 impl since_v0_1_0::tofu::desk::host::Host for State {
-    fn notify(&mut self, title: String, body: String) -> Result<(), Denied> {
-        if !self.granted.contains(&Capability::Notify) {
-            self.activity.push(Activity::Denied(Capability::Notify));
-            return Err(Denied {
-                permission: Capability::Notify.name().to_owned(),
-            });
-        }
-        self.activity.push(Activity::Notice { title, body });
-        Ok(())
+    fn notify(
+        &mut self,
+        title: String,
+        body: String,
+    ) -> Result<(), since_v0_1_0::tofu::desk::host::Denied> {
+        self.notice(title, body)
+            .map_err(|permission| since_v0_1_0::tofu::desk::host::Denied { permission })
+    }
+}
+
+impl since_v0_2_0::tofu::desk::types::Host for State {}
+
+impl since_v0_2_0::tofu::desk::host::Host for State {
+    fn notify(
+        &mut self,
+        title: String,
+        body: String,
+    ) -> Result<(), since_v0_2_0::tofu::desk::host::Denied> {
+        self.notice(title, body)
+            .map_err(|permission| since_v0_2_0::tofu::desk::host::Denied { permission })
+    }
+}
+
+impl guest_fs::Host for State {
+    fn read(&mut self, path: String) -> Result<Vec<u8>, guest_fs::FsError> {
+        self.fs(Op::Read, path, Folder::read)
+    }
+
+    fn write(&mut self, path: String, data: Vec<u8>) -> Result<(), guest_fs::FsError> {
+        self.fs(Op::Write, path, |folder, path| folder.write(path, &data))
+    }
+
+    fn list(&mut self, path: String) -> Result<Vec<guest_fs::Entry>, guest_fs::FsError> {
+        let entries = self.fs(Op::List, path, Folder::list)?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| guest_fs::Entry {
+                name: entry.name,
+                folder: entry.folder,
+                bytes: entry.bytes,
+            })
+            .collect())
+    }
+
+    fn remove(&mut self, path: String) -> Result<(), guest_fs::FsError> {
+        self.fs(Op::Remove, path, Folder::remove)
     }
 }
 
@@ -295,6 +374,7 @@ pub struct Host {
     home: Home,
     engine: Engine,
     linker_v0_1_0: Linker<State>,
+    linker_v0_2_0: Linker<State>,
 }
 
 impl Host {
@@ -304,6 +384,9 @@ impl Host {
         let engine = Engine::new(&config).map_err(Error::Engine)?;
         let mut linker_v0_1_0 = Linker::new(&engine);
         since_v0_1_0::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker_v0_1_0, |s| s)
+            .map_err(Error::Engine)?;
+        let mut linker_v0_2_0 = Linker::new(&engine);
+        since_v0_2_0::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker_v0_2_0, |s| s)
             .map_err(Error::Engine)?;
         let weak = engine.weak();
         thread::spawn(move || {
@@ -322,6 +405,7 @@ impl Host {
             home: home.clone(),
             engine,
             linker_v0_1_0,
+            linker_v0_2_0,
         })
     }
 
@@ -407,6 +491,7 @@ impl Host {
                     .filter(|&(_, &mode)| mode == Mode::Allow)
                     .map(|(&c, _)| c)
                     .collect(),
+                folder: Folder::new(id.clone(), plugin.dir.clone()),
                 activity: Vec::new(),
             },
         );
@@ -419,6 +504,10 @@ impl Host {
         let exports = match plugin.manifest.api {
             Api::V0_1_0 => Exports::V0_1_0(
                 since_v0_1_0::Plugin::instantiate(&mut store, &component, &self.linker_v0_1_0)
+                    .map_err(failed)?,
+            ),
+            Api::V0_2_0 => Exports::V0_2_0(
+                since_v0_2_0::Plugin::instantiate(&mut store, &component, &self.linker_v0_2_0)
                     .map_err(failed)?,
             ),
         };
@@ -477,9 +566,13 @@ impl Host {
                     continue;
                 }
                 let import = format!("{name}#{func}");
-                match capability_of(manifest.api, name, func) {
-                    Some(c) if manifest.capabilities.contains_key(&c) => imports.push(import),
-                    capability => return Err(refuse(import, capability)),
+                match need_of(manifest.api, name, func) {
+                    Some(Need::Free) => imports.push(import),
+                    Some(Need::Granted(c)) if manifest.capabilities.contains_key(&c) => {
+                        imports.push(import)
+                    }
+                    Some(Need::Granted(c)) => return Err(refuse(import, Some(c))),
+                    None => return Err(refuse(import, None)),
                 }
             }
         }
@@ -505,9 +598,21 @@ fn write_whole(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     fs::rename(&partial, path).map_err(io_at(path))
 }
 
-fn capability_of(api: Api, interface: &str, func: &str) -> Option<Capability> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Need {
+    Free,
+    Granted(Capability),
+}
+
+fn need_of(api: Api, interface: &str, func: &str) -> Option<Need> {
     match (api, interface, func) {
-        (Api::V0_1_0, "tofu:desk/host@0.1.0", "notify") => Some(Capability::Notify),
+        (Api::V0_1_0, "tofu:desk/host@0.1.0", "notify")
+        | (Api::V0_2_0, "tofu:desk/host@0.2.0", "notify") => {
+            Some(Need::Granted(Capability::Notify))
+        }
+        (Api::V0_2_0, "tofu:desk/fs@0.2.0", "read" | "write" | "list" | "remove") => {
+            Some(Need::Free)
+        }
         _ => None,
     }
 }
@@ -567,6 +672,7 @@ fn installed(dir: &Path, status: Status) -> Result<Installed, Error> {
 
 enum Exports {
     V0_1_0(since_v0_1_0::Plugin),
+    V0_2_0(since_v0_2_0::Plugin),
 }
 
 struct Instance {
@@ -579,6 +685,7 @@ type Job = Box<dyn FnOnce(&mut Instance) + Send>;
 
 pub struct Plugin {
     id: Id,
+    folder: Folder,
     jobs: Sender<Job>,
 }
 
@@ -610,6 +717,7 @@ impl<T> Pending<T> {
 impl Plugin {
     fn spawn(mut instance: Instance) -> Result<Self, Error> {
         let id = instance.id.clone();
+        let folder = instance.store.data().folder.clone();
         let (jobs, inbox) = mpsc::channel::<Job>();
         thread::Builder::new()
             .name(format!("plugin {id}"))
@@ -622,11 +730,15 @@ impl Plugin {
                 path: PathBuf::from(id.as_str()),
                 source,
             })?;
-        Ok(Self { id, jobs })
+        Ok(Self { id, folder, jobs })
     }
 
     pub fn id(&self) -> &Id {
         &self.id
+    }
+
+    pub fn folder(&self) -> &Folder {
+        &self.folder
     }
 
     fn ask<T: Send + 'static>(
@@ -650,15 +762,20 @@ impl Plugin {
 
     pub fn view(&self) -> Pending<Vec<Node>> {
         self.ask(|i| {
-            let tree = i.call(Export::View, |Exports::V0_1_0(p), s| p.call_view(s))?;
+            let tree = i.call(Export::View, |exports, s| match exports {
+                Exports::V0_1_0(p) => p.call_view(s).map(ladder::tree),
+                Exports::V0_2_0(p) => p.call_view(s),
+            })?;
             i.checked(Export::View, tree)
         })
     }
 
     pub fn rows(&self, range: Range<u64>) -> Pending<Vec<Node>> {
         self.ask(move |i| {
-            let tree = i.call(Export::Rows, |Exports::V0_1_0(p), s| {
-                p.call_rows(s, range.start, range.end)
+            let (start, end) = (range.start, range.end);
+            let tree = i.call(Export::Rows, |exports, s| match exports {
+                Exports::V0_1_0(p) => p.call_rows(s, start, end).map(ladder::tree),
+                Exports::V0_2_0(p) => p.call_rows(s, start, end),
             })?;
             i.checked(Export::Rows, tree)
         })
@@ -666,8 +783,12 @@ impl Plugin {
 
     pub fn handle(&self, event: Event) -> Pending<()> {
         self.ask(move |i| {
-            i.call(Export::Handle, |Exports::V0_1_0(p), s| {
-                p.call_handle(s, &event)
+            i.call(Export::Handle, |exports, s| match exports {
+                Exports::V0_1_0(p) => match ladder::event(&event) {
+                    Some(old) => p.call_handle(s, &old),
+                    None => Ok(()),
+                },
+                Exports::V0_2_0(p) => p.call_handle(s, &event),
             })
         })
     }

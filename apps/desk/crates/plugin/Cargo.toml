@@ -23,6 +23,10 @@ name = "scan"
 test = true
 harness = false
 
+[[example]]
+name = "notes"
+harness = false
+
 [lints.rust]
 unsafe_code = "deny"
 

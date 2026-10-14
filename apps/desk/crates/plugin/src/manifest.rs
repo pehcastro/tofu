@@ -8,12 +8,14 @@ use crate::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Api {
     V0_1_0,
+    V0_2_0,
 }
 
 impl Api {
     fn parse(text: &str) -> Result<Self, Error> {
         match text {
             "desk@0.1" => Ok(Api::V0_1_0),
+            "desk@0.2" => Ok(Api::V0_2_0),
             _ => Err(Error::Api(text.to_owned())),
         }
     }
@@ -84,7 +86,7 @@ impl fmt::Display for IdRule {
     }
 }
 
-fn is_device(part: &str) -> bool {
+pub(crate) fn is_device(part: &str) -> bool {
     let numbered = |prefix: &str| {
         part.strip_prefix(prefix)
             .is_some_and(|n| n.len() == 1 && n.bytes().all(|b| (b'1'..=b'9').contains(&b)))

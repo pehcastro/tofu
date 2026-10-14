@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use wasmparser::component_types::{ComponentAnyTypeId, ComponentEntityType};
 use wasmparser::{ComponentTypeRef, KnownCustom, Parser, Payload, Validator, WasmFeatures};
 
-use crate::{Capability, Error, Manifest, capability_of};
+use crate::{Capability, Error, Manifest, Need, need_of};
 
 pub const MIN_KEY_LEN: usize = 20;
 pub const KEY_ENTROPY_BITS: f64 = 4.0;
@@ -44,12 +44,16 @@ pub fn scan(wasm: &[u8], manifest: &Manifest) -> Result<ScanReport, Error> {
         .validate_all(wasm)
         .map_err(Error::Scan)?;
     let import = |module: &str, name: &str| {
-        let capability = capability_of(manifest.api, module, name);
+        let (capability, declared) = match need_of(manifest.api, module, name) {
+            Some(Need::Free) => (None, true),
+            Some(Need::Granted(c)) => (Some(c), manifest.capabilities.contains_key(&c)),
+            None => (None, false),
+        };
         Import {
             module: module.to_owned(),
             name: name.to_owned(),
             capability,
-            declared: capability.is_some_and(|c| manifest.capabilities.contains_key(&c)),
+            declared,
         }
     };
     let mut report = ScanReport {
