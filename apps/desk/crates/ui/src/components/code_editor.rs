@@ -23,6 +23,7 @@ use crate::components::code::{
 };
 use crate::components::find::{FindBar, find_ranges};
 use crate::components::form::{blinker, caret_shown};
+use crate::components::keymap::{Action, FocusedKeys, Keymap, Motion, Resolved, Stroke};
 use crate::components::paint::ink;
 use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN, NUMBER_PAD, T3};
 use crate::live::ActiveTheme;
@@ -37,6 +38,34 @@ const LONG_LINE_BYTES: usize = 64 * 1024;
 const SNIFF_BYTES: usize = 8192;
 const CONTROL_SHARE: f32 = 0.3;
 const PROSE: [&str; 4] = ["md", "mdx", "txt", "rst"];
+const LINE_COMMENTS: [(&str, &str); 26] = [
+    ("rs", "//"),
+    ("go", "//"),
+    ("ts", "//"),
+    ("tsx", "//"),
+    ("mts", "//"),
+    ("cts", "//"),
+    ("js", "//"),
+    ("jsx", "//"),
+    ("mjs", "//"),
+    ("cjs", "//"),
+    ("c", "//"),
+    ("h", "//"),
+    ("cpp", "//"),
+    ("cs", "//"),
+    ("java", "//"),
+    ("kt", "//"),
+    ("swift", "//"),
+    ("jsonc", "//"),
+    ("py", "#"),
+    ("toml", "#"),
+    ("sh", "#"),
+    ("bash", "#"),
+    ("yaml", "#"),
+    ("yml", "#"),
+    ("ps1", "#"),
+    ("sql", "--"),
+];
 const PILL_GAP: f32 = 6.0;
 const PILL_PAD: f32 = 6.0;
 const PILL_HEIGHT: f32 = 16.0;
@@ -375,6 +404,8 @@ pub struct CodeEditor {
     shown_lines: Option<Rc<[usize]>>,
     chevron: Option<usize>,
     folded_at: Rc<Cell<Option<Instant>>>,
+    keymap: Rc<Keymap>,
+    comment: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -433,6 +464,8 @@ impl CodeEditor {
             shown_lines: None,
             chevron: None,
             folded_at: Rc::default(),
+            keymap: Rc::default(),
+            comment: None,
         };
         editor.widest = editor.widest_line();
         editor
@@ -449,6 +482,11 @@ impl CodeEditor {
             editor.syntax = Highlight::Tree(syntax);
         }
         editor.wrapping = prose(path);
+        let extension = path.extension().and_then(|extension| extension.to_str());
+        editor.comment = LINE_COMMENTS
+            .iter()
+            .find(|(known, _)| extension.is_some_and(|ext| ext.eq_ignore_ascii_case(known)))
+            .map(|(_, token)| *token);
         Ok(editor)
     }
 
@@ -506,6 +544,11 @@ impl CodeEditor {
         save: impl Fn(&mut Buffer, &mut Window, &mut App) -> Result<(), String> + 'static,
     ) -> Self {
         self.on_save = Some(Rc::new(save));
+        self
+    }
+
+    pub fn keymap(mut self, keymap: Rc<Keymap>) -> Self {
+        self.keymap = keymap;
         self
     }
 
@@ -1154,26 +1197,65 @@ impl CodeEditor {
 
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keys = &event.keystroke;
-        let held = keys.modifiers;
-        let key = keys.key.as_str();
-        let command = held.secondary();
-        if command && self.frames.is_some() {
+        if keys.modifiers.secondary() && self.frames.is_some() {
             eprintln!(
                 "desk: editor key {} char {:?}",
                 keys.unparse(),
                 keys.key_char
             );
         }
-        match (command, key) {
-            (true, "up" | "down") if held.alt => self.stack(key),
-            (_, "left" | "right" | "up" | "down" | "home" | "end") => {
-                self.travel(key, command, held.shift)
+        let mut typed = cx
+            .try_global::<FocusedKeys>()
+            .filter(|keys| keys.focus == self.focus)
+            .map(|keys| keys.pending.clone())
+            .unwrap_or_default();
+        typed.push(Stroke::typed(keys));
+        let resolved = self.keymap.resolve(&typed);
+        let waiting = matches!(resolved, Resolved::Wait);
+        self.publish_keys(if waiting { typed.clone() } else { Vec::new() }, cx);
+        let action = match resolved {
+            Resolved::Run(action) => action,
+            Resolved::Wait => return cx.stop_propagation(),
+            Resolved::Miss if typed.len() > 1 => {
+                let chord: Vec<String> = typed.iter().map(ToString::to_string).collect();
+                eprintln!("desk: editor chord {} is not bound", chord.join(" "));
+                return cx.stop_propagation();
             }
-            (false, "backspace") => self.erase(true),
-            (false, "delete") => self.erase(false),
-            (false, "enter") => self.insert("\n"),
-            (false, "tab") => self.insert(TAB),
-            (false, "escape") => {
+            Resolved::Miss => return,
+        };
+        if let Action::Host(host) = action
+            && !window.is_action_available(host.action().as_ref(), cx)
+        {
+            return;
+        }
+        eprintln!("desk: editor action {action}");
+        self.run(action, window, cx);
+        cx.stop_propagation();
+        self.reveal();
+        self.touch(cx);
+    }
+
+    fn publish_keys(&self, pending: Vec<Stroke>, cx: &mut App) {
+        cx.set_global(FocusedKeys {
+            focus: self.focus.clone(),
+            keymap: self.keymap.clone(),
+            pending,
+        });
+    }
+
+    fn run(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        match action {
+            Action::Move(motion) => self.go(motion, false),
+            Action::Select(motion) => self.go(motion, true),
+            Action::AddCursorUp => self.stack("up"),
+            Action::AddCursorDown => self.stack("down"),
+            Action::SelectAll => {
+                self.carets = vec![Caret {
+                    head: self.buffer.len_chars(),
+                    ..Caret::at(0)
+                }]
+            }
+            Action::SingleCursor => {
                 self.carets = self
                     .carets
                     .last()
@@ -1181,39 +1263,300 @@ impl CodeEditor {
                     .into_iter()
                     .collect();
             }
-            (false, "z") if held.alt && !held.shift => self.toggle_wrap(),
-            (true, "{") | (true, "[") if held.shift || key == "{" => self.fold_at_caret(),
-            (true, "}") | (true, "]") if held.shift || key == "}" => {
-                if let Some(line) = self.caret_line() {
-                    self.unfold(line);
-                }
-            }
-            (true, "z") => self.history(!held.shift),
-            (true, "y") => self.history(false),
-            (true, "a") => {
-                self.carets = vec![Caret {
-                    head: self.buffer.len_chars(),
-                    ..Caret::at(0)
-                }]
-            }
-            (true, "c") => self.copy(cx),
-            (true, "x") => {
-                self.copy(cx);
-                self.insert("");
-            }
-            (true, "v") => self.paste(cx),
-            (true, "f") => self.find(window, cx),
-            (true, "s") => {
+            Action::DeleteLeft => self.erase(true),
+            Action::DeleteRight => self.erase(false),
+            Action::Newline => self.insert("\n"),
+            Action::Tab if self.spans_lines() => self.indent(),
+            Action::Tab => self.insert(TAB),
+            Action::DeleteLine => self.delete_lines(),
+            Action::DuplicateLine => self.duplicate_lines(),
+            Action::MoveLineUp => self.shift_lines(true),
+            Action::MoveLineDown => self.shift_lines(false),
+            Action::CommentToggle => self.comment_lines(),
+            Action::Indent => self.indent(),
+            Action::Outdent => self.edit_lines(|text| {
+                let gone = match text.starts_with('\t') {
+                    true => 1,
+                    false => text
+                        .chars()
+                        .take(TAB.len())
+                        .take_while(|ch| *ch == ' ')
+                        .count(),
+                };
+                (gone > 0).then(|| (0, gone, String::new()))
+            }),
+            Action::Find => self.find(window, cx),
+            Action::Save => {
                 if let Some(save) = self.on_save.clone().filter(|_| !self.read_only()) {
                     let saved = save(&mut self.buffer, window, cx);
                     self.failure = saved.err().map(|error| ("Could not save", error.into()));
                 }
             }
-            _ => return,
+            Action::Fold => self.fold_at_caret(),
+            Action::Unfold => {
+                if let Some(line) = self.caret_line() {
+                    self.unfold(line);
+                }
+            }
+            Action::Undo => self.history(true),
+            Action::Redo => self.history(false),
+            Action::Copy => self.copy(cx),
+            Action::Cut => {
+                self.copy(cx);
+                self.insert("");
+            }
+            Action::Paste => self.paste(cx),
+            Action::ToggleWrap => self.toggle_wrap(),
+            Action::Host(host) => window.dispatch_action(host.action(), cx),
         }
-        cx.stop_propagation();
-        self.reveal();
-        self.touch(cx);
+    }
+
+    fn go(&mut self, motion: Motion, extend: bool) {
+        let (key, word) = match motion {
+            Motion::Left => ("left", false),
+            Motion::Right => ("right", false),
+            Motion::WordLeft => ("left", true),
+            Motion::WordRight => ("right", true),
+            Motion::Up => ("up", false),
+            Motion::Down => ("down", false),
+            Motion::LineStart => ("home", false),
+            Motion::LineEnd => ("end", false),
+            Motion::Top => ("home", true),
+            Motion::Bottom => ("end", true),
+        };
+        self.travel(key, word, extend);
+    }
+
+    fn spans_lines(&self) -> bool {
+        self.carets.iter().any(|caret| {
+            let range = caret.range();
+            self.buffer.char_to_line(range.start).ok() != self.buffer.char_to_line(range.end).ok()
+        })
+    }
+
+    fn caret_lines(&self) -> Vec<Range<usize>> {
+        let mut groups: Vec<Range<usize>> = self
+            .carets
+            .iter()
+            .filter_map(|caret| {
+                let range = caret.range();
+                let first = self.buffer.char_to_line(range.start).ok()?;
+                let last = self.buffer.char_to_line(range.end).ok()?;
+                let ends_before =
+                    last > first && self.buffer.line_to_char(last).ok() == Some(range.end);
+                Some(first..if ends_before { last } else { last + 1 })
+            })
+            .collect();
+        groups.sort_by_key(|lines| lines.start);
+        let mut merged: Vec<Range<usize>> = Vec::with_capacity(groups.len());
+        for lines in groups {
+            match merged.last_mut() {
+                Some(last) if lines.start <= last.end => last.end = last.end.max(lines.end),
+                _ => merged.push(lines),
+            }
+        }
+        merged
+    }
+
+    fn place(&self, at: usize) -> Option<(usize, usize)> {
+        let line = self.buffer.char_to_line(at).ok()?;
+        Some((line, at - self.buffer.line_to_char(line).ok()?))
+    }
+
+    fn at_place(&self, (line, column): (usize, usize)) -> usize {
+        match self.buffer.line_to_char(line) {
+            Ok(start) => start + column.min(self.line_len(line)),
+            Err(_) => self.buffer.len_chars(),
+        }
+    }
+
+    fn rewrite(
+        &mut self,
+        lines: Range<usize>,
+        text: &[String],
+        moved: impl Fn(usize, usize) -> (usize, usize),
+    ) {
+        let last_open = lines.end >= self.buffer.line_count();
+        let end = match last_open {
+            true => Ok(self.buffer.len_chars()),
+            false => self.buffer.line_to_char(lines.end),
+        };
+        let (Ok(start), Ok(end), false) =
+            (self.buffer.line_to_char(lines.start), end, self.read_only())
+        else {
+            return;
+        };
+        let joined: String = match last_open {
+            true => text.join("\n"),
+            false => text.iter().map(|line| format!("{line}\n")).collect(),
+        };
+        let places: Vec<_> = self
+            .carets
+            .iter()
+            .filter_map(|caret| Some((self.place(caret.anchor)?, self.place(caret.head)?)))
+            .collect();
+        self.apply(std::slice::from_ref(&(start..end)), &joined);
+        self.carets = places
+            .into_iter()
+            .map(|((line, column), (head_line, head_column))| Caret {
+                anchor: self.at_place(moved(line, column)),
+                head: self.at_place(moved(head_line, head_column)),
+                goal: None,
+            })
+            .collect();
+        self.merge();
+    }
+
+    fn texts(&self, lines: impl Iterator<Item = usize>) -> Vec<String> {
+        lines.filter_map(|line| self.buffer.line(line)).collect()
+    }
+
+    fn delete_lines(&mut self) {
+        let groups = self.caret_lines();
+        let (Some(first), Some(last)) = (groups.first(), groups.last()) else {
+            return;
+        };
+        let mut span = first.start..last.end;
+        let kept = span
+            .clone()
+            .filter(|line| !groups.iter().any(|lines| lines.contains(line)));
+        let mut text = self.texts(kept);
+        if text.is_empty() && span.end >= self.buffer.line_count() && span.start > 0 {
+            span.start -= 1;
+            text = self.texts(span.start..span.start + 1);
+        }
+        let gone = |line: usize| -> usize {
+            groups
+                .iter()
+                .map(|lines| lines.end.min(line).saturating_sub(lines.start))
+                .sum()
+        };
+        self.rewrite(span, &text, |line, column| (line - gone(line), column));
+    }
+
+    fn duplicate_lines(&mut self) {
+        let groups = self.caret_lines();
+        let (Some(first), Some(last)) = (groups.first(), groups.last()) else {
+            return;
+        };
+        let span = first.start..last.end;
+        let order = span.clone().flat_map(|line| {
+            let copy = groups.iter().find(|lines| lines.end == line + 1);
+            std::iter::once(line).chain(copy.cloned().unwrap_or_default())
+        });
+        let text = self.texts(order);
+        let added = |line: usize| -> usize {
+            groups
+                .iter()
+                .filter(|lines| lines.start <= line)
+                .map(ExactSizeIterator::len)
+                .sum()
+        };
+        self.rewrite(span, &text, |line, column| (line + added(line), column));
+    }
+
+    fn shift_lines(&mut self, up: bool) {
+        let groups = self.caret_lines();
+        let (Some(first), Some(last)) = (groups.first(), groups.last()) else {
+            return;
+        };
+        let span = match up {
+            true => first.start.checked_sub(1).map(|above| above..last.end),
+            false => (last.end < self.buffer.line_count()).then_some(first.start..last.end + 1),
+        };
+        let Some(span) = span else {
+            return;
+        };
+        let mut order: Vec<usize> = span.clone().collect();
+        for lines in &groups {
+            let around = match up {
+                true => lines.start - 1 - span.start..lines.end - span.start,
+                false => lines.start - span.start..lines.end + 1 - span.start,
+            };
+            if let Some(turned) = order.get_mut(around) {
+                match up {
+                    true => turned.rotate_left(1),
+                    false => turned.rotate_right(1),
+                }
+            }
+        }
+        let text = self.texts(order.into_iter());
+        self.rewrite(span, &text, |line, column| {
+            let moved = groups.iter().find_map(|lines| match up {
+                true if lines.contains(&line) => Some(line - 1),
+                true if line + 1 == lines.start => Some(lines.end - 1),
+                false if lines.contains(&line) => Some(line + 1),
+                false if line == lines.end => Some(lines.start),
+                _ => None,
+            });
+            (moved.unwrap_or(line), column)
+        });
+    }
+
+    fn edit_lines(&mut self, change: impl Fn(&str) -> Option<(usize, usize, String)>) {
+        let groups = self.caret_lines();
+        let (Some(first), Some(last)) = (groups.first(), groups.last()) else {
+            return;
+        };
+        let span = first.start..last.end;
+        let mut cuts = BTreeMap::new();
+        let mut text = self.texts(span.clone());
+        for (line, content) in span.clone().zip(text.iter_mut()) {
+            let picked = groups.iter().any(|lines| lines.contains(&line));
+            let Some((at, gone, added)) = picked.then(|| change(content)).flatten() else {
+                continue;
+            };
+            let byte = |column: usize| {
+                content
+                    .char_indices()
+                    .nth(column)
+                    .map_or(content.len(), |(byte, _)| byte)
+            };
+            let bytes = byte(at)..byte(at + gone);
+            content.replace_range(bytes, &added);
+            cuts.insert(line, (at, gone, added.chars().count()));
+        }
+        if cuts.is_empty() {
+            return;
+        }
+        self.rewrite(span, &text, |line, column| match cuts.get(&line) {
+            Some(&(at, gone, added)) if column >= at + gone => (line, column - gone + added),
+            Some(&(at, _, _)) if column > at => (line, at),
+            _ => (line, column),
+        });
+    }
+
+    fn indent(&mut self) {
+        self.edit_lines(|text| (!text.is_empty()).then(|| (0, 0, TAB.to_owned())));
+    }
+
+    fn comment_lines(&mut self) {
+        let Some(token) = self.comment else {
+            eprintln!("desk: editor has no line comment for this file");
+            return;
+        };
+        let lines = self.texts(self.caret_lines().into_iter().flatten());
+        let filled = lines.iter().filter(|line| !line.trim().is_empty());
+        let commented = filled
+            .clone()
+            .all(|line| line.trim_start().starts_with(token));
+        let lead = |text: &str| text.chars().take_while(|ch| ch.is_whitespace()).count();
+        let indent = filled.map(|line| lead(line)).min().unwrap_or(0);
+        self.edit_lines(|text| {
+            let rest = text.trim_start();
+            match (rest.is_empty(), commented) {
+                (true, _) => None,
+                (false, true) => {
+                    let after = rest.strip_prefix(token)?;
+                    Some((
+                        lead(text),
+                        token.len() + usize::from(after.starts_with(' ')),
+                        String::new(),
+                    ))
+                }
+                (false, false) => Some((indent, 0, format!("{token} "))),
+            }
+        });
     }
 
     fn char_at_point(&self, position: Point<Pixels>, window: &Window, cx: &App) -> Option<usize> {
@@ -1247,6 +1590,7 @@ impl CodeEditor {
 
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
+        self.publish_keys(Vec::new(), cx);
         if self.gutter_fold(event.position) {
             cx.notify();
             return;
@@ -1513,6 +1857,12 @@ impl EntityInputHandler for CodeEditor {
 impl Render for CodeEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.focus.is_focused(window);
+        let published = cx
+            .try_global::<FocusedKeys>()
+            .is_some_and(|keys| keys.focus == self.focus);
+        if focused && !published {
+            self.publish_keys(Vec::new(), cx);
+        }
         match (focused, self.blink.is_some()) {
             (true, false) => self.blink = Some(blinker(cx)),
             (false, true) => self.blink = None,

@@ -44,6 +44,7 @@ use desk_tiling::{Action, Key, SHORTCUTS};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
+use desk_ui::components::keymap::editor_claims;
 use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side, context_menu};
@@ -1180,7 +1181,7 @@ impl Desk {
     fn global_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let stroke = &event.keystroke;
         let held = stroke.modifiers;
-        if !held.control || held.alt || held.platform {
+        if !held.control || held.alt || held.platform || editor_claims(event, window, cx) {
             return;
         }
         match (held.shift, stroke.key.as_str()) {

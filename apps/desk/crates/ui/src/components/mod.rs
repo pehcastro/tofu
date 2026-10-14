@@ -20,6 +20,7 @@ pub mod glyph;
 pub mod graph;
 pub mod history;
 pub mod hovercard;
+pub mod keymap;
 pub mod linkmeta;
 pub mod list;
 pub mod math;

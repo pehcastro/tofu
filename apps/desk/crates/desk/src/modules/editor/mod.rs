@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use desk_core::git::{Against, Git, GitBinary, GitError, Hunk};
+use desk_core::home::Home;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
@@ -19,6 +20,7 @@ use desk_ui::components::empty::empty_state;
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::history::inline_blame;
+use desk_ui::components::keymap::{Keymap, host};
 use desk_ui::components::overlay::{MenuItem, context_menu};
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
@@ -49,6 +51,7 @@ const SIDE_MOST: f32 = 320.0;
 const PATH_HEIGHT: f32 = 30.0;
 const BAR_GAP: f32 = 8.0;
 const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
+const KEYMAP_FILE: &str = "keymap.json";
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let root = match cx.try_global::<OpenProject>() {
@@ -169,6 +172,7 @@ pub struct Editor {
     github: Github,
     alerted: SharedString,
     menu: TreeMenu,
+    keymap: Rc<Keymap>,
     _tree: Subscription,
     _pack: Subscription,
     _project: Subscription,
@@ -200,6 +204,13 @@ impl Editor {
                 undone: Vec::new(),
                 naming: None,
             },
+            keymap: Rc::new(match Home::find() {
+                Ok(home) => Keymap::load(&home.config.join(KEYMAP_FILE)),
+                Err(error) => {
+                    eprintln!("desk: keymap has no home, so the defaults stand: {error}");
+                    Keymap::default()
+                }
+            }),
             _pack: cx.observe_global::<PickedPack>(Self::repack),
             _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
@@ -900,7 +911,7 @@ impl Editor {
     }
 
     fn page(&self, full: PathBuf, git: Option<Arc<GitBinary>>, cx: &mut Context<Self>) -> Page {
-        let code = file_editor(&full, cx);
+        let code = file_editor(&full, self.keymap.clone(), cx);
         let changes = code
             .as_ref()
             .ok()
@@ -935,6 +946,25 @@ impl Editor {
             window.focus(&code.focus_handle(cx), cx);
         }
         cx.notify();
+    }
+
+    fn select_page(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.active = at;
+        self.asking = None;
+        self.focus_changed(cx);
+        self.follow(cx);
+        if let Some(Page { code: Ok(code), .. }) = self.pages.get(at) {
+            window.focus(&code.focus_handle(cx), cx);
+        }
+        cx.notify();
+    }
+
+    fn step_page(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let count = self.pages.len();
+        let step = if forward { 1 } else { count.saturating_sub(1) };
+        if let Some(at) = (self.active + step).checked_rem(count) {
+            self.select_page(at, window, cx);
+        }
     }
 
     fn focus_changed(&mut self, cx: &mut Context<Self>) {
@@ -1357,16 +1387,7 @@ impl Editor {
                     &theme,
                     move |event, window, cx| {
                         let done = editor.update(cx, |editor, cx| match event {
-                            TabEvent::Select(at) => {
-                                editor.active = *at;
-                                editor.asking = None;
-                                editor.focus_changed(cx);
-                                editor.follow(cx);
-                                if let Some(Page { code: Ok(code), .. }) = editor.pages.get(*at) {
-                                    window.focus(&code.focus_handle(cx), cx);
-                                }
-                                cx.notify();
-                            }
+                            TabEvent::Select(at) => editor.select_page(*at, window, cx),
                             TabEvent::Close(at) => editor.close(*at, cx),
                             TabEvent::New => {}
                         });
@@ -1538,6 +1559,18 @@ impl Render for Editor {
                 editor.keep_open(cx);
             }
         }))
+        .on_action(cx.listener(|editor, _: &host::CloseTab, _, cx| editor.close(editor.active, cx)))
+        .on_action(
+            cx.listener(|editor, _: &host::NextTab, window, cx| editor.step_page(true, window, cx)),
+        )
+        .on_action(
+            cx.listener(|editor, _: &host::PrevTab, window, cx| {
+                editor.step_page(false, window, cx)
+            }),
+        )
+        .on_action(|_: &host::GoToLine, _, _| no_surface("go_to_line"))
+        .on_action(|_: &host::QuickOpen, _, _| no_surface("quick_open"))
+        .on_action(|_: &host::FindInFiles, _, _| no_surface("find_in_files"))
         .child(
             inner_card(&theme)
                 .flex_1()
@@ -1887,7 +1920,11 @@ fn described(marks: &Marks) -> String {
     lines.join(", ")
 }
 
-fn file_editor(path: &Path, cx: &mut App) -> Opened {
+fn no_surface(action: &str) {
+    eprintln!("desk: editor action {action} no surface yet");
+}
+
+fn file_editor(path: &Path, keymap: Rc<Keymap>, cx: &mut App) -> Opened {
     let shown = path.display();
     let editor = match CodeEditor::open(path, cx) {
         Ok(editor) => editor,
@@ -1906,7 +1943,7 @@ fn file_editor(path: &Path, cx: &mut App) -> Opened {
         editor.buffer().line_count()
     );
     let path = PathBuf::from(path);
-    let editor = editor.on_save(move |buffer, _, _| {
+    let editor = editor.keymap(keymap).on_save(move |buffer, _, _| {
         let shown = path.display();
         match buffer.save(&path) {
             Ok(()) => {
