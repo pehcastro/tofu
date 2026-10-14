@@ -114,6 +114,12 @@ fn block(out: &mut String, b: &Block, tight: bool) {
             }
             out.push_str("</table>\n");
         }
+        BlockKind::Math(tex) => {
+            cr(out);
+            out.push_str("<div class=\"math display\">\\[");
+            escape(out, tex);
+            out.push_str("\\]</div>\n");
+        }
         BlockKind::Component(c) => {
             cr(out);
             out.push_str("<div data-component=\"");
@@ -182,6 +188,15 @@ fn inlines(out: &mut String, list: &[Inline]) {
             InlineKind::SoftBreak => out.push('\n'),
             InlineKind::HardBreak => out.push_str("<br />\n"),
             InlineKind::Html(t) => out.push_str(t),
+            InlineKind::Math { tex, display } => {
+                let (class, open, close) = match display {
+                    true => ("display", "\\[", "\\]"),
+                    false => ("inline", "\\(", "\\)"),
+                };
+                out.push_str(&format!("<span class=\"math {class}\">{open}"));
+                escape(out, tex);
+                out.push_str(&format!("{close}</span>"));
+            }
             InlineKind::Component(c) => {
                 out.push_str("<span data-component=\"");
                 escape(out, &c.name);
@@ -211,7 +226,9 @@ fn plain(out: &mut String, list: &[Inline]) {
     for inline in list {
         match &inline.kind {
             InlineKind::Text(t) | InlineKind::Code(t) | InlineKind::Html(t) => escape(out, t),
-            InlineKind::Autolink { text, .. } => escape(out, text),
+            InlineKind::Autolink { text, .. } | InlineKind::Math { tex: text, .. } => {
+                escape(out, text)
+            }
             InlineKind::SoftBreak | InlineKind::HardBreak => out.push('\n'),
             InlineKind::Emphasis(c) | InlineKind::Strong(c) | InlineKind::Strikethrough(c) => {
                 plain(out, c)

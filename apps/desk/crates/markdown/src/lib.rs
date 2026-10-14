@@ -27,20 +27,24 @@ pub const MAX_COMPONENTS: usize = 256;
 pub struct Options {
     pub gfm: bool,
     pub components: bool,
+    pub math: bool,
 }
 
 impl Options {
     pub const COMMONMARK: Self = Self {
         gfm: false,
         components: false,
+        math: false,
     };
     pub const GFM: Self = Self {
         gfm: true,
         components: false,
+        math: false,
     };
     pub const ALL: Self = Self {
         gfm: true,
         components: true,
+        math: true,
     };
 }
 

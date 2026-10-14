@@ -23,6 +23,7 @@ pub enum BlockKind {
     Code { kind: CodeKind, text: String },
     Html(String),
     Table(Table),
+    Math(String),
     Component(Component<Block>),
 }
 
@@ -92,6 +93,7 @@ pub enum InlineKind {
     SoftBreak,
     HardBreak,
     Html(String),
+    Math { tex: String, display: bool },
     Component(Component<Inline>),
 }
 

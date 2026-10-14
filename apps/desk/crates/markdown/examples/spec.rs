@@ -206,3 +206,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+#[test]
+fn spec_report() -> Result<(), Box<dyn Error>> {
+    main()
+}

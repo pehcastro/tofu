@@ -1,5 +1,7 @@
 use crate::Options;
-use crate::ast::{Block, BlockKind, Cell, Component, List, ListItem, Table};
+use crate::ast::{
+    Block, BlockKind, Cell, CodeKind, Component, Inline, InlineKind, List, ListItem, Table,
+};
 use crate::block::{Mapped, RawBlock, RawKind, Refs, split_row};
 use crate::inline;
 
@@ -22,12 +24,26 @@ fn block(raw: &RawBlock, refs: &Refs, options: Options) -> Block {
                 })
                 .collect(),
         }),
-        RawKind::Paragraph(text) => BlockKind::Paragraph(inline::parse(text, refs, options)),
+        RawKind::Paragraph(text) => {
+            let mut inlines = inline::parse(text, refs, options);
+            match inlines.as_mut_slice() {
+                [
+                    Inline {
+                        kind: InlineKind::Math { tex, display: true },
+                        ..
+                    },
+                ] => BlockKind::Math(std::mem::take(tex)),
+                _ => BlockKind::Paragraph(inlines),
+            }
+        }
         RawKind::Heading(level, text) => BlockKind::Heading {
             level: *level,
             inlines: inline::parse(text, refs, options),
         },
         RawKind::ThematicBreak => BlockKind::ThematicBreak,
+        RawKind::Code(CodeKind::Fenced { info }, text) if options.math && info.trim() == "math" => {
+            BlockKind::Math(text.trim().to_string())
+        }
         RawKind::Code(kind, text) => BlockKind::Code {
             kind: kind.clone(),
             text: text.clone(),

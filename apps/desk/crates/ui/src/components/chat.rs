@@ -20,6 +20,7 @@ use crate::components::code_editor::syntax_token;
 use crate::components::find::{find_ranges, match_highlights};
 use crate::components::glyph::Glyph;
 use crate::components::hovercard::{hover, link_card, link_key};
+use crate::components::math::{self, Math};
 use crate::components::paint::{glyph, ink, ring, tint};
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
@@ -77,6 +78,9 @@ const CELL_PAD_Y: f32 = 4.0;
 const TASK_BOX: f32 = 11.0;
 const TASK_RADIUS: f32 = 3.0;
 const LINK_SCHEMES: [&str; 3] = ["https://", "http://", "mailto:"];
+const MATH_SLOT: char = '\u{a0}';
+const MONO_ADVANCE_EM: f32 = 0.6;
+const MATH_AXIS_EM: f32 = 0.3;
 const STRONG: Stress = Stress {
     strong: true,
     italic: false,
@@ -138,6 +142,7 @@ pub enum Face {
     Path,
     LinkTail,
     Mention,
+    Math,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -153,6 +158,7 @@ pub struct Span {
     pub face: Face,
     pub stress: Stress,
     pub link: Option<SharedString>,
+    pub math: Option<Rc<Math>>,
 }
 
 impl Span {
@@ -162,6 +168,7 @@ impl Span {
             face,
             stress: Stress::default(),
             link: None,
+            math: None,
         }
     }
 }
@@ -192,6 +199,7 @@ pub enum Block {
     },
     Rule,
     Source(SharedString),
+    Math(Rc<Math>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -372,7 +380,57 @@ struct Reader<'a> {
 
 impl Reader<'_> {
     fn blocks(&self, blocks: &[md::Block]) -> Vec<Block> {
-        blocks.iter().map(|block| self.block(block)).collect()
+        blocks
+            .iter()
+            .flat_map(|block| match &block.kind {
+                BlockKind::Paragraph(inlines) => self.paragraph(inlines),
+                _ => vec![self.block(block)],
+            })
+            .collect()
+    }
+
+    fn paragraph(&self, inlines: &[Inline]) -> Vec<Block> {
+        let mut out = Vec::new();
+        let mut rest = inlines;
+        while let Some(at) = rest
+            .iter()
+            .position(|i| matches!(i.kind, InlineKind::Math { display: true, .. }))
+        {
+            let (before, from) = rest.split_at(at);
+            let Some((math, after)) = from.split_first() else {
+                break;
+            };
+            out.extend(self.para(before));
+            if let InlineKind::Math { tex, .. } = &math.kind {
+                out.push(self.display(tex, &math.range));
+            }
+            rest = after;
+        }
+        out.extend(self.para(rest));
+        out
+    }
+
+    fn para(&self, inlines: &[Inline]) -> Option<Block> {
+        let edge = |i: &Inline| match &i.kind {
+            InlineKind::SoftBreak | InlineKind::HardBreak => true,
+            InlineKind::Text(text) => text.trim().is_empty(),
+            _ => false,
+        };
+        let start = inlines.iter().position(|i| !edge(i))?;
+        let end = inlines.iter().rposition(|i| !edge(i))?;
+        let kept = inlines.get(start..=end)?;
+        Some(Block::Para(self.spans(kept, Stress::default())))
+    }
+
+    fn display(&self, tex: &str, range: &Range<usize>) -> Block {
+        match self.math(tex, true) {
+            Some(math) => Block::Math(math),
+            None => Block::Code(Code {
+                text: self.source(range),
+                label: None,
+                paints: Vec::new(),
+            }),
+        }
     }
 
     fn source(&self, range: &Range<usize>) -> SharedString {
@@ -416,10 +474,15 @@ impl Reader<'_> {
                     })
                     .collect(),
             },
+            BlockKind::Math(tex) => self.display(tex, &block.range),
             BlockKind::Html(_) | BlockKind::Component(_) => {
                 Block::Source(self.source(&block.range))
             }
         }
+    }
+
+    fn math(&self, tex: &str, display: bool) -> Option<Rc<Math>> {
+        self.painted.then(|| math::layout(tex, display)).flatten()
     }
 
     fn spans(&self, inlines: &[Inline], stress: Stress) -> Vec<Span> {
@@ -441,6 +504,7 @@ impl Reader<'_> {
                 face,
                 stress,
                 link: link.cloned(),
+                math: None,
             };
             match &inline.kind {
                 InlineKind::Text(text) | InlineKind::Html(text) => {
@@ -453,6 +517,13 @@ impl Reader<'_> {
                     },
                     text.clone().into(),
                 )),
+                InlineKind::Math { tex, display } => out.push(match self.math(tex, *display) {
+                    Some(math) => Span {
+                        math: Some(math),
+                        ..span(Face::Math, tex.clone().into())
+                    },
+                    None => span(Face::Code, self.source(&inline.range)),
+                }),
                 InlineKind::Component(_) => out.push(span(Face::Code, self.source(&inline.range))),
                 InlineKind::SoftBreak => out.push(span(Face::Plain, " ".into())),
                 InlineKind::HardBreak => out.push(span(Face::Plain, "\n".into())),
@@ -649,6 +720,14 @@ fn span_text(span: &Span) -> String {
         Face::Code | Face::Mention => format!("{CODE_PAD}{}{CODE_PAD}", span.text),
         Face::Path => format!("{CODE_PAD}{GLYPH_SLOT}{}{CODE_PAD}", span.text),
         Face::LinkTail => LINK_SLOT.to_owned(),
+        Face::Math => {
+            let em = span
+                .math
+                .as_ref()
+                .map_or(0.0, |math| f32::from(math.width(px(1.0))));
+            let slots = (em / MONO_ADVANCE_EM).ceil().max(1.0) as usize;
+            std::iter::repeat_n(MATH_SLOT, slots).collect()
+        }
     }
 }
 
@@ -687,7 +766,7 @@ fn mark_runs(runs: Vec<TextRun>, marks: &[(Range<usize>, HighlightStyle)]) -> Ve
 fn run(span: &Span, len: usize, base: Rgba, theme: &Theme) -> TextRun {
     let mut face = match span.face {
         Face::Plain => font(theme.word(WordToken::ShapeFont)),
-        Face::Code | Face::Path | Face::LinkTail | Face::Mention => font(mono(theme)),
+        Face::Code | Face::Path | Face::LinkTail | Face::Mention | Face::Math => font(mono(theme)),
     };
     if span.stress.strong {
         face.weight = FontWeight::SEMIBOLD;
@@ -697,7 +776,7 @@ fn run(span: &Span, len: usize, base: Rgba, theme: &Theme) -> TextRun {
     }
     let color = match (span.face, &span.link) {
         (Face::Mention, _) => rgba(MENTION_TEXT),
-        (Face::Code, _) => ink(theme, T1),
+        (Face::Code | Face::Math, _) => ink(theme, T1),
         (Face::Path | Face::LinkTail, _) | (Face::Plain, Some(_)) => {
             theme.color(ColorToken::StatusAccent)
         }
@@ -783,6 +862,7 @@ fn gather(body: &[Block], found: &mut Vec<String>) {
             ),
             Block::Rule => {}
             Block::Source(text) => found.push(text.to_string()),
+            Block::Math(math) => found.push(math.tex.clone()),
         }
     }
 }
@@ -796,13 +876,18 @@ struct Draw<'a> {
     quoted: bool,
 }
 
-#[derive(Clone, Copy)]
 enum Decor {
     Pill(Rgba),
     Glyph(Glyph, Rgba),
+    Math(Rc<Math>, Rgba),
 }
 
-fn decor(spans: &[Span], pieces: &[String], theme: &Theme) -> Vec<(Range<usize>, Decor)> {
+fn decor(
+    spans: &[Span],
+    pieces: &[String],
+    base: Rgba,
+    theme: &Theme,
+) -> Vec<(Range<usize>, Decor)> {
     let accent = theme.color(ColorToken::StatusAccent);
     let mut found = Vec::new();
     let mut start = 0;
@@ -825,6 +910,11 @@ fn decor(spans: &[Span], pieces: &[String], theme: &Theme) -> Vec<(Range<usize>,
                 slot(range.end - GLYPH_SLOT.len(), GLYPH_SLOT),
                 Decor::Glyph(Glyph::Globe, accent),
             )),
+            Face::Math => found.extend(
+                span.math
+                    .clone()
+                    .map(|math| (range, Decor::Math(math, base))),
+            ),
         }
     }
     found
@@ -885,6 +975,18 @@ fn paint_decor(
                     eprintln!("desk: chat inline glyph not drawn: {error}");
                 }
             }
+            Decor::Math(math, color) => {
+                let em = px(FONT_CHAT);
+                let left = from.x + (to.x - from.x - math.width(em)) / 2.0;
+                let baseline = from.y + line / 2.0 + em * MATH_AXIS_EM;
+                math.paint(
+                    point(left, baseline - math.ascent(em)),
+                    em,
+                    rgb_to_hsla(*color),
+                    window,
+                    cx,
+                );
+            }
         }
     }
 }
@@ -922,7 +1024,7 @@ impl<'a> Draw<'a> {
         let joined = pieces.concat();
         let key = link_key(&joined, at);
         let text = StyledText::new(joined).with_runs(mark_runs(runs, marks));
-        let decor = decor(spans, &pieces, self.theme);
+        let decor = decor(spans, &pieces, base, self.theme);
         let layout = text.layout().clone();
         let (mut ranges, mut urls, mut start) = (Vec::new(), Vec::new(), 0);
         for (span, piece) in spans.iter().zip(&pieces) {
@@ -1140,6 +1242,19 @@ impl<'a> Draw<'a> {
                     .shadow(vec![ring(ink(theme, QUEUED_RING))])
                     .text_color(ink(theme, T3))
                     .child(marked(text.clone(), marks))
+            }
+            Block::Math(math) => {
+                let (at, _) = self.next();
+                let base = match self.quoted {
+                    true => ink(theme, T2),
+                    false => theme.color(ColorToken::TextBase),
+                };
+                div().child(math::display(
+                    ("chat-math", at),
+                    math.clone(),
+                    px(FONT_CHAT),
+                    rgb_to_hsla(base),
+                ))
             }
         }
     }
@@ -1465,7 +1580,60 @@ pub fn foot(text: impl Into<SharedString>, theme: &Theme) -> Div {
 
 #[cfg(test)]
 mod tests {
-    use super::{markdown, pieces};
+    use super::{Block, Face, Streaming, markdown, pieces};
+
+    #[test]
+    fn math_reaches_chat_as_math_and_prices_stay_text() {
+        let body =
+            markdown("inline $x^2$ costs $5 and $6\n\n$$\\frac{a}{b}$$\n\nbroken $\\frac{a$ here");
+        let faces: Vec<Vec<(Face, String, bool)>> = body
+            .iter()
+            .filter_map(|block| match block {
+                Block::Para(spans) => Some(
+                    spans
+                        .iter()
+                        .map(|s| (s.face, s.text.to_string(), s.math.is_some()))
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            faces[0].contains(&(Face::Math, "x^2".into(), true)),
+            "{:?}",
+            faces[0].iter().map(|f| &f.1).collect::<Vec<_>>()
+        );
+        assert!(faces[0].iter().any(|f| f.1.contains("costs $5 and $6")));
+        assert!(matches!(body[1], Block::Math(ref m) if m.tex == "\\frac{a}{b}"));
+        assert!(faces[1].contains(&(Face::Code, "$\\frac{a$".into(), false)));
+        let streamed = Streaming::default().blocks("so $y$");
+        assert!(matches!(&streamed[0], Block::Para(spans)
+            if spans.iter().any(|s| s.face == Face::Code && s.text == "$y$")));
+    }
+
+    #[test]
+    fn display_math_inside_a_paragraph_gets_its_own_line() {
+        let body = markdown("inline $x^2$ and prices $5 and $6.50.\n$$\\frac{a}{b} + \\sqrt{x}$$");
+        let shape: Vec<String> = body
+            .iter()
+            .map(|block| match block {
+                Block::Para(spans) => spans
+                    .iter()
+                    .map(|s| format!("{}:{}", s.math.is_some(), s.text))
+                    .collect::<Vec<_>>()
+                    .join("|"),
+                Block::Math(m) => format!("math:{}", m.tex),
+                _ => "other".into(),
+            })
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                "false:inline |true:x^2|false: and prices $5 and $6.50.",
+                "math:\\frac{a}{b} + \\sqrt{x}",
+            ]
+        );
+    }
 
     #[test]
     fn go_fence_reaches_paint_indented_by_four_columns() {

@@ -124,6 +124,35 @@ fn split_autolinks(t: String, range: Range<usize>, out: &mut Vec<Inline>) {
     }
 }
 
+fn math_close(b: &[u8], n: usize) -> Option<usize> {
+    let mut i = 0;
+    while let Some(&c) = b.get(i) {
+        let next = b.get(i + 1).copied();
+        let found = match c {
+            b'\\' => {
+                i += 2;
+                continue;
+            }
+            b'$' if n == 2 => i > 0 && next == Some(b'$'),
+            b'$' if next == Some(b'$') => {
+                i += 2;
+                continue;
+            }
+            b'$' => {
+                let before = b.get(i.wrapping_sub(1)).copied();
+                before.is_some_and(|p| !p.is_ascii_whitespace())
+                    && !next.is_some_and(|d| d.is_ascii_digit())
+            }
+            _ => false,
+        };
+        if found {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
 struct Slot {
     inline: Option<Inline>,
     depth: usize,
@@ -220,6 +249,7 @@ impl<'a> Parser<'a> {
             b'\n' => self.newline(),
             b'\\' => self.backslash(),
             b'`' => self.code_span(),
+            b'$' if self.cx.options.math => self.math(),
             b'*' | b'_' => self.delim(c),
             b'~' if self.cx.options.gfm => self.delim(c),
             b'[' => {
@@ -255,13 +285,14 @@ impl<'a> Parser<'a> {
             .get(start..)
             .and_then(|r| r.chars().next())
             .map_or(1, char::len_utf8);
-        let gfm = self.cx.options.gfm;
+        let Options { gfm, math, .. } = self.cx.options;
         let mut i = start + first;
         while let Some(c) = self.peek(i) {
             if matches!(
                 c,
                 b'\n' | b'\\' | b'`' | b'*' | b'_' | b'[' | b']' | b'!' | b'<' | b'&'
             ) || (gfm && c == b'~')
+                || (math && c == b'$')
             {
                 break;
             }
@@ -428,6 +459,23 @@ impl<'a> Parser<'a> {
         }
         self.text(start, after);
         self.pos = after;
+    }
+
+    fn math(&mut self) {
+        let start = self.pos;
+        let n = self.run_len(start, b'$');
+        let rest = self.s.get(start + n..self.end).unwrap_or_default();
+        let opens = n == 2 || (n == 1 && rest.starts_with(|c: char| !c.is_whitespace()));
+        let Some(close) = opens.then(|| math_close(rest.as_bytes(), n)).flatten() else {
+            self.text(start, start + n);
+            self.pos = start + n;
+            return;
+        };
+        let tex = rest.get(..close).unwrap_or_default().trim().to_string();
+        let end = start + n + close + n;
+        let display = n == 2;
+        self.push(InlineKind::Math { tex, display }, start..end, 1);
+        self.pos = end;
     }
 
     fn delim(&mut self, c: u8) {

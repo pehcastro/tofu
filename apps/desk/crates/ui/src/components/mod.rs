@@ -22,6 +22,7 @@ pub mod history;
 pub mod hovercard;
 pub mod linkmeta;
 pub mod list;
+pub mod math;
 pub mod overlay;
 pub mod paint;
 pub mod palette;

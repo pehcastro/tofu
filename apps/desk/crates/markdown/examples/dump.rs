@@ -80,6 +80,7 @@ fn block(out: &mut String, depth: usize, b: &Block, registry: &Registry) -> fmt:
             t.alignments.len(),
             t.rows.len()
         ),
+        BlockKind::Math(tex) => format!("Math {tex:?}"),
         BlockKind::Component(c) => format!("Component {}", c.name),
     };
     writeln!(out, "{pad}{head} {}..{}", b.range.start, b.range.end)?;
@@ -115,7 +116,10 @@ fn block(out: &mut String, depth: usize, b: &Block, registry: &Registry) -> fmt:
                 .iter()
                 .try_for_each(|child| block(out, depth + 1, child, registry))
         }
-        BlockKind::ThematicBreak | BlockKind::Code { .. } | BlockKind::Html(_) => Ok(()),
+        BlockKind::ThematicBreak
+        | BlockKind::Code { .. }
+        | BlockKind::Html(_)
+        | BlockKind::Math(_) => Ok(()),
     }
 }
 
@@ -134,6 +138,7 @@ fn inlines(out: &mut String, depth: usize, list: &[Inline], registry: &Registry)
             InlineKind::SoftBreak => ("SoftBreak".into(), &[]),
             InlineKind::HardBreak => ("HardBreak".into(), &[]),
             InlineKind::Html(t) => (format!("Html {t:?}"), &[]),
+            InlineKind::Math { tex, display } => (format!("Math {tex:?} display={display}"), &[]),
             InlineKind::Component(c) => (format!("Component {}", c.name), &c.children),
         };
         writeln!(
