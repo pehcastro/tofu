@@ -94,19 +94,18 @@ func (a *accounts) checkUsageAlongside(clock *startupClock) (wait func()) {
 	if err != nil || pollerErr != nil {
 		return checking.Wait
 	}
+	mine := slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != a.provider })
 	began := time.Now()
-	for _, row := range rows {
-		if row.Credential.Provider == a.provider && row.Unusable(a.now()) == "" {
-			checking.Go(func() {
-				results, _ := pollRowsOn(context.Background(), a.store, []cred.Row{row}, a.now, a.urls, poller)
-				if len(results) == 1 && !results[0].report.FetchedAt.Before(began) {
-					clock.mu.Lock()
-					clock.usageAskedAlongside = append(clock.usageAskedAlongside, time.Since(began))
-					clock.mu.Unlock()
-				}
-			})
+	checking.Go(func() {
+		results, _ := pollRowsOn(context.Background(), a.store, mine, a.now, a.urls, poller)
+		clock.mu.Lock()
+		defer clock.mu.Unlock()
+		for _, result := range results {
+			if !result.report.FetchedAt.Before(began) {
+				clock.usageAskedAlongside = append(clock.usageAskedAlongside, result.report.FetchedAt.Sub(began))
+			}
 		}
-	}
+	})
 	return checking.Wait
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"strconv"
+	"sync"
 	"time"
 
 	"tofu/internal/host"
@@ -141,7 +142,10 @@ func pollRows(
 	urls map[quota.Provider]string,
 ) ([]pollResult, error) {
 	readings, recordErr := quotaReadingDir()
+	var recording sync.Mutex
 	record := func(reading quota.Reading) error {
+		recording.Lock()
+		defer recording.Unlock()
 		if recordErr != nil {
 			return recordErr
 		}
@@ -167,30 +171,33 @@ func pollRowsOn(
 	urls map[quota.Provider]string,
 	poller *quota.Poller,
 ) ([]pollResult, error) {
-	results := make([]pollResult, 0, len(rows))
+	results := make([]pollResult, len(rows))
 	versions, _ := subFingerprint(".")
-	for _, row := range rows {
-		provider, name := quota.Provider(row.Credential.Provider), accountName(row.Credential.Identity, false)
+	var polling sync.WaitGroup
+	defer polling.Wait()
+	for i, row := range rows {
+		provider := quota.Provider(row.Credential.Provider)
+		results[i] = pollResult{row: row.ID, name: accountName(row.Credential.Identity, false), report: quota.Report{Provider: provider}}
 		if urls == nil && sys.CredentialsHiddenFromTests() {
-			results = append(results, pollResult{row: row.ID, name: name, report: quota.Report{Provider: provider}, unusable: noVendorInATest})
+			results[i].unusable = noVendorInATest
 			continue
 		}
-		if cause := row.Unusable(now()); cause != "" {
-			results = append(results, pollResult{row: row.ID, name: name, report: quota.Report{Provider: provider}, unusable: cause})
+		if results[i].unusable = row.Unusable(now()); results[i].unusable != "" {
 			continue
 		}
 		spec, err := cred.Lookup(string(row.Credential.Provider))
 		if err != nil {
 			return nil, err
 		}
-		report, err := poller.Poll(ctx, quota.Account{
-			Provider:      provider,
-			AccountID:     row.Credential.Identity.AccountID,
-			Row:           row.ID,
-			Credential:    cred.NewAccountManager(store, spec, row.ID),
-			ClientVersion: clientVersion(versions, row.Credential.Provider),
+		polling.Go(func() {
+			results[i].report, results[i].err = poller.Poll(ctx, quota.Account{
+				Provider:      provider,
+				AccountID:     row.Credential.Identity.AccountID,
+				Row:           row.ID,
+				Credential:    cred.NewAccountManager(store, spec, row.ID),
+				ClientVersion: clientVersion(versions, row.Credential.Provider),
+			})
 		})
-		results = append(results, pollResult{row: row.ID, name: name, report: report, err: err})
 	}
 	return results, nil
 }
