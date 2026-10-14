@@ -65,6 +65,7 @@ type row struct {
 	Rep        int       `json:"rep"`
 	Tool       string    `json:"tool"`
 	Version    string    `json:"version"`
+	Commit     string    `json:"commit,omitempty"`
 	AskedModel string    `json:"asked_model"`
 	Model      string    `json:"model"`
 	Models     []string  `json:"models"`
@@ -222,13 +223,13 @@ func runArm(args []string) error {
 		return err
 	}
 	env := goEnv(dirs)
-	versionArg := "--version"
-	if chosen.Tool == "tofu" {
-		versionArg = "version"
-	}
 	r := row{Arm: chosen.Name, Rep: *rep, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
-		Version: firstLine(toolOutput(dirs.repo, env, chosen.Tool, versionArg)),
-		Date:    time.Now().Format("2006-01-02 15:04"), Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU())}
+		Date: time.Now().Format("2006-01-02 15:04"), Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU())}
+	if chosen.Tool == "tofu" {
+		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
+	} else {
+		r.Version = firstLine(toolOutput(dirs.repo, env, chosen.Tool, "--version"))
+	}
 	lines, stderr, err := drive(chosen, dirs, env, strings.TrimSpace(string(prompt)), *limit, &r)
 	if err != nil {
 		return err
@@ -264,7 +265,7 @@ func save(r row) error {
 	if err := os.MkdirAll(filepath.Dir(runPath(r.Arm, r.Rep)), 0o755); err != nil {
 		return err
 	}
-	fmt.Printf("%s rep %d: exit %d, %.1f s wall, %.1f s CPU, %s, %d requests, %d calls, hidden %d of 5, rubric %d of 5\n", r.Arm, r.Rep, r.ExitCode, float64(r.WallMS)/1000,
+	fmt.Printf("%s rep %d: %s %s, exit %d, %.1f s wall, %.1f s CPU, %s, %d requests, %d calls, hidden %d of 5, rubric %d of 5\n", r.Arm, r.Rep, r.Tool, r.build(), r.ExitCode, float64(r.WallMS)/1000,
 		float64(r.Tree.CPUMS)/1000, r.Model, r.Requests, len(r.Calls), r.Score.hiddenPassed(), r.Score.rubricPassed())
 	return os.WriteFile(runPath(r.Arm, r.Rep), append(body, '\n'), 0o644)
 }
@@ -357,6 +358,15 @@ func toolOutput(dir string, env []string, name string, args ...string) string {
 		return strings.TrimSpace(string(out)) + " (" + err.Error() + ")"
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func tofuBuild(said string) (string, string) {
+	fields := map[string]string{}
+	for _, line := range strings.Split(said, "\n") {
+		name, value, _ := strings.Cut(strings.TrimSpace(line), " ")
+		fields[name] = strings.TrimSpace(value)
+	}
+	return fields["version"], fields["commit"]
 }
 
 func firstLine(text string) string {

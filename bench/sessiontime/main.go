@@ -10,6 +10,9 @@ import (
 	"runtime"
 	"slices"
 	"time"
+
+	"tofu/internal/konst"
+	"tofu/internal/sys"
 )
 
 const idleGap = 15 * time.Minute
@@ -71,8 +74,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "sessiontime:", err)
 		os.Exit(2)
 	}
-	fmt.Printf("where session time goes, run %s on %s/%s with %d cores, window %s to %s\n",
-		time.Now().Format(dateLayout), runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), cmp.Or(*since, "the start"), cmp.Or(*until, "today"))
+	fmt.Printf("where session time goes, run %s by tofu %s commit %s on %s/%s with %d cores, window %s to %s\n",
+		time.Now().Format(dateLayout), konst.Version, sys.BuildRevision(), runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), cmp.Or(*since, "the start"), cmp.Or(*until, "today"))
 	fmt.Println("times are agent-hours summed over every agent, not wall clock; reads local files only, no network")
 	tofu, err := readTofu(*project, w)
 	if err != nil {

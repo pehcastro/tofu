@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -52,9 +53,16 @@ func conditions(b *strings.Builder, byArm map[string][]row) {
 	for _, a := range present(byArm) {
 		rows := byArm[a.Name]
 		first, last := rows[0], rows[len(rows)-1]
-		fmt.Fprintf(b, "| %s | %s | %s | %s | %s | %s | %s | %s to %s |\n", a.Name, first.Version, first.AskedModel, distinct(rows, func(r row) string { return strings.Join(r.Models, ", ") }),
+		fmt.Fprintf(b, "| %s | %s | %s | %s | %s | %s | %s | %s to %s |\n", a.Name, distinct(rows, row.build), first.AskedModel, distinct(rows, func(r row) string { return strings.Join(r.Models, ", ") }),
 			distinct(rows, func(r row) string { return r.Credential }), first.Posture, first.Machine, first.Date, last.Date)
 	}
+}
+
+func (r row) build() string {
+	if r.Tool == "tofu" {
+		return fmt.Sprintf("%s commit %s", r.Version, cmp.Or(fmt.Sprintf("%.8s", r.Commit), "not recorded"))
+	}
+	return r.Version
 }
 
 func distinct(rows []row, field func(row) string) string {

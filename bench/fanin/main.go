@@ -36,8 +36,10 @@ type profile struct {
 }
 
 type arm struct {
-	label string
-	tofu  string
+	label   string
+	tofu    string
+	version string
+	commit  string
 }
 
 type measured struct {
@@ -65,9 +67,24 @@ func parseArms(text string) ([]arm, error) {
 		if err != nil {
 			return nil, err
 		}
-		arms = append(arms, arm{label: label, tofu: full})
+		said, _ := exec.Command(full, "version").Output()
+		version, commit := tofuBuild(string(said))
+		arms = append(arms, arm{label: label, tofu: full, version: version, commit: commit})
 	}
 	return arms, nil
+}
+
+func tofuBuild(said string) (string, string) {
+	fields := map[string]string{}
+	for _, line := range strings.Split(said, "\n") {
+		name, value, _ := strings.Cut(strings.TrimSpace(line), " ")
+		fields[name] = strings.TrimSpace(value)
+	}
+	return fields["version"], fields["commit"]
+}
+
+func (a arm) build() string {
+	return fmt.Sprintf("tofu %s commit %s", cmp.Or(a.version, "not recorded"), cmp.Or(fmt.Sprintf("%.8s", a.commit), "not recorded"))
 }
 
 func drive(p profile, a arm, cassettes, work string) measured {
@@ -182,14 +199,14 @@ func verb(tofu, project string, env []string, into any, args ...string) error {
 
 func table(rows []measured) string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%-10s %-7s %10s %12s %12s %11s %9s %13s %15s %8s\n", "profile", "arm", "lead turns", "report turns", "reports read", "check turns", "ask turns", "ask wait max", "report wait max", "last read")
+	fmt.Fprintf(&out, "%-10s %-7s %10s %12s %12s %11s %9s %13s %15s %9s  %s\n", "profile", "arm", "lead turns", "report turns", "reports read", "check turns", "ask turns", "ask wait max", "report wait max", "last read", "tofu")
 	for _, r := range rows {
 		if r.failed != nil {
 			fmt.Fprintf(&out, "%-10s %-7s FAILED, nothing counted: %v\n", r.profile.name, r.arm.label, r.failed)
 			continue
 		}
-		fmt.Fprintf(&out, "%-10s %-7s %10d %12d %9d/%-2d %11d %9d %13s %15s %8s\n", r.profile.name, r.arm.label, r.leadTurns, r.reportTurns, r.reportsRead, r.profile.finishing,
-			r.checkTurns, r.askTurns, r.askWait.Round(time.Millisecond), r.reportWait.Round(time.Millisecond), r.lastRead.Round(100*time.Millisecond))
+		fmt.Fprintf(&out, "%-10s %-7s %10d %12d %9d/%-2d %11d %9d %13s %15s %9s  %s\n", r.profile.name, r.arm.label, r.leadTurns, r.reportTurns, r.reportsRead, r.profile.finishing,
+			r.checkTurns, r.askTurns, r.askWait.Round(time.Millisecond), r.reportWait.Round(time.Millisecond), r.lastRead.Round(100*time.Millisecond), r.arm.build())
 	}
 	return out.String()
 }
@@ -213,8 +230,7 @@ func main() {
 	fmt.Printf("  credential  none: every arm drives tofu serve on a cassette in a fresh home under %s\n", work)
 	fmt.Printf("  window      quiet %dms, cap %dms, as built into this bench; each binary carries its own\n", konst.ReportGatherQuietMillis, konst.ReportGatherCapMillis)
 	for _, a := range arms {
-		version, _ := exec.Command(a.tofu, "version").Output()
-		fmt.Printf("  %-11s %s (%s)\n", a.label, strings.Join(strings.Fields(string(version)), " "), a.tofu)
+		fmt.Printf("  %-11s %s (%s)\n", a.label, a.build(), a.tofu)
 	}
 	fmt.Println()
 	var rows []measured

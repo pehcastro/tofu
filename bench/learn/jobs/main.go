@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/learn"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 )
 
 type step struct {
@@ -125,7 +127,7 @@ func bench(file, seed string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("bench learn jobs · %s · %d mocked sessions · %s\n\n", file, len(c.Sessions), time.Now().Format(time.RFC3339))
+	fmt.Printf("bench learn jobs · tofu %s commit %s · %s · %d mocked sessions · %s\n\n", konst.Version, sys.BuildRevision(), file, len(c.Sessions), time.Now().Format(time.RFC3339))
 	found, falses := map[string]bool{}, 0
 	for _, job := range run.Jobs {
 		var named []string

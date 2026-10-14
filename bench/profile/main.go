@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -60,6 +61,7 @@ type run struct {
 	Label         string    `json:"label"`
 	Command       []string  `json:"command"`
 	Version       string    `json:"version"`
+	Commit        string    `json:"commit"`
 	Model         string    `json:"model"`
 	Credential    string    `json:"credential"`
 	Wire          string    `json:"wire"`
@@ -246,7 +248,12 @@ func sample(args []string) error {
 		pprofDir = *profile
 	}
 	env := benchEnv(*goDir, *home, *cassette, pprofDir)
-	version, _ := exec.Command(command[0], "version").Output()
+	build, _ := exec.Command(command[0], "version").Output()
+	fields := map[string]string{}
+	for _, line := range strings.Split(string(build), "\n") {
+		name, value, _ := strings.Cut(strings.TrimSpace(line), " ")
+		fields[name] = strings.TrimSpace(value)
+	}
 	transcript, err := os.Create(filepath.Join(*profile, "stdout.txt"))
 	if err != nil {
 		return err
@@ -275,7 +282,7 @@ func sample(args []string) error {
 	for _, word := range command[1:] {
 		shown = append(shown, strings.ReplaceAll(word, *dir, "<project>"))
 	}
-	r := run{Label: *label, Command: shown, Version: strings.Join(strings.Fields(string(version)), " "),
+	r := run{Label: *label, Command: shown, Version: fields["version"], Commit: fields["commit"],
 		Model: strings.Join(models, "+"), Credential: *credential, Wire: *wire,
 		Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU()), Date: time.Now().Format("2006-01-02 15:04"),
 		Method: treeMethod, Exit: o.Exit, WallS: o.WallS, JobCPUS: o.JobCPUS, SeenCPUS: seenCPU, JobProcesses: o.JobProcesses, SeenProcesses: len(o.members),
@@ -293,8 +300,8 @@ func sample(args []string) error {
 
 func (r run) table() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: exit %d, %.1f s wall, job CPU %.2f s (%.2f s seen per process), peak tree RSS %.1f MB, peak commit %.1f MB, %d of %d processes seen, %d samples, model %s, %s\n\n",
-		r.Label, r.Exit, r.WallS, r.JobCPUS, r.SeenCPUS, r.PeakTreeMB, r.PeakCommitMB, r.SeenProcesses, r.JobProcesses, r.Samples, r.Model, r.Changed)
+	fmt.Fprintf(&b, "%s: tofu %s commit %s, exit %d, %.1f s wall, job CPU %.2f s (%.2f s seen per process), peak tree RSS %.1f MB, peak commit %.1f MB, %d of %d processes seen, %d samples, model %s, %s\n\n",
+		r.Label, cmp.Or(r.Version, "not recorded"), cmp.Or(r.Commit, "not recorded"), r.Exit, r.WallS, r.JobCPUS, r.SeenCPUS, r.PeakTreeMB, r.PeakCommitMB, r.SeenProcesses, r.JobProcesses, r.Samples, r.Model, r.Changed)
 	b.WriteString("| kind | processes | MB at the tree peak | kind's own peak MB | largest one process MB | of it private MB | largest commit MB | CPU s |\n|---|---|---|---|---|---|---|---|\n")
 	for _, k := range r.Kinds {
 		fmt.Fprintf(&b, "| %s | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %.2f |\n", k.Kind, k.Processes, k.AtTreePeakMB, k.OwnPeakMB, k.LargestOneMB, k.LargestOneWSMB, k.LargestPrivateMB, k.CPUS)
@@ -316,7 +323,7 @@ func report([]string) error {
 		if err := json.Unmarshal(body, &r); err != nil {
 			return err
 		}
-		fmt.Printf("%s\n%s, %s, %s credential, wire %s, %s\n\n", r.table(), r.Version, r.Date, r.Credential, r.Wire, r.Machine)
+		fmt.Printf("%s\n%s, %s credential, wire %s, %s\n\n", r.table(), r.Date, r.Credential, r.Wire, r.Machine)
 	}
 	return nil
 }
