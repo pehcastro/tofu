@@ -74,6 +74,7 @@ pub enum Page {
     FileEdits,
     Charts,
     Delegation,
+    Draw,
     Settings,
     Tiling,
 }
@@ -100,7 +101,7 @@ pub const UNBUILT: [(Group, &str); 7] = [
 ];
 
 impl Page {
-    pub const ALL: [Page; 44] = [
+    pub const ALL: [Page; 45] = [
         Page::Type,
         Page::Icons,
         Page::Surfaces,
@@ -142,6 +143,7 @@ impl Page {
         Page::AskBar,
         Page::Charts,
         Page::Delegation,
+        Page::Draw,
         Page::Settings,
         Page::Chrome,
         Page::Tiling,
@@ -572,6 +574,16 @@ impl Page {
                 "components/graph.rs",
                 "nothing picked, agent picked with its cross link, file picked and undone, edge hover; board width and 320 px",
                 "",
+            ),
+            Page::Draw => sheet(
+                "draw",
+                "Draw",
+                Group::Content,
+                "An Excalidraw board on desk_canvas: clean strokes over draw_doc, pan and zoom, select, move, resize, text, bound arrows and undo.",
+                "draw.md D3",
+                "desk_canvas; draw_doc Scene",
+                "liarsdice fixture fitted, a box moved with its bound arrow following, undo, a 10,000-shape grid",
+                "rotation of text, multi-select, creating shapes",
             ),
             Page::Settings => sheet(
                 "settings",

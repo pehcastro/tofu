@@ -8,6 +8,7 @@ mod content;
 mod controls;
 mod decide;
 mod diff;
+mod draw;
 mod editor;
 mod empty;
 mod file_edits;
@@ -59,6 +60,7 @@ use content::ContentState;
 use controls::ControlsState;
 use decide::Crossfade;
 use diff::DiffPage;
+use draw::DrawPage;
 use editor::{HistoryPage, TreePage};
 use file_edits::FileEditsPage;
 use find::FindPage;
@@ -103,6 +105,7 @@ pub struct Book {
     file_edits: FileEditsPage,
     charts: ChartsPage,
     graph: GraphPage,
+    draw: DrawPage,
     tiling: TilingPage,
     palette: PalettePage,
     find: FindPage,
@@ -146,6 +149,7 @@ impl Book {
             file_edits: FileEditsPage::new(cx),
             charts: ChartsPage::new(cx),
             graph: GraphPage::new(cx),
+            draw: DrawPage::new(cx),
             tiling: TilingPage::new(cx),
             palette: PalettePage::new(window, cx),
             find: FindPage::new(window, cx),
@@ -478,6 +482,7 @@ impl Book {
             Page::FileEdits => self.file_edits.render(theme, window, cx),
             Page::Charts => self.charts.render(theme, window, cx),
             Page::Delegation => self.graph.render(theme, window, cx),
+            Page::Draw => self.draw.render(theme, window, cx),
             Page::Tiling => self.tiling.render(theme, window, cx),
             Page::Palette => self.palette.render(theme, cx),
             Page::Find => self.find.render(theme, cx),

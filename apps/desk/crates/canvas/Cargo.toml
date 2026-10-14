@@ -1,0 +1,16 @@
+[package]
+name = "desk_canvas"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+desk_ui.workspace = true
+draw_doc.workspace = true
+gpui.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

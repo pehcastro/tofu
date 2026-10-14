@@ -11,7 +11,10 @@ name = "book"
 path = "src/main.rs"
 
 [dependencies]
+desk_canvas.workspace = true
 desk_core.workspace = true
+draw_doc.workspace = true
+serde_json.workspace = true
 desk_motion.workspace = true
 desk_perf.workspace = true
 desk_terminal.workspace = true
