@@ -216,32 +216,53 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		}
 	}
 	var recording sync.Mutex
-	compactionAsk := func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error) {
-		id, started := session.NewEventID(), time.Now()
-		tapped, tap := llm.Tapped(ctx)
-		decision, timing, err := askCountingAttempts(tapped, model, request)
-		recording.Lock()
-		defer recording.Unlock()
-		recorded.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
-		row.TotalCostUSD += decision.Usage.Cost
-		if err == nil {
-			spent := stepFrom(id, len(row.Steps), timing, decision)
-			spent.AssistantText = ""
-			recorded.step(session.EventMemoryRequest, spent)
+	compactionAsk := func(into *record, index int, charge func(float64)) RecordedAsk {
+		return func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error) {
+			id, started := session.NewEventID(), time.Now()
+			tapped, tap := llm.Tapped(ctx)
+			decision, timing, err := askCountingAttempts(tapped, model, request)
+			recording.Lock()
+			defer recording.Unlock()
+			into.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
+			charge(decision.Usage.Cost)
+			if err == nil {
+				spent := stepFrom(id, index, timing, decision)
+				spent.AssistantText = ""
+				into.step(session.EventMemoryRequest, spent)
+			}
+			return decision, err
 		}
-		return decision, err
 	}
 	answered := func(reply string) {
 		episode(episodeOfLead, reply)
 		if keeper == nil {
 			return
 		}
-		if err := keeper.Compact(compactionAsk); err != nil {
-			row.Warnings = append(row.Warnings, "the episode view was not summarized after this turn: "+err.Error())
+		const notSummarized = "the episode view was not summarized after this turn: "
+		index := len(row.Steps)
+		later, holds := recorded.heldAgain()
+		release := func() {
+			if later != nil {
+				later.inbox.letGo(later.log)
+			}
+		}
+		background := laterCompaction{drop: release, run: func() {
+			if err := keeper.Compact(compactionAsk(later, index, func(float64) {})); err != nil {
+				later.notice(notSummarized + err.Error())
+			}
+			release()
+		}}
+		if holds && config.Inbox.compactLater(background) {
+			return
+		}
+		release()
+		if err := keeper.Compact(compactionAsk(recorded, index, func(cost float64) { row.TotalCostUSD += cost })); err != nil {
+			row.Warnings = append(row.Warnings, notSummarized+err.Error())
 		}
 	}
 	episodesCarried := konst.MemtreeViewBytes
 	episodesFor := func(sized recall.Budget, head []llm.Message) []llm.Message {
+		config.Inbox.compacted()
 		room := (sized.Bands.Target() - sized.Tokens(artifacts.preview, historyOf(head))) * artifacts.preview.BytesPerThousandTokens / 1000
 		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, episodesCarried)
 		if allowed < konst.MemtreeLineBytes {
@@ -1060,6 +1081,20 @@ func backgroundSurvivors(registry *shell.Registry, before map[string]bool) strin
 func overflowed(err error) bool {
 	var refused *recall.OverWindow
 	return transport.ContextOverflow(err) || errors.As(err, &refused)
+}
+
+func (r *record) heldAgain() (*record, bool) {
+	if r == nil {
+		return nil, true
+	}
+	if !r.own || r.inbox == nil {
+		return nil, false
+	}
+	log, err := r.inbox.open(r.store, session.Header{ID: r.session()})
+	if err != nil {
+		return nil, false
+	}
+	return &record{store: r.store, inbox: r.inbox, log: log, scope: r.scope, turn: r.turn, said: map[string]string{}}, true
 }
 
 func NewID(at time.Time) string {

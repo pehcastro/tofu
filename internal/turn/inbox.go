@@ -58,6 +58,13 @@ type Inbox struct {
 	since    time.Time
 	waited   time.Duration
 	stopped  bool
+	led      bool
+	settling chan struct{}
+	queued   laterCompaction
+}
+
+type laterCompaction struct {
+	run, drop func()
 }
 
 type leadStopped struct{}
@@ -657,6 +664,62 @@ func (b *Inbox) release(log *session.Log) error {
 	return b.releasing(log)
 }
 
+func (b *Inbox) letGo(log *session.Log) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.releasing(log); err != nil {
+		b.unclosed = append(b.unclosed, err)
+	}
+}
+
+func (b *Inbox) compactLater(job laterCompaction) bool {
+	if b == nil {
+		return false
+	}
+	b.mu.Lock()
+	if !b.led {
+		b.mu.Unlock()
+		return false
+	}
+	superseded := b.queued
+	if b.settling == nil {
+		b.settling = make(chan struct{})
+		go b.compacting(job.run)
+	} else {
+		b.queued = job
+	}
+	b.mu.Unlock()
+	if superseded.drop != nil {
+		superseded.drop()
+	}
+	return true
+}
+
+func (b *Inbox) compacting(run func()) {
+	for run != nil {
+		run()
+		b.mu.Lock()
+		run, b.queued = b.queued.run, laterCompaction{}
+		if run == nil {
+			close(b.settling)
+			b.settling = nil
+		}
+		b.mu.Unlock()
+	}
+}
+
+func (b *Inbox) compacted() {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	settling := b.settling
+	b.mu.Unlock()
+	if settling != nil {
+		<-settling
+	}
+}
+
 func (b *Inbox) releasing(log *session.Log) error {
 	refs, kept := b.logs[log]
 	switch {
@@ -674,7 +737,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	var failed []error
 	for {
 		config.Inbox.mu.Lock()
-		config.Inbox.stopped = false
+		config.Inbox.stopped, config.Inbox.led = false, true
 		config.Inbox.mu.Unlock()
 		row, err := Run(ctx, config)
 		ended(row, err)
@@ -690,6 +753,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 			next = append(next, inboxItem{text: said, source: sourceTyped, posted: time.Now()})
 		}
 		if len(next) == 0 || ctx.Err() != nil {
+			config.Inbox.compacted()
 			return errors.Join(append(failed, config.Inbox.settle())...)
 		}
 		if row.Conversation != nil {

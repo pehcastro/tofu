@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -98,14 +100,67 @@ func (z *Zoom) Keep(kind, text string) error {
 	return memory.KeepEpisode(z.Project, memtree.Item{Kind: kind, Text: text})
 }
 
+type summaryAsked struct {
+	before, left, right string
+}
+
+type summaryAnswer struct {
+	line string
+	err  error
+}
+
+var errAskedWithTheLogClosed = errors.New("this summary is asked with the episode log closed and kept on the next pass")
+
 func (z *Zoom) Compact(ask turn.RecordedAsk) error {
+	logs, err := memory.Trees(z.Project)
+	if err != nil {
+		return err
+	}
 	compact, release := z.Compactor(ask)
 	defer release()
+	var answering sync.Mutex
+	answers, asked := map[summaryAsked]summaryAnswer{}, map[summaryAsked]bool{}
+	answered := func(_ context.Context, before, left, right string) (string, error) {
+		answering.Lock()
+		defer answering.Unlock()
+		question := summaryAsked{before, left, right}
+		if answer, known := answers[question]; known {
+			return answer.line, answer.err
+		}
+		asked[question] = true
+		return "", errAskedWithTheLogClosed
+	}
+	for {
+		if _, err := z.open(logs[memory.EpisodesStore], func(store *memtree.Store) ([]string, error) {
+			_, err := store.Build(context.Background(), answered)
+			return nil, err
+		}); err != nil {
+			return err
+		}
+		if len(asked) == 0 {
+			break
+		}
+		var asking sync.WaitGroup
+		slots := make(chan struct{}, konst.MemtreeCompactionsAtOnce)
+		for question := range asked {
+			slots <- struct{}{}
+			asking.Go(func() {
+				line, err := compact(context.Background(), question.before, question.left, question.right)
+				answering.Lock()
+				answers[question] = summaryAnswer{line, err}
+				answering.Unlock()
+				<-slots
+			})
+		}
+		asking.Wait()
+		clear(asked)
+	}
 	z.held.Lock()
 	defer z.held.Unlock()
-	_, built, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, compact)
-	if err == nil && len(built.Failed) > 0 {
-		err = fmt.Errorf("%d of %d episode summaries failed and are tried after the next turn, the first: %w", len(built.Failed), built.Calls, built.Failed[0])
+	_, built, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, answered)
+	failed := slices.DeleteFunc(built.Failed, func(err error) bool { return errors.Is(err, errAskedWithTheLogClosed) })
+	if err == nil && len(failed) > 0 {
+		err = fmt.Errorf("%d of %d episode summaries failed and are tried after the next turn, the first: %w", len(failed), len(answers), failed[0])
 	}
 	return err
 }
