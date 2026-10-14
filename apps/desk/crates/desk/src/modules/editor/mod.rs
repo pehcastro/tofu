@@ -12,10 +12,12 @@ use std::time::{Duration, Instant};
 
 use desk_core::git::{Against, Git, GitBinary, GitError, Hunk};
 use desk_core::home::Home;
+use desk_core::symbols::{Index, Symbol, indexed};
+use desk_core::syntax::Language;
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
-use desk_ui::components::code_editor::{CodeEditor, Highlight};
+use desk_ui::components::code_editor::{CodeEditor, Highlight, Jump};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
@@ -54,6 +56,9 @@ const BAR_GAP: f32 = 8.0;
 const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 const KEYMAP_FILE: &str = "keymap.json";
 const SETTINGS_FILE: &str = "settings.json";
+const CACHE_TAG: &str = "CACHEDIR.TAG";
+const GIT_DIR: &str = ".git";
+const MB: f64 = 1024.0 * 1024.0;
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let root = match cx.try_global::<OpenProject>() {
@@ -134,6 +139,12 @@ enum Asking {
     },
 }
 
+struct Spot {
+    path: PathBuf,
+    row: usize,
+    col: usize,
+}
+
 struct Folder {
     listing: Arc<Listing>,
     icons: IconTheme,
@@ -176,6 +187,10 @@ pub struct Editor {
     menu: TreeMenu,
     keymap: Rc<Keymap>,
     vim: bool,
+    symbols: Option<Arc<Index>>,
+    back: Vec<Spot>,
+    choosing: Option<(Spot, Vec<Symbol>)>,
+    choices_at: Option<Point<Pixels>>,
     _tree: Subscription,
     _pack: Subscription,
     _project: Subscription,
@@ -185,6 +200,7 @@ pub struct Editor {
     _unfolding: Vec<Task<()>>,
     _marking: Option<Task<()>>,
     _blaming: Option<Task<()>>,
+    _indexing: Option<Task<()>>,
 }
 
 impl Editor {
@@ -218,6 +234,10 @@ impl Editor {
             vim: home
                 .as_ref()
                 .is_ok_and(|home| Vim::enabled(&home.config.join(SETTINGS_FILE))),
+            symbols: None,
+            back: Vec::new(),
+            choosing: None,
+            choices_at: None,
             _pack: cx.observe_global::<PickedPack>(Self::repack),
             _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
@@ -226,9 +246,11 @@ impl Editor {
             _unfolding: Vec::new(),
             _marking: None,
             _blaming: None,
+            _indexing: None,
         };
         editor.start_watching(cx);
         editor.refresh(cx);
+        editor.index(cx);
         cx.spawn(async move |this, cx| {
             let answer = cx.background_executor().spawn(async { ask_github() }).await;
             let told = this.update(cx, |editor, cx| editor.signed_in(github(answer), cx));
@@ -271,8 +293,10 @@ impl Editor {
         self.pages.retain(|page| page.dirty);
         self.active = 0;
         self.asking = None;
+        self.back.clear();
         self.start_watching(cx);
         self.refresh(cx);
+        self.index(cx);
         cx.notify();
     }
 
@@ -352,7 +376,168 @@ impl Editor {
         for path in touched {
             self.reread(path, cx);
         }
+        self.retag(changed, cx);
         self.refresh(cx);
+    }
+
+    fn index(&mut self, cx: &mut Context<Self>) {
+        self.symbols = None;
+        let listing = self.folder.listing.clone();
+        let started = Instant::now();
+        let built = cx
+            .background_executor()
+            .spawn(async move { Index::build(&source_files(&listing)) });
+        self._indexing = Some(cx.spawn(async move |this, cx| {
+            let index = match built.await {
+                Ok(index) => index,
+                Err(error) => return eprintln!("desk: symbols not indexed: {error}"),
+            };
+            eprintln!(
+                "desk: symbols indexed {} files, {} symbols in {} ms, index {:.1} MB",
+                index.files(),
+                index.symbols(),
+                started.elapsed().as_millis(),
+                index.bytes() as f64 / MB
+            );
+            if let Err(error) = this.update(cx, |editor, cx| editor.indexed(index, cx)) {
+                eprintln!("desk: editor is gone before its symbols: {error}");
+            }
+        }));
+    }
+
+    fn retag(&mut self, changed: &BTreeSet<String>, cx: &mut Context<Self>) {
+        let Some(index) = self.symbols.clone() else {
+            return;
+        };
+        let root = &self.folder.listing.root;
+        let files: Vec<PathBuf> = changed
+            .iter()
+            .map(|path| root.join(path))
+            .filter(|path| indexed(path))
+            .collect();
+        if files.is_empty() {
+            return;
+        }
+        let retagged = cx.background_executor().spawn(async move {
+            let mut next = (*index).clone();
+            next.retag(&files).map(|()| (next, files.len()))
+        });
+        self._indexing = Some(cx.spawn(async move |this, cx| {
+            let (index, count) = match retagged.await {
+                Ok(found) => found,
+                Err(error) => return eprintln!("desk: symbols kept, retag failed: {error}"),
+            };
+            eprintln!("desk: symbols retagged {count} files");
+            if let Err(error) = this.update(cx, |editor, cx| editor.indexed(index, cx)) {
+                eprintln!("desk: editor is gone before its symbols: {error}");
+            }
+        }));
+    }
+
+    fn indexed(&mut self, index: Index, cx: &mut Context<Self>) {
+        let index = Arc::new(index);
+        for page in &self.pages {
+            if let Ok(code) = &page.code {
+                code.update(cx, |code, _| code.set_symbols(Some(index.clone())));
+            }
+        }
+        self.symbols = Some(index);
+    }
+
+    fn jumped(&mut self, jump: Jump, window: &mut Window, cx: &mut Context<Self>) {
+        match jump {
+            Jump::Definition { name, at, row, col } => {
+                self.definition(&name, at, (row, col), window, cx)
+            }
+            Jump::Back => self.back(window, cx),
+        }
+    }
+
+    fn shown(&self, path: &Path, row: usize) -> String {
+        let path = self
+            .folder
+            .relative(path)
+            .unwrap_or_else(|| path.display().to_string());
+        format!("{path}:{}", row + 1)
+    }
+
+    fn definition(
+        &mut self,
+        name: &str,
+        at: Point<Pixels>,
+        (row, col): (usize, usize),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(page) = self.pages.get(self.active) else {
+            return;
+        };
+        let from = Spot {
+            path: page.path.clone(),
+            row,
+            col,
+        };
+        let found: Vec<Symbol> = match (&self.symbols, Language::from_path(&page.path)) {
+            (Some(index), Some(language)) => index.definitions(name, language).cloned().collect(),
+            _ => Vec::new(),
+        };
+        if found.len() > 1 {
+            eprintln!("desk: editor definition {name} -> {} choices", found.len());
+            self.choosing = Some((from, found));
+            self.choices_at = Some(at);
+            return cx.notify();
+        }
+        let Some(symbol) = found.into_iter().next() else {
+            return eprintln!("desk: editor definition {name} -> none");
+        };
+        eprintln!(
+            "desk: editor definition {name} -> {}",
+            self.shown(&symbol.path, symbol.row)
+        );
+        self.go_to(from, &symbol, window, cx);
+    }
+
+    fn choose(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((from, symbol)) = self
+            .choosing
+            .take()
+            .and_then(|(from, found)| Some((from, found.into_iter().nth(at)?)))
+        else {
+            return;
+        };
+        eprintln!(
+            "desk: editor definition {} chose {}",
+            symbol.name,
+            self.shown(&symbol.path, symbol.row)
+        );
+        self.go_to(from, &symbol, window, cx);
+    }
+
+    fn go_to(&mut self, from: Spot, symbol: &Symbol, window: &mut Window, cx: &mut Context<Self>) {
+        self.back.push(from);
+        self.land(&symbol.path, symbol.row, symbol.col, window, cx);
+    }
+
+    fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(Spot { path, row, col }) = self.back.pop() else {
+            return eprintln!("desk: editor back to nothing");
+        };
+        eprintln!("desk: editor back to {}", self.shown(&path, row));
+        self.land(&path, row, col, window, cx);
+    }
+
+    fn land(
+        &mut self,
+        path: &Path,
+        row: usize,
+        col: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_path(path.to_path_buf(), window, cx);
+        if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
+            code.update(cx, |code, cx| code.jump(row, col, cx));
+        }
     }
 
     fn reread(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -918,7 +1103,7 @@ impl Editor {
     }
 
     fn page(&self, full: PathBuf, git: Option<Arc<GitBinary>>, cx: &mut Context<Self>) -> Page {
-        let code = file_editor(&full, self.keymap.clone(), self.vim, cx);
+        let code = file_editor(&full, self, cx);
         let changes = code
             .as_ref()
             .ok()
@@ -1448,6 +1633,21 @@ impl Editor {
         )
     }
 
+    fn choices_menu(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let items = self
+            .choosing
+            .iter()
+            .flat_map(|(_, found)| found)
+            .map(|symbol| MenuItem::action(self.shown(&symbol.path, symbol.row)))
+            .collect();
+        context_menu(items)
+            .id("editor-definitions")
+            .absolute()
+            .size_0()
+            .open_at(self.choices_at.take())
+            .on_pick(cx.listener(|editor, at: &usize, window, cx| editor.choose(*at, window, cx)))
+    }
+
     fn code_area(&self, theme: &Theme) -> AnyElement {
         match self.pages.get(self.active).map(|page| &page.code) {
             None => empty_state(
@@ -1552,7 +1752,8 @@ impl Render for Editor {
                     .min_h_0()
                     .overflow_hidden()
                     .child(self.code_area(&theme)),
-            );
+            )
+            .child(self.choices_menu(cx));
         let asking = self.asking.is_some();
         shell(
             Header::Title(Some(Glyph::Code), "Editor".into(), None),
@@ -1931,7 +2132,42 @@ fn no_surface(action: &str) {
     eprintln!("desk: editor action {action} no surface yet");
 }
 
-fn file_editor(path: &Path, keymap: Rc<Keymap>, vim: bool, cx: &mut App) -> Opened {
+fn source_files(listing: &Listing) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![String::new()];
+    while let Some(folder) = pending.pop() {
+        let dir = listing.root.join(&folder);
+        if dir.join(CACHE_TAG).is_file() {
+            continue;
+        }
+        let read = match fs::read_dir(&dir) {
+            Ok(read) => read,
+            Err(error) => {
+                eprintln!("desk: symbols could not list {}: {error}", dir.display());
+                continue;
+            }
+        };
+        for entry in read.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let relative = match folder.as_str() {
+                "" => name.clone(),
+                folder => format!("{folder}/{name}"),
+            };
+            if name == GIT_DIR || listing.ignore.ignored(&relative) {
+                continue;
+            }
+            match entry.file_type() {
+                Ok(kind) if kind.is_dir() => pending.push(relative),
+                Ok(kind) if kind.is_file() && indexed(&entry.path()) => found.push(entry.path()),
+                Ok(_) => {}
+                Err(error) => eprintln!("desk: symbols skipped {relative}: {error}"),
+            }
+        }
+    }
+    found
+}
+
+fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened {
     let shown = path.display();
     let editor = match CodeEditor::open(path, cx) {
         Ok(editor) => editor,
@@ -1950,7 +2186,18 @@ fn file_editor(path: &Path, keymap: Rc<Keymap>, vim: bool, cx: &mut App) -> Open
         editor.buffer().line_count()
     );
     let path = PathBuf::from(path);
-    let editor = editor.keymap(keymap).vim(vim).on_save(move |buffer, _, _| {
+    let desk = cx.weak_entity();
+    let on_jump = move |jump: Jump, window: &mut Window, cx: &mut App| {
+        if let Err(error) = desk.update(cx, |desk, cx| desk.jumped(jump, window, cx)) {
+            eprintln!("desk: editor is gone before its jump: {error}");
+        }
+    };
+    let mut editor = editor
+        .keymap(owner.keymap.clone())
+        .vim(owner.vim)
+        .on_jump(on_jump);
+    editor.set_symbols(owner.symbols.clone());
+    let editor = editor.on_save(move |buffer, _, _| {
         let shown = path.display();
         match buffer.save(&path) {
             Ok(()) => {

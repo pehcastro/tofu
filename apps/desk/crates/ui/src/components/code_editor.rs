@@ -5,16 +5,18 @@ use std::fs;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use desk_core::buffer::Buffer;
-use desk_core::syntax::{Kind, Span, Syntax};
+use desk_core::symbols::Index;
+use desk_core::syntax::{Kind, Language, Span, Syntax};
 use gpui::{
     AnyElement, App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity,
-    EntityInputHandler, FocusHandle, Focusable, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollStrategy, SharedString, Task,
-    UTF16Selection, UniformListScrollHandle, WeakEntity, Window, canvas, div, point, prelude::*,
-    px, size,
+    EntityInputHandler, FocusHandle, Focusable, KeyDownEvent, Keystroke, ModifiersChangedEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollStrategy,
+    SharedString, Task, UTF16Selection, UniformListScrollHandle, WeakEntity, Window, canvas, div,
+    fill, point, prelude::*, px, size,
 };
 
 use crate::components::chat::fail;
@@ -71,6 +73,24 @@ const PILL_GAP: f32 = 6.0;
 const PILL_PAD: f32 = 6.0;
 const PILL_HEIGHT: f32 = 16.0;
 const PILL_RADIUS: f32 = 4.0;
+const LINK_DROP: f32 = 4.0;
+const LINK_THICKNESS: f32 = 1.0;
+const LINK: ColorToken = ColorToken::SyntaxLinkUri;
+
+pub enum Jump {
+    Definition {
+        name: String,
+        at: Point<Pixels>,
+        row: usize,
+        col: usize,
+    },
+    Back,
+}
+
+fn back_stroke(keys: &Keystroke) -> bool {
+    let held = keys.modifiers;
+    keys.key == "left" && held.alt && !held.control && !held.shift && !held.platform
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileKind {
@@ -374,6 +394,7 @@ fn fold_pill(header: usize, editor: WeakEntity<CodeEditor>, theme: &Theme) -> An
 }
 
 type Save = Rc<dyn Fn(&mut Buffer, &mut Window, &mut App) -> Result<(), String>>;
+type OnJump = Rc<dyn Fn(Jump, &mut Window, &mut App)>;
 
 pub struct CodeEditor {
     buffer: Buffer,
@@ -408,6 +429,10 @@ pub struct CodeEditor {
     keymap: Rc<Keymap>,
     comment: Option<&'static str>,
     vim: Option<Vim>,
+    language: Option<Language>,
+    symbols: Option<Arc<Index>>,
+    link: Option<Range<usize>>,
+    on_jump: Option<OnJump>,
 }
 
 #[derive(Default)]
@@ -479,6 +504,10 @@ impl CodeEditor {
             keymap: Rc::default(),
             comment: None,
             vim: None,
+            language: None,
+            symbols: None,
+            link: None,
+            on_jump: None,
         };
         editor.widest = editor.widest_line();
         editor
@@ -495,6 +524,7 @@ impl CodeEditor {
             editor.syntax = Highlight::Tree(syntax);
         }
         editor.wrapping = prose(path);
+        editor.language = Language::from_path(path);
         let extension = path.extension().and_then(|extension| extension.to_str());
         editor.comment = LINE_COMMENTS
             .iter()
@@ -568,6 +598,84 @@ impl CodeEditor {
     pub fn vim(mut self, on: bool) -> Self {
         self.vim = on.then(Vim::default);
         self
+    }
+
+    pub fn on_jump(mut self, jump: impl Fn(Jump, &mut Window, &mut App) + 'static) -> Self {
+        self.on_jump = Some(Rc::new(jump));
+        self
+    }
+
+    pub fn set_symbols(&mut self, symbols: Option<Arc<Index>>) {
+        self.symbols = symbols;
+        self.link = None;
+    }
+
+    pub fn jump(&mut self, row: usize, col: usize, cx: &mut Context<Self>) {
+        self.carets = vec![Caret::at(self.at_place((row, col)))];
+        self.vim_clamp();
+        self.reveal();
+        self.touch(cx);
+    }
+
+    fn word_at(&self, at: usize) -> Option<Range<usize>> {
+        let word = |at: usize| self.char_at(at).is_some_and(|ch| class(ch) == Class::Word);
+        let inside = match word(at) {
+            true => at,
+            false => at.checked_sub(1).filter(|before| word(*before))?,
+        };
+        Some(self.word_left(inside + 1)..self.word_right(inside))
+    }
+
+    fn word(&self, range: Range<usize>) -> Option<String> {
+        Some(self.buffer.rope().get_slice(range)?.to_string())
+    }
+
+    fn defined(&self, range: &Range<usize>) -> bool {
+        let (Some(index), Some(language)) = (&self.symbols, self.language) else {
+            return false;
+        };
+        self.word(range.clone())
+            .is_some_and(|name| index.definitions(&name, language).next().is_some())
+    }
+
+    fn point_link(
+        &mut self,
+        position: Point<Pixels>,
+        held: bool,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let link = (held && self.on_jump.is_some() && self.in_text(position))
+            .then(|| self.char_at_point(position, window, cx))
+            .flatten()
+            .and_then(|at| self.word_at(at))
+            .filter(|range| self.defined(range));
+        if link != self.link {
+            self.link = link;
+            cx.notify();
+        }
+    }
+
+    fn in_text(&self, position: Point<Pixels>) -> bool {
+        let area = self.bounds.get();
+        area.contains(&position) && position.x >= area.left() + px(NUMBER_COLUMN)
+    }
+
+    fn modifiers_changed(
+        &mut self,
+        event: &ModifiersChangedEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let held = event.modifiers.secondary();
+        self.point_link(window.mouse_position(), held, window, cx);
+    }
+
+    fn leap(&self, jump: Jump, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(on_jump) = self.on_jump.clone() else {
+            return;
+        };
+        window.defer(cx, move |window, cx| on_jump(jump, window, cx));
     }
 
     pub fn marks(&self) -> &Marks {
@@ -1029,6 +1137,7 @@ impl CodeEditor {
 
     fn settle(&mut self, lines: usize) {
         self.wrap_stale = true;
+        self.link = None;
         if let Highlight::Tree(syntax) = &mut self.syntax {
             let synced = syntax.sync(&mut self.buffer);
             self.report("Could not colour", synced);
@@ -1249,6 +1358,10 @@ impl CodeEditor {
             Resolved::Miss if typed.len() > 1 => {
                 let chord: Vec<String> = typed.iter().map(ToString::to_string).collect();
                 eprintln!("desk: editor chord {} is not bound", chord.join(" "));
+                return cx.stop_propagation();
+            }
+            Resolved::Miss if back_stroke(keys) && self.on_jump.is_some() => {
+                self.leap(Jump::Back, window, cx);
                 return cx.stop_propagation();
             }
             Resolved::Miss => return,
@@ -1927,6 +2040,32 @@ impl CodeEditor {
         Some(self.buffer.line_to_char(line).ok()? + drawn.column(byte))
     }
 
+    fn x_of(&self, at: usize, window: &Window, cx: &App) -> Option<(usize, Pixels)> {
+        let line = self.buffer.char_to_line(at).ok()?;
+        let column = at - self.buffer.line_to_char(line).ok()?;
+        let drawn = self.drawn(line);
+        let text = drawn.text.as_str();
+        let byte = drawn.byte(column);
+        let (row, within) = match self.wrapped() {
+            Some(wrap) => {
+                let row = wrap.row_of(line, byte);
+                (row, wrap.piece(line, wrap.locate(row).1, text.len()))
+            }
+            None => (self.row_of(line), 0..text.len()),
+        };
+        let piece: SharedString = text.get(within.clone())?.to_owned().into();
+        let x = code_shape(piece, window, &ActiveTheme::theme(cx))
+            .x_for_index(byte.saturating_sub(within.start));
+        Some((row, x))
+    }
+
+    fn link_line(&self, window: &Window, cx: &App) -> Option<(usize, Pixels, Pixels)> {
+        let link = self.link.as_ref()?;
+        let (row, from) = self.x_of(link.start, window, cx)?;
+        let (end_row, to) = self.x_of(link.end, window, cx)?;
+        (row == end_row && to > from).then_some((row, from, to))
+    }
+
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
         self.publish_keys(Vec::new(), cx);
@@ -1938,6 +2077,15 @@ impl CodeEditor {
             return;
         };
         let held = event.modifiers;
+        let follows = held.secondary() && !held.alt && !held.shift && self.in_text(event.position);
+        let jumps = follows && self.language.is_some() && self.on_jump.is_some();
+        let named = jumps.then(|| self.word_at(at)).flatten();
+        let picked = named.and_then(|range| Some((self.place(range.start)?, self.word(range)?)));
+        if let Some(((row, col), name)) = picked {
+            let at = event.position;
+            self.leap(Jump::Definition { name, at, row, col }, window, cx);
+            return cx.stop_propagation();
+        }
         match self.carets.last_mut() {
             Some(last) if held.shift && !held.alt => {
                 last.head = at;
@@ -1955,6 +2103,7 @@ impl CodeEditor {
     fn mouse_move(&mut self, event: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
         if !self.dragging || !event.dragging() {
             self.hover(event.position, cx);
+            self.point_link(event.position, event.modifiers.secondary(), window, cx);
             return;
         }
         let Some(at) = self.char_at_point(event.position, window, cx) else {
@@ -2159,22 +2308,7 @@ impl EntityInputHandler for CodeEditor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        let at = self.chars(units).start;
-        let line = self.buffer.char_to_line(at).ok()?;
-        let column = at - self.buffer.line_to_char(line).ok()?;
-        let drawn = self.drawn(line);
-        let text = drawn.text.as_str();
-        let byte = drawn.byte(column);
-        let (row, within) = match self.wrapped() {
-            Some(wrap) => {
-                let row = wrap.row_of(line, byte);
-                (row, wrap.piece(line, wrap.locate(row).1, text.len()))
-            }
-            None => (self.row_of(line), 0..text.len()),
-        };
-        let piece: SharedString = text.get(within.clone())?.to_owned().into();
-        let x = code_shape(piece, window, &ActiveTheme::theme(cx))
-            .x_for_index(byte.saturating_sub(within.start));
+        let (row, x) = self.x_of(self.chars(units).start, window, cx)?;
         let origin = code_origin(element, &self.scroll, row);
         Some(Bounds::new(
             point(origin.x + x, origin.y),
@@ -2224,6 +2358,9 @@ impl Render for CodeEditor {
         let wrapped_at = self.wrapping.then(|| self.wrap.width());
         let folded_at = self.folded_at.clone();
         let shown_lines = self.shown_lines.clone();
+        let link = self.link_line(window, cx);
+        let link_ink = ActiveTheme::theme(cx).color(LINK);
+        let scroll = self.scroll.clone();
         let rows = code_view(
             "code-editor-rows",
             self.buffer.line_count(),
@@ -2270,14 +2407,22 @@ impl Render for CodeEditor {
             .relative()
             .size_full()
             .track_focus(&self.focus)
-            .cursor_text()
+            .map(|editing| match link {
+                Some(_) => editing.cursor_pointer(),
+                None => editing.cursor_text(),
+            })
             .on_key_down(cx.listener(Self::key_down))
+            .on_modifiers_changed(cx.listener(Self::modifiers_changed))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::mouse_down))
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::release))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::release))
             .on_hover(cx.listener(|editor, hovered: &bool, _, cx| {
-                if !hovered && editor.chevron.take().is_some() {
+                if *hovered {
+                    return;
+                }
+                let chevron = editor.chevron.take().is_some();
+                if editor.link.take().is_some() || chevron {
                     cx.notify();
                 }
             }))
@@ -2287,6 +2432,15 @@ impl Render for CodeEditor {
                     |_, _, _| {},
                     move |area, _, window, cx| {
                         bounds.set(area);
+                        if let Some((row, from, to)) = link {
+                            let origin = code_origin(area, &scroll, row);
+                            let start =
+                                point(origin.x + from, origin.y + px(CODE_LINE - LINK_DROP));
+                            if start.x >= area.left() + px(NUMBER_COLUMN) {
+                                let line = Bounds::new(start, size(to - from, px(LINK_THICKNESS)));
+                                window.paint_quad(fill(line, link_ink));
+                            }
+                        }
                         if let Some(clicked) = folded_at.take() {
                             let ms = clicked.elapsed().as_secs_f64() * 1000.0;
                             eprintln!("desk: editor fold {ms:.2} ms");

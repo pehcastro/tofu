@@ -10,4 +10,5 @@ pub mod protocol;
 pub mod query;
 pub mod sessions;
 pub mod settings;
+pub mod symbols;
 pub mod syntax;
