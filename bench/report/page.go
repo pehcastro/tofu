@@ -13,54 +13,32 @@ const (
 	chartWidth      = 800.0
 )
 
-const badgeAsLabel = `
-.badge{border-radius:var(--radius-sm);white-space:normal;padding:.25rem .625rem;line-height:1.35}
-`
-
-type panel struct {
-	id      string
-	tab     string
-	heading string
-	body    string
-}
-
 func Page(d Data) string {
-	panels := []panel{
-		{"rivals", "1. Against Claude Code, omp and codex", "Every measure where tofu ran beside another harness, tofu's latest run judged against each", rivalsHTML(d.History)},
-		{"changes", "2. Each change against the run before", "Every measure tofu repeated, with the version, the commit and the change since the run before", changesHTML(d.History)},
-		{"judgments", "3. Jev against the cheap way", "Which decisions Jev wins, which it loses, and by how much", judgmentsHTML(d)},
-		{"decides", "4. What decides what today", "What decides what when you run tofu, and what it costs", wiringHTML(d)},
-		{"reports", "Every measurement on disk", "Every dated report under bench/, newest first", reportsHTML(d)},
+	shown := summarySections(d.History)
+	older := []section{
+		{"jev", "Jev against the cheap way", judgmentsHTML(d)},
+		{"decides", "What decides what today", wiringHTML(d)},
+		{"reports", "Every dated report under bench/", reportsHTML(d)},
 	}
-	open := "rivals"
 	page := &strings.Builder{}
-	page.WriteString("<!doctype html>\n<html lang=\"en\" class=\"dark\">\n<head>\n<meta charset=\"utf-8\">\n")
-	page.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Tofu bench</title>\n")
-	page.WriteString("<style>" + shadcnTokens + shadcnComponents + pageLayout + badgeAsLabel + "</style>\n</head>\n<body>\n<main>\n")
-	page.WriteString("<h1>Where tofu stands, measured</h1>\n")
-	fmt.Fprintf(page, "<p class=\"lede\">%s</p>\n", html.EscapeString(d.History.DateLine()))
-	page.WriteString(standingHTML(d.History))
-	page.WriteString("<div role=\"tablist\" class=\"tab-list\" aria-label=\"the questions this page answers\">\n")
-	for _, one := range panels {
-		fmt.Fprintf(page, "<button role=\"tab\" class=\"tab-trigger\" id=\"tab-%s\" aria-controls=\"panel-%s\" aria-selected=\"%t\"%s>%s</button>\n",
-			one.id, one.id, one.id == open, unlessOpen(one.id == open, " tabindex=\"-1\""), html.EscapeString(one.tab))
+	page.WriteString("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+	page.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>tofu, measured</title>\n")
+	page.WriteString("<style>" + stylesheet + "</style>\n</head>\n<body>\n<main>\n<h1>tofu against Claude Code, omp and codex</h1>\n<nav class=\"index\">")
+	for _, one := range append(append([]section{}, shown...), older...) {
+		fmt.Fprintf(page, "<a href=\"#%s\">%s</a>", one.id, html.EscapeString(one.title))
 	}
-	page.WriteString("</div>\n")
-	for _, one := range panels {
-		fmt.Fprintf(page, "<div role=\"tabpanel\" class=\"tab-content\" id=\"panel-%s\" aria-labelledby=\"tab-%s\" tabindex=\"0\"%s>\n<h2>%s</h2>\n%s</div>\n",
-			one.id, one.id, unlessOpen(one.id == open, " hidden"), html.EscapeString(one.heading), one.body)
+	page.WriteString("</nav>\n" + headlinesHTML(d.History) + tldrHTML(d.History))
+	for _, one := range shown {
+		fmt.Fprintf(page, "<section id=\"%s\">\n<h2>%s</h2>\n%s</section>\n", one.id, html.EscapeString(one.title), one.body)
 	}
-	fmt.Fprintf(page, "<footer><code>%s</code> &middot; <code>%s</code> &middot; fetches nothing</footer>\n",
-		html.EscapeString(d.GeneratedBy), AnswersPath)
-	page.WriteString("</main>\n<script>" + tabScript + "</script>\n</body>\n</html>\n")
+	page.WriteString("<section>\n")
+	for _, one := range older {
+		fmt.Fprintf(page, "<details class=\"older\" id=\"%s\"><summary>%s</summary>\n%s</details>\n", one.id, html.EscapeString(one.title), one.body)
+	}
+	fmt.Fprintf(page, "</section>\n<footer>Read on %s, tofu %s. Built by <code>%s</code>, fetches nothing.</footer>\n",
+		html.EscapeString(d.History.ReadOn), html.EscapeString(d.History.Version), html.EscapeString(d.GeneratedBy))
+	page.WriteString("</main>\n<script>" + openTarget + "</script>\n</body>\n</html>\n")
 	return page.String()
-}
-
-func unlessOpen(open bool, attribute string) string {
-	if open {
-		return ""
-	}
-	return attribute
 }
 
 func figureHTML(figure Figure) string { return figureIn("fig", figure) }
@@ -113,23 +91,6 @@ func cardColumns(count int) int {
 	return 4
 }
 
-func standingHTML(h History) string {
-	body := &strings.Builder{}
-	standings := h.Standings()
-	fmt.Fprintf(body, "<div class=\"cards\" style=\"--cols:%d\">\n", cardColumns(len(ranked)))
-	for _, verdict := range ranked {
-		fmt.Fprintf(body, "<div class=\"card\"><div class=\"card-header\"><h3 class=\"card-title\">Where tofu is %s</h3></div><div class=\"card-content\"><ul>\n", verdict)
-		for _, one := range standings {
-			if one.Verdict == verdict {
-				fmt.Fprintf(body, "<li>%s</li>\n", html.EscapeString(one.Sentence()))
-			}
-		}
-		body.WriteString("</ul></div></div>\n")
-	}
-	fmt.Fprintf(body, "</div>\n<p class=\"lede\">%s</p>\n", html.EscapeString(h.Rule))
-	return body.String()
-}
-
 func verdictClass(verdict Verdict) string {
 	switch verdict {
 	case Ahead:
@@ -161,7 +122,11 @@ func measureHead(m Measure) string {
 
 func tableOf(caption string, heads []string, rows string) string {
 	table := &strings.Builder{}
-	fmt.Fprintf(table, "<div class=\"table-container\"><table class=\"table\">\n<caption class=\"table-caption\">%s</caption>\n<thead><tr class=\"table-row\">", html.EscapeString(caption))
+	table.WriteString("<div class=\"table-container\"><table class=\"table\">\n")
+	if caption != "" {
+		fmt.Fprintf(table, "<caption class=\"table-caption\">%s</caption>\n", html.EscapeString(caption))
+	}
+	table.WriteString("<thead><tr class=\"table-row\">")
 	for _, head := range heads {
 		fmt.Fprintf(table, "<th class=\"table-head\">%s</th>", head)
 	}
@@ -169,12 +134,9 @@ func tableOf(caption string, heads []string, rows string) string {
 	return table.String()
 }
 
-func rivalsHTML(h History) string {
+func rivalsHTML(measures []Measure) string {
 	rows := &strings.Builder{}
-	for _, m := range h.Measures {
-		if len(m.Rivals) == 0 {
-			continue
-		}
+	for _, m := range measures {
 		rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td><td class=\"table-cell\"><ul>")
 		for _, rival := range m.Rivals {
 			verdict := m.Against(rival)
@@ -187,12 +149,10 @@ func rivalsHTML(h History) string {
 		[]string{"What is measured", "tofu, run by run", "The other harness, and tofu's latest run against it"}, rows.String())
 }
 
-func changesHTML(h History) string {
+func changesHTML(measures []Measure) string {
 	rows := &strings.Builder{}
-	for _, m := range h.Measures {
-		if len(m.Rivals) == 0 {
-			rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td></tr>\n")
-		}
+	for _, m := range measures {
+		rows.WriteString("<tr class=\"table-row\">" + measureHead(m) + "<td class=\"table-cell\">" + runsHTML(m) + "</td></tr>\n")
 	}
 	return tableOf("Each run names the tofu version and commit it measured, and the change from the run before it.",
 		[]string{"What is measured", "Every run, oldest first"}, rows.String())

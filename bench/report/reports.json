@@ -4,12 +4,53 @@
     "tree": "9586ec60",
     "version": "0.5.14",
     "level_rule": "Level means the spread of tofu's latest 3 runs overlaps the other harness's, the rule bench/rivals judges by; where a measure has 1 run, the figures are compared as they are.",
+    "headlines": [
+      {
+        "pairing": "Sonnet 5.5",
+        "short": "peak MB",
+        "rival": "Claude Code",
+        "as": "ratio",
+        "says": "less memory than Claude Code on the same task"
+      },
+      {
+        "pairing": "Sonnet 5.5",
+        "short": "CPU s",
+        "rival": "Claude Code",
+        "as": "percent",
+        "says": "less CPU than Claude Code on the same task"
+      },
+      {
+        "pairing": "GPT 5.6 sol",
+        "short": "CPU s",
+        "rival": "codex",
+        "as": "percent",
+        "says": "less CPU than codex on the same task"
+      },
+      {
+        "pairing": "Per sub-agent",
+        "short": "base MB",
+        "rival": "Claude Code",
+        "as": "ratio",
+        "says": "less memory than Claude Code before any sub-agent"
+      },
+      {
+        "pairing": "Per sub-agent",
+        "short": "MB per agent",
+        "rival": "codex",
+        "as": "ratio",
+        "says": "less memory per sub-agent than codex"
+      }
+    ],
     "measures": [
       {
         "bench": "rivals",
         "task": "bench/rivals task, Sonnet 5.5",
         "measure": "quality, hidden tests plus rubric",
+        "short": "quality of 10",
+        "pairing": "Sonnet 5.5",
         "unit": "of 10",
+        "better_word": "higher",
+        "worse_word": "lower",
         "better": "higher",
         "tofu": [
           {
@@ -71,134 +112,12 @@
       {
         "bench": "rivals",
         "task": "bench/rivals task, Sonnet 5.5",
-        "measure": "peak memory of the whole process tree",
-        "unit": "MB",
-        "better": "lower",
-        "tofu": [
-          {
-            "label": "3 runs on the build the rivals runs reported",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "0.5.13-fix1",
-            "build": "0.5.13-fix1+dev",
-            "figure": "393.0 [375.6 to 398.6]",
-            "value": 393,
-            "low": 375.6,
-            "high": 398.6,
-            "source": "bench/rivals/report.md",
-            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
-          },
-          {
-            "label": "3 runs on a dev build made before 0.5.14",
-            "date": "2026-10-13",
-            "commit": "41ae6d2d",
-            "version": "0.5.13-fix1",
-            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
-            "figure": "332 [328 to 333]",
-            "value": 332,
-            "low": 328,
-            "high": 333,
-            "source": "bench/report/runs/board-2026-10-13.md",
-            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
-          }
-        ],
-        "rivals": [
-          {
-            "label": "Claude Code",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "2.1.296",
-            "build": "claude-sonnet-5-5, 3 runs",
-            "figure": "615.9 [590.3 to 643.0]",
-            "value": 615.9,
-            "low": 590.3,
-            "high": 643,
-            "source": "bench/rivals/report.md",
-            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
-          },
-          {
-            "label": "omp",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "18.3.2",
-            "build": "claude-sonnet-5-5, 3 runs",
-            "figure": "872.4 [790.9 to 896.4]",
-            "value": 872.4,
-            "low": 790.9,
-            "high": 896.4,
-            "source": "bench/rivals/report.md",
-            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
-          }
-        ]
-      },
-      {
-        "bench": "rivals",
-        "task": "bench/rivals task, Sonnet 5.5",
-        "measure": "CPU of the whole process tree",
-        "unit": "s",
-        "better": "lower",
-        "tofu": [
-          {
-            "label": "3 runs on the build the rivals runs reported",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "0.5.13-fix1",
-            "build": "0.5.13-fix1+dev",
-            "figure": "53.0 [52.7 to 53.8]",
-            "value": 53,
-            "low": 52.7,
-            "high": 53.8,
-            "source": "bench/rivals/report.md",
-            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
-          },
-          {
-            "label": "3 runs on a dev build made before 0.5.14",
-            "date": "2026-10-13",
-            "commit": "41ae6d2d",
-            "version": "0.5.13-fix1",
-            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
-            "figure": "39.2 [35.0 to 40.8]",
-            "value": 39.2,
-            "low": 35,
-            "high": 40.8,
-            "source": "bench/report/runs/board-2026-10-13.md",
-            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
-          }
-        ],
-        "rivals": [
-          {
-            "label": "Claude Code",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "2.1.296",
-            "build": "claude-sonnet-5-5, 3 runs",
-            "figure": "57.5 [49.8 to 59.1]",
-            "value": 57.5,
-            "low": 49.8,
-            "high": 59.1,
-            "source": "bench/rivals/report.md",
-            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
-          },
-          {
-            "label": "omp",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "18.3.2",
-            "build": "claude-sonnet-5-5, 3 runs",
-            "figure": "55.5 [52.5 to 58.6]",
-            "value": 55.5,
-            "low": 52.5,
-            "high": 58.6,
-            "source": "bench/rivals/report.md",
-            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
-          }
-        ]
-      },
-      {
-        "bench": "rivals",
-        "task": "bench/rivals task, Sonnet 5.5",
         "measure": "wall time",
+        "short": "wall s",
+        "pairing": "Sonnet 5.5",
         "unit": "s",
+        "better_word": "faster",
+        "worse_word": "slower",
         "better": "lower",
         "tofu": [
           {
@@ -261,7 +180,11 @@
         "bench": "rivals",
         "task": "bench/rivals task, Sonnet 5.5",
         "measure": "model requests",
+        "short": "requests",
+        "pairing": "Sonnet 5.5",
         "unit": "requests",
+        "better_word": "fewer",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -324,7 +247,11 @@
         "bench": "rivals",
         "task": "bench/rivals task, Sonnet 5.5",
         "measure": "input tokens, fresh plus cache read plus cache write",
+        "short": "input tokens",
+        "pairing": "Sonnet 5.5",
         "unit": "tokens",
+        "better_word": "fewer",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -387,7 +314,11 @@
         "bench": "rivals",
         "task": "bench/rivals task, Sonnet 5.5",
         "measure": "failed tool calls",
+        "short": "failed calls",
+        "pairing": "Sonnet 5.5",
         "unit": "calls",
+        "better_word": "fewer",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -443,9 +374,196 @@
       },
       {
         "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "peak memory of the whole process tree",
+        "short": "peak MB",
+        "pairing": "Sonnet 5.5",
+        "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "393.0 [375.6 to 398.6]",
+            "value": 393,
+            "low": 375.6,
+            "high": 398.6,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "332 [328 to 333]",
+            "value": 332,
+            "low": 328,
+            "high": 333,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "615.9 [590.3 to 643.0]",
+            "value": 615.9,
+            "low": 590.3,
+            "high": 643,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "872.4 [790.9 to 896.4]",
+            "value": 872.4,
+            "low": 790.9,
+            "high": 896.4,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5",
+        "measure": "CPU of the whole process tree",
+        "short": "CPU s",
+        "pairing": "Sonnet 5.5",
+        "unit": "s",
+        "better_word": "less",
+        "worse_word": "more",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "53.0 [52.7 to 53.8]",
+            "value": 53,
+            "low": 52.7,
+            "high": 53.8,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry",
+            "figure": "39.2 [35.0 to 40.8]",
+            "value": 39.2,
+            "low": 35,
+            "high": 40.8,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "1: 39.5 35.0 332 4 2463 79299 6421 2670 16 0 5 5 | 2: 49.7 40.8 328 7 2469 150097 6280 2305 16 1 5 4 | 3: 48.2 39.2 333 5 2465 102030 7232 2379 17 0 5 5. Median quality 10 [9 to 10], requests 5 against Claude Code 6, total in 111,727 against 151,458, wall 48.2 s against 50.5."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "57.5 [49.8 to 59.1]",
+            "value": 57.5,
+            "low": 49.8,
+            "high": 59.1,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "55.5 [52.5 to 58.6]",
+            "value": 55.5,
+            "low": 52.5,
+            "high": 58.6,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | 3 | 10 [10 to 10] | 38.7 [35.8 to 38.9] | 55.5 [52.5 to 58.6] | 872.4 [790.9 to 896.4] | 4 [4 to 4] | 54983 [54901 to 56085] | 10 [10 to 10] | 1854 [1753 to 2362] | 4 [4 to 9] | 0 [0 to 0] | 0 [0 to 0] | 89 [86 to 93] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, Sonnet 5.5, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
+        "measure": "time per edit call, median",
+        "short": "edit ms",
+        "pairing": "Sonnet 5.5",
+        "unit": "ms",
+        "better_word": "faster",
+        "worse_word": "slower",
+        "magnitude_only": true,
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "2",
+            "value": 2,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-sonnet | edit | 6 | 2 | 7 | 7 | 0 | 0 |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "2.1.296",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "39",
+            "value": 39,
+            "source": "bench/rivals/report.md",
+            "evidence": "| claude-sonnet | edit | 6 | 39 | 60 | 60 | 0 | 0 |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "18.3.2",
+            "build": "claude-sonnet-5-5, 3 runs",
+            "figure": "83",
+            "value": 83,
+            "source": "bench/rivals/report.md",
+            "evidence": "| omp-sonnet | edit | 0 | 83 | 83 | 83 | 0 | 0 |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
         "task": "bench/rivals task, gpt-5.6-sol",
         "measure": "quality, hidden tests plus rubric",
+        "short": "quality of 10",
+        "pairing": "GPT 5.6 sol",
         "unit": "of 10",
+        "better_word": "higher",
+        "worse_word": "lower",
         "better": "higher",
         "tofu": [
           {
@@ -494,108 +612,12 @@
       {
         "bench": "rivals",
         "task": "bench/rivals task, gpt-5.6-sol",
-        "measure": "peak memory of the whole process tree",
-        "unit": "MB",
-        "better": "lower",
-        "tofu": [
-          {
-            "label": "3 runs on the build the rivals runs reported",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "0.5.13-fix1",
-            "build": "0.5.13-fix1+dev",
-            "figure": "393.2 [387.6 to 409.0]",
-            "value": 393.2,
-            "low": 387.6,
-            "high": 409,
-            "source": "bench/rivals/report.md",
-            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
-          },
-          {
-            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
-            "date": "2026-10-13",
-            "commit": "41ae6d2d",
-            "version": "0.5.13-fix1",
-            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
-            "figure": "344 [343 to 353]",
-            "value": 344,
-            "low": 343,
-            "high": 353,
-            "source": "bench/report/runs/board-2026-10-13.md",
-            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
-          }
-        ],
-        "rivals": [
-          {
-            "label": "codex",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "codex-cli 0.155.1",
-            "build": "gpt-5.6-sol, 3 runs",
-            "figure": "543.0 [538.9 to 564.9]",
-            "value": 543,
-            "low": 538.9,
-            "high": 564.9,
-            "source": "bench/rivals/report.md",
-            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
-          }
-        ]
-      },
-      {
-        "bench": "rivals",
-        "task": "bench/rivals task, gpt-5.6-sol",
-        "measure": "CPU of the whole process tree",
-        "unit": "s",
-        "better": "lower",
-        "tofu": [
-          {
-            "label": "3 runs on the build the rivals runs reported",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "0.5.13-fix1",
-            "build": "0.5.13-fix1+dev",
-            "figure": "55.8 [45.2 to 59.0]",
-            "value": 55.8,
-            "low": 45.2,
-            "high": 59,
-            "source": "bench/rivals/report.md",
-            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
-          },
-          {
-            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
-            "date": "2026-10-13",
-            "commit": "41ae6d2d",
-            "version": "0.5.13-fix1",
-            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
-            "figure": "35.0 [33.2 to 35.9]",
-            "value": 35,
-            "low": 33.2,
-            "high": 35.9,
-            "source": "bench/report/runs/board-2026-10-13.md",
-            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
-          }
-        ],
-        "rivals": [
-          {
-            "label": "codex",
-            "date": "2026-10-13",
-            "commit": "f360965a",
-            "version": "codex-cli 0.155.1",
-            "build": "gpt-5.6-sol, 3 runs",
-            "figure": "67.1 [62.9 to 75.7]",
-            "value": 67.1,
-            "low": 62.9,
-            "high": 75.7,
-            "source": "bench/rivals/report.md",
-            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
-          }
-        ]
-      },
-      {
-        "bench": "rivals",
-        "task": "bench/rivals task, gpt-5.6-sol",
         "measure": "wall time",
+        "short": "wall s",
+        "pairing": "GPT 5.6 sol",
         "unit": "s",
+        "better_word": "faster",
+        "worse_word": "slower",
         "better": "lower",
         "tofu": [
           {
@@ -645,7 +667,11 @@
         "bench": "rivals",
         "task": "bench/rivals task, gpt-5.6-sol",
         "measure": "model requests",
+        "short": "requests",
+        "pairing": "GPT 5.6 sol",
         "unit": "requests",
+        "better_word": "fewer",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -695,7 +721,11 @@
         "bench": "rivals",
         "task": "bench/rivals task, gpt-5.6-sol",
         "measure": "input tokens, fresh plus cache read plus cache write",
+        "short": "input tokens",
+        "pairing": "GPT 5.6 sol",
         "unit": "tokens",
+        "better_word": "fewer",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -745,7 +775,11 @@
         "bench": "rivals",
         "task": "bench/rivals task, gpt-5.6-sol",
         "measure": "failed tool calls",
+        "short": "failed calls",
+        "pairing": "GPT 5.6 sol",
         "unit": "calls",
+        "better_word": "fewer",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -789,9 +823,13 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task, Sonnet 5.5, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
-        "measure": "time per edit call, median",
-        "unit": "ms",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "peak memory of the whole process tree",
+        "short": "peak MB",
+        "pairing": "GPT 5.6 sol",
+        "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -800,34 +838,94 @@
             "commit": "f360965a",
             "version": "0.5.13-fix1",
             "build": "0.5.13-fix1+dev",
-            "figure": "2",
-            "value": 2,
+            "figure": "393.2 [387.6 to 409.0]",
+            "value": 393.2,
+            "low": 387.6,
+            "high": 409,
             "source": "bench/rivals/report.md",
-            "evidence": "| tofu-sonnet | edit | 6 | 2 | 7 | 7 | 0 | 0 |"
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
+          },
+          {
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "344 [343 to 353]",
+            "value": 344,
+            "low": 343,
+            "high": 353,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
           }
         ],
         "rivals": [
           {
-            "label": "Claude Code",
+            "label": "codex",
             "date": "2026-10-13",
             "commit": "f360965a",
-            "version": "2.1.296",
-            "build": "claude-sonnet-5-5, 3 runs",
-            "figure": "39",
-            "value": 39,
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "543.0 [538.9 to 564.9]",
+            "value": 543,
+            "low": 538.9,
+            "high": 564.9,
             "source": "bench/rivals/report.md",
-            "evidence": "| claude-sonnet | edit | 6 | 39 | 60 | 60 | 0 | 0 |"
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
+          }
+        ]
+      },
+      {
+        "bench": "rivals",
+        "task": "bench/rivals task, gpt-5.6-sol",
+        "measure": "CPU of the whole process tree",
+        "short": "CPU s",
+        "pairing": "GPT 5.6 sol",
+        "unit": "s",
+        "better_word": "less",
+        "worse_word": "more",
+        "better": "lower",
+        "tofu": [
+          {
+            "label": "3 runs on the build the rivals runs reported",
+            "date": "2026-10-13",
+            "commit": "f360965a",
+            "version": "0.5.13-fix1",
+            "build": "0.5.13-fix1+dev",
+            "figure": "55.8 [45.2 to 59.0]",
+            "value": 55.8,
+            "low": 45.2,
+            "high": 59,
+            "source": "bench/rivals/report.md",
+            "evidence": "| tofu-gpt | 3 | 10 [4 to 10] | 325.8 [105.2 to 333.2] | 55.8 [45.2 to 59.0] | 393.2 [387.6 to 409.0] | 27 [12 to 29] | 494279 [208359 to 517986] | 83143 [11111 to 91618] | 8401 [1883 to 11170] | 54 [21 to 73] | 3 [0 to 5] | 3 [0 to 5] | 155 [0 to 168] |"
           },
           {
-            "label": "omp",
+            "label": "3 runs on a dev build made before 0.5.14, with the plan change",
+            "date": "2026-10-13",
+            "commit": "41ae6d2d",
+            "version": "0.5.13-fix1",
+            "build": "dev build of the tree later committed as 41ae6d2d and released in 0.5.14, plus an edit-before-read change given by go build -overlay that 0.5.14 does not carry, plus the plan.go change still open under TOFU-1322",
+            "figure": "35.0 [33.2 to 35.9]",
+            "value": 35,
+            "low": 33.2,
+            "high": 35.9,
+            "source": "bench/report/runs/board-2026-10-13.md",
+            "evidence": "tofu-gpt 1: 153.8 35.9 343 13 33297 200960 0 4570 32 2 5 5 | 2: 119.9 35.0 344 10 44314 130432 0 4408 32 0 5 5 | 3: 138.8 33.2 353 12 31338 187136 0 4856 31 0 5 5. Median requests 12 [10 to 13], plan calls 4 per run against 7, total in 218,474, wall 138.8 s, quality 10 in all three."
+          }
+        ],
+        "rivals": [
+          {
+            "label": "codex",
             "date": "2026-10-13",
             "commit": "f360965a",
-            "version": "18.3.2",
-            "build": "claude-sonnet-5-5, 3 runs",
-            "figure": "83",
-            "value": 83,
+            "version": "codex-cli 0.155.1",
+            "build": "gpt-5.6-sol, 3 runs",
+            "figure": "67.1 [62.9 to 75.7]",
+            "value": 67.1,
+            "low": 62.9,
+            "high": 75.7,
             "source": "bench/rivals/report.md",
-            "evidence": "| omp-sonnet | edit | 0 | 83 | 83 | 83 | 0 | 0 |"
+            "evidence": "| codex-gpt | 3 | 10 [10 to 10] | 110.8 [108.0 to 138.9] | 67.1 [62.9 to 75.7] | 543.0 [538.9 to 564.9] | 7 [6 to 7] | 125052 [105204 to 125069] | 10876 [10740 to 17805] | 4447 [3255 to 4469] | 6 [5 to 6] | 0 [0 to 0] | 0 [0 to 0] | 61 [55 to 101] |"
           }
         ]
       },
@@ -835,7 +933,12 @@
         "bench": "rivals",
         "task": "bench/rivals task, gpt-5.6-sol, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
         "measure": "time per edit call, median",
+        "short": "edit ms",
+        "pairing": "GPT 5.6 sol",
         "unit": "ms",
+        "better_word": "faster",
+        "worse_word": "slower",
+        "magnitude_only": true,
         "better": "lower",
         "tofu": [
           {
@@ -868,7 +971,11 @@
         "bench": "scale",
         "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
         "measure": "peak memory with no sub-agent",
+        "short": "base MB",
+        "pairing": "Per sub-agent",
         "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -923,7 +1030,11 @@
         "bench": "scale",
         "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
         "measure": "peak memory each extra sub-agent adds",
+        "short": "MB per agent",
+        "pairing": "Per sub-agent",
         "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -978,7 +1089,11 @@
         "bench": "scale",
         "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
         "measure": "CPU each extra sub-agent adds",
+        "short": "CPU s per agent",
+        "pairing": "Per sub-agent",
         "unit": "s",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1030,10 +1145,72 @@
         ]
       },
       {
+        "bench": "scale",
+        "task": "bench/scale tiny task, 0 to 10 sub-agents, 1 run per rung, a straight line fitted over 7 rungs; codex runs gpt-5.6-sol, the others Sonnet 5.5",
+        "measure": "sub-agents that fit in 2 GB by peak memory",
+        "short": "agents in 2 GB",
+        "pairing": "Per sub-agent",
+        "unit": "agents",
+        "better_word": "more",
+        "worse_word": "fewer",
+        "better": "higher",
+        "tofu": [
+          {
+            "label": "1 run per rung",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "0.5.13-fix1",
+            "build": "not recorded by bench/scale, the tree at b7c52479",
+            "figure": "over 100",
+            "value": 100,
+            "source": "bench/scale/report.md",
+            "evidence": "| tofu | live | claude-sonnet-5-5 | 42 | 0.4 | 96 | 0.8 | 0.99 | 0.12 | over 100, a straight line past 10 measured |"
+          }
+        ],
+        "rivals": [
+          {
+            "label": "Claude Code",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "over 100",
+            "value": 100,
+            "source": "bench/scale/report.md",
+            "evidence": "| claude | live | claude-sonnet-5-5 | 281 | 4.3 | 380 | 1.7 | 2.10 | 0.30 | over 100, a straight line past 10 measured |"
+          },
+          {
+            "label": "omp",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "64",
+            "value": 64,
+            "source": "bench/scale/report.md",
+            "evidence": "| omp | live | claude-sonnet-5-5 | 699 | 20.9 | 1321 | 36.5 | 5.57 | 0.62 | 64 |"
+          },
+          {
+            "label": "codex",
+            "date": "2026-10-13",
+            "commit": "b7c52479",
+            "version": "not recorded by bench/scale",
+            "build": "live, 1 run per rung",
+            "figure": "83",
+            "value": 83,
+            "source": "bench/scale/report.md",
+            "evidence": "| codex | live | gpt-5.6-sol | 215 | 22.0 | 169 | 19.7 | 3.12 | 3.44 | 83 |"
+          }
+        ]
+      },
+      {
         "bench": "sessiontime",
         "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
         "measure": "share of agent time waiting on the model",
+        "short": "share of agent time waiting on the model",
         "unit": "percent",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "neither",
         "tofu": [
           {
@@ -1077,7 +1254,10 @@
         "bench": "sessiontime",
         "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
         "measure": "share of agent time in builds",
+        "short": "share of agent time in builds",
         "unit": "percent",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "neither",
         "tofu": [
           {
@@ -1121,7 +1301,10 @@
         "bench": "sessiontime",
         "task": "agent-hours in the sessions recorded on one machine; tofu and Claude Code did different work, so this describes and does not rank",
         "measure": "share of agent time in tests",
+        "short": "share of agent time in tests",
         "unit": "percent",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "neither",
         "tofu": [
           {
@@ -1165,7 +1348,10 @@
         "bench": "profile",
         "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
         "measure": "tofu's own CPU",
+        "short": "tofu's own CPU on the rivals task",
         "unit": "s",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1209,7 +1395,10 @@
         "bench": "profile",
         "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
         "measure": "memory tofu allocates over the task",
+        "short": "memory tofu allocates on the rivals task",
         "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1240,7 +1429,10 @@
         "bench": "profile",
         "task": "the bench/rivals task on Sonnet 5.5, 1 run per row",
         "measure": "git processes tofu starts",
+        "short": "git processes on the rivals task",
         "unit": "processes",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1271,7 +1463,10 @@
         "bench": "profile",
         "task": "bench/scale tiny task, job CPU of 10 sub-agents less 0, over 10, live on Sonnet 5.5",
         "measure": "CPU each sub-agent costs",
+        "short": "CPU each sub-agent costs tofu",
         "unit": "s",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1317,7 +1512,10 @@
         "bench": "cli",
         "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
         "measure": "CPU of tofu version",
+        "short": "CPU of tofu version",
         "unit": "ms",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1359,7 +1557,10 @@
         "bench": "cli",
         "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
         "measure": "package init allocations",
+        "short": "package init allocations",
         "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1401,7 +1602,10 @@
         "bench": "cli",
         "task": "bench/cli, every verb in a fresh home, GOMAXPROCS=2, median of 7 runs",
         "measure": "package init clock",
+        "short": "package init clock",
         "unit": "ms",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1443,7 +1647,10 @@
         "bench": "cli",
         "task": "the long-session TUI test, median of 3",
         "measure": "GC CPU",
+        "short": "GC CPU in a long session",
         "unit": "ms",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1474,7 +1681,10 @@
         "bench": "cli",
         "task": "the long-session TUI test, median of 3",
         "measure": "peak heap, the cost of the GC change",
+        "short": "peak heap in a long session",
         "unit": "MB",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1505,7 +1715,10 @@
         "bench": "cli",
         "task": "tofu run --dry-run on claude-sub/claude-opus-5",
         "measure": "tokens before the first fork on a 1M window model",
+        "short": "tokens before the first fork, 1M window",
         "unit": "tokens",
+        "better_word": "more",
+        "worse_word": "less",
         "better": "higher",
         "tofu": [
           {
@@ -1536,7 +1749,10 @@
         "bench": "cli",
         "task": "Encode of a 1419957 byte request, median of 5",
         "measure": "bytes allocated per Encode, a change measured and dropped",
+        "short": "bytes per request encode, change dropped",
         "unit": "bytes",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1567,7 +1783,10 @@
         "bench": "fanin",
         "task": "bench/fanin cassette clustered, 3 sub-agents finishing together, fresh home, no model called",
         "measure": "lead turns",
+        "short": "lead turns, 3 sub-agents finishing together",
         "unit": "turns",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1598,7 +1817,10 @@
         "bench": "fanin",
         "task": "bench/fanin cassette straggler, 4 sub-agents with one late, fresh home, no model called",
         "measure": "lead turns",
+        "short": "lead turns, 4 sub-agents with one late",
         "unit": "turns",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1629,7 +1851,10 @@
         "bench": "fanin",
         "task": "bench/fanin cassette spread, 3 sub-agents finishing outside the window, fresh home, no model called",
         "measure": "lead turns",
+        "short": "lead turns, 3 sub-agents finishing apart",
         "unit": "turns",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1660,7 +1885,10 @@
         "bench": "fanin",
         "task": "bench/fanin cassette checkins, a check every second, fresh home, no model called",
         "measure": "lead turns started by a check-in",
+        "short": "lead turns started by a check-in",
         "unit": "turns",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1693,7 +1921,10 @@
         "bench": "fanin",
         "task": "bench/fanin cassette ask, an ask between two reports, fresh home, no model called",
         "measure": "seconds until the last report is read, the cost of the window",
+        "short": "seconds until the last report is read",
         "unit": "s",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1724,7 +1955,10 @@
         "bench": "learn",
         "task": "bench/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
         "measure": "repeated jobs found",
+        "short": "repeated jobs found",
         "unit": "of 5 labelled jobs",
+        "better_word": "more",
+        "worse_word": "less",
         "better": "higher",
         "tofu": [
           {
@@ -1766,7 +2000,10 @@
         "bench": "learn",
         "task": "bench/learn/jobs, 5 made-up sessions holding 5 labelled repeated jobs and 6 distractors, no model called",
         "measure": "false finds",
+        "short": "false finds",
         "unit": "false finds",
+        "better_word": "less",
+        "worse_word": "more",
         "better": "lower",
         "tofu": [
           {
@@ -1808,7 +2045,11 @@
         "bench": "tokens",
         "task": "glob calls replayed from recorded sessions",
         "measure": "glob calls that cannot replay",
+        "short": "glob calls that cannot replay",
         "unit": "glob calls, compared as a share of all",
+        "better_word": "less",
+        "worse_word": "more",
+        "corpus_moved": true,
         "better": "lower",
         "tofu": [
           {
@@ -1839,7 +2080,11 @@
         "bench": "forkcache",
         "task": "the first request after a context fork",
         "measure": "forks whose first request reads cache and writes none",
+        "short": "forks whose first request reads cache and writes none",
         "unit": "fork pairs, compared as a share",
+        "better_word": "more",
+        "worse_word": "less",
+        "corpus_moved": true,
         "better": "higher",
         "tofu": [
           {
@@ -1870,7 +2115,11 @@
         "bench": "recall",
         "task": "the largest billed request in recorded sessions",
         "measure": "largest billed request",
+        "short": "largest billed request",
         "unit": "tokens",
+        "better_word": "less",
+        "worse_word": "more",
+        "corpus_moved": true,
         "better": "neither",
         "tofu": [
           {
@@ -1901,7 +2150,11 @@
         "bench": "shortlist",
         "task": "recorded turns a file shortlist question can be asked of",
         "measure": "recordable turns",
+        "short": "recordable turns",
         "unit": "turns",
+        "better_word": "more",
+        "worse_word": "less",
+        "corpus_moved": true,
         "better": "higher",
         "tofu": [
           {
@@ -1932,7 +2185,11 @@
         "bench": "thrift",
         "task": "read and search results over the size cap in recorded sessions",
         "measure": "over-cap artifacts",
+        "short": "over-cap artifacts",
         "unit": "artifacts",
+        "better_word": "less",
+        "worse_word": "more",
+        "corpus_moved": true,
         "better": "neither",
         "tofu": [
           {

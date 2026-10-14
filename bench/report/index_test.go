@@ -314,9 +314,9 @@ func TestTheViewerFetchesNothingWhenItOpens(t *testing.T) {
 			t.Errorf("%s reaches for %q when it opens", ViewerFile, refused)
 		}
 	}
-	for _, copied := range []string{"oklch(0.5770 0.2450 27.3250)", "--radius-xl", ".table-container", ".tab-trigger", ".card-header", ".badge"} {
-		if !strings.Contains(page, copied) {
-			t.Errorf("%s does not carry the shadcn component %q that was copied into it", ViewerFile, copied)
+	for _, specified := range []string{"--font:Inter, system-ui", "font-feature-settings:\"tnum\"", "max-width:960px", "--bg:#fafafa", "prefers-color-scheme: dark", "--ahead-text:#15803d", "--behind-bg:#fee2e2"} {
+		if !strings.Contains(page, specified) {
+			t.Errorf("%s does not carry %q from the design TOFU-1330 specifies", ViewerFile, specified)
 		}
 	}
 }

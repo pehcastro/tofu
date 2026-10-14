@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,13 +49,19 @@ func (r Run) Conditions() string {
 }
 
 type Measure struct {
-	Bench  string `json:"bench"`
-	Task   string `json:"task"`
-	Name   string `json:"measure"`
-	Unit   string `json:"unit"`
-	Better Better `json:"better"`
-	Tofu   []Run  `json:"tofu"`
-	Rivals []Run  `json:"rivals,omitempty"`
+	Bench   string `json:"bench"`
+	Task    string `json:"task"`
+	Name    string `json:"measure"`
+	Short   string `json:"short"`
+	Pairing string `json:"pairing,omitempty"`
+	Unit    string `json:"unit"`
+	Gain    string `json:"better_word"`
+	Loss    string `json:"worse_word"`
+	Moved   bool   `json:"corpus_moved,omitempty"`
+	Rough   bool   `json:"magnitude_only,omitempty"`
+	Better  Better `json:"better"`
+	Tofu    []Run  `json:"tofu"`
+	Rivals  []Run  `json:"rivals,omitempty"`
 }
 
 func (m Measure) Latest() Run { return m.Tofu[len(m.Tofu)-1] }
@@ -82,6 +89,10 @@ func (m Measure) Change(at int) string {
 		return "first run"
 	}
 	before, after := m.Tofu[at-1], m.Tofu[at]
+	return fmt.Sprintf("%s to %s, %s", m.Shown(before), m.Shown(after), m.Ratio(before, after))
+}
+
+func (m Measure) Ratio(before, after Run) string {
 	moved := "no change"
 	switch {
 	case after.Value < before.Value:
@@ -90,7 +101,7 @@ func (m Measure) Change(at int) string {
 		moved = "higher"
 	}
 	if moved == "no change" || m.Better == BetterNeither {
-		return fmt.Sprintf("%s to %s, %s", m.Shown(before), m.Shown(after), moved)
+		return moved
 	}
 	judged := "worse"
 	if (moved == "lower") == (m.Better == BetterLower) {
@@ -99,17 +110,82 @@ func (m Measure) Change(at int) string {
 	if before.Value != 0 && after.Value != 0 {
 		moved = string(multipleFigure(before.Value, after.Value)) + " " + moved
 	}
-	return fmt.Sprintf("%s to %s, %s, %s", m.Shown(before), m.Shown(after), moved, judged)
+	return moved + ", " + judged
 }
 
 func (m Measure) Runs() []Run { return append(append([]Run{}, m.Tofu...), m.Rivals...) }
 
+func (m Measure) Words(ours, theirs Run) string {
+	switch {
+	case ours.Value == theirs.Value:
+		return "same"
+	case ours.Value == 0 || theirs.Value == 0:
+		return cellNumber(ours) + " against " + cellNumber(theirs)
+	}
+	word, ratio := m.Loss, math.Max(ours.Value, theirs.Value)/math.Min(ours.Value, theirs.Value)
+	gained := (m.Better == BetterLower) == (ours.Value < theirs.Value)
+	if gained {
+		word = m.Gain
+	}
+	switch {
+	case m.Rough && ratio >= 10:
+		return fmt.Sprintf("over %.0fx %s", math.Pow(10, math.Floor(math.Log10(ratio))), word)
+	case ratio >= 1.5:
+		return fmt.Sprintf("%.1fx %s", ratio, word)
+	case gained:
+		return fmt.Sprintf("%.0f%% %s", (1-1/ratio)*100, word)
+	default:
+		return fmt.Sprintf("%.0f%% %s", (ratio-1)*100, word)
+	}
+}
+
+type Headline struct {
+	Pairing string `json:"pairing"`
+	Short   string `json:"short"`
+	Rival   string `json:"rival"`
+	As      string `json:"as"`
+	Says    string `json:"says"`
+}
+
+type Stated struct {
+	Value string
+	Says  string
+}
+
+func (h History) state(one Headline) (Stated, error) {
+	for _, m := range h.Measures {
+		if m.Pairing != one.Pairing || m.Short != one.Short {
+			continue
+		}
+		for _, rival := range m.Rivals {
+			if rival.Label != one.Rival {
+				continue
+			}
+			if verdict := m.Against(rival); verdict != Ahead {
+				return Stated{}, fmt.Errorf("%s: the headline %q is tofu %s against %s, and only a win is a headline", HistoryPath, one.Says, verdict, one.Rival)
+			}
+			ratio := math.Max(m.Latest().Value, rival.Value) / math.Min(m.Latest().Value, rival.Value)
+			switch one.As {
+			case "ratio":
+				return Stated{Value: fmt.Sprintf("%.1fx", ratio), Says: one.Says}, nil
+			case "percent":
+				return Stated{Value: fmt.Sprintf("%.0f%%", (1-1/ratio)*100), Says: one.Says}, nil
+			default:
+				return Stated{}, fmt.Errorf("%s: the headline %q is stated as %q, which is neither ratio nor percent", HistoryPath, one.Says, one.As)
+			}
+		}
+	}
+	return Stated{}, fmt.Errorf("%s: the headline %q names %s, %s against %s, which no measure carries", HistoryPath, one.Says, one.Pairing, one.Short, one.Rival)
+}
+
 type History struct {
-	ReadOn   string    `json:"read_on"`
-	Tree     string    `json:"tree"`
-	Version  string    `json:"version"`
-	Rule     string    `json:"level_rule"`
-	Measures []Measure `json:"measures"`
+	ReadOn    string     `json:"read_on"`
+	Tree      string     `json:"tree"`
+	Version   string     `json:"version"`
+	Rule      string     `json:"level_rule"`
+	Headlines []Headline `json:"headlines"`
+	Measures  []Measure  `json:"measures"`
+	Stated    []Stated   `json:"-"`
 }
 
 type Standing struct {
@@ -173,14 +249,24 @@ func readHistory(path, tree string) (History, error) {
 		default:
 			return History{}, fmt.Errorf("%s: %s carries the unknown direction %q", HistoryPath, m.Name, m.Better)
 		}
-		if m.Bench == "" || m.Task == "" || m.Name == "" || m.Unit == "" || len(m.Tofu) == 0 {
-			return History{}, fmt.Errorf("%s: a measure needs a bench, a task, a name, a unit and one tofu run: %+v", HistoryPath, m)
+		if m.Bench == "" || m.Task == "" || m.Name == "" || m.Short == "" || m.Unit == "" || m.Gain == "" || m.Loss == "" || len(m.Tofu) == 0 {
+			return History{}, fmt.Errorf("%s: a measure needs a bench, a task, a name, a short name, a unit, the words for better and worse, and one tofu run: %+v", HistoryPath, m)
 		}
 		for _, run := range m.Runs() {
 			if err := checkRun(m, run, tree, texts); err != nil {
 				return History{}, err
 			}
 		}
+	}
+	if len(history.Headlines) < 3 || len(history.Headlines) > 6 {
+		return History{}, fmt.Errorf("%s: the page opens on 3 to 6 headlines and this names %d", HistoryPath, len(history.Headlines))
+	}
+	for _, one := range history.Headlines {
+		stated, err := history.state(one)
+		if err != nil {
+			return History{}, err
+		}
+		history.Stated = append(history.Stated, stated)
 	}
 	return history, nil
 }
