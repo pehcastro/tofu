@@ -10,7 +10,7 @@ use gpui::{AnyWindowHandle, App};
 use serde_json::Value;
 
 use super::change::{self, Answered, json};
-use super::editor;
+use super::{capture, editor};
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
@@ -61,10 +61,7 @@ pub fn answer(
     let routed = match &call {
         Call::ScreenOpen(open) => Some(screen_open(open, window, screens, cx)),
         Call::FileOpen(_) | Call::EditorSelectionGet(_) => Some(editor::answer(&call, window, cx)),
-        Call::Capture(_) => Some(Err((
-            ErrorCode::Refused,
-            "capture needs desk_perf to export a one-window PNG grab: its windows-capture Capture and its PNG writer are pub(crate)".to_owned(),
-        ))),
+        Call::Capture(capture) => Some(capture::answer(capture, window, cx)),
         _ => None,
     };
     if let Some(routed) = routed {

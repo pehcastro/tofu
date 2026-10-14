@@ -1,16 +1,17 @@
 mod report;
 
 use std::env;
-use std::fs::{self, File};
-use std::io::{self, BufWriter, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use gpui::{FrameEvent, FrameTiming, MouseButton, Pixels, Point, PresentTiming, Window};
 
-use crate::capture::{self, Capture, CaptureError, Shot, Shots};
+use crate::capture::{self, Capture, CaptureError, Shots};
 use crate::cells::Grid;
 use crate::frames::ms;
+use crate::grab::write_png;
 use crate::limits::RECORD_DIR;
 use crate::span::SpanRecord;
 use crate::trace::Recording;
@@ -217,26 +218,4 @@ impl Recorder {
 
 fn png_name(index: usize) -> String {
     format!("{:05}.png", index + 1)
-}
-
-fn write_png(path: &Path, shot: &Shot, rgba: &mut Vec<u8>) -> io::Result<()> {
-    rgba.clear();
-    rgba.extend(
-        shot.bgra
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .flat_map(|&[b, g, r, a]| [r, g, b, a]),
-    );
-    let width = u32::try_from(shot.width).map_err(io::Error::other)?;
-    let height = u32::try_from(shot.height).map_err(io::Error::other)?;
-    let mut file = BufWriter::new(File::create(path)?);
-    let mut encoder = png::Encoder::new(&mut file, width, height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_compression(png::Compression::Fast);
-    let mut writer = encoder.write_header().map_err(io::Error::other)?;
-    writer.write_image_data(rgba).map_err(io::Error::other)?;
-    writer.finish().map_err(io::Error::other)?;
-    file.flush()
 }

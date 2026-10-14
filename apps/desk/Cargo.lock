@@ -1469,6 +1469,7 @@ dependencies = [
  "chrono",
  "desk_control",
  "desk_core",
+ "desk_perf",
  "desk_plugin",
  "desk_terminal",
  "desk_tiling",

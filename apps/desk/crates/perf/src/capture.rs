@@ -16,7 +16,7 @@ pub(crate) struct Shots {
 }
 
 #[derive(Debug)]
-pub(crate) enum CaptureError {
+pub enum CaptureError {
     Handle(raw_window_handle::HandleError),
     NotWin32,
     #[cfg(not(windows))]
@@ -39,13 +39,16 @@ impl fmt::Display for CaptureError {
 }
 
 #[cfg(windows)]
-pub(crate) use self::wgc::{Capture, refresh_hz};
+pub(crate) use self::wgc::Capture;
+#[cfg(all(windows, feature = "profiler"))]
+pub(crate) use self::wgc::refresh_hz;
 
 #[cfg(windows)]
 mod wgc {
     use std::mem;
     use std::sync::{Arc, Mutex, PoisonError};
-    use std::time::Instant;
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     use gpui::Window;
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -59,7 +62,7 @@ mod wgc {
     use windows_capture::window::Window as CaptureWindow;
 
     use super::{CaptureError, Shot, Shots};
-    use crate::limits::RECORD_MAX_BYTES;
+    use crate::limits::{GRAB_POLL, RECORD_MAX_BYTES};
 
     pub(crate) struct Grabber {
         shots: Arc<Mutex<Shots>>,
@@ -120,6 +123,7 @@ mod wgc {
         ))
     }
 
+    #[cfg(feature = "profiler")]
     pub(crate) fn refresh_hz(window: &Window) -> Option<u32> {
         target(window).ok()?.monitor()?.refresh_rate().ok()
     }
@@ -156,6 +160,20 @@ mod wgc {
             Ok(Capture { control, shots })
         }
 
+        pub fn wait_for_shot(&self, within: Duration) {
+            let started = Instant::now();
+            while self
+                .shots
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .taken
+                .is_empty()
+                && started.elapsed() < within
+            {
+                thread::sleep(GRAB_POLL);
+            }
+        }
+
         pub fn stop(self) -> (Shots, Option<CaptureError>) {
             let stopped = self.control.stop();
             let shots = mem::take(&mut *self.shots.lock().unwrap_or_else(PoisonError::into_inner));
@@ -172,7 +190,7 @@ mod wgc {
 #[cfg(not(windows))]
 pub(crate) struct Capture;
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), feature = "profiler"))]
 pub(crate) fn refresh_hz(_: &gpui::Window) -> Option<u32> {
     None
 }
@@ -182,6 +200,8 @@ impl Capture {
     pub fn start(_: &gpui::Window) -> Result<Self, CaptureError> {
         Err(CaptureError::Unsupported)
     }
+
+    pub fn wait_for_shot(&self, _: std::time::Duration) {}
 
     pub fn stop(self) -> (Shots, Option<CaptureError>) {
         (Shots::default(), None)

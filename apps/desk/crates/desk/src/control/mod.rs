@@ -1,3 +1,4 @@
+mod capture;
 mod change;
 mod dispatch;
 mod editor;
