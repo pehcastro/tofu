@@ -579,6 +579,10 @@ impl Terminal {
         };
         match keystroke.key.as_str() {
             "escape" => self.find = None,
+            "c" if keystroke.modifiers.alt => {
+                find.toggle_case();
+                self.search(true);
+            }
             "enter" => self.search(!keystroke.modifiers.shift),
             "backspace" => find.edit(|query| {
                 query.pop();
@@ -1009,6 +1013,18 @@ impl Render for Terminal {
                 )
                 .size_full(),
             )
-            .children(self.find.as_ref().map(|find| find.bar(&palette, font)))
+            .children(self.find.as_ref().map(|find| {
+                find.bar(
+                    &palette,
+                    font,
+                    cx.listener(|terminal, _, _, cx| {
+                        if let Some(find) = &mut terminal.find {
+                            find.toggle_case();
+                            terminal.search(true);
+                            terminal.redraw(cx);
+                        }
+                    }),
+                )
+            }))
     }
 }
