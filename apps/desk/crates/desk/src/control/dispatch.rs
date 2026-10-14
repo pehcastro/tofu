@@ -1,12 +1,15 @@
 use desk_control::params::{ScreenList, WorkspaceScope};
-use desk_control::replies::{ModuleInfo, Screen, ScreenCurrent, Tile, Workspace as Listed};
-use desk_control::shapes;
+use desk_control::replies::{
+    Focus, Layout, ModuleInfo, Screen, ScreenCurrent, Tile, Workspace as Listed,
+};
+use desk_control::shapes::{self, FocusKind};
 use desk_control::transport::Reply;
 use desk_control::{Call, ErrorCode, Failure, Method, Request};
-use desk_tiling::{Module, Rect, Workspace, solve};
+use desk_tiling::{Axis, Module, Node, Rect, Size, Workspace, readout, solve};
 use gpui::{AnyWindowHandle, App};
 use serde_json::Value;
 
+use super::change;
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
@@ -23,7 +26,7 @@ pub fn answer(
     request: Request,
     window: AnyWindowHandle,
     screens: &[(&'static str, bool)],
-    cx: &App,
+    cx: &mut App,
 ) -> Reply {
     let Request { id, call } = request;
     let verb = verb(&call);
@@ -33,18 +36,55 @@ pub fn answer(
     let json = |value: serde_json::Result<Value>| {
         value.map_err(|error| fail(ErrorCode::Refused, error.to_string()))
     };
+    let gone = |error: String| {
+        fail(
+            ErrorCode::DeskNotRunning,
+            format!("the desk window is gone: {error}"),
+        )
+    };
+    let (modal, work) = window
+        .read::<Desk, _, _>(cx, |desk, cx| {
+            let desk = desk.read(cx);
+            (desk.modal(), desk.work().cloned())
+        })
+        .map_err(|error| gone(format!("{error:#}")))?;
+    if modal {
+        return Err(fail(
+            ErrorCode::Busy,
+            "a dialog is open in the desk".to_owned(),
+        ));
+    }
+    if let Some(changed) = change::answer(&call, work.as_ref(), cx) {
+        return changed.map_err(|(kind, message)| fail(kind, message));
+    }
     window
         .read::<Desk, _, _>(cx, |desk, cx| {
             let desk = desk.read(cx);
-            if desk.modal() {
-                return Err(fail(
-                    ErrorCode::Busy,
-                    "a dialog is open in the desk".to_owned(),
-                ));
-            }
             let board = || {
                 let board = desk.work()?.read(cx).board();
                 Some((board.workspaces(), board.active(), board.area()))
+            };
+            let scoped = |workspace: Option<String>| {
+                board()
+                    .and_then(|(workspaces, active, area)| {
+                        let at = match &workspace {
+                            None => Some(active),
+                            Some(wanted) => workspaces
+                                .iter()
+                                .position(|held| held.name == *wanted)
+                                .or_else(|| wanted.parse().ok()),
+                        };
+                        Some((workspaces.get(at?)?, area))
+                    })
+                    .ok_or_else(|| {
+                        fail(
+                            ErrorCode::NotFound,
+                            format!(
+                                "the work screen has no workspace {}",
+                                workspace.as_deref().unwrap_or("open")
+                            ),
+                        )
+                    })
             };
             match call {
                 Call::ScreenList(ScreenList { built }) => {
@@ -69,27 +109,28 @@ pub fn answer(
                         listed(workspaces, active, area)
                     }),
                 )),
-                Call::TileList(WorkspaceScope { workspace }) => {
-                    let found = board().and_then(|(workspaces, active, area)| {
-                        let at = match &workspace {
-                            None => Some(active),
-                            Some(wanted) => workspaces
-                                .iter()
-                                .position(|held| held.name == *wanted)
-                                .or_else(|| wanted.parse().ok()),
-                        };
-                        Some(tiles(workspaces.get(at?)?, area))
-                    });
-                    match found {
-                        Some(tiles) => json(serde_json::to_value(tiles)),
-                        None => Err(fail(
-                            ErrorCode::NotFound,
-                            format!(
-                                "the work screen has no workspace {}",
-                                workspace.as_deref().unwrap_or("open")
-                            ),
-                        )),
-                    }
+                Call::TileList(WorkspaceScope { workspace }) => scoped(workspace)
+                    .and_then(|(held, area)| json(serde_json::to_value(tiles(held, area)))),
+                Call::LayoutGet(WorkspaceScope { workspace }) => {
+                    scoped(workspace).and_then(|(held, _)| {
+                        json(serde_json::to_value(Layout {
+                            tree: tree(held.tree()),
+                            readout: readout(held.tree()),
+                        }))
+                    })
+                }
+                Call::FocusGet(_) => {
+                    let held = board().and_then(|(workspaces, active, _)| workspaces.get(active));
+                    let tile = held.and_then(Workspace::focus);
+                    json(serde_json::to_value(Focus {
+                        workspace: held.map(|held| held.name.clone()).unwrap_or_default(),
+                        tile: tile.map(|tile| tile.0),
+                        tab: held
+                            .zip(tile)
+                            .and_then(|(held, tile)| held.stack(tile))
+                            .map(|stack| count(stack.active)),
+                        kind: FocusKind::Tile,
+                    }))
                 }
                 _ => Err(fail(
                     ErrorCode::Refused,
@@ -97,12 +138,7 @@ pub fn answer(
                 )),
             }
         })
-        .unwrap_or_else(|error| {
-            Err(fail(
-                ErrorCode::DeskNotRunning,
-                format!("the desk window is gone: {error:#}"),
-            ))
-        })
+        .unwrap_or_else(|error| Err(gone(format!("{error:#}"))))
 }
 
 fn screen(name: &str, built: bool, open: bool) -> Screen {
@@ -128,7 +164,7 @@ fn capitalized(name: &str) -> String {
         .unwrap_or_default()
 }
 
-fn count(tiles: usize) -> u32 {
+pub(super) fn count(tiles: usize) -> u32 {
     u32::try_from(tiles).unwrap_or(u32::MAX)
 }
 
@@ -171,7 +207,43 @@ fn tiles(workspace: &Workspace, area: Rect) -> Vec<Tile> {
         .collect()
 }
 
-fn module(module: &Module) -> ModuleInfo {
+pub(super) fn tree(held: Option<&Node>) -> shapes::Node {
+    held.map_or_else(
+        || shapes::Node::Split {
+            axis: shapes::Axis::Row,
+            parts: Vec::new(),
+        },
+        node,
+    )
+}
+
+fn node(held: &Node) -> shapes::Node {
+    match held {
+        Node::Tile(stack) => shapes::Node::Tile {
+            id: stack.id.0,
+            modules: stack.modules.iter().map(|held| module(held).kind).collect(),
+            active: count(stack.active),
+        },
+        Node::Split { axis, parts } => shapes::Node::Split {
+            axis: match axis {
+                Axis::Row => shapes::Axis::Row,
+                Axis::Column => shapes::Axis::Column,
+            },
+            parts: parts
+                .iter()
+                .map(|part| shapes::Part {
+                    size: match part.size {
+                        Size::Share(share) => shapes::Size::Share(share),
+                        Size::Fixed(px) => shapes::Size::Fixed(px),
+                    },
+                    node: node(&part.node),
+                })
+                .collect(),
+        },
+    }
+}
+
+pub(super) fn module(module: &Module) -> ModuleInfo {
     let (kind, plugin) = match module {
         Module::Chat => (shapes::Module::Chat, None),
         Module::SubAgents => (shapes::Module::SubAgents, None),

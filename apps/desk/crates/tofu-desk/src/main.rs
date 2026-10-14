@@ -122,6 +122,11 @@ fn io_outcome(e: &std::io::Error) -> Outcome {
             ErrorCode::Refused.name(),
             "the desk closed the connection: its token may have changed",
         ),
+        ErrorKind::InvalidInput => (
+            Exit::Usage,
+            ErrorCode::BadParams.name(),
+            "TOFU_DESK_PID takes the pid of a running desk",
+        ),
         _ => (
             Exit::Failure,
             "instance_unreadable",
@@ -158,7 +163,28 @@ fn run(verb: &str, rest: &[&str]) -> Result<Reply, Outcome> {
                 exit: Exit::NotRunning,
                 code: ErrorCode::DeskNotRunning.name(),
                 message: "no desk is running".to_owned(),
-                hint: "start the desk, or use tofu for non-desk work".to_owned(),
+                hint: format!(
+                    "start the desk, or check {} names a running desk",
+                    instance::PICK
+                ),
+            });
+        }
+        Found::Several(running) => {
+            let listed: Vec<String> = running
+                .iter()
+                .map(|desk| {
+                    format!(
+                        "pid {} ({})",
+                        desk.pid,
+                        desk.project.as_deref().unwrap_or("no project")
+                    )
+                })
+                .collect();
+            return Err(Outcome {
+                exit: Exit::Usage,
+                code: "several_desks",
+                message: format!("{} desks are running: {}", running.len(), listed.join(", ")),
+                hint: format!("set {} to the pid of the one to drive", instance::PICK),
             });
         }
     };

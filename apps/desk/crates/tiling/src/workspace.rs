@@ -1108,4 +1108,15 @@ impl Workspace {
         next.next = id;
         next
     }
+
+    pub fn arranged(&self, tree: Node, area: Rect) -> Result<Self, Refusal> {
+        if self.locked {
+            return Err(Refusal::Locked);
+        }
+        fits(&tree, area)?;
+        let largest = solve(&tree, area).iter().map(|(stack, _)| stack.id.0).max();
+        let mut next = self.changed(Some(tree), self.focus);
+        next.next = largest.map_or(self.next, |id| self.next.max(id.saturating_add(1)));
+        Ok(next)
+    }
 }

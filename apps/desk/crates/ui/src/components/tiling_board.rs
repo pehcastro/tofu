@@ -210,6 +210,10 @@ impl<V: 'static> TilingBoard<V> {
             .unwrap_or_default()
     }
 
+    pub fn refusal(&self) -> Option<Refusal> {
+        self.refusal
+    }
+
     pub fn holding(&self) -> bool {
         matches!(
             self.gesture,

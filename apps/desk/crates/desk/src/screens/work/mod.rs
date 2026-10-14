@@ -756,6 +756,10 @@ impl Work {
         &self.board
     }
 
+    pub fn board_mut(&mut self) -> &mut TilingBoard<Work> {
+        &mut self.board
+    }
+
     pub fn chat(&self) -> &Entity<Chat> {
         &self.mounted.chat
     }

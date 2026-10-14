@@ -1,3 +1,4 @@
+mod change;
 mod dispatch;
 
 use std::io;
@@ -60,7 +61,12 @@ pub fn serve(
 ) {
     cx.spawn(async move |cx| {
         while let Ok(Asked { request, reply }) = asked.recv_async().await {
+            let verb = dispatch::verb(&request.call);
             let answer = cx.update(|cx| dispatch::answer(request, window, &screens, cx));
+            match &answer {
+                Ok(_) => eprintln!("desk: control {verb} ok"),
+                Err(failure) => eprintln!("desk: control {verb} refused {}", failure.error.message),
+            }
             if reply.send(answer).is_err() {
                 eprintln!("desk: control: the caller stopped waiting before the answer");
             }
