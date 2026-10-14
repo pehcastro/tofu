@@ -106,6 +106,7 @@ struct Repo {
     wanted: Option<String>,
     blamed: Option<Blamed>,
     inline: Option<Inline>,
+    absent_from_head: bool,
 }
 
 struct Page {
@@ -1092,8 +1093,13 @@ impl Editor {
         );
         if !dirty {
             page.stale = false;
+            if let Some(repo) = &mut page.repo {
+                repo.absent_from_head = false;
+                repo.wanted = None;
+            }
             if at == self.active {
                 self.remark(cx);
+                self.follow_blame(&code, cx);
             }
             self.refresh(cx);
         }
@@ -1159,7 +1165,7 @@ impl Editor {
             .marks()
             .iter()
             .find_map(|(row, mark)| mark.trailing.as_ref().map(|_| *row));
-        if repo.wanted.as_deref().is_none_or(|wanted| rope != wanted) {
+        if !repo.absent_from_head && repo.wanted.as_deref().is_none_or(|wanted| rope != wanted) {
             let text = rope.to_string();
             let wait = match repo.wanted {
                 Some(_) => BLAME_IDLE,
@@ -1279,7 +1285,10 @@ impl Editor {
                 );
                 repo.blamed = Some(blamed);
             }
-            Err(error) => eprintln!("desk: editor shows no blame for {}: {error}", repo.path),
+            Err(error) => {
+                repo.absent_from_head = matches!(&error, GitError::Failed { stderr, .. } if stderr.contains("no such path") && stderr.contains("in HEAD"));
+                eprintln!("desk: editor shows no blame for {}: {error}", repo.path);
+            }
         }
         let code = code.clone();
         self.follow_blame(&code, cx);
@@ -1832,6 +1841,7 @@ fn repo(full: &Path, git: Arc<GitBinary>) -> Option<Repo> {
         wanted: None,
         blamed: None,
         inline: None,
+        absent_from_head: false,
     })
 }
 

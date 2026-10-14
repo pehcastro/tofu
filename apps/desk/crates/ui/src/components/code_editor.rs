@@ -321,8 +321,7 @@ pub struct CodeEditor {
 
 #[derive(Default)]
 struct TypingFrames {
-    painted: Option<Instant>,
-    edited: bool,
+    edited: Option<Instant>,
     intervals: Vec<f64>,
 }
 
@@ -798,7 +797,7 @@ impl CodeEditor {
                 self.marks = marks;
                 self.settle(lines);
                 if let Some(frames) = &self.frames {
-                    frames.borrow_mut().edited = true;
+                    frames.borrow_mut().edited.get_or_insert_with(Instant::now);
                 }
             }
             Err(error) => self.report("Could not edit", Err(error)),
@@ -1259,7 +1258,7 @@ impl Render for CodeEditor {
         let shown = focused && caret_shown(self.since);
         self.rewrap(cx);
         let frames = self.frames.clone();
-        if let Some(log) = frames.as_ref().filter(|log| log.borrow().edited) {
+        if let Some(log) = frames.as_ref().filter(|log| log.borrow().edited.is_some()) {
             let log = log.clone();
             self.frames_flush = Some(cx.spawn(async move |_, cx| {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
@@ -1307,13 +1306,11 @@ impl Render for CodeEditor {
                         bounds.set(area);
                         if let Some(frames) = &frames {
                             let mut frames = frames.borrow_mut();
-                            let now = Instant::now();
-                            if let (true, Some(painted)) = (frames.edited, frames.painted) {
-                                let interval = now.duration_since(painted).as_secs_f64() * 1000.0;
-                                frames.intervals.push(interval);
+                            if let Some(edited) = frames.edited.take() {
+                                frames
+                                    .intervals
+                                    .push(edited.elapsed().as_secs_f64() * 1000.0);
                             }
-                            frames.edited = false;
-                            frames.painted = Some(now);
                         }
                         if wrapped_at.is_some_and(|width| width != wrap_width(area)) {
                             cx.notify(entity.entity_id());
