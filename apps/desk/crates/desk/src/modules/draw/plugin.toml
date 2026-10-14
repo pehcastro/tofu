@@ -1,0 +1,13 @@
+id = "tofu.draw"
+name = "Draw"
+icon = "palette"
+version = "0.1.0"
+api = "desk@0.1"
+tofu = ">=0.6"
+
+[capabilities]
+fs.read = ["boards"]
+fs.write = ["boards"]
+
+[contributes]
+tile = true

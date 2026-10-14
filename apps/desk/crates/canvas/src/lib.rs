@@ -70,6 +70,10 @@ impl Canvas {
         }
     }
 
+    pub fn scene(&self) -> &Scene {
+        &self.scene
+    }
+
     pub fn show(&mut self, scene: Scene, framing: Framing, cx: &mut Context<Self>) {
         self.scene = scene;
         (self.view, self.fit) = match framing {

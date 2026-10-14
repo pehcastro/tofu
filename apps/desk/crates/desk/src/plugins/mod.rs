@@ -57,6 +57,11 @@ const NATIVE: &[(&str, Mount)] = &[
         include_str!("../../../../plugins/tofu.notepad/plugin.toml"),
         crate::modules::notepad::mount,
     ),
+    #[cfg(feature = "plugin-draw")]
+    (
+        include_str!("../modules/draw/plugin.toml"),
+        crate::modules::draw::mount,
+    ),
 ];
 
 static FIRST_PARTY: LazyLock<Result<Vec<Plugin>, String>> = LazyLock::new(|| {
@@ -174,6 +179,7 @@ fn glyph(icon: &str) -> Option<Glyph> {
     match icon {
         "pencil" => Some(Glyph::Pencil),
         "file" => Some(Glyph::File),
+        "palette" => Some(Glyph::Palette),
         other => Glyph::workspace(other),
     }
 }

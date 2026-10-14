@@ -53,6 +53,8 @@ mod modules {
     pub mod chat;
     #[cfg(feature = "module-data-studio")]
     pub mod data_studio;
+    #[cfg(feature = "plugin-draw")]
+    pub mod draw;
     #[cfg(feature = "module-editor")]
     pub mod editor;
     #[cfg(any(feature = "module-file-edits", feature = "screen-work"))]

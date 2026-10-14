@@ -1467,6 +1467,7 @@ name = "desk"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "desk_canvas",
  "desk_control",
  "desk_core",
  "desk_perf",
@@ -1474,6 +1475,7 @@ dependencies = [
  "desk_terminal",
  "desk_tiling",
  "desk_ui",
+ "draw_doc",
  "flume",
  "gpui-ce",
  "gpui_ce_platform",
