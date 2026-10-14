@@ -24,7 +24,7 @@ use crate::components::code::{
     Blank, CodeLine, FoldMark, Guides, Marks, TAB_STOP, Wrap, code_origin, code_place, code_shape,
     code_view, wrap_width,
 };
-use crate::components::find::{FindBar, find_ranges};
+use crate::components::find::{FindBar, Matching, Replace, find_matching};
 use crate::components::form::{blinker, caret_shown};
 use crate::components::keymap::{Action, FocusedKeys, Host, Keymap, Motion, Resolved, Stroke};
 use crate::components::paint::ink;
@@ -766,11 +766,17 @@ impl CodeEditor {
                     editor.found(query, *at, cx);
                 });
                 let closed = cx.listener(|editor, _: &(), _, cx| editor.unfound(cx));
+                let replaced = cx.listener(|editor, (what, with): &(Replace, String), _, cx| {
+                    editor.replace(*what, with, cx);
+                });
                 bar.update(cx, |bar, _| {
                     bar.on_change(move |query, at, window, cx| {
                         changed(&(query.to_owned(), at), window, cx);
                     });
                     bar.on_close(move |window, cx| closed(&(), window, cx));
+                    bar.on_replace(move |what, with, window, cx| {
+                        replaced(&(what, with.to_owned()), window, cx);
+                    });
                 });
                 bar
             })
@@ -780,17 +786,12 @@ impl CodeEditor {
     }
 
     fn search(&mut self, cx: &mut Context<Self>) {
-        let text = self.buffer.text();
-        let rope = self.buffer.rope();
-        self.found = find_ranges(&text, &self.query)
-            .into_iter()
-            .filter_map(|bytes| {
-                Some(
-                    rope.try_byte_to_char(bytes.start).ok()?
-                        ..rope.try_byte_to_char(bytes.end).ok()?,
-                )
-            })
-            .collect();
+        let matching = self
+            .bar
+            .as_ref()
+            .map(|bar| bar.read(cx).matching())
+            .unwrap_or_default();
+        self.found = self.char_ranges(&self.query, matching);
         if self.current >= self.found.len() {
             self.current = 0;
         }
@@ -821,6 +822,92 @@ impl CodeEditor {
         self.found.clear();
         self.current = 0;
         cx.notify();
+    }
+
+    fn char_ranges(&self, query: &str, matching: Matching) -> Vec<Range<usize>> {
+        let text = self.buffer.text();
+        let rope = self.buffer.rope();
+        find_matching(&text, query, matching)
+            .into_iter()
+            .filter_map(|bytes| {
+                Some(
+                    rope.try_byte_to_char(bytes.start).ok()?
+                        ..rope.try_byte_to_char(bytes.end).ok()?,
+                )
+            })
+            .collect()
+    }
+
+    fn replace(&mut self, what: Replace, with: &str, cx: &mut Context<Self>) {
+        let started = Instant::now();
+        let targets = match what {
+            Replace::Current => self.found.get(self.current).cloned().into_iter().collect(),
+            Replace::All => self.found.clone(),
+        };
+        self.apply(&targets, with);
+        self.search(cx);
+        if what == Replace::All {
+            let ms = started.elapsed().as_secs_f64() * 1000.0;
+            eprintln!(
+                "desk: editor replace {} matches in {ms:.2} ms",
+                targets.len()
+            );
+        }
+        if let Some(found) = self.found.get(self.current) {
+            self.carets = vec![Caret {
+                anchor: found.start,
+                head: found.end,
+                goal: None,
+            }];
+        }
+        self.reveal();
+        self.touch(cx);
+    }
+
+    fn add_next_match(&mut self) {
+        let Some(last) = self.carets.last().map(|caret| caret.range()) else {
+            return;
+        };
+        if last.is_empty() {
+            self.carets = self
+                .carets
+                .iter()
+                .map(|caret| match self.word_at(caret.head) {
+                    Some(word) if caret.range().is_empty() => Caret {
+                        anchor: word.start,
+                        head: word.end,
+                        goal: None,
+                    },
+                    _ => *caret,
+                })
+                .collect();
+            return self.merge();
+        }
+        let Some(needle) = self.word(last.clone()) else {
+            return;
+        };
+        let matching = Matching {
+            case: true,
+            whole: self.word_at(last.start) == Some(last.clone()),
+        };
+        let taken = self.selections();
+        let free: Vec<Range<usize>> = self
+            .char_ranges(&needle, matching)
+            .into_iter()
+            .filter(|hit| !taken.contains(hit))
+            .collect();
+        let next = free
+            .iter()
+            .find(|hit| hit.start >= last.end)
+            .or(free.first());
+        if let Some(hit) = next {
+            self.carets.push(Caret {
+                anchor: hit.start,
+                head: hit.end,
+                goal: None,
+            });
+            self.merge();
+        }
     }
 
     fn char_at(&self, at: usize) -> Option<char> {
@@ -1828,6 +1915,13 @@ impl CodeEditor {
                 (gone > 0).then(|| (0, gone, String::new()))
             }),
             Action::Find => self.find(window, cx),
+            Action::FindReplace => {
+                self.find(window, cx);
+                if let Some(bar) = self.bar.clone() {
+                    bar.update(cx, |bar, cx| bar.show_replace(window, cx));
+                }
+            }
+            Action::AddNextMatch => self.add_next_match(),
             Action::Save => {
                 if let Some(save) = self.on_save.clone().filter(|_| !self.read_only()) {
                     let saved = save(&mut self.buffer, window, cx);

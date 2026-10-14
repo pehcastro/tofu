@@ -9,6 +9,7 @@ use gpui::{
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::header_action;
 use crate::components::chip::{kbd, tabular};
+use crate::components::code_editor::{Class, class};
 use crate::components::form::TextArea;
 use crate::components::overlay::menu_surface;
 use crate::components::paint::{ink, tint};
@@ -28,12 +29,55 @@ const MATCH_TINT: f32 = 0.22;
 const CURRENT_TINT: f32 = 0.6;
 const PLACEHOLDER: &str = "Find";
 const NO_MATCHES: &str = "no matches";
+const REPLACE_PLACEHOLDER: &str = "Replace";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Matching {
+    pub case: bool,
+    pub whole: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Replace {
+    Current,
+    All,
+}
 
 pub fn find_ranges(text: &str, query: &str) -> Vec<Range<usize>> {
-    let needle: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
-    if needle.is_empty() {
+    find_matching(text, query, Matching::default())
+}
+
+pub fn find_matching(text: &str, query: &str, matching: Matching) -> Vec<Range<usize>> {
+    if query.is_empty() {
         return Vec::new();
     }
+    let found = match matching.case {
+        true => text
+            .match_indices(query)
+            .map(|(at, hit)| at..at + hit.len())
+            .collect(),
+        false => folded_ranges(text, query),
+    };
+    match matching.whole {
+        true => found
+            .into_iter()
+            .filter(|range| whole_word(text, range))
+            .collect(),
+        false => found,
+    }
+}
+
+fn whole_word(text: &str, range: &Range<usize>) -> bool {
+    let word = |ch: Option<char>| ch.is_some_and(|ch| class(ch) == Class::Word);
+    let before = text
+        .get(..range.start)
+        .and_then(|text| text.chars().next_back());
+    let after = text.get(range.end..).and_then(|text| text.chars().next());
+    !word(before) && !word(after)
+}
+
+fn folded_ranges(text: &str, query: &str) -> Vec<Range<usize>> {
+    let needle: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
     let mut found: Vec<Range<usize>> = Vec::new();
     for (start, _) in text.char_indices() {
         if found.last().is_some_and(|last| start < last.end) {
@@ -83,6 +127,7 @@ pub fn match_highlights(
 
 type OnChange = Rc<dyn Fn(&str, usize, &mut Window, &mut App)>;
 type OnClose = Rc<dyn Fn(&mut Window, &mut App)>;
+type OnReplace = Rc<dyn Fn(Replace, &str, &mut Window, &mut App)>;
 pub type OnPick = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
 #[derive(Clone)]
@@ -161,6 +206,9 @@ pub struct FindBar {
     on_close: Option<OnClose>,
     on_pick: Option<OnPick>,
     groups: Vec<FindGroup>,
+    matching: Matching,
+    replace: Option<Entity<TextArea>>,
+    on_replace: Option<OnReplace>,
 }
 
 impl FindBar {
@@ -190,6 +238,9 @@ impl FindBar {
                 on_close: None,
                 on_pick: None,
                 groups: Vec::new(),
+                matching: Matching::default(),
+                replace: None,
+                on_replace: None,
             }
         })
     }
@@ -211,6 +262,41 @@ impl FindBar {
         self.current = at;
         self.dismiss(window, cx);
         window.defer(cx, move |window, cx| on_pick(at, window, cx));
+    }
+
+    pub fn on_replace(
+        &mut self,
+        on_replace: impl Fn(Replace, &str, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_replace = Some(Rc::new(on_replace));
+    }
+
+    pub fn matching(&self) -> Matching {
+        self.matching
+    }
+
+    pub fn show_replace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.on_replace.is_some() && self.replace.is_none() {
+            self.replace = Some(cx.new(|cx| {
+                TextArea::new(REPLACE_PLACEHOLDER.into(), window, cx)
+                    .bare()
+                    .max_lines(1)
+            }));
+        }
+        cx.notify();
+    }
+
+    fn replace(&mut self, what: Replace, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some(on_replace), Some(field)) = (self.on_replace.clone(), &self.replace) else {
+            return;
+        };
+        let with = field.read(cx).text();
+        window.defer(cx, move |window, cx| on_replace(what, &with, window, cx));
+    }
+
+    fn toggle(&mut self, flip: fn(&mut Matching), window: &mut Window, cx: &mut Context<Self>) {
+        flip(&mut self.matching);
+        self.select(self.current, window, cx);
     }
 
     pub fn on_change(&mut self, on_change: impl Fn(&str, usize, &mut Window, &mut App) + 'static) {
@@ -242,6 +328,7 @@ impl FindBar {
 
     fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open = false;
+        self.replace = None;
         if let Some(before) = self.return_focus.take() {
             window.focus(&before, cx);
         }
@@ -275,7 +362,20 @@ impl FindBar {
     fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keys = &event.keystroke;
         let picking = self.on_pick.is_some();
-        match (keys.key.as_str(), keys.modifiers.shift) {
+        let held = keys.modifiers;
+        let toggles = self.on_replace.is_some();
+        let replacing = self
+            .replace
+            .as_ref()
+            .is_some_and(|field| field.read(cx).focus_handle(cx).is_focused(window));
+        match (keys.key.as_str(), held.shift) {
+            ("enter", _) if replacing && held.secondary() && held.alt => {
+                self.replace(Replace::All, window, cx);
+            }
+            ("enter", false) if replacing => self.replace(Replace::Current, window, cx),
+            ("c", _) if toggles && held.alt => self.toggle(|on| on.case = !on.case, window, cx),
+            ("w", _) if toggles && held.alt => self.toggle(|on| on.whole = !on.whole, window, cx),
+            ("h", _) if toggles && held.secondary() => self.show_replace(window, cx),
             ("enter", false) if picking => self.pick(self.current, window, cx),
             ("enter", false) | ("down", _) => self.next(window, cx),
             ("enter", true) | ("up", _) => self.previous(window, cx),
@@ -338,6 +438,24 @@ impl Render for FindBar {
                     .text_color(ink(&theme, T3))
                     .child(self.count()),
             )
+            .when(self.on_replace.is_some(), |row| {
+                let lit = ink(&theme, ROW_ON);
+                let (case, whole) = (self.matching.case, self.matching.whole);
+                row.child(
+                    button("find-case", "Aa", None, ButtonKind::Text, &theme)
+                        .when(case, |toggle| toggle.bg(lit))
+                        .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| {
+                            bar.toggle(|on| on.case = !on.case, window, cx);
+                        })),
+                )
+                .child(
+                    button("find-whole", "Word", None, ButtonKind::Text, &theme)
+                        .when(whole, |toggle| toggle.bg(lit))
+                        .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| {
+                            bar.toggle(|on| on.whole = !on.whole, window, cx);
+                        })),
+                )
+            })
             .child(
                 button("find-previous", "Previous", None, ButtonKind::Text, &theme)
                     .child(kbd("Shift Enter", &theme))
@@ -355,6 +473,44 @@ impl Render for FindBar {
                     cx.listener(|bar, _: &ClickEvent, window, cx| bar.dismiss(window, cx)),
                 ),
             );
+        let replacing = self.replace.clone().map(|field| {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(MENU_GAP))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .w(px(FIND_FIELD))
+                        .h(px(FIELD))
+                        .px(px(ROW_PAD_X))
+                        .child(field),
+                )
+                .child(
+                    button("find-replace", "Replace", None, ButtonKind::Text, &theme)
+                        .child(kbd("Enter", &theme))
+                        .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| {
+                            bar.replace(Replace::Current, window, cx);
+                        })),
+                )
+                .child(
+                    button(
+                        "find-replace-all",
+                        "Replace all",
+                        None,
+                        ButtonKind::Text,
+                        &theme,
+                    )
+                    .child(kbd("Ctrl Alt Enter", &theme))
+                    .on_click(cx.listener(
+                        |bar, _: &ClickEvent, window, cx| {
+                            bar.replace(Replace::All, window, cx);
+                        },
+                    )),
+                )
+        });
         menu_surface(&theme)
             .id("find-bar")
             .absolute()
@@ -367,6 +523,7 @@ impl Render for FindBar {
             .capture_key_down(cx.listener(Self::key))
             .when(results.is_some(), |bar| bar.w(px(RESULTS_WIDTH)))
             .child(row)
+            .children(replacing)
             .children(results)
             .into_any_element()
     }

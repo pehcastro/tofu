@@ -204,11 +204,10 @@ impl Buffer {
             added += inserted_chars;
             removed += range.len();
         }
-        let typing = inserted_chars == 1
-            && !text.contains('\n')
-            && targets.iter().all(|range| range.is_empty());
+        let typing = inserted_chars == 1 && !text.contains('\n');
         let now = Instant::now();
         let grouped = typing
+            && targets.iter().all(|range| range.is_empty())
             && self
                 .typed_at
                 .is_some_and(|at| now.duration_since(at) <= TYPING_GROUP);
@@ -281,7 +280,9 @@ impl Buffer {
         let mut merged: Vec<Range<usize>> = Vec::with_capacity(sorted.len());
         for range in sorted {
             match merged.last_mut() {
-                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                Some(last) if range.start < last.end || range.start == last.start => {
+                    last.end = last.end.max(range.end);
+                }
                 _ => merged.push(range),
             }
         }

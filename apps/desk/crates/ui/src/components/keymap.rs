@@ -107,6 +107,8 @@ pub enum Action {
     Indent,
     Outdent,
     Find,
+    FindReplace,
+    AddNextMatch,
     Save,
     Fold,
     Unfold,
@@ -119,7 +121,7 @@ pub enum Action {
     Host(Host),
 }
 
-const PLAIN: [Action; 31] = [
+const PLAIN: [Action; 33] = [
     Action::AddCursorUp,
     Action::AddCursorDown,
     Action::SelectAll,
@@ -136,6 +138,8 @@ const PLAIN: [Action; 31] = [
     Action::Indent,
     Action::Outdent,
     Action::Find,
+    Action::FindReplace,
+    Action::AddNextMatch,
     Action::Save,
     Action::Fold,
     Action::Unfold,
@@ -184,6 +188,8 @@ impl fmt::Display for Action {
             Action::Indent => "indent",
             Action::Outdent => "outdent",
             Action::Find => "find",
+            Action::FindReplace => "find_replace",
+            Action::AddNextMatch => "add_next_match",
             Action::Save => "save",
             Action::Fold => "fold",
             Action::Unfold => "unfold",
@@ -335,7 +341,7 @@ pub enum Resolved {
     Miss,
 }
 
-const DEFAULTS: [(&str, Action); 66] = [
+const DEFAULTS: [(&str, Action); 68] = [
     ("left", Action::Move(Motion::Left)),
     ("right", Action::Move(Motion::Right)),
     ("up", Action::Move(Motion::Up)),
@@ -375,6 +381,8 @@ const DEFAULTS: [(&str, Action); 66] = [
     ("ctrl+]", Action::Indent),
     ("ctrl+[", Action::Outdent),
     ("ctrl+f", Action::Find),
+    ("ctrl+h", Action::FindReplace),
+    ("ctrl+d", Action::AddNextMatch),
     ("ctrl+s", Action::Save),
     ("ctrl+shift+[", Action::Fold),
     ("ctrl+shift+{", Action::Fold),
