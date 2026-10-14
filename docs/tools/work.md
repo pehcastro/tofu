@@ -2,7 +2,7 @@
 title: Work
 description: plan, settings, artifact_fetch, quote, ask_person, zoom, recall, skill and the tofu verbs, tools that organize the work rather than change files.
 order: 6
-updated: 2026-10-09
+updated: 2026-10-14
 ---
 
 Tools that change no project file. All are tofu's own Go code, except the
@@ -11,12 +11,16 @@ Tools that change no project file. All are tofu's own Go code, except the
 ## plan
 
 `plan` is an ordered list held in memory and shown in the chat. `set`
-writes it once, then `start`, `done` and `drop` move one item, named by its
-own words.
+writes it once and starts the first item. `done` finishes the running item
+and starts the next, so a plan worked in order takes `set` and `done` only.
+`start` takes an item out of order and `drop` abandons one, each named by
+its own words.
 
 You see what the model intends before it acts, and one item runs at
-a time, so the list can't drift from the work. Parameters: `op`, `items`,
-`item`.
+a time, so the list can't drift from the work. The model writes a plan only
+for a task of several steps across more than one file, and sends a move
+beside its next real tool call rather than in a request of its own.
+Parameters: `op`, `items`, `item`.
 
 Once the lead holds a plan, every later request carries it as it stands, as
 the last message, after the part the prompt cache reads. The plan is never

@@ -52,13 +52,14 @@ func (p *Plan) Name() string { return PlanToolName }
 func (p *Plan) Definition() llm.Tool {
 	return llm.Tool{
 		Name: PlanToolName,
-		Description: "states what you intend to do next, as an ordered list of short items the person watching can read. " +
-			"set writes the whole list once, at the start, and after that you move one item at a time: " +
-			"start marks the item you are working on, done marks it finished, drop marks it abandoned. " +
-			"an item is named by its own words, never by a number, so pass the text back as it was written. " +
-			"at most one item is running: starting a second one is refused and names the one already running. " +
-			"use it for work of several steps, and do not use it for a single tool call. " +
-			"send it in the same reply as the next real tool call, never in a reply of its own",
+		Description: "states what you intend to do, as an ordered list of short items the person watching can read. " +
+			"write one only when the task has several steps across more than one file; a task a few tool calls finish needs none. " +
+			"set writes the whole list once and starts its first item, and done marks the running item finished and starts the next pending one, " +
+			"so a plan worked in order needs set and done only: start takes an item out of order and drop abandons one. " +
+			"every reply costs a request, so never send plan in a reply of its own and never only to move an item: " +
+			"send it in the same reply as the next real tool call, and when no real call is left, leave the item as it stands. " +
+			"call set again only when the plan itself changes. " +
+			"an item is named by its own words, never by a number, so pass the text back as it was written",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -131,7 +132,11 @@ func parsePlanArgs(raw json.RawMessage) (planArgs, error) {
 
 func applyPlan(items []PlanItem, args planArgs) ([]PlanItem, error) {
 	if args.Op == "set" {
-		return planSet(args.Items)
+		set, err := planSet(args.Items)
+		if err == nil {
+			set[0].State = PlanRunning
+		}
+		return set, err
 	}
 	state, err := planStateFor(args.Op)
 	if err != nil {
@@ -148,6 +153,9 @@ func applyPlan(items []PlanItem, args planArgs) ([]PlanItem, error) {
 	}
 	moved := slices.Clone(items)
 	moved[at].State = state
+	if next := slices.IndexFunc(moved, func(item PlanItem) bool { return item.State == PlanPending }); state == PlanDone && running == at && next >= 0 {
+		moved[next].State = PlanRunning
+	}
 	return moved, nil
 }
 
