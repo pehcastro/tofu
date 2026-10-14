@@ -73,3 +73,22 @@ Per sub-agent, from the end of the lead request that asked for the spawn to the 
 - tofu's own work per sub-agent is under 0.2 s: on the cassette the spawn tool's notice is 0.01 to 0.03 s, the dispatch 0.09 to 0.11 s and the work between steps 0.01 s.
 - The spawning request is the largest single cell at 10 agents, 7.1 to 16.6 s for about 1,500 output tokens, of which the ten spawn calls' arguments are a few hundred; it is model time and varies by more than 2x between runs.
 - The probe paid 3.73 s from process start to its first request; every later live run paid 0.25 to 0.38 s. Not attributed: a subscription token refresh or a cold model catalogue are the candidates, and neither is in the session trace.
+
+## Why the live 10 fan rose from 7.01 to 12.40 s
+
+Model and run variance, not tofu. Split by `scale fan` from the six recorded sessions, read by the 75d2b58b binary on 2026-10-14, no new live run. The split follows the slowest report back from the final answer: the stagger and the sub-agent's own requests are model wait, the lead was either busy on an earlier report turn or running the final one, and what is left between its end and the lead taking it is the memory model or the gather window. tofu own is the spawn notice, dispatch, tools and the work between steps. Each row adds up to fan. First request is every sub-agent's first request in the run.
+
+| commit | run | fan | slowest report | model wait: stagger | model wait: its requests | lead: busy on an earlier report turn | lead: final report turn | memory model | gather window | tofu own | report turns | first request median | first request max |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 4009ae9f | 1 | 6.92 | research-6 | 1.52 | 3.05 | 0.00 | 2.25 | 0.00 | 0.02 | 0.09 | 1 | 1.53 | 1.81 |
+| 4009ae9f | 2 | 7.01 | research-4 | 1.68 | 2.86 | 0.00 | 2.40 | 0.00 | 0.01 | 0.06 | 1 | 1.64 | 1.74 |
+| 4009ae9f | 3 | 9.19 | research-8 | 1.73 | 2.70 | 0.00 | 2.29 | 2.38 | 0.06 | 0.03 | 1 | 1.57 | 2.51 |
+| 75d2b58b | 1 | 12.40 | research-4 | 1.55 | 5.39 | 2.67 | 2.65 | 0.07 | 0.00 | 0.07 | 3 | 1.82 | 3.91 |
+| 75d2b58b | 2 | 14.87 | research-7 | 1.80 | 9.85 | 0.00 | 3.17 | 0.00 | 0.01 | 0.06 | 1 | 1.97 | 8.66 |
+| 75d2b58b | 3 | 8.38 | research-3 | 1.86 | 3.93 | 0.00 | 2.51 | 0.00 | 0.02 | 0.06 | 1 | 1.85 | 2.59 |
+
+- Two sub-agent requests make the difference. 75d2b58b run 2: research-7's first request took 8.66 s for 607 tokens in, 50 out, 7975 cache read, one attempt, status 200, while its nine siblings sent the same request in 1.52 to 2.96 s. 75d2b58b run 1: research-4's first request took 3.91 s on the same payload against 1.25 to 2.03 s for its siblings, so it ended at 7.01 s, 0.10 s after the second report turn took four reports at 6.91 s, and waited 2.67 s for that turn before the third one read it.
+- tofu's own work on the path is 0.03 to 0.09 s before and 0.06 to 0.07 s after. The stagger is 1.52 to 1.73 s before and 1.55 to 1.86 s after. The final report turn is 2.25 to 2.40 s before and 2.51 to 3.17 s after, model time for 204 to 270 output tokens.
+- Between the two builds nothing on this path changed: `internal/llm/wire/anthropic` and `internal/turn/spawn_parallel.go` have no diff, `konst.ReportGatherQuietMillis` is 1500 and `konst.SubAgentWarmMillis` 8000 in both. 58da3db3 moved episode compaction off the turn, which removed the 2.38 s memory cell of 4009ae9f run 3 and cannot add time here. 72016ba4 added about 30 input tokens to each sub-agent's first request (577 to 580 before, 604 to 610 after), with cache reads unchanged.
+- The run 3 of 75d2b58b, with no slow request, is 8.38 s, inside the 6.92 to 9.19 s of 4009ae9f.
+- Open: the first request median moved 1.53 to 1.64 s before against 1.82 to 1.97 s after, about 0.3 s. Three runs a side cannot separate the 30 extra input tokens from the hour of day on the subscription.

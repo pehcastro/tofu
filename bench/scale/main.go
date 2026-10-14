@@ -294,9 +294,9 @@ func readRows(path string) ([]row, error) {
 }
 
 func main() {
-	verbs := map[string]func([]string) error{"sample": sample, "fixture": fixture, "cassette": cassette, "alloc": alloc, "check": check, "report": report, "wall": wall, "retrace": retrace, "wallreport": wallreport}
+	verbs := map[string]func([]string) error{"sample": sample, "fixture": fixture, "cassette": cassette, "alloc": alloc, "check": check, "report": report, "wall": wall, "retrace": retrace, "wallreport": wallreport, "fan": fan}
 	if len(os.Args) < 2 || verbs[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "usage: scale sample|fixture|cassette|alloc|check|report|wall|retrace|wallreport")
+		fmt.Fprintln(os.Stderr, "usage: scale sample|fixture|cassette|alloc|check|report|wall|retrace|wallreport|fan")
 		os.Exit(2)
 	}
 	if err := verbs[os.Args[1]](os.Args[2:]); err != nil {

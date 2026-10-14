@@ -64,13 +64,15 @@ type tracedInsert struct {
 	Text    string    `json:"text"`
 }
 
+type tracedAgent struct {
+	Agent     string    `json:"agent"`
+	SpawnCall string    `json:"spawn_call"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
+}
+
 type traced struct {
-	Agents []struct {
-		Agent     string    `json:"agent"`
-		SpawnCall string    `json:"spawn_call"`
-		StartedAt time.Time `json:"started_at"`
-		EndedAt   time.Time `json:"ended_at"`
-	} `json:"agents"`
+	Agents   []tracedAgent `json:"agents"`
 	Requests []struct {
 		Request    string  `json:"request"`
 		Agent      string  `json:"agent"`
@@ -219,20 +221,11 @@ func (s sessionTimes) askEnd() time.Time {
 	return s.details[s.trace.Calls[at].Request].end()
 }
 
-func (s sessionTimes) rows(began, ended time.Time, base wallRow) []wallRow {
+func (s sessionTimes) turnEnds() (map[string]time.Time, time.Time) {
 	turnEnd := map[string]time.Time{}
-	var models []string
-	leadBegan := ended
 	for _, request := range s.trace.Requests {
-		if !slices.Contains(models, request.Model) {
-			models = append(models, request.Model)
-		}
 		if request.Agent == "" {
-			base.LeadRequests++
 			turnEnd[request.Turn] = later(turnEnd[request.Turn], s.details[request.Request].end())
-			if s.details[request.Request].At.Before(leadBegan) {
-				leadBegan = s.details[request.Request].At
-			}
 		}
 	}
 	for _, message := range s.trace.Messages {
@@ -243,6 +236,24 @@ func (s sessionTimes) rows(began, ended time.Time, base wallRow) []wallRow {
 	var final time.Time
 	for _, end := range turnEnd {
 		final = later(final, end)
+	}
+	return turnEnd, final
+}
+
+func (s sessionTimes) rows(began, ended time.Time, base wallRow) []wallRow {
+	turnEnd, final := s.turnEnds()
+	var models []string
+	leadBegan := ended
+	for _, request := range s.trace.Requests {
+		if !slices.Contains(models, request.Model) {
+			models = append(models, request.Model)
+		}
+		if request.Agent == "" {
+			base.LeadRequests++
+			if s.details[request.Request].At.Before(leadBegan) {
+				leadBegan = s.details[request.Request].At
+			}
+		}
 	}
 	for _, request := range s.trace.Memory {
 		if detail := s.details[request.Request]; !detail.At.Before(final) {
