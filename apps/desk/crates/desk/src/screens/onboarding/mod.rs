@@ -1,20 +1,17 @@
 mod fixture;
 mod setup;
 
-use std::sync::Arc;
-
+use desk_ui::effects::EffectParams;
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, FontWeight, Image, IntoElement, Render,
+    AnyView, App, AppContext, ClickEvent, Context, Entity, FontWeight, IntoElement, Render,
     SharedString, Window, div, prelude::*, px,
 };
 
-use super::intro::effects::hero;
+use super::intro::effects::{Backdrop, WELCOME, backdrop, hero};
 use super::intro::paint;
 use fixture::{IMPORT, START, TAGLINE, TELL_IMPORT, TELL_START, TITLE};
-use paint::{hex, jpeg, load_fonts, shadow, white};
+use paint::{hex, load_fonts, shadow, white};
 
-const WELCOME: &[u8] = include_bytes!("../../../../../assets/intro/welcome.jpg");
-const WELCOME_BLURRED: &[u8] = include_bytes!("../../../../../assets/intro/welcome-blur.jpg");
 const STAGE_PAD: f32 = 16.0;
 const ABOVE_WELCOME: f32 = 7.0;
 const BELOW_WELCOME: f32 = 3.0;
@@ -27,8 +24,7 @@ struct Connected {
 }
 
 struct Onboarding {
-    image: Arc<Image>,
-    blurred: Arc<Image>,
+    backdrop: Entity<Backdrop>,
     step: usize,
     connected: Connected,
     key_open: bool,
@@ -51,10 +47,10 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
             ));
         }
     };
+    let backdrop = backdrop(WELCOME, EffectParams::default(), cx);
     Ok(cx
         .new(|_| Onboarding {
-            image: jpeg(WELCOME),
-            blurred: jpeg(WELCOME_BLURRED),
+            backdrop,
             step,
             connected: Connected::default(),
             key_open,
@@ -142,7 +138,7 @@ impl Render for Onboarding {
         } else {
             self.setup(scale, cx).into_any_element()
         };
-        hero(&self.image)
+        hero(&self.backdrop)
             .child(over)
             .children(self.told.clone().map(|message| {
                 paint::toast(

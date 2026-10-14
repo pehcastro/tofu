@@ -25,10 +25,6 @@ pub fn load_fonts(cx: &gpui::App) -> Result<(), String> {
         .map_err(|error| format!("the screen cannot load the Geist fonts: {error}"))
 }
 
-pub fn jpeg(bytes: &'static [u8]) -> Arc<Image> {
-    Arc::new(Image::from_bytes(ImageFormat::Jpeg, bytes.to_vec()))
-}
-
 pub const SANS: &str = "Geist";
 pub const MONO: &str = "Geist Mono";
 pub const LIVE: Rgba = hex(0x86e0b3);

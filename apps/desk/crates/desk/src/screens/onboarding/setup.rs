@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use gpui::{
-    ClickEvent, Context, Div, FontWeight, Image, ImageFormat, ObjectFit, Rgba, SharedString,
-    Stateful, StyledImage, Window, div, img, prelude::*, px, relative,
+    ClickEvent, Context, Div, FontWeight, Image, ImageFormat, Rgba, SharedString, Stateful, Window,
+    div, img, prelude::*, px, relative,
 };
 
 use super::Onboarding;
@@ -10,6 +10,7 @@ use super::fixture::{
     CLASSIFIERS, HINT, PROJECTS, PROVIDERS, STEPS, TELL_CHECK, TELL_FOLDER, TELL_OPEN,
 };
 use super::paint::{MONO, T3, glyph, hex, medium, ringed, shadow, spacer, text, tint, white};
+use crate::screens::intro::effects::glass;
 
 const CLAUDE: &[u8] = include_bytes!("../../../../../assets/intro/claude.svg");
 const FOLDER: &[u8] = include_bytes!("../../../../../assets/intro/folder.svg");
@@ -18,6 +19,7 @@ const TICK: &str = r#"<path d="M3.5 8.5l3 3 6-7"/>"#;
 const KEY: &str = r#"<circle cx="5.5" cy="10.5" r="2.5"/><path d="M7.5 8.5l5-5M11 5l1.5 1.5"/>"#;
 const ADD: Rgba = hex(0x7fd6a6);
 const INK: Rgba = white(0.9);
+const SHELL_SCRIM: u32 = 0x0a090e;
 const SHELL_SHARE: f32 = 0.66;
 const SHELL_LEAST: f32 = 400.0;
 const STAGE_PAD: f32 = 16.0;
@@ -506,14 +508,7 @@ impl Onboarding {
                     .px(px(3.0))
                     .pb(px(3.0))
                     .shadow(shadow(45.0, 30.0, 0.5))
-                    .child(
-                        img(self.blurred.clone())
-                            .absolute()
-                            .inset_0()
-                            .size_full()
-                            .object_fit(ObjectFit::Cover),
-                    )
-                    .child(div().absolute().inset_0().bg(tint(0x0a090e, 0.82)))
+                    .child(glass(12.0, SHELL_SCRIM, 0.76, 0.88))
                     .child(ringed(12.0, 0.1).absolute().inset_0())
                     .text_size(px(13.0))
                     .text_color(INK)

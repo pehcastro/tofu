@@ -2,29 +2,23 @@ pub mod effects;
 mod fixture;
 pub mod paint;
 
-use std::sync::Arc;
-
+use desk_ui::effects::EffectParams;
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Div, FontWeight, Image, IntoElement, Render,
-    SharedString, Stateful, Window, div, img, prelude::*, px, relative,
+    AnyView, App, AppContext, ClickEvent, Context, Div, Entity, FontWeight, IntoElement, Render,
+    SharedString, Stateful, Window, div, prelude::*, px, relative,
 };
 
-use effects::hero;
+use effects::{Backdrop, DUSK, ROOM, STREET, backdrop, glass, hero};
 use fixture::{
     ACCOUNT, CHECKOUT, EFFORT, MODEL, PROJECTS, Run, TELL_ACCOUNT, TELL_ALL_SESSIONS, TELL_ATTACH,
     TELL_BRANCH, TELL_CHECKOUT, TELL_FOLDER, TELL_MODEL, TELL_SESSION,
 };
 use paint::{
-    BRANCH, CARET, DOWN, FOLDER, LIVE, MONO, PLUS, POP, SEND, T3, WARN, glyph, hex, jpeg,
-    load_fonts, medium, ringed, shadow, spacer, text, tint, white,
+    BRANCH, CARET, DOWN, FOLDER, LIVE, MONO, PLUS, POP, SEND, T3, WARN, glyph, hex, load_fonts,
+    medium, ringed, shadow, spacer, text, tint, white,
 };
 
-const STREET: &[u8] = include_bytes!("../../../../../assets/intro/street.jpg");
-const ROOM: &[u8] = include_bytes!("../../../../../assets/intro/room.jpg");
-const DUSK: &[u8] = include_bytes!("../../../../../assets/intro/dusk.jpg");
-const STREET_CARD: &[u8] = include_bytes!("../../../../../assets/intro/card-street.jpg");
-const ROOM_CARD: &[u8] = include_bytes!("../../../../../assets/intro/card-room.jpg");
-const DUSK_CARD: &[u8] = include_bytes!("../../../../../assets/intro/card-dusk.jpg");
+const CARD_SCRIM: u32 = 0x18171e;
 const COMPOSER_SHARE: f32 = 0.56;
 const COMPOSER_LEAST: f32 = 340.0;
 const STAGE_PAD: f32 = 16.0;
@@ -41,8 +35,7 @@ enum Menu {
 }
 
 struct Intro {
-    image: Arc<Image>,
-    behind_card: Arc<Image>,
+    backdrop: Entity<Backdrop>,
     project: usize,
     menu: Menu,
     told: Option<SharedString>,
@@ -50,22 +43,22 @@ struct Intro {
 
 pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     load_fonts(cx)?;
-    let (image, behind_card, menu) = match board {
-        None | Some("IHOME-1") => (STREET, STREET_CARD, Menu::Closed),
-        Some("IHOME-2") => (ROOM, ROOM_CARD, Menu::Closed),
-        Some("IHOME-3") => (DUSK, DUSK_CARD, Menu::Closed),
-        Some("S-HOME-1") => (STREET, STREET_CARD, Menu::Resume),
-        Some("S-HOME-2") => (STREET, STREET_CARD, Menu::Projects),
+    let (source, menu) = match board {
+        None | Some("IHOME-1") => (STREET, Menu::Closed),
+        Some("IHOME-2") => (ROOM, Menu::Closed),
+        Some("IHOME-3") => (DUSK, Menu::Closed),
+        Some("S-HOME-1") => (STREET, Menu::Resume),
+        Some("S-HOME-2") => (STREET, Menu::Projects),
         Some(other) => {
             return Err(format!(
                 "the intro draws IHOME-1 to 3, S-HOME-1 and S-HOME-2, not {other}"
             ));
         }
     };
+    let backdrop = backdrop(source, EffectParams::default(), cx);
     Ok(cx
         .new(|_| Intro {
-            image: jpeg(image),
-            behind_card: jpeg(behind_card),
+            backdrop,
             project: 0,
             menu,
             told: None,
@@ -151,15 +144,7 @@ impl Intro {
             .relative()
             .rounded(px(18.0))
             .shadow(shadow(70.0, 24.0, 0.4))
-            .child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .rounded(px(18.0))
-                    .overflow_hidden()
-                    .child(img(self.behind_card.clone()).size_full())
-                    .child(div().absolute().inset_0().bg(tint(0x18171e, 0.55))),
-            )
+            .child(glass(18.0, CARD_SCRIM, 0.45, 0.65))
             .pt(px(14.0))
             .pr(px(12.0))
             .pb(px(10.0))
@@ -435,7 +420,7 @@ impl Render for Intro {
             .child(div().flex_grow(ABOVE_COMPOSER))
             .child(column)
             .child(div().flex_grow(BELOW_COMPOSER));
-        hero(&self.image)
+        hero(&self.backdrop)
             .child(stage)
             .children(self.told.clone().map(|message| {
                 paint::toast(
