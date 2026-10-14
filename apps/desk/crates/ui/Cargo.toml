@@ -13,6 +13,7 @@ desk_motion = { workspace = true }
 desk_tiling.workspace = true
 flume = { version = "0.11.1", default-features = false, features = ["async"] }
 gpui.workspace = true
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png"] }
 ratex-font = "=0.1.14"
 ratex-katex-fonts = "=0.1.14"
 ratex-layout = "=0.1.14"

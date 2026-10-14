@@ -1,5 +1,6 @@
 pub mod component;
 pub mod components;
+pub mod effects;
 pub mod icon;
 pub mod live;
 pub mod metrics;
