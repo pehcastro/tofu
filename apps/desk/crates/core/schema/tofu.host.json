@@ -7548,7 +7548,8 @@
               "review",
               "done",
               "dropped",
-              "blocked"
+              "blocked",
+              "needs-decision"
             ],
             "type": "string"
           },
@@ -7563,6 +7564,9 @@
         "live": {
           "type": "integer"
         },
+        "log_to_review": {
+          "type": "integer"
+        },
         "managers": {
           "items": {
             "type": "string"
@@ -7574,6 +7578,15 @@
         },
         "name": {
           "type": "string"
+        },
+        "scope_cites": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "tickets": {
           "type": "integer"
@@ -7655,9 +7668,24 @@
         "actor": {
           "type": "string"
         },
+        "agent": {
+          "type": "string"
+        },
         "at": {
           "format": "date-time",
           "type": "string"
+        },
+        "call": {
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "from": {
           "enum": [
@@ -7668,7 +7696,8 @@
             "review",
             "done",
             "dropped",
-            "blocked"
+            "blocked",
+            "needs-decision"
           ],
           "type": "string"
         },
@@ -7685,8 +7714,15 @@
             "handed",
             "widened",
             "managers",
-            "assigned"
+            "assigned",
+            "asked",
+            "answered",
+            "spawned",
+            "reported"
           ],
+          "type": "string"
+        },
+        "session": {
           "type": "string"
         },
         "text": {
@@ -7704,7 +7740,8 @@
             "review",
             "done",
             "dropped",
-            "blocked"
+            "blocked",
+            "needs-decision"
           ],
           "type": "string"
         }
@@ -7783,7 +7820,8 @@
               "review",
               "done",
               "dropped",
-              "blocked"
+              "blocked",
+              "needs-decision"
             ],
             "type": "string"
           },
@@ -7961,7 +7999,8 @@
             "review",
             "done",
             "dropped",
-            "blocked"
+            "blocked",
+            "needs-decision"
           ],
           "type": "string"
         }
@@ -7969,6 +8008,44 @@
       "required": [
         "id",
         "to"
+      ],
+      "type": "object"
+    },
+    "boardy.Question": {
+      "additionalProperties": false,
+      "properties": {
+        "eli5": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "recommend": {
+          "type": "integer"
+        },
+        "tldr": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "tldr",
+        "eli5",
+        "options",
+        "recommend",
+        "why"
       ],
       "type": "object"
     },
@@ -8204,6 +8281,9 @@
             "null"
           ]
         },
+        "parent": {
+          "type": "string"
+        },
         "points": {
           "type": "integer"
         },
@@ -8220,6 +8300,15 @@
         "problem": {
           "type": "string"
         },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/boardy.Question"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "reason": {
           "type": "string"
         },
@@ -8235,6 +8324,17 @@
         "scope": {
           "type": "string"
         },
+        "size": {
+          "enum": [
+            "S",
+            "M",
+            "L"
+          ],
+          "type": "string"
+        },
+        "spec": {
+          "type": "string"
+        },
         "sprint": {
           "type": "string"
         },
@@ -8247,7 +8347,8 @@
             "review",
             "done",
             "dropped",
-            "blocked"
+            "blocked",
+            "needs-decision"
           ],
           "type": "string"
         },
@@ -10890,7 +10991,9 @@
             "new",
             "compact",
             "undo",
-            "cron"
+            "cron",
+            "turn",
+            "diff-turn"
           ],
           "type": "string"
         },
@@ -11115,6 +11218,101 @@
       ],
       "type": "object"
     },
+    "learn.Job": {
+      "additionalProperties": false,
+      "properties": {
+        "cost_usd": {
+          "type": "number"
+        },
+        "cost_usd_each": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/learn.JobRun"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sessions": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "times": {
+          "type": "integer"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "tokens_each": {
+          "type": "integer"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "tools",
+        "times",
+        "sessions",
+        "tokens",
+        "tokens_each",
+        "cost_usd",
+        "cost_usd_each",
+        "runs"
+      ],
+      "type": "object"
+    },
+    "learn.JobRun": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "calls": {
+          "type": "integer"
+        },
+        "cost_usd": {
+          "type": "number"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "at",
+        "text",
+        "calls",
+        "tokens",
+        "cost_usd"
+      ],
+      "type": "object"
+    },
     "learn.Label": {
       "additionalProperties": false,
       "properties": {
@@ -11303,6 +11501,15 @@
         },
         "read": {
           "$ref": "#/$defs/learn.Read"
+        },
+        "repeated_jobs": {
+          "items": {
+            "$ref": "#/$defs/learn.Job"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "said": {
           "items": {
