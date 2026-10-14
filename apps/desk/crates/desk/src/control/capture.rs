@@ -1,10 +1,12 @@
+use std::path::Path;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use desk_control::ErrorCode;
 use desk_control::params::{Capture, CaptureTarget};
 use desk_control::replies::Captured;
 use desk_control::transport::runtime_dir;
-use gpui::{AnyWindowHandle, App};
+use desk_tiling::Rect;
+use gpui::{AnyWindowHandle, App, Bounds, DevicePixels, point, size};
 
 use super::change::{Answered, json};
 
@@ -48,4 +50,30 @@ pub fn answer(capture: &Capture, window: AnyWindowHandle, cx: &mut App) -> Answe
         h,
         bytes,
     })
+}
+
+pub fn region(
+    window: AnyWindowHandle,
+    path: &Path,
+    rect: Rect,
+    max_px: u32,
+    cx: &mut App,
+) -> Result<(u32, u32), (ErrorCode, String)> {
+    window
+        .update(cx, |_, window, _| {
+            let scale = window.scale_factor();
+            let device = |logical: f32| DevicePixels((logical * scale).round() as i32);
+            let bounds = Bounds::new(
+                point(device(rect.x), device(rect.y)),
+                size(device(rect.w), device(rect.h)),
+            );
+            desk_perf::grab_region(window, path, bounds, max_px)
+        })
+        .map_err(|error| {
+            (
+                ErrorCode::DeskNotRunning,
+                format!("the desk window is gone: {error:#}"),
+            )
+        })?
+        .map_err(|error| (ErrorCode::Refused, error.to_string()))
 }

@@ -27,7 +27,7 @@ pub use bench::{BenchResult, run_bench};
 pub use capture::CaptureError;
 #[cfg(feature = "profiler")]
 pub use frames::FrameSummary;
-pub use grab::{GrabError, grab};
+pub use grab::{GrabError, grab, grab_region};
 #[cfg(feature = "profiler")]
 pub use memory::{ALLOCATOR, CountingAllocator, MemorySample};
 #[cfg(feature = "profiler")]

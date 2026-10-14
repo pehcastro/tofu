@@ -1,19 +1,22 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use desk_control::params::{CommandRun, FocusTarget, TabActivate, TabPick, TileOpen};
 use desk_control::replies::CommandResult;
 use desk_control::{Call, ErrorCode, shapes};
-use desk_tiling::Module;
+use desk_core::home::Home;
+use desk_tiling::{Module, Rect};
 use draw_doc::{Edge, Graph, Node, Scene, diagram, graph};
 use gpui::{App, Entity};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use super::capture;
 use super::change::{self, Answered};
 use super::dispatch::count;
+use crate::desk::Desk;
 use crate::modules::draw::{self as tile, PLUGIN};
 use crate::screens::work::Work;
 
@@ -32,6 +35,16 @@ struct Diagram {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Snapshot {
+    board: String,
+    max_px: Option<u32>,
+    path: Option<PathBuf>,
+}
+
+const SNAPSHOT_MAX_PX: u32 = 512;
 
 pub fn answer(run: &CommandRun, work: Option<&Entity<Work>>, cx: &mut App) -> Answered {
     if run.dry_run {
@@ -79,9 +92,19 @@ pub fn answer(run: &CommandRun, work: Option<&Entity<Work>>, cx: &mut App) -> An
             eprintln!("desk: draw diagram {n} nodes {e} edges in {ms} ms");
             Ok(json!({ "board": board, "path": path, "nodes": n, "edges": e, "ms": ms }))
         }
+        "draw.snapshot" => {
+            let Snapshot {
+                board,
+                max_px,
+                path,
+            } = parsed(args)?;
+            snapshot(&board, max_px.unwrap_or(SNAPSHOT_MAX_PX), path, work, cx)
+        }
         other => Err((
             ErrorCode::UnknownCommand,
-            format!("{other} is not a draw command: draw.list, draw.open, draw.read, draw.diagram"),
+            format!(
+                "{other} is not a draw command: draw.list, draw.open, draw.read, draw.diagram, draw.snapshot"
+            ),
         )),
     }?;
     change::json(&CommandResult {
@@ -129,6 +152,64 @@ fn list() -> Answered {
             })
             .collect(),
     ))
+}
+
+fn snapshot(
+    board: &str,
+    max_px: u32,
+    path: Option<PathBuf>,
+    work: Option<&Entity<Work>>,
+    cx: &mut App,
+) -> Answered {
+    let started = Instant::now();
+    if !tile::board(board).map_err(bad)?.is_file() {
+        return Err((ErrorCode::NotFound, format!("no board {board}")));
+    }
+    let not_showing = || refused(format!("board {board} is not showing: run draw.open first"));
+    let work = work.ok_or_else(not_showing)?;
+    let draw = Module::Plugin(PLUGIN.to_owned());
+    let rect = {
+        let tiling = work.read(cx).board();
+        let (x, y) = tiling.origin();
+        tiling
+            .workspaces()
+            .get(tiling.active())
+            .and_then(|held| {
+                held.tiles(tiling.area())
+                    .into_iter()
+                    .find(|(stack, _)| stack.modules.get(stack.active) == Some(&draw))
+            })
+            .map(|(_, rect)| Rect {
+                x: rect.x + x,
+                y: rect.y + y,
+                ..rect
+            })
+            .ok_or_else(not_showing)?
+    };
+    let path = match path {
+        Some(path) => path,
+        None => Home::find()
+            .map_err(|error| refused(error.to_string()))?
+            .cache
+            .join("draw")
+            .join(format!("{board}.png")),
+    };
+    if let Some(folder) = path.parent() {
+        fs::create_dir_all(folder)
+            .map_err(|error| refused(format!("{}: {error}", folder.display())))?;
+    }
+    let window = cx
+        .windows()
+        .into_iter()
+        .find(|window| window.downcast::<Desk>().is_some())
+        .ok_or((ErrorCode::DeskNotRunning, "no desk window".to_owned()))?;
+    let (width, height) = capture::region(window, &path, rect, max_px, cx)?;
+    let bytes = fs::metadata(&path)
+        .map_err(|error| refused(format!("{}: {error}", path.display())))?
+        .len();
+    let ms = started.elapsed().as_millis();
+    eprintln!("desk: draw snapshot {board} {width}x{height} in {ms} ms");
+    Ok(json!({ "path": path, "width": width, "height": height, "bytes": bytes, "ms": ms }))
 }
 
 fn focus(work: Option<&Entity<Work>>, cx: &mut App) -> Result<(), Refused> {
