@@ -58,6 +58,7 @@ impl Git {
                     theme,
                     cx.listener(|this, _: &ClickEvent, _, cx| this.commit(cx)),
                 ))
+                .children(self.asking.is_some().then(|| confirm(theme, cx)))
                 .child(changed_files(
                     "changes",
                     &files,
@@ -159,6 +160,30 @@ impl Git {
                     ),
             )
     }
+}
+
+fn confirm(theme: &Theme, cx: &mut Context<Git>) -> Div {
+    let answer = |overwrite: bool| {
+        cx.listener(move |this: &mut Git, _: &ClickEvent, _, cx| this.answer(overwrite, cx))
+    };
+    let (anyway, cancel) = (answer(true), answer(false));
+    div()
+        .flex()
+        .gap(px(8.0))
+        .px(px(12.0))
+        .py(px(6.0))
+        .child(
+            kit::button("undo-anyway", 22.0, 11.5, theme)
+                .text_color(rgb(DANGER))
+                .on_click(anyway)
+                .child("Undo anyway"),
+        )
+        .child(
+            kit::button("undo-cancel", 22.0, 11.5, theme)
+                .text_color(ink(theme, BASE))
+                .on_click(cancel)
+                .child("Cancel"),
+        )
 }
 
 fn diff_head(theme: &Theme) -> Div {

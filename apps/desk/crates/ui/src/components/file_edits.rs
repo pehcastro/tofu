@@ -301,7 +301,7 @@ impl ChangeAction {
         match self {
             ChangeAction::Stage => "stage",
             ChangeAction::Unstage => "unstage",
-            ChangeAction::Discard => "discard",
+            ChangeAction::Discard => "undo",
         }
     }
 
@@ -309,7 +309,7 @@ impl ChangeAction {
         match self {
             ChangeAction::Stage => "Stage",
             ChangeAction::Unstage => "Unstage",
-            ChangeAction::Discard => "Discard",
+            ChangeAction::Discard => "Undo",
         }
     }
 }

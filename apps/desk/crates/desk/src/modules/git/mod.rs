@@ -3,7 +3,10 @@ mod fixture;
 mod history;
 mod kit;
 
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
+use std::time::Instant;
 
 use desk_core::git::{Entry, Git as _, GitBinary, GitError, Mark, State};
 use desk_ui::components::chip::GitStatus;
@@ -84,6 +87,7 @@ struct Repo {
     git: GitBinary,
     branch: SharedString,
     files: Vec<ChangedFile>,
+    seen: HashMap<SharedString, Option<u64>>,
 }
 
 impl Repo {
@@ -92,6 +96,7 @@ impl Repo {
             git: GitBinary::open(path)?,
             branch: SharedString::default(),
             files: Vec::new(),
+            seen: HashMap::new(),
         };
         repo.reload()?;
         Ok(repo)
@@ -104,7 +109,38 @@ impl Repo {
             .unwrap_or_else(|| DETACHED.to_owned())
             .into();
         self.files = self.git.status()?.into_iter().flat_map(rows).collect();
+        self.seen = self
+            .files
+            .iter()
+            .filter(|file| !file.staged)
+            .map(|file| (file.path.clone(), self.fingerprint(&file.path)))
+            .collect();
         Ok(())
+    }
+
+    fn fingerprint(&self, path: &str) -> Option<u64> {
+        let bytes = std::fs::read(self.git.root().join(path)).ok()?;
+        let mut hasher = DefaultHasher::new();
+        bytes.hash(&mut hasher);
+        Some(hasher.finish())
+    }
+
+    fn moved_since_shown(&self, path: &SharedString) -> bool {
+        self.seen
+            .get(path)
+            .is_some_and(|seen| *seen != self.fingerprint(path))
+    }
+
+    fn undo(&mut self, path: &str) -> Option<SharedString> {
+        let started = Instant::now();
+        let done = self.run(ChangeAction::Discard, path);
+        if done.is_ok() {
+            eprintln!(
+                "desk: undo restored {path} in {} ms",
+                started.elapsed().as_millis()
+            );
+        }
+        logged(&format!("undo {path}"), done)
     }
 
     fn run(&mut self, action: ChangeAction, path: &str) -> Result<(), GitError> {
@@ -170,6 +206,7 @@ pub struct Git {
     branches: bool,
     blocked: bool,
     told: Option<SharedString>,
+    asking: Option<SharedString>,
 }
 
 impl Git {
@@ -189,6 +226,7 @@ impl Git {
             branches,
             blocked,
             told: None,
+            asking: None,
         })
     }
 
@@ -216,7 +254,7 @@ impl Git {
         self.told = match &mut self.changes {
             Changes::Fixture(staged) => match (action, CHANGES.get(ix), staged.get_mut(ix)) {
                 (ChangeAction::Discard, _, _) => {
-                    Some("Discarding needs a repository: open the desk with --repo.".into())
+                    Some("Undo needs a repository: open the desk with --repo.".into())
                 }
                 (_, Some(change), Some(on)) if change.stageable => {
                     *on = !*on;
@@ -229,12 +267,32 @@ impl Git {
                 let Some(path) = repo.files.get(ix).map(|file| file.path.clone()) else {
                     return;
                 };
-                logged(
-                    &format!("{} {path}", action.verb()),
-                    repo.run(action, &path),
-                )
+                match action {
+                    ChangeAction::Discard if repo.moved_since_shown(&path) => {
+                        let told = format!("{path} changed on disk after the edit.");
+                        self.asking = Some(path);
+                        Some(told.into())
+                    }
+                    ChangeAction::Discard => repo.undo(&path),
+                    ChangeAction::Stage | ChangeAction::Unstage => logged(
+                        &format!("{} {path}", action.verb()),
+                        repo.run(action, &path),
+                    ),
+                }
             }
             Changes::Refused(_) => None,
+        };
+        cx.notify();
+    }
+
+    fn answer(&mut self, overwrite: bool, cx: &mut Context<Self>) {
+        let path = self.asking.take();
+        self.told = match (&mut self.changes, path) {
+            (Changes::Repo(repo), Some(path)) if overwrite => repo.undo(&path),
+            _ => {
+                eprintln!("desk: undo cancelled");
+                None
+            }
         };
         cx.notify();
     }
