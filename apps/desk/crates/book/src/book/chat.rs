@@ -70,7 +70,19 @@ fn main() {
 
 <Chart kind="bar" values={[1, 2, 3]} />"#;
 
-const COMPONENT_SAMPLE: &str = r#"The registry knows three tags. This reply uses them, and one it does not know.
+const COMPONENT_SAMPLE: &str = r#"The registry knows six tags. This reply uses them, and one it does not know.
+
+<Diff path="src/gate.rs" patch={"@@ -1,3 +1,3 @@\n fn gate() {\n-    run(4.8);\n+    run(4.2);\n }"} />
+
+<Table columns={["tag", "props", "paints", "order"]} rows={[["Diff", "path patch", "DiffCard", 2], ["Table", "columns rows", "table", 3], ["Chart", "kind series labels", "Bars Donut Sparkline", 3]]} />
+
+<Chart kind="bars" series={[4, 7, 3, 9]} labels={["mon", "tue", "wed", "thu"]} />
+
+<Chart kind="donut" series={[5, 3, 2]} labels={["read", "edit", "shell"]} />
+
+<Chart kind="line" series={[3, 5, 4, 8, 6]} />
+
+<Chart kind="pie" series={[1, 2]} labels={["a", "b"]} />
 
 <Card title="x">hi</Card>
 
@@ -1202,7 +1214,7 @@ impl ChatPage {
             .items_start()
             .gap(px(PAGE_GAP))
             .child(block(
-                "components: a reply streams Card, Callout, FileLink and an unknown tag; m streams it again",
+                "components: a reply streams Diff, Table, Chart, Card, Callout, FileLink, a pie chart and an unknown tag; m streams it again",
                 theme,
                 self.typing.render(theme, window),
             ))

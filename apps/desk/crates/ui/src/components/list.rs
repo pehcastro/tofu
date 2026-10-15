@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::time::Instant;
 
 use desk_motion::{Glide, GlideKind};
@@ -511,6 +512,7 @@ pub enum CellKind {
     Time,
 }
 
+#[derive(Clone)]
 pub struct Column {
     pub title: &'static str,
     pub width: Width,
@@ -552,8 +554,9 @@ type CellText = Box<dyn Fn(usize, usize) -> SharedString>;
 
 #[derive(IntoElement)]
 pub struct Table {
-    id: &'static str,
-    columns: &'static [Column],
+    id: SharedString,
+    columns: Cow<'static, [Column]>,
+    titles: Vec<SharedString>,
     rows: usize,
     selected: Option<usize>,
     scroll: UniformListScrollHandle,
@@ -572,10 +575,37 @@ pub fn table(
     text: impl Fn(usize, usize) -> SharedString + 'static,
 ) -> Table {
     Table {
-        id,
-        columns,
+        id: id.into(),
+        columns: Cow::Borrowed(columns),
+        titles: columns.iter().map(|column| column.title.into()).collect(),
         rows,
         selected,
+        scroll: scroll.clone(),
+        theme: theme.clone(),
+        text: Box::new(text),
+        hover: HoverVariant::default(),
+    }
+}
+
+pub fn owned_table(
+    id: SharedString,
+    titles: Vec<SharedString>,
+    rows: usize,
+    scroll: &UniformListScrollHandle,
+    theme: &Theme,
+    text: impl Fn(usize, usize) -> SharedString + 'static,
+) -> Table {
+    let column = Column {
+        title: "",
+        width: Width::Flex(1.0),
+        kind: CellKind::Text,
+    };
+    Table {
+        id,
+        columns: Cow::Owned(vec![column; titles.len()]),
+        titles,
+        rows,
+        selected: None,
         scroll: scroll.clone(),
         theme: theme.clone(),
         text: Box::new(text),
@@ -595,6 +625,7 @@ impl RenderOnce for Table {
         let Self {
             id,
             columns,
+            titles,
             rows,
             selected,
             scroll,
@@ -610,14 +641,20 @@ impl RenderOnce for Table {
             cx,
         );
         let lines = glide.clone();
-        let list = uniform_list(id, rows, move |range, _, cx| {
+        let row_id = id.clone();
+        let header = columns
+            .iter()
+            .zip(titles)
+            .map(|(column, title)| cell(column, &theme).child(caption(title, &theme)))
+            .collect::<Vec<_>>();
+        let list = uniform_list(id.clone(), rows, move |range, _, cx| {
             let theme = ActiveTheme::theme(cx);
             range
                 .map(|ix| {
                     lines.row(
                         ix,
                         grid_line(&theme)
-                            .id((id, ix))
+                            .id((row_id.clone(), ix))
                             .cursor_pointer()
                             .when(selected == Some(ix), |line| line.bg(ink(&theme, GRID_ON)))
                             .children(
@@ -642,11 +679,7 @@ impl RenderOnce for Table {
                 grid_line(&theme)
                     .border_b_1()
                     .border_color(theme.color(ColorToken::Separator))
-                    .children(
-                        columns.iter().map(|column| {
-                            cell(column, &theme).child(caption(column.title, &theme))
-                        }),
-                    ),
+                    .children(header),
             )
             .child(
                 div()

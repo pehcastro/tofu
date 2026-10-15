@@ -23,7 +23,7 @@ use crate::components::glyph::Glyph;
 use crate::components::hovercard::{hover, link_card, link_key};
 use crate::components::math::{self, Math};
 use crate::components::paint::{glyph, ink, ring, tint};
-use crate::components::rich::{self, Rich, Tone};
+use crate::components::rich::{self, Rich};
 use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CALLS_GAP, CALLS_INDENT, CALLS_PAD_X, CALLS_PAD_Y, CAPTION_TEXT, CODE_FILL, FAIL_RING,
@@ -192,18 +192,6 @@ pub struct Code {
     pub text: SharedString,
     pub label: Option<SharedString>,
     pub paints: Vec<(Range<usize>, Kind)>,
-}
-
-impl Clone for Rich {
-    fn clone(&self) -> Self {
-        match self {
-            Rich::Card(title) => Rich::Card(title.clone()),
-            Rich::Callout(Tone::Info) => Rich::Callout(Tone::Info),
-            Rich::Callout(Tone::Warn) => Rich::Callout(Tone::Warn),
-            Rich::Callout(Tone::Error) => Rich::Callout(Tone::Error),
-            Rich::FileLink(path) => Rich::FileLink(path.clone()),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -1360,8 +1348,10 @@ impl<'a> Draw<'a> {
                     })
             }
             Block::Component(rich, inner) => {
+                let key = self.tables;
+                self.tables += 1;
                 let drawn = self.blocks(inner);
-                rich::frame(rich, drawn, theme)
+                rich::frame(rich, drawn, key, theme)
             }
             Block::Math(math) => {
                 let (at, _) = self.next();
