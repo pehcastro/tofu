@@ -106,7 +106,7 @@ impl TilingPage {
                     spawnable: spawnable(),
                     spawns: EMPTY_SPAWNS.to_vec(),
                     settled: Box::new(|_, _, _| {}),
-                    expand: Box::new(|module, _, _, _| {
+                    expand: Box::new(|module, _, _, _, _| {
                         eprintln!("book: tiling: expand {}", module.name())
                     }),
                     origin: (0.0, FIRST_TOP),

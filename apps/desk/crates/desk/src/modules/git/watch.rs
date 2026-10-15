@@ -9,6 +9,8 @@ use flume::RecvTimeoutError;
 const POLL: Duration = Duration::from_millis(500);
 const GIT_DIR: &str = ".git";
 const GIT_STATE: [&str; 2] = [".git/index", ".git/HEAD"];
+const IGNORE_FILE: &str = ".gitignore";
+const NESTED_IGNORE_FILE: &str = "/.gitignore";
 
 type Stamps = BTreeMap<String, (SystemTime, u64)>;
 
@@ -56,10 +58,18 @@ fn stamps(root: &Path, skip: &BTreeSet<String>) -> Stamps {
     found
 }
 
+fn reshaped(was: &Stamps, now: &Stamps) -> bool {
+    !was.keys().eq(now.keys())
+        || now.iter().any(|(path, stamp)| {
+            (path == IGNORE_FILE || path.ends_with(NESTED_IGNORE_FILE))
+                && was.get(path) != Some(stamp)
+        })
+}
+
 pub fn watch(
     root: PathBuf,
     skip: BTreeSet<String>,
-) -> Result<(flume::Sender<BTreeSet<String>>, flume::Receiver<()>), String> {
+) -> Result<(flume::Sender<BTreeSet<String>>, flume::Receiver<bool>), String> {
     let (skips, skipped) = flume::unbounded::<BTreeSet<String>>();
     let (sender, changes) = flume::unbounded();
     thread::Builder::new()
@@ -67,7 +77,7 @@ pub fn watch(
         .spawn(move || {
             let mut skip = skip;
             let mut known = stamps(&root, &skip);
-            if sender.send(()).is_err() {
+            if sender.send(false).is_err() {
                 return;
             }
             loop {
@@ -80,8 +90,9 @@ pub fn watch(
                     Err(RecvTimeoutError::Timeout) => {
                         let now = stamps(&root, &skip);
                         if now != known {
+                            let reshaped = reshaped(&known, &now);
                             known = now;
-                            if sender.send(()).is_err() {
+                            if sender.send(reshaped).is_err() {
                                 return;
                             }
                         }

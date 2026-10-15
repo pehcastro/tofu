@@ -53,8 +53,12 @@ pub fn open_repo(
             "--repo draws the Changes pane, IGIT-1, not {other}"
         ));
     }
+    Ok(mount(path, window, cx)?.into())
+}
+
+pub fn mount(project: &Path, window: &mut Window, cx: &mut App) -> Result<Entity<Git>, String> {
     kit::load_fonts(cx)?;
-    let changes = match Repo::open(path) {
+    let changes = match Repo::open(project) {
         Ok(repo) => {
             eprintln!(
                 "desk: git opened {} on {}: {} changes",
@@ -65,13 +69,13 @@ pub fn open_repo(
             Changes::Repo(Box::new(repo))
         }
         Err(error) => {
-            eprintln!("desk: git could not open {}: {error}", path.display());
+            eprintln!("desk: git could not open {}: {error}", project.display());
             Changes::Refused(error.to_string().into())
         }
     };
     let git = Git::open(Pane::Changes, changes, false, false, window, cx);
     git.update(cx, |git, cx| git.watch(cx));
-    Ok(git.into())
+    Ok(git)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -106,21 +110,12 @@ impl Repo {
             skips: None,
         };
         repo.reload()?;
+        repo.reignore()?;
         Ok(repo)
     }
 
-    fn reload(&mut self) -> Result<(), GitError> {
-        self.branch = self
-            .git
-            .current_branch()?
-            .unwrap_or_else(|| DETACHED.to_owned())
-            .into();
-        let entries = self.git.status()?;
-        let ignored: BTreeSet<String> = entries
-            .iter()
-            .filter(|entry| entry.state == State::Ignored)
-            .map(|entry| entry.path.trim_end_matches('/').to_owned())
-            .collect();
+    fn reignore(&mut self) -> Result<(), GitError> {
+        let ignored = self.git.ignored()?;
         if ignored != self.ignored {
             if let Some(skips) = &self.skips
                 && skips.send(ignored.clone()).is_err()
@@ -129,7 +124,16 @@ impl Repo {
             }
             self.ignored = ignored;
         }
-        self.files = entries.into_iter().flat_map(rows).collect();
+        Ok(())
+    }
+
+    fn reload(&mut self) -> Result<(), GitError> {
+        self.branch = self
+            .git
+            .current_branch()?
+            .unwrap_or_else(|| DETACHED.to_owned())
+            .into();
+        self.files = self.git.changes()?.into_iter().flat_map(rows).collect();
         let mut was = std::mem::take(&mut self.first_seen);
         self.first_seen = self
             .files
@@ -273,21 +277,28 @@ impl Git {
         };
         repo.skips = Some(skips);
         self._watching = Some(cx.spawn(async move |this, cx| {
-            while changes.recv_async().await.is_ok() {
-                for () in changes.drain() {}
-                if this.update(cx, |git, cx| git.refresh(cx)).is_err() {
+            while let Ok(first) = changes.recv_async().await {
+                let reshaped = changes.drain().fold(first, |any, next| any || next);
+                if this
+                    .update(cx, |git, cx| git.refresh(reshaped, cx))
+                    .is_err()
+                {
                     return;
                 }
             }
         }));
     }
 
-    fn refresh(&mut self, cx: &mut Context<Self>) {
+    fn refresh(&mut self, reshaped: bool, cx: &mut Context<Self>) {
         let Changes::Repo(repo) = &mut self.changes else {
             return;
         };
         let started = Instant::now();
-        match repo.reload() {
+        let reignored = match reshaped {
+            true => repo.reignore(),
+            false => Ok(()),
+        };
+        match reignored.and_then(|()| repo.reload()) {
             Ok(()) => eprintln!(
                 "desk: git tree changed, {} changes in {} ms",
                 repo.files.len(),

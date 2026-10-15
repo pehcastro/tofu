@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::env;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -153,6 +153,29 @@ impl GitBinary {
         }
         let names = parse::shortlog(&self.run(&["shortlog", "-sne", "HEAD"], None)?)?;
         Ok(self.names.get_or_init(|| names))
+    }
+
+    pub fn changes(&self) -> Result<Vec<Entry>, GitError> {
+        parse::status(&self.run(&["status", "--porcelain=v2", "-z"], None)?)
+    }
+
+    pub fn ignored(&self) -> Result<BTreeSet<String>, GitError> {
+        let out = self.run(
+            &[
+                "ls-files",
+                "-z",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "--directory",
+            ],
+            None,
+        )?;
+        Ok(out
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(|path| path.trim_end_matches('/').to_owned())
+            .collect())
     }
 
     pub fn drift(&self) -> Result<Option<Drift>, GitError> {

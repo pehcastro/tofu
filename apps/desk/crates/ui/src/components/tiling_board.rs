@@ -48,7 +48,7 @@ pub type Body<V> = Box<dyn Fn(&Stack, Rect, &Theme, &mut Context<V>) -> AnyEleme
 pub type Title = Box<dyn Fn(TileId, &Module, TabMark, &App) -> Tab>;
 pub type Subtitle = Box<dyn Fn(TileId, &Module, &App) -> Option<AnyElement>>;
 pub type Settled = Box<dyn Fn(&[Workspace], usize, Rect)>;
-pub type Expand<V> = Box<dyn Fn(&Module, &str, &mut Window, &mut Context<V>)>;
+pub type Expand<V> = Box<dyn Fn(&Module, TileId, &str, &mut Window, &mut Context<V>)>;
 
 pub struct Host<V: 'static> {
     pub board: Lens<V>,
@@ -479,9 +479,10 @@ impl<V: 'static> TilingBoard<V> {
         self.hovered.or(self.current()?.focus())
     }
 
-    pub fn aimed_module(&self) -> Option<Module> {
-        let stack = self.current()?.stack(self.aimed_tile()?)?;
-        stack.modules.get(stack.active).cloned()
+    pub fn aimed_module(&self) -> Option<(TileId, Module)> {
+        let tile = self.aimed_tile()?;
+        let stack = self.current()?.stack(tile)?;
+        Some((tile, stack.modules.get(stack.active)?.clone()))
     }
 
     fn send_to_new(&mut self) {
@@ -961,7 +962,7 @@ impl<V: 'static> TilingBoard<V> {
                     view.update(cx, |view, cx| {
                         let board = lens(view);
                         let workspace = board.active_name();
-                        (board.host.expand)(module, &workspace, window, cx)
+                        (board.host.expand)(module, tile, &workspace, window, cx)
                     });
                 }
             },
@@ -1036,19 +1037,30 @@ impl<V: 'static> TilingBoard<V> {
             }
         });
         let plus_id = SharedString::from(format!("tiling-plus-{}", tile.0));
-        let rows: Vec<MenuItem> = self
+        let row = |module: &Module| {
+            let tab = (self.host.title)(tile, module, TabMark::Close, cx);
+            let row = MenuItem::action(tab.label);
+            match tab.icon {
+                Some(mark) => row.icon(mark),
+                None => row,
+            }
+        };
+        let (plugins, built_in): (Vec<&Module>, Vec<&Module>) = self
             .host
             .spawnable
             .iter()
-            .map(|module| {
-                let tab = (self.host.title)(tile, module, TabMark::Close, cx);
-                let row = MenuItem::action(tab.label);
-                match tab.icon {
-                    Some(mark) => row.icon(mark),
-                    None => row,
-                }
-            })
-            .collect();
+            .partition(|module| matches!(module, Module::Plugin(_)));
+        let mut rows: Vec<MenuItem> = built_in.iter().map(|module| row(module)).collect();
+        let mut picks: Vec<Option<Module>> = built_in.into_iter().cloned().map(Some).collect();
+        if !plugins.is_empty() {
+            rows.push(MenuItem::Submenu {
+                label: "Plugins".into(),
+                icon: Some(Glyph::Rocket.into()),
+                items: plugins.iter().map(|module| row(module)).collect(),
+            });
+            picks.push(None);
+            picks.extend(plugins.into_iter().cloned().map(Some));
+        }
         let plus = window
             .use_keyed_state(plus_id.clone(), cx, |_, cx| {
                 let button = MenuButton::new("Add a tab".into(), rows, cx);
@@ -1069,10 +1081,9 @@ impl<V: 'static> TilingBoard<V> {
             .read(cx)
             .clone();
         let adding = cx.entity().downgrade();
-        let modules = self.host.spawnable.clone();
         plus.update(cx, |button, _| {
             button.on_pick(move |pick, _, cx| {
-                let Some(module) = modules.get(*pick).cloned() else {
+                let Some(module) = picks.get(*pick).cloned().flatten() else {
                     return;
                 };
                 if let Some(view) = adding.upgrade() {

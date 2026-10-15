@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use desk_core::control::TELL_BADGE;
 use desk_ui::components::overlay::toast;
 use desk_ui::components::paint::ink;
 
@@ -87,7 +86,7 @@ pub fn frame(
                 .bottom(px(TOAST_BOTTOM))
                 .flex()
                 .justify_center()
-                .child(toast(message, TELL_BADGE, theme, on_dismiss).w_auto())
+                .child(toast(message, None, theme, on_dismiss).w_auto())
         }))
 }
 

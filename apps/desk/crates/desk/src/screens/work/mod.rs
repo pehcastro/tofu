@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -29,6 +29,8 @@ use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark};
 use crate::modules::chat::cassette::{Replay, Step};
 use crate::modules::chat::{self, Chat, ChatMirror, Find};
 use crate::modules::file_edits::{self, FileEdits};
+#[cfg(feature = "module-git")]
+use crate::modules::git;
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
 use crate::modules::subagents::{self, ExpandAgent, Subagents};
@@ -40,12 +42,13 @@ const BOARD: &str = "36-agents";
 const WORK_NAME: &str = "work";
 const PLUGINS_POLL: Duration = Duration::from_millis(50);
 const MIRROR_NAME: &str = "Chat (mirror)";
-const OPENABLE: [Module; 5] = [
+const OPENABLE: [Module; 6] = [
     Module::Chat,
     Module::SubAgents,
     Module::FileEdits,
     Module::Shells,
     Module::Terminal,
+    Module::SourceControl,
 ];
 
 fn tile_modules() -> Vec<Module> {
@@ -98,7 +101,27 @@ struct Mounted {
     terminals: Terminals,
     mirrors: Mirrors,
     plugins: Mounts,
+    source_control: SourceControl,
     project: PathBuf,
+}
+
+#[derive(Clone, Default)]
+struct SourceControl(Rc<RefCell<Option<Result<AnyView, SharedString>>>>);
+
+impl SourceControl {
+    fn view(&self) -> Option<Result<AnyView, SharedString>> {
+        self.0.borrow().clone()
+    }
+}
+
+#[cfg(feature = "module-git")]
+fn mount_git(project: &Path, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
+    git::mount(project, window, cx).map(Into::into)
+}
+
+#[cfg(not(feature = "module-git"))]
+fn mount_git(_: &Path, _: &mut Window, _: &mut App) -> Result<AnyView, String> {
+    Err("source control needs the git module: rebuild with --features module-git".to_owned())
 }
 
 #[derive(Default)]
@@ -154,15 +177,6 @@ impl Mounts {
             });
             view
         })
-    }
-
-    fn in_view(&self, plugin: &'static Plugin) -> Option<(usize, TileId)> {
-        let views = self.0.borrow();
-        views
-            .open
-            .iter()
-            .find(|open| open.plugin == plugin.id && open.at.0 == views.workspace)
-            .map(|open| open.at)
     }
 
     fn workspace(&self) -> usize {
@@ -241,6 +255,7 @@ fn build(
         terminals: Terminals::default(),
         mirrors: Mirrors::default(),
         plugins: Mounts::default(),
+        source_control: SourceControl::default(),
         project,
         store,
         chat,
@@ -321,8 +336,8 @@ fn build(
                 spawnable: tile_modules(),
                 spawns: tile_modules(),
                 settled: settled(layouts),
-                expand: Box::new(move |module, workspace, _, cx| {
-                    expand(&expandable, module, workspace, cx)
+                expand: Box::new(move |module, tile, workspace, _, cx| {
+                    expand(&expandable, module, tile, workspace, cx)
                 }),
                 origin: (0.0, 0.0),
                 below: 0.0,
@@ -385,7 +400,8 @@ fn glyph(module: &Module) -> Option<Glyph> {
         Module::FileEdits => Some(Glyph::File),
         Module::Shells | Module::Terminal => Some(Glyph::Terminal),
         Module::Plugin(id) => plugins::find(id).map(|plugin| plugin.glyph),
-        Module::Editor | Module::Browser | Module::SourceControl => None,
+        Module::SourceControl => Some(Glyph::Branch),
+        Module::Editor | Module::Browser => None,
     }
 }
 
@@ -602,7 +618,21 @@ fn body(
             )
             .into_any_element(),
         },
-        Module::Editor | Module::Browser | Module::SourceControl => empty_state(
+        Module::SourceControl => match mounted.source_control.view() {
+            Some(Ok(view)) => view.into_any_element(),
+            Some(Err(why)) => empty_state(
+                "work-source-control-refused",
+                "Source control did not open",
+                Some(why),
+                &[],
+                &[],
+                theme,
+                |_, _, _| {},
+            )
+            .into_any_element(),
+            None => div().into_any_element(),
+        },
+        Module::Editor | Module::Browser => empty_state(
             SharedString::from(format!("work-empty-{}", module.name())),
             module.name().to_owned(),
             Some("not mounted in the work screen yet".into()),
@@ -635,10 +665,17 @@ impl Expandable {
     }
 
     fn find(&self, name: &str) -> Option<&'static str> {
-        ["Chat", SUB_AGENTS, "File edits", "Shells", "Terminal"]
-            .into_iter()
-            .chain(plugins::all().map(|plugin| plugin.name.as_str()))
-            .find(|tab| *tab == name)
+        [
+            "Chat",
+            SUB_AGENTS,
+            "File edits",
+            "Shells",
+            "Terminal",
+            "Source control",
+        ]
+        .into_iter()
+        .chain(plugins::all().map(|plugin| plugin.name.as_str()))
+        .find(|tab| *tab == name)
     }
 }
 
@@ -679,7 +716,13 @@ impl Render for Tiled {
     }
 }
 
-fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<Work>) {
+fn expand(
+    mounted: &Mounted,
+    module: &Module,
+    tile: TileId,
+    workspace: &str,
+    cx: &mut Context<Work>,
+) {
     let tiled = |view: AnyView, chat: Option<Entity<Chat>>, cx: &mut Context<Work>| -> AnyView {
         cx.new(|cx| Tiled {
             glyph: glyph(module),
@@ -705,17 +748,23 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
             None => return eprintln!("desk: work: no terminal is open, so none expands"),
         },
         Module::Plugin(id) => match plugins::find(id) {
-            Some(plugin) => match mounted.plugins.in_view(plugin) {
-                Some(at) => tiled(mounted.plugins.view(plugin, at, cx), None, cx),
-                None => return eprintln!("desk: work: plugin {id} has no tile, so none expands"),
-            },
+            Some(plugin) => {
+                let at = (mounted.plugins.workspace(), tile);
+                tiled(mounted.plugins.view(plugin, at, cx), None, cx)
+            }
             None => {
                 return eprintln!(
                     "desk: work: plugin {id} is not installed, so it does not expand"
                 );
             }
         },
-        Module::Editor | Module::Browser | Module::SourceControl => {
+        Module::SourceControl => match mounted.source_control.view() {
+            Some(Ok(view)) => tiled(view, None, cx),
+            Some(Err(_)) | None => {
+                return eprintln!("desk: work: source control did not open, so it does not expand");
+            }
+        },
+        Module::Editor | Module::Browser => {
             return eprintln!(
                 "desk: work: {} is not mounted, so it does not expand",
                 module.name()
@@ -860,6 +909,21 @@ impl Work {
             }
             let mirror = chat::mirror(self.mounted.chat.clone(), window, cx);
             tiles.open.push((at, mirror));
+        }
+    }
+
+    fn keep_source_control(&self, window: &mut Window, cx: &mut App) {
+        let placed = !self.placed(&Module::SourceControl).is_empty();
+        let mut held = self.mounted.source_control.0.borrow_mut();
+        match (placed, held.is_some()) {
+            (true, false) => {
+                *held = Some(mount_git(&self.mounted.project, window, cx).map_err(Into::into));
+            }
+            (false, true) => {
+                *held = None;
+                eprintln!("desk: source control closed, so it stops watching the tree");
+            }
+            (true, true) | (false, false) => {}
         }
     }
 
@@ -1087,7 +1151,9 @@ impl Work {
         let key = stroke.key.as_str();
         if key == "enter" && held.control && held.shift && !held.alt {
             match self.board.aimed_module() {
-                Some(module) => expand(&self.mounted, &module, &self.board.active_name(), cx),
+                Some((tile, module)) => {
+                    expand(&self.mounted, &module, tile, &self.board.active_name(), cx)
+                }
                 None => eprintln!("desk: work: no tile is focused, so nothing expands"),
             }
             return;
@@ -1388,6 +1454,7 @@ impl Render for Work {
         self.keep_terminals(cx);
         self.keep_mirrors(window, cx);
         self.keep_plugins();
+        self.keep_source_control(window, cx);
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));
