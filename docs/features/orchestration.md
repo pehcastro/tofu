@@ -52,11 +52,13 @@ Claude Code and Codex are general agents: the orchestrator, the sub-agents
 and their rules are yours to build. tofu is a coding harness that brings
 them.
 
-**The lead does one small piece itself.** Work that stays in one directory
-and within the lead's budget of changed source lines is the lead's: it edits,
-checks and answers without spawning. Source in a second directory, or past the
-budget, is refused, and the refusal names the sub-agent to spawn. A program's
-own output redirected into a file, such as a schema printer, is not counted.
+**The lead does one small piece itself.** The lead may change up to 200
+source lines a turn, in any folder: it edits, checks and answers without
+spawning. A write counts only the lines it changes, and a file the lead read
+with `cat` counts as read. Past the budget an edit is refused, and the
+refusal names the sub-agent to spawn. A program's own output redirected into
+a file, such as a schema printer, is not counted. On a long edit task the
+lead finishes in 78 s where it took 141 s, and omp takes 91 s.
 
 **Each sub-agent starts clean**, with only the rules for its own piece. A
 sub-agent that writes Go never reads the React rules. Against the same agents
@@ -67,7 +69,12 @@ and Rust caught a stack overflow on deep input in 3 of 3 runs against 1 of 6.
 **Side by side is faster.** The same app task took 4 min 58 s with 5 of 5
 sub-agents running at once, and 21 min 18 s when none overlapped. Low effort
 finished the same hidden tests in 63 s where medium took 78 s, so the lead
-sets effort per spawn.
+sets effort per spawn. An effort the model lacks runs at the nearest one it
+has, so a spawn never fails on it.
+
+**A sub-agent is light.** Each one allocates about 35% less than it did, and
+under one vCPU and 128 MB of memory tofu runs ten sub-agents at about 0.7 MB
+each.
 
 **Nothing you type waits on a sub-agent.** Sub-agents used to run inside the
 lead's tool call, and a message you typed waited 9 minutes for the lead.

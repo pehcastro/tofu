@@ -32,10 +32,18 @@ the target, so this is rare, and nothing about it needs a setting.
 **A cache read costs a fraction of fresh input**, so the prefix is laid out
 to stay identical between requests. On Anthropic's wire, tofu marks the end
 of the tool list, the last stable system block, and up to two points in the
-history: the newest message and the last settled exchange, once the history
-passes 4,096 characters. The cache lives one hour on a subscription. On the
-Codex wire, requests carry the session as a cache key. Over 24 turns, 88% of
-billed input was a cache read.
+history: the newest message, from the first message on, and the last settled
+exchange, once the history passes 4,096 characters. The cache lives one hour
+on a subscription. On the Codex wire, requests carry the session as a cache
+key. Over 24 turns, 88% of billed input was a cache read.
+
+**A request carries only what the step needs.** Tool descriptions say what a
+model needs before it calls a tool, and the rest of the guidance arrives in
+the error when its case happens. A `tofu run` whose task names a few files in
+one folder leaves out the sub-agent text, since the lead does that work
+itself. Each request is about a fifth smaller for it: on a Go task with
+Sonnet 5.5, median input is about 74k tokens where it was 105k, at the same
+quality.
 
 **A target from the model's window, with a cap.** tofu holds 20,000 tokens of
 the window for the answer and forks at 80% of the rest, so a 200,000 token

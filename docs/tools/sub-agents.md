@@ -28,7 +28,7 @@ limits in settings.
 | `spawn` | `task` | the brief, kept whole |
 | `spawn` | `owns` | the paths the sub-agent may write |
 | `spawn` | `agent` | a defined sub-agent, on its own model |
-| `spawn` | `effort` | `none` to `max`; left out, the lead's |
+| `spawn` | `effort` | `none` to `max`; left out, the lead's; one the model lacks runs at the nearest it has |
 | `message` | `to`, `text`, `stop` | more work, a correction, or a stop; resumes a finished one |
 | `subagents` | none | each sub-agent's state, steps and last tool |
 | `ask` | `question`, `why`, `default` | the default stands when no answer comes |

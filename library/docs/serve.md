@@ -10,7 +10,7 @@ verbs: serve
 `tofu serve --stdio` runs one project for another program, the desk app or a script of your own. It reads
 JSON-RPC 2.0 requests on standard input and writes responses and events on standard output, one JSON object
 a line, in the protocol `tofu.host/1`. Standard error carries logs and nothing else. There is no port and no
-daemon: the program that starts tofu owns it.
+daemon: the program that starts tofu owns it. Idle, it uses about 0.35% of a core. `session.list` answers about 4x and `session.trace` about 2x faster than in 0.5.14, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the same output.
 
 Every event names its `session`, `turn`, `item`, `seq`, `agent` for a sub-agent's, and `ref`, the token ctrl+r
 types for its item. Events carry data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool

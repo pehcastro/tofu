@@ -21,7 +21,8 @@ asks the vendor's usage endpoint only when it holds no fresh reading.
 serve` and the desk, shares one cache in `~/.tofu/quota/latest/`, with a
 lock per account so only one of them asks at a time. Three `tofu serve`
 processes opened at once on a cold cache ask once per account, not once per
-caller.
+caller. `tofu usage` checks every account at once rather than one after
+another.
 
 **A refusal is honoured, and the number stays.** When the endpoint answers
 429 or fails, tofu waits exactly as long as its `Retry-After` says, or 1
@@ -40,7 +41,9 @@ seconds at 99%, unless a reply already said more recently.
 with the rate limit, tofu asks the same step again on your next signed-in
 account of that subscription, `claude-sub` to `claude-sub`, without asking
 you. The screen notes the move and `tofu serve` sends `turn.account` with
-the reason `moved`. Each account is tried at most once per step.
+the reason `moved`. Each account is tried at most once per step. The footer
+names the account that served the last request, so it follows a rotation, a
+pick in the model picker and a new login.
 
 **Then you choose, because another source is other money.** When every
 account of the subscription is at its limit and another subscription you

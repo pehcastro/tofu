@@ -61,6 +61,8 @@ without copying the list.
 - **Exclude a model**: write `~/.tofu/models/<provider>/<model>.yaml` with
   `use: excluded` and a `reason:`. Delete the file to undo.
 
+`tofu models reload` also finds the newest build of Jev, the model that judges each tool call, and pins it; when the gate was calibrated on an older build, reload says the gate runs in shadow until it is calibrated on the new one. The app's start-up reload only reports a newer build.
+
 ## Commands
 
 ```

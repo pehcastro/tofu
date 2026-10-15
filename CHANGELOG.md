@@ -10,6 +10,35 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc1 - 2026-10-14
+
+tofu starts, resumes and idles faster and lighter, and sends fewer tokens for the same work.
+
+### Changed
+
+- The interface draws its first screen in about 81 ms on a fresh start and 104 ms when resuming a 2,130-event session, against 184 and 285 ms in 0.5.14 (`bench/startup`). It opens its credential store once instead of about twenty times, reads only what a resumed session shows, and loads the time zone and git identity beside the first frame.
+- tofu sitting idle uses about 2.4% of a core in a chat, 1.1% on the set-up screen and 0.35% as `tofu serve`, under half of 0.5.14: the input reader waits on the console instead of polling every 10 ms, the screen redraws only when something changed, and the welcome animations share one clock (`bench/profile`).
+- Verbs start in about 6 ms of package init instead of 41 ms; `docs`, `changelog`, `context` and `settings` answer about 1.7x faster and `tofu usage` checks every account at once (`bench/cli`).
+- `tofu serve` answers `session.list` about 4x and `session.trace` about 2x faster, and the `boardy` verbs and `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the same output (`bench/serve`, `bench/boardy`).
+- Each request is about a fifth smaller: tool descriptions say only what a model needs before a call, and the rest arrives in the error when the case happens. A `tofu run` whose task names a few files in one folder leaves out the sub-agent text. A conversation is cached from its first message. On the `bench/rivals` Go task with Sonnet 5.5, median input fell from about 105k to 74k tokens with quality unchanged.
+- The lead may change up to 200 source lines a turn in any folder; a write counts only the lines it changes, and a file read with `cat` counts as read. On the `bench/rivals` long edit tofu takes 78 s against 141 s before (omp: 91 s).
+- `codex-sub/gpt-5.6-sol` runs without the plan tool, which took tofu-gpt from 11 requests to 7 on `bench/rivals`. A model file can say `plan: no`.
+- The `thinkingSummary` setting `omitted` now sends the thinking body Claude Code sends on claude-sub and the one codex sends on codex-sub; `summarized`, the default, sends omp's. Sonnet's thinking tokens are recorded in the session.
+- A sub-agent allocates about 35% less, and under one vCPU and 128 MB tofu runs ten sub-agents at about 0.7 MB each (`bench/minimal`).
+- A rule can carry an `unless` pattern that vetoes a match on its line; the browse rule no longer fires on a domain inside an import or module line.
+- Episode memory compacts after the answer instead of before it, and its calls reuse their own cache.
+- `tofu models reload` finds the newest Jev build and pins it (Jev 1.14 today); when the gate's calibration names an older build, it says the gate runs in shadow until it is calibrated again. The app's start-up reload only reports a newer build.
+
+### Fixed
+
+- The footer names the account that served the last request, and follows a rotation, a pick and a login.
+- A reply cut short by Esc, a closed terminal or a hangup is kept and shown as interrupted on `tofu --continue`; quitting waits at most 3 s for it.
+- On Linux and macOS a hangup quits tofu cleanly instead of killing it without saving.
+- A spent subscription rotates to the next account of the same source, asks before another source, or waits and resumes by itself.
+- A spawn asking for an effort the model lacks runs at the nearest one instead of failing.
+- A lead working alone on a small task no longer hands the whole task to a sub-agent because the spawn tool told it to.
+- 0.5.14's entry said Sonnet took 5 requests, 112k input tokens and 48 s on `bench/rivals`; that was measured on a build carrying a change 0.5.14 did not hold. This release's own numbers are above.
+
 ## 0.5.14 - 2026-10-13
 
 A lead that never freezes, an auto mode that asks only when it matters, and tofu ahead of Claude Code on the same task.

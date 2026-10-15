@@ -31,6 +31,17 @@ model at its next step.
 to 169 ms, and the sub-agents tab opens in 2.0 ms, down from 59.6 ms, all
 inside the 16.7 ms of a 60 Hz frame.
 
+**It opens at once.** The first screen draws in about 81 ms on a fresh start
+and 104 ms when `tofu --continue` resumes a 2,130-event session, where it took
+184 and 285 ms. tofu opens the credential store once, reads only what the
+resumed session shows, and loads the time zone and git identity beside the
+first frame.
+
+**It costs nothing while you read.** Sitting idle, tofu uses about 2.4% of a
+core in a chat and 1.1% on the setup screen, under half of what it used: the
+input reader waits on the console instead of polling, the screen redraws only
+when something changed, and the welcome animations share one clock.
+
 ## Shortcuts and the gate
 
 - **Write the prompt in your own editor**: `Ctrl+G` opens what you have
@@ -65,8 +76,9 @@ inside the 16.7 ms of a 60 Hz frame.
   opens above the composer with its recommended option marked. A digit or
   `Enter` chooses, **other** takes your own words, and in auto the work
   keeps going while you decide.
-- **See the quota**: the footer shows the fullest subscription window, and
-  `read 12m ago` beside a stale reading. See [Subscription
+- **See the quota**: the footer names the account that served the last
+  request and shows the fullest subscription window, and `read 12m ago`
+  beside a stale reading. See [Subscription
   quota](/docs/llms/quota).
 - **Leave it in another tab**: tofu reports working, waiting on you, done or
   failed to the terminal over OSC 7501, so a terminal that shows it tells

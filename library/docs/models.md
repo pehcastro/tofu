@@ -22,7 +22,7 @@ The orchestrator is the model you talk to. A sub-agent runs its own model,
 and a tier is a name for a model a sub-agent file can point at:
 `@genius`, `@smart`, `@worker` and `@dumb`. A file Claude Code also reads,
 in `.claude/agents`, may say `opus`, `sonnet` or `haiku` instead, which
-mean the genius, smart and worker tiers when those are set.
+mean the genius, smart and worker tiers when those are set. The `thinkingSummary` setting picks the thinking a request asks for: `summarized`, the default, asks Claude for a summary for the sub-agents feed, and `omitted` asks for none and sends the thinking body Claude Code sends on `claude-sub` and the one codex sends on `codex-sub`. Either way, Sonnet's thinking tokens are recorded in the session. A spawn asking for an effort the model lacks runs at the nearest one it has.
 
 ## Where it lives
 
@@ -52,7 +52,7 @@ subscription's default.
 
 `tofu models reload` asks each signed-in account which models it serves,
 reads models.dev for their facts, and writes each id tofu does not know
-into the catalog, allowed and never the default. Efforts and image input
+into the catalog, allowed and never the default, and pins the newest Jev build (the gate runs in shadow until calibrated on it). Efforts and image input
 come from the newest allowed model of its family, so `claude-sonnet-5-5`
 follows `claude-sonnet-5`, else from models.dev. A model without tool
 calls, or one the account stopped serving, is excluded. A catalog file

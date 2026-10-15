@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.5.14"
+const Version = "0.5.15-rc1"
 
 const GateAskArgsBytes = 4096
 
@@ -174,6 +174,11 @@ const (
 	ShellRewriteHeadBytes    = 64
 	ShellConsoleColumns      = 1024
 	ShellConsoleRows         = 50
+	ShellMinColumns          = 2
+	ShellMaxRows             = 500
+	ShellRawRingBytes        = 1048576
+	ShellInputMaxBytes       = 65536
+	ShellHandBackNoteChars   = 500
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000

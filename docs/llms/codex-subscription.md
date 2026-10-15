@@ -9,7 +9,8 @@ updated: 2026-10-05
 at OpenAI the way the Codex command line does, receives the result on port
 1455 of this machine, stores it beside any Claude credential, and speaks the
 Codex protocol. Its default model is `codex-sub/gpt-5.6-sol`, and it accepts
-every effort from `none` to `max`.
+every effort from `none` to `max`. It runs without the plan tool, which
+took a task on the rivals bench from 11 requests to 7.
 
 ## Claude and Codex in one session
 

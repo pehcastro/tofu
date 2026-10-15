@@ -99,14 +99,25 @@ per language.
   [Orchestration](/docs/features/orchestration).
 - **Sub-tickets and threads** in Boardy, and `tofu learn` names the jobs you
   repeat and what each costs.
-- **Ahead on the same task**: on a Go task with Sonnet 5.5, tofu takes 5
-  requests and 112k input tokens where Claude Code takes 6 and 151k, at
-  the same quality, with the least memory of the tools measured.
 - **Auto mode that asks only when it matters**: reads, help and work inside
   an agent's own paths run; what is destructive or leaves the project asks.
   See [Asking](/docs/features/asking).
 - **A lead that never freezes**: a refused sub-agent no longer stops the
   others, and Esc or Ctrl+C always ends a turn.
+- **Faster and lighter**: the first screen draws in about 81 ms, 104 ms on a
+  resumed 2,130-event session; idle tofu uses under half the CPU it did;
+  verbs start in about 6 ms, and `tofu serve` and `boardy` answer up to 4x
+  faster. See [The interface](/docs/features/interface).
+- **Smaller requests**: on a Go task with Sonnet 5.5, median input is about
+  74k tokens where it was 105k, at the same quality, and the lead finishes a
+  long edit in 78 s where omp takes 91. See
+  [Context](/docs/features/context).
+- **A reply is never lost**: one cut by Esc, a closed terminal or a hangup
+  comes back marked interrupted on `tofu --continue`. See
+  [Sessions](/docs/features/sessions).
+- **Accounts that follow you**: the footer names the account that served the
+  last request, and a spent subscription moves to the next account. See
+  [Subscription quota](/docs/llms/quota).
 
 ## 0.4
 

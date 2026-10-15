@@ -9,7 +9,7 @@ verbs: session, context, shells, migrate
 
 A session is one conversation with tofu: every message, tool call and sub-agent, recorded as it
 happens. You can continue it later, read it back, or give it a name. The session you last worked in
-is the head, and that is the one `tofu --continue` opens.
+is the head, and that is the one `tofu --continue` opens. A reply cut short by Esc, a closed terminal or a hangup is kept as far as it got and shows as interrupted on `tofu --continue`; quitting waits at most 3 s for it. On Linux and macOS a hangup quits tofu the way a person's quit does, saving first.
 
 A conversation keeps one name for its whole life, such as `tidy-moss-vole#12cp3.2`: the name, the
 family tag after `#`, and the generation after `.`. A fork to stay under the context budget,

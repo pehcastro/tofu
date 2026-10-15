@@ -36,6 +36,10 @@ one go, refusing while its turn runs unless you pass `stop: true`. Two sessions 
 only with the setting `oneTurnPerProject` off; while it is on, the default, the second turn ends
 `failed` and says the project is busy.
 
+**It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x
+faster than before, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the
+same output. An idle `tofu serve` uses about 0.35% of a core.
+
 ## What a frontend can ask
 
 `initialize` answers `capabilities`, one name per family of methods, so a client can tell an older

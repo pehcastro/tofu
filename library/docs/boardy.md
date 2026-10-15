@@ -9,7 +9,7 @@ summary: boards of tickets kept as markdown files under the tofu home, numbered 
 Boardy keeps a project's tickets as plain markdown files, the way a Jira or
 Linear board keeps them on a server. A project holds as many boards as it
 needs, each with a short key such as `DEMO` or `OPS`, and each board numbers
-its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`.
+its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`. On a board of 1,500 tickets the `boardy` verbs and the `boardy.*` calls of `tofu serve` answer in about half the time they took in 0.5.14, with the same output.
 
 A ticket has front matter (type, status, assignee, priority P0 to P4,
 points, owns, depends, blocks, relates, duplicates, epic, sprint, labels,

@@ -25,6 +25,12 @@ shell, `typecheck` wraps `tsc`, `test` wraps Vitest, `github_pr_diff` wraps
 | [Sub-agents](/docs/tools/sub-agents) | spawn, message, subagents, ask |
 | [Browser](/docs/automation/browser-tools) | browser_tabs, browser_observe, browser_act, browser_read, browser_do, browser_motion |
 
+Each tool's description says only what the model needs before it calls the
+tool. The guidance for a case the model rarely meets, such as an `edit` on a
+file that does not exist, arrives in the error when that case happens, so every
+request is smaller and the model still gets the help at the moment it needs
+it. See [Context](/docs/features/context).
+
 ## What tofu does to every result
 
 What the model reads is what it pays for, so tofu shapes every result before

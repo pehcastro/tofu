@@ -85,4 +85,11 @@ session runs a turn, a turn from another session in the same project
 is refused. Turn it off to run several sessions in one repository at
 once: `tofu settings set oneTurnPerProject false`.
 
+`thinkingSummary` decides what a model sends back of its thinking.
+`summarized`, the default, asks for a summary, which streams to the
+sub-agents feed. `omitted` asks for none and sends the thinking request the
+vendor's own command line sends: Claude Code's on `claude-sub` and codex's on
+`codex-sub`. Either way, the thinking tokens Sonnet spends are recorded in
+the session.
+
 `tofu settings get <key>` prints one value. Both take `--json`.

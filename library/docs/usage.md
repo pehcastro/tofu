@@ -11,7 +11,16 @@ windows, how full each one is and when it resets. A Claude subscription
 has a 5 hour and a 7 day window, and sometimes a 7 day window for one
 model; a ChatGPT subscription has the windows its plan carries. The app
 shows the fullest window in its footer, and `tofu serve` answers the same
-reading in `query.usage` and pushes it as `quota.updated`.
+reading in `query.usage` and pushes it as `quota.updated`. `tofu usage`
+checks every account at once, not one after another.
+
+The footer names the account that served the last request, and follows a
+rotation, a pick in the model picker and a login. When a subscription's
+account is spent mid-turn, tofu asks the same step again on the next signed-in
+account of the same source without asking you, each account once per step.
+When every account of that source is spent, it asks before moving to another
+source, since that is other money, or waits for the reset and resumes by
+itself; typing resumes at once and `esc` cancels the wait.
 
 Every reading says where it came from and when:
 

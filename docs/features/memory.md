@@ -80,8 +80,9 @@ before it acts on it. Where tofu departs:
 - **The view fits the context target.** It takes at most half the room left
   under the target, capped at 32 KB, where OptChat sends 64 to 128 KB.
 - **Your subscription writes the summaries.** The `memoryModel` setting,
-  `claude-sub/claude-haiku-4-5-20251001` by default, compacts between
-  turns, never on the classifier key.
+  `claude-sub/claude-haiku-4-5-20251001` by default, compacts after the
+  answer, so a summary never delays a reply, and never on the classifier
+  key. Its calls read their own shared part from cache.
 - **Entries get the same tree.** Each of the four scopes is its own log,
   tree and view, so `zoom` and `recall` work on entries as well as
   episodes.

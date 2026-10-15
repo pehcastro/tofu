@@ -81,9 +81,9 @@ builds a summary tree over a log of `kind` and `text` json lines and prints its 
 whole, older ones as summaries of at most 512 bytes, written by the `memoryModel` subscription model
 (`claude-sub/claude-haiku-4-5-20251001`), never the OpenRouter key. The tree and view are saved, so a
 second run calls no model. Its last line says how many nodes were summarized and how many model
-calls that took: a line over 512 bytes is asked for once more.
+calls that took: a line over 512 bytes is asked for once more. Calls over one chat share its text as a cached prefix, and an `input tokens:` line on stderr says how many were fresh, read from the cache and written to it.
 
-The episode summaries written between turns are memory-model calls too.
+The episode summaries are memory-model calls too, written after the answer so a summary never delays a reply.
 `tofu session trace <name>` lists them under `memory model`, with why
 each was asked, its tokens and its cost. They are not steps: `tofu
 session list` counts only the session's own model, and the trace never

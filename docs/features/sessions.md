@@ -22,6 +22,11 @@ commit by mistake.
 **Appended, not saved at the end,** so a crash keeps everything up to the
 last event, and `tofu --continue` picks up from there.
 
+**A cut reply is kept.** A reply cut short by `Esc`, a closed terminal or a
+hangup is saved as far as it got, and `tofu --continue` shows it marked
+interrupted. Quitting waits at most 3 s for it. On Linux and macOS a hangup
+quits tofu the way a person's quit does, saving first.
+
 **Never rewritten.** When a session forks to stay under its context budget,
 the old one keeps its whole record and points at the new one, and the new
 one carries every message you typed, word for word. tofu never deletes a

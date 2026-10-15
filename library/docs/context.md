@@ -32,6 +32,15 @@ A sub-agent's fork asks the model for its working state first. That
 request is the last step's history plus one question, so the provider
 reads nearly all of it from cache and writes only the newest step.
 
+On Anthropic's wire the history is marked for the cache from its first
+message, and the last settled exchange once the history passes 4,096
+characters. Tool descriptions say only what a model needs before a call; the
+guidance for a rarer case arrives in the error when that case happens. A
+`tofu run` whose task names a few files in one folder leaves out the
+sub-agent text. A request is about a fifth smaller for it: on the rivals Go
+task with Sonnet 5.5, median input is about 74k tokens where 0.5.14 sent
+105k, at the same quality.
+
 No request past the ceiling is sent. A conversation continued or resumed
 over it forks before its first request, and when neither the fork nor a
 trim brings a request under, the turn ends saying so instead of sending it.
