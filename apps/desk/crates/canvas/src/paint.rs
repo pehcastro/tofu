@@ -2,8 +2,9 @@ use desk_ui::components::paint::tint;
 use desk_ui::theme::{ColorToken, Theme};
 use draw_doc::Element;
 use gpui::{
-    App, BorderStyle, Bounds, PathBuilder, Pixels, Point, Rgba, SharedString, TextAlign, TextRun,
-    Window, fill, outline, point, px, rgb, rgb_to_hsla, size,
+    App, Background, BorderStyle, Bounds, Corners, Edges, PathBuilder, Pixels, Point, Rgba,
+    SharedString, TextAlign, TextRun, Window, fill, outline, point, px, quad, rgb, rgb_to_hsla,
+    size, transparent_black,
 };
 
 use crate::edit::Handle;
@@ -23,6 +24,10 @@ const CARET_WIDTH: f32 = 1.5;
 const FIELD_LEAST: f32 = 80.0;
 const FIELD_PAD: f32 = 4.0;
 const HATCHURE_SHARE: f32 = 0.5;
+const SKETCH_BELOW_ZOOM: f64 = 0.5;
+const SKETCH_SIDE: f32 = 24.0;
+const SKETCH_TEXT: f32 = 6.0;
+const GREEK_SHARE: f32 = 0.5;
 const DEFAULT_INKS: [&str; 3] = ["#000000", "#1e1e1e", "#000"];
 
 pub struct Palette {
@@ -80,6 +85,55 @@ pub struct Frame<'a> {
     pub palette: &'a Palette,
 }
 
+#[derive(Default)]
+pub struct Batch {
+    strokes: Vec<(Rgba, Pixels, PathBuilder)>,
+}
+
+impl Batch {
+    fn stroke(&mut self, color: Rgba, width: Pixels) -> &mut PathBuilder {
+        let at = match self
+            .strokes
+            .iter()
+            .position(|(have, wide, _)| *have == color && *wide == width)
+        {
+            Some(at) => at,
+            None => {
+                self.strokes
+                    .push((color, width, PathBuilder::stroke(width)));
+                self.strokes.len() - 1
+            }
+        };
+        &mut self.strokes[at].2
+    }
+
+    pub fn paint(self, window: &mut Window) {
+        for (color, _, path) in self.strokes {
+            if let Ok(path) = path.build() {
+                window.paint_path(path, color);
+            }
+        }
+    }
+}
+
+fn wings(tip: (f64, f64), from: (f64, f64)) -> Option<((f64, f64), (f64, f64))> {
+    let (dx, dy) = (from.0 - tip.0, from.1 - tip.1);
+    let length = dx.hypot(dy);
+    if length <= f64::EPSILON {
+        return None;
+    }
+    let reach = HEAD_LENGTH.min(length / 2.0);
+    let (ux, uy) = (dx / length, dy / length);
+    let wing = |turn: f64| {
+        let (sin, cos) = turn.sin_cos();
+        (
+            tip.0 + (ux * cos - uy * sin) * reach,
+            tip.1 + (ux * sin + uy * cos) * reach,
+        )
+    };
+    Some((wing(HEAD_SPREAD), wing(-HEAD_SPREAD)))
+}
+
 enum Head {
     Open,
     Solid,
@@ -113,7 +167,86 @@ impl Frame<'_> {
         )
     }
 
-    pub fn element(&self, element: &Element, editing: bool, window: &mut Window, cx: &mut App) {
+    pub fn sketch(&self, element: &Element, batch: &mut Batch, window: &mut Window) -> bool {
+        if self.view.zoom() >= SKETCH_BELOW_ZOOM {
+            return false;
+        }
+        let kind = Kind::of(element);
+        let (stroke, background, width) = self.inks(element);
+        if kind == Kind::Text {
+            let font = self.view.length(shape::font_size(element));
+            if font >= px(SKETCH_TEXT) {
+                return false;
+            }
+            let Some(color) = stroke else {
+                return true;
+            };
+            let origin = self.view.screen(self.origin, element.x, element.y);
+            let step = self.view.length(shape::line_step(element));
+            let rows = shape::label(element).map_or(0, |text| text.split('\n').count());
+            let thick = font * GREEK_SHARE;
+            for row in 0..rows {
+                let top = origin.y + step * row as f32 + (step - thick) / 2.0;
+                let bar = Bounds::new(
+                    point(origin.x, top),
+                    size(self.view.length(element.width), thick),
+                );
+                window.paint_quad(fill(bar, tint(color, color.alpha * GREEK_SHARE)));
+            }
+            return true;
+        }
+        let bounds = element.bounds();
+        let area = Bounds::from_corners(
+            self.view.screen(self.origin, bounds.min_x, bounds.min_y),
+            self.view.screen(self.origin, bounds.max_x, bounds.max_y),
+        );
+        if area.size.width.max(area.size.height) >= px(SKETCH_SIDE) {
+            return false;
+        }
+        if kind.traced() {
+            let Some(color) = stroke else {
+                return true;
+            };
+            let trace = shape::trace(element);
+            let path = batch.stroke(color, width);
+            if let Some((first, rest)) = trace.split_first() {
+                path.move_to(self.at(element, *first));
+                for point in rest {
+                    path.line_to(self.at(element, *point));
+                }
+            }
+            if kind == Kind::Arrow
+                && let [.., from, tip] = trace.as_slice()
+                && let Some((left, right)) = wings(*tip, *from)
+            {
+                path.move_to(self.at(element, left));
+                path.line_to(self.at(element, *tip));
+                path.line_to(self.at(element, right));
+            }
+            return true;
+        }
+        let side = area.size.width.min(area.size.height);
+        let round = element.extra.get("roundness").is_some_and(|r| !r.is_null());
+        let radius = match kind {
+            Kind::Ellipse => side / 2.0,
+            _ if round => side * ROUND_SHARE as f32,
+            _ => px(0.0),
+        };
+        let paint = |color: Option<Rgba>| -> Background {
+            color.map_or_else(|| transparent_black().into(), Background::from)
+        };
+        window.paint_quad(quad(
+            area,
+            Corners::all(radius),
+            paint(background),
+            Edges::all(width),
+            paint(stroke),
+            BorderStyle::Solid,
+        ));
+        true
+    }
+
+    fn inks(&self, element: &Element) -> (Option<Rgba>, Option<Rgba>, Pixels) {
         let opacity = shape::number(element, "opacity").unwrap_or(100.0) as f32 / 100.0;
         let faded = |color: Rgba| tint(color, color.alpha * opacity);
         let stroke = self
@@ -132,6 +265,11 @@ impl Frame<'_> {
             .view
             .length(shape::number(element, "strokeWidth").unwrap_or(1.0))
             .max(px(THINNEST));
+        (stroke, background, width)
+    }
+
+    pub fn element(&self, element: &Element, editing: bool, window: &mut Window, cx: &mut App) {
+        let (stroke, background, width) = self.inks(element);
         let dash = match shape::word(element, "strokeStyle") {
             Some("dashed") => Some([width * 4.0, width * 4.0]),
             Some("dotted") => Some([width, width * 2.0]),
@@ -260,21 +398,9 @@ impl Frame<'_> {
         (color, width): (Rgba, Pixels),
         window: &mut Window,
     ) {
-        let (dx, dy) = (from.0 - tip.0, from.1 - tip.1);
-        let length = dx.hypot(dy);
-        if length <= f64::EPSILON {
+        let Some((left, right)) = wings(tip, from) else {
             return;
-        }
-        let reach = HEAD_LENGTH.min(length / 2.0);
-        let wing = |turn: f64| {
-            let (sin, cos) = turn.sin_cos();
-            let (ux, uy) = (dx / length, dy / length);
-            (
-                tip.0 + (ux * cos - uy * sin) * reach,
-                tip.1 + (ux * sin + uy * cos) * reach,
-            )
         };
-        let (left, right) = (wing(HEAD_SPREAD), wing(-HEAD_SPREAD));
         let mut path = match head {
             Head::Open => PathBuilder::stroke(width),
             Head::Solid => PathBuilder::fill(),

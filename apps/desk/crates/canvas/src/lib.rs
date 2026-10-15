@@ -20,7 +20,7 @@ use std::ops::Range;
 use create::Mint;
 pub use create::Tool;
 use edit::Handle;
-use paint::{Frame, Palette};
+use paint::{Batch, Frame, Palette};
 use shape::Kind;
 use style::Style;
 pub use style::{BACKGROUNDS, FILLS, LINES, Pick, STROKES, WIDTHS};
@@ -606,10 +606,15 @@ impl Canvas {
             ..Default::default()
         };
         window.with_content_mask(Some(mask), |window| {
+            let mut batch = Batch::default();
             for element in self.scene.cull(visible) {
                 let shown = self.shown(element);
-                frame.element(shown, editing == Some(shown.id.as_str()), window, cx);
+                let edited = editing == Some(shown.id.as_str());
+                if edited || !frame.sketch(shown, &mut batch, window) {
+                    frame.element(shown, edited, window, cx);
+                }
             }
+            batch.paint(window);
             for moved in &self.preview {
                 let culled = self
                     .scene
