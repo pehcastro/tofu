@@ -306,10 +306,7 @@ func (t *SpawnTool) limits() SubAgentLimits {
 
 func (t *SpawnTool) Definition() llm.Tool {
 	limits := t.limits()
-	raise, duties := "the person can raise either in the settings menu.", "you plan and spawn"
-	if t.ChecksWork {
-		duties = "you plan, spawn and verify"
-	}
+	raise := "the person can raise either in the settings menu."
 	cite := ""
 	if t.Remembered != nil {
 		cite = "a sub-agent sees none of your memory: cite each entry it needs as [memory#id] in the task, and that line is copied above the brief word for word. "
@@ -334,9 +331,8 @@ func (t *SpawnTool) Definition() llm.Tool {
 	}
 	return llm.Tool{
 		Name: "spawn",
-		Description: duties + ", and implementation goes to a sub-agent: spawn one per separable piece of work as soon as the piece is known, rather than writing the code yourself first. " +
-			"hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. " +
-			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start, so spawn every piece you know in that one reply. " +
+		Description: "hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. task is the whole brief the sub-agent starts from. " +
+			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + cite +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
