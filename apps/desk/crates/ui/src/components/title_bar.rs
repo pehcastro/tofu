@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use crate::component::{control, icon, icon_button};
-use crate::components::avatar::{Face, NameTip, PersonSize, person_avatar};
+use crate::components::avatar::{Face, PersonSize, person_avatar};
 use crate::components::card::caption;
 use crate::components::chip::mono;
 use crate::components::empty::empty_state;
@@ -16,6 +16,7 @@ use crate::components::list::bare_row;
 use crate::components::overlay::{Align, Placement, Popover, Side};
 use crate::components::paint::{focus_ring, glyph, ink};
 use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T2, T3};
+use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{
@@ -546,6 +547,19 @@ impl RenderOnce for TitleBar {
             )
         })
         .on_click(toggle(TitlePop::Notifications));
+        let bell = tooltip(
+            "title-bell-tip",
+            bell,
+            Edge::Frame,
+            Control::Notifications.label(),
+            &theme,
+            window,
+            cx,
+        );
+        let account_tip = title
+            .github
+            .tip()
+            .unwrap_or(Control::Account.label().into());
         let account = named_stop(
             control("account", Control::Account.label(), &theme),
             "account",
@@ -559,10 +573,16 @@ impl RenderOnce for TitleBar {
             PersonSize::Title,
             &theme,
         ))
-        .when_some(title.github.tip(), |account, tip| {
-            account.tooltip(move |_, cx| cx.new(|_| NameTip(tip.clone())).into())
-        })
         .on_click(toggle(TitlePop::Account));
+        let account = tooltip(
+            "title-account-tip",
+            account,
+            Edge::Frame,
+            account_tip,
+            &theme,
+            window,
+            cx,
+        );
         bar.child(
             div()
                 .w(px(column))

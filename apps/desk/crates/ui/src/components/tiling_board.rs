@@ -26,6 +26,7 @@ use crate::components::size::{
     CAPTION_TEXT, FONT_SMALL, HEADER, RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_ROW, T1,
 };
 use crate::components::tabs::{Tab, TabEvent, TabMark, connected_tabs, tile_control};
+use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::metrics::ICON_SMALL;
 use crate::theme::{ColorToken, NumberToken, Theme};
@@ -1118,6 +1119,17 @@ impl<V: 'static> TilingBoard<V> {
             .gap_1()
             .children(badge)
             .child(controls);
+        let plus = tooltip(
+            SharedString::from(format!("tiling-plus-tip-{}", tile.0)),
+            div()
+                .id(SharedString::from(format!("tiling-plus-host-{}", tile.0)))
+                .child(plus),
+            Edge::Frame,
+            "Add a tab",
+            theme,
+            window,
+            cx,
+        );
         Header::Tabs(
             strip.new_button(plus).into_any_element(),
             Some(trailing.into_any_element()),

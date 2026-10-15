@@ -151,6 +151,8 @@ struct Floating {
     watcher: Option<EntityId>,
     muted: Option<ElementId>,
     overlays: HashSet<ElementId>,
+    entered: Option<Instant>,
+    pressed: Option<Instant>,
 }
 
 impl Floating {
@@ -177,12 +179,15 @@ impl Floating {
             watcher: None,
             muted: None,
             overlays: HashSet::new(),
+            entered: None,
+            pressed: None,
         }
     }
 
     fn press(&mut self, key: ElementId, cx: &mut Context<Self>) {
         self.record(Event::Mute(key.clone()), cx);
         self.timer = None;
+        self.pressed = Some(Instant::now());
         let showing = self.shown && self.current.as_ref() == Some(&key);
         self.muted = Some(key);
         if showing {
@@ -216,6 +221,7 @@ impl Floating {
         self.hovered = Some(key.clone());
         self.hull = None;
         self.timer = None;
+        self.entered = Some(Instant::now());
         if !self.hosts.contains(&view) {
             self.hosts.push(view);
         }
@@ -306,6 +312,15 @@ impl Floating {
                 to: 1.0,
                 at: now,
             };
+            if let Some(entered) = self.entered {
+                let waited = now.saturating_duration_since(entered);
+                let late = waited.saturating_sub(self.kind.open());
+                eprintln!(
+                    "desk: tooltip {key} open {} ms after hover, {:.1} ms past the delay",
+                    waited.as_millis(),
+                    late.as_secs_f64() * 1000.0
+                );
+            }
         }
         if self.current.as_ref() != Some(&key) {
             self.placed = None;
@@ -416,9 +431,17 @@ fn floating(kind: Kind, window: &Window, cx: &mut App) -> Entity<Floating> {
 
 pub fn overlay_shown(overlay: ElementId, open: bool, window: &Window, cx: &mut App) {
     for kind in [Kind::Tip, Kind::Card] {
-        floating(kind, window, cx).update(cx, |floating, _| match open {
-            true => floating.overlays.insert(overlay.clone()),
-            false => floating.overlays.remove(&overlay),
+        floating(kind, window, cx).update(cx, |floating, _| {
+            if !open {
+                floating.overlays.remove(&overlay);
+                return;
+            }
+            if floating.overlays.insert(overlay.clone()) && kind == Kind::Tip {
+                let since = floating
+                    .pressed
+                    .map_or(0.0, |at| at.elapsed().as_secs_f64() * 1000.0);
+                eprintln!("desk: popover {overlay} open {since:.1} ms after press");
+            }
         });
     }
 }
