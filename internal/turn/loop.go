@@ -67,6 +67,39 @@ func (p panicked) Error() string {
 	return fmt.Sprintf("panic: %v\n\n%s", p.value, p.stack)
 }
 
+type leadWaits struct {
+	mu     sync.Mutex
+	now    func() time.Time
+	open   int
+	since  time.Time
+	closed time.Duration
+}
+
+func (w *leadWaits) begin() func() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.open == 0 {
+		w.since = w.now()
+	}
+	w.open++
+	return func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if w.open--; w.open == 0 {
+			w.closed += w.now().Sub(w.since)
+		}
+	}
+}
+
+func (w *leadWaits) total() time.Duration {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.open == 0 {
+		return w.closed
+	}
+	return w.closed + w.now().Sub(w.since)
+}
+
 func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if config.Model == nil && config.Accounts.Pick == nil {
 		return Row{}, errors.New("turn: no model")
@@ -167,6 +200,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return Row{}, errors.New("turn: the account this session was pinned to came with no model")
 	}
 	start := now()
+	waits := &leadWaits{now: now}
+	if person := config.Person; config.Caps.WallClock > 0 && person != nil {
+		config.Person = func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
+			defer waits.begin()()
+			return person(ctx, request, decision)
+		}
+	}
 	origin := newID()
 	sentTools := answerable(withLoopTools(config.Tools.tools))
 	usedTools := make([]string, len(sentTools))
@@ -642,7 +682,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		capped := config.Caps.MaxSteps > 0
 		switch {
-		case config.Caps.WallClock > 0 && now().Sub(start) >= config.Caps.WallClock:
+		case config.Caps.WallClock > 0 && now().Sub(start)-waits.total() >= config.Caps.WallClock:
 			lead := "this sub-agent retired at its wall clock cap of " + config.Caps.WallClock.String() + ", and the work is not finished"
 			row.Warnings = append(row.Warnings, lead)
 			return endAt(OutcomeRetiredWallClockCap, lead, messages), nil
@@ -928,16 +968,23 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				answers := make([]llm.Message, len(wave))
 				memoHits := make([]bool, len(wave))
 				waveCtx, waveEnded := config.Inbox.stoppableWave(ctx)
+				runAt := func(i, batch int) {
+					gated := wave[i]
+					if gated.call.Name == (askTool{}).Name() {
+						defer waits.begin()()
+					}
+					rows[i], answers[i], memoHits[i] = gated.run(withShellCall(waveCtx, gated.id), toolsFor(gated), config.ResultBytesCap, artifacts, batch)
+				}
 				if len(wave) == 1 {
-					rows[0], answers[0], memoHits[0] = wave[0].run(withShellCall(waveCtx, wave[0].id), toolsFor(wave[0]), config.ResultBytesCap, artifacts, 0)
+					runAt(0, 0)
 				} else {
 					batches++
 					var running sync.WaitGroup
 					running.Add(len(wave))
-					for i, gated := range wave {
+					for i := range wave {
 						go func() {
 							defer running.Done()
-							rows[i], answers[i], memoHits[i] = gated.run(withShellCall(waveCtx, gated.id), toolsFor(gated), config.ResultBytesCap, artifacts, batches)
+							runAt(i, batches)
 						}()
 					}
 					running.Wait()
