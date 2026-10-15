@@ -1,0 +1,211 @@
+{
+  "arm": "tofu-sonnet",
+  "rep": 1,
+  "setting": "summarized",
+  "batch": "tofu-1403",
+  "tool": "tofu",
+  "version": "0.5.15-rc1",
+  "commit": "b440a7727b91de9a22cf87e07b7b94b7d92b3f2c",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-15 04:34",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 45778,
+  "tree": {
+    "cpu_ms": 39859,
+    "peak_tree_rss_bytes": 362754048,
+    "peak_commit_bytes": 450043904,
+    "processes": 389,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 4376,
+    "cache_read": 97650,
+    "cache_write": 6754,
+    "out": 3584,
+    "reasoning": 38
+  },
+  "requests": 6,
+  "auxiliary_requests": 4,
+  "calls": [
+    {
+      "kind": "other",
+      "name": "project_report",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 4,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 15,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 4,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 18837,
+      "failed": false
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 1806,
+      "first_ms": 1130,
+      "out": 77
+    },
+    {
+      "at_ms": 1814,
+      "ms": 1980,
+      "first_ms": 1050,
+      "out": 237
+    },
+    {
+      "at_ms": 3821,
+      "ms": 1084,
+      "first_ms": 900,
+      "out": 48
+    },
+    {
+      "at_ms": 4912,
+      "ms": 9222,
+      "first_ms": 869,
+      "out": 1947
+    },
+    {
+      "at_ms": 14163,
+      "ms": 2600,
+      "first_ms": 2581,
+      "out": 121
+    },
+    {
+      "at_ms": 35605,
+      "ms": 3778,
+      "first_ms": 3763,
+      "out": 520
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 9,
+    "lines_added": 85,
+    "lines_deleted": 6
+  },
+  "notes": [
+    "setting: thinkingSummary summarized, resolved with no settings file in the repo",
+    "turn outcome stopped"
+  ],
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\t1403\\work\\tofu-sonnet-summarized-1"
+}

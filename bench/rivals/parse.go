@@ -394,7 +394,7 @@ func parseOmp(lines []stamped, sessions string) transcript {
 	if len(seen) > fromStream {
 		t.notes = append(t.notes, fmt.Sprintf("%d model requests came from sub-agent session files, their tool calls are not timed", len(seen)-fromStream))
 	}
-	t.requests, t.calls = len(seen)+t.auxiliary, open.calls
+	t.requests, t.calls = len(seen), open.calls
 	return t
 }
 
@@ -464,7 +464,6 @@ func parseTofu(lines []stamped, repo string, env []string, codexWire bool) trans
 		t.calls = append(t.calls, call{Kind: tofuKind(str(c, "tool")), Name: str(c, "tool"), MS: ms, Failed: str(c, "outcome") != "ran"})
 	}
 	for _, m := range list(trace["data"], "memory") {
-		t.requests++
 		t.auxiliary++
 		t.saw(str(m, "model"))
 		t.tokens.add(num(m, "usage", "input_tokens"), num(m, "usage", "cache_read_tokens"), num(m, "usage", "cache_write_tokens"), num(m, "usage", "output_tokens"))

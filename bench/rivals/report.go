@@ -97,7 +97,7 @@ func distinct(rows []row, field func(row) string) string {
 }
 
 func runsTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MB | peak commit MB | processes | requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MB | peak commit MB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		for _, r := range byArm[a.Name] {
 			fmt.Fprintf(b, "| %s | %d | %d | %.1f | %.1f | %.0f | %.0f | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | +%d/-%d | %s |\n",
@@ -109,7 +109,7 @@ func runsTable(b *strings.Builder, byArm map[string][]row) {
 }
 
 func turnTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Turn against turn\n\nMedian of the runs, with the lowest and highest in brackets. Total in is fresh plus cache read plus cache write.\n\n| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MB | requests | total in | fresh in | out | calls | failed | retried | lines changed |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Turn against turn\n\nMedian of the runs, with the lowest and highest in brackets. Total in is fresh plus cache read plus cache write.\n\n| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MB | conversation requests | total in | fresh in | out | calls | failed | retried | lines changed |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		rows := byArm[a.Name]
 		column := func(value func(row) float64) string { return spread(rows, value) }
@@ -211,11 +211,11 @@ func toolTable(b *strings.Builder, byArm map[string][]row) {
 }
 
 const (
-	settingShipped = "shipped"
-	settingRival   = "rival"
+	settingShipped     = "shipped"
+	settingRival       = "rival"
+	thinkingSummarized = "summarized"
+	thinkingOmitted    = "omitted"
 )
-
-var thinkingSummaries = []string{"summarized", "omitted"}
 
 var settingMeasures = []func(row) float64{
 	func(r row) float64 { return seconds(r.WallMS) },
@@ -230,14 +230,14 @@ func settingTable(b *strings.Builder, bySetting map[string][]row) {
 	if len(bySetting) == 0 {
 		return
 	}
-	b.WriteString("\n## Shipped thinking setting against the rival's\n\nOne row per run, alternating. Shipped is tofu as built; rival is the same commit sending what the rival on that wire sends. Thinking sent is read from the first request body tofu recorded. Total in is fresh plus cache read plus cache write; reasoning is the wire's own count and is part of out.\n\n| arm | setting | rep | date | thinking sent | wall s | requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Shipped thinking setting against the rival's\n\nOne row per run, alternating. Shipped is tofu as built; rival is the same commit sending what the rival on that wire sends. Thinking sent is read from the first request body tofu recorded. Total in is fresh plus cache read plus cache write; reasoning is the wire's own count and is part of out.\n\n| arm | setting | rep | date | thinking sent | wall s | conversation requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(bySetting) {
 		for _, r := range slices.SortedFunc(slices.Values(bySetting[a.Name]), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
 			fmt.Fprintf(b, "| %s | %s | %d | %s | `%s` | %.1f | %d | %d | %d | %d | %d |\n", r.Arm, r.Setting, r.Rep, r.Date, r.ThinkingSent, seconds(r.WallMS), r.Requests,
 				r.Tokens.in(), r.Tokens.Out, r.Tokens.Reasoning, r.Score.hiddenPassed()+r.Score.rubricPassed())
 		}
 	}
-	b.WriteString("\nMedians per setting, and what shipped costs over rival in percent of the rival's median.\n\n| arm | setting | runs | wall s | requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\nMedians per setting, and what shipped costs over rival in percent of the rival's median.\n\n| arm | setting | runs | wall s | conversation requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(bySetting) {
 		shipped, rival := settingMedians(b, a.Name, settingShipped, bySetting[a.Name]), settingMedians(b, a.Name, settingRival, bySetting[a.Name])
 		if len(shipped) == 0 || len(rival) == 0 {
@@ -296,8 +296,8 @@ func taskTable(b *strings.Builder, name string, rows []row) {
 		byArm[r.Arm] = append(byArm[r.Arm], r)
 	}
 	_, outOf := rows[0].Score.quality()
-	fmt.Fprintf(b, "\n## Task %s\n\nPrompt, rubric and seed in `testdata/tasks/%s`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Requests count every model call of the run and every sub-agent; auxiliary is the part outside the conversation, tofu's memory model and omp's auto-thinking judge, whose tokens are in the token columns too. Sub-agents is the count the tool's own transcript reports.\n\n", name, name)
-	b.WriteString("| arm | tool version | runs | quality of " + fmt.Sprint(outOf) + " | requests | auxiliary | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(b, "\n## Task %s\n\nPrompt, rubric and seed in `testdata/tasks/%s`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Conversation requests count every model call of the conversation and of every sub-agent; memory or judge calls are the calls outside it, tofu's memory model and omp's auto-thinking judge, counted apart and with their tokens in the token columns too. Sub-agents is the count the tool's own transcript reports.\n\n", name, name)
+	b.WriteString("| arm | tool version | runs | quality of " + fmt.Sprint(outOf) + " | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		armRows := byArm[a.Name]
 		column := func(value func(row) float64) string { return spread(armRows, value) }
@@ -315,7 +315,7 @@ func taskTable(b *strings.Builder, name string, rows []row) {
 			column(func(r row) float64 { return float64(failedCalls(r)) }),
 			column(func(r row) float64 { return float64(r.Agents) }))
 	}
-	b.WriteString("\n| arm | rep | date | models the responses reported | quality | requests | auxiliary | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range slices.SortedFunc(slices.Values(rows), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
 		got, _ := r.Score.quality()
 		fmt.Fprintf(b, "| %s | %d | %s | %s | %d | %d | %d | %d | %d | %d | %.1f | %.0f | %d | %d | %d | %s |\n", r.Arm, r.Rep, r.Date, strings.Join(r.Models, ", "), got, r.Requests, r.Auxiliary, r.Tokens.in(), r.Tokens.CacheRead,

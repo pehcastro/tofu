@@ -32,7 +32,7 @@
     "out": 3002,
     "reasoning": 184
   },
-  "requests": 12,
+  "requests": 8,
   "auxiliary_requests": 4,
   "calls": [
     {

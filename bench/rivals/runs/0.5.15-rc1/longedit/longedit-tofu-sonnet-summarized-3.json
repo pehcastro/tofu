@@ -33,7 +33,7 @@
     "out": 7523,
     "reasoning": 203
   },
-  "requests": 13,
+  "requests": 7,
   "auxiliary_requests": 6,
   "calls": [
     {

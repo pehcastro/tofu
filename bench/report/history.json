@@ -139,7 +139,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 10.0,
           "high": 10.0
         }
@@ -154,7 +154,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "10 [9 to 10]",
           "value": 10.0,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 9.0,
           "high": 10.0
         }
@@ -193,7 +193,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "48.6 [40.1 to 71.1]",
           "value": 48.6,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 40.1,
           "high": 71.1
         }
@@ -208,7 +208,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "43.1 [38.9 to 44.4]",
           "value": 43.1,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 38.9,
           "high": 44.4
         }
@@ -245,11 +245,11 @@
           "version": "0.5.15-rc1",
           "build": "installed 0.5.15-rc1, 3 live runs",
           "source": "bench/report/runs/parity-2026-10-15.md",
-          "figure": "8 [8 to 12]",
-          "value": 8.0,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
-          "low": 8.0,
-          "high": 12.0
+          "figure": "5 [4 to 8]",
+          "value": 5.0,
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "low": 4.0,
+          "high": 8.0
         }
       ],
       "rivals": [
@@ -262,7 +262,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "4 [4 to 5]",
           "value": 4.0,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 4.0,
           "high": 5.0
         }
@@ -301,7 +301,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "89748 [73379 to 141107]",
           "value": 89748.0,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 73379.0,
           "high": 141107.0
         }
@@ -316,7 +316,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "97176 [96912 to 122876]",
           "value": 97176.0,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 96912.0,
           "high": 122876.0
         }
@@ -355,7 +355,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "3002 [2811 to 4152]",
           "value": 3002.0,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 2811.0,
           "high": 4152.0
         }
@@ -370,7 +370,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "2241 [2155 to 2321]",
           "value": 2241.0,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 2155.0,
           "high": 2321.0
         }
@@ -409,7 +409,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "356.9 [329.1 to 365.8]",
           "value": 356.9,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 329.1,
           "high": 365.8
         }
@@ -424,7 +424,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "563.8 [559.9 to 620.6]",
           "value": 563.8,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 559.9,
           "high": 620.6
         }
@@ -463,7 +463,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "30.9 [30.7 to 40.8]",
           "value": 30.9,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 30.7,
           "high": 40.8
         }
@@ -478,7 +478,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "40.4 [39.1 to 45]",
           "value": 40.4,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 39.1,
           "high": 45.0
         }
@@ -517,7 +517,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "1 [1 to 2]",
           "value": 1.0,
-          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
+          "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 5 [4 to 8] | 4 [3 to 4] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |",
           "low": 1.0,
           "high": 2.0
         }
@@ -532,7 +532,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "0 [0 to 0]",
           "value": 0.0,
-          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
+          "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 0 [0 to 0] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
         }
@@ -571,7 +571,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 10.0,
           "high": 10.0
         }
@@ -586,7 +586,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 10.0,
           "high": 10.0
         }
@@ -625,7 +625,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "45.4 [43.5 to 50.3]",
           "value": 45.4,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 43.5,
           "high": 50.3
         }
@@ -640,7 +640,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "34.1 [30.7 to 34.4]",
           "value": 34.1,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 30.7,
           "high": 34.4
         }
@@ -677,11 +677,11 @@
           "version": "0.5.15-rc1",
           "build": "installed 0.5.15-rc1, 3 live runs",
           "source": "bench/report/runs/parity-2026-10-15.md",
-          "figure": "9 [8 to 11]",
-          "value": 9.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
-          "low": 8.0,
-          "high": 11.0
+          "figure": "6 [5 to 7]",
+          "value": 6.0,
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "low": 5.0,
+          "high": 7.0
         }
       ],
       "rivals": [
@@ -694,7 +694,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "4 [4 to 4]",
           "value": 4.0,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 4.0,
           "high": 4.0
         }
@@ -733,7 +733,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "104484 [84553 to 128544]",
           "value": 104484.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 84553.0,
           "high": 128544.0
         }
@@ -748,7 +748,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "51183 [50977 to 54428]",
           "value": 51183.0,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 50977.0,
           "high": 54428.0
         }
@@ -787,7 +787,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "3296 [2645 to 3944]",
           "value": 3296.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 2645.0,
           "high": 3944.0
         }
@@ -802,7 +802,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "1231 [1097 to 1684]",
           "value": 1231.0,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 1097.0,
           "high": 1684.0
         }
@@ -841,7 +841,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "354.6 [353.6 to 369.2]",
           "value": 354.6,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 353.6,
           "high": 369.2
         }
@@ -856,7 +856,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "857.8 [847.8 to 866.8]",
           "value": 857.8,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 847.8,
           "high": 866.8
         }
@@ -895,7 +895,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "34.2 [34.2 to 40.6]",
           "value": 34.2,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 34.2,
           "high": 40.6
         }
@@ -910,7 +910,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "40.9 [40.6 to 44.3]",
           "value": 40.9,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 40.6,
           "high": 44.3
         }
@@ -949,7 +949,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "0 [0 to 3]",
           "value": 0.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 6 [5 to 7] | 3 [3 to 4] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |",
           "low": 0.0,
           "high": 3.0
         }
@@ -964,7 +964,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "0 [0 to 0]",
           "value": 0.0,
-          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
+          "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 0 [0 to 0] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
         }
@@ -1003,7 +1003,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 10.0,
           "high": 10.0
         }
@@ -1018,7 +1018,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 10.0,
           "high": 10.0
         }
@@ -1057,7 +1057,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "190.8 [168.8 to 192.2]",
           "value": 190.8,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 168.8,
           "high": 192.2
         }
@@ -1072,7 +1072,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "108.4 [107.1 to 126.9]",
           "value": 108.4,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 107.1,
           "high": 126.9
         }
@@ -1109,11 +1109,11 @@
           "version": "0.5.15-rc1",
           "build": "installed 0.5.15-rc1, 3 live runs",
           "source": "bench/report/runs/parity-2026-10-15.md",
-          "figure": "17 [14 to 20]",
-          "value": 17.0,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
-          "low": 14.0,
-          "high": 20.0
+          "figure": "13 [10 to 15]",
+          "value": 13.0,
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "low": 10.0,
+          "high": 15.0
         }
       ],
       "rivals": [
@@ -1126,7 +1126,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "7 [6 to 10]",
           "value": 7.0,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 6.0,
           "high": 10.0
         }
@@ -1165,7 +1165,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "174261 [138849 to 226052]",
           "value": 174261.0,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 138849.0,
           "high": 226052.0
         }
@@ -1180,7 +1180,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "127903 [108412 to 187595]",
           "value": 127903.0,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 108412.0,
           "high": 187595.0
         }
@@ -1219,7 +1219,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "6419 [6168 to 6492]",
           "value": 6419.0,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 6168.0,
           "high": 6492.0
         }
@@ -1234,7 +1234,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "3789 [3196 to 4479]",
           "value": 3789.0,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 3196.0,
           "high": 4479.0
         }
@@ -1273,7 +1273,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "344.8 [344.3 to 350.4]",
           "value": 344.8,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 344.3,
           "high": 350.4
         }
@@ -1288,7 +1288,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "506.1 [496.5 to 507.1]",
           "value": 506.1,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 496.5,
           "high": 507.1
         }
@@ -1327,7 +1327,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "30.1 [28.6 to 34.9]",
           "value": 30.1,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 28.6,
           "high": 34.9
         }
@@ -1342,7 +1342,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "56.1 [55.9 to 65.9]",
           "value": 56.1,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 55.9,
           "high": 65.9
         }
@@ -1381,7 +1381,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "0 [0 to 1]",
           "value": 0.0,
-          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 13 [10 to 15] | 4 [4 to 5] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |",
           "low": 0.0,
           "high": 1.0
         }
@@ -1396,7 +1396,7 @@
           "source": "bench/report/runs/parity-2026-10-15.md",
           "figure": "0 [0 to 1]",
           "value": 0.0,
-          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
+          "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 0 [0 to 0] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |",
           "low": 0.0,
           "high": 1.0
         }
@@ -1471,7 +1471,7 @@
           "figure": "6 [6 to 6]",
           "value": 6.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 6.0,
           "high": 6.0
         },
@@ -1484,7 +1484,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
           "low": 6.0,
           "high": 6.0
         }
@@ -1499,7 +1499,7 @@
           "figure": "6 [6 to 6]",
           "value": 6.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 6.0,
           "high": 6.0
         }
@@ -1525,7 +1525,7 @@
           "figure": "74.0 [71.9 to 80.1]",
           "value": 74.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 71.9,
           "high": 80.1
         },
@@ -1538,7 +1538,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "61.4 [58.6 to 66.4]",
           "value": 61.4,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
           "low": 58.6,
           "high": 66.4
         }
@@ -1553,7 +1553,7 @@
           "figure": "82.9 [80.3 to 124.6]",
           "value": 82.9,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 80.3,
           "high": 124.6
         }
@@ -1576,12 +1576,12 @@
           "commit": "b0e2401d",
           "version": "0.5.14",
           "build": "b0e2401d built in scratch, 3 live runs",
-          "figure": "33 [33 to 36]",
-          "value": 33.0,
+          "figure": "26 [25 to 27]",
+          "value": 26.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
-          "low": 33.0,
-          "high": 36.0
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "low": 25.0,
+          "high": 27.0
         },
         {
           "label": "3 runs",
@@ -1590,11 +1590,11 @@
           "version": "0.5.15-rc1",
           "build": "installed 0.5.15-rc1, 3 live runs",
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
-          "figure": "40 [39 to 43]",
-          "value": 40.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
-          "low": 39.0,
-          "high": 43.0
+          "figure": "28 [27 to 32]",
+          "value": 28.0,
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "low": 27.0,
+          "high": 32.0
         }
       ],
       "rivals": [
@@ -1604,12 +1604,12 @@
           "commit": "b0e2401d",
           "version": "18.3.2",
           "build": "live, 3 runs",
-          "figure": "37 [30 to 53]",
-          "value": 37.0,
+          "figure": "31 [30 to 46]",
+          "value": 31.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 30.0,
-          "high": 53.0
+          "high": 46.0
         }
       ],
       "short": "six sub-agents: requests",
@@ -1633,7 +1633,7 @@
           "figure": "365425 [350668 to 394047]",
           "value": 365425.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 350668.0,
           "high": 394047.0
         },
@@ -1646,7 +1646,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "365047 [339196 to 402908]",
           "value": 365047.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
           "low": 339196.0,
           "high": 402908.0
         }
@@ -1661,7 +1661,7 @@
           "figure": "455504 [324613 to 700756]",
           "value": 455504.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 324613.0,
           "high": 700756.0
         }
@@ -1687,7 +1687,7 @@
           "figure": "6965 [6374 to 7001]",
           "value": 6965.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 6374.0,
           "high": 7001.0
         },
@@ -1700,7 +1700,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "6749 [6685 to 6836]",
           "value": 6749.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
           "low": 6685.0,
           "high": 6836.0
         }
@@ -1715,7 +1715,7 @@
           "figure": "14501 [7325 to 21323]",
           "value": 14501.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 7325.0,
           "high": 21323.0
         }
@@ -1741,7 +1741,7 @@
           "figure": "0 [0 to 1]",
           "value": 0.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 0.0,
           "high": 1.0
         },
@@ -1754,7 +1754,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "0 [0 to 1]",
           "value": 0.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
           "low": 0.0,
           "high": 1.0
         }
@@ -1769,7 +1769,7 @@
           "figure": "4 [3 to 9]",
           "value": 4.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 3.0,
           "high": 9.0
         }
@@ -1795,7 +1795,7 @@
           "figure": "362.5 [353.6 to 367.8]",
           "value": 362.5,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |",
           "low": 353.6,
           "high": 367.8
         },
@@ -1808,7 +1808,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "360.5 [340.5 to 366.2]",
           "value": 360.5,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 28 [27 to 32] | 12 [11 to 12] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |",
           "low": 340.5,
           "high": 366.2
         }
@@ -1823,7 +1823,7 @@
           "figure": "1080.0 [1046.2 to 1154.8]",
           "value": 1080.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
+          "evidence": "| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |",
           "low": 1046.2,
           "high": 1154.8
         }
@@ -1849,7 +1849,7 @@
           "figure": "6 [6 to 6]",
           "value": 6.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 6.0,
           "high": 6.0
         },
@@ -1862,7 +1862,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "6 [6 to 6]",
           "value": 6.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
           "low": 6.0,
           "high": 6.0
         }
@@ -1903,7 +1903,7 @@
           "figure": "21.5 [20.8 to 22.8]",
           "value": 21.5,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 20.8,
           "high": 22.8
         },
@@ -1916,7 +1916,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "22.6 [22.2 to 23.2]",
           "value": 22.6,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
           "low": 22.2,
           "high": 23.2
         }
@@ -1954,12 +1954,12 @@
           "commit": "b0e2401d",
           "version": "0.5.14",
           "build": "b0e2401d built in scratch, 3 live runs",
-          "figure": "9 [9 to 9]",
-          "value": 9.0,
+          "figure": "6 [6 to 6]",
+          "value": 6.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
-          "low": 9.0,
-          "high": 9.0
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "low": 6.0,
+          "high": 6.0
         },
         {
           "label": "3 runs",
@@ -1968,11 +1968,11 @@
           "version": "0.5.15-rc1",
           "build": "installed 0.5.15-rc1, 3 live runs",
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
-          "figure": "10 [10 to 10]",
-          "value": 10.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
-          "low": 10.0,
-          "high": 10.0
+          "figure": "7 [7 to 7]",
+          "value": 7.0,
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "low": 7.0,
+          "high": 7.0
         }
       ],
       "rivals": [
@@ -2011,7 +2011,7 @@
           "figure": "128721 [128403 to 129857]",
           "value": 128721.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 128403.0,
           "high": 129857.0
         },
@@ -2024,7 +2024,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "114008 [113795 to 115259]",
           "value": 114008.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
           "low": 113795.0,
           "high": 115259.0
         }
@@ -2065,7 +2065,7 @@
           "figure": "1063 [966 to 1085]",
           "value": 1063.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 966.0,
           "high": 1085.0
         },
@@ -2078,7 +2078,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "1189 [1070 to 1191]",
           "value": 1189.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
           "low": 1070.0,
           "high": 1191.0
         }
@@ -2119,7 +2119,7 @@
           "figure": "0 [0 to 0]",
           "value": 0.0,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
         },
@@ -2132,7 +2132,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "0 [0 to 0]",
           "value": 0.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
           "low": 0.0,
           "high": 0.0
         }
@@ -2173,7 +2173,7 @@
           "figure": "57.5 [53.3 to 70.3]",
           "value": 57.5,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |",
           "low": 53.3,
           "high": 70.3
         },
@@ -2186,7 +2186,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "53.7 [53.6 to 72.1]",
           "value": 53.7,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 7 [7 to 7] | 3 [3 to 3] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |",
           "low": 53.6,
           "high": 72.1
         }
@@ -2227,7 +2227,7 @@
           "figure": "347.1 [344.3 to 347.5]",
           "value": 347.1,
           "source": "bench/rivals/report.md",
-          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 10 [10 to 10] | 25 [19 to 26] | 8 [7 to 9] | 11296 [10118 to 13413] | 418778 [277977 to 466108] | 45990 [35919 to 52822] | 478181 [340917 to 513323] | 14937 [13270 to 19335] | 146.4 [143.5 to 167.5] | 347.1 [344.3 to 347.5] | 14 [6 to 23] | 1 [1 to 1] |",
+          "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 10 [10 to 10] | 16 [12 to 18] | 8 [7 to 9] | 11296 [10118 to 13413] | 418778 [277977 to 466108] | 45990 [35919 to 52822] | 478181 [340917 to 513323] | 14937 [13270 to 19335] | 146.4 [143.5 to 167.5] | 347.1 [344.3 to 347.5] | 14 [6 to 23] | 1 [1 to 1] |",
           "low": 344.3,
           "high": 347.5
         },
@@ -2240,7 +2240,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "343.1 [338.6 to 356.5]",
           "value": 343.1,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
           "low": 338.6,
           "high": 356.5
         }
@@ -2292,7 +2292,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "10 [10 to 10]",
           "value": 10.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
           "low": 10.0,
           "high": 10.0
         }
@@ -2346,7 +2346,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "73.1 [69 to 73.7]",
           "value": 73.1,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
           "low": 69.0,
           "high": 73.7
         }
@@ -2384,12 +2384,12 @@
           "commit": "5c3e46c4",
           "version": "0.5.14+dev",
           "build": "5c3e46c4 with the TOFU-1382 budget change, built in scratch, 3 live runs",
-          "figure": "12 [12 to 20]",
-          "value": 12.0,
+          "figure": "7 [6 to 14]",
+          "value": 7.0,
           "source": "bench/report/runs/fixes-2026-10-14.md",
-          "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent.",
-          "low": 12.0,
-          "high": 20.0
+          "evidence": "| tofu-sonnet after the budget fix | 3 | 7 [6 to 14] | 6 [5 to 6] |",
+          "low": 6.0,
+          "high": 14.0
         },
         {
           "label": "3 runs",
@@ -2398,11 +2398,11 @@
           "version": "0.5.15-rc1",
           "build": "installed 0.5.15-rc1, 3 live runs",
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
-          "figure": "12 [11 to 13]",
-          "value": 12.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
-          "low": 11.0,
-          "high": 13.0
+          "figure": "7 [5 to 8]",
+          "value": 7.0,
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "low": 5.0,
+          "high": 8.0
         }
       ],
       "rivals": [
@@ -2454,7 +2454,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "186187 [122776 to 204045]",
           "value": 186187.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
           "low": 122776.0,
           "high": 204045.0
         }
@@ -2508,7 +2508,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "7373 [7197 to 7523]",
           "value": 7373.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
           "low": 7197.0,
           "high": 7523.0
         }
@@ -2562,7 +2562,7 @@
           "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
           "figure": "2 [1 to 2]",
           "value": 2.0,
-          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
+          "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 7 [5 to 8] | 6 [4 to 6] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |",
           "low": 1.0,
           "high": 2.0
         }

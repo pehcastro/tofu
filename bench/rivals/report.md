@@ -191,7 +191,7 @@ Process tree: a Windows job object holds the whole process tree from its first i
 
 ## Every run
 
-| arm | rep | exit | wall s | CPU s | peak tree RSS MB | peak commit MB | processes | requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |
+| arm | rep | exit | wall s | CPU s | peak tree RSS MB | peak commit MB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | tofu-sonnet | 1 | 0 | 62.4 | 52.7 | 376 | 535 | 426 | 11 | 1194 | 205352 | 26584 | 3874 | 18 | 4 | 4 | 5 | 5 | +41/-6 | turn outcome stopped; 1 sub-agents |
 | tofu-sonnet | 2 | 0 | 63.1 | 53.0 | 399 | 541 | 427 | 11 | 1194 | 221172 | 11875 | 3729 | 16 | 4 | 4 | 5 | 4 | +40/-5 | turn outcome stopped; 1 sub-agents |
@@ -213,7 +213,7 @@ Process tree: a Windows job object holds the whole process tree from its first i
 
 Median of the runs, with the lowest and highest in brackets. Total in is fresh plus cache read plus cache write.
 
-| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MB | requests | total in | fresh in | out | calls | failed | retried | lines changed |
+| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MB | conversation requests | total in | fresh in | out | calls | failed | retried | lines changed |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | tofu-sonnet | 3 | 10 [9 to 10] | 63.1 [62.4 to 66.7] | 53.0 [52.7 to 53.8] | 393.0 [375.6 to 398.6] | 11 [11 to 11] | 234241 [233130 to 239093] | 1194 [1194 to 1194] | 3874 [3729 to 4916] | 18 [16 to 19] | 4 [4 to 4] | 4 [4 to 4] | 47 [45 to 90] |
 | claude-sonnet | 3 | 10 [10 to 10] | 50.5 [46.8 to 55.2] | 57.5 [49.8 to 59.1] | 615.9 [590.3 to 643.0] | 6 [5 to 6] | 151458 [129060 to 151532] | 12 [10 to 12] | 4316 [4315 to 4388] | 18 [18 to 18] | 0 [0 to 0] | 0 [0 to 0] | 93 [92 to 93] |
@@ -281,7 +281,7 @@ Every call of the three runs pooled. Calls per run is the median. Time is from t
 
 One row per run, alternating. Shipped is tofu as built; rival is the same commit sending what the rival on that wire sends. Thinking sent is read from the first request body tofu recorded. Total in is fresh plus cache read plus cache write; reasoning is the wire's own count and is part of out.
 
-| arm | setting | rep | date | thinking sent | wall s | requests | total in | out | reasoning | quality of 10 |
+| arm | setting | rep | date | thinking sent | wall s | conversation requests | total in | out | reasoning | quality of 10 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | tofu-sonnet | shipped | 1 | 2026-10-14 16:21 | `thinking {"display":"summarized","type":"adaptive"}` | 84.1 | 5 | 115208 | 2057 | 97 | 10 |
 | tofu-sonnet | rival | 1 | 2026-10-14 16:23 | `thinking {"type":"adaptive"}` | 67.9 | 5 | 115349 | 2145 | 125 | 10 |
@@ -298,7 +298,7 @@ One row per run, alternating. Shipped is tofu as built; rival is the same commit
 
 Medians per setting, and what shipped costs over rival in percent of the rival's median.
 
-| arm | setting | runs | wall s | requests | total in | out | reasoning | quality of 10 |
+| arm | setting | runs | wall s | conversation requests | total in | out | reasoning | quality of 10 |
 |---|---|---|---|---|---|---|---|---|
 | tofu-sonnet | shipped | 3 | 70.1 [64.8 to 84.1] | 5 [5 to 6] | 116530 [115208 to 141696] | 2475 [2057 to 2646] | 97 [46 to 99] | 10 [10 to 10] |
 | tofu-sonnet | rival | 3 | 65.4 [64.2 to 67.9] | 6 [5 to 6] | 141398 [115349 to 141891] | 2446 [2145 to 2469] | 34 [31 to 125] | 10 [10 to 10] |
@@ -309,54 +309,54 @@ Medians per setting, and what shipped costs over rival in percent of the rival's
 
 ## Task bigread
 
-Prompt, rubric and seed in `testdata/tasks/bigread`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Requests count every model call of the run and every sub-agent; auxiliary is the part outside the conversation, tofu's memory model and omp's auto-thinking judge, whose tokens are in the token columns too. Sub-agents is the count the tool's own transcript reports.
+Prompt, rubric and seed in `testdata/tasks/bigread`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Conversation requests count every model call of the conversation and of every sub-agent; memory or judge calls are the calls outside it, tofu's memory model and omp's auto-thinking judge, counted apart and with their tokens in the token columns too. Sub-agents is the count the tool's own transcript reports.
 
-| arm | tool version | runs | quality of 6 | requests | auxiliary | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |
+| arm | tool version | runs | quality of 6 | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |
+| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 6 [6 to 6] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |
 | omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 7 [7 to 7] | 0 [0 to 0] | 16 [16 to 16] | 91850 [91078 to 91884] | 4649 [4246 to 4662] | 96528 [95340 to 96549] | 982 [980 to 1041] | 22.6 [20.4 to 23.2] | 537.6 [531.9 to 541.7] | 0 [0 to 0] | 0 [0 to 0] |
 
-| arm | rep | date | models the responses reported | quality | requests | auxiliary | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |
+| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 1 | 2026-10-14 17:27 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 9 | 3 | 128403 | 120299 | 966 | 22.8 | 53 | 5 | 0 | 0 | turn outcome stopped |
+| tofu-sonnet | 1 | 2026-10-14 17:27 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 6 | 3 | 128403 | 120299 | 966 | 22.8 | 53 | 5 | 0 | 0 | turn outcome stopped |
 | omp-sonnet | 1 | 2026-10-14 17:29 | claude-sonnet-5-5 | 6 | 7 | 0 | 95340 | 91078 | 980 | 22.6 | 532 | 6 | 0 | 0 |  |
 | omp-sonnet | 2 | 2026-10-14 17:40 | claude-sonnet-5-5 | 6 | 7 | 0 | 96528 | 91850 | 982 | 23.2 | 538 | 6 | 0 | 0 |  |
-| tofu-sonnet | 2 | 2026-10-14 17:42 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 9 | 3 | 129857 | 121263 | 1085 | 20.8 | 70 | 5 | 0 | 0 | turn outcome stopped |
-| tofu-sonnet | 3 | 2026-10-14 17:52 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 9 | 3 | 128721 | 120510 | 1063 | 21.5 | 58 | 5 | 0 | 0 | turn outcome stopped |
+| tofu-sonnet | 2 | 2026-10-14 17:42 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 6 | 3 | 129857 | 121263 | 1085 | 20.8 | 70 | 5 | 0 | 0 | turn outcome stopped |
+| tofu-sonnet | 3 | 2026-10-14 17:52 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 6 | 3 | 128721 | 120510 | 1063 | 21.5 | 58 | 5 | 0 | 0 | turn outcome stopped |
 | omp-sonnet | 3 | 2026-10-14 17:54 | claude-sonnet-5-5 | 6 | 7 | 0 | 96549 | 91884 | 1041 | 20.4 | 542 | 6 | 0 | 0 |  |
 
 ## Task longedit
 
-Prompt, rubric and seed in `testdata/tasks/longedit`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Requests count every model call of the run and every sub-agent; auxiliary is the part outside the conversation, tofu's memory model and omp's auto-thinking judge, whose tokens are in the token columns too. Sub-agents is the count the tool's own transcript reports.
+Prompt, rubric and seed in `testdata/tasks/longedit`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Conversation requests count every model call of the conversation and of every sub-agent; memory or judge calls are the calls outside it, tofu's memory model and omp's auto-thinking judge, counted apart and with their tokens in the token columns too. Sub-agents is the count the tool's own transcript reports.
 
-| arm | tool version | runs | quality of 10 | requests | auxiliary | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |
+| arm | tool version | runs | quality of 10 | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 10 [10 to 10] | 25 [19 to 26] | 8 [7 to 9] | 11296 [10118 to 13413] | 418778 [277977 to 466108] | 45990 [35919 to 52822] | 478181 [340917 to 513323] | 14937 [13270 to 19335] | 146.4 [143.5 to 167.5] | 347.1 [344.3 to 347.5] | 14 [6 to 23] | 1 [1 to 1] |
+| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 10 [10 to 10] | 16 [12 to 18] | 8 [7 to 9] | 11296 [10118 to 13413] | 418778 [277977 to 466108] | 45990 [35919 to 52822] | 478181 [340917 to 513323] | 14937 [13270 to 19335] | 146.4 [143.5 to 167.5] | 347.1 [344.3 to 347.5] | 14 [6 to 23] | 1 [1 to 1] |
 | omp-sonnet | omp/18.3.2 | 3 | 10 [10 to 10] | 7 [6 to 7] | 0 [0 to 0] | 16 [14 to 16] | 114697 [93075 to 114726] | 11505 [9727 to 12016] | 126247 [102816 to 126729] | 6185 [4197 to 6210] | 91.4 [80.6 to 116.6] | 778.2 [762.9 to 886.6] | 0 [0 to 0] | 0 [0 to 0] |
 
-| arm | rep | date | models the responses reported | quality | requests | auxiliary | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |
+| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 1 | 2026-10-14 17:21 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 10 | 19 | 7 | 340917 | 277977 | 14937 | 143.5 | 347 | 50 | 14 | 1 | turn outcome stopped; 1 sub-agents |
+| tofu-sonnet | 1 | 2026-10-14 17:21 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 10 | 12 | 7 | 340917 | 277977 | 14937 | 143.5 | 347 | 50 | 14 | 1 | turn outcome stopped; 1 sub-agents |
 | omp-sonnet | 1 | 2026-10-14 17:24 | claude-sonnet-5-5 | 10 | 7 | 0 | 126247 | 114726 | 6185 | 116.6 | 887 | 6 | 0 | 0 |  |
 | omp-sonnet | 2 | 2026-10-14 17:35 | claude-sonnet-5-5 | 10 | 6 | 0 | 102816 | 93075 | 4197 | 80.6 | 763 | 5 | 0 | 0 |  |
-| tofu-sonnet | 2 | 2026-10-14 17:37 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 10 | 26 | 8 | 513323 | 466108 | 13270 | 146.4 | 348 | 36 | 6 | 1 | turn outcome stopped; 1 sub-agents |
-| tofu-sonnet | 3 | 2026-10-14 17:47 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 10 | 25 | 9 | 478181 | 418778 | 19335 | 167.5 | 344 | 56 | 23 | 1 | turn outcome stopped; 1 sub-agents |
+| tofu-sonnet | 2 | 2026-10-14 17:37 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 10 | 18 | 8 | 513323 | 466108 | 13270 | 146.4 | 348 | 36 | 6 | 1 | turn outcome stopped; 1 sub-agents |
+| tofu-sonnet | 3 | 2026-10-14 17:47 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 10 | 16 | 9 | 478181 | 418778 | 19335 | 167.5 | 344 | 56 | 23 | 1 | turn outcome stopped; 1 sub-agents |
 | omp-sonnet | 3 | 2026-10-14 17:50 | claude-sonnet-5-5 | 10 | 7 | 0 | 126729 | 114697 | 6210 | 91.4 | 778 | 6 | 0 | 0 |  |
 
 ## Task subagents
 
-Prompt, rubric and seed in `testdata/tasks/subagents`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Requests count every model call of the run and every sub-agent; auxiliary is the part outside the conversation, tofu's memory model and omp's auto-thinking judge, whose tokens are in the token columns too. Sub-agents is the count the tool's own transcript reports.
+Prompt, rubric and seed in `testdata/tasks/subagents`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Conversation requests count every model call of the conversation and of every sub-agent; memory or judge calls are the calls outside it, tofu's memory model and omp's auto-thinking judge, counted apart and with their tokens in the token columns too. Sub-agents is the count the tool's own transcript reports.
 
-| arm | tool version | runs | quality of 6 | requests | auxiliary | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |
+| arm | tool version | runs | quality of 6 | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |
-| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 37 [30 to 53] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |
+| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 26 [25 to 27] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |
+| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 6] | 31 [30 to 46] | 6 [0 to 7] | 2839 [76 to 2895] | 387604 [266793 to 574561] | 65005 [57744 to 123356] | 455504 [324613 to 700756] | 14501 [7325 to 21323] | 82.9 [80.3 to 124.6] | 1080.0 [1046.2 to 1154.8] | 4 [3 to 9] | 6 [6 to 7] |
 
-| arm | rep | date | models the responses reported | quality | requests | auxiliary | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |
+| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | omp-sonnet | 1 | 2026-10-14 17:20 | claude-sonnet-5-5 | 6 | 30 | 0 | 324613 | 266793 | 7325 | 80.3 | 1155 | 44 | 4 | 6 | 19 model requests came from sub-agent session files, their tool calls are not timed |
-| omp-sonnet | 2 | 2026-10-14 17:31 | claude-sonnet-5-5, muse-spark-1.2-contributor | 6 | 53 | 7 | 700756 | 574561 | 21323 | 124.6 | 1046 | 84 | 9 | 7 | 31 model requests came from sub-agent session files, their tool calls are not timed |
-| tofu-sonnet | 2 | 2026-10-14 17:33 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 36 | 9 | 394047 | 349454 | 7001 | 80.1 | 368 | 31 | 1 | 6 | turn outcome stopped; 6 sub-agents |
-| tofu-sonnet | 3 | 2026-10-14 17:44 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 33 | 7 | 350668 | 311789 | 6965 | 74.0 | 354 | 31 | 0 | 6 | turn outcome stopped; 6 sub-agents |
-| omp-sonnet | 3 | 2026-10-14 17:46 | claude-sonnet-5-5 | 6 | 37 | 6 | 455504 | 387604 | 14501 | 82.9 | 1080 | 53 | 3 | 6 | 21 model requests came from sub-agent session files, their tool calls are not timed |
-| tofu-sonnet | 1 | 2026-10-14 18:12 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 33 | 8 | 365425 | 321872 | 6374 | 71.9 | 363 | 29 | 0 | 6 | turn outcome stopped; 6 sub-agents |
+| omp-sonnet | 2 | 2026-10-14 17:31 | claude-sonnet-5-5, muse-spark-1.2-contributor | 6 | 46 | 7 | 700756 | 574561 | 21323 | 124.6 | 1046 | 84 | 9 | 7 | 31 model requests came from sub-agent session files, their tool calls are not timed |
+| tofu-sonnet | 2 | 2026-10-14 17:33 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 27 | 9 | 394047 | 349454 | 7001 | 80.1 | 368 | 31 | 1 | 6 | turn outcome stopped; 6 sub-agents |
+| tofu-sonnet | 3 | 2026-10-14 17:44 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 26 | 7 | 350668 | 311789 | 6965 | 74.0 | 354 | 31 | 0 | 6 | turn outcome stopped; 6 sub-agents |
+| omp-sonnet | 3 | 2026-10-14 17:46 | claude-sonnet-5-5 | 6 | 31 | 6 | 455504 | 387604 | 14501 | 82.9 | 1080 | 53 | 3 | 6 | 21 model requests came from sub-agent session files, their tool calls are not timed |
+| tofu-sonnet | 1 | 2026-10-14 18:12 | claude-sonnet-5-5, claude-haiku-4-5-20251001 | 6 | 25 | 8 | 365425 | 321872 | 6374 | 71.9 | 363 | 29 | 0 | 6 | turn outcome stopped; 6 sub-agents |

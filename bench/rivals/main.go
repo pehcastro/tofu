@@ -95,7 +95,7 @@ type row struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fail(errors.New("usage: rivals check [-task <name>] [-prompt <file>] | run [-task <name>] -arm <name> -rep <n> -slot <dir> | reparse | report"))
+		fail(errors.New("usage: rivals check [-task <name>] [-prompt <file>] | run [-task <name>] -arm <name> -rep <n> -slot <dir> | reparse [-batch <dir>] [-task <name>] | report | parity -batch <dir> [-task <name>]"))
 	}
 	switch os.Args[1] {
 	case "check":
@@ -106,6 +106,8 @@ func main() {
 		fail(reparse(os.Args[2:]))
 	case "report":
 		fail(writeReport(os.Args[2:]))
+	case "parity":
+		fail(printParity(os.Args[2:]))
 	default:
 		fail(fmt.Errorf("unknown verb %q", os.Args[1]))
 	}
@@ -200,7 +202,7 @@ func runArm(args []string) error {
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
 	limit := flags.Duration("limit", 20*time.Minute, "wall clock cap")
 	patience := flags.Duration("patience", 30*time.Minute, "how long to wait for the slot")
-	setting := flags.String("setting", "", "the build or setting under test: shipped or rival, or a thinkingSummary value written to the run's project settings")
+	setting := flags.String("setting", "", "the build or setting under test: shipped, rival, or summarized, tofu's thinkingSummary as it resolves with no file in the measured repo")
 	batch := flags.String("batch", "", "folder under runs for this batch of rows, so a rerun keeps the rows before it")
 	taskName := flags.String("task", "", "task folder under testdata/tasks; empty is the first task in testdata")
 	if err := flags.Parse(args); err != nil {
@@ -214,8 +216,12 @@ func runArm(args []string) error {
 	if index < 0 || *rep < 1 || *slot == "" {
 		return errors.New("run needs -arm, -rep and -slot")
 	}
-	if !slices.Contains(append([]string{"", settingShipped, settingRival}, thinkingSummaries...), *setting) {
-		return fmt.Errorf("-setting is %s, %s or one of %v, not %q", settingShipped, settingRival, thinkingSummaries, *setting)
+	switch *setting {
+	case "", settingShipped, settingRival, thinkingSummarized:
+	case thinkingOmitted:
+		return errors.New("-setting omitted is refused: tofu run takes thinkingSummary only from .tofu/settings.json in the measured repo or from the global settings, a file in the repo is part of what the run sees, and tofu run has no flag for it yet")
+	default:
+		return fmt.Errorf("-setting is %s, %s or %s, not %q", settingShipped, settingRival, thinkingSummarized, *setting)
 	}
 	chosen := arms[index]
 	for waited := time.Duration(0); os.Mkdir(*slot, 0o755) != nil; waited += 15 * time.Second {
@@ -235,8 +241,12 @@ func runArm(args []string) error {
 	env := goEnv(dirs)
 	if chosen.Tool == "tofu" {
 		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
-		if slices.Contains(thinkingSummaries, *setting) {
-			r.Notes = append(r.Notes, "setting: "+toolOutput(dirs.repo, env, "tofu", "settings", "set", "--scope", "project", "thinkingSummary", *setting))
+		if *setting == thinkingSummarized {
+			resolved := toolOutput(dirs.repo, env, "tofu", "settings", "get", "thinkingSummary")
+			if resolved != thinkingSummarized {
+				return fmt.Errorf("thinkingSummary resolves to %q in the run repo, not %s, and the bench writes no settings file", resolved, thinkingSummarized)
+			}
+			r.Notes = append(r.Notes, "setting: thinkingSummary "+resolved+", resolved with no settings file in the repo")
 		}
 	} else {
 		r.Version = firstLine(toolOutput(dirs.repo, env, chosen.Tool, "--version"))
@@ -288,10 +298,11 @@ func reparse(args []string) error {
 	flags := flag.NewFlagSet("reparse", flag.ContinueOnError)
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
 	taskName := flags.String("task", "", "reparse only this task's rows; empty is the first task")
+	batch := flags.String("batch", "", "folder under runs that holds the rows")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	paths, err := filepath.Glob(filepath.Join(here(), "runs", *taskName, "*.json"))
+	paths, err := filepath.Glob(filepath.Join(here(), "runs", *batch, *taskName, "*.json"))
 	if err != nil {
 		return err
 	}
@@ -317,6 +328,9 @@ func reparse(args []string) error {
 			lines = append(lines, stamped{ms: at, text: text})
 		}
 		dirs := runDirs{repo: filepath.Join(dir, "repo"), goDir: filepath.Join(dir, "go"), sessions: filepath.Join(dir, "sessions")}
+		if err := os.MkdirAll(dirs.repo, 0o755); err != nil {
+			return err
+		}
 		if err := save(withTranscript(r, parse(chosen, lines, dirs, goEnv(dirs)))); err != nil {
 			return err
 		}

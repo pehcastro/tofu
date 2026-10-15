@@ -28,7 +28,7 @@
     "cache_write": 65005,
     "out": 14501
   },
-  "requests": 37,
+  "requests": 31,
   "auxiliary_requests": 6,
   "calls": [
     {
