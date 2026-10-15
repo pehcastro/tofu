@@ -16,6 +16,11 @@ use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
 pub fn verb(call: &Call) -> &'static str {
+    if let Call::CommandRun(run) = call
+        && let Some(method) = Method::ALL.iter().find(|method| method.name() == run.name)
+    {
+        return method.name();
+    }
     let shown = format!("{call:?}");
     let variant = shown.split('(').next().unwrap_or_default();
     Method::ALL

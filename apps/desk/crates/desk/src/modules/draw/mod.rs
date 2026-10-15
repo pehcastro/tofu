@@ -16,7 +16,7 @@ use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_ROW, T1, T2};
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
-use draw_doc::Scene;
+use draw_doc::{DocError, Op, Rect, Scene, bounds};
 use gpui::{
     AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, Context, Entity, Focusable, Global,
     KeyDownEvent, Pixels, Render, SharedString, StyleRefinement, WeakEntity, Window, div,
@@ -94,8 +94,6 @@ pub fn boards() -> Result<Vec<PathBuf>, String> {
 }
 
 pub fn replace(path: PathBuf, text: &str, cx: &mut App) -> Result<(), String> {
-    let plugin =
-        crate::plugins::find(PLUGIN).ok_or(format!("plugin {PLUGIN} is not in this desk"))?;
     if let Some(draw) = live(cx) {
         draw.update(cx, |draw, _| {
             if draw.board.as_ref() == Some(&path) {
@@ -103,9 +101,61 @@ pub fn replace(path: PathBuf, text: &str, cx: &mut App) -> Result<(), String> {
             }
         });
     }
-    write(plugin, &path, text)?;
+    store(&path, text)?;
     show(path, cx);
     Ok(())
+}
+
+pub fn store(path: &Path, text: &str) -> Result<(), String> {
+    let found =
+        crate::plugins::find(PLUGIN).ok_or(format!("plugin {PLUGIN} is not in this desk"))?;
+    write(found, path, text)
+}
+
+fn showing(path: &Path, cx: &App) -> Option<Entity<Draw>> {
+    live(cx).filter(|draw| draw.read(cx).board.as_deref() == Some(path))
+}
+
+pub fn edit<T>(
+    path: &Path,
+    change: impl FnOnce(&Scene) -> Result<(Vec<Op>, T), DocError>,
+    cx: &mut App,
+) -> Result<T, String> {
+    let Some(draw) = showing(path, cx) else {
+        let text =
+            fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let mut scene = Scene::read(&text).map_err(|error| error.to_string())?;
+        let (ops, made) = change(&scene).map_err(|error| error.to_string())?;
+        scene.apply(ops).map_err(|error| error.to_string())?;
+        store(path, &scene.write().map_err(|error| error.to_string())?)?;
+        return Ok(made);
+    };
+    draw.update(cx, |draw, cx| {
+        let made = draw
+            .canvas
+            .update(cx, |canvas, cx| {
+                let (ops, made) = change(canvas.scene())?;
+                canvas.apply(ops, cx)?;
+                Ok::<_, DocError>(made)
+            })
+            .map_err(|error| error.to_string())?;
+        draw.store(cx)?;
+        cx.notify();
+        Ok(made)
+    })
+}
+
+pub fn fit(path: &Path, keys: Option<&[String]>, cx: &mut App) -> Result<(Rect, f64), String> {
+    let draw = showing(path, cx)
+        .ok_or_else(|| format!("{} is not showing: run draw.open first", path.display()))?;
+    draw.update(cx, |draw, cx| {
+        draw.canvas.update(cx, |canvas, cx| {
+            let rect = bounds(canvas.scene(), keys)
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| "the board is empty".to_owned())?;
+            Ok((rect, canvas.fit(rect, cx).zoom()))
+        })
+    })
 }
 
 pub struct Draw {
@@ -238,22 +288,24 @@ impl Draw {
     }
 
     fn save(&mut self, cx: &App) {
+        if let Err(error) = self.store(cx) {
+            self.fail(error);
+        }
+    }
+
+    fn store(&self, cx: &App) -> Result<(), String> {
         let Some(path) = &self.board else {
-            return;
+            return Ok(());
         };
         let scene = self.canvas.read(cx).scene();
-        let written = scene
-            .write()
-            .map_err(|error| error.to_string())
-            .and_then(|text| write(self.plugin, path, &text));
-        match written {
-            Ok(()) => eprintln!(
-                "desk: draw saved {} {} shapes",
-                path.display(),
-                scene.elements().len()
-            ),
-            Err(error) => self.fail(error),
-        }
+        let text = scene.write().map_err(|error| error.to_string())?;
+        write(self.plugin, path, &text)?;
+        eprintln!(
+            "desk: draw saved {} {} shapes",
+            path.display(),
+            scene.elements().len()
+        );
+        Ok(())
     }
 
     fn open(&mut self, path: PathBuf, cx: &mut Context<Self>) {

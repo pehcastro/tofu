@@ -2,16 +2,22 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use desk_control::params::{CommandRun, FocusTarget, TabActivate, TabPick, TileOpen};
+use desk_control::params::{
+    CommandRun, DrawConnect, DrawDelete, DrawImport, DrawShapes, DrawUpdate, DrawView, FocusTarget,
+    TabActivate, TabPick, TileOpen,
+};
 use desk_control::replies::CommandResult;
 use desk_control::{Call, ErrorCode, shapes};
 use desk_core::home::Home;
 use desk_tiling::{Module, Rect};
-use draw_doc::{Edge, Graph, Node, Scene, diagram, graph};
+use draw_doc::{
+    Edge, Graph, Link, Node, Patch, Scene, Shape, add_shapes, connect, delete, diagram, graph,
+    update,
+};
 use gpui::{App, Entity, px};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use super::capture;
 use super::change::{self, Answered};
@@ -101,10 +107,92 @@ pub fn answer(run: &CommandRun, work: Option<&Entity<Work>>, cx: &mut App) -> An
             } = parsed(args)?;
             snapshot(&board, max_px.unwrap_or(SNAPSHOT_MAX_PX), path, work, cx)
         }
+        "draw.create_board" => {
+            let Board { board } = parsed(args)?;
+            let path = tile::board(&board).map_err(bad)?;
+            if path.exists() {
+                return Err((ErrorCode::Conflict, format!("board {board} already exists")));
+            }
+            let text = Scene::new()
+                .write()
+                .map_err(|error| refused(error.to_string()))?;
+            tile::store(&path, &text).map_err(refused)?;
+            Ok(json!({ "board": board, "path": path }))
+        }
+        "draw.add_shapes" => {
+            let DrawShapes {
+                board,
+                shapes,
+                shapes_file,
+            } = parsed(args)?;
+            let shapes: Vec<Shape> = listed(shapes, shapes_file, "shapes")?;
+            let started = Instant::now();
+            let made = tile::edit(&existing(&board)?, |scene| add_shapes(scene, &shapes), cx)
+                .map_err(refused)?;
+            let ids: Map<String, Value> = made
+                .into_iter()
+                .map(|(key, id)| (key, Value::String(id)))
+                .collect();
+            let ms = started.elapsed().as_millis();
+            eprintln!("desk: draw add_shapes {} shapes in {ms} ms", ids.len());
+            Ok(json!({ "board": board, "ids": ids, "ms": ms }))
+        }
+        "draw.connect" => {
+            let DrawConnect {
+                board,
+                edges,
+                edges_file,
+            } = parsed(args)?;
+            let edges: Vec<Link> = listed(edges, edges_file, "edges")?;
+            let ids = tile::edit(&existing(&board)?, |scene| connect(scene, &edges), cx)
+                .map_err(refused)?;
+            Ok(json!({ "board": board, "ids": ids }))
+        }
+        "draw.update" => {
+            let DrawUpdate {
+                board,
+                patches,
+                patches_file,
+            } = parsed(args)?;
+            let patches: Vec<Patch> = listed(patches, patches_file, "patches")?;
+            let path = existing(&board)?;
+            tile::edit(&path, |scene| Ok((update(scene, &patches)?, ())), cx).map_err(refused)?;
+            Ok(json!({ "board": board, "updated": patches.len() }))
+        }
+        "draw.delete" => {
+            let DrawDelete { board, keys } = parsed(args)?;
+            let keys = key_list(keys)?;
+            let path = existing(&board)?;
+            tile::edit(&path, |scene| Ok((delete(scene, &keys)?, ())), cx).map_err(refused)?;
+            Ok(json!({ "board": board, "deleted": keys }))
+        }
+        "draw.view" => {
+            let DrawView { board, fit } = parsed(args)?;
+            let keys = match fit.as_deref() {
+                None | Some("all") => None,
+                Some(keys) => Some(keys.split(',').map(str::to_owned).collect::<Vec<_>>()),
+            };
+            let (seen, zoom) =
+                tile::fit(&existing(&board)?, keys.as_deref(), cx).map_err(refused)?;
+            Ok(json!({
+                "board": board,
+                "camera": {
+                    "x": seen.min_x,
+                    "y": seen.min_y,
+                    "w": seen.max_x - seen.min_x,
+                    "h": seen.max_y - seen.min_y,
+                    "zoom": zoom,
+                },
+            }))
+        }
+        "draw.import_excalidraw" => {
+            let DrawImport { path, board } = parsed(args)?;
+            import(&path, board)
+        }
         other => Err((
             ErrorCode::UnknownCommand,
             format!(
-                "{other} is not a draw command: draw.list, draw.open, draw.read, draw.diagram, draw.snapshot"
+                "{other} is not a draw command: draw.list, draw.create_board, draw.open, draw.read, draw.add_shapes, draw.connect, draw.update, draw.delete, draw.view, draw.diagram, draw.snapshot, draw.import_excalidraw"
             ),
         )),
     }?;
@@ -128,6 +216,65 @@ fn refused(message: String) -> Refused {
 
 fn parsed<T: DeserializeOwned>(args: Value) -> Result<T, Refused> {
     serde_json::from_value(args).map_err(|error| bad(error.to_string()))
+}
+
+fn existing(board: &str) -> Result<PathBuf, Refused> {
+    let path = tile::board(board).map_err(bad)?;
+    if !path.is_file() {
+        return Err((
+            ErrorCode::NotFound,
+            format!("no board {board} at {}", path.display()),
+        ));
+    }
+    Ok(path)
+}
+
+fn listed<T: DeserializeOwned>(
+    inline: Option<Vec<Value>>,
+    file: Option<String>,
+    name: &str,
+) -> Result<Vec<T>, Refused> {
+    match (inline, file) {
+        (Some(items), None) => parsed(Value::Array(items)),
+        (None, Some(file)) => {
+            let text = fs::read_to_string(&file)
+                .map_err(|error| (ErrorCode::NotFound, format!("{file}: {error}")))?;
+            serde_json::from_str(&text).map_err(|error| bad(format!("{file}: {error}")))
+        }
+        (Some(_), Some(_)) | (None, None) => Err(bad(format!(
+            "give {name} as a JSON list or --{name}-file with a path to one, exactly one of them"
+        ))),
+    }
+}
+
+fn key_list(keys: Value) -> Result<Vec<String>, Refused> {
+    match keys {
+        Value::String(keys) => Ok(keys.split(',').map(str::to_owned).collect()),
+        Value::Array(_) => parsed(keys),
+        other => Err(bad(format!(
+            "keys is a key, a comma list of keys, or a JSON list of keys, not {other}"
+        ))),
+    }
+}
+
+fn import(path: &str, board: Option<String>) -> Answered {
+    let from = Path::new(path);
+    let text = fs::read_to_string(from)
+        .map_err(|error| (ErrorCode::NotFound, format!("{path}: {error}")))?;
+    let scene = Scene::read(&text).map_err(|error| bad(format!("{path}: {error}")))?;
+    let board = match board {
+        Some(board) => board,
+        None => from
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .ok_or_else(|| bad(format!("{path} has no file name")))?,
+    };
+    let target = tile::board(&board).map_err(bad)?;
+    if target.exists() {
+        return Err((ErrorCode::Conflict, format!("board {board} already exists")));
+    }
+    tile::store(&target, &text).map_err(refused)?;
+    Ok(json!({ "board": board, "path": target, "elements": scene.elements().len() }))
 }
 
 fn read(path: &Path) -> Result<Scene, Refused> {

@@ -1,11 +1,13 @@
 mod diagram;
+mod edit;
 mod element;
 mod layout;
 mod scene;
 
 use std::fmt;
 
-pub use diagram::{Edge, Graph, Node, diagram, graph};
+pub use diagram::{Edge, Graph, Line, Node, diagram, graph};
+pub use edit::{Color, Link, Patch, Shape, ShapeKind, add_shapes, bounds, connect, delete, update};
 pub use element::{ArrowEnd, BindMode, Binding, BoundElement, BoundKind, Element, Rect};
 pub use scene::{Op, Scene};
 
@@ -19,6 +21,8 @@ pub enum DocError {
     },
     UnknownId(String),
     DuplicateId(String),
+    UnknownKey(String),
+    DuplicateKey(String),
     NotAnArrow(String),
     OutOfRange {
         at: usize,
@@ -36,6 +40,8 @@ impl fmt::Display for DocError {
             }
             DocError::UnknownId(id) => write!(f, "no element with id {id}"),
             DocError::DuplicateId(id) => write!(f, "element id {id} already exists"),
+            DocError::UnknownKey(key) => write!(f, "no shape with key {key}"),
+            DocError::DuplicateKey(key) => write!(f, "key {key} is used twice"),
             DocError::NotAnArrow(id) => write!(f, "element {id} is not an arrow"),
             DocError::OutOfRange { at, len } => {
                 write!(f, "position {at} is past the {len} elements")
@@ -54,6 +60,8 @@ impl std::error::Error for DocError {
             DocError::Unwind(first, _) => Some(first.as_ref()),
             DocError::UnknownId(_)
             | DocError::DuplicateId(_)
+            | DocError::UnknownKey(_)
+            | DocError::DuplicateKey(_)
             | DocError::NotAnArrow(_)
             | DocError::OutOfRange { .. } => None,
         }

@@ -52,7 +52,17 @@ macro_rules! verbs {
 impl Method {
     pub fn wire(self, params: Value) -> (&'static str, Value) {
         match self {
-            Method::DrawList | Method::DrawOpen | Method::DrawRead | Method::DrawDiagram => (
+            Method::DrawList
+            | Method::DrawOpen
+            | Method::DrawRead
+            | Method::DrawDiagram
+            | Method::DrawCreateBoard
+            | Method::DrawAddShapes
+            | Method::DrawConnect
+            | Method::DrawUpdate
+            | Method::DrawDelete
+            | Method::DrawView
+            | Method::DrawImportExcalidraw => (
                 Method::CommandRun.name(),
                 json!({ "name": self.name(), "args": params }),
             ),
@@ -157,6 +167,13 @@ verbs! {
     DrawOpen "draw.open" p::DrawBoard => r::CommandResult, [NotFound, BadParams];
     DrawRead "draw.read" p::DrawBoard => r::CommandResult, [NotFound, Refused];
     DrawDiagram "draw.diagram" p::DrawDiagram => r::CommandResult, [BadParams, NotFound, Refused];
+    DrawCreateBoard "draw.create_board" p::DrawBoard => r::CommandResult, [BadParams, Conflict, Refused];
+    DrawAddShapes "draw.add_shapes" p::DrawShapes => r::CommandResult, [BadParams, NotFound, Refused];
+    DrawConnect "draw.connect" p::DrawConnect => r::CommandResult, [BadParams, NotFound, Refused];
+    DrawUpdate "draw.update" p::DrawUpdate => r::CommandResult, [BadParams, NotFound, Refused];
+    DrawDelete "draw.delete" p::DrawDelete => r::CommandResult, [BadParams, NotFound, Refused];
+    DrawView "draw.view" p::DrawView => r::CommandResult, [BadParams, NotFound, Refused];
+    DrawImportExcalidraw "draw.import_excalidraw" p::DrawImport => r::CommandResult, [BadParams, NotFound, Conflict, Refused];
     TaskList "task.list" p::Empty => Vec<r::Task>, [];
     TaskGet "task.get" p::IdRef => r::Task, [NotFound];
     TaskCancel "task.cancel" p::IdRef => r::Task, [NotFound];

@@ -88,6 +88,12 @@ params! {
     DrawNode { key: String, label: String }
     DrawEdge { from: String, to: String, #[serde(default, skip_serializing_if = "Option::is_none")] label: Option<String> }
     DrawDiagram { board: String, nodes: Vec<DrawNode>, edges: Vec<DrawEdge> }
+    DrawShapes { board: String, shapes: Option<Vec<Value>>, #[serde(alias = "shapes-file")] shapes_file: Option<String> }
+    DrawConnect { board: String, edges: Option<Vec<Value>>, #[serde(alias = "edges-file")] edges_file: Option<String> }
+    DrawUpdate { board: String, patches: Option<Vec<Value>>, #[serde(alias = "patches-file")] patches_file: Option<String> }
+    DrawDelete { board: String, keys: Value }
+    DrawView { board: String, fit: Option<String> }
+    DrawImport { path: String, board: Option<String> }
     CommandRun {
         name: String,
         args: Option<Map<String, Value>>,

@@ -25,6 +25,34 @@ pub struct Edge {
     pub label: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Line {
+    Solid,
+    Dashed,
+    Dotted,
+}
+
+pub(crate) fn dress(arrow: &mut Element, line: Line, headed: bool) {
+    let style = match line {
+        Line::Solid => "solid",
+        Line::Dashed => "dashed",
+        Line::Dotted => "dotted",
+    };
+    let head = match headed {
+        true => json!("arrow"),
+        false => Value::Null,
+    };
+    for (field, value) in [
+        ("strokeStyle", json!(style)),
+        ("startArrowhead", Value::Null),
+        ("endArrowhead", head),
+        ("elbowed", json!(false)),
+    ] {
+        arrow.extra.insert(field.to_owned(), value);
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Graph {
     pub nodes: Vec<Node>,
@@ -98,11 +126,7 @@ pub fn diagram(graph: &Graph) -> Result<Scene, DocError> {
                 list.push(json!({ "id": id, "type": "arrow" }));
             }
         }
-        arrow.extra.insert("startArrowhead".to_owned(), Value::Null);
-        arrow
-            .extra
-            .insert("endArrowhead".to_owned(), json!("arrow"));
-        arrow.extra.insert("elbowed".to_owned(), json!(false));
+        dress(&mut arrow, Line::Solid, true);
         let label = edge.label.as_deref().map(|text| {
             arrow.extra.insert(
                 "boundElements".to_owned(),
@@ -198,7 +222,13 @@ pub fn graph(scene: &Scene) -> Result<Graph, DocError> {
     Ok(found)
 }
 
-fn shape(id: &str, kind: &str, at: (f64, f64), size: (f64, f64), seed: usize) -> Element {
+pub(crate) fn shape(
+    id: &str,
+    kind: &str,
+    at: (f64, f64),
+    size: (f64, f64),
+    seed: usize,
+) -> Element {
     let extra = json!({
         "strokeColor": "#1e1e1e",
         "backgroundColor": "transparent",
@@ -235,7 +265,13 @@ fn shape(id: &str, kind: &str, at: (f64, f64), size: (f64, f64), seed: usize) ->
     }
 }
 
-fn text_in(id: &str, text: &str, container: &str, middle: (f64, f64), seed: usize) -> Element {
+pub(crate) fn text_in(
+    id: &str,
+    text: &str,
+    container: &str,
+    middle: (f64, f64),
+    seed: usize,
+) -> Element {
     let width = (text.chars().count() as f64 * FONT * CHAR).min(BOX.0 - 10.0);
     let height = FONT * LINE;
     let corner = (middle.0 - width / 2.0, middle.1 - height / 2.0);

@@ -108,6 +108,24 @@ impl Canvas {
         &self.scene
     }
 
+    pub fn apply(&mut self, ops: Vec<Op>, cx: &mut Context<Self>) -> Result<(), DocError> {
+        self.scene.apply(ops)?;
+        if let Some(id) = &self.selected
+            && self.scene.get(id).is_none()
+        {
+            self.selected = None;
+        }
+        cx.notify();
+        Ok(())
+    }
+
+    pub fn fit(&mut self, to: Rect, cx: &mut Context<Self>) -> View {
+        self.view = View::fit(to, self.bounds.size);
+        self.fit = false;
+        cx.notify();
+        self.view
+    }
+
     pub fn drawn(&self, pad: Pixels) -> Option<Bounds<Pixels>> {
         let content = self.content()?;
         let origin = self.bounds.origin;
