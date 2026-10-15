@@ -1,6 +1,7 @@
 pub(crate) mod cassette;
 mod items;
 mod mention;
+mod mirror;
 
 use std::collections::BTreeMap;
 use std::io::ErrorKind;
@@ -11,7 +12,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use std::{env, fs, iter, slice, thread};
 
-use desk_core::bridge::{Bridge, BridgeError, Event, serve_command};
+use desk_core::bridge::{Bridge, BridgeError, Event, Exit, serve_command};
 use desk_core::model::{PersonAsk, PersonKind, Role, Statuses, Store};
 use desk_core::protocol::turn::{PersonQuestion, PersonReply};
 use desk_core::protocol::{
@@ -43,6 +44,7 @@ use cassette::{Replay, Step};
 use items::{Entry, Item};
 use mention::{Files, Mention, Menu};
 pub use mention::{Trace, mention};
+pub use mirror::{ChatMirror, mirror};
 
 const CLIENT: &str = "tofu-desk";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
@@ -141,6 +143,7 @@ pub struct Chat {
     files: Files,
     _files: Option<Task<()>>,
     _signed: Option<Task<()>>,
+    reopening: Option<Instant>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
 }
@@ -166,6 +169,25 @@ impl EventEmitter<Touched> for Chat {}
 pub struct SettingsMoved;
 
 impl EventEmitter<SettingsMoved> for Chat {}
+
+#[derive(Clone)]
+pub struct TofuStopped {
+    pub exit: Exit,
+    pub session: Option<String>,
+}
+
+impl EventEmitter<TofuStopped> for Chat {}
+
+pub enum Spliced {
+    Rows {
+        old: Range<usize>,
+        count: usize,
+        after: usize,
+    },
+    Cleared,
+}
+
+impl EventEmitter<Spliced> for Chat {}
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let store = cx.new(|_| Store::default());
@@ -222,31 +244,8 @@ pub fn live(
     cx: &mut App,
 ) -> Entity<Chat> {
     let chat = cx.new(|cx| {
-        let (sender, opened) = flume::bounded::<Opened>(1);
-        thread::spawn(move || {
-            let bridge = Bridge::open(serve_command(&tofu(), &project), CLIENT, PROTOCOL);
-            sender.send(bridge).ok();
-        });
         let mut chat = Chat::new(Link::Starting, store, window, cx);
-        chat._drain = Some(cx.spawn(async move |this, cx| {
-            let Ok(opened) = opened.recv_async().await else {
-                return;
-            };
-            let events = this
-                .update(cx, |chat, cx| chat.started(opened, cx))
-                .ok()
-                .flatten();
-            let Some(events) = events else {
-                return;
-            };
-            while let Ok(first) = events.recv_async().await {
-                let batch: Vec<Event> = iter::once(first).chain(events.try_iter()).collect();
-                if this.update(cx, |chat, cx| chat.take(&batch, cx)).is_err() {
-                    return;
-                }
-            }
-            this.update(cx, |chat, cx| chat.stopped(cx)).ok();
-        }));
+        chat.connect(project, None, cx);
         chat
     });
     mention::aim(&chat, cx);
@@ -451,6 +450,7 @@ impl Chat {
             files: Files::default(),
             _files: None,
             _signed: None,
+            reopening: None,
             _drain: None,
             _flash: None,
         }
@@ -557,6 +557,13 @@ impl Chat {
                 "desk: session {} opened, fresh {}",
                 opened.session, opened.fresh
             );
+            if let Some(at) = chat.reopening.take() {
+                eprintln!(
+                    "desk: tofu restarted, session {} back in {} ms",
+                    opened.session,
+                    at.elapsed().as_millis()
+                );
+            }
             chat.ask_shells(cx);
             chat.opened(opened, cx);
             chat.refresh(cx);
@@ -675,13 +682,57 @@ impl Chat {
         Some(events)
     }
 
-    fn stopped(&mut self, cx: &mut Context<Self>) {
-        let said = match &self.link {
-            Link::Ready(bridge) => bridge.log().pop().unwrap_or_default(),
-            Link::Starting | Link::Gone | Link::Recorded(_) | Link::Fed => String::new(),
-        };
+    fn connect(&mut self, project: PathBuf, reopen: Option<String>, cx: &mut Context<Self>) {
+        let (sender, opened) = flume::bounded::<Opened>(1);
+        thread::spawn(move || {
+            let bridge = Bridge::open(serve_command(&tofu(), &project), CLIENT, PROTOCOL);
+            sender.send(bridge).ok();
+        });
+        self.link = Link::Starting;
+        self._drain = Some(cx.spawn(async move |this, cx| {
+            let Ok(opened) = opened.recv_async().await else {
+                return;
+            };
+            let events = this
+                .update(cx, move |chat, cx| {
+                    let events = chat.started(opened, cx)?;
+                    if let Some(session) = reopen {
+                        chat.restart(cx);
+                        chat.open_session(Some(session), cx);
+                    }
+                    Some(events)
+                })
+                .ok()
+                .flatten();
+            let Some(events) = events else {
+                return;
+            };
+            while let Ok(first) = events.recv_async().await {
+                let batch: Vec<Event> = iter::once(first).chain(events.try_iter()).collect();
+                if this.update(cx, |chat, cx| chat.take(&batch, cx)).is_err() {
+                    return;
+                }
+            }
+        }));
+    }
+
+    pub fn reconnect(&mut self, session: Option<String>, cx: &mut Context<Self>) {
+        eprintln!(
+            "desk: restarting tofu, session {}",
+            session.as_deref().unwrap_or("none")
+        );
+        self.problem = None;
+        self.reopening = session.as_ref().map(|_| Instant::now());
+        self.connect(PathBuf::from(&self.project), session, cx);
+    }
+
+    fn exited(&mut self, exit: &Exit, cx: &mut Context<Self>) {
         self.link = Link::Gone;
-        self.fail(format!("tofu stopped: {said}"), cx);
+        cx.emit(TofuStopped {
+            exit: exit.clone(),
+            session: self.open_id().map(str::to_owned),
+        });
+        cx.notify();
     }
 
     fn fail(&mut self, problem: String, cx: &mut Context<Self>) {
@@ -729,6 +780,7 @@ impl Chat {
         self.set_opening(Opening::Closed, cx);
         self.items = Rc::default();
         self.transcript.reset(0);
+        cx.emit(Spliced::Cleared);
     }
 
     pub fn focus_composer(&self, window: &mut Window, cx: &mut App) -> bool {
@@ -897,6 +949,7 @@ impl Chat {
                 }
                 return;
             }
+            Event::Exited(exit) => return self.exited(exit, cx),
             Event::Notification(_) | Event::Unreadable { .. } => return,
         };
         self.orders.entry(session.clone()).or_default().push(entry);
@@ -947,7 +1000,7 @@ impl Chat {
         };
         let order = self.orders.get(id).map_or(&[][..], Vec::as_slice);
         let shown = Rc::make_mut(&mut self.items);
-        let (mut at, mut changed) = (0, false);
+        let (mut at, mut spliced) = (0, Vec::new());
         for (index, entry) in order.iter().enumerate() {
             if let Some(slot) = self.slots.get(index)
                 && slot.settled
@@ -974,25 +1027,32 @@ impl Chat {
                     None
                 }
             };
-            match (was, now) {
-                (None, None) => {}
-                (Some(was), Some(now)) if was == now => at += 1,
+            let (old, count) = match (was, now) {
+                (None, None) => continue,
+                (Some(was), Some(now)) if was == now => {
+                    at += 1;
+                    continue;
+                }
                 (Some(_), Some(now)) => {
                     shown[at] = now;
-                    self.transcript.splice(at..at + 1, 1);
-                    (at, changed) = (at + 1, true);
+                    (at..at + 1, 1)
                 }
                 (None, Some(now)) => {
                     shown.insert(at, now);
-                    self.transcript.splice(at..at, 1);
-                    (at, changed) = (at + 1, true);
+                    (at..at, 1)
                 }
                 (Some(_), None) => {
                     shown.remove(at);
-                    self.transcript.splice(at..at + 1, 0);
-                    changed = true;
+                    (at..at + 1, 0)
                 }
-            }
+            };
+            self.transcript.splice(old.clone(), count);
+            spliced.push(Spliced::Rows {
+                old,
+                count,
+                after: shown.len(),
+            });
+            at += count;
         }
         let kept = self.card.as_ref().is_some_and(|shown| {
             session.approvals.contains_key(&shown.key) || session.questions.contains_key(&shown.key)
@@ -1006,6 +1066,10 @@ impl Chat {
                 .map(|(asked_id, asked)| Card::approval(asked_id.clone(), asked, &self.project))
                 .or_else(|| session.questions.values().next().map(Card::question));
             self.refocus |= shown || self.card.is_some();
+        }
+        let changed = !spliced.is_empty();
+        for rows in spliced {
+            cx.emit(rows);
         }
         if changed && !self.query.is_empty() {
             self.search(cx);
@@ -1516,6 +1580,10 @@ impl Chat {
             return;
         }
         self.area.update(cx, |area, cx| area.clear(cx));
+        self.post(text, cx);
+    }
+
+    fn post(&mut self, text: String, cx: &mut Context<Self>) {
         self.problem = None;
         match (&self.opening, self.running(cx)) {
             (_, Some((session, turn))) => {
@@ -1554,7 +1622,7 @@ impl Chat {
                     );
                     chat.opened(opened, cx);
                     chat.relist(cx);
-                    chat.send(&text, cx);
+                    chat.post(text, cx);
                 });
             }
         }

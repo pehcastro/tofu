@@ -27,7 +27,7 @@ use gpui::{
 
 use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark};
 use crate::modules::chat::cassette::{Replay, Step};
-use crate::modules::chat::{self, Chat, Find};
+use crate::modules::chat::{self, Chat, ChatMirror, Find};
 use crate::modules::file_edits::{self, FileEdits};
 use crate::modules::replayed;
 use crate::modules::shells::{self, Kill, Shells};
@@ -39,6 +39,7 @@ use crate::project;
 const BOARD: &str = "36-agents";
 const WORK_NAME: &str = "work";
 const PLUGINS_POLL: Duration = Duration::from_millis(50);
+const MIRROR_NAME: &str = "Chat (mirror)";
 const OPENABLE: [Module; 5] = [
     Module::Chat,
     Module::SubAgents,
@@ -95,8 +96,29 @@ struct Mounted {
     file_edits: Entity<FileEdits>,
     shells: Entity<Shells>,
     terminals: Terminals,
+    mirrors: Mirrors,
     plugins: Mounts,
     project: PathBuf,
+}
+
+#[derive(Default)]
+struct MirrorTiles {
+    open: Vec<((usize, TileId), Entity<ChatMirror>)>,
+    workspace: usize,
+}
+
+#[derive(Clone, Default)]
+struct Mirrors(Rc<RefCell<MirrorTiles>>);
+
+impl Mirrors {
+    fn at(&self, tile: TileId) -> Option<Entity<ChatMirror>> {
+        let tiles = self.0.borrow();
+        tiles
+            .open
+            .iter()
+            .find(|(at, _)| *at == (tiles.workspace, tile))
+            .map(|(_, mirror)| mirror.clone())
+    }
 }
 
 #[derive(Clone, Default)]
@@ -187,6 +209,7 @@ fn build(
         file_edits: file_edits::mount(store.clone(), cx),
         shells: shells::mount(store.clone(), kill, cx),
         terminals: Terminals::default(),
+        mirrors: Mirrors::default(),
         plugins: Mounts::default(),
         project,
         store,
@@ -238,9 +261,11 @@ fn build(
                         .then(|| titles.terminals.at(tile))
                         .flatten();
                     let terminal = terminal.as_ref().map(|terminal| terminal.read(cx));
+                    let mirrored = *module == Module::Chat && titles.mirrors.at(tile).is_some();
                     Tab {
                         label: terminal
                             .and_then(|terminal| terminal.label(cx))
+                            .or_else(|| mirrored.then(|| MIRROR_NAME.into()))
                             .unwrap_or_else(|| name(module)),
                         icon: glyph(module),
                         count: count(&titles, module, cx),
@@ -343,13 +368,18 @@ fn screen_row(mark: &ScreenMark) -> MenuItem {
     MenuItem::action(mark.label).icon(mark.glyph)
 }
 
-fn module_row(module: &Module) -> MenuItem {
+fn module_row(module: &Module, chatting: bool) -> MenuItem {
     let state = match module {
         Module::Plugin(id) => plugins::find(id).and_then(Plugin::state),
         _ => None,
     };
+    let mirrors = chatting && *module == Module::Chat;
     MenuItem::Action {
-        label: name(module),
+        label: if mirrors {
+            MIRROR_NAME.into()
+        } else {
+            name(module)
+        },
         keys: state.map(SharedString::from),
         icon: glyph(module).map(Into::into),
     }
@@ -515,7 +545,10 @@ fn body(
     cx: &mut App,
 ) -> AnyElement {
     match module {
-        Module::Chat => mounted.chat.clone().into_any_element(),
+        Module::Chat => mounted.mirrors.at(tile).map_or_else(
+            || mounted.chat.clone().into_any_element(),
+            IntoElement::into_any_element,
+        ),
         Module::SubAgents => mounted.subagents.clone().into_any_element(),
         Module::FileEdits => mounted.file_edits.clone().into_any_element(),
         Module::Shells => mounted.shells.clone().into_any_element(),
@@ -764,9 +797,8 @@ impl Work {
         &self.mounted.chat
     }
 
-    fn keep_terminals(&mut self, cx: &mut Context<Self>) {
-        let wanted: Vec<(usize, TileId)> = self
-            .board
+    fn placed(&self, module: &Module) -> Vec<(usize, TileId)> {
+        self.board
             .workspaces()
             .iter()
             .enumerate()
@@ -774,10 +806,32 @@ impl Work {
                 workspace
                     .tiles(EVERYWHERE)
                     .into_iter()
-                    .filter(|(stack, _)| stack.modules.contains(&Module::Terminal))
+                    .filter(|(stack, _)| stack.modules.contains(module))
                     .map(move |(stack, _)| (at, stack.id))
             })
-            .collect();
+            .collect()
+    }
+
+    fn keep_mirrors(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let wanted: Vec<(usize, TileId)> = self.placed(&Module::Chat).into_iter().skip(1).collect();
+        let mut tiles = self.mounted.mirrors.0.borrow_mut();
+        tiles.workspace = self.board.active();
+        let before = tiles.open.len();
+        tiles.open.retain(|(at, _)| wanted.contains(at));
+        if tiles.open.len() < before {
+            eprintln!("desk: chat mirror closed, the session stays with the chat");
+        }
+        for at in wanted {
+            if tiles.open.iter().any(|(open, _)| *open == at) {
+                continue;
+            }
+            let mirror = chat::mirror(self.mounted.chat.clone(), window, cx);
+            tiles.open.push((at, mirror));
+        }
+    }
+
+    fn keep_terminals(&mut self, cx: &mut Context<Self>) {
+        let wanted = self.placed(&Module::Terminal);
         let mut tabs = self.mounted.terminals.0.borrow_mut();
         tabs.workspace = self.board.active();
         let before = tabs.open.len();
@@ -1028,7 +1082,7 @@ impl Work {
         cx.notify();
     }
 
-    fn plus_menu(openable: &[&'static str]) -> Vec<MenuItem> {
+    fn plus_menu(openable: &[&'static str], chatting: bool) -> Vec<MenuItem> {
         let new = MenuItem::Action {
             label: "New workspace".into(),
             keys: Some("Ctrl T".into()),
@@ -1036,7 +1090,12 @@ impl Work {
         };
         std::iter::once(new)
             .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
-            .chain(tile_modules().iter().map(module_row).collect::<Vec<_>>())
+            .chain(
+                tile_modules()
+                    .iter()
+                    .map(|module| module_row(module, chatting))
+                    .collect::<Vec<_>>(),
+            )
             .chain([MenuItem::Caption("Screens, open as a tab".into())])
             .chain(
                 Self::screen_rows(openable)
@@ -1080,7 +1139,7 @@ impl Work {
             .collect()
     }
 
-    fn tab_menu(workspace: Option<&Workspace>) -> Vec<MenuItem> {
+    fn tab_menu(workspace: Option<&Workspace>, chatting: bool) -> Vec<MenuItem> {
         let (pinned, locked) = workspace.map_or((false, false), |at| (at.pinned, at.locked));
         [
             Some(MenuItem::action("Rename").icon(Glyph::Pencil)),
@@ -1103,7 +1162,10 @@ impl Work {
             Some(MenuItem::Submenu {
                 label: "Spawn".into(),
                 icon: Some(Icon::Plus.into()),
-                items: tile_modules().iter().map(module_row).collect(),
+                items: tile_modules()
+                    .iter()
+                    .map(|module| module_row(module, chatting))
+                    .collect(),
             }),
         ]
         .into_iter()
@@ -1231,7 +1293,9 @@ impl Work {
                 window.refresh();
             }
         });
-        let tab_menu = context_menu(Self::tab_menu(self.board.workspaces().get(self.pointed)))
+        let chatting = !self.placed(&Module::Chat).is_empty();
+        let tab_rows = Self::tab_menu(self.board.workspaces().get(self.pointed), chatting);
+        let tab_menu = context_menu(tab_rows)
             .id("work-tab-menu")
             .open_at(self.menu_at.take())
             .on_pick(move |pick, window, cx| {
@@ -1244,7 +1308,7 @@ impl Work {
             })
             .child(strip.new_button(self.plus.clone()));
         self.plus.update(cx, |button, cx| {
-            button.items(Self::plus_menu(openable), cx);
+            button.items(Self::plus_menu(openable, chatting), cx);
             button.on_pick(move |pick, window, cx| {
                 let strip = plus
                     .update(cx, |work, cx| {
@@ -1280,6 +1344,7 @@ impl Render for Work {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.frame(window, cx);
         self.keep_terminals(cx);
+        self.keep_mirrors(window, cx);
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));
