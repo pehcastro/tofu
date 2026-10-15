@@ -329,6 +329,12 @@ func (b *Inbox) Remembered(note string) {
 	b.mu.Unlock()
 }
 
+func (b *Inbox) reportAgain(report string) {
+	b.mu.Lock()
+	b.items = append(b.items, inboxItem{text: report, source: sourceReport, posted: time.Now()})
+	b.mu.Unlock()
+}
+
 func (b *Inbox) attach(held *heldSubAgent, check *checkIn) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

@@ -309,8 +309,22 @@ func (l *resumedLead) show(spawned ...SubAgentRow) {
 func (l *resumedLead) parkTheRunning() {
 	parked := false
 	for i := range l.rows {
-		if l.rows[i].State == roster.Working {
-			l.rows[i].State, parked = roster.Parked, true
+		row := &l.rows[i]
+		if row.State != roster.Working {
+			continue
+		}
+		row.State, parked = roster.Parked, true
+		run := l.runs[row.Name]
+		for _, ended := range []roster.State{roster.Errored, roster.Finished} {
+			if ended.String() == run.Status {
+				row.State = ended
+				row.endedAs(run)
+			}
+		}
+		for _, report := range l.reports {
+			if report.agent == row.Name {
+				row.Report = report.text
+			}
 		}
 	}
 	if parked {

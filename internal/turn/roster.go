@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,15 +24,18 @@ type recordedSession struct {
 }
 
 type recordedSubAgent struct {
-	agent  subagent.SubAgent
-	call   string
-	byLead bool
-	depth  int
-	state  subagent.State
-	steps  int
-	calls  []string
-	active time.Time
-	report string
+	agent       subagent.SubAgent
+	in          string
+	call        string
+	byLead      bool
+	depth       int
+	state       subagent.State
+	ended       bool
+	steps       int
+	calls       []string
+	active      time.Time
+	report      string
+	undelivered bool
 }
 
 func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, inbox *Inbox) error {
@@ -39,15 +43,20 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 	if err != nil {
 		return err
 	}
+	runs := recordedSubAgents(chain)
+	stopErr := endStoppedByTheRestart(store, runs)
+	store.ForgetRead()
 	unread := *store
-	unread.ForgetRead()
-	for _, run := range recordedSubAgents(chain) {
+	for _, run := range runs {
 		agentID, restored := run.agent.ID, run.agent
 		restored.State, restored.Report = run.state, run.report
 		roster.Restore(restored)
 		roster.Stepped(agentID, run.steps, run.active, run.calls...)
 		if !run.byLead {
 			continue
+		}
+		if run.undelivered {
+			inbox.reportAgain(run.report)
 		}
 		inbox.adopt(restoredHeld(run.agent, run.depth, func() ([]llm.Message, error) {
 			chain, err := sessionChain(&unread, id)
@@ -57,7 +66,33 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 			return subAgentHistory(&unread, chain, agentID)
 		}))
 	}
-	return nil
+	return stopErr
+}
+
+func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) error {
+	var failed []error
+	for _, run := range runs {
+		if run.ended {
+			continue
+		}
+		log, err := store.Open(session.Header{ID: run.in})
+		if errors.As(err, &session.BusyError{}) {
+			continue
+		}
+		if err != nil {
+			failed = append(failed, err)
+			continue
+		}
+		stopped := "sub-agent " + run.agent.ID + " is " + subagent.Errored.String() + ": tofu closed while it was working, at step " + strconv.Itoa(run.steps)
+		if len(run.calls) > 0 {
+			stopped += " after calling " + run.calls[len(run.calls)-1]
+		}
+		stopped += ", and it did not finish. Message it to resume from its conversation, or spawn the work again."
+		_, err = log.Append(session.Event{Agent: run.agent.ID, Kind: session.EventReport}, session.ReportBody{State: subagent.Errored.String(), Text: stopped})
+		failed = append(failed, err, spawnTrace{site: spawnSite{log: log}}.end(run.agent.ID, subagent.Errored), log.Close())
+		run.state, run.report, run.undelivered = subagent.Errored, stopped, true
+	}
+	return errors.Join(failed...)
 }
 
 func restoredHeld(agent subagent.SubAgent, depth int, reload func() ([]llm.Message, error)) *heldSubAgent {
@@ -80,7 +115,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				if json.Unmarshal(event.Body, &body) != nil || ran[body.Agent] != nil {
 					continue
 				}
-				ran[body.Agent] = &recordedSubAgent{call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagent.Parked, active: event.At,
+				ran[body.Agent] = &recordedSubAgent{in: recorded.id, call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagent.Parked, active: event.At,
 					agent: subagent.SubAgent{ID: body.Agent, Agent: body.Definition, Model: body.Model, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket, Started: event.At}}
 				order = append(order, ran[body.Agent])
 			case event.Kind == session.EventToolCall:
@@ -106,20 +141,27 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				}
 			case event.Kind == session.EventMessage && event.Agent == "":
 				var message session.MessageBody
-				if json.Unmarshal(event.Body, &message) == nil && strings.Contains(message.Origin, sourceReport) {
+				if json.Unmarshal(event.Body, &message) != nil {
+					continue
+				}
+				if strings.Contains(message.Origin, sourceReport) {
 					leadReports = append(leadReports, message.Content)
+				}
+				for _, told := range order {
+					told.undelivered = told.undelivered && !strings.Contains(message.Content, told.report)
 				}
 			case run == nil:
 			case event.Kind == session.EventReport:
 				var report session.ReportBody
 				_ = json.Unmarshal(event.Body, &report)
-				run.report, reportEvents = report.Text, true
+				run.report, run.undelivered, reportEvents = report.Text, report.Text != "", true
 			case event.Kind == session.EventAgentEnd:
 				var ended session.AgentEndBody
 				_ = json.Unmarshal(event.Body, &ended)
-				run.state, run.active = stateAfterResume(ended.Status), event.At
+				run.state, run.ended = endedAs(ended.Status)
+				run.active = event.At
 			case event.Kind == session.EventRequest && event.Attempt <= session.FirstAttempt:
-				run.steps, run.active = run.steps+1, event.At
+				run.steps, run.active, run.ended = run.steps+1, event.At, false
 			}
 		}
 		if !reportEvents {
@@ -177,13 +219,13 @@ func sessionChain(store *session.Store, id string) ([]recordedSession, error) {
 	return chain, nil
 }
 
-func stateAfterResume(status string) subagent.State {
-	for _, state := range []subagent.State{subagent.Finished, subagent.Errored} {
+func endedAs(status string) (subagent.State, bool) {
+	for _, state := range []subagent.State{subagent.Finished, subagent.Errored, subagent.Parked} {
 		if state.String() == status {
-			return state
+			return state, true
 		}
 	}
-	return subagent.Parked
+	return subagent.Parked, false
 }
 
 func reportsWrittenBeforeReportEvents(leadReports []string, order []*recordedSubAgent) {
