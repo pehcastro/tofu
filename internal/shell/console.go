@@ -2,6 +2,7 @@ package shell
 
 import (
 	"bytes"
+	"cmp"
 	"io"
 	"regexp"
 	"slices"
@@ -20,6 +21,7 @@ type screenText struct {
 	out    io.Writer
 	held   []byte
 	column int
+	width  int
 }
 
 func (s *screenText) Write(p []byte) (int, error) {
@@ -54,7 +56,7 @@ func (s *screenText) step(rest []byte, text *bytes.Buffer) int {
 		if len(rest) < 2 {
 			return 0
 		}
-		wrapped := s.column == konst.ShellConsoleColumns
+		wrapped := s.column == cmp.Or(s.width, konst.ShellConsoleColumns)
 		s.column = 0
 		if rest[1] != '\n' {
 			text.WriteByte('\r')

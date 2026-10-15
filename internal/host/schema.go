@@ -42,6 +42,7 @@ func Schema() ([]byte, error) {
 		"$defs":           defs,
 		"x-notifications": notified,
 		"x-requests":      requested,
+		"x-capabilities":  capabilities(),
 		"x-serverRequests": map[string]any{
 			ApprovalMethod: map[string]any{"params": asked, "result": answer},
 			QuestionMethod: map[string]any{"params": question, "result": chosen},
@@ -79,6 +80,8 @@ func (defs schemaDefs) of(t reflect.Type) any {
 		return map[string]any{"type": "string", "format": "date-time"}
 	case reflect.TypeFor[json.RawMessage]():
 		return map[string]any{}
+	case reflect.TypeFor[[]byte]():
+		return map[string]any{"type": "string", "contentEncoding": "base64"}
 	}
 	switch t.Kind() {
 	case reflect.String:

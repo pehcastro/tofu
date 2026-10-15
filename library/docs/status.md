@@ -37,7 +37,10 @@ The records tofu sends:
   `agents/go-dev-1/agents/research-1`.
 - `shells/<name>`, one for each kept shell: `working` while it runs, `done`
   when it exited 0, `error` with the exit code otherwise. The message is the
-  command. A shell you killed has no record.
+  command. A shell you killed has no record. While a person holds a shell
+  through `shell.takeover` it stays `working`, never `blocked`, and its
+  message reads `held by you: <command>`; a program in it reporting
+  `blocked` shows `working` until the shell is released.
 - A program in a kept shell that reports OSC 7501 itself speaks for that
   shell: `blocked:kind=auth` from a nested `claude` makes the shell blocked
   on auth, and `progress=40` is the shell's progress. Its own child ids sit

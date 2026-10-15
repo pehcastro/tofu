@@ -68,22 +68,21 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		return Yielded{}, err
 	}
 	started := time.Now()
-	spawned, waited, terminal, err := r.spawn(cmd, command, logFile)
+	process, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {
 		_ = os.Remove(r.logPath(name))
 		return Yielded{}, err
 	}
 	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, Call: wait.Call, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal, Port: wait.Port, Env: addedEnv(cmd.Env)}}
-	process := &live{tree: spawned, finished: make(chan struct{})}
 	if err := r.list(got.Shell, process); err != nil {
 		_ = killTree(cmd.Process.Pid)
-		spawned.release()
+		process.tree.release()
 		_ = logFile.Close()
 		return Yielded{}, err
 	}
 	exited := func(waitErr error) (Yielded, error) {
 		_ = logFile.Close()
-		spawned.release()
+		process.tree.release()
 		output, readErr := os.ReadFile(r.logPath(name))
 		r.mu.Lock()
 		delete(r.running, name)

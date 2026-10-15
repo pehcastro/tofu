@@ -59,6 +59,18 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
 - `shell.run`: takes `command`, runs it as `!` does, answers `output` and
   `stopped`. `shell.read` takes `shell` and `offset`; `shell.kill` `shell`
+- take-over (capability `takeover`; once `initialize` declares it, every bash command runs in a terminal).
+  `shell.takeover` takes `shell`, `cols` (2 to 1024) and `rows` (1 to 500); answers `shell`, `holder`
+  (`person`), `since`, `cols`, `rows`, `base` and `next` (absolute byte offsets) and `replay`, the base64 raw
+  bytes between them, colours kept; a second call answers a fresh replay. `shell.input` takes `shell` and
+  `data`, base64 of 1 to 65536 bytes (Ctrl+C is `Aw==`); `shell.resize` takes `shell`, `cols`, `rows`; both
+  answer `ok`. `shell.release` takes `shell` and `note` (at most 500 characters, quoted to the agent); answers
+  `shell`, `holder` (`agent`) and `since`. `shell.holder` (`shell`, `holder`, `since`, `note`) tells every
+  client of each change, an exit while held included, before `shell.exited`; `shell.raw` (`shell`, `offset`,
+  `data`) streams the raw bytes while a person holds it, from `offset == next`. Bad params err `-32602`; a
+  refusal errs `-32000` with `data.reason`: `not_declared`, `unknown_shell`, `not_running`, `not_kept`,
+  `not_in_terminal`, `other_process` or `not_held` (input, resize or release on a shell nobody holds).
+  `shell.started` and kept shells in `session.state` carry `terminal`, `holder` and `heldSince`
 - reads, `query.` and: `models` (with `wires` signed in and `stale`), `settings` (each row's
   `label`, `description`, `kind` of `bool`, `int`, `text`, `choice` or `list`, `choices`, `min`, `max`
   with none for no ceiling, `unit`, `restart`), `commands` (each slash command's `name`, `args`,

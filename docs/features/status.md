@@ -61,7 +61,7 @@ which turns `idle` once you focus the terminal, press a key or click.
 |---|---|
 | the lead | `idle`, `working`, `blocked` (permission or question), `done`, `error` |
 | `agents/<name>` | `working`; `blocked:kind=question` while it waits on the lead; `blocked:kind=permission` while one of its calls waits on you; `done`; `idle` when parked; `error` |
-| `shells/<name>` | `working`, then `done` on exit code 0 or `error` with the code |
+| `shells/<name>` | `working`, then `done` on exit code 0 or `error` with the code; `working` with the message `held by you: <command>` while a person holds it, even when a program in it reports `blocked` |
 | `cron/<id>` | the lead's state while the job's turn runs, until you have seen it |
 
 A sub-agent's or a shell's `done` and `error` clear once you open the

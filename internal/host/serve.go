@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm/quota"
@@ -53,6 +54,8 @@ type ServeConfig struct {
 	Release  func()
 }
 
+const noShellRegistry = "this tofu has no shell registry"
+
 var errCommandRunning = errors.New("a shell.run command is still running: wait for it, or turn.stop stops it")
 
 type server struct {
@@ -65,6 +68,7 @@ type server struct {
 	pending  map[string]ApprovalRequest
 	asked    map[string]QuestionRequest
 	answers  bool
+	takeover bool
 	shells   map[string]*watchedShell
 	command  context.CancelFunc
 	status   statusFeed
@@ -246,6 +250,14 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.shellRead)
 	case "shell.kill":
 		return handle(raw, s.shellKill)
+	case "shell.takeover":
+		return handle(raw, s.shellTakeOver)
+	case "shell.input":
+		return handle(raw, s.shellInput)
+	case "shell.resize":
+		return handle(raw, s.shellResize)
+	case "shell.release":
+		return handle(raw, s.shellRelease)
 	case "label":
 		return handle(raw, func(p LabelParams) (any, error) {
 			return verbAs[LabelResult](s, "label", cmp.Or(p.Row, "--last"), p.Outcome)
@@ -279,6 +291,10 @@ func (s *server) initialize(p InitializeParams) (any, error) {
 	}
 	s.mu.Lock()
 	s.client, s.ready, s.answers = p.Client, true, slices.Contains(p.Capabilities, "questions")
+	s.takeover = slices.Contains(p.Capabilities, "takeover") && s.Shells != nil
+	if s.Shells != nil {
+		s.Shells.Terminals.Store(s.takeover)
+	}
 	s.mu.Unlock()
 	return InitializeResult{Protocol: Protocol, Tofu: konst.Version, Project: s.Dir, Capabilities: capabilities()}, nil
 }
@@ -480,7 +496,7 @@ func (s *server) undo(p UndoParams) (any, error) {
 
 func (s *server) shellRead(p ShellParams) (any, error) {
 	if s.Shells == nil {
-		return nil, &Refusal{Code: CodeRefused, Message: "this tofu has no shell registry"}
+		return nil, &Refusal{Code: CodeRefused, Message: noShellRegistry}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -494,9 +510,116 @@ func (s *server) shellRead(p ShellParams) (any, error) {
 
 func (s *server) shellKill(p ShellParams) (any, error) {
 	if s.Shells == nil {
-		return nil, &Refusal{Code: CodeRefused, Message: "this tofu has no shell registry"}
+		return nil, &Refusal{Code: CodeRefused, Message: noShellRegistry}
 	}
 	return Ack{OK: true}, s.Shells.Kill(p.Shell)
+}
+
+func endedWhileHeld(one shell.Shell) string {
+	switch {
+	case one.State == shell.Killed:
+		return one.Name + " was killed while the person held it."
+	case one.ExitCode != nil:
+		return one.Name + " exited with code " + strconv.Itoa(*one.ExitCode) + " while the person held it."
+	}
+	return one.Name + " ended while the person held it."
+}
+
+type RefusalReason struct {
+	Reason string `json:"reason"`
+}
+
+func shellRefusal(name string, err error) error {
+	var refused shell.Refused
+	if !errors.As(err, &refused) {
+		return err
+	}
+	return &Refusal{Code: CodeRefused, Message: name + ": " + refused.Error(), Data: RefusalReason{Reason: string(refused)}}
+}
+
+func (s *server) shellSize(p ShellSizeParams) (shell.Size, error) {
+	if s.Shells == nil {
+		return shell.Size{}, &Refusal{Code: CodeRefused, Message: noShellRegistry}
+	}
+	if p.Shell == "" {
+		return shell.Size{}, &Refusal{Code: CodeBadParams, Message: "shell is the name of a kept shell, such as bash-3"}
+	}
+	size, err := shell.NewSize(p.Cols, p.Rows)
+	if err != nil {
+		return size, &Refusal{Code: CodeBadParams, Message: err.Error()}
+	}
+	return size, nil
+}
+
+func (s *server) changeHolder(owner string, held ShellHeld, note, notice string) {
+	s.watched(held.Shell).holder = shell.Holder(held.Holder)
+	focus := s.focus()
+	s.box.push(kept("shell.holder", &ShellHolderChanged{Identity: focus.items.identity(owner, held.Shell), ShellHeld: held, Note: note}))
+	focus.host.Steer(notice)
+	s.reportStatus(focus)
+}
+
+func (s *server) shellTakeOver(p ShellSizeParams) (any, error) {
+	size, err := s.shellSize(p)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.takeover {
+		return nil, &Refusal{Code: CodeRefused, Message: "this client did not declare takeover in initialize", Data: RefusalReason{Reason: "not_declared"}}
+	}
+	hold, err := s.Shells.TakeOver(p.Shell, size)
+	if err != nil {
+		return nil, shellRefusal(p.Shell, err)
+	}
+	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderPerson), Since: *hold.Shell.HeldSince}
+	watched := s.watched(p.Shell)
+	if watched.holder != shell.HolderPerson {
+		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+sys.LoadKeyRedactor().Redact(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
+	}
+	watched.raw = hold.Next
+	return ShellTakenOver{ShellHeld: held, Cols: p.Cols, Rows: p.Rows, Base: hold.Base, Next: hold.Next, Replay: hold.Replay}, nil
+}
+
+func (s *server) shellInput(p ShellInputParams) (any, error) {
+	switch {
+	case s.Shells == nil:
+		return nil, &Refusal{Code: CodeRefused, Message: noShellRegistry}
+	case len(p.Data) == 0 || len(p.Data) > konst.ShellInputMaxBytes:
+		return nil, &Refusal{Code: CodeBadParams, Message: "data is the base64 of 1 to " + strconv.Itoa(konst.ShellInputMaxBytes) + " bytes, and this decoded to " + strconv.Itoa(len(p.Data))}
+	}
+	return Ack{OK: true}, shellRefusal(p.Shell, s.Shells.Input(p.Shell, p.Data))
+}
+
+func (s *server) shellResize(p ShellSizeParams) (any, error) {
+	size, err := s.shellSize(p)
+	if err != nil {
+		return nil, err
+	}
+	return Ack{OK: true}, shellRefusal(p.Shell, s.Shells.Resize(p.Shell, size))
+}
+
+func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
+	switch {
+	case s.Shells == nil:
+		return nil, &Refusal{Code: CodeRefused, Message: noShellRegistry}
+	case utf8.RuneCountInString(p.Note) > konst.ShellHandBackNoteChars:
+		return nil, &Refusal{Code: CodeBadParams, Message: "note is at most " + strconv.Itoa(konst.ShellHandBackNoteChars) + " characters"}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, err := s.Shells.HandBack(p.Shell)
+	if err != nil {
+		return nil, shellRefusal(p.Shell, err)
+	}
+	notice := "The person handed " + p.Shell + " back."
+	if p.Note != "" {
+		notice += " Note from them: " + strconv.Quote(p.Note) + "."
+	}
+	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderAgent), Since: time.Now()}
+	s.changeHolder(entry.Owner, held, p.Note, notice+" It is running. Its output while they held it is in shell logs.")
+	return held, nil
 }
 
 func (s *server) answered(id, result json.RawMessage) error {
@@ -673,6 +796,8 @@ type watchedShell struct {
 	exitCode  *int
 	status    shellStatus
 	portFrom  int
+	holder    shell.Holder
+	raw       int64
 }
 
 func (w *watchedShell) portPrinted() int {
@@ -761,7 +886,7 @@ func (s *server) scanShells(first bool) {
 		}
 		if !watched.announced {
 			s.box.push(kept("shell.started", &ShellStarted{Identity: id, Shell: one.Name, Command: mask(one.Command), PID: one.PID, StartedAt: one.Started,
-				Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), call: one.Call}))
+				Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), ShellHolding: holdingOf(one), call: one.Call}))
 			if first {
 				watched.sent = len(watched.stream)
 			}
@@ -772,6 +897,15 @@ func (s *server) scanShells(first bool) {
 		if len(watched.stream) > watched.sent {
 			s.box.push(merged("shell.output", one.Name, &ShellOutput{Identity: id, Shell: one.Name, Offset: watched.sent, Text: watched.stream[watched.sent:]}))
 			watched.sent = len(watched.stream)
+		}
+		if watched.holder == shell.HolderPerson {
+			if data, from := s.Shells.Raw(one.Name, watched.raw); len(data) > 0 {
+				s.box.push(merged("shell.raw", one.Name, &ShellRaw{Identity: id, Shell: one.Name, Offset: from, Data: data}))
+				watched.raw = from + int64(len(data))
+			}
+			if one.State != shell.Running {
+				s.changeHolder(one.Owner, ShellHeld{Shell: one.Name, Holder: ShellHolder(shell.HolderAgent), Since: time.Now()}, "", endedWhileHeld(one))
+			}
 		}
 		if one.State != shell.Running {
 			s.box.push(kept("shell.exited", &ShellExited{Identity: id, Shell: one.Name, ExitCode: one.ExitCode, Killed: one.State == shell.Killed, EndedAt: one.Ended}))

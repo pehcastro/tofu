@@ -54,6 +54,7 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 | `side` | `session.branch`, `session.access` | a side chat beside the lead, from its latest point or one you name, with its own model and effort, and what it may write |
 | `status` | `status.list`, `status.ack` | every program status record of every open session as it stands, with when it entered its state and the approval or question a blocked one waits on; an acknowledged finished record clears |
 | `mention` | `mention.resolve` | the item a `ref` points at |
+| `takeover` | `shell.takeover`, `shell.input`, `shell.resize`, `shell.release` | a person borrows a kept shell: every bash command runs in a terminal once the client declares `takeover`, the take-over answers the raw output so far with its colours, keystrokes and sizes go in as base64 bytes, and the release hands it back to the agent with an optional note. Neither kills the process. A refusal is `-32000` with `data.reason`, one of `not_declared`, `unknown_shell`, `not_running`, `not_kept`, `not_in_terminal`, `other_process` and `not_held` |
 | `boardy` | `boardy.boards`, `boardy.list`, `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
 | `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
 | `queries` | `query.context`, `query.rules`, `query.usage`, `query.settings`, `query.ledger` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the decisions of one session |
@@ -73,6 +74,11 @@ started it.
   every one of them. `shell.ready` carries a dev server's port once tofu reads
   `http://localhost:3000` or a like address in its output, colours and all, or finds the shell's own
   process listening, so `npm run dev` gets its port though the command never names one.
+- `shell.holder` on every change of who holds a shell, `agent` or `person`, with the release `note`,
+  and before `shell.exited` when a held shell ends; `shell.raw`, the raw bytes at an absolute
+  `offset`, only while a person holds it. A client that sees a gap in the offsets calls
+  `shell.takeover` again for a fresh replay. `shell.started` and `session.state` say `terminal`,
+  `holder` and `heldSince`.
 - `turn.account`: the account a turn spends, `picked` as it starts and `moved` off a spent one.
 - `session.turns.updated`: the digest of a turn just ended, the row `session.turns` answers.
 - `quota.updated` when a session opens, after each turn, when a turn moves to another account, every

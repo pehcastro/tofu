@@ -15,17 +15,31 @@ import (
 	"tofu/internal/konst"
 )
 
-func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime) (tree, <-chan error, error) {
+type device struct{ leader *os.File }
+
+func (d device) write(data []byte) error {
+	_, err := d.leader.Write(data)
+	return err
+}
+
+func (d device) resize(size Size) error {
+	return unix.IoctlSetWinsize(int(d.leader.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Row: uint16(size.rows), Col: uint16(size.cols)})
+}
+
+func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool) (tree, <-chan error, *terminal, error) {
 	leader, err := os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
-		return tree{}, nil, err
+		return tree{}, nil, nil, err
 	}
-	follower, err := openFollower(leader)
+	follower, err := openFollower(leader, typed)
 	if err != nil {
 		_ = leader.Close()
-		return tree{}, nil, err
+		return tree{}, nil, nil, err
 	}
 	cmd.Stdout, cmd.Stderr = follower, follower
+	if typed {
+		cmd.Stdin = follower
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 1}
 	if lifetime == DiesWithTofu {
 		endWithParent(cmd.SysProcAttr)
@@ -33,18 +47,22 @@ func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime) (tree, <-chan
 	err = cmd.Start()
 	_ = follower.Close()
 	if err != nil {
-		cmd.Stdout, cmd.Stderr, cmd.SysProcAttr = nil, nil, nil
+		cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.SysProcAttr = nil, nil, nil, nil
 		_ = leader.Close()
-		return tree{}, nil, err
+		return tree{}, nil, nil, err
 	}
+	sink, term := readerFor(out, typed, device{leader: leader})
 	drained := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(&screenText{out: out}, leader)
+		_, _ = io.Copy(sink, leader)
 		close(drained)
 	}()
 	waited := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
+		if term != nil {
+			term.end()
+		}
 		select {
 		case <-drained:
 		case <-time.After(killWait):
@@ -52,10 +70,10 @@ func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime) (tree, <-chan
 		_ = leader.Close()
 		waited <- err
 	}()
-	return tree{}, waited, nil
+	return tree{}, waited, term, nil
 }
 
-func openFollower(leader *os.File) (*os.File, error) {
+func openFollower(leader *os.File, typed bool) (*os.File, error) {
 	if err := unix.IoctlSetPointerInt(int(leader.Fd()), unix.TIOCSPTLCK, 0); err != nil {
 		return nil, err
 	}
@@ -69,7 +87,7 @@ func openFollower(leader *os.File) (*os.File, error) {
 	}
 	fd := int(follower.Fd())
 	state, err := unix.IoctlGetTermios(fd, unix.TCGETS)
-	if err == nil {
+	if err == nil && !typed {
 		state.Oflag &^= unix.OPOST
 		err = unix.IoctlSetTermios(fd, unix.TCSETS, state)
 	}

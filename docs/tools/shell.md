@@ -90,6 +90,26 @@ tree, so the port is free.
 When a classifier is set up, long `bash` output is sifted before the model
 reads it.
 
+## Taking a shell over
+
+A client of `tofu serve` that declares `takeover`, such as the desk, lets you
+take a kept shell over, the way a terminal daemon such as arbor's attaches a
+client to a process it owns: tofu owns the process and you borrow it. From the
+moment the client declares it, every `bash` command runs in a terminal (a pty,
+ConPTY on Windows), so a prompt can be answered; before that, and always in
+the TUI and `tofu run`, commands stay on pipes and a foreground `read x` ends
+at once. Take over sends what the shell printed so far, colours included, and
+your keys go in as bytes, Ctrl+C included. Release hands it back with an
+optional note. Neither kills the process.
+
+While you hold it the agent backs off, in code and not in a prompt: `shell`
+logs, wait, stop and restart answer `bash-3 is held by the person, who took it
+over at 21:03:11. You cannot read, wait on, stop or restart it while they hold
+it...`, a bash `kill` of it and a sub-agent's kill leave it running and say
+so, and the agent is told when you take it and when you hand it back, with
+your note. `tofu shells list` shows it `running, held by a person`. The wire
+methods are in `tofu docs serve-methods`.
+
 ## Shorter output through rtk
 
 By default, each `bash` command is first passed to `rtk rewrite`, with a 5 s

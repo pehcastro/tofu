@@ -496,17 +496,27 @@ func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
 }
 
 func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (Result, error) {
-	names := make([]string, len(owned))
-	for i, one := range owned {
-		if err := registry.Kill(one.Name); err != nil {
+	var names, left []string
+	for _, one := range owned {
+		err := registry.AgentKill(one.Name)
+		var held shell.HeldError
+		switch {
+		case errors.As(err, &held):
+			left = append(left, one.Name+" is held by the person and was left running")
+		case err != nil:
 			return Result{}, fmt.Errorf("bash: %q kills %s, which tofu started, so it ran as shell stop, and the stop failed: %w", command, one.Name, err)
+		default:
+			names = append(names, one.Name)
 		}
-		names[i] = one.Name
 	}
 	stopped := strings.Join(names, ", ")
+	said := fmt.Sprintf("bash: %q kills %s, which tofu started, so it ran as shell stop %s instead: every process in its tree is gone, children included. next time use the shell tool to stop or restart it", command, stopped, stopped)
+	if len(names) == 0 {
+		said = fmt.Sprintf("bash: %q kills a shell tofu started, so it ran as shell stop instead", command)
+	}
 	return Result{
-		Content: fmt.Sprintf("bash: %q kills %s, which tofu started, so it ran as shell stop %s instead: every process in its tree is gone, children included. next time use the shell tool to stop or restart it", command, stopped, stopped),
-		Command: ShellToolName + " stop " + stopped,
+		Content: strings.Join(append([]string{said}, left...), ". "),
+		Command: strings.TrimSpace(ShellToolName + " stop " + stopped),
 		Outcome: ResultSucceeded,
 	}, nil
 }

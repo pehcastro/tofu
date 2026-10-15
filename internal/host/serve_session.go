@@ -151,7 +151,7 @@ func (s *server) shellsNow() []ShellNow {
 	mask := sys.LoadKeyRedactor().Redact
 	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
 		now = append(now, ShellNow{Shell: one.Name, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
-			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: tools.QuoteRef(one.Call)})
+			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: tools.QuoteRef(one.Call), ShellHolding: holdingOf(one)})
 	}
 	return now
 }

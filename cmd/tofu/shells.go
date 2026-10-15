@@ -109,6 +109,8 @@ func shellsLines(page cli.Page, shells []shellReading, now time.Time) []string {
 		switch {
 		case one.LeftOver():
 			mark, state = cli.Warn, "left over"
+		case one.HeldByPerson():
+			mark, state = cli.Active, "running, held by a person"
 		case one.State == shell.Running:
 			mark = cli.Active
 		case one.ExitCode != nil:

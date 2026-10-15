@@ -184,11 +184,15 @@ func (w *watchedShell) records(name string) []status.Record {
 			own.State, own.Msg = status.Errored, "exit "+strconv.Itoa(*w.exitCode)+": "+w.command
 		}
 	}
+	held := running && w.holder == shell.HolderPerson
 	var records []status.Record
 	for _, reported := range w.status.program.List() {
 		lasting := reported.State == status.Done || reported.State == status.Errored
 		if !running && !lasting {
 			continue
+		}
+		if held && reported.State == status.Blocked {
+			reported.State, reported.Ask = status.Working, ""
 		}
 		if reported.ID == "" {
 			reported.ID, reported.Title = id, cmp.Or(reported.Title, name)
@@ -199,6 +203,9 @@ func (w *watchedShell) records(name string) []status.Record {
 			reported.ID = nested
 			records = append(records, reported)
 		}
+	}
+	if held {
+		own.Msg = "held by you: " + w.command
 	}
 	return append([]status.Record{own}, records...)
 }

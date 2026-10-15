@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/konst"
@@ -39,23 +40,25 @@ const (
 )
 
 type Shell struct {
-	Name     string     `json:"name"`
-	Command  string     `json:"command"`
-	Dir      string     `json:"dir"`
-	Owner    string     `json:"owner"`
-	Call     string     `json:"call,omitempty"`
-	TofuPID  int        `json:"tofu_pid,omitempty"`
-	PID      int        `json:"pid"`
-	State    State      `json:"state"`
-	Started  time.Time  `json:"started"`
-	Ended    *time.Time `json:"ended,omitempty"`
-	ExitCode *int       `json:"exit_code,omitempty"`
-	Terminal bool       `json:"terminal,omitempty"`
-	Deadline int64      `json:"deadline_ms,omitempty"`
-	Kept     Kept       `json:"kept,omitempty"`
-	Port     int        `json:"port,omitempty"`
-	Ready    Readiness  `json:"ready,omitempty"`
-	Env      []string   `json:"env,omitempty"`
+	Name      string     `json:"name"`
+	Command   string     `json:"command"`
+	Dir       string     `json:"dir"`
+	Owner     string     `json:"owner"`
+	Call      string     `json:"call,omitempty"`
+	TofuPID   int        `json:"tofu_pid,omitempty"`
+	PID       int        `json:"pid"`
+	State     State      `json:"state"`
+	Started   time.Time  `json:"started"`
+	Ended     *time.Time `json:"ended,omitempty"`
+	ExitCode  *int       `json:"exit_code,omitempty"`
+	Terminal  bool       `json:"terminal,omitempty"`
+	Holder    Holder     `json:"holder,omitempty"`
+	HeldSince *time.Time `json:"held_since,omitempty"`
+	Deadline  int64      `json:"deadline_ms,omitempty"`
+	Kept      Kept       `json:"kept,omitempty"`
+	Port      int        `json:"port,omitempty"`
+	Ready     Readiness  `json:"ready,omitempty"`
+	Env       []string   `json:"env,omitempty"`
 }
 
 func addedEnv(env []string) []string {
@@ -72,6 +75,7 @@ const (
 
 type live struct {
 	tree     tree
+	term     *terminal
 	finished chan struct{}
 	killed   bool
 }
@@ -84,11 +88,12 @@ const (
 )
 
 type Registry struct {
-	Lifetime Lifetime
-	dir      string
-	self     int
-	mu       sync.Mutex
-	running  map[string]*live
+	Lifetime  Lifetime
+	Terminals atomic.Bool
+	dir       string
+	self      int
+	mu        sync.Mutex
+	running   map[string]*live
 }
 
 func OpenAt(dir string) *Registry {
@@ -163,22 +168,26 @@ func (r *Registry) claim() (string, *os.File, error) {
 	}
 }
 
-func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (tree, <-chan error, bool, error) {
-	if len(cmd.Args) == 3 && cmd.Args[1] == "-c" && endsInFilter(command) {
+func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (*live, <-chan error, bool, error) {
+	typed := r.Terminals.Load()
+	if typed || len(cmd.Args) == 3 && cmd.Args[1] == "-c" && endsInFilter(command) {
 		cmd.Env = append(cmd.Environ(), "PAGER=cat", "GIT_PAGER=cat")
-		if spawned, waited, err := startConsole(cmd, logFile, r.Lifetime); err == nil {
-			return spawned, waited, true, nil
+		if typed {
+			cmd.Env = append(cmd.Env, "TERM=xterm-256color")
+		}
+		if spawned, waited, term, err := startConsole(cmd, logFile, r.Lifetime, typed); err == nil {
+			return &live{tree: spawned, term: term, finished: make(chan struct{})}, waited, true, nil
 		}
 	}
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	spawned, err := startTree(cmd, r.Lifetime)
 	if err != nil {
 		_ = logFile.Close()
-		return tree{}, nil, false, err
+		return nil, nil, false, err
 	}
 	waited := make(chan error, 1)
 	go func() { waited <- cmd.Wait() }()
-	return spawned, waited, false, nil
+	return &live{tree: spawned, finished: make(chan struct{})}, waited, false, nil
 }
 
 func (r *Registry) list(entry Shell, process *live) error {
@@ -208,13 +217,13 @@ func (r *Registry) Start(root, name, command, owner string, env ...string) (Shel
 	}
 	cmd := choice.Command(context.Background(), root, command, env...)
 	started := time.Now()
-	spawned, waited, terminal, err := r.spawn(cmd, command, logFile)
+	process, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {
 		return Shell{}, err
 	}
 	entry := Shell{Name: name, Command: command, Dir: root, Owner: owner, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal,
 		Kept: KeptBackground, Port: NamedPort(root, command, cmd.Env), Env: env}
-	return entry, r.keep(entry, &live{tree: spawned, finished: make(chan struct{})}, waited, logFile)
+	return entry, r.keep(entry, process, waited, logFile)
 }
 
 func exitCode(waitErr error) int {
@@ -262,6 +271,9 @@ func (r *Registry) Prune() error {
 }
 
 func (r *Registry) writeLocked(entry Shell) error {
+	if entry.State != Running {
+		entry.Holder, entry.HeldSince = "", nil
+	}
 	raw, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return err
@@ -332,7 +344,7 @@ func (r *Registry) AwaitEnd(ctx context.Context, name string, within time.Durati
 	gaveUp := time.After(within)
 	for {
 		entry, err := r.Read(name)
-		if err != nil || entry.State != Running {
+		if err != nil || entry.State != Running || entry.HeldByPerson() {
 			return entry, err
 		}
 		select {

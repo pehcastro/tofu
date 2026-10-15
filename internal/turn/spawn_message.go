@@ -313,26 +313,38 @@ func (t *SpawnTool) kill(ctx context.Context, to string) (Result, error) {
 	for _, nested := range owners[1:] {
 		t.roster.Release(nested)
 	}
-	var killed []string
+	var killed, leftRunning []string
 	var failed []error
 	if registry := ShellRegistryFrom(ctx); registry != nil {
 		for _, running := range registry.Own() {
 			if !ownedBy(running.Owner, owners) {
 				continue
 			}
-			if err := registry.Kill(running.Name); err != nil && !errors.Is(err, shell.ErrNotRunning) {
+			err := registry.AgentKill(running.Name)
+			var holding shell.HeldError
+			switch {
+			case errors.As(err, &holding):
+				leftRunning = append(leftRunning, running.Name)
+			case err != nil && !errors.Is(err, shell.ErrNotRunning):
 				failed = append(failed, err)
-				continue
+			default:
+				killed = append(killed, running.Name)
 			}
-			killed = append(killed, running.Name)
 		}
 	}
 	ended, shells := "was not running", "no shell of its was running"
 	if ran {
 		ended = "is killed and its run ends now"
 	}
+	var told []string
 	if len(killed) > 0 {
-		shells = "its shells " + strings.Join(killed, ", ") + " are killed"
+		told = append(told, "its shells "+strings.Join(killed, ", ")+" are killed")
+	}
+	if len(leftRunning) > 0 {
+		told = append(told, "its shells "+strings.Join(leftRunning, ", ")+" are held by the person and were left running")
+	}
+	if len(told) > 0 {
+		shells = strings.Join(told, ", ")
 	}
 	said := to + " " + ended + ", " + shells + ", and " + freedWords(agent.Owns) + "."
 	if ran {

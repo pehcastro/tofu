@@ -20,14 +20,16 @@ func HitDeadline(after time.Duration) string {
 	return "hit the deadline after " + strconv.FormatFloat(after.Seconds(), 'f', -1, 64) + " s"
 }
 
-func (r *Registry) Kill(name string) error { return r.stop(name, 0) }
+func (r *Registry) Kill(name string) error { return r.stop(name, 0, HolderPerson) }
+
+func (r *Registry) AgentKill(name string) error { return r.stop(name, 0, HolderAgent) }
 
 func (r *Registry) KillAtDeadline(name string, deadline time.Duration) error {
-	return r.stop(name, deadline)
+	return r.stop(name, deadline, HolderAgent)
 }
 
-func (r *Registry) stop(name string, deadline time.Duration) error {
-	process, err := r.terminate(name, deadline)
+func (r *Registry) stop(name string, deadline time.Duration, by Holder) error {
+	process, err := r.terminate(name, deadline, by)
 	if err != nil {
 		return err
 	}
@@ -56,12 +58,16 @@ func (r *Registry) StopUnder(dir string) []string {
 	return stopped
 }
 
-func (r *Registry) Restart(name string) (Shell, error) {
+func (r *Registry) Restart(name string) (Shell, error) { return r.restart(name, HolderPerson) }
+
+func (r *Registry) AgentRestart(name string) (Shell, error) { return r.restart(name, HolderAgent) }
+
+func (r *Registry) restart(name string, by Holder) (Shell, error) {
 	entry, err := r.Read(name)
 	if err != nil {
 		return Shell{}, err
 	}
-	if err := r.Kill(name); err != nil && !errors.Is(err, ErrNotRunning) {
+	if err := r.stop(name, 0, by); err != nil && !errors.Is(err, ErrNotRunning) {
 		return Shell{}, err
 	}
 	return r.Start(entry.Dir, name, entry.Command, entry.Owner, entry.Env...)
@@ -179,7 +185,7 @@ func (r *Registry) Owning(command string) []Shell {
 	return owned
 }
 
-func (r *Registry) terminate(name string, deadline time.Duration) (*live, error) {
+func (r *Registry) terminate(name string, deadline time.Duration, by Holder) (*live, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry, err := r.readLocked(name)
@@ -188,6 +194,9 @@ func (r *Registry) terminate(name string, deadline time.Duration) (*live, error)
 	}
 	if entry.State != Running {
 		return nil, fmt.Errorf("%w: %q", ErrNotRunning, name)
+	}
+	if err := entry.refusedToAgent(); by == HolderAgent && err != nil {
+		return nil, err
 	}
 	process := r.running[name]
 	if process != nil {

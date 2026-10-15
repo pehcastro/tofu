@@ -3,6 +3,7 @@ package host
 import (
 	"cmp"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"tofu/internal/boardy"
@@ -362,7 +363,18 @@ type ShellStarted struct {
 	Port      int        `json:"port,omitempty"`
 	Ready     ShellReady `json:"ready,omitempty"`
 	LeftOver  bool       `json:"leftOver,omitempty"`
-	call      string
+	ShellHolding
+	call string
+}
+
+type ShellHolding struct {
+	Terminal  bool        `json:"terminal,omitempty"`
+	Holder    ShellHolder `json:"holder,omitempty"`
+	HeldSince *time.Time  `json:"heldSince,omitempty"`
+}
+
+func holdingOf(one shell.Shell) ShellHolding {
+	return ShellHolding{Terminal: one.Terminal, Holder: ShellHolder(one.Holder), HeldSince: one.HeldSince}
 }
 
 type ShellListening struct {
@@ -406,6 +418,61 @@ type ShellExited struct {
 	ExitCode *int       `json:"exitCode,omitempty"`
 	Killed   bool       `json:"killed"`
 	EndedAt  *time.Time `json:"endedAt,omitempty"`
+}
+
+type ShellHolder string
+
+func (ShellHolder) enum() []string {
+	return []string{string(shell.HolderAgent), string(shell.HolderPerson)}
+}
+
+type ShellSizeParams struct {
+	Shell string `json:"shell"`
+	Cols  int    `json:"cols"`
+	Rows  int    `json:"rows"`
+}
+
+type ShellInputParams struct {
+	Shell string `json:"shell"`
+	Data  []byte `json:"data"`
+}
+
+type ShellReleaseParams struct {
+	Shell string `json:"shell"`
+	Note  string `json:"note,omitempty"`
+}
+
+type ShellHeld struct {
+	Shell  string      `json:"shell"`
+	Holder ShellHolder `json:"holder"`
+	Since  time.Time   `json:"since"`
+}
+
+type ShellTakenOver struct {
+	ShellHeld
+	Cols   int    `json:"cols"`
+	Rows   int    `json:"rows"`
+	Base   int64  `json:"base"`
+	Next   int64  `json:"next"`
+	Replay []byte `json:"replay"`
+}
+
+type ShellHolderChanged struct {
+	Identity
+	ShellHeld
+	Note string `json:"note"`
+}
+
+type ShellRaw struct {
+	Identity
+	Shell  string `json:"shell"`
+	Offset int64  `json:"offset"`
+	Data   []byte `json:"data"`
+}
+
+func (s *ShellRaw) absorb(older any) {
+	was := older.(*ShellRaw)
+	s.Offset, s.Data = was.Offset, slices.Concat(was.Data, s.Data)
 }
 
 type Judgement struct {
@@ -844,6 +911,7 @@ type ShellNow struct {
 	Ready     ShellReady `json:"ready,omitempty"`
 	LeftOver  bool       `json:"leftOver,omitempty"`
 	Ref       string     `json:"ref,omitempty"`
+	ShellHolding
 }
 
 type ShellState string
@@ -1055,6 +1123,8 @@ func notifications() []method {
 		{name: "shell.ready", params: ShellListening{}},
 		{name: "shell.output", params: ShellOutput{}},
 		{name: "shell.exited", params: ShellExited{}},
+		{name: "shell.holder", params: ShellHolderChanged{}},
+		{name: "shell.raw", params: ShellRaw{}},
 		{name: "decision", params: DecisionMade{}},
 		{name: "note", params: Said{}},
 		{name: "failure", params: Said{}},
@@ -1104,6 +1174,10 @@ func requests() []method {
 		{name: "undo", params: UndoParams{}, result: snapshot.Report{}},
 		{name: "shell.read", params: ShellParams{}, result: ShellReadResult{}},
 		{name: "shell.kill", params: ShellParams{}, result: Ack{}},
+		{name: "shell.takeover", params: ShellSizeParams{}, result: ShellTakenOver{}},
+		{name: "shell.input", params: ShellInputParams{}, result: Ack{}},
+		{name: "shell.resize", params: ShellSizeParams{}, result: Ack{}},
+		{name: "shell.release", params: ShellReleaseParams{}, result: ShellHeld{}},
 		{name: "label", params: LabelParams{}, result: LabelResult{}},
 		{name: "settings.set", params: SettingsSetParams{}, result: SettingsSet{}},
 		{name: "login.start", params: LoginParams{}, result: LoginStarted{}},
@@ -1164,7 +1238,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
 }
 
 const queryPrefix = "query."
