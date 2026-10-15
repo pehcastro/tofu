@@ -1,11 +1,18 @@
 package search
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 
 	"tofu/internal/konst"
 	"tofu/internal/sys"
+)
+
+const (
+	FilesPerPage = 20
+	Unbudgeted   = 1 << 30
 )
 
 var unitHeaderPattern = sys.LazyRegexp(`(?m)^(\S+):\d+-\d+ `)
@@ -25,10 +32,46 @@ func OfferedPaths(rendered string) []string {
 }
 
 func (r Result) render() (string, error) {
-	units, stats := r.Units, r.Stats
+	return r.Page(0, r.Stats.Budget)
+}
+
+func (r Result) Page(skip, budget int) (string, error) {
+	fileAt := map[string]int{}
+	for _, unit := range r.Units {
+		if _, seen := fileAt[unit.Path]; !seen {
+			fileAt[unit.Path] = len(fileAt)
+		}
+	}
+	files := len(fileAt)
+	first, last := min(skip, files), min(skip+FilesPerPage, files)
+	listsLines := files > FilesPerPage
+	stats := &r.Stats
+	stats.Budget, stats.Tokens = budget, konst.SearchResultOverhead
+	var units []Unit
+	inWindow := 0
+	for _, unit := range r.Units {
+		if at := fileAt[unit.Path]; at < first || at >= last {
+			continue
+		}
+		inWindow++
+		if listsLines {
+			unit.Body = matchedLines(unit)
+			unit.Tokens = (len(unit.Path) + len(unit.Symbol) + len(unit.Body)) / konst.SearchBytesPerToken
+		}
+		if stats.Tokens+unit.Tokens > budget {
+			continue
+		}
+		stats.Tokens += unit.Tokens
+		units = append(units, unit)
+	}
+	slices.SortStableFunc(units, func(left, right Unit) int {
+		return cmp.Or(cmp.Compare(fileAt[left.Path], fileAt[right.Path]), cmp.Compare(left.FirstLine, right.FirstLine))
+	})
+	stats.Returned = len(units)
+
 	var out strings.Builder
-	fmt.Fprintf(&out, "%d text candidates, %d units, %d returned, %s, about %d tokens\n",
-		stats.Candidates, stats.Units, stats.Returned, plural(stats.Fallbacks, "fallback"), stats.Tokens)
+	fmt.Fprintf(&out, "%d text candidates, %d units in %s, %d returned, %s, about %d tokens\n",
+		stats.Candidates, stats.Units, plural(files, "file"), stats.Returned, plural(stats.Fallbacks, "fallback"), stats.Tokens)
 	r.sayWhichFormAnswered(&out)
 	if stats.Fallbacks > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%d of the %d units are the lines around the match rather than a declaration", stats.Fallbacks, stats.Units)))
@@ -36,8 +79,18 @@ func (r Result) render() (string, error) {
 	if stats.ScanStopped {
 		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("the scan stopped after %d of %d files because %d candidate lines had already been found: narrow the pattern or the path to see the rest", stats.Scanned, stats.TotalFiles, stats.Candidates)))
 	}
-	if stats.Returned < stats.Units {
-		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%d units matched and %d fit the %d token budget: raise max_tokens or narrow the pattern to see the rest", stats.Units, stats.Returned, stats.Budget)))
+	switch {
+	case files > 0 && first == files:
+		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("skip %d is past the end, since %s hold a match: skip 0 shows the first page", skip, plural(files, "file"))))
+	case first > 0 || last < files:
+		next := "this is the last page"
+		if last < files {
+			next = fmt.Sprintf("skip %d shows the next page, or narrow the path or the pattern", last)
+		}
+		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%s hold a match and files %d to %d are shown, %d a page: %s", plural(files, "file"), first+1, last, FilesPerPage, next)))
+	}
+	if stats.Returned < inWindow {
+		fmt.Fprintf(&out, "%s\n", Note(Truncated, fmt.Sprintf("%d units on this page matched and %d fit the %d token budget: raise max_tokens or narrow the pattern to see the rest", inWindow, stats.Returned, stats.Budget)))
 	}
 	if stats.Skipped > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(BinarySkipped, fmt.Sprintf("%d files hold a null byte and were not read", stats.Skipped)))
@@ -48,7 +101,7 @@ func (r Result) render() (string, error) {
 	if stats.Unreadable > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Partial, fmt.Sprintf("%s could not be read, the first %s", plural(stats.Unreadable, "file"), stats.FirstFailed)))
 	}
-	if len(units) == 0 {
+	if len(r.Units) == 0 {
 		read := "the files were read"
 		switch {
 		case stats.TooLarge > 0 && stats.Unreadable > 0:
@@ -69,19 +122,44 @@ func (r Result) render() (string, error) {
 		}
 		return out.String(), nil
 	}
-	out.WriteString("each result is the whole declaration the match sits inside, not the matching line\n")
+	switch {
+	case len(units) == 0:
+	case listsLines:
+		fmt.Fprintf(&out, "the matches span more than %d files, so each result is the declaration a match sits in and its matching lines: narrow the path to read whole declarations\n", FilesPerPage)
+	default:
+		out.WriteString("each result is the whole declaration the match sits inside, not the matching line\n")
+	}
 	for _, unit := range units {
-		note, err := matchNote(unit.Matches)
-		if err != nil {
-			return "", err
-		}
 		what := string(unit.Kind)
 		if unit.Symbol != "" {
 			what += " " + unit.Symbol
 		}
+		if listsLines {
+			fmt.Fprintf(&out, "%s:%d-%d %s\n%s\n", unit.Path, unit.FirstLine, unit.LastLine, what, unit.Body)
+			continue
+		}
+		note, err := matchNote(unit.Matches)
+		if err != nil {
+			return "", err
+		}
 		fmt.Fprintf(&out, "\n%s:%d-%d %s, %s\n%s\n", unit.Path, unit.FirstLine, unit.LastLine, what, note, unit.Body)
 	}
 	return out.String(), nil
+}
+
+func matchedLines(unit Unit) string {
+	body := strings.Split(unit.Body, "\n")
+	var lines []string
+	for index, match := range unit.Matches {
+		if index == konst.SearchMatchLinesListed {
+			lines = append(lines, fmt.Sprintf("  and %d more matching lines", len(unit.Matches)-index))
+			break
+		}
+		if at := match.Line - unit.FirstLine; at >= 0 && at < len(body) {
+			lines = append(lines, fmt.Sprintf("  %d: %s", match.Line, strings.TrimSpace(body[at])))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (r Result) sayWhichFormAnswered(out *strings.Builder) {

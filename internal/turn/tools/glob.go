@@ -47,12 +47,14 @@ func (g Glob) Definition() llm.Tool {
 			"so *.ts finds every typescript file at any depth and src/*.ts finds only the ones directly under src. " +
 			"** matches any number of directories, so src/**/*.ts finds every typescript file under src, and {ts,tsx} matches either. " +
 			ignoredWalkDescription + ". " +
+			fmt.Sprintf("it lists %d paths a page, and skip passes over that many to reach the next. ", konst.GlobPathsResultCap) +
 			"it does not read a file and it does not search file contents: search does that",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"pattern":         map[string]any{"type": "string"},
 				"path":            map[string]any{"type": "string"},
+				"skip":            map[string]any{"type": "integer"},
 				"include_ignored": map[string]any{"type": "boolean"},
 			},
 			"required": []string{"pattern"},
@@ -63,6 +65,7 @@ func (g Glob) Definition() llm.Tool {
 type globArgs struct {
 	Pattern        string `json:"pattern"`
 	Path           string `json:"path"`
+	Skip           int    `json:"skip"`
 	IncludeIgnored bool   `json:"include_ignored"`
 }
 
@@ -73,6 +76,9 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	}
 	if strings.TrimSpace(args.Pattern) == "" {
 		return turn.Result{}, errors.New("glob: pattern is required")
+	}
+	if args.Skip < 0 {
+		return turn.Result{}, fmt.Errorf("glob: skip is a count of paths to pass over and cannot be %d", args.Skip)
 	}
 	glob, err := globExpression(args.Pattern)
 	if err != nil {
@@ -103,12 +109,19 @@ func (g Glob) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) {
 	matched := len(found)
 	note := listed.note
 	header := fmt.Sprintf("%d of %d files under %s match %q", matched, len(listed.files), under, args.Pattern)
-	if matched > konst.GlobPathsResultCap {
-		found = found[:konst.GlobPathsResultCap]
-		header = fmt.Sprintf("%d of %d files under %s match %q, showing the first %d",
-			matched, len(listed.files), under, args.Pattern, konst.GlobPathsResultCap)
+	if first, last := min(args.Skip, matched), min(args.Skip+konst.GlobPathsResultCap, matched); first > 0 || last < matched {
+		found = found[first:last]
+		header += fmt.Sprintf(", showing %d to %d", first+1, last)
+		next := "this is the last page"
+		switch {
+		case first == matched:
+			header = fmt.Sprintf("%d of %d files under %s match %q, and skip %d is past the end", matched, len(listed.files), under, args.Pattern, args.Skip)
+			next = "skip 0 shows the first page"
+		case last < matched:
+			next = fmt.Sprintf("skip %d shows the next page, or narrow the pattern", last)
+		}
 		note = strings.TrimSpace(note + " " + search.Note(search.Truncated,
-			fmt.Sprintf("%d files matched and %d are shown: narrow the pattern to see the rest", matched, konst.GlobPathsResultCap)))
+			fmt.Sprintf("%d files matched and %d a page are shown: %s", matched, konst.GlobPathsResultCap, next)))
 	}
 	return turn.Result{
 		Content: withNote(header+"\n"+strings.Join(found, "\n")+"\n", note),
