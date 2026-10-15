@@ -3,11 +3,14 @@ package turn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
@@ -19,8 +22,9 @@ import (
 type BudgetRefusal string
 
 const (
-	RefusedShellSource BudgetRefusal = "shell"
-	RefusedOverLines   BudgetRefusal = "lines"
+	RefusedShellSource    BudgetRefusal = "shell"
+	RefusedUnreadablePath BudgetRefusal = "unreadable"
+	RefusedOverLines      BudgetRefusal = "lines"
 )
 
 type SourceBudgetError struct {
@@ -30,19 +34,26 @@ type SourceBudgetError struct {
 	Spent  int
 	Spawn  []string
 	Reason BudgetRefusal
+	Step   subagent.ShellStep
 }
 
 func (e SourceBudgetError) Error() string {
 	spawn := strings.Join(e.Spawn, " or ")
 	switch e.Reason {
 	case RefusedShellSource:
-		return fmt.Sprintf("%s: %s is source code written by hand through the shell, which the orchestrator never does: use edit or write within your budget of %d changed source lines a turn, or spawn %s. a rename is edit with replace_all in each file, and a program's own output redirected into a file, such as a generator or a schema printer, is not counted and runs",
-			e.Tool, e.Path, konst.OrchestratorSourceLinesPerTurn, spawn)
+		return e.refusedShellWrite("the command writes the source file "+e.Path+" through the shell, where the budget cannot count it", spawn)
+	case RefusedUnreadablePath:
+		return e.refusedShellWrite("the command writes to "+e.Path+", and which file that is stays unknown until the shell runs, so the budget cannot count it", spawn)
 	case RefusedOverLines:
 		return fmt.Sprintf("%s: %s is source code, and this change of %d lines would pass the orchestrator's budget of %d changed source lines in one turn, %d of which are spent: spawn %s with this work instead, rather than another route to the same file, such as sed or a redirect",
 			e.Tool, e.Path, e.Lines, konst.OrchestratorSourceLinesPerTurn, e.Spent, spawn)
 	}
 	panic("tofu: unknown source budget refusal " + string(e.Reason))
+}
+
+func (e SourceBudgetError) refusedShellWrite(why, spawn string) string {
+	return fmt.Sprintf("%s: nothing ran and no file changed: %s. the same change is %s. send it in your next reply together with every other change the task needs. edit and write spend up to %d changed source lines a turn; past that, spawn %s with the whole change. a program's own output redirected into a file, such as a generator or a schema printer, is not counted and runs",
+		e.Tool, why, sameChangeByTool(e.Step, e.Path), konst.OrchestratorSourceLinesPerTurn, spawn)
 }
 
 func sourceLanguage(path string) string {
@@ -60,19 +71,70 @@ func linesIn(text string) int {
 	return strings.Count(strings.TrimSuffix(text, "\n"), "\n") + 1
 }
 
-func handWrittenSource(command string) (string, error) {
+func shellWriter(step subagent.ShellStep) bool {
+	return slices.Contains([]string{"", "echo", "printf", "cat", "tee", "sed", "perl", "cp", "mv"}, step.Program)
+}
+
+func shellRefusal(command string) (SourceBudgetError, bool) {
+	steps := subagent.ShellSteps(command)
 	if _, err := subagent.ShellWrites(command); err != nil {
-		return "", err
+		var unreadable subagent.UnparseablePathError
+		errors.As(err, &unreadable)
+		refusal := SourceBudgetError{Path: unreadable.Path, Reason: RefusedUnreadablePath}
+		if at := slices.IndexFunc(steps, func(step subagent.ShellStep) bool { return slices.Contains(step.Changes, unreadable.Path) }); at >= 0 {
+			refusal.Step = steps[at]
+		}
+		return refusal, true
 	}
-	for _, step := range subagent.ShellSteps(command) {
-		if !slices.Contains([]string{"", "echo", "printf", "cat", "tee", "sed", "perl", "cp", "mv"}, step.Program) {
+	for _, step := range steps {
+		if at := slices.IndexFunc(step.Changes, func(path string) bool { return sourceLanguage(path) != "" }); at >= 0 && shellWriter(step) {
+			return SourceBudgetError{Path: step.Changes[at], Reason: RefusedShellSource, Step: step}, true
+		}
+	}
+	return SourceBudgetError{}, false
+}
+
+func substitution(step subagent.ShellStep) (string, string, []string, bool) {
+	if step.Program != "sed" && step.Program != "perl" {
+		return "", "", nil, false
+	}
+	for i, arg := range step.Args {
+		if len(arg) < 4 || arg[0] != 's' || !unicode.IsPunct(rune(arg[1])) && !unicode.IsSymbol(rune(arg[1])) || arg[1] == '\\' {
 			continue
 		}
-		if at := slices.IndexFunc(step.Changes, func(path string) bool { return sourceLanguage(path) != "" }); at >= 0 {
-			return step.Changes[at], nil
+		parts := strings.Split(arg[2:], arg[1:2])
+		if len(parts) != 3 {
+			continue
+		}
+		files := slices.DeleteFunc(slices.Clone(step.Args[i+1:]), func(file string) bool { return strings.HasPrefix(file, "-") })
+		return parts[0], parts[1], files, true
+	}
+	return "", "", nil, false
+}
+
+func sameChangeByTool(step subagent.ShellStep, path string) string {
+	if !shellWriter(step) {
+		return "that command with every file it writes named literally, or edit and write calls for source"
+	}
+	old, replacement, files, renames := substitution(step)
+	if !renames {
+		return fmt.Sprintf("write with path %q and the whole file as content, or edit for a change inside a file that exists", path)
+	}
+	if len(files) == 0 {
+		files = []string{path}
+	}
+	var named []string
+	for _, file := range files {
+		switch {
+		case strings.ContainsAny(file, "$`"):
+			named = append(named, "each file the command would have reached")
+		case strings.ContainsAny(file, "*?["):
+			named = append(named, "each file "+file+" matches")
+		default:
+			named = append(named, strconv.Quote(file))
 		}
 	}
-	return "", nil
+	return fmt.Sprintf("edit with old_string %q, new_string %q and replace_all true, one call per file: %s", old, replacement, strings.Join(named, ", "))
 }
 
 type sourceBudget struct {
@@ -208,12 +270,8 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, err
 		return t.tool.Run(ctx, raw)
 	}
 	if t.Name() == "bash" {
-		written, err := handWrittenSource(args.Command)
-		if err != nil {
-			return Result{}, fmt.Errorf("%s: %w", t.Name(), err)
-		}
-		if written != "" {
-			return Result{}, t.refuse(SourceBudgetError{Path: written, Reason: RefusedShellSource})
+		if refusal, refused := shellRefusal(args.Command); refused {
+			return Result{}, t.refuse(refusal)
 		}
 		result, err := t.tool.Run(ctx, raw)
 		if err == nil {

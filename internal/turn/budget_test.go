@@ -36,23 +36,67 @@ func TestShellWriteToSourceIsRefusedOnlyWhenTheCommandCarriesTheSource(t *testin
 		refused bool
 	}{
 		{"sed -i s/a/b/ src/app.ts", true},
+		{"sed -i 's/CalcTotal/Total/g' *.go", true},
+		{"perl -pi -e 's/a/b/g' x.go", true},
+		{"go test ./... && sed -i.bak -E 's|a|b|' x.go", true},
+		{"sed -i s/a/b/ $(find . -name '*.go')", true},
+		{`echo x > "$OUT"`, true},
 		{"echo 'package x' > x.go", true},
 		{"cat > main.go <<'EOF'\npackage main\nEOF", true},
 		{"printf 'x' | tee y.go", true},
+		{"cp notes.txt z.go", true},
+		{"mv old.go new.go", true},
 		{"echo x >> NOTES.md", false},
+		{"sed -i s/a/b/ README.md", false},
+		{"sed -n 1,5p a.go", false},
+		{"go test ./...", false},
 		{"tofu serve --schema > apps/desk/schema/tofu.host.json", false},
 		{"go run ./gen > types_gen.go", false},
 		{"stringer -type=Kind > kind_string.go", false},
 	} {
 		raw, _ := json.Marshal(map[string]string{"command": c.command})
 		_, err := shell.Run(context.Background(), raw)
-		var refusal SourceBudgetError
-		if errors.As(err, &refusal) != c.refused {
+		if (err != nil) != c.refused {
 			t.Errorf("%q: refused %v, want %v, error %v", c.command, err != nil, c.refused, err)
 		}
 	}
-	if len(ran) != 4 {
-		t.Errorf("ran %d commands, want the four that carry no source: %v", len(ran), ran)
+	if len(ran) != 7 {
+		t.Errorf("ran %d commands, want the seven that carry no source: %v", len(ran), ran)
+	}
+}
+
+func TestARefusedShellWriteNamesTheCallThatDoesItInOneReply(t *testing.T) {
+	var ran []string
+	shell := WithSourceBudget([]Tool{ranTool{name: "bash", ran: &ran}}, nil)[0]
+	for _, c := range []struct {
+		command string
+		want    []string
+	}{
+		{"sed -i 's/CalcTotal/Total/g' cart.go report.go", []string{"edit", "replace_all true", `old_string "CalcTotal"`, `new_string "Total"`, `"cart.go"`, `"report.go"`}},
+		{"sed -i -E 's|Acct|Account|g' *.go", []string{"edit", "replace_all true", `old_string "Acct"`, `new_string "Account"`, "each file *.go matches"}},
+		{"perl -pi -e 's/a/b/g' x.go", []string{"edit", "replace_all true", `old_string "a"`, `"x.go"`}},
+		{"sed -i 's/Acct/Account/g' $(find . -name '*.go')", []string{"edit", "replace_all true", `old_string "Acct"`, "until the shell runs"}},
+		{"cat > main.go <<'EOF'\npackage main\nEOF", []string{`write with path "main.go"`, "whole file as content"}},
+		{"echo 'package x' > x.go", []string{`write with path "x.go"`, "whole file as content"}},
+		{`echo x > "$OUT"`, []string{"until the shell runs", "write"}},
+	} {
+		raw, _ := json.Marshal(map[string]string{"command": c.command})
+		_, err := shell.Run(context.Background(), raw)
+		if err == nil {
+			t.Fatalf("%q ran", c.command)
+		}
+		text := err.Error()
+		for _, want := range append(c.want, "nothing ran", "no file changed", "in your next reply") {
+			if !strings.Contains(text, want) {
+				t.Errorf("%q: refusal lacks %q: %s", c.command, want, text)
+			}
+		}
+		if strings.Contains(text, "MUST") || strings.Contains(text, "NEVER") || strings.Contains(text, "never does") {
+			t.Errorf("%q: refusal scolds rather than says what to send: %s", c.command, text)
+		}
+	}
+	if len(ran) != 0 {
+		t.Errorf("a refused command ran: %v", ran)
 	}
 }
 
