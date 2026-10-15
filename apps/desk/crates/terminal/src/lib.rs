@@ -994,6 +994,7 @@ impl Render for Terminal {
             .child(
                 canvas(
                     move |bounds, window, cx| {
+                        let bounds = paint::padded(bounds);
                         let cell = paint::cell_size(window, font);
                         let (frame, thumb) = terminal.update(cx, |terminal, cx| {
                             (terminal.frame(bounds, cell, cx), terminal.thumb())

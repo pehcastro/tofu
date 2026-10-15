@@ -18,6 +18,7 @@ use crate::components::size::{
     TAB_PAD_LEFT, TAB_PAD_TAIL,
 };
 use crate::components::term::{TermCard, TermStatus};
+use crate::components::tooltip::{Edge, tooltip};
 use crate::components::width::{Fit, Width};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
@@ -25,6 +26,7 @@ use crate::metrics::{ICON_SMALL, ICON_TINY};
 use crate::theme::{ColorToken, Theme};
 
 const VISIBLE: usize = 3;
+const REFUSED: &str = "tofu does not give this shell a terminal yet";
 const SHELL_TAB: f32 = 108.0;
 const SHELL_MORE: f32 = 80.0;
 const ROW_PAD_LEFT: f32 = 12.0;
@@ -151,6 +153,7 @@ enum Ending<'a> {
 enum Hold<'a> {
     Unavailable,
     Offered(&'a OnAt),
+    Refused(AnyElement),
     Held(AnyView, &'a OnAt),
 }
 
@@ -441,6 +444,7 @@ fn panel(
                 .child(button);
             (Some(shown_on_hover.into_any_element()), None)
         }
+        Hold::Refused(button) => (Some(button), None),
         Hold::Held(terminal, release) => {
             let release = release.clone();
             let button = action(
@@ -691,10 +695,27 @@ impl RenderOnce for Shells {
                 (Some((at, terminal, release)), _) if *at == active => {
                     Hold::Held(terminal.clone(), release)
                 }
-                (_, Some((takeable, take)))
-                    if shell.state.endable() && takeable.get(active).copied().unwrap_or(false) =>
-                {
-                    Hold::Offered(take)
+                (_, Some((takeable, take))) if shell.state.endable() => {
+                    match takeable.get(active).copied().unwrap_or(false) {
+                        true => Hold::Offered(take),
+                        false => Hold::Refused(
+                            tooltip(
+                                ElementId::Name(format!("{id}-take-tip").into()),
+                                div()
+                                    .id(ElementId::Name(format!("{id}-take-refused").into()))
+                                    .flex_none()
+                                    .px(px(BADGE_PAD_X))
+                                    .text_color(ink(&theme, DIM_TEXT))
+                                    .child("take over"),
+                                Edge::Frame,
+                                REFUSED,
+                                &theme,
+                                window,
+                                cx,
+                            )
+                            .into_any_element(),
+                        ),
+                    }
                 }
                 _ => Hold::Unavailable,
             };

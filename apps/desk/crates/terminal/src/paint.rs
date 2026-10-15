@@ -5,9 +5,9 @@ use alacritty_terminal::term::point_to_viewport;
 use alacritty_terminal::term::search::Match;
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui::{
-    App, BorderStyle, Bounds, Font, FontFeatures, FontStyle, FontWeight, Hsla, PaintQuad, Pixels,
-    Point, ShapedLine, SharedString, Size, StrikethroughStyle, TextAlign, TextRun, UnderlineStyle,
-    Window, fill, font, outline, point, px, size,
+    App, BorderStyle, Bounds, Edges, Font, FontFeatures, FontStyle, FontWeight, Hsla, PaintQuad,
+    Pixels, Point, ShapedLine, SharedString, Size, StrikethroughStyle, TextAlign, TextRun,
+    UnderlineStyle, Window, fill, font, outline, point, px, size,
 };
 use std::mem;
 use std::ops::RangeInclusive;
@@ -15,6 +15,8 @@ use std::ops::RangeInclusive;
 const LINE_HEIGHT: f32 = 1.3;
 const FALLBACK_ADVANCE: f32 = 0.6;
 const BAR_WIDTH: f32 = 2.;
+const PAD_X: f32 = 8.;
+const PAD_Y: f32 = 6.;
 const DECORATION: f32 = 1.;
 const BOX_DRAWING: RangeInclusive<char> = '\u{2500}'..='\u{259F}';
 const POWERLINE: RangeInclusive<char> = '\u{E0B0}'..='\u{E0D7}';
@@ -69,6 +71,15 @@ fn mono() -> Font {
     let mut mono = font(FAMILY);
     mono.features = FontFeatures::disable_ligatures();
     mono
+}
+
+pub(crate) fn padded(bounds: Bounds<Pixels>) -> Bounds<Pixels> {
+    bounds.extend(Edges {
+        top: px(-PAD_Y),
+        bottom: px(-PAD_Y),
+        left: px(-PAD_X),
+        right: px(-PAD_X),
+    })
 }
 
 pub(crate) fn cell_size(window: &Window, font: Pixels) -> Size<Pixels> {

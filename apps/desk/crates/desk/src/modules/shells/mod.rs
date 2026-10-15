@@ -438,10 +438,8 @@ impl Render for Shells {
             }
             cx.notify();
         }));
-        let Some(at) = self.local_at() else {
-            return tile;
-        };
-        let takeable = (0..self.shells.len()).map(|ix| ix == at).collect();
+        let local = self.local_at();
+        let takeable = (0..self.shells.len()).map(|ix| Some(ix) == local).collect();
         let tile = tile.on_take_over(
             takeable,
             cx.listener(|module, _: &usize, window, cx| {
@@ -449,6 +447,9 @@ impl Render for Shells {
                 cx.notify();
             }),
         );
+        let Some(at) = local else {
+            return tile;
+        };
         let Some(terminal) = self.local.as_ref().and_then(|local| local.held.clone()) else {
             return tile;
         };
