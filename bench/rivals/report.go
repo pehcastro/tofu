@@ -215,6 +215,8 @@ const (
 	settingRival   = "rival"
 )
 
+var thinkingSummaries = []string{"summarized", "omitted"}
+
 var settingMeasures = []func(row) float64{
 	func(r row) float64 { return seconds(r.WallMS) },
 	func(r row) float64 { return float64(r.Requests) },

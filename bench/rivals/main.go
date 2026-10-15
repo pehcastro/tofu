@@ -66,6 +66,7 @@ type row struct {
 	Arm          string        `json:"arm"`
 	Rep          int           `json:"rep"`
 	Setting      string        `json:"setting,omitempty"`
+	Batch        string        `json:"batch,omitempty"`
 	Tool         string        `json:"tool"`
 	Version      string        `json:"version"`
 	Commit       string        `json:"commit,omitempty"`
@@ -199,7 +200,8 @@ func runArm(args []string) error {
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
 	limit := flags.Duration("limit", 20*time.Minute, "wall clock cap")
 	patience := flags.Duration("patience", 30*time.Minute, "how long to wait for the slot")
-	setting := flags.String("setting", "", "the build or setting under test, either shipped or rival; its rows go to the setting table, not the arm tables")
+	setting := flags.String("setting", "", "the build or setting under test: shipped or rival, or a thinkingSummary value written to the run's project settings")
+	batch := flags.String("batch", "", "folder under runs for this batch of rows, so a rerun keeps the rows before it")
 	taskName := flags.String("task", "", "task folder under testdata/tasks; empty is the first task in testdata")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -212,8 +214,8 @@ func runArm(args []string) error {
 	if index < 0 || *rep < 1 || *slot == "" {
 		return errors.New("run needs -arm, -rep and -slot")
 	}
-	if !slices.Contains([]string{"", settingShipped, settingRival}, *setting) {
-		return fmt.Errorf("-setting is %s or %s, not %q", settingShipped, settingRival, *setting)
+	if !slices.Contains(append([]string{"", settingShipped, settingRival}, thinkingSummaries...), *setting) {
+		return fmt.Errorf("-setting is %s, %s or one of %v, not %q", settingShipped, settingRival, thinkingSummaries, *setting)
 	}
 	chosen := arms[index]
 	for waited := time.Duration(0); os.Mkdir(*slot, 0o755) != nil; waited += 15 * time.Second {
@@ -223,7 +225,7 @@ func runArm(args []string) error {
 		time.Sleep(15 * time.Second)
 	}
 	defer func() { _ = os.Remove(*slot) }()
-	r := row{Task: t.Name, Arm: chosen.Name, Rep: *rep, Setting: *setting, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
+	r := row{Task: t.Name, Arm: chosen.Name, Rep: *rep, Setting: *setting, Batch: *batch, Tool: chosen.Tool, AskedModel: chosen.AskedModel, Posture: chosen.Posture,
 		Date: time.Now().Format("2006-01-02 15:04"), Machine: fmt.Sprintf("%s/%s, %d logical CPUs", runtime.GOOS, runtime.GOARCH, runtime.NumCPU())}
 	r.Work = filepath.Join(*work, r.name())
 	dirs, err := stage(r.Work, t, false)
@@ -233,6 +235,9 @@ func runArm(args []string) error {
 	env := goEnv(dirs)
 	if chosen.Tool == "tofu" {
 		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
+		if slices.Contains(thinkingSummaries, *setting) {
+			r.Notes = append(r.Notes, "setting: "+toolOutput(dirs.repo, env, "tofu", "settings", "set", "--scope", "project", "thinkingSummary", *setting))
+		}
 	} else {
 		r.Version = firstLine(toolOutput(dirs.repo, env, chosen.Tool, "--version"))
 	}
@@ -253,7 +258,7 @@ func runArm(args []string) error {
 func withTranscript(r row, t transcript) row {
 	r.Model, r.Models, r.Credential, r.Requests, r.Tokens, r.Calls, r.Timed, r.ThinkingSent, r.Agents, r.Auxiliary = t.model, t.models, t.credential, t.requests, t.tokens, t.calls, t.timed, t.thinkingSent, t.agents, t.auxiliary
 	r.Notes = append(slices.DeleteFunc(r.Notes, func(note string) bool {
-		return !strings.HasPrefix(note, "stopped at") && !strings.HasPrefix(note, "wait:")
+		return !strings.HasPrefix(note, "stopped at") && !strings.HasPrefix(note, "wait:") && !strings.HasPrefix(note, "setting:")
 	}), t.notes...)
 	r.Retried = retried(t.calls)
 	return r
@@ -269,7 +274,7 @@ func save(r row) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(here(), "runs", r.Task, r.name()+".json")
+	path := filepath.Join(here(), "runs", r.Batch, r.Task, r.name()+".json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

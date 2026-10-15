@@ -1,0 +1,145 @@
+{
+  "task": "bigread",
+  "arm": "tofu-sonnet",
+  "rep": 3,
+  "setting": "summarized",
+  "batch": "0.5.15-rc1",
+  "tool": "tofu",
+  "version": "0.5.15-rc1",
+  "commit": "b440a7727b91de9a22cf87e07b7b94b7d92b3f2c",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-15 03:40",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 22644,
+  "tree": {
+    "cpu_ms": 2218,
+    "peak_tree_rss_bytes": 56344576,
+    "peak_commit_bytes": 129081344,
+    "processes": 34,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 2541,
+    "cache_read": 107989,
+    "cache_write": 3265,
+    "out": 1189,
+    "reasoning": 32
+  },
+  "requests": 10,
+  "auxiliary_requests": 3,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1757,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 29,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 1617,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 339,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 151,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 1865,
+      "first_ms": 1306,
+      "out": 54
+    },
+    {
+      "at_ms": 3626,
+      "ms": 1254,
+      "first_ms": 1031,
+      "out": 67
+    },
+    {
+      "at_ms": 4914,
+      "ms": 1397,
+      "first_ms": 1166,
+      "out": 72
+    },
+    {
+      "at_ms": 7932,
+      "ms": 3286,
+      "first_ms": 3274,
+      "out": 113
+    },
+    {
+      "at_ms": 11562,
+      "ms": 1761,
+      "first_ms": 1462,
+      "out": 99
+    },
+    {
+      "at_ms": 13479,
+      "ms": 1526,
+      "first_ms": 1189,
+      "out": 88
+    },
+    {
+      "at_ms": 15010,
+      "ms": 4060,
+      "first_ms": 4047,
+      "out": 453
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "function": true,
+      "queue": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "visible tests pass": true
+    },
+    "files_changed": 2,
+    "lines_added": 2,
+    "lines_deleted": 0,
+    "harness_files": [
+      ".tofu/settings.json"
+    ]
+  },
+  "notes": [
+    "setting: ~ thinkingSummary = summarized\n  ~/AppData/Local/Temp/claude/F--localhost-ephem-sh-tofu/ade52729-2164-44a1-b4b8-877a234f4893/scratchpad/t1400/work/bigread-tofu-sonnet-summarized-3/repo/.tofu/settings.json\n  → undo: tofu settings set --scope project thinkingSummary summarized",
+    "turn outcome stopped"
+  ],
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\t1400\\work\\bigread-tofu-sonnet-summarized-3"
+}

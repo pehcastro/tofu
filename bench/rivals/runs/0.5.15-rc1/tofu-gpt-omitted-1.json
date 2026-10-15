@@ -1,0 +1,340 @@
+{
+  "arm": "tofu-gpt",
+  "rep": 1,
+  "setting": "omitted",
+  "batch": "0.5.15-rc1",
+  "tool": "tofu",
+  "version": "0.5.15-rc1",
+  "commit": "b440a7727b91de9a22cf87e07b7b94b7d92b3f2c",
+  "asked_model": "codex-sub/gpt-5.6-sol",
+  "model": "gpt-5.6-sol",
+  "models": [
+    "gpt-5.6-sol",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own codex-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire codex --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-15 03:05",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 192172,
+  "tree": {
+    "cpu_ms": 30093,
+    "peak_tree_rss_bytes": 344752128,
+    "peak_commit_bytes": 463491072,
+    "processes": 351,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 29316,
+    "cache_read": 196736,
+    "cache_write": 0,
+    "out": 6492,
+    "reasoning": 2690
+  },
+  "requests": 20,
+  "auxiliary_requests": 5,
+  "calls": [
+    {
+      "kind": "other",
+      "name": "project_report",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 13,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 80,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "tofu_lint_comments",
+      "ms": 23,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 12829,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 125,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 758,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 117,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "tofu_docs",
+      "ms": 29,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 1269,
+      "failed": false
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 6350,
+      "first_ms": 6090,
+      "out": 39
+    },
+    {
+      "at_ms": 6355,
+      "ms": 5979,
+      "first_ms": 5979,
+      "out": 101
+    },
+    {
+      "at_ms": 12351,
+      "ms": 7983,
+      "first_ms": 3554,
+      "out": 387
+    },
+    {
+      "at_ms": 20341,
+      "ms": 18950,
+      "first_ms": 15273,
+      "out": 654
+    },
+    {
+      "at_ms": 39297,
+      "ms": 9794,
+      "first_ms": 9794,
+      "out": 641
+    },
+    {
+      "at_ms": 49111,
+      "ms": 18782,
+      "first_ms": 11309,
+      "out": 873
+    },
+    {
+      "at_ms": 67899,
+      "ms": 6352,
+      "first_ms": 5756,
+      "out": 107
+    },
+    {
+      "at_ms": 74373,
+      "ms": 6940,
+      "first_ms": 6940,
+      "out": 129
+    },
+    {
+      "at_ms": 94390,
+      "ms": 8536,
+      "first_ms": 7764,
+      "out": 187
+    },
+    {
+      "at_ms": 103736,
+      "ms": 6142,
+      "first_ms": 5680,
+      "out": 100
+    },
+    {
+      "at_ms": 109883,
+      "ms": 8261,
+      "first_ms": 7892,
+      "out": 101
+    },
+    {
+      "at_ms": 118313,
+      "ms": 7830,
+      "first_ms": 7748,
+      "out": 136
+    },
+    {
+      "at_ms": 126176,
+      "ms": 18854,
+      "first_ms": 15801,
+      "out": 773
+    },
+    {
+      "at_ms": 145036,
+      "ms": 8989,
+      "first_ms": 8542,
+      "out": 149
+    },
+    {
+      "at_ms": 155349,
+      "ms": 29908,
+      "first_ms": 24214,
+      "out": 1338
+    }
+  ],
+  "thinking_sent": "reasoning {\"effort\":\"medium\"}",
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 10,
+    "lines_added": 108,
+    "lines_deleted": 6,
+    "harness_files": [
+      ".tofu/settings.json"
+    ]
+  },
+  "notes": [
+    "setting: ~ thinkingSummary = omitted\n  ~/AppData/Local/Temp/claude/F--localhost-ephem-sh-tofu/ade52729-2164-44a1-b4b8-877a234f4893/scratchpad/t1400/work/tofu-gpt-omitted-1/repo/.tofu/settings.json\n  → undo: tofu settings set --scope project thinkingSummary summarized",
+    "turn outcome stopped"
+  ],
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\t1400\\work\\tofu-gpt-omitted-1"
+}

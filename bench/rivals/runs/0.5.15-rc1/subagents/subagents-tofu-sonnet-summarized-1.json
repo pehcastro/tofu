@@ -1,0 +1,459 @@
+{
+  "task": "subagents",
+  "arm": "tofu-sonnet",
+  "rep": 1,
+  "setting": "summarized",
+  "batch": "0.5.15-rc1",
+  "tool": "tofu",
+  "version": "0.5.15-rc1",
+  "commit": "b440a7727b91de9a22cf87e07b7b94b7d92b3f2c",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-15 03:29",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 61372,
+  "tree": {
+    "cpu_ms": 34906,
+    "peak_tree_rss_bytes": 378040320,
+    "peak_commit_bytes": 475922432,
+    "processes": 349,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 12172,
+    "cache_read": 356740,
+    "cache_write": 33996,
+    "out": 6836,
+    "reasoning": 184
+  },
+  "requests": 43,
+  "auxiliary_requests": 11,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 11,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 28,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 16,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 18,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 20,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "spawn",
+      "ms": 39,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 6,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "reference",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 3,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 105,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 4,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "subagents",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "subagents",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "subagents",
+      "ms": 12,
+      "failed": false
+    },
+    {
+      "kind": "spawn",
+      "name": "subagents",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 8,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 18328,
+      "failed": false
+    }
+  ],
+  "agents": 6,
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 2106,
+      "first_ms": 1939,
+      "out": 53
+    },
+    {
+      "at_ms": 2110,
+      "ms": 6443,
+      "first_ms": 1645,
+      "out": 1110
+    },
+    {
+      "at_ms": 8594,
+      "ms": 1792,
+      "first_ms": 1510,
+      "out": 75
+    },
+    {
+      "at_ms": 10379,
+      "ms": 1636,
+      "first_ms": 999,
+      "out": 74
+    },
+    {
+      "at_ms": 10387,
+      "ms": 1843,
+      "first_ms": 1187,
+      "out": 75
+    },
+    {
+      "at_ms": 10376,
+      "ms": 1974,
+      "first_ms": 1278,
+      "out": 76
+    },
+    {
+      "at_ms": 10392,
+      "ms": 1984,
+      "first_ms": 1101,
+      "out": 122
+    },
+    {
+      "at_ms": 10390,
+      "ms": 1990,
+      "first_ms": 1288,
+      "out": 75
+    },
+    {
+      "at_ms": 10396,
+      "ms": 2644,
+      "first_ms": 2636,
+      "out": 86
+    },
+    {
+      "at_ms": 12022,
+      "ms": 1416,
+      "first_ms": 1239,
+      "out": 54
+    },
+    {
+      "at_ms": 12382,
+      "ms": 1166,
+      "first_ms": 895,
+      "out": 76
+    },
+    {
+      "at_ms": 12237,
+      "ms": 1453,
+      "first_ms": 1276,
+      "out": 80
+    },
+    {
+      "at_ms": 12386,
+      "ms": 1437,
+      "first_ms": 1188,
+      "out": 75
+    },
+    {
+      "at_ms": 12356,
+      "ms": 1489,
+      "first_ms": 1174,
+      "out": 81
+    },
+    {
+      "at_ms": 13553,
+      "ms": 1529,
+      "first_ms": 1181,
+      "out": 117
+    },
+    {
+      "at_ms": 13827,
+      "ms": 1696,
+      "first_ms": 1318,
+      "out": 118
+    },
+    {
+      "at_ms": 13047,
+      "ms": 3095,
+      "first_ms": 3085,
+      "out": 346
+    },
+    {
+      "at_ms": 13445,
+      "ms": 3262,
+      "first_ms": 3042,
+      "out": 66
+    },
+    {
+      "at_ms": 13855,
+      "ms": 3017,
+      "first_ms": 3010,
+      "out": 299
+    },
+    {
+      "at_ms": 13848,
+      "ms": 3454,
+      "first_ms": 2992,
+      "out": 104
+    },
+    {
+      "at_ms": 15528,
+      "ms": 3420,
+      "first_ms": 3410,
+      "out": 364
+    },
+    {
+      "at_ms": 15085,
+      "ms": 3900,
+      "first_ms": 3892,
+      "out": 475
+    },
+    {
+      "at_ms": 18387,
+      "ms": 1483,
+      "first_ms": 1431,
+      "out": 27
+    },
+    {
+      "at_ms": 16713,
+      "ms": 3694,
+      "first_ms": 3686,
+      "out": 150
+    },
+    {
+      "at_ms": 17307,
+      "ms": 3628,
+      "first_ms": 3622,
+      "out": 374
+    },
+    {
+      "at_ms": 19893,
+      "ms": 1313,
+      "first_ms": 1227,
+      "out": 27
+    },
+    {
+      "at_ms": 21214,
+      "ms": 1833,
+      "first_ms": 1563,
+      "out": 71
+    },
+    {
+      "at_ms": 20410,
+      "ms": 4173,
+      "first_ms": 4162,
+      "out": 456
+    },
+    {
+      "at_ms": 23063,
+      "ms": 4666,
+      "first_ms": 4655,
+      "out": 126
+    },
+    {
+      "at_ms": 27736,
+      "ms": 2206,
+      "first_ms": 1509,
+      "out": 173
+    },
+    {
+      "at_ms": 30269,
+      "ms": 2466,
+      "first_ms": 1729,
+      "out": 178
+    },
+    {
+      "at_ms": 51071,
+      "ms": 3725,
+      "first_ms": 3712,
+      "out": 349
+    }
+  ],
+  "thinking_sent": "thinking {\"display\":\"summarized\",\"type\":\"adaptive\"}",
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "limit": true,
+      "retries": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "visible tests pass": true
+    },
+    "files_changed": 3,
+    "lines_added": 7,
+    "lines_deleted": 1,
+    "harness_files": [
+      ".tofu/settings.json"
+    ]
+  },
+  "notes": [
+    "setting: ~ thinkingSummary = summarized\n  ~/AppData/Local/Temp/claude/F--localhost-ephem-sh-tofu/ade52729-2164-44a1-b4b8-877a234f4893/scratchpad/t1400/work/subagents-tofu-sonnet-summarized-1/repo/.tofu/settings.json\n  → undo: tofu settings set --scope project thinkingSummary summarized",
+    "turn outcome stopped",
+    "6 sub-agents"
+  ],
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\t1400\\work\\subagents-tofu-sonnet-summarized-1"
+}

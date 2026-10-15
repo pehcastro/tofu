@@ -1,0 +1,73 @@
+{
+  "arm": "omp-sonnet",
+  "rep": 2,
+  "batch": "0.5.15-rc1",
+  "tool": "omp",
+  "version": "omp/18.3.2",
+  "asked_model": "anthropic/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "credential": "provider anthropic through omp's own login, credential 3",
+  "posture": "--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay",
+  "date": "2026-10-15 03:12",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 30749,
+  "tree": {
+    "cpu_ms": 40593,
+    "peak_tree_rss_bytes": 847806464,
+    "peak_commit_bytes": 1388371968,
+    "processes": 378,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 10,
+    "cache_read": 48389,
+    "cache_write": 2578,
+    "out": 1097
+  },
+  "requests": 4,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 298,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 359,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 17516,
+      "failed": false
+    }
+  ],
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 8,
+    "lines_added": 41,
+    "lines_deleted": 6
+  },
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\t1400\\work\\omp-sonnet-2"
+}

@@ -1,0 +1,166 @@
+{
+  "arm": "tofu-sonnet",
+  "rep": 3,
+  "setting": "omitted",
+  "batch": "0.5.15-rc1",
+  "tool": "tofu",
+  "version": "0.5.15-rc1",
+  "commit": "b440a7727b91de9a22cf87e07b7b94b7d92b3f2c",
+  "asked_model": "claude-sub/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5-20251001"
+  ],
+  "credential": "tofu's own claude-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire anthropic --gate shadow --no-instructions, real home for the login, scratch project folder",
+  "date": "2026-10-15 03:19",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 48593,
+  "tree": {
+    "cpu_ms": 30734,
+    "peak_tree_rss_bytes": 365752320,
+    "peak_commit_bytes": 469819392,
+    "processes": 313,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 4223,
+    "cache_read": 62236,
+    "cache_write": 6920,
+    "out": 4152,
+    "reasoning": 32
+  },
+  "requests": 8,
+  "auxiliary_requests": 4,
+  "calls": [
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 1817,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": -1,
+      "failed": true
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 4,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 14277,
+      "failed": true
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 2160,
+      "first_ms": 1552,
+      "out": 58
+    },
+    {
+      "at_ms": 3983,
+      "ms": 6449,
+      "first_ms": 1397,
+      "out": 1152
+    },
+    {
+      "at_ms": 10752,
+      "ms": 9211,
+      "first_ms": 1914,
+      "out": 1820
+    },
+    {
+      "at_ms": 34264,
+      "ms": 4015,
+      "first_ms": 4013,
+      "out": 498
+    }
+  ],
+  "thinking_sent": "thinking {\"type\":\"adaptive\"}",
+  "retried": 1,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 10,
+    "lines_added": 75,
+    "lines_deleted": 6,
+    "harness_files": [
+      ".tofu/settings.json"
+    ]
+  },
+  "notes": [
+    "setting: ~ thinkingSummary = omitted\n  ~/AppData/Local/Temp/claude/F--localhost-ephem-sh-tofu/ade52729-2164-44a1-b4b8-877a234f4893/scratchpad/t1400/work/tofu-sonnet-omitted-3/repo/.tofu/settings.json\n  → undo: tofu settings set --scope project thinkingSummary summarized",
+    "turn outcome stopped"
+  ],
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\t1400\\work\\tofu-sonnet-omitted-3"
+}

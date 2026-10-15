@@ -1,8 +1,8 @@
 {
   "history": {
-    "read_on": "2026-10-14",
-    "tree": "fdd8ef49",
-    "version": "0.5.14",
+    "read_on": "2026-10-15",
+    "tree": "b440a772",
+    "version": "0.5.15-rc1",
     "level_rule": "Level means the spread of tofu's latest 3 runs overlaps the other harness's, the rule bench/rivals judges by; where a measure has 1 run, the figures are compared as they are.",
     "headlines": [
       {
@@ -53,7 +53,7 @@
         "pairing": "coding task, Claude Code's setting",
         "rival": "Claude Code",
         "title": "The coding task",
-        "tag": "Sonnet 5.5, tofu 0.5.14+dev sending Claude Code's thinking setting, Claude Code 2.1.300, 3 runs each"
+        "tag": "Sonnet 5.5, tofu 0.5.15-rc1 sending Claude Code's thinking setting, Claude Code 2.1.300, 3 runs each"
       },
       {
         "pairing": "Per sub-agent",
@@ -71,19 +71,13 @@
         "pairing": "coding task, omp's setting",
         "rival": "omp",
         "title": "The coding task",
-        "tag": "Sonnet 5.5, tofu 0.5.14+dev sending omp's thinking setting, omp 18.3.2, 3 runs each"
+        "tag": "Sonnet 5.5, tofu 0.5.15-rc1 sending omp's thinking setting, omp 18.3.2, 3 runs each"
       },
       {
         "pairing": "three new tasks",
         "rival": "omp",
         "title": "Six sub-agents, a large read, a long edit",
-        "tag": "Sonnet 5.5, tofu 0.5.14 and omp 18.3.2, both at omp's thinking setting, 3 runs per task"
-      },
-      {
-        "pairing": "long edit after the budget fix",
-        "rival": "omp",
-        "title": "The long edit, after tonight's fix",
-        "tag": "Sonnet 5.5, tofu 0.5.14+dev with the edit budget fix against the omp 18.3.2 runs above, 3 runs each"
+        "tag": "Sonnet 5.5, tofu 0.5.15-rc1 against omp 18.3.2's runs from the 0.5.14 night, both at omp's thinking setting, 3 runs per task"
       },
       {
         "pairing": "Per sub-agent",
@@ -101,7 +95,7 @@
         "pairing": "coding task, codex's setting",
         "rival": "codex",
         "title": "The coding task",
-        "tag": "gpt-5.6-sol, tofu 0.5.14+dev sending codex's reasoning setting, codex 0.155.1, 3 runs each"
+        "tag": "gpt-5.6-sol, tofu 0.5.15-rc1 sending codex's reasoning setting, codex 0.155.1, 3 runs each"
       },
       {
         "pairing": "Per sub-agent",
@@ -140,21 +134,34 @@
             "high": 10,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "10 [10 to 10]",
+            "figure": "10 [9 to 10]",
             "value": 10,
-            "low": 10,
+            "low": 9,
             "high": 10,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -181,21 +188,34 @@
             "high": 63.1,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "48.6 [40.1 to 71.1]",
+            "value": 48.6,
+            "low": 40.1,
+            "high": 71.1,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "60.3 [35.6 to 73.8]",
-            "value": 60.3,
-            "low": 35.6,
-            "high": 73.8,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "figure": "43.1 [38.9 to 44.4]",
+            "value": 43.1,
+            "low": 38.9,
+            "high": 44.4,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -222,21 +242,34 @@
             "high": 11,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "8 [8 to 12]",
+            "value": 8,
+            "low": 8,
+            "high": 12,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "3 [3 to 5]",
-            "value": 3,
-            "low": 3,
+            "figure": "4 [4 to 5]",
+            "value": 4,
+            "low": 4,
             "high": 5,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -263,21 +296,34 @@
             "high": 108198,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "89748 [73379 to 141107]",
+            "value": 89748,
+            "low": 73379,
+            "high": 141107,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "71508 [70758 to 129733]",
-            "value": 71508,
-            "low": 70758,
-            "high": 129733,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "figure": "97176 [96912 to 122876]",
+            "value": 97176,
+            "low": 96912,
+            "high": 122876,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -304,21 +350,34 @@
             "high": 3447,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "3002 [2811 to 4152]",
+            "value": 3002,
+            "low": 2811,
+            "high": 4152,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "1994 [1654 to 4341]",
-            "value": 1994,
-            "low": 1654,
-            "high": 4341,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "figure": "2241 [2155 to 2321]",
+            "value": 2241,
+            "low": 2155,
+            "high": 2321,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -345,21 +404,34 @@
             "high": 378,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "356.9 [329.1 to 365.8]",
+            "value": 356.9,
+            "low": 329.1,
+            "high": 365.8,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "639.2 [634.5 to 645.6]",
-            "value": 639.2,
-            "low": 634.5,
-            "high": 645.6,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "figure": "563.8 [559.9 to 620.6]",
+            "value": 563.8,
+            "low": 559.9,
+            "high": 620.6,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -386,21 +458,34 @@
             "high": 41.2,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "30.9 [30.7 to 40.8]",
+            "value": 30.9,
+            "low": 30.7,
+            "high": 40.8,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
-            "figure": "45.5 [40.9 to 49.1]",
-            "value": 45.5,
-            "low": 40.9,
-            "high": 49.1,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
+            "figure": "40.4 [39.1 to 45]",
+            "value": 40.4,
+            "low": 39.1,
+            "high": 45,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -426,57 +511,32 @@
             "high": 1,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at Claude Code's setting | 3 | 10 [9 to 10] | 60.1 [54.9 to 63.1] | 10 [10 to 11] | 106201 [103872 to 108198] | 3439 [3231 to 3447] | 371.1 [353.4 to 378.0] | 36.9 [35.4 to 41.2] | 1 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at Claude Code's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "1 [1 to 2]",
+            "value": 1,
+            "low": 1,
+            "high": 2,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at Claude Code's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 48.6 [40.1 to 71.1] | 8 [8 to 12] | 89748 [73379 to 141107] | 3002 [2811 to 4152] | 356.9 [329.1 to 365.8] | 30.9 [30.7 to 40.8] | 1 [1 to 2] |"
           }
         ],
         "rivals": [
           {
             "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "2.1.300",
             "build": "live, 3 runs",
             "figure": "0 [0 to 0]",
             "value": 0,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 3 | 10 [10 to 10] | 60.3 [35.6 to 73.8] | 3 [3 to 5] | 71508 [70758 to 129733] | 1994 [1654 to 4341] | 639.2 [634.5 to 645.6] | 45.5 [40.9 to 49.1] | 0 [0 to 0] |"
-          }
-        ]
-      },
-      {
-        "bench": "rivals",
-        "task": "bench/rivals task, Sonnet 5.5 on claude-sub, tofu sending Claude Code's thinking body, all edit calls of 3 runs pooled; tofu times its own calls and the others are timed from their output, so only the order of magnitude compares",
-        "measure": "time per edit call, median",
-        "short": "edit ms",
-        "pairing": "coding task, Claude Code's setting",
-        "unit": "ms",
-        "better_word": "faster",
-        "worse_word": "slower",
-        "magnitude_only": true,
-        "better": "lower",
-        "tofu": [
-          {
-            "label": "3 runs at Claude Code's setting",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
-            "version": "0.5.14+dev",
-            "build": "17c4bf0a with the TOFU-1380 change, built in scratch, 3 live runs",
-            "figure": "2",
-            "value": 2,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| tofu-sonnet at Claude Code's setting | 18 | 2 |"
-          }
-        ],
-        "rivals": [
-          {
-            "label": "Claude Code",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
-            "version": "2.1.300",
-            "build": "live, 3 runs",
-            "figure": "81",
-            "value": 81,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| Claude Code | 7 | 81 |"
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| Claude Code | claude 2.1.300 (Claude Code) | 3 | 10 [9 to 10] | 43.1 [38.9 to 44.4] | 4 [4 to 5] | 97176 [96912 to 122876] | 2241 [2155 to 2321] | 563.8 [559.9 to 620.6] | 40.4 [39.1 to 45] | 0 [0 to 0] |"
           }
         ]
       },
@@ -503,21 +563,34 @@
             "high": 10,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
             "figure": "10 [10 to 10]",
             "value": 10,
             "low": 10,
             "high": 10,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -544,21 +617,34 @@
             "high": 62.6,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "45.4 [43.5 to 50.3]",
+            "value": 45.4,
+            "low": 43.5,
+            "high": 50.3,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "49.6 [32.7 to 57.7]",
-            "value": 49.6,
-            "low": 32.7,
-            "high": 57.7,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "figure": "34.1 [30.7 to 34.4]",
+            "value": 34.1,
+            "low": 30.7,
+            "high": 34.4,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -585,21 +671,34 @@
             "high": 10,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "9 [8 to 11]",
+            "value": 9,
+            "low": 8,
+            "high": 11,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "4 [4 to 6]",
+            "figure": "4 [4 to 4]",
             "value": 4,
             "low": 4,
-            "high": 6,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "high": 4,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -626,21 +725,34 @@
             "high": 124629,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "104484 [84553 to 128544]",
+            "value": 104484,
+            "low": 84553,
+            "high": 128544,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "51663 [51462 to 81539]",
-            "value": 51663,
-            "low": 51462,
-            "high": 81539,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "figure": "51183 [50977 to 54428]",
+            "value": 51183,
+            "low": 50977,
+            "high": 54428,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -667,21 +779,34 @@
             "high": 3620,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "3296 [2645 to 3944]",
+            "value": 3296,
+            "low": 2645,
+            "high": 3944,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "1721 [1642 to 1877]",
-            "value": 1721,
-            "low": 1642,
-            "high": 1877,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "figure": "1231 [1097 to 1684]",
+            "value": 1231,
+            "low": 1097,
+            "high": 1684,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -708,21 +833,34 @@
             "high": 366.7,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "354.6 [353.6 to 369.2]",
+            "value": 354.6,
+            "low": 353.6,
+            "high": 369.2,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "860.4 [847.5 to 877.1]",
-            "value": 860.4,
-            "low": 847.5,
-            "high": 877.1,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "figure": "857.8 [847.8 to 866.8]",
+            "value": 857.8,
+            "low": 847.8,
+            "high": 866.8,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -749,21 +887,34 @@
             "high": 40.8,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "34.2 [34.2 to 40.6]",
+            "value": 34.2,
+            "low": 34.2,
+            "high": 40.6,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "44.2 [40.9 to 44.4]",
-            "value": 44.2,
-            "low": 40.9,
-            "high": 44.4,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "figure": "40.9 [40.6 to 44.3]",
+            "value": 40.9,
+            "low": 40.6,
+            "high": 44.3,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -789,20 +940,31 @@
             "high": 1,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-sonnet at omp's setting | 3 | 9 [9 to 10] | 59.6 [42.4 to 62.6] | 9 [9 to 10] | 83973 [82400 to 124629] | 3217 [2717 to 3620] | 346.9 [329.2 to 366.7] | 35.9 [34.5 to 40.8] | 0 [0 to 1] |"
+          },
+          {
+            "label": "3 runs at omp's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "0 [0 to 3]",
+            "value": 0,
+            "high": 3,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 45.4 [43.5 to 50.3] | 9 [8 to 11] | 104484 [84553 to 128544] | 3296 [2645 to 3944] | 354.6 [353.6 to 369.2] | 34.2 [34.2 to 40.6] | 0 [0 to 3] |"
           }
         ],
         "rivals": [
           {
             "label": "omp",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "18.3.2",
             "build": "live, 3 runs",
-            "figure": "0 [0 to 1]",
+            "figure": "0 [0 to 0]",
             "value": 0,
-            "high": 1,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| omp | 3 | 10 [10 to 10] | 49.6 [32.7 to 57.7] | 4 [4 to 6] | 51663 [51462 to 81539] | 1721 [1642 to 1877] | 860.4 [847.5 to 877.1] | 44.2 [40.9 to 44.4] | 0 [0 to 1] |"
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| omp | omp omp/18.3.2 | 3 | 10 [10 to 10] | 34.1 [30.7 to 34.4] | 4 [4 to 4] | 51183 [50977 to 54428] | 1231 [1097 to 1684] | 857.8 [847.8 to 866.8] | 40.9 [40.6 to 44.3] | 0 [0 to 0] |"
           }
         ]
       },
@@ -829,21 +991,34 @@
             "high": 10,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
             "figure": "10 [10 to 10]",
             "value": 10,
             "low": 10,
             "high": 10,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -870,21 +1045,34 @@
             "high": 153.3,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "190.8 [168.8 to 192.2]",
+            "value": 190.8,
+            "low": 168.8,
+            "high": 192.2,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "105.3 [97.9 to 137.1]",
-            "value": 105.3,
-            "low": 97.9,
-            "high": 137.1,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "figure": "108.4 [107.1 to 126.9]",
+            "value": 108.4,
+            "low": 107.1,
+            "high": 126.9,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -911,21 +1099,34 @@
             "high": 15,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "17 [14 to 20]",
+            "value": 17,
+            "low": 14,
+            "high": 20,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "7 [6 to 7]",
+            "figure": "7 [6 to 10]",
             "value": 7,
             "low": 6,
-            "high": 7,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "high": 10,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -952,21 +1153,34 @@
             "high": 193390,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "174261 [138849 to 226052]",
+            "value": 174261,
+            "low": 138849,
+            "high": 226052,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "125500 [102083 to 131754]",
-            "value": 125500,
-            "low": 102083,
-            "high": 131754,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "figure": "127903 [108412 to 187595]",
+            "value": 127903,
+            "low": 108412,
+            "high": 187595,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -993,21 +1207,34 @@
             "high": 4799,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "6419 [6168 to 6492]",
+            "value": 6419,
+            "low": 6168,
+            "high": 6492,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "4086 [3199 to 4397]",
-            "value": 4086,
-            "low": 3199,
-            "high": 4397,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "figure": "3789 [3196 to 4479]",
+            "value": 3789,
+            "low": 3196,
+            "high": 4479,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -1034,21 +1261,34 @@
             "high": 376.2,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "344.8 [344.3 to 350.4]",
+            "value": 344.8,
+            "low": 344.3,
+            "high": 350.4,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "528.1 [488.0 to 534.1]",
-            "value": 528.1,
-            "low": 488,
-            "high": 534.1,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "figure": "506.1 [496.5 to 507.1]",
+            "value": 506.1,
+            "low": 496.5,
+            "high": 507.1,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -1075,21 +1315,34 @@
             "high": 41.8,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "30.1 [28.6 to 34.9]",
+            "value": 30.1,
+            "low": 28.6,
+            "high": 34.9,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "57.5 [56.6 to 67.3]",
-            "value": 57.5,
-            "low": 56.6,
-            "high": 67.3,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "figure": "56.1 [55.9 to 65.9]",
+            "value": 56.1,
+            "low": 55.9,
+            "high": 65.9,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -1114,19 +1367,32 @@
             "value": 0,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 3 | 10 [10 to 10] | 116.1 [86.2 to 153.3] | 11 [10 to 15] | 97116 [92337 to 193390] | 4458 [3064 to 4799] | 365.5 [347.7 to 376.2] | 40.0 [34.9 to 41.8] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "0 [0 to 1]",
+            "value": 0,
+            "high": 1,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 190.8 [168.8 to 192.2] | 17 [14 to 20] | 174261 [138849 to 226052] | 6419 [6168 to 6492] | 344.8 [344.3 to 350.4] | 30.1 [28.6 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "0 [0 to 0]",
+            "figure": "0 [0 to 1]",
             "value": 0,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 3 | 10 [10 to 10] | 105.3 [97.9 to 137.1] | 7 [6 to 7] | 125500 [102083 to 131754] | 4086 [3199 to 4397] | 528.1 [488.0 to 534.1] | 57.5 [56.6 to 67.3] | 0 [0 to 0] |"
+            "high": 1,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | codex codex-cli 0.155.1 | 3 | 10 [10 to 10] | 108.4 [107.1 to 126.9] | 7 [6 to 10] | 127903 [108412 to 187595] | 3789 [3196 to 4479] | 506.1 [496.5 to 507.1] | 56.1 [55.9 to 65.9] | 0 [0 to 1] |"
           }
         ]
       },
@@ -1152,19 +1418,30 @@
             "value": 2,
             "source": "bench/report/runs/parity-2026-10-14.md",
             "evidence": "| tofu-gpt at codex's setting | 20 | 2 |"
+          },
+          {
+            "label": "3 runs at codex's setting",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "1",
+            "value": 1,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| tofu-gpt at codex's setting | 20 | 1 |"
           }
         ],
         "rivals": [
           {
             "label": "codex",
-            "date": "2026-10-14",
-            "commit": "17c4bf0a",
+            "date": "2026-10-15",
+            "commit": "b440a772",
             "version": "0.155.1",
             "build": "live, 3 runs",
-            "figure": "4249",
-            "value": 4249,
-            "source": "bench/report/runs/parity-2026-10-14.md",
-            "evidence": "| codex | 5 | 4249 |"
+            "figure": "1080",
+            "value": 1080,
+            "source": "bench/report/runs/parity-2026-10-15.md",
+            "evidence": "| codex | 6 | 1080 |"
           }
         ]
       },
@@ -1191,6 +1468,19 @@
             "high": 6,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "6 [6 to 6]",
+            "value": 6,
+            "low": 6,
+            "high": 6,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1232,6 +1522,19 @@
             "high": 80.1,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "61.4 [58.6 to 66.4]",
+            "value": 61.4,
+            "low": 58.6,
+            "high": 66.4,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1273,6 +1576,19 @@
             "high": 36,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "40 [39 to 43]",
+            "value": 40,
+            "low": 39,
+            "high": 43,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1314,6 +1630,19 @@
             "high": 394047,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "365047 [339196 to 402908]",
+            "value": 365047,
+            "low": 339196,
+            "high": 402908,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1355,6 +1684,19 @@
             "high": 7001,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "6749 [6685 to 6836]",
+            "value": 6749,
+            "low": 6685,
+            "high": 6836,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1395,6 +1737,18 @@
             "high": 1,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "0 [0 to 1]",
+            "value": 0,
+            "high": 1,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1436,6 +1790,19 @@
             "high": 367.8,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 33 [33 to 36] | 8 [7 to 9] | 17252 [17114 to 23695] | 321872 [311789 to 349454] | 21765 [20898 to 26301] | 365425 [350668 to 394047] | 6965 [6374 to 7001] | 74.0 [71.9 to 80.1] | 362.5 [353.6 to 367.8] | 0 [0 to 1] | 6 [6 to 6] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "360.5 [340.5 to 366.2]",
+            "value": 360.5,
+            "low": 340.5,
+            "high": 366.2,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 61.4 [58.6 to 66.4] | 40 [39 to 43] | 365047 [339196 to 402908] | 6749 [6685 to 6836] | 360.5 [340.5 to 366.2] | 34.1 [34.1 to 34.9] | 0 [0 to 1] |"
           }
         ],
         "rivals": [
@@ -1477,6 +1844,19 @@
             "high": 6,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "6 [6 to 6]",
+            "value": 6,
+            "low": 6,
+            "high": 6,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1518,6 +1898,19 @@
             "high": 22.8,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "22.6 [22.2 to 23.2]",
+            "value": 22.6,
+            "low": 22.2,
+            "high": 23.2,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1559,6 +1952,19 @@
             "high": 9,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1600,6 +2006,19 @@
             "high": 129857,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "114008 [113795 to 115259]",
+            "value": 114008,
+            "low": 113795,
+            "high": 115259,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1641,6 +2060,19 @@
             "high": 1085,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "1189 [1070 to 1191]",
+            "value": 1189,
+            "low": 1070,
+            "high": 1191,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1680,6 +2112,17 @@
             "value": 0,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "0 [0 to 0]",
+            "value": 0,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1719,6 +2162,19 @@
             "high": 70.3,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 [6 to 6] | 9 [9 to 9] | 3 [3 to 3] | 5110 [5023 to 5149] | 120510 [120299 to 121263] | 3101 [3081 to 3445] | 128721 [128403 to 129857] | 1063 [966 to 1085] | 21.5 [20.8 to 22.8] | 57.5 [53.3 to 70.3] | 0 [0 to 0] | 0 [0 to 0] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "53.7 [53.6 to 72.1]",
+            "value": 53.7,
+            "low": 53.6,
+            "high": 72.1,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 6 [6 to 6] | 22.6 [22.2 to 23.2] | 10 [10 to 10] | 114008 [113795 to 115259] | 1189 [1070 to 1191] | 53.7 [53.6 to 72.1] | 2.2 [2 to 2.4] | 0 [0 to 0] |"
           }
         ],
         "rivals": [
@@ -1760,6 +2216,19 @@
             "high": 347.5,
             "source": "bench/rivals/report.md",
             "evidence": "| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 10 [10 to 10] | 25 [19 to 26] | 8 [7 to 9] | 11296 [10118 to 13413] | 418778 [277977 to 466108] | 45990 [35919 to 52822] | 478181 [340917 to 513323] | 14937 [13270 to 19335] | 146.4 [143.5 to 167.5] | 347.1 [344.3 to 347.5] | 14 [6 to 23] | 1 [1 to 1] |"
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "343.1 [338.6 to 356.5]",
+            "value": 343.1,
+            "low": 338.6,
+            "high": 356.5,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -1780,10 +2249,10 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, at omp's thinking setting; omp's runs are the TOFU-1370 ones",
+        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
         "measure": "quality, hidden tests plus rubric",
         "short": "long edit: quality of 10",
-        "pairing": "long edit after the budget fix",
+        "pairing": "three new tasks",
         "unit": "of 10",
         "better_word": "better",
         "worse_word": "worse",
@@ -1799,6 +2268,19 @@
             "value": 10,
             "source": "bench/report/runs/fixes-2026-10-14.md",
             "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent."
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "10 [10 to 10]",
+            "value": 10,
+            "low": 10,
+            "high": 10,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -1819,10 +2301,10 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, at omp's thinking setting; omp's runs are the TOFU-1370 ones",
+        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
         "measure": "wall time",
         "short": "long edit: wall time s",
-        "pairing": "long edit after the budget fix",
+        "pairing": "three new tasks",
         "unit": "s",
         "better_word": "faster",
         "worse_word": "slower",
@@ -1840,6 +2322,19 @@
             "high": 119,
             "source": "bench/report/runs/fixes-2026-10-14.md",
             "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent."
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "73.1 [69 to 73.7]",
+            "value": 73.1,
+            "low": 69,
+            "high": 73.7,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -1860,10 +2355,10 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, at omp's thinking setting; omp's runs are the TOFU-1370 ones",
+        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
         "measure": "model requests",
         "short": "long edit: requests",
-        "pairing": "long edit after the budget fix",
+        "pairing": "three new tasks",
         "unit": "requests",
         "better_word": "fewer",
         "worse_word": "more",
@@ -1881,6 +2376,19 @@
             "high": 20,
             "source": "bench/report/runs/fixes-2026-10-14.md",
             "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent."
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "12 [11 to 13]",
+            "value": 12,
+            "low": 11,
+            "high": 13,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -1901,10 +2409,10 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, at omp's thinking setting; omp's runs are the TOFU-1370 ones",
+        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
         "measure": "input tokens, fresh plus cache read plus cache write",
         "short": "long edit: input tokens",
-        "pairing": "long edit after the budget fix",
+        "pairing": "three new tasks",
         "unit": "tokens",
         "better_word": "fewer",
         "worse_word": "more",
@@ -1922,6 +2430,19 @@
             "high": 335958,
             "source": "bench/report/runs/fixes-2026-10-14.md",
             "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent."
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "186187 [122776 to 204045]",
+            "value": 186187,
+            "low": 122776,
+            "high": 204045,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -1942,10 +2463,10 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, at omp's thinking setting; omp's runs are the TOFU-1370 ones",
+        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
         "measure": "output tokens",
         "short": "long edit: output tokens",
-        "pairing": "long edit after the budget fix",
+        "pairing": "three new tasks",
         "unit": "tokens",
         "better_word": "fewer",
         "worse_word": "more",
@@ -1963,6 +2484,19 @@
             "high": 11413,
             "source": "bench/report/runs/fixes-2026-10-14.md",
             "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent."
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "7373 [7197 to 7523]",
+            "value": 7373,
+            "low": 7197,
+            "high": 7523,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -1983,10 +2517,10 @@
       },
       {
         "bench": "rivals",
-        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, at omp's thinking setting; omp's runs are the TOFU-1370 ones",
+        "task": "bench/rivals task longedit, Sonnet 5.5 on claude-sub, both at omp's thinking setting",
         "measure": "tool calls refused or failed",
         "short": "long edit: refused or failed calls",
-        "pairing": "long edit after the budget fix",
+        "pairing": "three new tasks",
         "unit": "calls",
         "better_word": "fewer",
         "worse_word": "more",
@@ -2004,6 +2538,19 @@
             "high": 3,
             "source": "bench/report/runs/fixes-2026-10-14.md",
             "evidence": "2026-10-14 go-dev: Acceptance 1, longedit, tofu-sonnet, 3 alternating live runs per build behind the rivalslot, HEAD 5c3e46c4 archived LF (tofu.exe sha 3a5911d1) against HEAD plus source_budget.go only (sha 7058707f), rows in scratchpad t1382/head/bench/rivals/runs. Columns: wall s, requests (conversation + memory aux), total input, out, refused, quality. CHANGE: r1 75.4 12 (7+5) 171,005 7,986 2 10; r2 119.0 20 (14+6) 335,958 11,413 3 10; r3 78.5 12 (6+6) 156,947 7,126 2 10; median 78.5 s, 12 requests, 171k. HEAD: s1 141.0 26 (19+7) 488,794 13,854 10 10; s2 146.7 24 (16+8) 429,355 17,292 13 10; s3 136.8 24 (16+8) 433,468 17,497 19 10; median 141.0 s, 24 requests, 433k. omp (TOFU-1370): 91.4 s, 7, 126k. Quality 10 in every run. tofu now beats omp on wall (78.5 vs 91.4 s) and ties it on conversation requests (7 vs 7 median) but still loses total requests 12 vs 7 (5 to 6 are memory-model Haiku calls, cmd/tofu/memory_tree.go:173) and input 171k vs 126k. r2 spawned go-dev after a refused shell sed: the library rule still says a second directory goes to a sub-agent."
+          },
+          {
+            "label": "3 runs",
+            "date": "2026-10-15",
+            "commit": "b440a772",
+            "version": "0.5.15-rc1",
+            "build": "installed 0.5.15-rc1, 3 live runs",
+            "figure": "2 [1 to 2]",
+            "value": 2,
+            "low": 1,
+            "high": 2,
+            "source": "bench/report/runs/rivals-tasks-2026-10-15.md",
+            "evidence": "| tofu-sonnet at omp's setting | tofu 0.5.15-rc1 | 3 | 10 [10 to 10] | 73.1 [69 to 73.7] | 12 [11 to 13] | 186187 [122776 to 204045] | 7373 [7197 to 7523] | 343.1 [338.6 to 356.5] | 38.1 [37.3 to 38.2] | 2 [1 to 2] |"
           }
         ],
         "rivals": [
@@ -6773,6 +7320,11 @@
       "note": "learn/jobs, TOFU-1305, 2026-10-13 at 6d565412 and rerun 2026-10-14 at 9586ec60: 4 of 5 labelled repeated jobs found, 0 false, on 5 made-up sessions; the output is in bench/report/runs/learn-jobs-2026-10-14.txt and on the first tab. The labels.txt run of TOFU-1176 needs Jev and claude and has no committed number."
     },
     {
+      "package": "longsession",
+      "kind": "measurement with no dated report",
+      "note": "TOFU-1401, in progress on 2026-10-15: a long session with hundreds of sub-agents, 0 dated reports so far."
+    },
+    {
       "package": "memory",
       "kind": "measurement with no dated report",
       "note": "TOFU-1175, 2026-10-07, at c3890d91, owing its dated report because the write of bench/memory/report-2026-10-07.md was refused to the bench agent under TOFU-1181. Repeats of one correction over 10 driven chains on a cassette, no model called: memory on 0 of 9, memory off 9 of 9, delivery of the words to the request only. TOFU-1186 removed the offer on a typed message, its corpus and the jev memory_offer@1 question: memory on now keeps the correction with /remember, and memory off keeps nothing."
@@ -6831,7 +7383,7 @@
   "counts": {
     "reports": 67,
     "packages_with_a_dated_report": 42,
-    "packages_with_no_dated_report": 17,
+    "packages_with_no_dated_report": 18,
     "withdrawn_whole_or_in_part": 20,
     "stale": 1,
     "unparsed": 2

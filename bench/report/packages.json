@@ -30,6 +30,11 @@
     "note": "two offline replays over ~/.tofu/projects, rerun 2026-10-05 at 7afccaa under TOFU-1083, 0 dated reports so far. cache/shrink: shrinking browser pages only when the batch pays is 427.67 USD against 445.57 at list price, 4.0% less over 11,801 requests, with 10 requests over the context target against 1. cache/ttl: history at 5 minutes is 14.93% less than all at 1 hour and all at 5 minutes 20.51% less, over 14,934 requests whose record holds no person pausing; the layout is open in TOFU-1064."
   },
   {
+    "package": "longsession",
+    "kind": "measurement with no dated report",
+    "note": "TOFU-1401, in progress on 2026-10-15: a long session with hundreds of sub-agents, 0 dated reports so far."
+  },
+  {
     "package": "memtree",
     "kind": "measurement with no dated report",
     "note": "TOFU-1218, 2026-10-08, at b5859988, owing its dated report because an agent may not write a report file. 10000 synthetic items with a fake compaction function: prefix stability 97.84% batched against 79.39% merging at every append, 1.47 line-inputs per item against 13.30, 1.149 model calls per item."
