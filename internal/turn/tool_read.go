@@ -3,6 +3,7 @@ package turn
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,13 +18,23 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"tofu/internal/llm"
 )
 
+const readRepeatsBeforeNote = 3
+
+type readSeen struct {
+	hash  [sha256.Size]byte
+	times int
+}
+
 type ReadTool struct {
 	root   Root
 	ledger *ReadLedger
+	mutex  sync.Mutex
+	seen   map[string]readSeen
 }
 
 func NewReadTool(root string) (*ReadTool, error) {
@@ -31,7 +42,7 @@ func NewReadTool(root string) (*ReadTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ReadTool{root: resolved}, nil
+	return &ReadTool{root: resolved, seen: map[string]readSeen{}}, nil
 }
 
 func (t *ReadTool) Reading(ledger *ReadLedger) *ReadTool {
@@ -65,7 +76,7 @@ type readArgs struct {
 	EndLine   int    `json:"end_line"`
 }
 
-func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
 	var args readArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return Result{}, fmt.Errorf("read: arguments are not the expected shape: %w", err)
@@ -104,14 +115,11 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
 		t.ledger.Mark(args.Path, content)
-		return Result{Content: repair + string(content), Command: args.Path}, nil
+		return Result{Content: repair + t.noteRepeat(ctx, args.Path, content, string(content)), Command: args.Path}, nil
 	}
 
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
-	start, end := args.StartLine, args.EndLine
-	if start <= 0 {
-		start = 1
-	}
+	start, end := max(args.StartLine, 1), args.EndLine
 	if end <= 0 || end > len(lines) {
 		end = len(lines)
 	}
@@ -124,9 +132,34 @@ func (t *ReadTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
 	span := fmt.Sprintf("%s lines %d-%d of %d", args.Path, start, end, len(lines))
 	t.ledger.MarkLines(args.Path, content, start, end)
 	return Result{
-		Content: repair + span + "\n" + strings.Join(lines[start-1:end], "\n"),
+		Content: repair + t.noteRepeat(ctx, args.Path, content, span+"\n"+strings.Join(lines[start-1:end], "\n")),
 		Command: span,
 	}, nil
+}
+
+type uncountedReadKey struct{}
+
+func uncountedRead(ctx context.Context) context.Context {
+	return context.WithValue(ctx, uncountedReadKey{}, true)
+}
+
+func (t *ReadTool) noteRepeat(ctx context.Context, path string, content []byte, text string) string {
+	if uncounted, _ := ctx.Value(uncountedReadKey{}).(bool); uncounted {
+		return text
+	}
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	key, hash := shellOwnerFrom(ctx)+" "+ledgerKey(path), sha256.Sum256(append([]byte(text), content...))
+	seen := t.seen[key]
+	if seen.hash != hash {
+		seen = readSeen{hash: hash}
+	}
+	seen.times++
+	t.seen[key] = seen
+	if seen.times < readRepeatsBeforeNote {
+		return text
+	}
+	return text + fmt.Sprintf("\n\nthis read has returned this same text %d times and the file has not changed, so reading it again will not change it: read a narrower range with start_line and end_line, or go on with the change", seen.times)
 }
 
 func lookAt(media string, content []byte) (llm.Image, string, error) {

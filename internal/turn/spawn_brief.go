@@ -152,7 +152,7 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 	var placed, skipped []string
 	for _, candidate := range candidates {
 		raw, _ := json.Marshal(readArgs{Path: candidate.path})
-		result, err := read.Run(ctx, raw)
+		result, err := read.Run(uncountedRead(ctx), raw)
 		if err != nil {
 			continue
 		}
