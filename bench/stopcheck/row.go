@@ -94,13 +94,17 @@ func appendRow(writer *ledger.Writer, in rowInput) (ledger.Row, error) {
 		return ledger.Row{}, err
 	}
 	reason.Mode = in.mode
+	model, err := openrouter.Model()
+	if err != nil {
+		return ledger.Row{}, err
+	}
 	row := ledger.Row{
 		Bench:         in.bench,
 		Point:         in.pol.Name,
 		Questions:     in.pol.Questions,
 		Version:       in.wording,
 		Build:         in.build,
-		Model:         openrouter.Alias,
+		Model:         model,
 		StateHash:     hash,
 		StateBuilder:  in.stateBuilder,
 		Answers:       in.answers,

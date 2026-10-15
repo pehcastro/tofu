@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"tofu/interface/cli"
+	jevwire "tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
@@ -143,10 +144,12 @@ codex-sub       ✗ model list refused (403)
   → tofu login llm codex-sub
 `
 
-	reloadWithNobodySignedIn = `Model reload                                                  ✓ 1 version raised
+	reloadWithNobodySignedIn = `Model reload                                 ✓ 1 version raised · jev pin raised
 
   models.dev    ✓ 2 context windows
   npm           ✓ claudeCode raised from PIN to NPM
+  jev           ✓ found typesafe/jev-1.14-20261014, pin raised from
+    ~typesafe/jev-latest to typesafe/jev-1.14
 
 claude-sub      ○ not signed in
   → tofu login llm claude-sub
@@ -232,6 +235,16 @@ func stubbedHome(t *testing.T) {
 	}))
 	t.Cleanup(npm.Close)
 	t.Setenv(settingspkg.NpmRegistryVariable, npm.URL)
+	listing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		model := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/endpoints")
+		if model != "typesafe/jev-1.13" && model != "typesafe/jev-1.14" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"endpoints":[{"name":"TypeSafe | ` + model + `-20261014"}]}}`))
+	}))
+	t.Cleanup(listing.Close)
+	t.Setenv(jevwire.ListingVariable, listing.URL)
 }
 
 func TestModelsReloadWithNpmDownPassesAndSaysTheVersionCheckWasSkipped(t *testing.T) {

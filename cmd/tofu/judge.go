@@ -92,7 +92,11 @@ func judgeVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	jevRequest := jev.Request{State: input.State, Questions: set.Questions}
 
 	if opts.dryRun {
-		body, err := jevRequest.Encode(openrouter.Alias)
+		model, err := openrouter.Model()
+		if err != nil {
+			return failed(o, err)
+		}
+		body, err := jevRequest.Encode(model)
 		if err != nil {
 			return failed(o, err)
 		}

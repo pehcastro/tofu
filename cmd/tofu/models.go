@@ -16,6 +16,9 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
+	"tofu/internal/judge/gate"
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire/openrouter"
 	"tofu/internal/konst"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
@@ -124,7 +127,7 @@ func modelsVerb(args []string, out, errOut io.Writer) int {
 	if reload {
 		held := holdStore()
 		defer held.close()
-		report, err := reloadSignedIn(context.Background(), held)
+		report, err := reloadSignedIn(context.Background(), held, jevPinRaised)
 		code := showReload(out, errOut, asJSON, report, err)
 		stampReload(code)
 		return code
@@ -295,7 +298,10 @@ func windowShort(tokens int) string {
 	return widget.Count(tokens)
 }
 
-type modelReload host.ModelReload
+type modelReload struct {
+	host.ModelReload
+	Jev jev.PinCheck `json:"jev,omitzero"`
+}
 
 type (
 	versionCheck = host.VersionCheck
@@ -329,11 +335,54 @@ func failedSource(s reloadSource, what string, err error) reloadSource {
 }
 
 func (h heldStore) reload(ctx context.Context, out io.Writer) int {
-	report, err := reloadSignedIn(ctx, h)
+	report, err := reloadSignedIn(ctx, h, jevPinChecked)
 	return showReload(out, out, false, report, err)
 }
 
-func reloadSignedIn(ctx context.Context, held heldStore) (modelReload, error) {
+type jevPinning int
+
+const (
+	jevPinChecked jevPinning = iota
+	jevPinRaised
+)
+
+func checkJevPin(ctx context.Context, client *transport.Client, pinning jevPinning) jev.PinCheck {
+	check, newest := openrouter.CheckPin(ctx, client)
+	switch pinning {
+	case jevPinChecked:
+		return check
+	case jevPinRaised:
+	default:
+		panic("tofu: unknown jev pinning " + strconv.Itoa(int(pinning)))
+	}
+	if check.Newer == "" {
+		return check
+	}
+	if err := newest.Store(); err != nil {
+		check.Skipped, check.Error = "the pin could not be written, it stays at "+check.From, err.Error()
+		return check
+	}
+	check.To = newest.Model
+	dir, err := sys.CalibrationDir()
+	if err != nil {
+		check.Shadowed = append(check.Shadowed, "calibration locks unreadable: "+err.Error())
+		return check
+	}
+	names, _ := sys.ListFiles(dir, ".lock")
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		lock, err := gate.LoadLock(path)
+		switch {
+		case err != nil:
+			check.Shadowed = append(check.Shadowed, err.Error())
+		case !openrouter.Serves(newest, lock.Build):
+			check.Shadowed = append(check.Shadowed, fmt.Sprintf("%s@%d runs in shadow until %s names a %s build, it names %s", lock.Rule, lock.RuleVersion, path, newest.Model, lock.Build))
+		}
+	}
+	return check
+}
+
+func reloadSignedIn(ctx context.Context, held heldStore, pinning jevPinning) (modelReload, error) {
 	if held.err != nil {
 		return modelReload{}, held.err
 	}
@@ -342,7 +391,7 @@ func reloadSignedIn(ctx context.Context, held heldStore) (modelReload, error) {
 	if err != nil {
 		return modelReload{}, err
 	}
-	checked := raiseVersions(ctx, client)
+	checked, pinned := raiseVersions(ctx, client), checkJevPin(ctx, client, pinning)
 	var accounts []models.Account
 	var settled []reloadSource
 	versions, _ := subFingerprint(".")
@@ -369,7 +418,7 @@ func reloadSignedIn(ctx context.Context, held heldStore) (modelReload, error) {
 		}
 	}
 	report, err := reloadModels(ctx, client, accounts, settled)
-	report.Versions = checked
+	report.Versions, report.Jev = checked, pinned
 	return report, err
 }
 
@@ -409,7 +458,7 @@ func reloadModels(ctx context.Context, client *transport.Client, accounts []mode
 	if err != nil {
 		return modelReload{}, err
 	}
-	report := modelReload{Unshadowed: dropShipped(catalog), Sources: settled}
+	report := modelReload{ModelReload: host.ModelReload{Unshadowed: dropShipped(catalog), Sources: settled}}
 	registry, err := refreshRegistry(ctx, client)
 	if err != nil {
 		report.TableError = err.Error()
@@ -526,8 +575,11 @@ func reloadLines(page cli.Page, report modelReload) []string {
 		}
 		said = strings.TrimPrefix(said+" · "+strconv.Itoa(raised)+noun, " · ")
 	}
+	if report.Jev.To != "" {
+		said = strings.TrimPrefix(said+" · jev pin raised", " · ")
+	}
 	verdict := cli.Verdict{Mark: cli.Done, Text: cmp.Or(said, "nothing changed")}
-	if counts[cli.Fail] > 0 {
+	if counts[cli.Fail] > 0 || len(report.Jev.Shadowed) > 0 {
 		verdict.Mark = cli.Warn
 	}
 	table := cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(report.ContextWindows) + " context windows"}
@@ -540,6 +592,19 @@ func reloadLines(page cli.Page, report modelReload) []string {
 	}
 	if report.Versions.Skipped != "" {
 		lines = append(lines, page.Status("npm", cli.Verdict{Mark: cli.Warn, Text: report.Versions.Skipped}))
+	}
+	switch pin := report.Jev; {
+	case pin.Skipped != "":
+		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Warn, Text: pin.Skipped}))
+	case pin.To != "":
+		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Done, Text: "found " + pin.Found + ", pin raised from " + pin.From + " to " + pin.To}))
+	case pin.Newer != "":
+		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Warn, Text: "found " + pin.Found + ", newer than " + pin.From + ", " + models.ReloadVerb + " raises the pin"}))
+	case pin.Found != "":
+		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Done, Text: "found " + pin.Found + ", already pinned"}))
+	}
+	for _, shadowed := range report.Jev.Shadowed {
+		lines = append(lines, page.Status("gate", cli.Verdict{Mark: cli.Warn, Text: shadowed}))
 	}
 	if removed := len(report.Unshadowed); removed > 0 {
 		noun := " files removed"

@@ -1,6 +1,11 @@
 package typesafe
 
-import "tofu/internal/judge/jev/wire"
+import (
+	"strings"
+
+	"tofu/internal/judge/jev"
+	"tofu/internal/judge/jev/wire"
+)
 
 const (
 	Name            = "typesafe"
@@ -9,6 +14,9 @@ const (
 	RequestIDHeader = "x-typesafe-request-id"
 
 	DollarsPerInputToken = 42.0 / 1e9
+
+	openRouterVendor = "typesafe/"
+	patchZero        = ".0"
 )
 
 type (
@@ -16,11 +24,23 @@ type (
 	Wire   = wire.Wire
 )
 
+func Model() (string, error) {
+	pin, err := jev.LoadPin()
+	if err != nil || pin.Model == "" {
+		return Alias, err
+	}
+	return strings.TrimPrefix(pin.Model, openRouterVendor) + patchZero, nil
+}
+
 func New(config Config) (*Wire, error) {
+	model, err := Model()
+	if err != nil {
+		return nil, err
+	}
 	return wire.New(wire.Spec{
 		Name:            Name,
 		Endpoint:        Endpoint,
-		Alias:           Alias,
+		Alias:           model,
 		FailOp:          "typesafe.New",
 		RequestIDHeader: RequestIDHeader,
 	}, config)

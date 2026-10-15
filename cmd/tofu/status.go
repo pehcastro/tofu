@@ -5,11 +5,14 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 	"slices"
 	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
+	jevwire "tofu/internal/judge/jev/wire/openrouter"
+	typesafewire "tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/quota"
@@ -55,10 +58,18 @@ func jevKeyUse(provider models.Provider) string {
 	case err != nil:
 		return "jev, the classifier is unreadable: " + err.Error()
 	case serving.Provider == provider:
-		if failover := jevFailoverLine(time.Now()); failover != "" {
-			return "judges tool calls with jev-latest; " + failover
+		model, err := jevwire.Model()
+		if provider == models.TypeSafe {
+			model, err = typesafewire.Model()
 		}
-		return "judges tool calls with jev-latest"
+		if err != nil {
+			return "jev, the pin is unreadable: " + err.Error()
+		}
+		use := "judges tool calls with " + path.Base(model)
+		if failover := jevFailoverLine(time.Now()); failover != "" {
+			return use + "; " + failover
+		}
+		return use
 	case serving.Provider == failoverOf(provider):
 		return "answers for jev when " + serving.Provider.Display() + " cannot"
 	}
