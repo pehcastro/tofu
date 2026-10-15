@@ -2,8 +2,9 @@ mod changes;
 mod fixture;
 mod history;
 mod kit;
+mod watch;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::time::Instant;
@@ -14,7 +15,7 @@ use desk_ui::components::file_edits::{ChangeAction, ChangedFile};
 use desk_ui::components::form::TextArea;
 use desk_ui::live::ActiveTheme;
 use gpui::{
-    AnyView, App, AppContext, ClickEvent, Context, Entity, Render, SharedString, Window,
+    AnyView, App, AppContext, ClickEvent, Context, Entity, Render, SharedString, Task, Window,
     prelude::*, px,
 };
 
@@ -68,7 +69,9 @@ pub fn open_repo(
             Changes::Refused(error.to_string().into())
         }
     };
-    Ok(Git::open(Pane::Changes, changes, false, false, window, cx).into())
+    let git = Git::open(Pane::Changes, changes, false, false, window, cx);
+    git.update(cx, |git, cx| git.watch(cx));
+    Ok(git.into())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -87,7 +90,9 @@ struct Repo {
     git: GitBinary,
     branch: SharedString,
     files: Vec<ChangedFile>,
-    seen: HashMap<SharedString, Option<u64>>,
+    first_seen: HashMap<SharedString, Option<u64>>,
+    ignored: BTreeSet<String>,
+    skips: Option<flume::Sender<BTreeSet<String>>>,
 }
 
 impl Repo {
@@ -96,7 +101,9 @@ impl Repo {
             git: GitBinary::open(path)?,
             branch: SharedString::default(),
             files: Vec::new(),
-            seen: HashMap::new(),
+            first_seen: HashMap::new(),
+            ignored: BTreeSet::new(),
+            skips: None,
         };
         repo.reload()?;
         Ok(repo)
@@ -108,12 +115,32 @@ impl Repo {
             .current_branch()?
             .unwrap_or_else(|| DETACHED.to_owned())
             .into();
-        self.files = self.git.status()?.into_iter().flat_map(rows).collect();
-        self.seen = self
+        let entries = self.git.status()?;
+        let ignored: BTreeSet<String> = entries
+            .iter()
+            .filter(|entry| entry.state == State::Ignored)
+            .map(|entry| entry.path.trim_end_matches('/').to_owned())
+            .collect();
+        if ignored != self.ignored {
+            if let Some(skips) = &self.skips
+                && skips.send(ignored.clone()).is_err()
+            {
+                eprintln!("desk: git watcher is gone, so ignored paths are not skipped");
+            }
+            self.ignored = ignored;
+        }
+        self.files = entries.into_iter().flat_map(rows).collect();
+        let mut was = std::mem::take(&mut self.first_seen);
+        self.first_seen = self
             .files
             .iter()
             .filter(|file| !file.staged)
-            .map(|file| (file.path.clone(), self.fingerprint(&file.path)))
+            .map(|file| {
+                let seen = was
+                    .remove(&file.path)
+                    .unwrap_or_else(|| self.fingerprint(&file.path));
+                (file.path.clone(), seen)
+            })
             .collect();
         Ok(())
     }
@@ -125,21 +152,24 @@ impl Repo {
         Some(hasher.finish())
     }
 
-    fn moved_since_shown(&self, path: &SharedString) -> bool {
-        self.seen
+    fn moved_since_edit(&self, path: &SharedString) -> bool {
+        self.first_seen
             .get(path)
             .is_some_and(|seen| *seen != self.fingerprint(path))
     }
 
     fn undo(&mut self, path: &str) -> Option<SharedString> {
         let started = Instant::now();
-        let done = self.run(ChangeAction::Discard, path);
-        if done.is_ok() {
-            eprintln!(
-                "desk: undo restored {path} in {} ms",
-                started.elapsed().as_millis()
-            );
+        if let Err(error) = self.git.discard(&[path.to_owned()]) {
+            return logged(&format!("undo {path}"), Err(error));
         }
+        let restored = started.elapsed().as_millis();
+        let reloading = Instant::now();
+        let done = self.reload();
+        eprintln!(
+            "desk: undo restored {path} in {restored} ms, list reloaded in {} ms",
+            reloading.elapsed().as_millis()
+        );
         logged(&format!("undo {path}"), done)
     }
 
@@ -207,6 +237,7 @@ pub struct Git {
     blocked: bool,
     told: Option<SharedString>,
     asking: Option<SharedString>,
+    _watching: Option<Task<()>>,
 }
 
 impl Git {
@@ -227,7 +258,47 @@ impl Git {
             blocked,
             told: None,
             asking: None,
+            _watching: None,
         })
+    }
+
+    fn watch(&mut self, cx: &mut Context<Self>) {
+        let Changes::Repo(repo) = &mut self.changes else {
+            return;
+        };
+        let (skips, changes) = match watch::watch(repo.git.root().to_owned(), repo.ignored.clone())
+        {
+            Ok(found) => found,
+            Err(error) => return eprintln!("desk: git does not watch the tree: {error}"),
+        };
+        repo.skips = Some(skips);
+        self._watching = Some(cx.spawn(async move |this, cx| {
+            while changes.recv_async().await.is_ok() {
+                for () in changes.drain() {}
+                if this.update(cx, |git, cx| git.refresh(cx)).is_err() {
+                    return;
+                }
+            }
+        }));
+    }
+
+    fn refresh(&mut self, cx: &mut Context<Self>) {
+        let Changes::Repo(repo) = &mut self.changes else {
+            return;
+        };
+        let started = Instant::now();
+        match repo.reload() {
+            Ok(()) => eprintln!(
+                "desk: git tree changed, {} changes in {} ms",
+                repo.files.len(),
+                started.elapsed().as_millis()
+            ),
+            Err(error) => {
+                eprintln!("desk: git reload: {error}");
+                self.told = Some(error.to_string().into());
+            }
+        }
+        cx.notify();
     }
 
     fn files(&self) -> Vec<ChangedFile> {
@@ -268,7 +339,7 @@ impl Git {
                     return;
                 };
                 match action {
-                    ChangeAction::Discard if repo.moved_since_shown(&path) => {
+                    ChangeAction::Discard if repo.moved_since_edit(&path) => {
                         let told = format!("{path} changed on disk after the edit.");
                         self.asking = Some(path);
                         Some(told.into())
