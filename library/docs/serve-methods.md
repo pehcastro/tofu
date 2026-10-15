@@ -34,8 +34,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `standing` answers (`target`, `decision`; kept beside the session, read back when it reopens, carried into
   its compaction and never into another session), open `questions`, sub-agents, kept shells (each with `port`
   once tofu learns it and `ref`, the quote of the call that started it), the context and the cron jobs
-- `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later
-  turns and cron fires; `session.settings` tells every client
+- `session.set`: takes `asking`, `wire`, `model` and `effort`, held for later turns and cron fires; `session.settings` tells every client
 - `session.rename`: takes `session` and `name`, and names the whole family
 - `session.compact`: answers `results`, `tokensBefore`, `tokensAfter`, `into`, and errs on a session opened
   beside the first. `session.history`: takes `session`, `limit` and `before`; answers `lines`, each
@@ -55,22 +54,14 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a `step`. `turn.unsteer` takes `text`,
   answers `removed`. `turn.stop` takes `turn`, `lead: true` stops the lead alone. `undo` takes `session`,
   `turns`; answers `turns`, `restored`, `removed`, `refused` (`path`, `why`) and `dry_run`
-- `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`,
-  `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
-- `shell.run`: takes `command`, runs it as `!` does, answers `output` and
-  `stopped`. `shell.read` takes `shell` and `offset`; `shell.kill` `shell`
-- take-over (capability `takeover`; once `initialize` declares it, every bash command runs in a terminal).
-  `shell.takeover` takes `shell`, `cols` (2 to 1024) and `rows` (1 to 500); answers `shell`, `holder`
-  (`person`), `since`, `cols`, `rows`, `base` and `next` (absolute byte offsets) and `replay`, the base64 raw
-  bytes between them, colours kept; a second call answers a fresh replay. `shell.input` takes `shell` and
-  `data`, base64 of 1 to 65536 bytes (Ctrl+C is `Aw==`); `shell.resize` takes `shell`, `cols`, `rows`; both
-  answer `ok`. `shell.release` takes `shell` and `note` (at most 500 characters, quoted to the agent); answers
-  `shell`, `holder` (`agent`) and `since`. `shell.holder` (`shell`, `holder`, `since`, `note`) tells every
-  client of each change, an exit while held included, before `shell.exited`; `shell.raw` (`shell`, `offset`,
-  `data`) streams the raw bytes while a person holds it, from `offset == next`. Bad params err `-32602`; a
-  refusal errs `-32000` with `data.reason`: `not_declared`, `unknown_shell`, `not_running`, `not_kept`,
-  `not_in_terminal`, `other_process` or `not_held` (input, resize or release on a shell nobody holds).
-  `shell.started` and kept shells in `session.state` carry `terminal`, `holder` and `heldSince`
+- `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`, `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
+- `shell.run`: takes `command`, runs it as `!` does, answers `output` and `stopped`. `shell.read` takes `shell` and `offset`; `shell.kill` `shell`
+- take-over (capability `takeover`; once `initialize` declares it, every bash command runs in a terminal). `shell.takeover` takes `shell`, `cols` (2 to 1024) and `rows` (1 to 500); answers `shell`, `holder`
+  (`person`), `since`, `cols`, `rows`, `base` and `next` (absolute byte offsets) and `replay`, the base64 raw bytes between them, colours kept; a second call answers a fresh replay.
+  `shell.input` takes `shell` and `data`, base64 of 1 to 65536 bytes (Ctrl+C is `Aw==`); `shell.resize` takes `shell`, `cols`, `rows`; both answer `ok`. `shell.release` takes `shell` and `note` (at most 500 characters, quoted to the agent); answers
+  `shell`, `holder` (`agent`) and `since`. `shell.holder` (`shell`, `holder`, `since`, `note`) tells every client of each change, an exit while held included, before `shell.exited`; `shell.raw` (`shell`, `offset`,
+  `data`) streams the raw bytes while a person holds it, from `offset == next`. Bad params err `-32602`; a refusal errs `-32000` with `data.reason`: `not_declared`, `unknown_shell`, `not_running`, `not_kept`,
+  `not_in_terminal`, `other_process` or `not_held` (input, resize or release on a shell nobody holds). `shell.started` and kept shells in `session.state` carry `terminal`, `holder` and `heldSince`
 - reads, `query.` and: `models` (with `wires` signed in and `stale`), `settings` (each row's
   `label`, `description`, `kind` of `bool`, `int`, `text`, `choice` or `list`, `choices`, `min`, `max`
   with none for no ceiling, `unit`, `restart`), `commands` (each slash command's `name`, `args`,
@@ -92,19 +83,15 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   back by default; answers `points`, each `count`, `week`, `would_ask`, `labeled`, `agreed`, `mean_ms`,
   `cost_usd` and `thresholds`
 - memory: `memory.add` takes `text`, `scope` (`user-local`, `project-local`, `project-global`, `user-global`),
-  `kind`; `memory.edit` `scope`, `id`, `text`; `memory.remove` `scope`, `id`; each answers the entry, which
-  the lead hears. `memory.view` takes `scope` or `episodes`, `memory.zoom` `store`, `id`, `n`,
-  `memory.recall` `store`, `regex`; each answers `store`, `lines` `{id, n, text}`
+  `kind`; `memory.edit` `scope`, `id`, `text`; `memory.remove` `scope`, `id`; each answers the entry, which the lead hears.
+  `memory.view` takes `scope` or `episodes`, `memory.zoom` `store`, `id`, `n`, `memory.recall` `store`, `regex`; each answers `store`, `lines` `{id, n, text}`
 - `rules.add` takes `id`, `text`, `reason`, `concern`, `global`, `replace`; `rules.off` `id`, `reason`,
   `global`; `rules.remove`, `rules.restore` `id`, `global`. `agents.add` takes `name`, `description`, `model`,
   `tools`, `global`; `agents.set` `name`, `model`, `global`; `agents.remove` `name`, `global`. Each, and
   `learn.apply`, answers `changes` `{change, what, file}` (`added`, `changed`, `removed`) and `undo`
-- `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject` `id`,
-  `reason`, each the finding; `learn.apply` takes `id`, `project`
-- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`);
-  `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
-- `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one
-  with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
+- `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject` `id`, `reason`, each the finding; `learn.apply` takes `id`, `project`
+- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`); `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
+- `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
   `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role` (`llm`,
   `classifier`, `search`), `provider`; answers the account signed in, `id`, `source`, `account`, `change`. `settings.set` takes `key`,
   `value`, `scope` (`global` or `project`); answers `key`, `value`, `scope`, and `source`, where the

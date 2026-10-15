@@ -58,17 +58,9 @@ pipe. Every other command stays on a pipe, because a terminal costs about
 a quarter of a millisecond a line and makes some tools draw progress
 bars. Exit code and log are the same either way.
 
-A person can take a kept shell over from a client that declares
-`takeover` to `tofu serve`, such as the desk: from then on every bash
-command runs in a terminal, foreground or background, and Take over on a
-running shell hands its keys to the person, with what it printed so far,
-colours included. Taking over and releasing never kill it. While the
-person holds it the agent backs off: its `shell` logs, wait, stop and
-restart answer `bash-3 is held by the person, who took it over at
-21:03:11 ...`, a bash kill of it and a sub-agent kill leave it running,
-and the agent is told at take-over and again at release, with the
-person's note. The TUI and `tofu run` declare nothing, so their shells
-stay on pipes and a foreground `read x` ends at once, as before.
+A person can take a kept shell over from a client that declares `takeover` to `tofu serve`, such as the desk: from then on every bash command runs in a terminal, foreground or background, and Take over on a running shell hands its keys to the person, with what it printed so far, colours included. Taking over and releasing never kill it.
+While the person holds it the agent backs off: its `shell` logs, wait, stop and restart answer `bash-3 is held by the person, who took it over at 21:03:11 ...`, a bash kill of it and a sub-agent kill leave it running, and the agent is told at take-over and again at release, with the person's note.
+The TUI and `tofu run` declare nothing, so their shells stay on pipes and a foreground `read x` ends at once, as before.
 
 Some commands still hold their output back, and the row's first line says
 so: `| tail -2`, `| sort` and `| wc` print when the command ends, `| head`
@@ -98,19 +90,14 @@ restart, keep more lines of output, or ask before a stop from the screen:
 
 ## Check it
 
-List every shell, who started it, whether it still runs, is `running,
-held by a person` or is `left over` from a tofu that closed, how long it
-ran and when it last printed. A
-finished one stays listed for 72 hours:
+List every shell, who started it, whether it still runs, is `running, held by a person` or is `left over` from a tofu that closed, how long it
+ran and when it last printed. A finished one stays listed for 72 hours:
 
     tofu shells list
 
-With `--json` each also says why it was kept, `"kept": "background"` or
-`"moved"`, its folder as `dir`, the port its command names as `port`,
-what ended the wait as `ready` (`port`, `line` for a ready line, or
-`waited`), `"terminal": true` for one run in a terminal, `"holder":
-"person"` and `held_since` while a person holds it, and `exit_code`
-and `ended` once it ends.
+With `--json` each also says why it was kept, `"kept": "background"` or `"moved"`, its folder as `dir`, the port its command names as `port`,
+what ended the wait as `ready` (`port`, `line` for a ready line, or `waited`), `"terminal": true` for one run in a terminal,
+`"holder": "person"` and `held_since` while a person holds it, and `exit_code` and `ended` once it ends.
 
 Print a shell's last lines, the same text `shell logs` gives the model,
 which also says `ran 1m 1s, last output 2s ago`:

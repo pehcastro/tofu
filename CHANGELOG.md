@@ -10,6 +10,30 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc2 - 2026-10-15
+
+Sub-agents survive a crash, a restart and a long session.
+
+### Added
+
+- `tofu serve` lets a client that declares `takeover`, such as the desk app, hand a person an agent's running shell and give it back, without killing it; `tofu shells` shows it as `running, held by a person`.
+
+### Changed
+
+- Sub-agents settled for over two hours fold into one row in the sub-agents tab and the chat; a click, `enter`, `f` or a search opens them. At 450 sub-agents the app holds about 153 MB instead of 334 and draws a chat frame in 2 ms instead of 21 (`bench/longsession`).
+- A sub-agent's one-hour cap counts only its own work, not time spent waiting on the lead or on you.
+- Independent tool calls go out in one reply: tofu-gpt took 6 conversation requests instead of 11 on the `bench/rivals` Go task.
+- A wide search pages by file and shows the matching lines: on the `bench/rivals` large read, input fell to about 82k tokens with Sonnet and 86k with GPT, under omp's 97k.
+- A refused shell write names the edit or write call that does the same change: on the `bench/rivals` long edit Sonnet took 5 conversation requests instead of 16 (omp: 7).
+- A read of a missing file lists the files git knows before walking the tree: 7 s became 0.1 s in a large project, and a sub-agent's brief takes 0.26 s instead of 40.
+- A third identical read of an unchanged file says so instead of sending it again.
+
+### Fixed
+
+- A sub-agent still working when tofu closed comes back errored on `tofu --continue`, and the lead is told at which step it stopped; a report it finished before the close still reaches the lead. A session from an older build lists such sub-agents as dead, not running.
+- A grant the lead gives a sub-agent mid-step no longer crashes the app (`slice bounds out of range`). A crash inside any turn ends only that turn, as errored with the stack in its trace, and the app runs on.
+- A crash in the interface turns mouse reporting and the full-screen mode off before it prints, so the terminal no longer echoes mouse moves after it.
+
 ## 0.5.15-rc1 - 2026-10-14
 
 tofu starts, resumes and idles faster and lighter, and sends fewer tokens for the same work.

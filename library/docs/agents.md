@@ -25,8 +25,8 @@ or with `owns` grants, revokes or replaces the paths it holds. None of
 these asks the gate. Each sub-agent also has a scratch folder outside the
 project, under `~/.tofu/projects/<project>/scratchpad/`, where it writes
 and deletes with no ask. See [Scratchpad](scratchpad).
-A sub-agent from before a restart holds no paths until a message resumes
-it, so a new one can start on them. With `projectManagement` set to `boardy`, a spawn names a `ticket`:
+A sub-agent from before a restart holds no paths until a message resumes it, so a new one can start on them. One still working when tofu closed comes back errored, the model is told at which step it stopped, and a report it finished before the close still reaches the model.
+A sub-agent's one-hour cap counts only its own work, not time spent waiting on an answer. A crash inside one ends only that sub-agent, as errored with the stack in its trace. Sub-agents settled for over two hours fold into one row in the sub-agents tab and the chat; a click, `enter`, `f` or a search opens them. With `projectManagement` set to `boardy`, a spawn names a `ticket`:
 its owns become the paths, and the sub-agent moves it to review itself. See [Boardy](boardy).
 Clean reports finishing close together reach the model as one turn: each
 waits 1.5 seconds for the next, 10 at most, and goes at once when no

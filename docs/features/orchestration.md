@@ -138,7 +138,16 @@ When idle, each kind wakes it differently:
   keeps its conversation so far.
 
 After a restart, the sub-agents of the session come back holding no paths,
-so the lead can start a new one on the same files at once.
+so the lead can start a new one on the same files at once. One that was
+still working when tofu closed comes back errored, and the lead is told at
+which step it stopped; a report it finished before the close still reaches
+the lead.
+
+A sub-agent's one-hour cap counts only its own work: time it spends waiting
+on the lead or on you does not count. A crash inside a sub-agent ends only
+that sub-agent, as errored with the stack in its trace, and the lead and the
+app carry on. A crash in the interface turns mouse reporting and the
+full-screen mode off before it prints the error, so the terminal stays usable.
 
 ## Paths
 
@@ -183,7 +192,10 @@ reads `stalled` only when nothing has moved for that long.
 
 The **sub-agents** tab lists every agent by state, **Active**, **Waiting** or
 **Dead**, with the lead first, and the selected agent's thinking and tool
-calls on the right. **All activity** shows every agent at once.
+calls on the right. **All activity** shows every agent at once. Sub-agents
+settled for over two hours fold into one row there and in the chat; a click,
+`enter`, `f` or a search opens them. At 450 sub-agents this keeps the app at
+about 150 MB and a chat frame at about 2 ms.
 
 To run the lead alone: `tofu settings set turnMaySpawn false`.
 
