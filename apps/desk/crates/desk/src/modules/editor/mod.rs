@@ -130,6 +130,7 @@ struct Page {
     repo: Option<Repo>,
     dirty: bool,
     stale: bool,
+    on_disk: Option<u64>,
     _changes: Option<Subscription>,
 }
 
@@ -870,7 +871,10 @@ impl Editor {
             (Ok(code), Ok(text)) => *code.read(cx).buffer().rope() == text.as_str(),
             _ => false,
         };
-        if same {
+        let ours = text
+            .as_ref()
+            .is_ok_and(|text| Some(content_hash(text)) == page.on_disk);
+        if same || ours {
             page.stale = false;
             return cx.notify();
         }
@@ -1431,6 +1435,10 @@ impl Editor {
             .as_ref()
             .ok()
             .map(|code| cx.observe(code, Self::code_changed));
+        let on_disk = code
+            .as_ref()
+            .ok()
+            .map(|code| content_hash(&code.read(cx).buffer().text()));
         Page {
             name: full
                 .file_name()
@@ -1441,6 +1449,7 @@ impl Editor {
             code,
             dirty: false,
             stale: false,
+            on_disk,
             _changes: changes,
         }
     }
@@ -1687,6 +1696,7 @@ impl Editor {
         );
         if !dirty {
             page.stale = false;
+            page.on_disk = Some(content_hash(&code.read(cx).buffer().text()));
             if let Some(repo) = &mut page.repo {
                 repo.absent_from_head = false;
                 repo.wanted = None;
@@ -2675,4 +2685,10 @@ fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened 
         editor.colour_rest(cx);
         editor
     }))
+}
+
+fn content_hash(text: &str) -> u64 {
+    let mut hasher = std::hash::DefaultHasher::new();
+    std::hash::Hash::hash(text, &mut hasher);
+    std::hash::Hasher::finish(&hasher)
 }
