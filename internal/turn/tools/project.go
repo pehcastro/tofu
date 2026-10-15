@@ -31,12 +31,12 @@ func (p Project) Name() string { return "project_report" }
 func (p Project) Definition() llm.Tool {
 	return llm.Tool{
 		Name: p.Name(),
-		Description: "answers what is this repository in one call, and it is the first thing to reach for when you do not know the project yet. " +
+		Description: "answers what is this repository in one call. when the task already names the files or symbols to change, read or search those instead; otherwise send it in the same reply as the glob, search or read calls you already know you need. " +
 			"it returns how many files there are and how many bytes they hold, the languages by file count, the top level directories by file count, " +
 			"the entry points and manifests the project is built and started from, and its documentation files. " +
 			ignoredWalkDescription + ". " +
 			"it costs one walk: never assemble this from find, ls -R or wc, which descend into every ignored directory and take minutes on a tree this one walks in milliseconds. " +
-			"after it, glob lists files by name, search finds text and returns the whole declaration around a match, and read reads one file whole",
+			"beside it, glob lists files by name, search finds text and returns the whole declaration around a match, and read reads one file whole",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -106,7 +106,6 @@ func (p Project) Run(_ context.Context, raw json.RawMessage) (turn.Result, error
 		}
 		fmt.Fprintf(&out, "\n%s\n  %s\n", part.title, strings.Join(part.lines, "\n  "))
 	}
-	out.WriteString("\nnext: glob lists files by name, search finds text and returns the declaration around a match, read reads one file whole\n")
 
 	note := listed.note
 	if len(cut) > 0 {
