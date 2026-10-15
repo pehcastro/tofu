@@ -3,10 +3,10 @@ use std::hash::BuildHasher;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use draw_doc::Element;
-use gpui::Rgba;
 use serde_json::{Map, Value, json};
 
 use crate::shape::{self, FONT_SIZE, Kind, LINE_HEIGHT};
+use crate::style::Style;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
@@ -94,17 +94,7 @@ impl Mint {
     }
 }
 
-pub fn hex(color: Rgba) -> String {
-    let byte = |channel: f32| (channel.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!(
-        "#{:02x}{:02x}{:02x}",
-        byte(color.red),
-        byte(color.green),
-        byte(color.blue)
-    )
-}
-
-pub fn fresh(tool: Tool, mint: &mut Mint, stroke: &str, at: (f64, f64)) -> Option<Element> {
+pub fn fresh(tool: Tool, mint: &mut Mint, style: &Style, at: (f64, f64)) -> Option<Element> {
     let kind = tool.kind()?;
     let updated = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -112,11 +102,6 @@ pub fn fresh(tool: Tool, mint: &mut Mint, stroke: &str, at: (f64, f64)) -> Optio
         .and_then(|since| u64::try_from(since.as_millis()).ok())
         .unwrap_or_default();
     let mut extra = match json!({
-        "strokeColor": stroke,
-        "backgroundColor": "transparent",
-        "fillStyle": "solid",
-        "strokeWidth": 2,
-        "strokeStyle": "solid",
         "roughness": 1,
         "opacity": 100,
         "groupIds": [],
@@ -133,6 +118,9 @@ pub fn fresh(tool: Tool, mint: &mut Mint, stroke: &str, at: (f64, f64)) -> Optio
         Value::Object(map) => map,
         _ => Map::new(),
     };
+    for pick in style {
+        extra.insert(pick.field().to_owned(), pick.value());
+    }
     let fields = match tool {
         Tool::Select | Tool::Ellipse => vec![],
         Tool::Rectangle => vec![("roundness", json!({ "type": 3 }))],

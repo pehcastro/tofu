@@ -2,6 +2,7 @@ mod create;
 mod edit;
 mod paint;
 mod shape;
+mod style;
 mod view;
 
 use std::time::Instant;
@@ -21,6 +22,8 @@ pub use create::Tool;
 use edit::Handle;
 use paint::{Frame, Palette};
 use shape::Kind;
+use style::Style;
+pub use style::{BACKGROUNDS, FILLS, LINES, Pick, STROKES, WIDTHS};
 pub use view::View;
 
 const HIT_SLACK: f64 = 6.0;
@@ -75,6 +78,7 @@ pub struct Canvas {
     tool: Tool,
     locked: bool,
     mint: Mint,
+    style: Style,
 }
 
 impl EventEmitter<ToolChanged> for Canvas {}
@@ -96,6 +100,7 @@ impl Canvas {
             tool: Tool::Select,
             locked: false,
             mint: Mint::new(),
+            style: style::DEFAULT,
         }
     }
 
@@ -128,6 +133,42 @@ impl Canvas {
 
     pub fn toggle_lock(&mut self, cx: &mut Context<Self>) {
         self.locked = !self.locked;
+        cx.emit(ToolChanged);
+        cx.notify();
+    }
+
+    pub fn typing(&self) -> bool {
+        self.editing.is_some()
+    }
+
+    pub fn styling(&self) -> bool {
+        self.tool != Tool::Select || self.selected.is_some()
+    }
+
+    pub fn picked(&self, pick: Pick) -> bool {
+        match self.selected.as_deref().and_then(|id| self.scene.get(id)) {
+            Some(element) => pick.on(element),
+            None => self.style.get(pick.slot()) == Some(&pick),
+        }
+    }
+
+    pub fn restyle(&mut self, pick: Pick, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus.focus(window, cx);
+        if let Some(slot) = self.style.get_mut(pick.slot()) {
+            *slot = pick;
+        }
+        if let Some(element) = self.selected.as_deref().and_then(|id| self.scene.get(id)) {
+            let mut styled = element.clone();
+            styled.extra.insert(pick.field().to_owned(), pick.value());
+            match self.scene.apply(vec![Op::Update(Box::new(styled))]) {
+                Ok(()) => eprintln!(
+                    "desk: draw styled 1 shapes {}={}",
+                    pick.field(),
+                    pick.value()
+                ),
+                Err(error) => self.fail(&error),
+            }
+        }
         cx.emit(ToolChanged);
         cx.notify();
     }
@@ -292,8 +333,7 @@ impl Canvas {
             cx.notify();
             return;
         }
-        let stroke = create::hex(Palette::new(&ActiveTheme::theme(cx)).ink);
-        if let Some(from) = create::fresh(self.tool, &mut self.mint, &stroke, (x, y)) {
+        if let Some(from) = create::fresh(self.tool, &mut self.mint, &self.style, (x, y)) {
             self.selected = None;
             match self.tool {
                 Tool::Text => {
@@ -329,10 +369,11 @@ impl Canvas {
                 }
                 None => {
                     self.selected = None;
-                    Gesture::Pan(event.position)
+                    Gesture::Idle
                 }
             },
         };
+        cx.emit(ToolChanged);
         cx.notify();
     }
 
@@ -372,6 +413,7 @@ impl Canvas {
             if let Some(element) = preview.pop() {
                 self.create(element, cx);
             }
+            cx.emit(ToolChanged);
             cx.notify();
             return;
         }
@@ -467,6 +509,7 @@ impl Canvas {
         };
         if used {
             cx.stop_propagation();
+            cx.emit(ToolChanged);
             cx.notify();
         }
     }
@@ -709,6 +752,14 @@ impl Render for Canvas {
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::mouse_up))
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(|canvas, event: &MouseDownEvent, _, _| {
+                    canvas.gesture = Gesture::Pan(event.position);
+                }),
+            )
+            .on_mouse_up(MouseButton::Middle, cx.listener(Self::mouse_up))
+            .on_mouse_up_out(MouseButton::Middle, cx.listener(Self::mouse_up))
             .on_scroll_wheel(cx.listener(Self::scroll))
             .on_key_down(cx.listener(Self::key))
             .child(

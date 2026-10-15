@@ -22,6 +22,7 @@ const SELECTION_GAP: f32 = 4.0;
 const CARET_WIDTH: f32 = 1.5;
 const FIELD_LEAST: f32 = 80.0;
 const FIELD_PAD: f32 = 4.0;
+const HATCHURE_SHARE: f32 = 0.5;
 const DEFAULT_INKS: [&str; 3] = ["#000000", "#1e1e1e", "#000"];
 
 pub struct Palette {
@@ -41,7 +42,7 @@ impl Palette {
         }
     }
 
-    fn color(&self, written: Option<&str>) -> Option<Rgba> {
+    pub fn color(&self, written: Option<&str>) -> Option<Rgba> {
         let written = written?;
         if written == "transparent" {
             return None;
@@ -119,10 +120,14 @@ impl Frame<'_> {
             .palette
             .color(shape::word(element, "strokeColor"))
             .map(faded);
+        let light = match shape::word(element, "fillStyle") {
+            Some("solid") | None => 1.0,
+            Some(_) => HATCHURE_SHARE,
+        };
         let background = self
             .palette
             .color(shape::word(element, "backgroundColor"))
-            .map(faded);
+            .map(|color| tint(color, color.alpha * opacity * light));
         let width = self
             .view
             .length(shape::number(element, "strokeWidth").unwrap_or(1.0))

@@ -4,10 +4,13 @@ use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
-use desk_canvas::{Canvas, Framing, Tool, ToolChanged};
+use desk_canvas::{
+    BACKGROUNDS, Canvas, FILLS, Framing, LINES, Pick, STROKES, Tool, ToolChanged, WIDTHS,
+};
 use desk_plugin::{Capability, Home};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::empty::empty_state;
+use desk_ui::components::form::segmented;
 use desk_ui::components::paint::ink;
 use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_ROW, T1, T2};
 use desk_ui::components::tooltip::{Edge, tooltip};
@@ -28,6 +31,8 @@ const GRID_SHAPES: usize = 10_000;
 const GRID_COLUMNS: usize = 100;
 const GRID_PITCH: (f64, f64) = (160.0, 120.0);
 const GRID_SHAPE: (f64, f64) = (120.0, 80.0);
+const SWATCH: f32 = 14.0;
+const SWATCH_RING: f32 = 1.0;
 const GRID_KINDS: [&str; 5] = ["rectangle", "ellipse", "diamond", "text", "arrow"];
 
 pub const PLUGIN: &str = "tofu.draw";
@@ -163,8 +168,10 @@ fn grid(count: usize) -> Result<Scene, String> {
                 "width": GRID_SHAPE.0,
                 "height": GRID_SHAPE.1,
                 "strokeColor": "#1e1e1e",
-                "backgroundColor": "transparent",
+                "backgroundColor": "#a5d8ff",
+                "fillStyle": "solid",
                 "strokeWidth": 1,
+                "strokeStyle": "dashed",
                 "roundness": null,
             });
             match kind {
@@ -303,13 +310,28 @@ impl Draw {
         }
     }
 
-    fn key(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keys = &event.keystroke;
         if keys.key == "s" && keys.modifiers.secondary() && !keys.modifiers.shift {
             cx.stop_propagation();
             self.save(cx);
             cx.notify();
+            return;
         }
+        let plain = !keys.modifiers.secondary() && !keys.modifiers.alt;
+        let tool = Tool::of_key(&keys.key);
+        let typing = self.canvas.read(cx).typing();
+        if !plain || typing || (tool.is_none() && keys.key != "q") || self.board.is_none() {
+            return;
+        }
+        cx.stop_propagation();
+        self.canvas.update(cx, |canvas, cx| {
+            match tool {
+                Some(tool) => canvas.set_tool(tool, cx),
+                None => canvas.toggle_lock(cx),
+            }
+            canvas.focus_handle(cx).focus(window, cx);
+        });
     }
 
     fn tools(
@@ -359,6 +381,105 @@ impl Draw {
             ));
         }
         row
+    }
+
+    fn styles(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        if !self.canvas.read(cx).styling() {
+            return None;
+        }
+        let swatch = |at: usize, pick: Pick| {
+            let ring = match self.canvas.read(cx).picked(pick) {
+                true => theme.color(ColorToken::FocusRing),
+                false => theme.color(ColorToken::ButtonFill),
+            };
+            let face = match pick.swatch(theme) {
+                Some(color) => div().size(px(SWATCH)).rounded_full().bg(color),
+                None => div()
+                    .size(px(SWATCH))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(ink(theme, T2)),
+            };
+            div()
+                .id(("draw-swatch", at))
+                .flex_none()
+                .p(px(SWATCH_RING))
+                .rounded_full()
+                .border_2()
+                .border_color(ring)
+                .cursor_pointer()
+                .aria_label(format!("{} {}", pick.field(), pick.value()))
+                .on_click(cx.listener(move |draw, _: &ClickEvent, window, cx| {
+                    draw.canvas
+                        .update(cx, |canvas, cx| canvas.restyle(pick, window, cx));
+                }))
+                .child(face)
+        };
+        let strokes: Vec<_> = STROKES
+            .map(Pick::Stroke)
+            .into_iter()
+            .enumerate()
+            .map(|(at, pick)| swatch(at, pick))
+            .collect();
+        let fills: Vec<_> = BACKGROUNDS
+            .map(Pick::Background)
+            .into_iter()
+            .enumerate()
+            .map(|(at, pick)| swatch(at + STROKES.len(), pick))
+            .collect();
+        let canvas = self.canvas.read(cx);
+        let picks = |picks: Vec<Pick>| {
+            let chosen = picks
+                .iter()
+                .position(|pick| canvas.picked(*pick))
+                .unwrap_or(usize::MAX);
+            let target = self.canvas.clone();
+            (
+                chosen,
+                move |at: &usize, window: &mut Window, cx: &mut App| {
+                    if let Some(pick) = picks.get(*at).copied() {
+                        target.update(cx, |canvas, cx| canvas.restyle(pick, window, cx));
+                    }
+                },
+            )
+        };
+        let (fill, on_fill) = picks(FILLS.map(Pick::Fill).to_vec());
+        let (width, on_width) = picks(WIDTHS.map(Pick::Width).to_vec());
+        let (line, on_line) = picks(LINES.map(Pick::Line).to_vec());
+        Some(
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap_1()
+                .px_2()
+                .pb_1()
+                .overflow_hidden()
+                .children(strokes)
+                .child(div().w_2())
+                .children(fills)
+                .child(segmented(
+                    "draw-fill",
+                    &["Solid", "Hatch"],
+                    fill,
+                    theme,
+                    on_fill,
+                ))
+                .child(segmented(
+                    "draw-width",
+                    &["1", "2", "4"],
+                    width,
+                    theme,
+                    on_width,
+                ))
+                .child(segmented(
+                    "draw-line",
+                    &["Line", "Dash", "Dot"],
+                    line,
+                    theme,
+                    on_line,
+                )),
+        )
     }
 
     fn rows(&self, boards: &[PathBuf], theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
@@ -484,6 +605,7 @@ impl Render for Draw {
                 .flex()
                 .flex_col()
                 .child(self.tools(&theme, window, cx))
+                .children(self.styles(&theme, cx))
                 .child(
                     div().flex_1().min_h_0().child(
                         self.canvas
