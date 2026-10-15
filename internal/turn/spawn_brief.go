@@ -132,8 +132,12 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 	if memoised, cached := read.(interface{ Uncached() Tool }); cached {
 		read = memoised.Uncached()
 	}
+	named := briefPath.FindAllString(args.Task, -1)
+	if direct, isRead := read.(*ReadTool); isRead {
+		named = direct.root.realPaths(named)
+	}
 	var candidates []briefCandidate
-	for _, path := range briefPath.FindAllString(args.Task, -1) {
+	for _, path := range named {
 		candidates = append(candidates, briefCandidate{path: path})
 	}
 	for _, message := range lead {

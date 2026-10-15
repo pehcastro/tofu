@@ -3,6 +3,8 @@ package turn
 import (
 	"fmt"
 	"io/fs"
+	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -26,33 +28,89 @@ func RepairPath(requested, noun string, found []string) (string, string, error) 
 }
 
 func (r Root) lookalikes(requested string) ([]string, error) {
-	wanted := strings.ToLower(path.Clean(filepath.ToSlash(requested)))
-	base := path.Base(wanted)
-	var found []string
-	walkErr := filepath.WalkDir(string(r), func(full string, entry fs.DirEntry, err error) error {
+	if listed, err := r.gitListing(); err == nil {
+		if found := r.namedLike(listed, requested); len(found) > 0 {
+			return found, nil
+		}
+	}
+	walked, err := r.walkListing()
+	if err != nil {
+		return nil, err
+	}
+	return r.namedLike(walked, requested), nil
+}
+
+func (r Root) realPaths(candidates []string) []string {
+	var real, listed []string
+	var listErr error
+	for _, candidate := range candidates {
+		if resolved, err := r.Resolve(candidate); err == nil {
+			if _, err := os.Stat(resolved); err == nil {
+				real = append(real, candidate)
+				continue
+			}
+		}
+		if listed == nil && listErr == nil {
+			if listed, listErr = r.gitListing(); listErr != nil {
+				listed, listErr = r.walkListing()
+			}
+		}
+		if len(r.namedLike(listed, candidate)) > 0 {
+			real = append(real, candidate)
+		}
+	}
+	return real
+}
+
+func (r Root) gitListing() ([]string, error) {
+	listed, err := exec.Command("git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
+	if err != nil {
+		return nil, err
+	}
+	return strings.FieldsFunc(string(listed), func(c rune) bool { return c == 0 }), nil
+}
+
+func (r Root) walkListing() ([]string, error) {
+	var listed []string
+	err := filepath.WalkDir(string(r), func(full string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if entry.IsDir() {
-			switch entry.Name() {
-			case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
+			if neverListed(entry.Name()) {
 				return fs.SkipDir
 			}
 			return nil
 		}
 		rel, err := filepath.Rel(string(r), full)
-		if err != nil {
-			return err
+		listed = append(listed, filepath.ToSlash(rel))
+		return err
+	})
+	return listed, err
+}
+
+func neverListed(directory string) bool {
+	switch directory {
+	case "node_modules", ".git", sys.StateDirName, sys.LegacyStateDirName:
+		return true
+	}
+	return false
+}
+
+func (r Root) namedLike(listed []string, requested string) []string {
+	wanted := strings.ToLower(path.Clean(filepath.ToSlash(requested)))
+	base := path.Base(wanted)
+	var found []string
+	for _, slash := range listed {
+		lower := strings.ToLower(slash)
+		named := lower == wanted || path.Base(lower) == base
+		if !named || slices.ContainsFunc(strings.Split(path.Dir(slash), "/"), neverListed) {
+			continue
 		}
-		slash := filepath.ToSlash(rel)
-		if lower := strings.ToLower(slash); lower == wanted || path.Base(lower) == base {
+		if _, err := os.Lstat(filepath.Join(string(r), slash)); err == nil {
 			found = append(found, slash)
 		}
-		return nil
-	})
-	if walkErr != nil {
-		return nil, walkErr
 	}
 	slices.Sort(found)
-	return slices.Compact(found), nil
+	return slices.Compact(found)
 }
