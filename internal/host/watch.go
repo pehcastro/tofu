@@ -393,13 +393,14 @@ func (a *watcher) redrawWhenChanged() {
 		return
 	}
 	agents := a.held.SubAgents()
-	if reflect.DeepEqual(agents, a.ticked) {
+	working := slices.ContainsFunc(agents, func(agent roster.SubAgent) bool { return agent.State == roster.Working })
+	if !working && reflect.DeepEqual(agents, a.ticked) {
 		return
 	}
 	a.ticked = agents
 	subAgents := a.rowsOf(agents)
 	a.shows.Lock()
-	changed := !slices.EqualFunc(subAgents, a.drawn, sameButElapsed)
+	changed := !slices.EqualFunc(subAgents, a.drawn, sameToTheSecond)
 	if changed {
 		a.drawn = subAgents
 	}
@@ -409,8 +410,8 @@ func (a *watcher) redrawWhenChanged() {
 	}
 }
 
-func sameButElapsed(now, drawn SubAgentRow) bool {
-	return (now.Since == drawn.Since || now.State == roster.Working) && now.State == drawn.State &&
+func sameToTheSecond(now, drawn SubAgentRow) bool {
+	return (now.Since == drawn.Since || now.State == roster.Working && now.Since/time.Second == drawn.Since/time.Second) && now.State == drawn.State &&
 		now.Name == drawn.Name && now.Agent == drawn.Agent && now.Model == drawn.Model && now.Ticket == drawn.Ticket && now.Doing == drawn.Doing &&
 		now.Report == drawn.Report && now.Turn == drawn.Turn && now.Parent == drawn.Parent &&
 		now.Steps == drawn.Steps && now.Total == drawn.Total && now.Tokens == drawn.Tokens &&

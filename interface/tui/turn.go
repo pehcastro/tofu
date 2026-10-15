@@ -789,15 +789,8 @@ func (a *App) unfoldFor(actor string) {
 }
 
 func (a *App) showUnfolded() {
-	a.subAgents = a.allSubAgents
-	if a.folding() {
-		a.subAgents = nil
-		for _, row := range a.allSubAgents {
-			if !a.folded[row.Name] {
-				a.subAgents = append(a.subAgents, row)
-			}
-		}
-	}
+	folding := a.folding()
+	a.subAgents = slices.DeleteFunc(slices.Clone(a.allSubAgents), func(row subagent.Row) bool { return folding && a.folded[row.Name] })
 	a.view.SubAgents, a.edits.SubAgents = a.subAgents, a.subAgents
 }
 
