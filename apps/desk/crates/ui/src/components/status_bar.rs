@@ -13,7 +13,7 @@ use crate::components::card::caption;
 use crate::components::chip::tabular;
 use crate::components::glyph::Glyph;
 use crate::components::list::{row, separator};
-use crate::components::overlay::{Align, Placement, Popover, Side};
+use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{glyph, ink};
 use crate::components::size::{
     CAPTION_TEXT, CHIP_FILL, FONT_BODY, FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
@@ -199,14 +199,14 @@ impl StatusBar {
         };
         let toggle = {
             let (state, focus) = (state.clone(), focus.clone());
-            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+            move |window: &mut Window, cx: &mut App| {
                 set_open(&state, !open, cx);
                 if !open {
                     window.focus(&focus, cx);
                 }
             }
         };
-        let item = status_item("Limits", "Limits", theme).on_click(toggle);
+        let item = toggles_on_press(status_item("Limits", "Limits", theme), toggle);
         let lock = || tile(theme).child(glyph(Glyph::Lock, EMPTY_GLYPH, ink(theme, T3)));
         let (trigger, sections): (_, Vec<Div>) = match &self.status.accounts {
             Accounts::Reading => (

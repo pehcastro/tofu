@@ -13,7 +13,7 @@ use crate::components::chip::mono;
 use crate::components::empty::empty_state;
 use crate::components::glyph::Glyph;
 use crate::components::list::bare_row;
-use crate::components::overlay::{Align, Placement, Popover, Side};
+use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{focus_ring, glyph, ink};
 use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T2, T3};
 use crate::components::tooltip::{Edge, tooltip};
@@ -502,7 +502,7 @@ impl RenderOnce for TitleBar {
         };
         let toggle = |pop: TitlePop| {
             let (state, focus, on_pick) = (state.clone(), focus.clone(), self.on_pick.clone());
-            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+            move |window: &mut Window, cx: &mut App| {
                 let next = (shown != Some(pop)).then_some(pop);
                 state.update(cx, |opened, cx| {
                     opened.pop = next;
@@ -524,29 +524,31 @@ impl RenderOnce for TitleBar {
         let column = title.tabs_x.max(SIDEBAR_CLOSED_WIDTH + TITLE_GAP) - TITLE_GAP;
         let warn = theme.color(ColorToken::StatusWarn);
         let unread = title.unread;
-        let bell = named_stop(
-            icon_button(
-                "notifications",
-                Icon::Bell,
-                Control::Notifications.label(),
+        let bell = toggles_on_press(
+            named_stop(
+                icon_button(
+                    "notifications",
+                    Icon::Bell,
+                    Control::Notifications.label(),
+                    &theme,
+                ),
+                "bell",
                 &theme,
-            ),
-            "bell",
-            &theme,
-        )
-        .occlude()
-        .when(unread, |bell| {
-            bell.child(
-                div()
-                    .absolute()
-                    .top(px(BELL_DOT_INSET))
-                    .right(px(BELL_DOT_INSET))
-                    .size(px(BELL_DOT))
-                    .rounded_full()
-                    .bg(warn),
             )
-        })
-        .on_click(toggle(TitlePop::Notifications));
+            .occlude()
+            .when(unread, |bell| {
+                bell.child(
+                    div()
+                        .absolute()
+                        .top(px(BELL_DOT_INSET))
+                        .right(px(BELL_DOT_INSET))
+                        .size(px(BELL_DOT))
+                        .rounded_full()
+                        .bg(warn),
+                )
+            }),
+            toggle(TitlePop::Notifications),
+        );
         let bell = tooltip(
             "title-bell-tip",
             bell,
@@ -560,20 +562,22 @@ impl RenderOnce for TitleBar {
             .github
             .tip()
             .unwrap_or(Control::Account.label().into());
-        let account = named_stop(
-            control("account", Control::Account.label(), &theme),
-            "account",
-            &theme,
-        )
-        .occlude()
-        .size(px(CONTROL))
-        .rounded_full()
-        .child(person_avatar(
-            title.github.face(),
-            PersonSize::Title,
-            &theme,
-        ))
-        .on_click(toggle(TitlePop::Account));
+        let account = toggles_on_press(
+            named_stop(
+                control("account", Control::Account.label(), &theme),
+                "account",
+                &theme,
+            )
+            .occlude()
+            .size(px(CONTROL))
+            .rounded_full()
+            .child(person_avatar(
+                title.github.face(),
+                PersonSize::Title,
+                &theme,
+            )),
+            toggle(TitlePop::Account),
+        );
         let account = tooltip(
             "title-account-tip",
             account,

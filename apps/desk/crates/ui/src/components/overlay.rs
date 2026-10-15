@@ -1764,6 +1764,24 @@ fn opens_menu(trigger: Stateful<Div>, menu: &Entity<MenuState>, anchor: &Anchor)
     )
 }
 
+pub fn toggles_on_press(
+    trigger: Stateful<Div>,
+    toggle: impl Fn(&mut Window, &mut App) + 'static,
+) -> Stateful<Div> {
+    let pressed = Rc::new(toggle);
+    let keyed = pressed.clone();
+    trigger
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            pressed(window, cx);
+            window.prevent_default();
+        })
+        .on_click(move |event, window, cx| {
+            if !matches!(event, ClickEvent::Mouse(_)) {
+                keyed(window, cx);
+            }
+        })
+}
+
 type BuildTrigger = Rc<dyn Fn(bool, &Theme) -> Stateful<Div>>;
 
 pub struct MenuButton {
