@@ -1,7 +1,7 @@
 use crate::shapes::{Access, Mode, Node, Preset, Range, Side, Step, Target, TileId, WorkspacePick};
 use crate::verbs::Method;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 macro_rules! params {
@@ -58,7 +58,12 @@ params! {
     PathRef { path: String }
     FileSaveAs { path: String, new: String }
     SelectionSet { path: String, range: Range }
-    TextReplace { path: String, range: Range, text: String, expect_hash: Option<String> }
+    TextReplace {
+        path: String,
+        range: Range,
+        #[serde(deserialize_with = "unescaped")] text: String,
+        expect_hash: Option<String>,
+    }
     Find { pattern: String, path: Option<String>, #[serde(default)] regex: bool }
     PaletteList { query: Option<String> }
     PaletteRun { id: String, args: Option<Value> }
@@ -99,6 +104,26 @@ params! {
     Audit { since: Option<String>, caller: Option<String> }
     GateJudge { caller: String, command: String, arguments: Value, purpose: String }
     Conformance { plugin: String }
+}
+
+fn unescaped<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    let raw = String::deserialize(deserializer)?;
+    let mut text = String::with_capacity(raw.len());
+    let mut chars = raw.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match (ch, chars.peek()) {
+            ('\\', Some('n')) => {
+                text.push('\n');
+                chars.next();
+            }
+            ('\\', Some('\\')) => {
+                text.push('\\');
+                chars.next();
+            }
+            _ => text.push(ch),
+        }
+    }
+    Ok(text)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

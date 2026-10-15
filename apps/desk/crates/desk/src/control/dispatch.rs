@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use super::change::{self, Answered, json};
 use super::workspace::{self, Step};
-use super::{capture, editor};
+use super::{capture, editor, tabs};
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
@@ -66,7 +66,19 @@ pub fn answer(
     }
     let routed = match &call {
         Call::ScreenOpen(open) => Some(screen_open(open, window, screens, cx)),
-        Call::FileOpen(_) | Call::EditorSelectionGet(_) => Some(editor::answer(&call, window, cx)),
+        Call::TabList(_) | Call::TabStep(_) | Call::TabClose(_) | Call::TabReopen(_) => {
+            Some(tabs::answer(&call, window, work.as_ref(), cx))
+        }
+        Call::FileOpen(_)
+        | Call::FileClose(_)
+        | Call::FileSave(_)
+        | Call::FileList(_)
+        | Call::FileListOpen(_)
+        | Call::FileReveal(_)
+        | Call::EditorSelectionGet(_)
+        | Call::EditorSelectionSet(_)
+        | Call::EditorTextReplace(_)
+        | Call::EditorFind(_) => Some(editor::answer(&call, window, cx)),
         Call::Capture(capture) => Some(capture::answer(capture, window, cx)),
         #[cfg(feature = "plugin-draw")]
         Call::CommandRun(run) if run.name.starts_with("draw.") => {

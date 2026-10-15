@@ -61,6 +61,7 @@ const SETTINGS_FILE: &str = "settings.json";
 const CACHE_TAG: &str = "CACHEDIR.TAG";
 const GIT_DIR: &str = ".git";
 const MB: f64 = 1024.0 * 1024.0;
+const CLOSED_PAGES: usize = 16;
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     let root = match cx.try_global::<OpenProject>() {
@@ -167,6 +168,30 @@ impl Side {
             Side::Right => "editor-file-tabs-right",
         }
     }
+
+    fn tile(self) -> u32 {
+        match self {
+            Side::Left => 0,
+            Side::Right => 1,
+        }
+    }
+}
+
+pub(crate) struct OpenTab {
+    pub(crate) tile: u32,
+    pub(crate) index: usize,
+    pub(crate) path: PathBuf,
+    pub(crate) active: bool,
+    pub(crate) dirty: bool,
+    pub(crate) stale: bool,
+    pub(crate) code: Option<Entity<CodeEditor>>,
+}
+
+pub(crate) struct Hit {
+    pub(crate) path: PathBuf,
+    pub(crate) line: usize,
+    pub(crate) col: usize,
+    pub(crate) text: String,
 }
 
 struct Pane {
@@ -238,6 +263,7 @@ pub struct Editor {
     opening: Option<Opening>,
     peeked: Option<(PathBuf, Instant)>,
     asking: Option<Asking>,
+    closed: Vec<PathBuf>,
     find_logged: Option<(String, usize, usize)>,
     github: Github,
     alerted: SharedString,
@@ -274,6 +300,7 @@ impl Editor {
             opening: None,
             peeked: None,
             asking: None,
+            closed: Vec::new(),
             find_logged: None,
             github: Github::Asking,
             alerted: SharedString::default(),
@@ -450,7 +477,7 @@ impl Editor {
         let started = Instant::now();
         let built = cx
             .background_executor()
-            .spawn(async move { Index::build(&source_files(&listing)) });
+            .spawn(async move { Index::build(&files_under(&listing, indexed)) });
         self._indexing = Some(cx.spawn(async move |this, cx| {
             let index = match built.await {
                 Ok(index) => index,
@@ -672,6 +699,111 @@ impl Editor {
         }
     }
 
+    pub(crate) fn focused(&self) -> (u32, usize) {
+        (self.side.tile(), self.active)
+    }
+
+    pub(crate) fn open_tabs(&self, cx: &App) -> Vec<OpenTab> {
+        let aside = self
+            .aside
+            .iter()
+            .map(|pane| (self.side.other(), &pane.pages, pane.active));
+        let mut tabs: Vec<OpenTab> = std::iter::once((self.side, &self.pages, self.active))
+            .chain(aside)
+            .flat_map(|(side, pages, active)| {
+                pages.iter().enumerate().map(move |(index, page)| OpenTab {
+                    tile: side.tile(),
+                    index,
+                    path: page.path.clone(),
+                    active: index == active,
+                    dirty: page
+                        .code
+                        .as_ref()
+                        .map_or(page.dirty, |code| code.read(cx).buffer().is_dirty()),
+                    stale: page.stale,
+                    code: page.code.as_ref().ok().cloned(),
+                })
+            })
+            .collect();
+        tabs.sort_by_key(|tab| tab.tile);
+        tabs
+    }
+
+    pub(crate) fn close_page(&mut self, path: &Path, cx: &mut Context<Self>) -> bool {
+        let closed = self.on_pane_of(path, cx, Self::drop_page);
+        self.focus_changed(cx);
+        self.follow(cx);
+        closed
+    }
+
+    pub(crate) fn reopen_page(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<PathBuf> {
+        let path = self.closed.pop()?;
+        self.open_path(path.clone(), Open::Pinned, window, cx);
+        Some(path)
+    }
+
+    pub(crate) fn reveal_in_tree(&mut self, path: &Path, cx: &mut Context<Self>) -> bool {
+        let Some(relative) = self.folder.relative(path) else {
+            return false;
+        };
+        let folders: Vec<SharedString> = relative
+            .match_indices('/')
+            .filter_map(|(at, _)| relative.get(..at))
+            .map(|folder| SharedString::from(folder.to_owned()))
+            .collect();
+        eprintln!("desk: editor tree reveals /{relative}");
+        self.folder.tree.update(cx, |tree, cx| {
+            tree.expand(folders, cx);
+            tree.select(relative.into(), cx);
+        });
+        self.refresh(cx);
+        true
+    }
+
+    pub(crate) fn find_text(
+        &self,
+        pattern: &str,
+        only: Option<&Path>,
+        most: usize,
+        cx: &App,
+    ) -> Vec<Hit> {
+        let mut paths = match only {
+            Some(path) => vec![path.to_path_buf()],
+            None => files_under(&self.folder.listing, |_| true),
+        };
+        paths.sort();
+        let mut hits = Vec::new();
+        for path in paths {
+            let open = self.all_pages().find(|page| page.path == path);
+            let text = match open.map(|page| &page.code) {
+                Some(Ok(code)) => code.read(cx).buffer().text(),
+                Some(Err(_)) | None => match fs::read_to_string(&path) {
+                    Ok(text) => text,
+                    Err(_) => continue,
+                },
+            };
+            for (line, row) in text.lines().enumerate() {
+                for (at, _) in row.match_indices(pattern) {
+                    let col = row.get(..at).map_or(0, |before| before.chars().count());
+                    hits.push(Hit {
+                        path: path.clone(),
+                        line,
+                        col,
+                        text: row.to_owned(),
+                    });
+                    if hits.len() >= most {
+                        return hits;
+                    }
+                }
+            }
+        }
+        hits
+    }
+
     fn reread(&mut self, path: PathBuf, seen: Instant, cx: &mut Context<Self>) {
         let read = path.clone();
         let text = cx
@@ -694,6 +826,17 @@ impl Editor {
         seen: Instant,
         cx: &mut Context<Self>,
     ) {
+        self.on_pane_of(path, cx, |editor, at, cx| {
+            editor.compared(path, at, text, seen, cx);
+        });
+    }
+
+    fn on_pane_of(
+        &mut self,
+        path: &Path,
+        cx: &mut Context<Self>,
+        act: impl FnOnce(&mut Self, usize, &mut Context<Self>),
+    ) -> bool {
         let aside_only = !self.pages.iter().any(|page| page.path == path)
             && self
                 .aside
@@ -701,12 +844,25 @@ impl Editor {
                 .is_some_and(|aside| aside.pages.iter().any(|page| page.path == path));
         if aside_only {
             self.swap_panes();
-            self.compare(path, text, seen, cx);
-            return self.swap_panes();
         }
-        let Some(at) = self.pages.iter().position(|page| page.path == path) else {
-            return;
-        };
+        let found = self.pages.iter().position(|page| page.path == path);
+        if let Some(at) = found {
+            act(self, at, cx);
+        }
+        if aside_only {
+            self.swap_panes();
+        }
+        found.is_some()
+    }
+
+    fn compared(
+        &mut self,
+        path: &Path,
+        at: usize,
+        text: std::io::Result<String>,
+        seen: Instant,
+        cx: &mut Context<Self>,
+    ) {
         let Some(page) = self.pages.get_mut(at) else {
             return;
         };
@@ -1351,7 +1507,7 @@ impl Editor {
         cx.notify();
     }
 
-    fn step_page(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn step_page(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let count = self.pages.len();
         let step = if forward { 1 } else { count.saturating_sub(1) };
         if let Some(at) = (self.active + step).checked_rem(count) {
@@ -1471,6 +1627,9 @@ impl Editor {
         if self.preview.as_ref() == Some(&page.path) {
             self.preview = None;
         }
+        self.closed.push(page.path);
+        let excess = self.closed.len().saturating_sub(CLOSED_PAGES);
+        self.closed.drain(..excess);
         if at < self.active || self.active >= self.pages.len() {
             self.active = self.active.saturating_sub(1);
         }
@@ -2425,7 +2584,19 @@ fn no_surface(action: &str) {
     eprintln!("desk: editor action {action} no surface yet");
 }
 
-fn source_files(listing: &Listing) -> Vec<PathBuf> {
+pub(crate) fn language(code: &CodeEditor) -> String {
+    match code.syntax() {
+        Highlight::Tree(syntax) => syntax
+            .report()
+            .split(' ')
+            .next()
+            .unwrap_or("plain")
+            .to_owned(),
+        Highlight::Plain => "plain".to_owned(),
+    }
+}
+
+fn files_under(listing: &Listing, wanted: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut pending = vec![String::new()];
     while let Some(folder) = pending.pop() {
@@ -2436,7 +2607,7 @@ fn source_files(listing: &Listing) -> Vec<PathBuf> {
         let read = match fs::read_dir(&dir) {
             Ok(read) => read,
             Err(error) => {
-                eprintln!("desk: symbols could not list {}: {error}", dir.display());
+                eprintln!("desk: editor could not walk {}: {error}", dir.display());
                 continue;
             }
         };
@@ -2451,9 +2622,9 @@ fn source_files(listing: &Listing) -> Vec<PathBuf> {
             }
             match entry.file_type() {
                 Ok(kind) if kind.is_dir() => pending.push(relative),
-                Ok(kind) if kind.is_file() && indexed(&entry.path()) => found.push(entry.path()),
+                Ok(kind) if kind.is_file() && wanted(&entry.path()) => found.push(entry.path()),
                 Ok(_) => {}
-                Err(error) => eprintln!("desk: symbols skipped {relative}: {error}"),
+                Err(error) => eprintln!("desk: editor walk skipped {relative}: {error}"),
             }
         }
     }
@@ -2469,13 +2640,9 @@ fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened 
             return Err(error.into());
         }
     };
-    let language = match editor.syntax() {
-        Highlight::Tree(syntax) => syntax.report(),
-        Highlight::Plain => "plain".to_owned(),
-    };
-    let language = language.split(' ').next().unwrap_or("plain");
     eprintln!(
-        "desk: editor opened {shown} {language} {} lines",
+        "desk: editor opened {shown} {} {} lines",
+        language(&editor),
         editor.buffer().line_count()
     );
     let path = PathBuf::from(path);

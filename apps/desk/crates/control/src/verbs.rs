@@ -111,6 +111,7 @@ verbs! {
     FileClose "file.close" p::FileClose => r::Closed, [NeedsApproval];
     FileSave "file.save" p::MaybePath => r::FileSaved, [Conflict, DeniedByGate];
     FileSaveAs "file.save_as" p::FileSaveAs => r::PathReply, [Conflict];
+    FileList "file.list" p::Empty => Vec<r::ListedFile>, [];
     FileListOpen "file.list_open" p::Empty => Vec<r::OpenFile>, [];
     FileReveal "file.reveal" p::PathRef => r::TileRef, [NotFound];
     FileDiff "file.diff" p::FileDiff => r::TileRef, [NotFound];

@@ -71,6 +71,7 @@ replies! {
     FileSaved { path: String, bytes: u64, hash: String }
     PathReply { path: String }
     OpenFile { path: String, tile: TileId, dirty: bool, line: u32, col: u32, language: String }
+    ListedFile { path: String, dirty: bool, tile: TileId, tab: u32 }
     Selection { path: String, ranges: Vec<Range>, text: String }
     Ranges { ranges: Vec<Range> }
     Edited { rev: u64, undo: String }

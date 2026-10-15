@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
+use std::str::FromStr;
 
 pub type TileId = u32;
 
@@ -94,10 +95,46 @@ pub struct Position {
     pub c: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct Range {
     pub start: Position,
     pub end: Position,
+}
+
+impl<'de> Deserialize<'de> for Range {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Form {
+            Spelled(String),
+            Whole { start: Position, end: Position },
+        }
+        match Form::deserialize(deserializer)? {
+            Form::Whole { start, end } => Ok(Range { start, end }),
+            Form::Spelled(text) => text.parse().map_err(de::Error::custom),
+        }
+    }
+}
+
+impl FromStr for Range {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let position = |at: &str| {
+            let (l, c) = at.split_once(':')?;
+            Some(Position {
+                l: l.trim().parse().ok()?,
+                c: c.trim().parse().ok()?,
+            })
+        };
+        let (start, end) = text.split_once('-').unwrap_or((text, text));
+        position(start)
+            .zip(position(end))
+            .map(|(start, end)| Range { start, end })
+            .ok_or(format!(
+                "range `{text}` is not L:C-L:C or L:C, lines and columns counted from 1"
+            ))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]

@@ -748,6 +748,52 @@ impl CodeEditor {
         self.touch(cx);
     }
 
+    pub fn select(&mut self, ranges: &[Range<usize>], cx: &mut Context<Self>) {
+        let end = self.buffer.len_chars();
+        self.carets = ranges
+            .iter()
+            .map(|range| Caret {
+                anchor: self.snap(range.start.min(end)),
+                head: self.snap(range.end.min(end)),
+                goal: None,
+            })
+            .collect();
+        self.merge();
+        self.reveal();
+        self.touch(cx);
+    }
+
+    pub fn edit(
+        &mut self,
+        range: Range<usize>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let len = self.buffer.len_chars();
+        if self.read_only() {
+            return Err("the file is read only".to_owned());
+        }
+        if range.start > range.end || range.end > len {
+            return Err(format!(
+                "{range:?} is outside the {len} characters of the file"
+            ));
+        }
+        self.marked = None;
+        self.apply(&[range], text);
+        self.reveal();
+        self.touch(cx);
+        Ok(())
+    }
+
+    pub fn save(&mut self, path: &Path, cx: &mut Context<Self>) -> Result<(), String> {
+        if self.read_only() {
+            return Err("the file is read only".to_owned());
+        }
+        self.buffer.save(path).map_err(|error| error.to_string())?;
+        cx.notify();
+        Ok(())
+    }
+
     pub fn follow(
         &mut self,
         before: &Entity<CodeEditor>,

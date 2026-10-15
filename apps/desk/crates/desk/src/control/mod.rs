@@ -4,6 +4,7 @@ mod dispatch;
 #[cfg(feature = "plugin-draw")]
 mod draw;
 mod editor;
+mod tabs;
 mod workspace;
 
 use std::io;
