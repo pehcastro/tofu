@@ -3,11 +3,13 @@ package tui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -451,7 +453,7 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0))
+	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0)))
 }
 
 func (a *App) watchUpdates(after time.Duration) tea.Cmd {
@@ -516,7 +518,32 @@ func (a *App) resize(width, height int) {
 	a.selection, a.frozen = pointer.Selection{}, ""
 }
 
+type commandPanicked string
+
+func caught(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() (msg tea.Msg) {
+		defer func() {
+			if value := recover(); value != nil {
+				msg = commandPanicked(fmt.Sprintf("%v\n\n%s", value, debug.Stack()))
+			}
+		}()
+		msg = cmd()
+		if batch, isBatch := msg.(tea.BatchMsg); isBatch {
+			for i, each := range batch {
+				batch[i] = caught(each)
+			}
+		}
+		return msg
+	}
+}
+
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if panicked, inACommand := msg.(commandPanicked); inACommand {
+		panic(string(panicked))
+	}
 	a.followStatus(msg)
 	cmd := a.update(msg)
 	if a.feed.FoldAsked() {
@@ -533,7 +560,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.ageWorking()
 	a.flushFeed()
 	a.syncFeed()
-	return a, tea.Batch(cmd, a.startPulse(), a.reportStatus())
+	return a, caught(tea.Batch(cmd, a.startPulse(), a.reportStatus()))
 }
 
 func (a *App) update(msg tea.Msg) tea.Cmd {

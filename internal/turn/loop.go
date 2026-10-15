@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/shell"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 )
@@ -56,7 +58,16 @@ func (SentNow) Error() string {
 	return "the person sent a queued message now, so this request was dropped and the step asked again with it"
 }
 
-func Run(ctx context.Context, config Config) (Row, error) {
+type panicked struct {
+	value any
+	stack []byte
+}
+
+func (p panicked) Error() string {
+	return fmt.Sprintf("panic: %v\n\n%s", p.value, p.stack)
+}
+
+func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if config.Model == nil && config.Accounts.Pick == nil {
 		return Row{}, errors.New("turn: no model")
 	}
@@ -492,6 +503,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		row.Error = redactor.Redact(err.Error())
 		return finish(OutcomeError), err
 	}
+	defer func() {
+		if value := recover(); value != nil {
+			ran, runErr = fail(panicked{value: value, stack: debug.Stack()})
+		}
+	}()
 	endAt := func(outcome Outcome, lead string, history []llm.Message) Row {
 		messages = history
 		if config.NoLastWord {
@@ -537,7 +553,11 @@ func Run(ctx context.Context, config Config) (Row, error) {
 		return fail(&recall.CeilingTooLow{CeilingTokens: budget.Ceiling(), PromptTokens: sentTokens(messages[:afterSystem]), LeastTokens: least})
 	}
 	guard := newLoopGuard(config.Caps)
-	forks, recordedGrants, stopContinuations, handbacks := 0, 0, 0, 0
+	forks, stopContinuations, handbacks := 0, 0, 0
+	var recordedGrants []subagent.Question
+	if config.Boundary != nil {
+		recordedGrants = config.Boundary.Asked()
+	}
 	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
 		ended := row
 		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
@@ -953,8 +973,8 @@ func Run(ctx context.Context, config Config) (Row, error) {
 			}
 			if config.Boundary != nil {
 				asked := config.Boundary.Asked()
-				stepRow.Grants = slices.Clone(asked[recordedGrants:])
-				recordedGrants = len(asked)
+				stepRow.Grants = slices.DeleteFunc(slices.Clone(asked), func(question subagent.Question) bool { return slices.Contains(recordedGrants, question) })
+				recordedGrants = asked
 			}
 			if leadStop != nil {
 				refuse(&stepRow, pending, thePersonStoppedTheLead)

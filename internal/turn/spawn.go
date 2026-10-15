@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -554,6 +555,17 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		return gateMissed(t.Project, projectRecipes(t.Project), held.definition, held.boundary.Owns(), []Row{run})
 	}}
 	defer t.watch(held, check)()
+	defer func() {
+		if value := recover(); value != nil {
+			told := "sub-agent " + held.agent.ID + " is " + subagent.Errored.String() + ": " + panicked{value: value, stack: debug.Stack()}.Error()
+			held.agent.State = subagent.Errored
+			t.roster.Reached(held.agent.ID, subagent.Errored, told)
+			trace := held.trace
+			trace.site = site
+			_ = trace.end(held.agent.ID, subagent.Errored)
+			t.Inbox.ended(held, told, sourceReportForLead, false, site.log)
+		}
+	}()
 	for {
 		subAgent := opened.onto(t.subAgentConfig(held, site, check, limits))
 		subAgent.Task, subAgent.TaskOrigin, subAgent.NewID = task, taskOrigin, func() string { return held.agent.ID }
