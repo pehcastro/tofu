@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -258,6 +259,7 @@ func (a *App) syncFeed() {
 	for index, subAgent := range a.subAgents {
 		agents[index] = feed.Agent{Name: subAgent.Name, Definition: subAgent.Agent, Model: subAgent.Model, State: subAgent.State, Doing: subAgent.Doing, Since: subAgent.Since, Owns: subAgent.Owns, Report: subAgent.Report}
 	}
+	a.feed.SetFolded(len(a.folded), a.unfolded, widget.Until(konst.SettledSubAgentFoldMinutes*time.Minute))
 	a.feed.SetDensity(a.text(isettings.Density))
 	a.feed.SetRetention(a.retention())
 	a.feed.SetThinking(a.flag(isettings.ShowThinking))

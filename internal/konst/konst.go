@@ -101,6 +101,8 @@ const (
 	FeedRecentEvents     = 200
 	ComposerContentRows  = 10000
 
+	SettledSubAgentFoldMinutes = 120
+
 	DriveTimeoutMillis = 60000
 	DriveSettleMillis  = ProgressTickMillis / 2
 	DrivePollMillis    = 5

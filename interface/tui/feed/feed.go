@@ -100,6 +100,12 @@ const (
 	messageTool    = "message"
 	askedWord      = " asked: "
 	toldWord       = ": "
+	showsWord      = " · enter shows"
+	foldsWord      = " · enter folds"
+	settledWord    = " settled"
+	foldedWord     = " folded"
+	foldedName     = " folded"
+	settledHeading = "Settled sub-agents"
 )
 
 type Retention int
@@ -139,6 +145,10 @@ type Model struct {
 	version            int
 	retention          Retention
 	thinkingHidden     bool
+	folded             int
+	foldedOpen         bool
+	foldedAge          string
+	foldAsked          bool
 	cards              *cardCache
 	rail, main         *look.PaneCache
 }
@@ -156,6 +166,23 @@ func (m *Model) SetAgents(orchestratorBusy bool, agents []Agent) {
 }
 
 func (m *Model) SetPlan(line string) { m.plan = line }
+
+func (m *Model) SetFolded(count int, open bool, age string) {
+	m.folded, m.foldedOpen, m.foldedAge = count, open, age
+}
+
+func (m *Model) FoldAsked() bool {
+	asked := m.foldAsked
+	m.foldAsked = false
+	return asked
+}
+
+func (m Model) foldedDoing() string {
+	if m.foldedOpen {
+		return "over " + m.foldedAge + foldsWord
+	}
+	return "over " + m.foldedAge + showsWord
+}
 
 func (m *Model) SetDensity(density string) {
 	switch density {
@@ -244,7 +271,11 @@ func (m Model) View() string {
 	width := m.feedWidth()
 	p := m.page()
 	heading, hint := allActivity, "newest"
-	if m.filter != (identity{}) {
+	switch m.filter.name {
+	case "":
+	case foldedName:
+		heading = settledHeading
+	default:
 		heading = m.filter.label()
 	}
 	switch {
@@ -324,6 +355,9 @@ func (m Model) page() page {
 	p := page{total: len(s.drafts)}
 	if len(s.drafts) == 0 {
 		p.view = look.Muted("No events in this feed")
+		if m.filter.name == foldedName {
+			p.view = look.Muted(strconv.Itoa(m.folded) + " sub-agents settled " + m.foldedDoing())
+		}
 		return p
 	}
 	top := fromTop(s.rows, height, m.scroll)
@@ -391,9 +425,9 @@ func stateWord(state roster.State) string {
 }
 
 type entry struct {
-	who          identity
-	group        group
-	glyph, doing string
+	who                 identity
+	group               group
+	label, glyph, doing string
 }
 
 func (m Model) glyph(g group) string {
@@ -411,8 +445,11 @@ func (m Model) entries() []entry {
 	if m.orchestratorBusy {
 		lead.group, lead.doing = active, "Working"
 	}
-	lead.glyph = m.glyph(lead.group)
+	lead.label, lead.glyph = lead.who.label(), m.glyph(lead.group)
 	all := []entry{lead}
+	if m.folded > 0 {
+		all = append(all, entry{identity{name: foldedName}, dead, strconv.Itoa(m.folded) + settledWord, look.Faint("+"), m.foldedDoing()})
+	}
 	for _, a := range m.agents {
 		g := groupOf(a.State)
 		glyph := m.glyph(g)
@@ -423,7 +460,8 @@ func (m Model) entries() []entry {
 		if word := stateWord(a.State); word != "" {
 			doing = word + " · " + a.Doing
 		}
-		all = append(all, entry{identity{a.Name, a.Instance}, g, glyph, doing})
+		who := identity{a.Name, a.Instance}
+		all = append(all, entry{who, g, who.label(), glyph, doing})
 	}
 	slices.SortStableFunc(all, func(a, b entry) int { return cmp.Compare(a.group, b.group) })
 	return all
@@ -460,19 +498,27 @@ func (m Model) railView() (string, []railTarget) {
 		b.WriteString(text)
 		rows += strings.Count(text, "\n")
 	}
-	write("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(fmt.Sprintf("%d agents · live activity", len(m.agents)), width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
+	counted := fmt.Sprintf("%d agents · live activity", len(m.agents))
+	if m.folded > 0 && !m.foldedOpen {
+		counted = fmt.Sprintf("%d agents · %d", len(m.agents), m.folded) + foldedWord
+	}
+	write("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(counted, width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
 	targets := []railTarget{{rows, identity{}}}
 	write(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(m.sheet().kept)) + "\n")
 	entries := m.entries()
 	for g, name := range [...]string{"Active", "Waiting", "Dead"} {
 		members := slices.DeleteFunc(slices.Clone(entries), func(e entry) bool { return e.group != group(g) })
-		write("\n" + look.SectionLabel(name) + look.Faint("  "+strconv.Itoa(len(members))) + "\n")
+		agents := len(members)
+		if g == int(dead) && m.folded > 0 {
+			agents--
+		}
+		write("\n" + look.SectionLabel(name) + look.Faint("  "+strconv.Itoa(agents)) + "\n")
 		for _, e := range members {
 			if rows >= m.height {
 				return b.String(), targets
 			}
 			targets = append(targets, railTarget{rows, e.who})
-			write(m.cards.railEntry(railRow{width, m.filter == e.who, e.who.label(), e.glyph, e.doing}) + "\n")
+			write(m.cards.railEntry(railRow{width, m.filter == e.who, e.label, e.glyph, e.doing}) + "\n")
 			if e.who.name == orchestrator && m.plan != "" {
 				write("  " + look.Faint(widget.Fit(m.plan, width-2)) + "\n")
 			}

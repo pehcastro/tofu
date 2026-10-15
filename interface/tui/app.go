@@ -258,6 +258,11 @@ type App struct {
 	stopCommand    context.CancelFunc
 	subAgentCalls  []string
 	subAgents      []subagent.Row
+	allSubAgents   []subagent.Row
+	folded         map[string]bool
+	unfolded       bool
+	kept           []feed.Event
+	keptIndex      map[string]int
 	moves          map[string]movement
 	liveShells     []shells.Entry
 	shellsTicking  bool
@@ -368,6 +373,7 @@ func New(options Options) *App {
 	for _, event := range options.Resumed {
 		app.absorb(event)
 	}
+	app.options.Resumed = nil
 	app.view.Stop()
 	app.readWires()
 	app.flushFeed()
@@ -513,6 +519,9 @@ func (a *App) resize(width, height int) {
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.followStatus(msg)
 	cmd := a.update(msg)
+	if a.feed.FoldAsked() {
+		a.toggleFold()
+	}
 	if a.options.Host != nil {
 		a.options.Host.Choose(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort})
 	}
@@ -521,6 +530,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.watchSubAgents()
 		a.view.Activity = append(a.view.Activity, a.shellActivity()...)
 	}
+	a.ageWorking()
 	a.flushFeed()
 	a.syncFeed()
 	return a, tea.Batch(cmd, a.startPulse(), a.reportStatus())
@@ -547,6 +557,10 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	case tea.MouseWheelMsg:
 		return a.wheel(msg)
 	case tea.KeyPressMsg:
+		if msg.String() == foldKey && a.current == screenAgents && a.top() == nil && !a.settingUp() && len(a.folded) > 0 {
+			a.toggleFold()
+			return nil
+		}
 		return a.key(msg)
 	case tea.PasteMsg:
 		return a.pasted(msg)

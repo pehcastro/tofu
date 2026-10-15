@@ -3,6 +3,7 @@ package tui
 import (
 	"cmp"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,7 @@ const (
 	sentNowNote        = "sent to the lead now"
 	readHead           = "read by the lead at step "
 	readClock          = "15:04"
+	foldKey            = "f"
 )
 
 func gateOffNote(why jev.Why) string {
@@ -125,6 +127,7 @@ func idPrefix(task string) (string, bool) {
 func (a *App) jumpToID(typed string) {
 	for _, event := range a.happened {
 		if strings.HasPrefix(event.ID, typed) || strings.HasSuffix(event.ID, typed) {
+			a.unfoldFor(event.Actor)
 			a.show(screenAgents)
 			a.flushFeed()
 			a.feed.Focus(event.ID)
@@ -644,6 +647,33 @@ func (a *App) record(event feed.Event) {
 		a.happenedIndex[event.ID] = len(a.happened)
 		a.happened = append(a.happened, event)
 	}
+	if a.folding() {
+		a.keep(event)
+	}
+	a.feedStale = true
+}
+
+func (a *App) folding() bool { return len(a.folded) > 0 && !a.unfolded }
+
+func (a *App) keep(event feed.Event) {
+	if a.folded[event.Actor] {
+		return
+	}
+	if at, held := a.keptIndex[event.ID]; held {
+		a.kept[at] = event
+		return
+	}
+	a.keptIndex[event.ID] = len(a.kept)
+	a.kept = append(a.kept, event)
+}
+
+func (a *App) refilter() {
+	a.kept, a.keptIndex = nil, map[string]int{}
+	if a.folding() {
+		for _, event := range a.happened {
+			a.keep(event)
+		}
+	}
 	a.feedStale = true
 }
 
@@ -653,21 +683,26 @@ func (a *App) forget(at int) {
 	for index, held := range a.happened {
 		a.happenedIndex[held.ID] = index
 	}
-	a.feedStale = true
+	a.refilter()
 }
 
 func (a *App) flushFeed() {
-	if a.feedStale && a.current == screenAgents {
-		a.feed.SetEvents(a.happened)
-		a.feedStale = false
+	if !a.feedStale || a.current != screenAgents {
+		return
 	}
+	a.feedStale = false
+	if a.folding() {
+		a.feed.SetEvents(a.kept)
+		return
+	}
+	a.feed.SetEvents(a.happened)
 }
 
 func (a *App) stopWhatStillRuns() {
-	for index := range a.happened {
-		if a.happened[index].State == feed.StateRunning {
-			a.happened[index].State = feed.StateStopped
-			a.feedStale = true
+	for _, held := range a.happened {
+		if held.State == feed.StateRunning {
+			held.State = feed.StateStopped
+			a.record(held)
 		}
 	}
 }
@@ -703,10 +738,11 @@ func (a *App) judged(decision session.Decision, actor string) {
 
 func (a *App) showSubAgents(subAgents []subagent.Row) {
 	callsBefore := map[string][]subagent.Call{}
-	for _, held := range a.subAgents {
+	for _, held := range a.allSubAgents {
 		callsBefore[held.Name] = held.Calls
 	}
-	a.subAgents, a.view.SubAgents, a.edits.SubAgents = subAgents, subAgents, subAgents
+	a.allSubAgents = subAgents
+	a.refold()
 	a.status.Agents = 0
 	a.linkSpawns(subAgents)
 	for _, subAgent := range subAgents {
@@ -722,6 +758,66 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 	if a.busy && !a.leading {
 		a.view.WaitOn(a.status.Agents)
 	}
+}
+
+func (a *App) refold() {
+	cut := a.options.Now().Add(-konst.SettledSubAgentFoldMinutes * time.Minute)
+	folded := map[string]bool{}
+	for _, row := range a.allSubAgents {
+		if settledBefore(row, cut) {
+			folded[row.Name] = true
+		}
+	}
+	if !maps.Equal(folded, a.folded) {
+		a.folded = folded
+		a.refilter()
+	}
+	a.showUnfolded()
+}
+
+func (a *App) toggleFold() {
+	a.unfolded = !a.unfolded
+	a.showUnfolded()
+	a.refilter()
+}
+
+func (a *App) unfoldFor(actor string) {
+	if a.folded[actor] && !a.unfolded {
+		a.toggleFold()
+		a.syncFeed()
+	}
+}
+
+func (a *App) showUnfolded() {
+	a.subAgents = a.allSubAgents
+	if a.folding() {
+		a.subAgents = nil
+		for _, row := range a.allSubAgents {
+			if !a.folded[row.Name] {
+				a.subAgents = append(a.subAgents, row)
+			}
+		}
+	}
+	a.view.SubAgents, a.edits.SubAgents = a.subAgents, a.subAgents
+}
+
+func (a *App) ageWorking() {
+	now := a.options.Now()
+	for index := range a.subAgents {
+		if row := &a.subAgents[index]; row.State == roster.Working && !row.Started.IsZero() {
+			row.Since = max(row.Since, now.Sub(row.Started))
+		}
+	}
+}
+
+func settledBefore(row subagent.Row, cut time.Time) bool {
+	switch row.State {
+	case roster.Working, roster.WaitingAnswer, roster.InReview, roster.Reopened:
+		return false
+	case roster.Parked, roster.Errored, roster.Finished:
+		return !row.Started.IsZero() && row.Ended.Before(cut) && row.Started.Add(row.Since).Before(cut)
+	}
+	panic("tui: unknown sub-agent state " + row.State.String())
 }
 
 func (a *App) drawReport(subAgent subagent.Row) {
@@ -800,7 +896,7 @@ func (a *App) linkSpawns(subAgents []subagent.Row) {
 }
 
 func (a *App) parkSubAgentsTheTurnLeftBehind() {
-	parked := slices.Clone(a.subAgents)
+	parked := slices.Clone(a.allSubAgents)
 	for i, subAgent := range parked {
 		if subAgent.State == roster.Working || subAgent.State == roster.WaitingAnswer {
 			parked[i].State = roster.Parked

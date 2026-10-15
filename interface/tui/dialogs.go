@@ -14,6 +14,7 @@ import (
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/models"
 	"tofu/interface/tui/palette"
+	"tofu/interface/tui/pointer"
 	"tofu/interface/tui/quota"
 	"tofu/interface/tui/settings"
 	"tofu/interface/tui/shells"
@@ -119,7 +120,15 @@ func (a *App) found(choice palette.SearchChoice) tea.Cmd {
 	case !choice.Done:
 		return nil
 	case choice.Result.Reference != "":
-		return tea.Batch(a.clearDialogs(), a.follow(choice.Result.Reference))
+		ref := choice.Result.Reference
+		actor, _, isAgent := agentOf(ref)
+		if _, id := pointer.SplitReference(ref); !isAgent {
+			if at := a.happenedAt(strings.TrimPrefix(id, "#")); at >= 0 {
+				actor = a.happened[at].Actor
+			}
+		}
+		a.unfoldFor(actor)
+		return tea.Batch(a.clearDialogs(), a.follow(ref))
 	}
 	cmd := a.show(screen(choice.Result.Screen))
 	for _, row := range a.settings.Rows {
@@ -141,7 +150,7 @@ func (a *App) find(query string) []palette.Result {
 			results = append(results, palette.Result{Label: name, Detail: "screen", Screen: index})
 		}
 	}
-	for _, subAgent := range a.subAgents {
+	for _, subAgent := range a.allSubAgents {
 		if contains(subAgent.Name+" "+subAgent.Doing, query) {
 			results = append(results, palette.Result{Label: "&" + subAgent.Name + "  " + subAgent.Doing, Reference: "[&" + subAgent.Name + "]"})
 		}

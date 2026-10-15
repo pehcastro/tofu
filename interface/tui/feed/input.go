@@ -31,6 +31,8 @@ func (m *Model) Key(key string) bool {
 		m.step(-1, false)
 	case key == "down" || key == "j":
 		m.step(1, false)
+	case (key == "enter" || key == "space") && m.railFocused && m.filter.name == foldedName:
+		m.foldAsked = true
 	case (key == "enter" || key == "space") && !m.railFocused && m.selected != "":
 		m.expanded[m.selected], m.version = !m.expanded[m.selected], m.version+1
 	default:
@@ -64,6 +66,7 @@ func (m *Model) Click(x, y int) (reference string, handled bool) {
 		for _, t := range targets {
 			if t.row == y {
 				m.filter, m.scroll, m.railFocused = t.who, 0, true
+				m.foldAsked = t.who.name == foldedName
 				return "", true
 			}
 		}

@@ -202,6 +202,7 @@ func (l *resumedLead) spawned(row SubAgentRow) {
 }
 
 func recordedRuns(store *session.Store, id string) map[string]session.AgentRun {
+	store = store.ReadOnce()
 	lineage, _ := store.Ancestors(id)
 	slices.Reverse(lineage)
 	if header, err := store.Header(id); err == nil {
@@ -302,7 +303,7 @@ func (l *resumedLead) linked(agent string) bool {
 
 func (l *resumedLead) show(spawned ...SubAgentRow) {
 	l.rows = append(l.rows, spawned...)
-	l.watch.emit(Event{Kind: EventSubAgent, SubAgents: slices.Clone(l.rows)})
+	l.watch.emit(Event{Kind: EventSubAgent, SubAgents: l.rows})
 }
 
 func (l *resumedLead) parkTheRunning() {

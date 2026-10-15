@@ -49,6 +49,7 @@ func (a *App) keyRows() []keyRow {
 		{tabsGroup, []string{tabs}, "go to it, outside chat", nil},
 		{tabsGroup, []string{"esc"}, "back to chat", nil},
 		{"agents", []string{thinkingKey}, "show or hide thinking", nil},
+		{"agents", []string{foldKey}, "show or fold sub-agents settled over 2h", nil},
 		{"agents", []string{"enter", "space"}, "open a call or a diff", nil},
 		{"settings", []string{"shift+tab"}, "change the scope", nil},
 		{dialogsGroup, []string{"up", "down"}, "move", nil},

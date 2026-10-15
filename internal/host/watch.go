@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -69,8 +70,11 @@ type watcher struct {
 	thoughts  atomic.Int64
 	stop      *leadStop
 	ran       func(agent string) session.AgentRun
+	runs      func() map[string]session.AgentRun
 	ends      map[string]session.AgentRun
 	parents   map[string]string
+	drawn     []SubAgentRow
+	ticked    []roster.SubAgent
 }
 
 type tokenTally struct {
@@ -330,10 +334,6 @@ func (a *watcher) noteWholeFile(call llm.ToolCall) {
 	a.wrote[call.ID] = args.Content
 }
 
-func (a *watcher) anyWorking() bool {
-	return a.held != nil && slices.ContainsFunc(a.held.SubAgents(), func(agent roster.SubAgent) bool { return agent.State == roster.Working })
-}
-
 func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.ToolCall) {
 	if subAgent == "" {
 		return
@@ -367,6 +367,7 @@ func (a *watcher) readCalls() {
 	if a.spawner != nil {
 		rows = a.spawner.SubAgentRows()
 	}
+	rowsOf := rowsOfEachAgent(rows)
 	agents := a.held.SubAgents()
 	a.shows.Lock()
 	defer a.shows.Unlock()
@@ -374,30 +375,76 @@ func (a *watcher) readCalls() {
 		a.calls = map[string][]Call{}
 	}
 	for _, agent := range agents {
-		a.calls[agent.ID] = recordedOrCalling(recordedCalls(rows, agent.ID), a.asked[agent.ID], agent.Calling, agent.CallsDropped)
+		a.calls[agent.ID] = recordedOrCalling(recordedCalls(rowsOf(agent.ID), agent.ID), a.asked[agent.ID], agent.Calling, agent.CallsDropped)
 	}
 }
 
 func (a *watcher) draw() {
 	if subAgents := a.subAgents(); len(subAgents) > 0 {
+		a.shows.Lock()
+		a.drawn = subAgents
+		a.shows.Unlock()
 		a.emit(Event{Kind: EventSubAgent, SubAgents: subAgents})
 	}
+}
+
+func (a *watcher) redrawWhenChanged() {
+	if a.held == nil {
+		return
+	}
+	agents := a.held.SubAgents()
+	if reflect.DeepEqual(agents, a.ticked) {
+		return
+	}
+	a.ticked = agents
+	subAgents := a.rowsOf(agents)
+	a.shows.Lock()
+	changed := !slices.EqualFunc(subAgents, a.drawn, sameButElapsed)
+	if changed {
+		a.drawn = subAgents
+	}
+	a.shows.Unlock()
+	if changed {
+		a.emit(Event{Kind: EventSubAgent, SubAgents: subAgents})
+	}
+}
+
+func sameButElapsed(now, drawn SubAgentRow) bool {
+	return (now.Since == drawn.Since || now.State == roster.Working) && now.State == drawn.State &&
+		now.Name == drawn.Name && now.Agent == drawn.Agent && now.Model == drawn.Model && now.Ticket == drawn.Ticket && now.Doing == drawn.Doing &&
+		now.Report == drawn.Report && now.Turn == drawn.Turn && now.Parent == drawn.Parent &&
+		now.Steps == drawn.Steps && now.Total == drawn.Total && now.Tokens == drawn.Tokens &&
+		now.Started.Equal(drawn.Started) && now.Ended.Equal(drawn.Ended) &&
+		slices.Equal(now.Owns, drawn.Owns) && slices.Equal(now.Calls, drawn.Calls)
 }
 
 func (a *watcher) subAgents() []SubAgentRow {
 	if a.held == nil {
 		return nil
 	}
-	agents := a.held.SubAgents()
-	for index := range agents {
-		if agents[index].State == roster.InReview && (a.spawner == nil || a.spawner.Review == nil) {
-			agents[index].State = roster.Finished
-		}
-	}
+	return a.rowsOf(a.held.SubAgents())
+}
+
+func (a *watcher) rowsOf(agents []roster.SubAgent) []SubAgentRow {
 	a.shows.Lock()
 	defer a.shows.Unlock()
 	rows := SubAgentRows(agents, a.now(), a.maxSteps, a.spent.counts(), func(agent roster.SubAgent) []Call { return a.calls[agent.ID] })
-	if a.ran == nil {
+	for index := range rows {
+		if rows[index].State == roster.InReview && (a.spawner == nil || a.spawner.Review == nil) {
+			rows[index].State = roster.Finished
+		}
+	}
+	lookup := a.ran
+	if a.runs != nil {
+		var held map[string]session.AgentRun
+		lookup = func(agent string) session.AgentRun {
+			if held == nil {
+				held = a.runs()
+			}
+			return held[agent]
+		}
+	}
+	if lookup == nil {
 		return rows
 	}
 	if a.ends == nil {
@@ -409,8 +456,10 @@ func (a *watcher) subAgents() []SubAgentRow {
 	for index := range rows {
 		row := &rows[index]
 		parent, known := a.parents[row.Name]
-		if !known {
-			if run := a.ran(row.Name); run.Agent != "" {
+		run, read := a.ends[row.Name]
+		if !known || ended(row.State) && !read {
+			run = lookup(row.Name)
+			if run.Agent != "" || row.State != roster.Working {
 				parent, a.parents[row.Name] = run.ParentAgent, run.ParentAgent
 			}
 		}
@@ -419,9 +468,7 @@ func (a *watcher) subAgents() []SubAgentRow {
 			delete(a.ends, row.Name)
 			continue
 		}
-		run, read := a.ends[row.Name]
 		if !read {
-			run = a.ran(row.Name)
 			a.ends[row.Name] = run
 		}
 		row.endedAs(run)
@@ -452,9 +499,7 @@ func (a *watcher) clockRunningSubAgents() (stop func()) {
 			case <-ticking:
 				return
 			case <-every.C:
-				if a.anyWorking() {
-					a.draw()
-				}
+				a.redrawWhenChanged()
 			}
 		}
 	}()
@@ -493,6 +538,26 @@ func hidingEarlier(kept []Call, hidden int) []Call {
 		return kept
 	}
 	return append([]Call{{Tool: strconv.Itoa(hidden) + earlierCallsHidden}}, kept...)
+}
+
+func rowsOfEachAgent(rows []turn.Row) func(id string) []turn.Row {
+	spawnedBy, withID, withSpawner := map[string]string{}, map[string][]int{}, map[string][]int{}
+	for index, row := range rows {
+		spawnedBy[row.ID] = row.SpawnedBy
+		withID[row.ID] = append(withID[row.ID], index)
+		withSpawner[row.SpawnedBy] = append(withSpawner[row.SpawnedBy], index)
+	}
+	return func(id string) []turn.Row {
+		members := withID[id]
+		if by := spawnedBy[id]; by != "" {
+			members = slices.Compact(slices.Sorted(slices.Values(slices.Concat(members, withSpawner[by]))))
+		}
+		held := make([]turn.Row, len(members))
+		for at, index := range members {
+			held[at] = rows[index]
+		}
+		return held
+	}
 }
 
 func recordedCalls(rows []turn.Row, id string) []Call {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"tofu/interface/tui/frametime"
 	"tofu/interface/tui/look"
 	"tofu/internal/golden"
+	roster "tofu/internal/subagent"
 )
 
 func rawRowHolding(t *testing.T, app *App, text string) string {
@@ -132,6 +134,24 @@ func TestATranscriptLongerThanThePaneAnchorsToTheBottomAndScrolls(t *testing.T) 
 	if app.View().Content != view.Content {
 		t.Fatal("end did not return a long transcript to the anchored tail")
 	}
+}
+
+func TestALongSessionWhoseSubAgentsSettledHoursAgoDrawsInsideTheBudget(t *testing.T) {
+	s := generatedLongSession(t, longSizeFromEnv(t))
+	ended := *s.at
+	for index := range s.rows {
+		s.rows[index].Started, s.rows[index].Ended = fixedStart(), ended
+	}
+	*s.at = ended.Add(3 * time.Hour)
+	s.rows[0].State = roster.Working
+	s.app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(s.rows)})
+	s.frames(t, "settled 3h ago, chat, a key behind the deltas", s.typing)
+	s.app.show(screenAgents)
+	s.frames(t, "settled 3h ago, sub-agents, thinking streams", func(at int) {
+		for range longChunksAFrame {
+			s.app.Update(Event{Kind: EventThinking, ID: "streaming-" + strconv.Itoa(at), Agent: s.rows[0].Name, Text: longThinking})
+		}
+	})
 }
 
 func TestTheSessionViewOfARunningTurnRendersInsideTheFrameBudget(t *testing.T) {

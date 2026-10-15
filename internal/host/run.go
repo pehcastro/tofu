@@ -196,7 +196,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		emit(gateOffEvent(prepared.GateOff))
 	}
 	watch.spawner, watch.maxSteps, watch.decisions = prepared.Spawner, prepared.MaxSteps, prepared.Decisions
-	watch.ran = func(agent string) session.AgentRun { return recordedRuns(sessions, h.ID())[agent] }
+	watch.runs = func() map[string]session.AgentRun { return recordedRuns(sessions, h.ID()) }
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
 	config.History, config.Prefix = h.carried, h.prefix
