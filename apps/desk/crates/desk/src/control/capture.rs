@@ -52,6 +52,7 @@ pub fn answer(capture: &Capture, window: AnyWindowHandle, cx: &mut App) -> Answe
     })
 }
 
+#[cfg_attr(not(feature = "plugin-draw"), allow(dead_code))]
 pub fn region(
     window: AnyWindowHandle,
     path: &Path,

@@ -121,22 +121,52 @@ impl Mirrors {
     }
 }
 
+struct PluginView {
+    plugin: &'static str,
+    at: (usize, TileId),
+    view: AnyView,
+}
+
+#[derive(Default)]
+struct PluginViews {
+    open: Vec<PluginView>,
+    workspace: usize,
+}
+
 #[derive(Clone, Default)]
-struct Mounts(Rc<RefCell<Vec<(&'static str, AnyView)>>>);
+struct Mounts(Rc<RefCell<PluginViews>>);
 
 impl Mounts {
-    fn view(&self, plugin: &'static Plugin, cx: &mut App) -> AnyView {
+    fn view(&self, plugin: &'static Plugin, at: (usize, TileId), cx: &mut App) -> AnyView {
         let mounted = self
             .0
             .borrow()
+            .open
             .iter()
-            .find(|(id, _)| *id == plugin.id)
-            .map(|(_, view)| view.clone());
+            .find(|open| open.plugin == plugin.id && open.at == at)
+            .map(|open| open.view.clone());
         mounted.unwrap_or_else(|| {
             let view = plugin.mount(cx);
-            self.0.borrow_mut().push((&plugin.id, view.clone()));
+            self.0.borrow_mut().open.push(PluginView {
+                plugin: &plugin.id,
+                at,
+                view: view.clone(),
+            });
             view
         })
+    }
+
+    fn in_view(&self, plugin: &'static Plugin) -> Option<(usize, TileId)> {
+        let views = self.0.borrow();
+        views
+            .open
+            .iter()
+            .find(|open| open.plugin == plugin.id && open.at.0 == views.workspace)
+            .map(|open| open.at)
+    }
+
+    fn workspace(&self) -> usize {
+        self.0.borrow().workspace
     }
 }
 
@@ -557,7 +587,10 @@ fn body(
             .at(tile)
             .map_or_else(|| div().into_any_element(), IntoElement::into_any_element),
         Module::Plugin(id) => match plugins::find(id) {
-            Some(plugin) => mounted.plugins.view(plugin, cx).into_any_element(),
+            Some(plugin) => {
+                let at = (mounted.plugins.workspace(), tile);
+                mounted.plugins.view(plugin, at, cx).into_any_element()
+            }
             None => empty_state(
                 SharedString::from(format!("work-missing-plugin-{id}")),
                 format!("plugin {id} is not installed"),
@@ -672,10 +705,10 @@ fn expand(mounted: &Mounted, module: &Module, workspace: &str, cx: &mut Context<
             None => return eprintln!("desk: work: no terminal is open, so none expands"),
         },
         Module::Plugin(id) => match plugins::find(id) {
-            Some(plugin) => {
-                let view = mounted.plugins.view(plugin, cx);
-                tiled(view, None, cx)
-            }
+            Some(plugin) => match mounted.plugins.in_view(plugin) {
+                Some(at) => tiled(mounted.plugins.view(plugin, at, cx), None, cx),
+                None => return eprintln!("desk: work: plugin {id} has no tile, so none expands"),
+            },
             None => {
                 return eprintln!(
                     "desk: work: plugin {id} is not installed, so it does not expand"
@@ -828,6 +861,15 @@ impl Work {
             let mirror = chat::mirror(self.mounted.chat.clone(), window, cx);
             tiles.open.push((at, mirror));
         }
+    }
+
+    fn keep_plugins(&self) {
+        let mut views = self.mounted.plugins.0.borrow_mut();
+        views.workspace = self.board.active();
+        views.open.retain(|open| {
+            self.placed(&Module::Plugin(open.plugin.to_owned()))
+                .contains(&open.at)
+        });
     }
 
     fn keep_terminals(&mut self, cx: &mut Context<Self>) {
@@ -1345,6 +1387,7 @@ impl Render for Work {
         self.frame(window, cx);
         self.keep_terminals(cx);
         self.keep_mirrors(window, cx);
+        self.keep_plugins();
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));
