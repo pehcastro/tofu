@@ -26,7 +26,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   picks its `model`. `tofu session branch` takes `--model`, `--effort`, `--at`. `session.access` takes `session`
   and `owns` or `preset`, `read` with neither, and errs while that chat's turn runs
 - `session.open`: takes `session` (none starts a fresh one), `asking` and `replay`, how many of the newest
-  lines it sends; answers `session` and `fresh`. A session another tofu holds errs `session.busy`. While a
+  lines it sends; answers `session`, `fresh` and `heldBy` `{pid, since}` when another tofu on this machine holds it: this one follows, replaying the session, then streaming that tofu's events live, and `turn.send`, `turn.stop` and answers run there; when that tofu ends this one takes the session within 2 s. One that cannot be followed errs `session.busy`. While a
   turn runs, the new one opens beside it (capability `sessions`) and one already open here takes the focus;
   a request with no `session` means the one opened last. `session.close` takes `session` and `stop`, and
   errs while that session's turn runs unless `stop` is true, and on the only session open
@@ -99,7 +99,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 - `cron.command` takes the line you would type (`/cron delete all`), answers `note`. `label` takes `row`
   and `outcome`; answers `id`, `outcome`, `kind`, `verdict`. `scratch.list` (`scratch`) answers `root`, `folders`;
   `scratch.clean` takes `session`, `cache`, `dryRun`; answers `root`, `dry_run`, `removed`, the folders
-  `tofu scratch clean --json` prints. `boardy.*` (`boardy`): `tofu docs boardy-views`
+  `tofu scratch clean --json` prints. `boardy.*` (`boardy`): `tofu docs boardy-views`. `boardy.questions {board?}` open questions from the ticket files, every board when board is left out; never rewrites catchup.md. `boardy.answer {ticket, id, answer}` one answer, as `tofu boardy catchup --answers`. `boardy.plan {board}` epics, milestones, sprints, view names. `boardy.init {key, name}` makes a board, as `tofu boardy init`. Every boardy answer carries `words`.
 - `status.list` (`status`) takes `session`, none for every session open here, and errs on one not open;
   answers `records`: `session`, `id`, `state`, `kind`, `progress`, `msg`, `ask` (the approval or question a
   blocked record waits on) and `at`, when it entered its state. `status.ack` takes a `done` or `error`

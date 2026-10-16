@@ -745,8 +745,9 @@ type SessionCloseParams struct {
 }
 
 type SessionOpenResult struct {
-	Session string `json:"session"`
-	Fresh   bool   `json:"fresh"`
+	Session string         `json:"session"`
+	Fresh   bool           `json:"fresh"`
+	HeldBy  *SessionHolder `json:"heldBy,omitempty"`
 }
 
 type SessionListParams struct {

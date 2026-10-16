@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-09
+updated: 2026-10-16
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -51,6 +51,21 @@ so `tofu --continue` opens in under a second on a chain of 21 sessions
 with 84 sub-agents. Each message keeps its own time, each sub-agent report
 draws as a report, and a conversation over the context target forks
 before its first request instead of resending the whole history.
+
+## One session in two places
+
+Open a session another tofu on the same machine is working in, with
+`tofu session resume <name>`, `tofu --continue` or the desk, and it opens as a
+follower instead of refusing. It shows the transcript, then every event the
+holding tofu writes, live, token by token. A prompt, `Esc` or an approval
+you give in the follower runs in the holding tofu, exactly as if you had
+typed it there, and the chat names the process that holds the session.
+
+There is one writer, always. When the holding tofu quits or is killed, the
+follower takes the session within 2 s and runs what you type itself. The
+two talk over a local socket under the session's folder, or under the
+system temp folder when that path is too long for a socket, so nothing is
+reachable from another machine.
 
 ## Side chats
 

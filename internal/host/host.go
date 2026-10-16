@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
@@ -88,6 +89,9 @@ type Host struct {
 	cronMove chan struct{}
 	readOnly error
 	turnLock *sync.Mutex
+
+	audience  atomic.Pointer[audience]
+	following atomic.Pointer[following]
 
 	mu        sync.Mutex
 	closed    bool
@@ -169,7 +173,12 @@ func New(cfg Config) (*Host, []string) {
 	}
 	h.started = SourceResumed
 	if h.readOnly = h.hold(h.id); h.readOnly != nil {
-		return h, append(troubles, h.readOnly.Error())
+		leader, err := h.dialHolder(h.id, h.readOnly)
+		if err != nil {
+			return h, append(troubles, h.readOnly.Error())
+		}
+		h.follow(leader, h.id)
+		return h, append(troubles, leader.note(h.id))
 	}
 	if err := h.loadCron(h.id); err != nil {
 		return h, append(troubles, err.Error())
@@ -201,6 +210,9 @@ func (h *Host) Choose(pick Pick) {
 }
 
 func (h *Host) Send(pick Pick, task string) bool {
+	if f := h.following.Load(); f != nil {
+		return f.send(task)
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.running {
@@ -265,6 +277,10 @@ func (h *Host) Remembered(note string) {
 }
 
 func (h *Host) Stop() {
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followStop})
+		return
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.cancel != nil {
@@ -280,6 +296,10 @@ func (h *Host) Cancelled() bool {
 }
 
 func (h *Host) StopLead() {
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followStopLead})
+		return
+	}
 	h.mu.Lock()
 	h.stopped = true
 	inbox := h.inbox
@@ -292,6 +312,9 @@ func (h *Host) StopLead() {
 }
 
 func (h *Host) Answer(id string, answer Answer) bool {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followAnswer, Asked: id, Answer: answer}).OK
+	}
 	if answered, _ := h.asks.answer(id, answer); answered {
 		return true
 	}
@@ -304,6 +327,10 @@ func (h *Host) Answer(id string, answer Answer) bool {
 }
 
 func (h *Host) AnswerAsk(id string, answer Answer) (answered, stands bool) {
+	if f := h.following.Load(); f != nil {
+		reply := f.ask(followAsk{Op: followAnswerAsk, Asked: id, Answer: answer})
+		return reply.OK, reply.Stands
+	}
 	return h.asks.answer(id, answer)
 }
 
@@ -336,6 +363,9 @@ func (h *Host) Close() {
 }
 
 func (h *Host) deliver(event Event) {
+	if a := h.audience.Load(); a != nil {
+		a.tell(event)
+	}
 	if !event.snapshot() {
 		h.events <- event
 		return
@@ -373,10 +403,19 @@ func (h *Host) hold(id string) error {
 	}
 	h.letGo()
 	h.release, h.heldID = release, id
+	if release != nil {
+		h.openAudience(store, id)
+	}
 	return nil
 }
 
 func (h *Host) letGo() {
+	if a := h.audience.Swap(nil); a != nil {
+		a.close()
+	}
+	if f := h.following.Swap(nil); f != nil {
+		f.leave()
+	}
 	if h.release != nil {
 		_ = h.release()
 	}
@@ -455,15 +494,21 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 		h.mu.Unlock()
 		return nil, errTurnRunning
 	}
-	if err := h.hold(carry.Session); err != nil {
-		h.mu.Unlock()
-		return nil, err
+	held := h.hold(carry.Session)
+	if held != nil {
+		leader, err := h.dialHolder(carry.Session, held)
+		if err != nil {
+			h.mu.Unlock()
+			return nil, held
+		}
+		h.letGo()
+		h.follow(leader, carry.Session)
 	}
-	h.readOnly = nil
+	h.readOnly = held
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
 	restoreErr := h.carry(carry)
 	h.mu.Unlock()
-	chat := resumedChat(carry, h.dir)
+	chat := h.Opening(carry)
 	if restoreErr != nil {
 		chat = append(chat, Event{Kind: EventNote, Text: restoreErr.Error()})
 	}
@@ -474,7 +519,13 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 	return chat, nil
 }
 
-func (h *Host) Opening(carry Carry) []Event { return resumedChat(carry, h.dir) }
+func (h *Host) Opening(carry Carry) []Event {
+	chat := resumedChat(carry, h.dir)
+	if f := h.following.Load(); f != nil {
+		chat = append(chat, Event{Kind: EventNote, Text: f.note(carry.Session)})
+	}
+	return chat
+}
 
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()

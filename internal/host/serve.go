@@ -221,6 +221,10 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		if err == nil {
 			safe.Go(s.report, "serve quota", s.quota)
 		}
+		if opened, ok := result.(SessionOpenResult); ok {
+			opened.HeldBy = s.focus().host.heldBy()
+			result = opened
+		}
 		return result, err
 	case "session.close":
 		return handle(raw, s.closeSession)
@@ -694,7 +698,7 @@ func (s *server) questionAnswered(l *lane, asked QuestionRequest, result json.Ra
 	if json.Unmarshal(result, &answer) != nil || answer.Outcome != QuestionSubmitted && answer.Outcome != QuestionCancelled || !offered(asked.Questions, answer.Answers) {
 		return &Refusal{Code: CodeBadParams, Message: "question " + asked.Question + " takes submitted with answers among its options, or cancelled"}
 	}
-	if !l.host.AnswerQuestion(asked.Question, answer, s.client) {
+	if !l.host.answerQuestion(asked.Question, answer, s.client) {
 		return &Refusal{Code: CodeInvalid, Message: "question " + asked.Question + " was withdrawn before this answer arrived"}
 	}
 	delete(l.asked, asked.Question)
