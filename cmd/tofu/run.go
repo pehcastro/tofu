@@ -879,7 +879,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
-	if settingText(dir, boardy.ManagementSetting, run.notify) == string(boardy.ManagementBoardy) && projectHasBoard(dir) {
+	if boardManaged(dir) {
 		store, err := boardy.OpenStore(dir)
 		if err != nil {
 			return turn.Config{}, nil, err

@@ -39,10 +39,11 @@ const andThisIsItsLastStep = ", and this is its last step: answer now from what 
 
 const theLastStepRunsNoTool = "this was the turn's last step, which runs no tool"
 
-const aMessageArrivedMidTurn = "the person's next message arrived while you were working. before your next tool call, " +
-	"write one line saying what it changes in what you are doing, or that it changes nothing."
+const aMessageArrivedMidTurn = "the person wrote to you while you were working. before your next tool call, reply to them in one line: " +
+	"answer a question now when you can without new work, or say when you will answer it, and take in what they told you in their own terms. " +
+	"never call their message irrelevant or say it changes nothing."
 
-const theLeadSkippedTheLine = "the lead read a message from the person mid-turn and called a tool without a line saying what it changes"
+const theLeadSkippedTheLine = "the lead read a message from the person mid-turn and called a tool without a line to the person"
 
 const cronTaskSource = "cron "
 
@@ -122,6 +123,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	config, err := sideChat(config)
 	if err != nil {
 		return Row{}, err
+	}
+	if config.TaskOrigin.Source == "" && strings.HasPrefix(config.Task, leadCheckInOpening) {
+		config.TaskOrigin.Source = sourceLeadCheckIn
 	}
 	if config.Places, err = config.ResolvedPlaces(); err != nil {
 		return Row{}, err
@@ -341,13 +345,21 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		episodesCarried = len(view)
 		return withEpisodes(head, view)
 	}
-	messages = slices.Concat(messages, config.MemoryMessage(), config.History)
+	carried, view := config.History, []llm.Message(nil)
+	if config.opensGeneration() {
+		carried, view = withoutMemoryViews(config.History), config.MemoryMessage()
+	}
+	messages = slices.Concat(messages, carried, view)
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
 		messages = episodesFor(budget.Sending(artifacts.preview, string(schemas)), messages)
 	}
 	concluding, taken := "", ""
+	var lead *SpawnTool
 	for _, tool := range config.Tools.tools {
 		if spawner, spawning := tool.(*SpawnTool); spawning {
+			if config.SpawnedFrom == "" {
+				lead = spawner
+			}
 			if spawner.ChecksWork {
 				continue
 			}
@@ -364,7 +376,18 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		prompted := fire(ctx, hook.Input{Event: hook.UserPromptSubmit, Prompt: config.Task})
 		promptRefused, hookContext = prompted.Block, strings.TrimSpace(hookContext+"\n\n"+prompted.Context)
 	}
-	first := config.FirstUserMessage(concluding+taken, hookContext)
+	var boardLine string
+	arm, _ := ctx.Value(leadCheckInKey{}).(func(*LeadCheckIn))
+	if lead == nil {
+		arm = nil
+	}
+	if arm != nil {
+		arm(nil)
+	}
+	if strings.Contains(config.TaskOrigin.Source, sourceReport) {
+		boardLine = lead.boardLine(config.Task)
+	}
+	first := config.FirstUserMessage(concluding+taken, hookContext, boardLine)
 	taskOrigin, taskSource := config.TaskOrigin, sourceTask
 	if config.SpawnedFrom != "" {
 		taskSource = sourceBrief
@@ -378,7 +401,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	var shadowIDs, shadowErrs []string
 	var forkWrites sync.Mutex
 	var forkWriteErrs []string
-	sent, answering := afterSystem+len(config.History), ""
+	sent, answering := afterSystem+len(carried), ""
 	results := map[string]ToolCallRow{}
 	refuse := func(step *StepRow, calls []llm.ToolCall, why string) {
 		for _, call := range calls {
@@ -474,6 +497,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return trimFrom(step, when, from)
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
+		begun = config.withFreshMemoryView(begun)
 		if keeper != nil {
 			begun = episodesFor(budget, withoutEpisodes(begun))
 			carryState(fork, begun, "", row.Session)
@@ -660,7 +684,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		flush()
 	}
-	askedAgainAfterBlank, polled := false, false
+	askedAgainAfterBlank, polled, nudged := false, false, false
 	steeredAt := 0
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	for step := 1; ; step++ {
@@ -674,6 +698,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				}
 				steeredAt = step
 				said := inserted(sourceSteer, steered, time.Time{})
+				if config.Inbox != nil {
+					said.Content += config.Inbox.repeatNote(config.Sessions, cmp.Or(row.Session, config.Session), steered)
+				}
 				if config.ImagesOf != nil {
 					said.Images = config.ImagesOf(steered)
 				}
@@ -683,6 +710,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		if config.Inbox != nil {
 			for _, item := range config.Inbox.fold(config.TaskOrigin.Source) {
+				if strings.Contains(item.source, sourceReport) {
+					if line := lead.boardLine(item.text); line != "" {
+						item.text += "\n\n" + line
+					}
+				}
 				messages = append(messages, inserted(item.source, item.text, item.posted))
 				episode(episodeKind(item.source), item.text)
 				if item.source == sourceMemory {
@@ -855,8 +887,19 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				keep(stepRow)
 				continue
 			}
+			work, held := lead.work()
+			if held && work.open() && concluding == "" && !nudged {
+				nudged = true
+				stepRow.Warnings = append(stepRow.Warnings, "the lead ended with board work open, so it was asked to take it")
+				messages = append(messages, inserted(sourceHandback, work.asks("you ended the turn"), time.Time{}))
+				keep(stepRow)
+				continue
+			}
 			keep(stepRow)
 			answered(decision.Content)
+			if held && arm != nil && !strings.Contains(config.TaskOrigin.Source, sourceLeadCheckIn) {
+				arm(lead.leadCheckIn(work))
+			}
 			return finish(OutcomeStopped), nil
 
 		case llm.OutcomeTruncated:

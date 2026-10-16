@@ -68,13 +68,14 @@ type ruleStack struct {
 const (
 	boardLeadRule     = "board_lead"
 	boardSubAgentRule = "board_sub_agent"
+	keepsSlotsRule    = "keeps_slots"
 )
 
 func ruleSetting(id string) string {
 	switch id {
 	case verifySubAgentsRule:
 		return settingspkg.VerifySubAgents
-	case boardLeadRule, boardSubAgentRule:
+	case boardLeadRule, boardSubAgentRule, keepsSlotsRule:
 		return boardy.ManagementSetting
 	}
 	return ""
@@ -87,6 +88,15 @@ func projectHasBoard(project string) bool {
 	}
 	boards, _ := store.Boards()
 	return len(boards) > 0
+}
+
+func boardManaged(project string) bool {
+	store, err := openSettings(project)
+	if err != nil || !projectHasBoard(project) {
+		return false
+	}
+	_, set := store.Source(boardy.ManagementSetting)
+	return !set || store.Text(boardy.ManagementSetting) == string(boardy.ManagementBoardy)
 }
 
 func ruleSettingOnValue(key string) string {
@@ -137,7 +147,7 @@ func stackRules(library, project string) (ruleStack, error) {
 		}
 		on := settingInt(project, key, nil) != 0
 		if key == boardy.ManagementSetting {
-			on = settingText(project, key, nil) == string(boardy.ManagementBoardy) && projectHasBoard(project)
+			on = boardManaged(project)
 		}
 		mode := rule.ModeOff
 		if on {
@@ -299,7 +309,7 @@ func rulesListVerb(args []string, out, errOut io.Writer) int {
 		switch {
 		case slices.Contains(stack.bySetting, off.ID):
 			switchOn = "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
-		case key == boardy.ManagementSetting && settingText(opts.dir, key, nil) == string(boardy.ManagementBoardy):
+		case key == boardy.ManagementSetting && !projectHasBoard(opts.dir):
 			switchOn = "off until the project has a board: tofu boardy init"
 		case key != "":
 			switchOn += ", or tofu settings set " + key + " " + ruleSettingOnValue(key)

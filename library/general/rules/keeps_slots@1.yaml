@@ -1,0 +1,8 @@
+id: keeps_slots
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+mode: off
+text: when a sub-agent reports on a board ticket, close that ticket in the same reply: read its Log against the acceptance in force, then move it to done, or back to doing with the failing lines as the reason. in that same reply spawn free todo tickets up to the running limit, one sub-agent per ticket, so no slot sits empty while the board has free work. the board line under each report says how many sub-agents run, the status of its ticket and the free todo ids. a reply that leaves a review open or a slot empty while todo is free says why in one line.
+notes: ships off and turns on in a project that has a board, unless projectManagement is set to something other than boardy. a lead given a ceiling and no floor started 12 of 13 spawns only after the person asked, started nothing for 14 hours while tickets were free, and closed none of 13 tickets in review. it guards against an empty slot and an unclosed review.

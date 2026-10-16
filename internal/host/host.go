@@ -109,6 +109,8 @@ type Host struct {
 	previous  string
 	streaming bool
 	ticking   *time.Timer
+	checkIn   *turn.LeadCheckIn
+	checking  *time.Timer
 	id        string
 	started   string
 	carried   []llm.Message
@@ -172,6 +174,7 @@ func New(cfg Config) (*Host, []string) {
 	if err := h.carry(cfg.Resumed); err != nil {
 		troubles = append(troubles, err.Error())
 	}
+	h.armCron()
 	if h.id == "" {
 		return h, troubles
 	}
@@ -228,7 +231,8 @@ func (h *Host) Send(pick Pick, task string) bool {
 }
 
 func (h *Host) begin(pick Pick, task string, origin Origin) {
-	ctx, cancel := context.WithCancel(context.Background())
+	h.dropCheckIn()
+	ctx, cancel := context.WithCancel(turn.WithLeadCheckIn(context.Background(), h.keepCheckIn))
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.cancel, h.turn, h.turnOver = true, false, false, cancel, turn.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
@@ -243,6 +247,7 @@ func (h *Host) begin(pick Pick, task string, origin Origin) {
 		})
 		cancel()
 		h.ended(out)
+		h.armCheckIn()
 	})
 }
 
@@ -346,6 +351,7 @@ func (h *Host) Close() {
 		close(h.done)
 	}
 	h.closed = true
+	h.dropCheckIn()
 	if h.ticking != nil {
 		h.ticking.Stop()
 	}
@@ -500,6 +506,7 @@ func (c Carry) reading(dir string) (*session.Store, error) {
 func (h *Host) Fresh() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.dropCheckIn()
 	if h.running {
 		return errTurnRunning
 	}
@@ -511,6 +518,7 @@ func (h *Host) Fresh() error {
 
 func (h *Host) Resume(carry Carry) ([]Event, error) {
 	h.mu.Lock()
+	h.dropCheckIn()
 	if h.running {
 		h.mu.Unlock()
 		return nil, errTurnRunning
@@ -551,6 +559,7 @@ func (h *Host) Opening(carry Carry) []Event {
 func (h *Host) Compacted(into string, messages []llm.Message) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.dropCheckIn()
 	h.id, h.carried, h.prefix = into, messages, &turn.Prefix{}
 	return h.hold(into)
 }

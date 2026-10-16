@@ -244,6 +244,23 @@ func (r SubAgentReport) Text(store *recall.Store) string {
 	return body.String()
 }
 
+func (t *SpawnTool) boardLine(reports string) string {
+	w, held := t.work()
+	if !held {
+		return ""
+	}
+	line := fmt.Sprintf("board: %d of %d sub-agents running", w.running, w.limit)
+	for _, said := range strings.Split(reports, "\n") {
+		if !strings.HasPrefix(said, "contract ") {
+			continue
+		}
+		if id := subagent.TicketID(said); w.status[id] != "" {
+			line += "; " + id + " is " + string(w.status[id])
+		}
+	}
+	return line + "; free todo: " + listed(w.free)
+}
+
 func marked(prose string) string {
 	lines := strings.Split(strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n", "\u0085", "\n").Replace(prose), "\n")
 	for i, line := range lines {
