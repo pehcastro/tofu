@@ -125,6 +125,9 @@ func (s *server) memoryRead(named string, read func(*memtree.Store) ([]string, e
 }
 
 func (h *Host) AnswerMemory(id string, scope memory.Scope) bool {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followMemory, Asked: id, Scope: scope}).OK
+	}
 	return h.memoryPicks.answer(id, scope)
 }
 

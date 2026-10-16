@@ -93,6 +93,9 @@ func (q *steerQueue) heard() string {
 }
 
 func (h *Host) Steer(text string) string {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followSteer, Text: text}).Steered
+	}
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
 	id := session.NewEventID()
@@ -101,6 +104,9 @@ func (h *Host) Steer(text string) string {
 }
 
 func (h *Host) SendNow(id string) bool {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followSendNow, Text: id}).OK
+	}
 	h.steering.mu.Lock()
 	queued := h.steering.queued()
 	found := id == "" && len(queued) > 0 || slices.Contains(queued, id)
@@ -121,6 +127,10 @@ func (h *Host) SendNow(id string) bool {
 }
 
 func (h *Host) DropSteering() {
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followUnqueue})
+		return
+	}
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
 	h.steering.drain()
@@ -128,6 +138,9 @@ func (h *Host) DropSteering() {
 }
 
 func (h *Host) Unsteer(text string) bool {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followUnsteer, Text: text}).OK
+	}
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
 	entries := h.steering.drain()

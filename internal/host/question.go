@@ -54,6 +54,9 @@ func (h *Host) questionsBlock() (blocks, decided bool) {
 }
 
 func (h *Host) AnswerQuestion(id string, answer QuestionAnswer, by string) bool {
+	if f := h.following.Load(); f != nil {
+		return f.ask(followAsk{Op: followQuestion, Asked: id, Question: answer, By: by}).OK
+	}
 	return h.questions.answer(id, answeredQuestion{answer, by})
 }
 

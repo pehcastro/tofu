@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/memory"
 	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/turn"
@@ -32,6 +33,11 @@ const (
 	followAnswer    followOp = "answer"
 	followAnswerAsk followOp = "answerAsk"
 	followQuestion  followOp = "question"
+	followMemory    followOp = "memory"
+	followSteer     followOp = "steer"
+	followSendNow   followOp = "sendNow"
+	followUnsteer   followOp = "unsteer"
+	followUnqueue   followOp = "unqueue"
 )
 
 type followAsk struct {
@@ -41,13 +47,15 @@ type followAsk struct {
 	Asked    string
 	Answer   Answer
 	Question QuestionAnswer
+	Scope    memory.Scope `json:",omitempty"`
 	By       string
 }
 
 type followReply struct {
-	ID     int
-	OK     bool
-	Stands bool
+	ID      int
+	OK      bool
+	Stands  bool
+	Steered string
 }
 
 type followLine struct {
@@ -245,6 +253,16 @@ func (h *Host) served(ask followAsk) followReply {
 		reply.OK, reply.Stands = h.AnswerAsk(ask.Asked, ask.Answer)
 	case followQuestion:
 		reply.OK = h.AnswerQuestion(ask.Asked, ask.Question, ask.By)
+	case followMemory:
+		reply.OK = h.AnswerMemory(ask.Asked, ask.Scope)
+	case followSteer:
+		reply.Steered = h.Steer(ask.Text)
+	case followSendNow:
+		reply.OK = h.SendNow(ask.Text)
+	case followUnsteer:
+		reply.OK = h.Unsteer(ask.Text)
+	case followUnqueue:
+		h.DropSteering()
 	default:
 		reply.OK = false
 	}
@@ -438,13 +456,6 @@ func (h *Host) reload(id string) error {
 	}
 	h.id = id
 	return h.carry(Carry{Session: id, Messages: messages, Store: store})
-}
-
-func (h *Host) answerQuestion(id string, answer QuestionAnswer, by string) bool {
-	if f := h.following.Load(); f != nil {
-		return f.ask(followAsk{Op: followQuestion, Asked: id, Question: answer, By: by}).OK
-	}
-	return h.AnswerQuestion(id, answer, by)
 }
 
 func (h *Host) heldBy() *SessionHolder {

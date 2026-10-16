@@ -698,7 +698,7 @@ func (s *server) questionAnswered(l *lane, asked QuestionRequest, result json.Ra
 	if json.Unmarshal(result, &answer) != nil || answer.Outcome != QuestionSubmitted && answer.Outcome != QuestionCancelled || !offered(asked.Questions, answer.Answers) {
 		return &Refusal{Code: CodeBadParams, Message: "question " + asked.Question + " takes submitted with answers among its options, or cancelled"}
 	}
-	if !l.host.answerQuestion(asked.Question, answer, s.client) {
+	if !l.host.AnswerQuestion(asked.Question, answer, s.client) {
 		return &Refusal{Code: CodeInvalid, Message: "question " + asked.Question + " was withdrawn before this answer arrived"}
 	}
 	delete(l.asked, asked.Question)
@@ -729,7 +729,9 @@ func (s *server) publish(event Event) {
 	case EventAwaitPerson:
 		if event.Questions != nil && !s.answers {
 			by := cmp.Or(s.client, "this client")
-			safe.Go(s.report, "serve undelivered question", func() { l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, by) })
+			safe.Go(s.report, "serve undelivered question", func() {
+				l.host.questions.answer(event.ID, answeredQuestion{QuestionAnswer{Outcome: QuestionUndelivered}, by})
+			})
 			return
 		}
 		if event.Questions != nil {
