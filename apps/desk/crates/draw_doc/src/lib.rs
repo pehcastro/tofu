@@ -9,6 +9,7 @@ use std::fmt;
 pub use diagram::{Edge, Graph, Line, Node, diagram, graph};
 pub use edit::{Color, Link, Patch, Shape, ShapeKind, add_shapes, bounds, connect, delete, update};
 pub use element::{ArrowEnd, BindMode, Binding, BoundElement, BoundKind, Element, Rect};
+pub use layout::Layout;
 pub use scene::{Op, Scene};
 
 #[derive(Debug)]

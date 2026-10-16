@@ -72,17 +72,30 @@ impl Scene {
 
     pub fn read(json: &str) -> Result<Self, DocError> {
         let file: FileIn = serde_json::from_str(json)?;
-        let mut scene = Self {
+        Self {
             elements: file.elements,
             rest: file.rest,
             ..Self::default()
-        };
-        for (i, element) in scene.elements.iter().enumerate() {
-            if scene.by_id.insert(element.id.clone(), i).is_some() {
+        }
+        .indexed()
+    }
+
+    pub(crate) fn of(elements: Vec<Element>) -> Result<Self, DocError> {
+        Self {
+            elements,
+            ..Self::new()
+        }
+        .indexed()
+    }
+
+    fn indexed(mut self) -> Result<Self, DocError> {
+        self.by_id.reserve(self.elements.len());
+        for (i, element) in self.elements.iter().enumerate() {
+            if self.by_id.insert(element.id.clone(), i).is_some() {
                 return Err(DocError::DuplicateId(element.id.clone()));
             }
         }
-        Ok(scene)
+        Ok(self)
     }
 
     pub fn write(&self) -> Result<String, DocError> {

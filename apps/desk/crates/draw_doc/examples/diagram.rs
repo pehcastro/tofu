@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::time::Instant;
 
-use draw_doc::{Edge, Graph, Node, diagram};
+use draw_doc::{Edge, Graph, Layout, Node, diagram};
 
 const RUNS: usize = 5;
 
@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut times = Vec::with_capacity(RUNS);
         for _ in 0..RUNS {
             let started = Instant::now();
-            let text = diagram(&graph)?.write()?;
+            let text = diagram(&graph, Layout::Layered)?.write()?;
             times.push(started.elapsed().as_secs_f64() * 1000.0);
             std::hint::black_box(text);
         }
@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
     let crates = crates();
-    std::fs::write(&path, diagram(&crates)?.write()?)?;
+    std::fs::write(&path, diagram(&crates, Layout::Layered)?.write()?)?;
     println!(
         "wrote {path}: {} nodes {} edges",
         crates.nodes.len(),
