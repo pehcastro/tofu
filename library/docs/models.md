@@ -38,7 +38,7 @@ mean the genius, smart and worker tiers when those are set. The `thinkingSummary
   `tofu models reload` found on your accounts that tofu does not ship.
   Each carries `from`, what listed it, and `found`, the day it was found
 - `~/.tofu/models/<provider>/<model>.yaml`, `.tofu/models/...`: your
-  changes to one model, field by field, over the list tofu ships. `plan: no` takes the plan tool away from a model; `codex-sub/gpt-5.6-sol` ships with it, since GPT spent requests on replies holding only a plan call
+  changes to one model, field by field, over the list tofu ships. `plan: no` takes the plan tool away from a model; `codex-sub/gpt-5.6-sol` ships with it, since GPT spent requests on replies holding only a plan call. `verbosity` (`low`, `medium` or `high`) and `reasoning_context` (`all_turns` or `current_turn`) follow [codex](https://github.com/openai/codex), which sends both for its models: tofu sends them on the codex wire as `text.verbosity` and `reasoning.context`, and a model file that leaves them out sends neither. `codex-sub/gpt-5.6-sol` ships with `verbosity: low` and `reasoning_context: all_turns`, the values codex sends for it
 - the `modelTier.genius`, `modelTier.smart`, `modelTier.worker` and
   `modelTier.dumb` settings: the model each tier names
 - `~/.tofu/model-windows.json`: the models.dev table `tofu models reload`

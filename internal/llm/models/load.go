@@ -115,7 +115,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "plan", "efforts", "from", "found"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "plan", "verbosity", "reasoning_context", "efforts", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -315,19 +315,21 @@ func buildSubscription(id string, from *sheet) (SubscriptionSpec, *Broken) {
 func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpec) (Model, *Broken) {
 	provider, name, _ := strings.Cut(slug, "/")
 	model := Model{
-		Provider:     Provider(provider),
-		ID:           name,
-		Subscription: Subscription(from.values["subscription"]),
-		Use:          Use(from.values["use"]),
-		Kind:         Kind(cmp.Or(from.values["kind"], string(KindLLM))),
-		Vision:       Vision(from.values["vision"]),
-		Plan:         PlanTool(from.values["plan"]),
-		Reason:       from.values["reason"],
-		Notice:       from.values["notice"],
-		File:         from.file,
-		Layer:        from.layer,
-		From:         from.values["from"],
-		Found:        from.values["found"],
+		Provider:         Provider(provider),
+		ID:               name,
+		Subscription:     Subscription(from.values["subscription"]),
+		Use:              Use(from.values["use"]),
+		Kind:             Kind(cmp.Or(from.values["kind"], string(KindLLM))),
+		Vision:           Vision(from.values["vision"]),
+		Plan:             PlanTool(from.values["plan"]),
+		Verbosity:        Verbosity(from.values["verbosity"]),
+		ReasoningContext: ReasoningContext(from.values["reasoning_context"]),
+		Reason:           from.values["reason"],
+		Notice:           from.values["notice"],
+		File:             from.file,
+		Layer:            from.layer,
+		From:             from.values["from"],
+		Found:            from.values["found"],
 	}
 	if !model.Provider.valid() {
 		return model, &Broken{File: from.file, Why: fmt.Sprintf("the vendor is %s, %s, %s, %s or %s, found %q", Anthropic, OpenAI, TypeSafe, OpenRouter, Meta, model.Provider)}
@@ -340,6 +342,12 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	}
 	if !model.Plan.valid() {
 		return model, &Broken{File: from.file, Field: "plan", Why: fmt.Sprintf("plan is %s or %s, or left out to offer the plan tool, found %q", PlanOffered, PlanWithheld, model.Plan)}
+	}
+	if !model.Verbosity.valid() {
+		return model, &Broken{File: from.file, Field: "verbosity", Why: fmt.Sprintf("verbosity is %s, %s or %s, or left out to let the endpoint choose, found %q", VerbosityLow, VerbosityMedium, VerbosityHigh, model.Verbosity)}
+	}
+	if !model.ReasoningContext.valid() {
+		return model, &Broken{File: from.file, Field: "reasoning_context", Why: fmt.Sprintf("reasoning_context is %s or %s, or left out to let the endpoint choose, found %q", ReasoningAllTurns, ReasoningCurrentTurn, model.ReasoningContext)}
 	}
 	for _, raw := range commas(from.values["efforts"]) {
 		effort, err := llm.ParseEffort(raw)

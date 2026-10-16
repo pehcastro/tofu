@@ -156,6 +156,39 @@ func (p PlanTool) valid() bool {
 	return false
 }
 
+type Verbosity string
+
+const (
+	VerbosityUnstated Verbosity = ""
+	VerbosityLow      Verbosity = "low"
+	VerbosityMedium   Verbosity = "medium"
+	VerbosityHigh     Verbosity = "high"
+)
+
+func (v Verbosity) valid() bool {
+	switch v {
+	case VerbosityUnstated, VerbosityLow, VerbosityMedium, VerbosityHigh:
+		return true
+	}
+	return false
+}
+
+type ReasoningContext string
+
+const (
+	ReasoningContextUnstated ReasoningContext = ""
+	ReasoningAllTurns        ReasoningContext = "all_turns"
+	ReasoningCurrentTurn     ReasoningContext = "current_turn"
+)
+
+func (r ReasoningContext) valid() bool {
+	switch r {
+	case ReasoningContextUnstated, ReasoningAllTurns, ReasoningCurrentTurn:
+		return true
+	}
+	return false
+}
+
 type SubscriptionSpec struct {
 	ID        Subscription
 	Provider  Provider
@@ -166,22 +199,24 @@ type SubscriptionSpec struct {
 }
 
 type Model struct {
-	Provider     Provider
-	ID           string
-	Subscription Subscription
-	Windows      []string
-	Use          Use
-	Kind         Kind
-	Vision       Vision
-	Plan         PlanTool
-	Efforts      []llm.Effort
-	Reason       string
-	Notice       string
-	File         string
-	Layer        string
-	From         string
-	Found        string
-	Published    PublishedWindow
+	Provider         Provider
+	ID               string
+	Subscription     Subscription
+	Windows          []string
+	Use              Use
+	Kind             Kind
+	Vision           Vision
+	Plan             PlanTool
+	Verbosity        Verbosity
+	ReasoningContext ReasoningContext
+	Efforts          []llm.Effort
+	Reason           string
+	Notice           string
+	File             string
+	Layer            string
+	From             string
+	Found            string
+	Published        PublishedWindow
 }
 
 type PublishedWindow struct {

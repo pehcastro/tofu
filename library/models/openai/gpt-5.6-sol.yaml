@@ -2,4 +2,6 @@ subscription: codex-sub
 use: default
 vision: yes
 plan: no
+verbosity: low
+reasoning_context: all_turns
 efforts: none, minimal, low, medium, high, xhigh, max

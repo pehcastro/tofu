@@ -39,6 +39,9 @@ type accounts struct {
 	wrap     func(turn.Model) (turn.Model, error)
 	fixed    turn.Model
 
+	verbosity        models.Verbosity
+	reasoningContext models.ReasoningContext
+
 	polling   sync.Once
 	poller    *quota.Poller
 	pollerErr error
@@ -276,7 +279,7 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 		if err != nil {
 			return nil, err
 		}
-		return codexTurn{wire: wire, effort: a.effort}, nil
+		return codexTurn{wire: wire, effort: a.effort, verbosity: a.verbosity, reasoningContext: a.reasoningContext}, nil
 	}
 	stand := os.Getenv(claudeBaseURLVariable)
 	wire, err := anthropic.New(anthropic.Config{
@@ -332,18 +335,18 @@ func subFingerprint(dir string) (settingspkg.Fingerprint, func(version string) e
 	}
 }
 
-func metaModel(modelID string, effort llm.Effort) (turn.Model, error) {
+func metaModel(selected models.Model, effort llm.Effort) (turn.Model, error) {
 	key, err := jev.KeyFor(sys.CredentialFileName, sys.MetaMuseKeyName)
 	if err != nil {
 		return nil, fmt.Errorf("%w: run %s", err, loginHint(metaName))
 	}
 	wire, err := codex.New(codex.Config{
 		BaseURL:   models.MetaBaseURL() + codex.KeyPath,
-		Model:     modelID,
+		Model:     selected.ID,
 		Token:     func(context.Context, string) (string, error) { return key, nil },
 		Transport: turnTransportConfig(),
 	})
-	return codexTurn{wire: wire, effort: effort}, err
+	return codexTurn{wire: wire, effort: effort, verbosity: selected.Verbosity, reasoningContext: selected.ReasoningContext}, err
 }
 
 func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, error) {
@@ -354,7 +357,7 @@ func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, e
 		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
 	}
 	if opts.wire == wireMeta {
-		model, err := metaModel(modelID, opts.effort)
+		model, err := metaModel(selected, opts.effort)
 		return &accounts{modelID: modelID, now: time.Now, fixed: model}, spend, err
 	}
 	provider := cred.ClaudeSub
@@ -373,5 +376,6 @@ func openAccounts(opts runOpts, selected models.Model) (*accounts, turn.Spend, e
 	if err != nil {
 		return nil, spend, err
 	}
-	return &accounts{dir: opts.dir, provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.effort, now: time.Now}, spend, nil
+	return &accounts{dir: opts.dir, provider: provider, spec: spec, store: store, modelID: modelID, spends: selected.Windows, effort: opts.effort, now: time.Now,
+		verbosity: selected.Verbosity, reasoningContext: selected.ReasoningContext}, spend, nil
 }

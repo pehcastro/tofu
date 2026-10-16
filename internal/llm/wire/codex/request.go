@@ -22,21 +22,23 @@ type Sampling struct {
 }
 
 type Request struct {
-	Model           string
-	Instructions    string
-	Messages        []llm.Message
-	Tools           []llm.Tool
-	ToolChoice      string
-	Effort          llm.Effort
-	SummaryOff      bool
-	ServiceTier     string
-	PromptCacheKey  string
-	Identity        Identity
-	TurnState       string
-	MaxOutputTokens int
-	Sampling        Sampling
-	OnThinking      func(string)
-	OnRetry         func()
+	Model            string
+	Instructions     string
+	Messages         []llm.Message
+	Tools            []llm.Tool
+	ToolChoice       string
+	Effort           llm.Effort
+	SummaryOff       bool
+	ReasoningContext string
+	Verbosity        string
+	ServiceTier      string
+	PromptCacheKey   string
+	Identity         Identity
+	TurnState        string
+	MaxOutputTokens  int
+	Sampling         Sampling
+	OnThinking       func(string)
+	OnRetry          func()
 }
 
 const imageDetail = "high"
@@ -97,8 +99,13 @@ type wireTool struct {
 }
 
 type wireReasoning struct {
-	Effort  string `json:"effort"`
+	Effort  string `json:"effort,omitempty"`
 	Summary string `json:"summary,omitempty"`
+	Context string `json:"context,omitempty"`
+}
+
+type wireText struct {
+	Verbosity string `json:"verbosity"`
 }
 
 type wireBody struct {
@@ -112,6 +119,7 @@ type wireBody struct {
 	ToolChoice     string            `json:"tool_choice,omitempty"`
 	ServiceTier    string            `json:"service_tier,omitempty"`
 	Reasoning      *wireReasoning    `json:"reasoning,omitempty"`
+	Text           *wireText         `json:"text,omitempty"`
 	Include        []string          `json:"include"`
 	ClientMetadata map[string]string `json:"client_metadata,omitempty"`
 }
@@ -135,6 +143,10 @@ func (r Request) Encode(clientMetadata map[string]string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	var text *wireText
+	if r.Verbosity != "" {
+		text = &wireText{Verbosity: r.Verbosity}
+	}
 
 	var out bytes.Buffer
 	encoder := json.NewEncoder(&out)
@@ -150,6 +162,7 @@ func (r Request) Encode(clientMetadata map[string]string) ([]byte, error) {
 		ToolChoice:     r.ToolChoice,
 		ServiceTier:    r.ServiceTier,
 		Reasoning:      reasoning,
+		Text:           text,
 		Include:        []string{EncryptedReasoningInclude},
 		ClientMetadata: clientMetadata,
 	}); err != nil {
@@ -160,14 +173,17 @@ func (r Request) Encode(clientMetadata map[string]string) ([]byte, error) {
 
 func (r Request) reasoning() (*wireReasoning, error) {
 	if r.Effort == "" {
-		return nil, nil
+		if r.ReasoningContext == "" {
+			return nil, nil
+		}
+		return &wireReasoning{Context: r.ReasoningContext}, nil
 	}
 	if !slices.Contains(ReasoningEfforts(), r.Effort) {
 		return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 			"%q is not a codex reasoning effort; this wire takes %s",
 			r.Effort, llm.EffortList(ReasoningEfforts()))
 	}
-	reasoning := &wireReasoning{Effort: string(r.Effort)}
+	reasoning := &wireReasoning{Effort: string(r.Effort), Context: r.ReasoningContext}
 	if !r.SummaryOff {
 		reasoning.Summary = DefaultReasoningSummary
 	}

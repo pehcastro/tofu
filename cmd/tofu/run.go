@@ -457,7 +457,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		if err != nil {
 			return runFail(errOut, err)
 		}
-		body, err := dryRunBody(opts, selected.ID, config)
+		body, err := dryRunBody(opts, selected, config)
 		if err != nil {
 			return runFail(errOut, err)
 		}
@@ -986,7 +986,7 @@ func gateMode(arm string) turn.GateMode {
 	panic("tofu run: unknown gate arm " + arm)
 }
 
-func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) {
+func dryRunBody(opts runOpts, selected models.Model, config turn.Config) ([]byte, error) {
 	tools := config.Tools.Definitions()
 	messages := config.MemoryMessage()
 	if dir := cmp.Or(opts.dir, "."); opts.agent == "" && episodesOn(dir) {
@@ -1003,12 +1003,13 @@ func dryRunBody(opts runOpts, model string, config turn.Config) ([]byte, error) 
 	switch opts.wire {
 	case wireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)
-		return llm.Request{Messages: system, Tools: tools}.Encode(model)
+		return llm.Request{Messages: system, Tools: tools}.Encode(selected.ID)
 	case wireCodex, wireMeta:
-		return codex.Request{Model: model, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.effort, SummaryOff: summaryOff}.Encode(nil)
+		return codex.Request{Model: selected.ID, Instructions: config.SystemMessage(), Messages: messages, Tools: tools, Effort: opts.effort, SummaryOff: summaryOff,
+			Verbosity: string(selected.Verbosity), ReasoningContext: string(selected.ReasoningContext)}.Encode(nil)
 	}
 	versions, _ := subFingerprint(opts.dir)
-	return anthropic.Request{Model: model, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode, OmitThinkingSummary: summaryOff}.Encode(true)
+	return anthropic.Request{Model: selected.ID, System: []string{config.SystemMessage()}, Messages: messages, Tools: tools, Effort: opts.effort, ClaudeCodeVersion: versions.ClaudeCode, OmitThinkingSummary: summaryOff}.Encode(true)
 }
 
 func turnTransportConfig() transport.Config {
@@ -1045,8 +1046,10 @@ func keyModel(model string) (turn.Model, error) {
 }
 
 type codexTurn struct {
-	wire   *codex.Wire
-	effort llm.Effort
+	wire             *codex.Wire
+	effort           llm.Effort
+	verbosity        models.Verbosity
+	reasoningContext models.ReasoningContext
 }
 
 func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
@@ -1061,14 +1064,16 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	}
 
 	result, _, err := c.wire.Ask(ctx, codex.Request{
-		Instructions: strings.Join(instructions, "\n\n"),
-		Messages:     messages,
-		Tools:        request.Tools,
-		ToolChoice:   request.ToolChoice.OpenAIValue(),
-		Effort:       c.effort,
-		SummaryOff:   request.OmitThinkingSummary,
-		OnThinking:   request.OnThinking,
-		OnRetry:      request.OnRetry,
+		Instructions:     strings.Join(instructions, "\n\n"),
+		Messages:         messages,
+		Tools:            request.Tools,
+		ToolChoice:       request.ToolChoice.OpenAIValue(),
+		Effort:           c.effort,
+		SummaryOff:       request.OmitThinkingSummary,
+		Verbosity:        string(c.verbosity),
+		ReasoningContext: string(c.reasoningContext),
+		OnThinking:       request.OnThinking,
+		OnRetry:          request.OnRetry,
 	})
 	if err != nil {
 		return llm.Decision{}, err
