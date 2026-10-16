@@ -32,6 +32,7 @@ import (
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/memory"
+	"tofu/internal/safe"
 	sessionstore "tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/shell"
@@ -59,6 +60,13 @@ const (
 	leftOverFix      = ", end them in the shells screen"
 	noteSeparator    = "  ·  "
 	roundMark        = "-r"
+	artifactsDirName = "artifacts"
+	sessionsDirName  = "sessions"
+)
+
+const (
+	stateFileKeptDays = 7
+	shellPruneEvery   = time.Hour
 )
 
 type appWiring struct {
@@ -86,6 +94,16 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := launchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), stopRestoring: func() {}}
+	safe.Go(sys.Crashes(dir), "state sweep", func() {
+		aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
+		if state, err := sys.ProjectStateDirAt(dir); err == nil {
+			_ = sys.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
+			_ = sys.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
+		}
+		if stateHome, err := sys.HomeConfigDir(); err == nil {
+			_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
+		}
+	})
 	if registryErr != nil {
 		return launch
 	}
@@ -504,6 +522,7 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 		if openErr != nil {
 			return nil
 		}
+		_ = registry.PruneEvery(shellPruneEvery)
 		found, err := registry.List()
 		if err != nil {
 			return nil

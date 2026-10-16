@@ -35,6 +35,7 @@ const (
 	stagingSuffix      = ".writing"
 	claimedPrefix      = "bash-"
 	highestClaimedFile = "highest-claimed"
+	prunedStampFile    = "pruned"
 	runningDir         = "running"
 	DefaultTail        = 200
 	dirMode            = 0o755
@@ -290,7 +291,14 @@ func (r *Registry) Prune() error {
 			_ = os.Remove(r.logPath(name))
 		}
 	}
-	return err
+	return errors.Join(err, os.WriteFile(filepath.Join(r.dir, prunedStampFile), []byte(time.Now().Format(time.RFC3339)), fileMode))
+}
+
+func (r *Registry) PruneEvery(every time.Duration) error {
+	if info, err := os.Stat(filepath.Join(r.dir, prunedStampFile)); err == nil && time.Since(info.ModTime()) < every {
+		return nil
+	}
+	return r.Prune()
 }
 
 func (r *Registry) writeLocked(entry Shell) error {

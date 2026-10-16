@@ -17,6 +17,7 @@ const (
 	ScratchLead         = "lead"
 	ScratchAgents       = "agents"
 	ScratchRootsSetting = "scratchRoots"
+	scratchOut          = "out"
 	scratchSessionFile  = ".session"
 	scratchRootsFolder  = "tofu"
 	settingsFileName    = "settings.json"
@@ -105,7 +106,7 @@ func (p ScratchPlace) For(agent string) ScratchPlace {
 }
 
 func (p ScratchPlace) Make() error {
-	for _, dir := range []string{p.Tmp(), filepath.Join(p.Dir(), "logs"), filepath.Join(p.Dir(), "out"), p.Shared(), p.Cache()} {
+	for _, dir := range []string{p.Tmp(), filepath.Join(p.Dir(), "logs"), filepath.Join(p.Dir(), scratchOut), p.Shared(), p.Cache()} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}

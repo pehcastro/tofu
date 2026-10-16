@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,14 @@ const (
 	ScratchKindShared   ScratchKind = "shared"
 	ScratchKindCache    ScratchKind = "cache"
 	ScratchKindLeftover ScratchKind = "leftover"
+)
+
+const (
+	artifactSuffix         = ".bin"
+	artifactBackups        = "backups"
+	artifactHandleChars    = 32
+	artifactScanChunkBytes = 1 << 20
+	sessionLockFile        = "lock"
 )
 
 type ScratchFolder struct {
@@ -128,6 +137,122 @@ func (r ScratchReport) Removable(sweep ScratchSweep) []ScratchFolder {
 		removed, total = append(removed, folder), total-folder.Bytes
 	}
 	return removed
+}
+
+func (p ScratchPlace) Settle(report string) error {
+	if !filepath.IsAbs(p.Root) || p.Agent == "" || p.Agent != filepath.Base(p.Agent) || p.Agent == "." || p.Agent == ".." {
+		return nil
+	}
+	dir := p.Dir()
+	folded := func(path string) string { return strings.ToLower(filepath.ToSlash(path)) }
+	if !strings.Contains(folded(report), folded(filepath.Join(dir, scratchOut))) {
+		return os.RemoveAll(dir)
+	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	failed := []error{err}
+	for _, entry := range entries {
+		if entry.Name() != scratchOut {
+			failed = append(failed, os.RemoveAll(filepath.Join(dir, entry.Name())))
+		}
+	}
+	return errors.Join(failed...)
+}
+
+func RemoveAged(dir, prefix, suffix string, before time.Time) error {
+	return removeEach(dir, agedFiles(dir, prefix, suffix, before))
+}
+
+func RemoveUnreferencedArtifacts(artifacts, sessions string, before time.Time) error {
+	candidates := map[string]bool{}
+	for _, name := range agedFiles(artifacts, "", artifactSuffix, before) {
+		candidates[strings.TrimSuffix(name, artifactSuffix)] = true
+	}
+	referrers := []string{filepath.Join(artifacts, artifactBackups)}
+	sessionDirs, _ := os.ReadDir(sessions)
+	for _, entry := range sessionDirs {
+		referrers = append(referrers, filepath.Join(sessions, entry.Name()))
+	}
+	for _, dir := range referrers {
+		files, _ := os.ReadDir(dir)
+		if len(candidates) == 0 || !activeSince(files, before) {
+			continue
+		}
+		for _, file := range files {
+			if file.Type().IsRegular() {
+				forgetReferenced(filepath.Join(dir, file.Name()), candidates)
+			}
+		}
+	}
+	names := make([]string, 0, len(candidates))
+	for id := range candidates {
+		names = append(names, id+artifactSuffix)
+	}
+	return removeEach(artifacts, names)
+}
+
+func activeSince(files []fs.DirEntry, since time.Time) bool {
+	return slices.ContainsFunc(files, func(file fs.DirEntry) bool {
+		info, err := file.Info()
+		return file.Name() == sessionLockFile || err == nil && info.ModTime().After(since)
+	})
+}
+
+func forgetReferenced(path string, candidates map[string]bool) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer func() { _ = file.Close() }()
+	chunk, run := make([]byte, artifactScanChunkBytes), make([]byte, 0, artifactHandleChars+1)
+	ended := func() {
+		if len(run) == artifactHandleChars && candidates[string(run)] {
+			delete(candidates, string(run))
+		}
+		run = run[:0]
+	}
+	for {
+		read, err := file.Read(chunk)
+		for _, b := range chunk[:read] {
+			if '0' <= b && b <= '9' || 'a' <= b && b <= 'f' {
+				if len(run) <= artifactHandleChars {
+					run = append(run, b)
+				}
+				continue
+			}
+			ended()
+		}
+		if err != nil {
+			ended()
+			return
+		}
+	}
+}
+
+func agedFiles(dir, prefix, suffix string, before time.Time) []string {
+	entries, _ := os.ReadDir(dir)
+	var names []string
+	for _, entry := range entries {
+		name := entry.Name()
+		info, err := entry.Info()
+		if err == nil && info.Mode().IsRegular() && strings.HasPrefix(name, prefix) && strings.HasSuffix(name, suffix) && info.ModTime().Before(before) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func removeEach(dir string, names []string) error {
+	if !filepath.IsAbs(dir) {
+		return nil
+	}
+	var failed []error
+	for _, name := range names {
+		failed = append(failed, os.Remove(filepath.Join(dir, name)))
+	}
+	return errors.Join(failed...)
 }
 
 func RemoveScratch(folders []ScratchFolder, stop func(dir string), tries int, wait time.Duration) error {

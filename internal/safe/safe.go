@@ -13,6 +13,8 @@ const (
 	firstRestart   = 250 * time.Millisecond
 	restartCeiling = 30 * time.Second
 	stateDirMode   = 0o755
+	CrashPrefix    = "crash-"
+	CrashSuffix    = ".log"
 )
 
 type Panic struct {
@@ -31,7 +33,7 @@ func (p Panic) Saved(dir string) string {
 	err := os.MkdirAll(dir, stateDirMode)
 	var file *os.File
 	if err == nil {
-		file, err = os.CreateTemp(dir, "crash-"+strings.ReplaceAll(p.Unit, " ", "-")+"-"+time.Now().Format("20060102-150405")+"-*.log")
+		file, err = os.CreateTemp(dir, CrashPrefix+strings.ReplaceAll(p.Unit, " ", "-")+"-"+time.Now().Format("20060102-150405")+"-*"+CrashSuffix)
 	}
 	if err == nil {
 		_, err = fmt.Fprintf(file, "%v\n\n%s", p.Value, p.Stack)
