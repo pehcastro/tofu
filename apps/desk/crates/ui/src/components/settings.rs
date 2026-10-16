@@ -8,7 +8,7 @@ use crate::components::card::caption;
 use crate::components::chip::{Tone, kbd};
 use crate::components::paint::{ink, pressed, ring, tint};
 use crate::components::size::T3;
-use crate::theme::{ColorToken, Theme};
+use crate::theme::{ColorToken, Mode, Theme};
 
 const TITLE: f32 = 18.0;
 const TITLE_LINE: f32 = 21.6;
@@ -37,6 +37,14 @@ const TONE_LIVE: f32 = 0.12;
 const TONE_LINK: f32 = 0.14;
 const TONE_WARN: f32 = 0.14;
 const KEY_GAP: f32 = 4.0;
+const LIGHT_RULE_GAIN: f32 = 2.5;
+
+fn rule(theme: &Theme, alpha: f32) -> f32 {
+    match theme.mode() {
+        Mode::Dark => alpha,
+        Mode::Light => alpha * LIGHT_RULE_GAIN,
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -123,7 +131,7 @@ pub fn setting_row(row: SettingRow, theme: &Theme) -> Div {
         .py(px(ROW_PAD_Y))
         .px_4()
         .border_b_1()
-        .border_color(ink(theme, ROW_RULE))
+        .border_color(ink(theme, rule(theme, ROW_RULE)))
         .child(
             div()
                 .flex_1()
@@ -207,8 +215,11 @@ fn group_card(
                 .flex_col()
                 .mb_2p5()
                 .rounded(px(CARD_RADIUS))
-                .bg(tint(theme.color(ColorToken::Shadow), CARD_FILL))
-                .shadow(vec![ring(ink(theme, CARD_RING))])
+                .bg(match theme.mode() {
+                    Mode::Dark => tint(theme.color(ColorToken::Shadow), CARD_FILL),
+                    Mode::Light => theme.color(ColorToken::CardsInnerFill),
+                })
+                .shadow(vec![ring(ink(theme, rule(theme, CARD_RING)))])
                 .children(rows),
         )
 }
