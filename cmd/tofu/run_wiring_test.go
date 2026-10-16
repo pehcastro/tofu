@@ -978,7 +978,7 @@ func TestTheLeadTakesACleanReportUncheckedOnlyWithTheCheckOff(t *testing.T) {
 	}
 	leadChecks := []string{`{"tools":[{"name":"bash","args":{"command":"go vet ./stats/"}}]}`, `{"text":"go-dev added stats.Extra."}`}
 	ran := `step 1: tool_call tool=bash command="[^"]*go vet \./stats/" sub_agent="" exit_code=0`
-	refused := `step 1: tool_call tool=bash command="" .*was not executed: this turn ends on a clean sub-agent report`
+	refused := `step 1: tool_call tool=bash command="[^"]*go vet \./stats/" .*was not executed: this turn ends on a clean sub-agent report`
 	concerns := append([]string{`{"agent":"c1","tools":[{"name":"read","args":{"path":"stats/missing.go"}}]}`}, gated...)
 	for _, run := range []struct {
 		name     string
@@ -1182,5 +1182,35 @@ func TestEveryLeadThatCanAskAPersonHoldsRuleOverrideAndTheThreeToolArmAloneStays
 		if asked > 1 || arm.person != (asked == 1) {
 			t.Errorf("arms %v, a person %v: rule_override asked the person %d times", arm.args, arm.person, asked)
 		}
+	}
+}
+
+func TestTheThinkingSummaryFlagWinsOverTheStoredSettingForThatRunOnly(t *testing.T) {
+	for _, stored := range []string{"summarized", "omitted"} {
+		flag := map[string]string{"summarized": "omitted", "omitted": "summarized"}[stored]
+		dir := t.TempDir()
+		settingsFile := filepath.Join(dir, ".tofu", "settings.json")
+		written := `{"thinkingSummary":"` + stored + `"}`
+		if err := sys.WriteFile(settingsFile, []byte(written), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		opts, err := parseRunArgs([]string{"--dir", dir, "--wire", wireCodex, "--thinking-summary", flag, "--dry-run", "a task"})
+		if err != nil {
+			t.Fatalf("parseRunArgs: %v", err)
+		}
+		body, err := dryRunBody(opts, models.Model{ID: "gpt-5.6-sol"}, turn.Config{Task: opts.task})
+		if err != nil {
+			t.Fatalf("dryRunBody: %v", err)
+		}
+		if summarized := strings.Contains(string(body), `"summary"`); summarized != (flag == "summarized") {
+			t.Fatalf("stored %s, flag %s, and the body asks for a summary: %v\n%s", stored, flag, summarized, body)
+		}
+		if after, _ := os.ReadFile(settingsFile); string(after) != written {
+			t.Fatalf("the flag rewrote the stored setting to %s", after)
+		}
+	}
+	_, err := parseRunArgs([]string{"--dir", t.TempDir(), "--thinking-summary", "brief", "a task"})
+	if err == nil || !strings.Contains(err.Error(), "summarized, omitted") {
+		t.Fatalf("an unknown value was not refused with the allowed list: %v", err)
 	}
 }

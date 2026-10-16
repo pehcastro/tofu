@@ -109,6 +109,7 @@ type runOpts struct {
 	loopGuardWindow  int
 	contextCeiling   int
 	siftArm          string
+	thinkingSummary  string
 	noInstructions   bool
 	noDocs           bool
 	subAgentList     string
@@ -157,8 +158,15 @@ func (s summaryOmitted) Ask(ctx context.Context, request llm.Request) (llm.Decis
 	return s.inner.Ask(ctx, request)
 }
 
-func thinkingSummaryOff(dir string, say func(string)) bool {
-	return settingText(dir, settingspkg.ThinkingSummary, say) == settingspkg.ThinkingOmitted
+func thinkingSummaries() []string {
+	return []string{settingspkg.ThinkingSummarized, settingspkg.ThinkingOmitted}
+}
+
+func thinkingSummaryOff(opts runOpts, say func(string)) bool {
+	if opts.thinkingSummary != "" {
+		return opts.thinkingSummary == settingspkg.ThinkingOmitted
+	}
+	return settingText(cmp.Or(opts.dir, "."), settingspkg.ThinkingSummary, say) == settingspkg.ThinkingOmitted
 }
 
 func (r runtime) applyThinkingSummary(accounts turn.Accounts) turn.Accounts {
@@ -337,7 +345,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 func runUsage() string {
 	return fmt.Sprintf(runUsageText,
 		llm.EffortList(llm.Efforts()), llm.EffortDefault,
-		llm.EffortList(anthropic.ReasoningEfforts()), shellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff)
+		llm.EffortList(anthropic.ReasoningEfforts()), strings.Join(thinkingSummaries(), " or "), shellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff)
 }
 
 const runUsageText = `tofu run works a task in a directory until it is done.
@@ -355,6 +363,8 @@ Arguments:
                         the default is %s. the anthropic wire takes %s,
                         and refuses the rest rather than picking a neighbour.
                         the openrouter wire sends no level and takes no --effort
+  --thinking-summary <v> %s, for this run only, otherwise the
+                        thinkingSummary setting; the stored setting is not changed
   --gate <arm>          off, shadow or enforce, and enforce when not given. nobody answers
                         a tofu run, so under enforce and gatePrompt auto a call the gate asks
                         about runs and is recorded, and a deny or a gate that could not answer
@@ -783,7 +793,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
 	dir := cmp.Or(opts.dir, ".")
-	run.omitThinkingSummary = thinkingSummaryOff(dir, run.notify)
+	run.omitThinkingSummary = thinkingSummaryOff(opts, run.notify)
 	references := map[string]string{}
 	for _, definition := range prompt.subAgents.Defined {
 		for _, reference := range definition.References {
@@ -999,7 +1009,7 @@ func dryRunBody(opts runOpts, selected models.Model, config turn.Config) ([]byte
 		}
 	}
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: config.FirstUserMessage()})
-	summaryOff := thinkingSummaryOff(cmp.Or(opts.dir, "."), nil)
+	summaryOff := thinkingSummaryOff(opts, nil)
 	switch opts.wire {
 	case wireKey:
 		system := append([]llm.Message{{Role: llm.RoleSystem, Content: config.SystemMessage()}}, messages...)
@@ -1530,6 +1540,10 @@ func parseRunArgs(args []string) (runOpts, error) {
 			var raw string
 			if raw, err = nextArg(args, &i, arg); err == nil {
 				opts.effort, err = llm.ParseEffort(raw)
+			}
+		case "--thinking-summary":
+			if opts.thinkingSummary, err = nextArg(args, &i, arg); err == nil && !slices.Contains(thinkingSummaries(), opts.thinkingSummary) {
+				err = fmt.Errorf("--thinking-summary %q is none of %s", opts.thinkingSummary, strings.Join(thinkingSummaries(), ", "))
 			}
 		case "--max-steps":
 			opts.maxSteps, err = nextInt(args, &i, arg)
