@@ -1,6 +1,9 @@
 package guard
 
 import (
+	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -33,11 +36,16 @@ var (
 		sys.LazyRegexp(`(?i)\bgo\s+run\b.*\bserve\b`),
 	}
 	gitPublishes = sys.LazyRegexp(`(?i)` + gitThen + `(add|commit|push)` + wordEnds)
+	inlineScript = sys.LazyRegexp(`(?i)(^|[\s;&|(/\\])` + interpreters + `\s+(-\S+\s+)*(-[a-z]*[ce]|--eval|-p|--print|-command)(\s|['"])`)
+	scriptFile   = sys.LazyRegexp(`(?i)>\s*\S+\.(py|sh|bash|js|mjs|cjs|ts|rb|pl|ps1)\b`)
+	interpreter  = sys.LazyRegexp(`(?i)^` + interpreters + `$`)
 )
 
 const (
-	gitThen  = `\bgit(\s+(-c\s*("[^"]*"|'[^']*'|\S+)|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix)(=|\s+)\S+|-[-\w]+))*\s+`
-	wordEnds = `([^\w-]|$)`
+	gitThen      = `\bgit(\s+(-c\s*("[^"]*"|'[^']*'|\S+)|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix)(=|\s+)\S+|-[-\w]+))*\s+`
+	wordEnds     = `([^\w-]|$)`
+	interpreters = `(python[23]?|py|node|bash|sh|zsh|perl|ruby|bun|deno|php|powershell|pwsh)(\.exe)?`
+	scriptBytes  = 64 << 10
 )
 
 func shell(env Env, ev event) (Answer, error) {
@@ -49,7 +57,7 @@ func shell(env Env, ev event) (Answer, error) {
 	if reason := flowsRefusal(env, stripped); reason != "" {
 		return deny(reason), nil
 	}
-	git := withoutQuotedText(stripped)
+	git := withoutQuotedText(stripped) + "\n" + scriptCode(scriptText(env, command))
 	reason, err := shellRefusal(env, ev, command, stripped, git)
 	if reason != "" {
 		return deny(reason), nil
@@ -89,6 +97,83 @@ func shellRefusal(env Env, ev event, command, stripped, git string) (string, err
 		return treeWideRefusal(env)
 	}
 	return "", nil
+}
+
+func scriptText(env Env, command string) string {
+	var out strings.Builder
+	for at := 0; at < len(command); at++ {
+		end, found := heredocAt(command, at)
+		if !found {
+			continue
+		}
+		segment := command[strings.LastIndexAny(command[:at], ";&|\n(")+1 : at]
+		words := shellWords(segment)[0]
+		if scriptFile().MatchString(segment) || len(words) > 0 && interpreter().MatchString(filepath.Base(words[0])) {
+			body := command[at+2 : end]
+			out.WriteString(body + "\n" + scriptText(env, body) + "\n")
+		}
+		at = end - 1
+	}
+	stripped := stripHeredocs(command)
+	if inlineScript().MatchString(stripped) {
+		out.WriteString(stripped + "\n")
+	}
+	dir := env.Root
+	for _, words := range shellWords(stripped) {
+		if len(words) > 1 && words[0] == "cd" {
+			dir = resolved(env.Root, words[1])
+		}
+		if file := scriptArgument(words); file != "" {
+			out.WriteString(readScript(env, resolved(dir, file)) + "\n")
+		}
+	}
+	return out.String()
+}
+
+func scriptArgument(words []string) string {
+	for at, word := range words {
+		if !interpreter().MatchString(filepath.Base(word)) {
+			continue
+		}
+		for _, arg := range words[at+1:] {
+			if !strings.HasPrefix(arg, "-") {
+				return arg
+			}
+		}
+		return ""
+	}
+	return ""
+}
+
+func resolved(dir, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(dir, path)
+}
+
+func readScript(env Env, path string) string {
+	_, inProject := underRoot(env.Root, path)
+	_, inScratch := underRoot(env.Temp, path)
+	if !inProject && (blank(env.Temp) || !inScratch) {
+		return ""
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	data, _ := io.ReadAll(io.LimitReader(file, scriptBytes))
+	_ = file.Close()
+	return string(data)
+}
+
+func scriptCode(text string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune("\"'`,[](){}", r) {
+			return ' '
+		}
+		return r
+	}, text)
 }
 
 func stashes(command string) bool {
