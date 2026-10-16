@@ -1,12 +1,14 @@
 package session
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ const (
 	exchangesName = "requests.jsonl"
 	blobsName     = "blobs.jsonl"
 	blobHashBytes = 16
+	blobHashField = `{"hash":"`
 )
 
 type BodyPart struct {
@@ -70,19 +73,16 @@ func (l *Log) keep(raw []byte) (string, error) {
 	}
 	hash := BlobHash(masked)
 	if l.blobs == nil {
-		kept, err := l.store.Blobs(l.header.ID)
+		kept, err := l.store.blobHashes(l.header.ID)
 		if err != nil {
 			return "", err
 		}
-		l.blobs = map[string]bool{}
-		for known := range kept {
-			l.blobs[known] = true
-		}
+		l.blobs = kept
 	}
 	if l.blobs[hash] {
 		return hash, nil
 	}
-	if err := l.appendLine(blobsName, slices.Concat([]byte(`{"hash":"`+hash+`","body":`), masked, []byte("}"))); err != nil {
+	if err := l.appendLine(blobsName, slices.Concat([]byte(blobHashField+hash+`","body":`), masked, []byte("}"))); err != nil {
 		return "", err
 	}
 	l.blobs[hash] = true
@@ -256,6 +256,40 @@ func (s *Store) Blobs(id string) (map[string]json.RawMessage, error) {
 		return nil
 	})
 	return blobs, err
+}
+
+func (s *Store) blobHashes(id string) (map[string]bool, error) {
+	hashes := map[string]bool{}
+	file, err := os.Open(filepath.Join(s.Dir(id), blobsName))
+	if errors.Is(err, fs.ErrNotExist) {
+		return hashes, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	reader := bufio.NewReader(file)
+	for {
+		head, err := reader.ReadSlice('\n')
+		trimmed := bytes.TrimSpace(head)
+		rest, opens := bytes.CutPrefix(trimmed, []byte(blobHashField))
+		hash, _, closes := bytes.Cut(rest, []byte(`"`))
+		key, blank := string(hash), len(trimmed) == 0
+		for errors.Is(err, bufio.ErrBufferFull) {
+			_, err = reader.ReadSlice('\n')
+		}
+		switch {
+		case errors.Is(err, io.EOF):
+			return hashes, nil
+		case err != nil:
+			return nil, err
+		case blank:
+		case !opens || !closes:
+			return nil, fmt.Errorf("%s: a line does not open with its hash", blobsName)
+		default:
+			hashes[key] = true
+		}
+	}
 }
 
 func Assemble(parts []BodyPart, blobs map[string]json.RawMessage) json.RawMessage {
