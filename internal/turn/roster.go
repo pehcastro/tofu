@@ -37,6 +37,7 @@ type recordedSubAgent struct {
 	report      string
 	reportedAt  time.Time
 	undelivered bool
+	recent      bool
 }
 
 func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, inbox *Inbox) error {
@@ -55,7 +56,7 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 		if !run.byLead {
 			continue
 		}
-		if run.undelivered {
+		if run.undelivered && run.recent {
 			inbox.reportAgain(run.report)
 		}
 		inbox.adopt(restoredHeld(run.agent, run.depth, readBack(store, id, agentID)))
@@ -88,13 +89,19 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 			failed = append(failed, err)
 			continue
 		}
-		stopped := "sub-agent " + run.agent.ID + " is " + subagent.Errored.String() + ": tofu closed while it was working, at step " + strconv.Itoa(run.steps)
-		if len(run.calls) > 0 {
-			stopped += " after calling " + run.calls[len(run.calls)-1]
+		trace := spawnTrace{site: spawnSite{log: log}}
+		if !run.recent {
+			failed = append(failed, trace.end(run.agent.ID, subagent.Parked), log.Close())
+			run.state = subagent.Parked
+			continue
 		}
-		stopped += ", and it did not finish. Message it to resume from its conversation, or spawn the work again."
+		stopped := "sub-agent " + run.agent.ID + " is " + subagent.Errored.String() + ": tofu closed it at step " + strconv.Itoa(run.steps) + " of " + strconv.Quote(run.agent.Mission)
+		if len(run.calls) > 0 {
+			stopped += ", after " + run.calls[len(run.calls)-1]
+		}
+		stopped += "; message it to resume."
 		_, err = log.Append(session.Event{Agent: run.agent.ID, Kind: session.EventReport}, session.ReportBody{State: subagent.Errored.String(), Text: stopped})
-		failed = append(failed, err, spawnTrace{site: spawnSite{log: log}}.end(run.agent.ID, subagent.Errored), log.Close())
+		failed = append(failed, err, trace.end(run.agent.ID, subagent.Errored), log.Close())
 		run.state, run.report, run.undelivered = subagent.Errored, stopped, true
 	}
 	return errors.Join(failed...)
@@ -109,6 +116,7 @@ func restoredHeld(agent subagent.SubAgent, depth int, reload func() ([]llm.Messa
 func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 	var order []*recordedSubAgent
 	ran, briefs, regrants := map[string]*recordedSubAgent{}, map[string]string{}, map[string]messageArgs{}
+	var leadIdle, lastTurnFrom time.Time
 	for _, recorded := range chain {
 		var leadReports []string
 		reportEvents := false
@@ -155,6 +163,10 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				for _, told := range order {
 					told.undelivered = told.undelivered && (message.Role != llm.RoleUser.String() || !event.At.After(told.reportedAt))
 				}
+			case event.Agent == "" && event.Kind == session.EventTurnEnd:
+				leadIdle = event.At
+			case event.Agent == "" && event.Kind == session.EventTurnStart:
+				lastTurnFrom = leadIdle
 			case run == nil:
 			case event.Kind == session.EventReport:
 				var report session.ReportBody
@@ -174,7 +186,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 		}
 	}
 	for _, run := range order {
-		run.agent.Brief = briefs[run.call]
+		run.agent.Brief, run.recent = briefs[run.call], !run.active.Before(lastTurnFrom)
 	}
 	return order
 }
