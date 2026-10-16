@@ -2,7 +2,7 @@
 title: Boardy views and reports
 description: See only the tickets that matter now. Saved views keep the default to the active sprint and live tickets, a report sums a board from its tickets and events, and the desk reads and writes every ticket field over tofu serve.
 order: 19
-updated: 2026-10-09
+updated: 2026-10-16
 ---
 
 A board with sixty tickets is too many to read at once. `tofu boardy view`
@@ -93,3 +93,14 @@ its rounds and minutes in doing, `boardy.events {board, since}`,
 `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage {action:
 list|accept|drop}`, and the notification `boardy.changed {board, paths}`.
 `tofu serve --schema` types each one.
+
+| Method | Does |
+|---|---|
+| `boardy.questions {board?}` | open questions read from the ticket files, every board when `board` is left out, with any answer typed in `catchup.md`; never rewrites it |
+| `boardy.answer {ticket, id, answer}` | applies one answer as `tofu boardy catchup --answers` does, and moves the ticket out of needs-decision when no question is left |
+| `boardy.plan {board}` | epics, milestones, sprints and view names |
+| `boardy.init {key, name}` | makes a board, as `tofu boardy init` |
+
+Every answer carries `words`: with `boardFlow` set to `linear` they read
+issue, team, project, cycle and estimate, in the way of Linear's
+conceptual model (https://linear.app/docs/conceptual-model).

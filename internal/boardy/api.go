@@ -43,6 +43,18 @@ func (a API) Boards() (BoardsAnswer, error) {
 	return answer, err
 }
 
+type InitRequest struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+func (a API) Init(request InitRequest) (BoardsAnswer, error) {
+	if _, err := a.Board.Store.Init(request.Key, request.Name); err != nil {
+		return BoardsAnswer{}, err
+	}
+	return a.Boards()
+}
+
 type ListRequest struct {
 	Board  string `json:"board,omitempty"`
 	View   string `json:"view,omitempty"`
@@ -74,6 +86,78 @@ func (a API) List(request ListRequest) (ListAnswer, error) {
 	active, _ := ActiveSprint(sprints)
 	groups := Apply(view, request.Filter, tickets, Resolved{Sprint: active.ID, Me: a.Actor})
 	return ListAnswer{Board: key, View: view, Sprint: active.ID, Groups: groups, Words: a.Words}, err
+}
+
+type PlanRequest struct {
+	Board string `json:"board"`
+}
+
+type EpicState string
+
+const (
+	EpicOpen EpicState = "open"
+	EpicDone EpicState = "done"
+)
+
+func (EpicState) Enum() []string { return enum(EpicOpen, EpicDone) }
+
+type PlannedEpic struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Status    EpicState `json:"status"`
+	Milestone string    `json:"milestone,omitempty"`
+}
+
+type PlannedMilestone struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Due   Day    `json:"due,omitempty"`
+}
+
+type PlannedSprint struct {
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Active bool   `json:"active"`
+	Start  Day    `json:"start,omitempty"`
+	End    Day    `json:"end,omitempty"`
+}
+
+type PlanAnswer struct {
+	Epics      []PlannedEpic      `json:"epics"`
+	Milestones []PlannedMilestone `json:"milestones"`
+	Sprints    []PlannedSprint    `json:"sprints"`
+	Views      []string           `json:"views"`
+	Words      Words              `json:"words"`
+}
+
+func (a API) Plan(request PlanRequest) (PlanAnswer, error) {
+	key, err := a.boardKey(request.Board)
+	if err != nil {
+		return PlanAnswer{}, err
+	}
+	store := a.Board.Store
+	epics, epicsErr := store.Epics(key)
+	milestones, milestonesErr := store.Milestones(key)
+	sprints, sprintsErr := store.Sprints(key)
+	views, viewsErr := store.Views(key)
+	plan := PlanAnswer{Epics: []PlannedEpic{}, Milestones: []PlannedMilestone{}, Sprints: []PlannedSprint{}, Views: []string{}, Words: a.Words}
+	for _, epic := range epics {
+		state := EpicOpen
+		if epic.Done {
+			state = EpicDone
+		}
+		plan.Epics = append(plan.Epics, PlannedEpic{ID: epic.ID, Title: epic.Title, Status: state, Milestone: epic.Milestone})
+	}
+	for _, milestone := range milestones {
+		plan.Milestones = append(plan.Milestones, PlannedMilestone{ID: milestone.ID, Title: milestone.Title, Due: milestone.Due})
+	}
+	for _, sprint := range sprints {
+		plan.Sprints = append(plan.Sprints, PlannedSprint{ID: sprint.ID, Title: sprint.Title, Active: sprint.State == Active, Start: sprint.Start, End: sprint.End})
+	}
+	for _, view := range views {
+		plan.Views = append(plan.Views, view.Name)
+	}
+	return plan, errors.Join(epicsErr, milestonesErr, sprintsErr, viewsErr)
 }
 
 type ReportRequest struct {
@@ -108,6 +192,57 @@ func (a API) Report(request ReportRequest) (ReportAnswer, error) {
 	return ReportAnswer{Report: BuildReport(key, request.Since, time.Now(), tickets, events, epics, sprints), Words: a.Words}, errors.Join(ticketsErr, eventsErr, epicsErr, sprintsErr)
 }
 
+type QuestionsRequest struct {
+	Board string `json:"board,omitempty"`
+}
+
+type AskedQuestion struct {
+	Ticket      string   `json:"ticket"`
+	ID          int      `json:"id"`
+	TLDR        string   `json:"tldr"`
+	ELI5        string   `json:"eli5"`
+	Options     []string `json:"options"`
+	Recommended int      `json:"recommended"`
+	Answer      string   `json:"answer,omitempty"`
+}
+
+type QuestionsAnswer struct {
+	Questions []AskedQuestion `json:"questions"`
+	Words     Words           `json:"words"`
+}
+
+func (a API) Questions(request QuestionsRequest) (QuestionsAnswer, error) {
+	boards := []Board{{Key: request.Board}}
+	if request.Board == "" {
+		var err error
+		if boards, err = a.Board.Store.Boards(); err != nil {
+			return QuestionsAnswer{}, err
+		}
+	}
+	answer := QuestionsAnswer{Questions: []AskedQuestion{}, Words: a.Words}
+	for _, board := range boards {
+		listed, err := a.Board.OpenQuestions(board.Key)
+		if err != nil {
+			return answer, err
+		}
+		for _, open := range listed.Open {
+			q := open.Question
+			answer.Questions = append(answer.Questions, AskedQuestion{Ticket: open.Ticket, ID: q.ID, TLDR: q.TLDR, ELI5: q.ELI5, Options: q.Options, Recommended: q.Recommend, Answer: open.Answer})
+		}
+	}
+	return answer, nil
+}
+
+type AnswerRequest struct {
+	Ticket string `json:"ticket"`
+	ID     int    `json:"id"`
+	Answer string `json:"answer"`
+}
+
+func (a API) Answer(request AnswerRequest) (TicketAnswer, error) {
+	return a.named(a.Board.Answer(request.Ticket, request.ID, request.Answer, a.Actor))
+}
+
 type GetRequest struct {
 	ID string `json:"id"`
 }
@@ -116,6 +251,7 @@ type GetAnswer struct {
 	Ticket Ticket  `json:"ticket"`
 	Actual Actual  `json:"actual"`
 	Events []Event `json:"events"`
+	Words  Words   `json:"words"`
 }
 
 func (a API) Get(request GetRequest) (GetAnswer, error) {
@@ -124,7 +260,7 @@ func (a API) Get(request GetRequest) (GetAnswer, error) {
 		return GetAnswer{}, err
 	}
 	thread, err := a.Board.Store.Thread(ticket.ID)
-	return GetAnswer{Ticket: ticket, Actual: Actuals(thread, time.Now())[ticket.ID], Events: thread}, err
+	return GetAnswer{Ticket: ticket, Actual: Actuals(thread, time.Now())[ticket.ID], Events: thread, Words: a.Words}, err
 }
 
 type EventsRequest struct {
@@ -136,6 +272,7 @@ type EventsAnswer struct {
 	Board  string  `json:"board"`
 	Events []Event `json:"events"`
 	Next   int     `json:"next"`
+	Words  Words   `json:"words"`
 }
 
 func (a API) Events(request EventsRequest) (EventsAnswer, error) {
@@ -144,7 +281,7 @@ func (a API) Events(request EventsRequest) (EventsAnswer, error) {
 		return EventsAnswer{}, err
 	}
 	events, err := a.Board.Store.Events(key, request.Since)
-	return EventsAnswer{Board: key, Events: append([]Event{}, events...), Next: request.Since + len(events)}, err
+	return EventsAnswer{Board: key, Events: append([]Event{}, events...), Next: request.Since + len(events), Words: a.Words}, err
 }
 
 type CreateRequest struct {
@@ -154,6 +291,11 @@ type CreateRequest struct {
 
 type TicketAnswer struct {
 	Ticket Ticket `json:"ticket"`
+	Words  Words  `json:"words"`
+}
+
+func (a API) named(ticket Ticket, err error) (TicketAnswer, error) {
+	return TicketAnswer{Ticket: ticket, Words: a.Words}, err
 }
 
 func (a API) Create(request CreateRequest) (TicketAnswer, error) {
@@ -161,8 +303,7 @@ func (a API) Create(request CreateRequest) (TicketAnswer, error) {
 	if err != nil {
 		return TicketAnswer{}, err
 	}
-	ticket, err := a.Board.Create(key, request.Ticket, a.Actor)
-	return TicketAnswer{Ticket: ticket}, err
+	return a.named(a.Board.Create(key, request.Ticket, a.Actor))
 }
 
 type MoveRequest struct {
@@ -175,8 +316,7 @@ func (a API) Move(request MoveRequest) (TicketAnswer, error) {
 	if _, err := ParseStatus(string(request.To)); err != nil {
 		return TicketAnswer{}, err
 	}
-	ticket, err := a.Board.Move(request.ID, request.To, request.Reason, a.Actor)
-	return TicketAnswer{Ticket: ticket}, err
+	return a.named(a.Board.Move(request.ID, request.To, request.Reason, a.Actor))
 }
 
 type LogRequest struct {
@@ -185,8 +325,7 @@ type LogRequest struct {
 }
 
 func (a API) Log(request LogRequest) (TicketAnswer, error) {
-	ticket, err := a.Board.Comment(request.ID, request.Text, a.Actor)
-	return TicketAnswer{Ticket: ticket}, err
+	return a.named(a.Board.Comment(request.ID, request.Text, a.Actor))
 }
 
 type AssignRequest struct {
@@ -195,8 +334,7 @@ type AssignRequest struct {
 }
 
 func (a API) Assign(request AssignRequest) (TicketAnswer, error) {
-	ticket, err := a.Board.Assign(request.ID, request.Assignee, a.Actor)
-	return TicketAnswer{Ticket: ticket}, err
+	return a.named(a.Board.Assign(request.ID, request.Assignee, a.Actor))
 }
 
 type HandRequest struct {
@@ -213,8 +351,7 @@ func (a API) Hand(request HandRequest) (TicketAnswer, error) {
 			return TicketAnswer{}, err
 		}
 	}
-	ticket, err := a.Board.Hand(request.ID, request.To, to, a.Actor)
-	return TicketAnswer{Ticket: ticket}, err
+	return a.named(a.Board.Hand(request.ID, request.To, to, a.Actor))
 }
 
 type TriageAction string
@@ -238,6 +375,7 @@ type TriageAnswer struct {
 	Board    string    `json:"board"`
 	Requests []Request `json:"requests"`
 	Accepted *Ticket   `json:"accepted,omitempty"`
+	Words    Words     `json:"words"`
 }
 
 func (a API) Triage(request TriageRequest) (TriageAnswer, error) {
@@ -245,7 +383,7 @@ func (a API) Triage(request TriageRequest) (TriageAnswer, error) {
 	if err != nil {
 		return TriageAnswer{}, err
 	}
-	answer := TriageAnswer{Board: key}
+	answer := TriageAnswer{Board: key, Words: a.Words}
 	switch request.Action {
 	case TriageList:
 	case TriageAccept:

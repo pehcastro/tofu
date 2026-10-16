@@ -79,7 +79,16 @@ Over `tofu serve`, capability `boardy`: `boardy.boards`, `boardy.list
 spawn or report event carries session, agent, call and files),
 `boardy.events {board, since}`, `boardy.report {board, since}`, `boardy.create`, `boardy.move`,
 `boardy.assign`, `boardy.log`, `boardy.hand` and `boardy.triage {action}`.
-A watcher sends `boardy.changed {board, paths}` within a second of any
+`boardy.questions {board}` lists the open questions from the ticket files,
+every board when `board` is left out, with an answer already typed in
+`catchup.md`; it never rewrites that file. `boardy.answer {ticket, id,
+answer}` applies one answer the way `tofu boardy catchup --answers` does:
+it logs it, drops the question, and moves the ticket out of
+needs-decision once none are left. `boardy.plan {board}` returns epics,
+milestones, sprints and view names, and `boardy.init {key, name}` makes a
+board as `tofu boardy init` does. Every answer carries `words`, the
+ticket, board, epic, sprint and points names for the board's flow
+(`boardFlow`). A watcher sends `boardy.changed {board, paths}` within a second of any
 ticket file changing on disk, whoever wrote it.
 
 ## Undo it

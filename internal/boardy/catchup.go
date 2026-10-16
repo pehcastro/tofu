@@ -48,6 +48,14 @@ type Catchup struct {
 var catchupHeading = sys.LazyRegexp(`^## ([A-Z][A-Z0-9]*-[1-9][0-9]*(?:-[1-9][0-9]*)?) Q([1-9][0-9]*): (.*)$`)
 
 func (m Managed) Catchup(key string) (Catchup, error) {
+	c, err := m.OpenQuestions(key)
+	if err != nil {
+		return c, err
+	}
+	return c, writeAtomic(c.File, c.markdown())
+}
+
+func (m Managed) OpenQuestions(key string) (Catchup, error) {
 	path := filepath.Join(m.Store.BoardDir(key), CatchupFileName)
 	typed, err := readTypedAnswers(path)
 	if err != nil {
@@ -70,7 +78,29 @@ func (m Managed) Catchup(key string) (Catchup, error) {
 		}
 	}
 	c.Stale = append(c.Stale, typed...)
-	return c, writeAtomic(path, c.markdown())
+	return c, nil
+}
+
+func (m Managed) Answer(id string, question int, answer, actor string) (Ticket, error) {
+	ticket, board, err := m.ticketOnBoard(id)
+	if err != nil {
+		return ticket, err
+	}
+	if err := m.Manages(board.Key, actor, "apply the person's answers"); err != nil {
+		return ticket, err
+	}
+	at := slices.IndexFunc(ticket.Questions, func(q Question) bool { return q.ID == question })
+	answer = strings.Join(strings.Fields(answer), " ")
+	switch {
+	case at < 0:
+		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("it has no open question Q%d", question)}
+	case answer == "":
+		return ticket, RefusedError{Ticket: id, Why: "the answer is empty: give an option number or your own words"}
+	}
+	if _, err := m.apply(OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: ticket.Questions[at], Answer: answer}, actor); err != nil {
+		return ticket, err
+	}
+	return m.Store.Get(id)
 }
 
 func (m Managed) Answers(key, actor string) (Catchup, error) {

@@ -29,6 +29,10 @@ func boardyRequests() []method {
 		{name: boardyPrefix + "log", params: boardy.LogRequest{}, result: boardy.TicketAnswer{}},
 		{name: boardyPrefix + "hand", params: boardy.HandRequest{}, result: boardy.TicketAnswer{}},
 		{name: boardyPrefix + "triage", params: boardy.TriageRequest{}, result: boardy.TriageAnswer{}},
+		{name: boardyPrefix + "questions", params: boardy.QuestionsRequest{}, result: boardy.QuestionsAnswer{}},
+		{name: boardyPrefix + "answer", params: boardy.AnswerRequest{}, result: boardy.TicketAnswer{}},
+		{name: boardyPrefix + "plan", params: boardy.PlanRequest{}, result: boardy.PlanAnswer{}},
+		{name: boardyPrefix + "init", params: boardy.InitRequest{}, result: boardy.BoardsAnswer{}},
 	}
 }
 
@@ -78,6 +82,14 @@ func (s *server) boardy(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, answered(api.Hand))
 	case boardyPrefix + "triage":
 		return handle(raw, answered(api.Triage))
+	case boardyPrefix + "questions":
+		return handle(raw, answered(api.Questions))
+	case boardyPrefix + "answer":
+		return handle(raw, answered(api.Answer))
+	case boardyPrefix + "plan":
+		return handle(raw, answered(api.Plan))
+	case boardyPrefix + "init":
+		return handle(raw, answered(api.Init))
 	}
 	return nil, &Refusal{Code: CodeNoMethod, Message: "no method " + method}
 }
