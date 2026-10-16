@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
 	settingspkg "tofu/internal/settings"
@@ -15,10 +16,10 @@ import (
 
 const askPoint = "ask@1"
 
-func askPersonTool(dir, log string, person turn.Person, inbox *turn.Inbox, say func(string)) tools.AskPerson {
+func askPersonTool(dir, log string, person turn.Person, inbox *turn.Inbox, keys jev.Keyring, say func(string)) tools.AskPerson {
 	tool := tools.AskPerson{Person: person, Inbox: inbox, Wait: time.Duration(settingInt(dir, settingspkg.AskPersonWaitSeconds, say)) * time.Second,
 		Auto: func() bool { return settingText(dir, settingspkg.GatePrompt, say) != settingspkg.GatePromptAsk }, Log: log}
-	judge, err := askJudge(dir, log)
+	judge, err := askJudge(dir, log, keys)
 	if err != nil && say != nil {
 		say("ask_person records no ask row in shadow: " + err.Error())
 	}
@@ -29,7 +30,7 @@ func askPersonTool(dir, log string, person turn.Person, inbox *turn.Inbox, say f
 	return tool
 }
 
-func askJudge(dir, log string) (subagent.AskJudge, error) {
+func askJudge(dir, log string, keys jev.Keyring) (subagent.AskJudge, error) {
 	layers, err := question.Layers(questions.Files(), dir)
 	if err != nil {
 		return subagent.AskJudge{}, err
@@ -42,7 +43,7 @@ func askJudge(dir, log string) (subagent.AskJudge, error) {
 	if err != nil {
 		return subagent.AskJudge{}, err
 	}
-	client, err := newJevClient(oneCallAtATime)
+	client, err := jevClientFrom(keys, oneCallAtATime)
 	if err != nil {
 		return subagent.AskJudge{}, err
 	}

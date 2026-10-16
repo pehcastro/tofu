@@ -53,11 +53,15 @@ func (u unusableRule) Error() string { return u.err.Error() }
 func (u unusableRule) Unwrap() error { return u.err }
 
 func newToolGate(dir, log string) (*toolGate, error) {
+	return toolGateOn(dir, log, jev.ReadKeyring())
+}
+
+func toolGateOn(dir, log string, keys jev.Keyring) (*toolGate, error) {
 	set, err := resolvePoint(runGatePoint, dir)
 	if err != nil {
 		return nil, unusableRule{err}
 	}
-	client, err := newJevClient(oneCallAtATime)
+	client, err := jevClientFrom(keys, oneCallAtATime)
 	if err != nil {
 		return nil, err
 	}
@@ -119,11 +123,15 @@ func thresholdsInRange(r gate.Rule, set battery) error {
 }
 
 func newJevClient(concurrency int) (*jev.Client, error) {
-	key, err := gateKey()
+	return jevClientFrom(jev.ReadKeyring(), concurrency)
+}
+
+func jevClientFrom(keys jev.Keyring, concurrency int) (*jev.Client, error) {
+	key, err := gateKeyFrom(keys)
 	if err != nil {
 		return nil, err
 	}
-	return jevClientOn(key, concurrency)
+	return jevClientWith(keys, key, concurrency)
 }
 
 func boundClassifier() (models.Model, error) {
@@ -155,7 +163,10 @@ func failoverOf(provider models.Provider) models.Provider {
 }
 
 func jevClientOn(key string, concurrency int) (*jev.Client, error) {
-	keys := jev.ReadKeyring()
+	return jevClientWith(jev.ReadKeyring(), key, concurrency)
+}
+
+func jevClientWith(keys jev.Keyring, key string, concurrency int) (*jev.Client, error) {
 	classifier, err := classifierFrom(keys)
 	if err != nil {
 		return nil, err

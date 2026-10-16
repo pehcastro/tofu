@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/safe"
@@ -39,6 +40,7 @@ type Store struct {
 	rename   func(from, to string) error
 	parsed   map[string][]Event
 	headers  map[string]Header
+	redactor func() sys.KeyRedactor
 }
 
 func (s *Store) ReadOnce() *Store {
@@ -50,10 +52,12 @@ func (s *Store) ReadOnce() *Store {
 func (s *Store) ForgetRead() { s.parsed, s.headers = nil, nil }
 
 func NewStore(dir string) *Store {
-	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename}
+	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename, redactor: sync.OnceValue(sys.LoadKeyRedactor)}
 }
 
 func (s *Store) Use(settings Settings) { s.settings = settings }
+
+func (s *Store) Redacts(redactor func() sys.KeyRedactor) { s.redactor = redactor }
 
 func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
@@ -208,11 +212,11 @@ func (s *Store) edit(id string, change func(*Header)) (Header, error) {
 		return Header{}, err
 	}
 	change(&header)
-	return header, s.writeHeader(header, sys.LoadKeyRedactor())
+	return header, s.writeHeader(header, s.redactor())
 }
 
 func (s *Store) SetName(id, given string) (Header, error) {
-	name, err := slugOf(sys.LoadKeyRedactor().Redact(given))
+	name, err := slugOf(s.redactor().Redact(given))
 	if err != nil {
 		return Header{}, err
 	}

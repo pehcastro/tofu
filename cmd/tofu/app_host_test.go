@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"tofu/interface/tui"
@@ -13,9 +14,10 @@ const cancelledAt = "cancelled at"
 
 type appSession struct {
 	*host.Host
-	engine  *appEngine
-	answers <-chan tui.Answer
-	dir     string
+	engine     *appEngine
+	answers    <-chan tui.Answer
+	dir        string
+	warmClosed sync.Once
 }
 
 func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
@@ -28,6 +30,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 	if !s.Send(pick, task) {
 		panic("a turn is already running on this host")
 	}
+	s.warmClosed.Do(func() { context.AfterFunc(ctx, func() { s.engine.warm.Close() }) })
 	defer s.Close()
 	defer context.AfterFunc(ctx, s.Stop)()
 	for event := range s.Events() {

@@ -126,8 +126,8 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 	}
 	note := strings.Join(slices.DeleteFunc(notes, func(one string) bool { return one == "" }), noteSeparator)
 	*launch.release = func() {
-		engine.warm.Close()
 		live.Close()
+		engine.warm.Close()
 	}
 	*launch.endSession = func() []string { return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) }
 	settingsStore, _ := openSettings(dir)
@@ -770,6 +770,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		return prepared, err
 	}
+	sessions.Redacts(e.warm.keys.redactor)
 	built, plan = planAsOffered(opened.selected, built, plan)
 	if start.Pick.Fired != "" {
 		built = withoutPush(built)
@@ -784,13 +785,13 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 	var gate *toolGate
 	var gateErr error
 	if opts.gateArm != gateOff {
-		gate, gateErr = newToolGate(e.dir, places.Log)
+		gate, gateErr = toolGateOn(e.dir, places.Log, e.warm.keys.keyring())
 	}
 	var unusable unusableRule
 	if errors.As(gateErr, &unusable) {
 		return prepared, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
 	}
-	sifter, scorer, siftErr := buildShellSift(opts.siftArm, places.Log)
+	sifter, scorer, siftErr := shellSiftOn(opts.siftArm, places.Log, e.warm.keys.keyring())
 	if siftErr != nil {
 		say("no shell result is cut: " + siftErr.Error())
 	}
@@ -817,7 +818,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 		turnAccounts, others, account = stand.forTurn(), stand.others, stand.spent
 	}
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
-		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock})
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory})
 	if err != nil {
 		return prepared, err
 	}

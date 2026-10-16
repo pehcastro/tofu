@@ -47,6 +47,10 @@ type shellScorer struct {
 }
 
 func buildShellSift(arm, log string) (*turn.ShellSift, *shellScorer, error) {
+	return shellSiftOn(arm, log, jev.ReadKeyring())
+}
+
+func shellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *shellScorer, error) {
 	table, err := method.Load(shipped.Files())
 	if err != nil {
 		return nil, nil, err
@@ -68,7 +72,7 @@ func buildShellSift(arm, log string) (*turn.ShellSift, *shellScorer, error) {
 		if setErr != nil {
 			return nil, nil, setErr
 		}
-		client, clientErr := newJevClient(konst.SiftConcurrency)
+		client, clientErr := jevClientFrom(keys, konst.SiftConcurrency)
 		if clientErr != nil {
 			return nil, nil, clientErr
 		}

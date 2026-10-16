@@ -457,11 +457,11 @@ func cronFile(store *session.Store, id string) string {
 }
 
 func (h *Host) carry(resumed Carry) error {
-	if h.engine != nil {
-		h.engine.Renew()
-	}
 	if h.inbox != nil {
 		h.settled = append(h.settled, h.inbox.CancelCompactions())
+	}
+	if h.engine != nil {
+		h.engine.Renew()
 	}
 	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
 	h.ran, h.carried, h.prefix = nil, resumed.Messages, &turn.Prefix{}

@@ -296,12 +296,16 @@ type KeyRedactor struct {
 }
 
 func LoadKeyRedactor() KeyRedactor {
+	stored, _ := StoredKeys()
+	return KeyRedactorOf(stored)
+}
+
+func KeyRedactorOf(stored map[string]string) KeyRedactor {
 	names := KeyNames()
 	var secrets []string
 	for _, name := range names {
 		secrets = append(secrets, strings.TrimSpace(os.Getenv(name)))
 	}
-	stored, _ := StoredKeys()
 	for name, value := range stored {
 		names = append(names, name)
 		secrets = append(secrets, value)

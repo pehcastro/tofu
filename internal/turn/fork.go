@@ -32,7 +32,7 @@ type RecordedAsk func(ctx context.Context, why, wire string, model Model, reques
 type episodeKeeper interface {
 	Episodes(budget int) (string, error)
 	Keep(kind, text string) error
-	Compact(ask RecordedAsk) error
+	Compact(ctx context.Context, ask RecordedAsk) error
 }
 
 func standsAtTheHead(message llm.Message) bool {

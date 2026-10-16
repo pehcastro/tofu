@@ -140,6 +140,8 @@ type runtime struct {
 	cron         *cron.Book
 	places       sys.Places
 	startup      *startupClock
+	keys         *storedKeys
+	memory       *sessionMemoryModel
 
 	omitThinkingSummary bool
 }
@@ -479,7 +481,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, string(body))
 		return exitOK
 	}
-	return runTurn(opts, selected, built, plan, budget, warm.tabs, clock, out, errOut)
+	return runTurn(opts, selected, built, plan, budget, warm, clock, out, errOut)
 }
 
 func contextBudget(opts runOpts, model models.Model) (recall.Budget, error) {
@@ -525,7 +527,7 @@ func guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
 	return windowGuard{inner: model, budget: budget, cfg: cfg}, nil
 }
 
-func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools.Plan, budget recall.Budget, tabs *tools.BrowserTabs, clock *startupClock, out, errOut io.Writer) int {
+func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools.Plan, budget recall.Budget, warm *warmProcesses, clock *startupClock, out, errOut io.Writer) int {
 	open := openAppWire
 	deck, err := readCassette(os.Getenv(cassetteVariable))
 	if err != nil {
@@ -555,12 +557,12 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 
 	var gate *toolGate
 	if opts.gateArm != gateOff {
-		if gate, err = newToolGate(opts.dir, places.Log); err != nil {
+		if gate, err = toolGateOn(opts.dir, places.Log, warm.keys.keyring()); err != nil {
 			return runFail(errOut, err)
 		}
 	}
 
-	sifter, scorer, err := buildShellSift(opts.siftArm, places.Log)
+	sifter, scorer, err := shellSiftOn(opts.siftArm, places.Log, warm.keys.keyring())
 	if err != nil {
 		var contradiction turn.RuleContradictsTheTableError
 		if !errors.As(err, &contradiction) {
@@ -573,10 +575,11 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	sessions.Redacts(warm.keys.redactor)
 	clock.step("gate, sift and session store")
 
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(opened.held.forTurn(), opened.held.store), spend: opened.spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: writeNotice(errOut),
-		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: tabs, plan: plan, places: places, startup: clock})
+		open: open, wrapSubAgent: wrap, orchestrator: selected, tabs: warm.tabs, plan: plan, places: places, startup: clock, keys: &warm.keys, memory: &warm.memory})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -804,7 +807,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			references[reference.Name] = reference.Text
 		}
 	}
-	redactor := sys.LoadKeyRedactor()
+	if run.keys == nil {
+		run.keys = &storedKeys{}
+	}
+	redactor := run.keys.redactor()
 	config := turn.Config{
 		Places:        run.places,
 		Redactor:      &redactor,
@@ -862,10 +868,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	asking := []turn.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].dir, Project: layers[1].dir}}
 	if run.leadAsks != nil {
-		asking = append(asking, askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.notify))
+		asking = append(asking, askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify))
 	}
 	if run.sessions != nil && memoryOn(dir) {
-		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.places.Log, run.notify),
+		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: memoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := appSetting(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
 	if settingText(dir, boardy.ManagementSetting, run.notify) == string(boardy.ManagementBoardy) && projectHasBoard(dir) {
@@ -883,8 +889,11 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	if opts.agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, func()) {
-			compact, _, release := memoryCompactor(dir, ask)
-			return compact, release
+			if run.memory == nil {
+				opened := openMemoryModel(dir)
+				return opened.compactor(ask), opened.release
+			}
+			return run.memory.model(dir).compactor(ask), func() {}
 		}}
 		asking = append(asking, zoom, tools.Recall{Zoom: zoom})
 	}
@@ -1154,10 +1163,56 @@ func readsWhen(readBeforeEdit bool, reads *turn.ReadLedger) *turn.ReadLedger {
 	return reads
 }
 
+type storedKeys struct {
+	mu       sync.Mutex
+	stamp    string
+	read     bool
+	keys     jev.Keyring
+	redacted sys.KeyRedactor
+}
+
+func credentialStoreStamp() string {
+	path, err := sys.CredentialStorePath()
+	if err != nil {
+		return ""
+	}
+	stamp := ""
+	for _, file := range []string{path, path + "-wal"} {
+		if info, err := os.Stat(file); err == nil {
+			stamp += info.ModTime().String() + " " + strconv.FormatInt(info.Size(), 10) + "; "
+		}
+	}
+	return stamp
+}
+
+func (s *storedKeys) current() (jev.Keyring, sys.KeyRedactor) {
+	stamp := credentialStoreStamp()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.read || stamp != s.stamp {
+		s.keys = jev.ReadKeyring()
+		s.redacted = sys.KeyRedactorOf(s.keys.Stored)
+		s.stamp, s.read = stamp, true
+	}
+	return s.keys, s.redacted
+}
+
+func (s *storedKeys) keyring() jev.Keyring {
+	keys, _ := s.current()
+	return keys
+}
+
+func (s *storedKeys) redactor() sys.KeyRedactor {
+	_, redactor := s.current()
+	return redactor
+}
+
 type warmProcesses struct {
 	checkers *turn.Typecheckers
 	tests    *turn.TestRunners
 	tabs     *tools.BrowserTabs
+	keys     storedKeys
+	memory   sessionMemoryModel
 }
 
 func newWarmProcesses(tabs *tools.BrowserTabs) *warmProcesses {
@@ -1169,6 +1224,7 @@ func (w *warmProcesses) Close() {
 		w.checkers.Close()
 		w.tests.Close()
 		w.tabs.Close()
+		w.memory.close()
 	}
 }
 
@@ -1215,7 +1271,7 @@ func assembleRunTools(dir, set string, ledger *turn.ReadLedger, warm *warmProces
 	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr, testErr); err != nil {
 		return nil, nil, err
 	}
-	webTools, webErr := buildWebTools(dir)
+	webTools, webErr := buildWebTools(dir, warm.keys.keyring())
 	home, _ := os.UserHomeDir()
 	settingsDir := cmp.Or(dir, ".")
 	browserTools, browserErr := tools.NewBrowser(tools.BrowserSettings{
@@ -1412,12 +1468,12 @@ func browserJudge(dir string) (jevloop.Jev, error) {
 	return jevloop.Jev{Client: client, Set: set, Ledger: ledger.NewWriter(logDir)}, nil
 }
 
-func buildWebTools(dir string) ([]turn.Tool, error) {
+func buildWebTools(dir string, keys jev.Keyring) ([]turn.Tool, error) {
 	layers, err := web.Layers(shipped.Files(), dir)
 	if err != nil {
 		return nil, err
 	}
-	config, err := web.Load(layers)
+	config, err := web.LoadKeyed(layers, keys)
 	if err != nil {
 		return nil, err
 	}

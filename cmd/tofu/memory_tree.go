@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -99,7 +100,9 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 		return o.fail(err)
 	}
 	var asked, hits, fresh, read, written, writtenForAnHour atomic.Int64
-	compact, slug, release := memoryCompactor(dir, func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
+	memoryModel := openMemoryModel(dir)
+	defer memoryModel.release()
+	compact := memoryModel.compactor(func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
 		asked.Add(1)
 		decision, err := model.Ask(ctx, request)
 		if decision.CacheReadTokens > 0 {
@@ -111,7 +114,6 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 		writtenForAnHour.Add(int64(decision.CacheWrite1h))
 		return decision, err
 	})
-	defer release()
 	built, err := store.Build(context.Background(), compact)
 	if err == nil {
 		err = store.Advance(budget, budget/2)
@@ -122,7 +124,7 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	view, compacted := store.View(), built.Calls-len(built.Failed)
 	_, _ = io.WriteString(o.out, view)
 	_, _ = fmt.Fprintf(o.errOut, "%d nodes built now: %d by %d model calls on %s, %d free, %d failed; the view is %d lines, %d bytes of a %d byte budget\n",
-		compacted+built.Free, compacted, asked.Load(), slug, built.Free, len(built.Failed), strings.Count(view, "\n"), len(view), budget)
+		compacted+built.Free, compacted, asked.Load(), memoryModel.slug, built.Free, len(built.Failed), strings.Count(view, "\n"), len(view), budget)
 	_, _ = fmt.Fprintf(o.errOut, "input tokens: %d fresh, %d read from the cache by %d of %d calls, %d written to it, %d of them for an hour\n",
 		fresh.Load(), read.Load(), hits.Load(), asked.Load(), written.Load(), writtenForAnHour.Load())
 	if len(built.Failed) > 0 {
@@ -131,47 +133,96 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 	return exitOK
 }
 
-func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string, func()) {
-	slug := settingText(dir, settingspkg.MemoryModel, nil)
+type memoryModel struct {
+	slug, wire string
+	held       *accounts
+	err        error
+}
+
+func openMemoryModel(dir string) memoryModel {
+	opened := memoryModel{slug: settingText(dir, settingspkg.MemoryModel, nil)}
 	library, err := modelLibrary(dir)
 	var model models.Model
 	if err == nil {
-		model, err = library.Select(slug)
+		model, err = library.Select(opened.slug)
 	}
 	if err == nil && library.WireOf(model) == wireKey {
-		err = fmt.Errorf("%s is reached through the OpenRouter key, which is for Jev only: set %s to a subscription model", slug, settingspkg.MemoryModel)
-	}
-	var opened appWire
-	wire := ""
-	if err == nil {
-		wire = library.WireOf(model)
-		opts := runOpts{dir: dir, wire: wire, model: slug}
-		if len(model.Efforts) > 0 {
-			opts.effort = defaultEffort(model.Efforts)
-		}
-		open := openAppWire
-		var deck *cassette
-		if deck, err = readCassette(os.Getenv(cassetteVariable)); deck != nil {
-			open = driveWire(deck)
-		}
-		if err == nil {
-			opened, err = open(opts)
-		}
-	}
-	release := func() {
-		if opened.held != nil {
-			opened.held.close()
-		}
+		err = fmt.Errorf("%s is reached through the OpenRouter key, which is for Jev only: set %s to a subscription model", opened.slug, settingspkg.MemoryModel)
 	}
 	if err != nil {
-		return func(context.Context, string, string, string) (string, error) { return "", err }, slug, release
+		opened.err = err
+		return opened
+	}
+	opened.wire = library.WireOf(model)
+	opts := runOpts{dir: dir, wire: opened.wire, model: opened.slug}
+	if len(model.Efforts) > 0 {
+		opts.effort = defaultEffort(model.Efforts)
+	}
+	open := openAppWire
+	deck, err := readCassette(os.Getenv(cassetteVariable))
+	if deck != nil {
+		open = driveWire(deck)
+	}
+	if err == nil {
+		var wire appWire
+		wire, err = open(opts)
+		opened.held = wire.held
+	}
+	opened.err = err
+	return opened
+}
+
+func (m memoryModel) release() {
+	if m.held != nil {
+		m.held.close()
+	}
+}
+
+type sessionMemoryModel struct {
+	mu     sync.Mutex
+	opened *memoryModel
+	closed bool
+}
+
+var errMemoryModelClosed = errors.New("the session that held the memory model has ended")
+
+func (s *sessionMemoryModel) model(dir string) memoryModel {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return memoryModel{err: errMemoryModelClosed}
+	}
+	if s.opened != nil {
+		return *s.opened
+	}
+	opened := openMemoryModel(dir)
+	if opened.err != nil {
+		opened.release()
+		return opened
+	}
+	s.opened = &opened
+	return opened
+}
+
+func (s *sessionMemoryModel) close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	if s.opened != nil {
+		s.opened.release()
+	}
+}
+
+func (m memoryModel) compactor(ask turn.RecordedAsk) memtree.Compact {
+	if m.err != nil {
+		return func(context.Context, string, string, string) (string, error) { return "", m.err }
 	}
 	var mu sync.Mutex
 	chatsBeingWritten := map[string]chan struct{}{}
 	ruler := strings.Repeat("-", len(compactionExample))
 	return func(ctx context.Context, before, left, right string) (string, error) {
 		mu.Lock()
-		account, err := opened.held.forTurn().Pick(ctx)
+		account, err := m.held.forTurn().Pick(ctx)
 		chatCached, anotherCallWritesThisChat := chatsBeingWritten[before]
 		if err == nil && !anotherCallWritesThisChat {
 			chatCached = make(chan struct{})
@@ -200,7 +251,7 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		}
 		messages = append(messages, afterTheCachedPrefix(llm.RoleUser, asked))
 		asking := func(why string, messages []llm.Message) (string, error) {
-			decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, wire, account.Model, llm.Request{Messages: messages})
+			decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, m.wire, account.Model, llm.Request{Messages: messages})
 			return compactionLine(decision, err)
 		}
 		line, err := asking("memory model: "+task, messages)
@@ -215,7 +266,7 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		}
 		retry := fmt.Sprintf("Too long: your line is %d bytes, over the %d-byte limit. Write the whole line again for the same <input>, cutting just enough of the least valuable items to fit before this cut:\n%s| <- LIMIT", len(line), konst.MemtreeLineBytes, line[:konst.MemtreeLineBytes])
 		return asking("memory model: the same line again, under the limit", append(messages, afterTheCachedPrefix(llm.RoleAssistant, line), afterTheCachedPrefix(llm.RoleUser, retry)))
-	}, slug, release
+	}
 }
 
 func afterTheCachedPrefix(role llm.Role, text string) llm.Message {

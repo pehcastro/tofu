@@ -277,9 +277,6 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if err := compacting.Err(); err != nil {
 				return llm.Decision{}, err
 			}
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
-			defer context.AfterFunc(compacting, cancel)()
 			id, started := session.NewEventID(), time.Now()
 			tapped, tap := llm.Tapped(ctx)
 			decision, timing, err := askCountingAttempts(tapped, model, request)
@@ -313,7 +310,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if compacting.Err() != nil {
 				return
 			}
-			if err := keeper.Compact(compactionAsk(later, index, func(float64) {})); err != nil && compacting.Err() == nil {
+			if err := keeper.Compact(compacting, compactionAsk(later, index, func(float64) {})); err != nil && compacting.Err() == nil {
 				later.notice(notSummarized + err.Error())
 			}
 		}}
@@ -324,7 +321,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if compacting.Err() != nil {
 			return
 		}
-		if err := keeper.Compact(compactionAsk(recorded, index, func(cost float64) { row.TotalCostUSD += cost })); err != nil {
+		if err := keeper.Compact(compacting, compactionAsk(recorded, index, func(cost float64) { row.TotalCostUSD += cost })); err != nil {
 			row.Warnings = append(row.Warnings, notSummarized+err.Error())
 		}
 	}

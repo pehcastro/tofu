@@ -67,6 +67,10 @@ var providerFields = map[string]bool{
 }
 
 func Load(layers []Layer) (Config, error) {
+	return LoadKeyed(layers, jev.ReadKeyring())
+}
+
+func LoadKeyed(layers []Layer, keys jev.Keyring) (Config, error) {
 	fetch := sheet{values: map[string]string{}}
 	providers := map[string]*sheet{}
 	for _, layer := range layers {
@@ -123,7 +127,7 @@ func Load(layers []Layer) (Config, error) {
 		}
 	}
 	if config.Provider.KeyVariable != "" {
-		config.searchKey, _ = jev.KeyFor(sys.CredentialFileName, config.Provider.KeyVariable)
+		config.searchKey, _ = keys.KeyFor(sys.CredentialFileName, config.Provider.KeyVariable)
 	}
 	return config, nil
 }

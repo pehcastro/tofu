@@ -59,7 +59,7 @@ func (s *Store) Open(header Header) (log *Log, err error) {
 			err = errors.Join(err, unlock(lock))
 		}
 	}()
-	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string]string{}, redact: sys.LoadKeyRedactor(), side: map[string]*os.File{}}
+	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string]string{}, redact: s.redactor(), side: map[string]*os.File{}}
 	kept, err := s.read(header.ID)
 	switch {
 	case err == nil:

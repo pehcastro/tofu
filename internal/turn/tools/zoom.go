@@ -113,7 +113,7 @@ type summaryAnswer struct {
 
 var errAskedWithTheLogClosed = errors.New("this summary is asked with the episode log closed and kept on the next pass")
 
-func (z *Zoom) Compact(ask turn.RecordedAsk) error {
+func (z *Zoom) Compact(ctx context.Context, ask turn.RecordedAsk) error {
 	logs, err := memory.Trees(z.Project)
 	if err != nil {
 		return err
@@ -134,7 +134,7 @@ func (z *Zoom) Compact(ask turn.RecordedAsk) error {
 	}
 	for {
 		if _, err := z.open(logs[memory.EpisodesStore], func(store *memtree.Store) ([]string, error) {
-			_, err := store.Build(context.Background(), answered)
+			_, err := store.Build(ctx, answered)
 			return nil, err
 		}); err != nil {
 			return err
@@ -150,7 +150,7 @@ func (z *Zoom) Compact(ask turn.RecordedAsk) error {
 				defer func() { <-slots }()
 				var line string
 				err := safe.Call(report, "memory compaction", func() (err error) {
-					line, err = compact(context.Background(), question.before, question.left, question.right)
+					line, err = compact(ctx, question.before, question.left, question.right)
 					return err
 				})
 				answering.Lock()

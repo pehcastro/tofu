@@ -361,7 +361,7 @@ func toLedgerReason(r gate.Reason) *ledger.Reason {
 	}
 }
 
-func memoryScopeJudge(dir, log string, say func(string)) *tools.ScopeJudge {
+func memoryScopeJudge(dir, log string, keys jev.Keyring, say func(string)) *tools.ScopeJudge {
 	layers, err := question.Layers(questions.Files(), dir)
 	var set question.Set
 	if err == nil {
@@ -369,7 +369,7 @@ func memoryScopeJudge(dir, log string, say func(string)) *tools.ScopeJudge {
 	}
 	var client *jev.Client
 	if err == nil {
-		client, err = newJevClient(oneCallAtATime)
+		client, err = jevClientFrom(keys, oneCallAtATime)
 	}
 	if err != nil {
 		if say != nil {
