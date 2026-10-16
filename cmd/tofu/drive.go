@@ -752,7 +752,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, held, quotas), plan.width, plan.height)
+	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, held, quotas), plan.width, plan.height, crashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
 	defer func() {

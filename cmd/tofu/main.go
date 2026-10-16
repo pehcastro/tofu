@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 	"tofu/library/changelog"
 )
@@ -99,8 +101,28 @@ Every verb that reports state takes --json and prints one JSON document.
 
 func loadLocalTimeZone() { _ = time.Local.String() }
 
+func crashDir(project string) string {
+	state, err := sys.ProjectStateDirAt(project)
+	if err != nil {
+		return os.TempDir()
+	}
+	return state
+}
+
+func crashTold(project string, tell func(string)) safe.Report {
+	return func(p safe.Panic) { tell(p.Saved(crashDir(project))) }
+}
+
+func crashed(project string, err error) error {
+	var caught safe.Panic
+	if !errors.As(err, &caught) {
+		return err
+	}
+	return errors.New(caught.Saved(crashDir(project)))
+}
+
 func main() {
-	go loadLocalTimeZone()
+	safe.Go(crashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
 	stopProfile := sys.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])

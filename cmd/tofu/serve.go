@@ -122,7 +122,8 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	} else {
 		held := holdStore()
 		defer held.close()
-		stopKeeping = keepAccountsAlive(held, func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) })
+		note := func(line string) { _, _ = fmt.Fprintln(errOut, "tofu serve: "+line) }
+		stopKeeping = keepAccountsAlive(held, note, note)
 	}
 	launch := launchOf(dir, sessionResume{}, true)
 	say := func(line string) {

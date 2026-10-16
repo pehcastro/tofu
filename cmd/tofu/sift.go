@@ -13,6 +13,7 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/judge/jev"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/sift"
 )
 
@@ -163,12 +164,12 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	errs := make([]error, len(parts))
 	var wg sync.WaitGroup
 	for i := range parts {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			mark, cost, err := siftOne(client, set, parts, i, opts, rule)
-			marks[i], costs[i], errs[i] = mark, cost, err
-		}(i)
+		wg.Go(func() {
+			errs[i] = crashed(".", safe.Call(nil, "sift", func() (err error) {
+				marks[i], costs[i], err = siftOne(client, set, parts, i, opts, rule)
+				return err
+			}))
+		})
 	}
 	wg.Wait()
 

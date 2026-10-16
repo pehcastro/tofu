@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"sync"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/method"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/sift"
 	"tofu/internal/turn"
 	shipped "tofu/library"
@@ -104,6 +106,7 @@ func decidedBy(table method.Table, chosen method.Method) method.Table {
 func (s *shellScorer) Score(ctx context.Context, shell sift.Shell, units []sift.Unit, task string) (map[int]float64, error) {
 	states := make([]json.RawMessage, len(units))
 	replies := make([]*jev.Decision, len(units))
+	failed := make([]error, len(units))
 	var asking sync.WaitGroup
 	for i, unit := range units {
 		if unit.Held != sift.NotHeld {
@@ -114,17 +117,19 @@ func (s *shellScorer) Score(ctx context.Context, shell sift.Shell, units []sift.
 			return nil, err
 		}
 		states[i] = state
-		asking.Add(1)
-		go func() {
-			defer asking.Done()
-			decision, err := s.client.Ask(ctx, jev.Request{State: states[i], Questions: s.set.Questions})
-			if err != nil {
-				return
-			}
-			replies[i] = &decision
-		}()
+		asking.Go(func() {
+			failed[i] = crashed(".", safe.Call(nil, "shell sift", func() error {
+				if decision, err := s.client.Ask(ctx, jev.Request{State: states[i], Questions: s.set.Questions}); err == nil {
+					replies[i] = &decision
+				}
+				return nil
+			}))
+		})
 	}
 	asking.Wait()
+	if err := errors.Join(failed...); err != nil {
+		return nil, err
+	}
 
 	scores := make(map[int]float64, len(units))
 	for i := range units {

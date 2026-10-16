@@ -9,6 +9,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/llm/cred"
 	"tofu/internal/llm/quota"
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 	"tofu/internal/transport"
 	"tofu/internal/widget"
@@ -194,13 +195,16 @@ func pollRowsOn(
 			return nil, err
 		}
 		polling.Go(func() {
-			results[i].report, results[i].err = poller.Poll(ctx, quota.Account{
-				Provider:      provider,
-				AccountID:     row.Credential.Identity.AccountID,
-				Row:           row.ID,
-				Credential:    cred.NewAccountManager(store, spec, row.ID),
-				ClientVersion: clientVersion(versions, row.Credential.Provider),
-			})
+			results[i].err = crashed(".", safe.Call(nil, "quota poll", func() (err error) {
+				results[i].report, err = poller.Poll(ctx, quota.Account{
+					Provider:      provider,
+					AccountID:     row.Credential.Identity.AccountID,
+					Row:           row.ID,
+					Credential:    cred.NewAccountManager(store, spec, row.ID),
+					ClientVersion: clientVersion(versions, row.Credential.Provider),
+				})
+				return err
+			}))
 		})
 	}
 	return results, nil

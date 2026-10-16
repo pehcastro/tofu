@@ -13,6 +13,7 @@ import (
 	"tofu/interface/tui"
 	"tofu/interface/tui/welcome"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 )
 
 const (
@@ -47,6 +48,7 @@ var namedModifiers = map[string]tea.KeyMod{
 type delivery struct {
 	message tea.Msg
 	cause   tea.Msg
+	failed  error
 }
 
 func (d delivery) rearmedTimer() bool {
@@ -61,12 +63,13 @@ func (d delivery) repeatedWelcomePulse() bool {
 
 type Driver struct {
 	app        *tui.App
+	crashes    string
 	deliveries chan delivery
 	stopped    chan struct{}
 }
 
-func Drive(app *tui.App, width, height int) *Driver {
-	d := &Driver{app: app, deliveries: make(chan delivery, konst.DriveMessageBuffer), stopped: make(chan struct{})}
+func Drive(app *tui.App, width, height int, crashes string) *Driver {
+	d := &Driver{app: app, crashes: crashes, deliveries: make(chan delivery, konst.DriveMessageBuffer), stopped: make(chan struct{})}
 	d.command(app.Init(), nil)
 	d.feed(tea.WindowSizeMsg{Width: width, Height: height}, nil)
 	return d
@@ -78,16 +81,19 @@ func (d *Driver) command(cmd tea.Cmd, cause tea.Msg) {
 	if cmd == nil {
 		return
 	}
-	go func() {
-		message := cmd()
-		if message == nil {
-			return
+	failed := func(p safe.Panic) { d.deliver(delivery{cause: cause, failed: errors.New(p.Saved(d.crashes))}) }
+	safe.Go(failed, "app command", func() {
+		if message := cmd(); message != nil {
+			d.deliver(delivery{message: message, cause: cause})
 		}
-		select {
-		case d.deliveries <- delivery{message: message, cause: cause}:
-		case <-d.stopped:
-		}
-	}()
+	})
+}
+
+func (d *Driver) deliver(got delivery) {
+	select {
+	case d.deliveries <- got:
+	case <-d.stopped:
+	}
 }
 
 func (d *Driver) feed(message, cause tea.Msg) {
@@ -113,6 +119,8 @@ func (d *Driver) settle(within time.Duration) error {
 		select {
 		case got := <-d.deliveries:
 			switch {
+			case got.failed != nil:
+				return got.failed
 			case got.repeatedWelcomePulse():
 			case got.rearmedTimer():
 				timers = append(timers, got)
@@ -216,7 +224,10 @@ func (d *Driver) Await(text string, within time.Duration) error {
 		}
 		select {
 		case got := <-d.deliveries:
-			if !got.repeatedWelcomePulse() {
+			switch {
+			case got.failed != nil:
+				return got.failed
+			case !got.repeatedWelcomePulse():
 				d.feed(got.message, got.cause)
 			}
 		case <-poll.C:

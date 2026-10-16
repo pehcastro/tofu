@@ -36,6 +36,7 @@ import (
 	"tofu/internal/recall"
 	"tofu/internal/recipe"
 	"tofu/internal/rule"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/skill"
@@ -693,16 +694,20 @@ type composedRun struct {
 }
 
 func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, error) {
-	found := make(chan subagent.Found, 1)
-	if !opts.noSubAgents && opts.toolSet != toolSetThree && run.open != nil {
-		go func() { found <- offeredToSpawn(cmp.Or(opts.dir, "."), scanSubAgents(opts.dir, built)) }()
-	} else {
-		found <- subagent.Found{}
-	}
 	say := func(notice string) {
 		if notice != "" && run.notify != nil {
 			run.notify(notice)
 		}
+	}
+	found := make(chan subagent.Found, 1)
+	if !opts.noSubAgents && opts.toolSet != toolSetThree && run.open != nil {
+		scanned := crashTold(cmp.Or(opts.dir, "."), func(said string) {
+			say(said)
+			found <- subagent.Found{}
+		})
+		safe.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(cmp.Or(opts.dir, "."), scanSubAgents(opts.dir, built)) })
+	} else {
+		found <- subagent.Found{}
 	}
 	environment, files, instructions, notice := runEnvironment(opts)
 	say(notice)

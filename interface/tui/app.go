@@ -37,6 +37,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	library "tofu/internal/llm/models"
+	"tofu/internal/safe"
 	isession "tofu/internal/session"
 	isettings "tofu/internal/settings"
 	"tofu/internal/status"
@@ -316,7 +317,7 @@ type shellsMsg []shells.Entry
 
 type shellsDueMsg struct{}
 
-type modelsReloadedMsg string
+type noticeMsg string
 
 type updateMsg string
 
@@ -446,11 +447,19 @@ func Run(options Options) error {
 	program := tea.NewProgram(New(options), programOptions...)
 	hangup := make(chan os.Signal, 1)
 	signal.Notify(hangup, syscall.SIGHUP)
-	go func() {
+	unheard := func(p safe.Panic) {
+		signal.Stop(hangup)
+		state, err := sys.ProjectStateDirAt(options.Root)
+		if err != nil {
+			state = os.TempDir()
+		}
+		program.Send(noticeMsg(p.Saved(state)))
+	}
+	safe.Go(unheard, "hangup handler", func() {
 		if _, hungUp := <-hangup; hungUp {
 			program.Quit()
 		}
-	}()
+	})
 	_, err := program.Run()
 	signal.Stop(hangup)
 	close(hangup)
@@ -475,7 +484,7 @@ func (a *App) reloadStaleModels() tea.Cmd {
 	if !a.options.ModelsStale || reload == nil {
 		return nil
 	}
-	return func() tea.Msg { return modelsReloadedMsg(reload()) }
+	return func() tea.Msg { return noticeMsg(reload()) }
 }
 
 func (a *App) pollShells() tea.Cmd {
@@ -673,7 +682,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.pollShells()
 	case pickerReloadedMsg:
 		return a.pickerReloaded(string(msg))
-	case modelsReloadedMsg:
+	case noticeMsg:
 		if msg != "" {
 			a.notify(string(msg))
 		}

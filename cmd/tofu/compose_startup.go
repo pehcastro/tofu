@@ -10,7 +10,9 @@ import (
 
 	"tofu/internal/llm"
 	"tofu/internal/llm/cred"
+	"tofu/internal/safe"
 	"tofu/internal/session"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -97,14 +99,17 @@ func (a *accounts) checkUsageAlongside(clock *startupClock) (wait func()) {
 	mine := slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != a.provider })
 	began := time.Now()
 	checking.Go(func() {
-		results, _ := pollRowsOn(context.Background(), a.store, mine, a.now, a.urls, poller)
-		clock.mu.Lock()
-		defer clock.mu.Unlock()
-		for _, result := range results {
-			if !result.report.FetchedAt.Before(began) {
-				clock.usageAskedAlongside = append(clock.usageAskedAlongside, result.report.FetchedAt.Sub(began))
+		_ = safe.Call(sys.Crashes("."), "usage check alongside", func() error {
+			results, _ := pollRowsOn(context.Background(), a.store, mine, a.now, a.urls, poller)
+			clock.mu.Lock()
+			defer clock.mu.Unlock()
+			for _, result := range results {
+				if !result.report.FetchedAt.Before(began) {
+					clock.usageAskedAlongside = append(clock.usageAskedAlongside, result.report.FetchedAt.Sub(began))
+				}
 			}
-		}
+			return nil
+		})
 	})
 	return checking.Wait
 }

@@ -281,12 +281,18 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
-	stopKeeping := keepAccountsAlive(held, func(string) {})
+	var keeperCrashed []string
+	stopKeeping := keepAccountsAlive(held, func(string) {}, func(said string) { keeperCrashed = append(keeperCrashed, said) })
 	var identity sync.WaitGroup
 	var identityErr error
-	identity.Go(func() { identityErr = sys.RecordIdentity(dir) })
+	identity.Go(func() {
+		identityErr = crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
+	})
 	err = tui.Run(appOptions(dir, runOpts{}, live, launch, held))
 	stopKeeping()
+	for _, said := range keeperCrashed {
+		_, _ = fmt.Fprintln(errOut, "tofu: "+said)
+	}
 	identity.Wait()
 	if identityErr != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: the git remote and root of this project were not recorded: %v\n", identityErr)

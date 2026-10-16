@@ -18,6 +18,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -249,8 +250,14 @@ func continueCarry(store *session.Store) sessionResume {
 
 func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	var keys sys.KeyRedactor
+	var keysErr error
 	var loaded sync.WaitGroup
-	loaded.Go(func() { keys = sys.LoadKeyRedactor() })
+	loaded.Go(func() {
+		keysErr = crashed(".", safe.Call(nil, "key redactor load", func() error {
+			keys = sys.LoadKeyRedactor()
+			return nil
+		}))
+	})
 	defer loaded.Wait()
 	store = store.ReadOnce()
 	row, recorded, err := sessionSummary(store, id)
@@ -284,6 +291,9 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 		carry.Busy = &busy
 	case err != nil:
 		return sessionResume{}, err
+	}
+	if loaded.Wait(); keysErr != nil {
+		return sessionResume{}, keysErr
 	}
 	return carry, nil
 }

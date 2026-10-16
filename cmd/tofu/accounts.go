@@ -19,6 +19,7 @@ import (
 	"tofu/internal/llm/quota"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/llm/wire/codex"
+	"tofu/internal/safe"
 	settingspkg "tofu/internal/settings"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -301,17 +302,18 @@ func (a *accounts) modelOn(row cred.Row) (turn.Model, error) {
 	return turn.Subscription{Wire: wire, Effort: a.effort}, nil
 }
 
-func keepAccountsAlive(held heldStore, note func(string)) (stop func()) {
+func keepAccountsAlive(held heldStore, note, told func(string)) (stop func()) {
 	if held.err != nil {
 		note("signed-in accounts are not kept alive: " + held.err.Error())
 		return func() {}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() {
+	report := crashTold(".", told)
+	safe.Go(report, "credential keeper", func() {
 		defer close(done)
-		cred.NewKeeper(held.store, note).Run(ctx)
-	}()
+		safe.Loop(report, "credential keeper", ctx.Done(), func() { cred.NewKeeper(held.store, note).Run(ctx) })
+	})
 	return func() {
 		cancel()
 		<-done

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tofu/interface/tui/progress"
+	"tofu/internal/safe"
 	"tofu/internal/widget"
 )
 
@@ -28,7 +29,7 @@ func restoring(out io.Writer, carry sessionResume) func() {
 	}
 	label := "restoring " + carry.Handle
 	stop, stopped := make(chan struct{}), make(chan struct{})
-	go func() {
+	safe.Go(crashTold(".", func(said string) { _, _ = io.WriteString(out, "\rtofu: "+said+"\n") }), "restoring spinner", func() {
 		defer close(stopped)
 		tick := time.NewTicker(progress.TickInterval)
 		defer tick.Stop()
@@ -41,7 +42,7 @@ func restoring(out io.Writer, carry sessionResume) func() {
 			case <-tick.C:
 			}
 		}
-	}()
+	})
 	return func() {
 		close(stop)
 		<-stopped
