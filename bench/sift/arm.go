@@ -66,15 +66,16 @@ func Free(row Row, planted Planted) Reading {
 }
 
 type Answered struct {
-	Units      []sift.Unit
-	Scores     map[int]float64
-	Latencies  []time.Duration
-	Cost       float64
-	Errors     int
-	Unrecorded []error
-	StateBytes int
-	Builds     map[string]int
-	StateSum   string
+	Units       []sift.Unit
+	Scores      map[int]float64
+	Latencies   []time.Duration
+	Cost        float64
+	InputTokens int
+	Errors      int
+	Unrecorded  []error
+	StateBytes  int
+	Builds      map[string]int
+	StateSum    string
 }
 
 type Asker struct {
@@ -130,6 +131,7 @@ func (a Asker) Ask(ctx context.Context, shell sift.Shell, units []sift.Unit, tas
 		}
 		decision := *replies[i]
 		out.Cost += decision.Usage.Cost
+		out.InputTokens += decision.Usage.InputTokens
 		out.Latencies = append(out.Latencies, decision.Latency)
 		out.Scores[i] = decision.Answers[sift.NeededQuestion].Noul
 		out.Builds[decision.Build]++
