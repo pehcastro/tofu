@@ -26,12 +26,17 @@ func newAppSession(dir string, open func(runOpts) (appWire, error), answers <-ch
 	return &appSession{Host: live, engine: engine, answers: answers, dir: dir}
 }
 
+func (s *appSession) Close() {
+	s.Host.Close()
+	s.warmClosed.Do(func() { s.engine.warm.Close() })
+}
+
 func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 	if !s.Send(pick, task) {
 		panic("a turn is already running on this host")
 	}
-	s.warmClosed.Do(func() { context.AfterFunc(ctx, func() { s.engine.warm.Close() }) })
-	defer s.Close()
+	context.AfterFunc(ctx, s.Close)
+	defer s.Host.Close()
 	defer context.AfterFunc(ctx, s.Stop)()
 	for event := range s.Events() {
 		switch event.Kind {

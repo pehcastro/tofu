@@ -144,8 +144,8 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			say(trouble)
 		}
 		return live, func() {
-			engine.warm.Close()
 			live.Close()
+			engine.warm.Close()
 			for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
 				say(warning)
 			}
