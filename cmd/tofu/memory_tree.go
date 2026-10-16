@@ -167,16 +167,26 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		return func(context.Context, string, string, string) (string, error) { return "", err }, slug, release
 	}
 	var mu sync.Mutex
-	chatsBeingWritten := map[string]bool{}
+	chatsBeingWritten := map[string]chan struct{}{}
 	ruler := strings.Repeat("-", len(compactionExample))
 	return func(ctx context.Context, before, left, right string) (string, error) {
 		mu.Lock()
 		account, err := opened.held.forTurn().Pick(ctx)
-		anotherCallWritesThisChat := chatsBeingWritten[before]
-		chatsBeingWritten[before] = true
+		chatCached, anotherCallWritesThisChat := chatsBeingWritten[before]
+		if err == nil && !anotherCallWritesThisChat {
+			chatCached = make(chan struct{})
+			chatsBeingWritten[before] = chatCached
+		}
 		mu.Unlock()
 		if err != nil {
 			return "", err
+		}
+		if anotherCallWritesThisChat {
+			select {
+			case <-chatCached:
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
 		}
 		task, input := "compress this item", left
 		if right != "" {
@@ -184,14 +194,9 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		}
 		asked := fmt.Sprintf("\n</chat>\n\nCompaction: %s into one line of about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\n<input>\n%s\n</input>\n<input> is %d words. Your line has at most %d: rewrite it shorter, never join or copy it.",
 			task, len(compactionExample), konst.MemtreeLineBytes, ruler, compactionExample, input, len(strings.Fields(input)), len(strings.Fields(compactionExample)))
-		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}}
-		if anotherCallWritesThisChat {
-			messages = append(messages, afterTheCachedPrefix(llm.RoleUser, "<chat>\n"+before))
-		} else {
-			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "<chat>\n"})
-			for line := range strings.Lines(before) {
-				messages = append(messages, llm.Message{Role: llm.RoleUser, Content: line})
-			}
+		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}, {Role: llm.RoleUser, Content: "<chat>\n"}}
+		for line := range strings.Lines(before) {
+			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: line})
 		}
 		messages = append(messages, afterTheCachedPrefix(llm.RoleUser, asked))
 		asking := func(why string, messages []llm.Message) (string, error) {
@@ -202,6 +207,7 @@ func memoryCompactor(dir string, ask turn.RecordedAsk) (memtree.Compact, string,
 		if !anotherCallWritesThisChat {
 			mu.Lock()
 			delete(chatsBeingWritten, before)
+			close(chatCached)
 			mu.Unlock()
 		}
 		if err != nil || len(line) <= konst.MemtreeLineBytes {
