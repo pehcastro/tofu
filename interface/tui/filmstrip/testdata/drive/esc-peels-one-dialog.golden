@@ -35,7 +35,7 @@
   CATEGORIES              Composer                                                  standard  ▾     
     Appearance    05      Enter sends; Shift+Enter inserts a line break                             
     Models & rol… 02                                                                                
-  › Interaction   07    › Keybindings                                                   edit  ▾     
+  › Interaction   09    › Keybindings                                                   edit  ▾     
     Context       15      Change shortcuts handled inside tofu                                      
     Files         03                                                                                
     Shell         05      Host integration                                       inspect Zed  ▾     
@@ -44,17 +44,17 @@
     Browser       08      Confirmations                                                 auto  ▾     
                           auto lets jev decide at every gate and work never stops for you: only…    
   NAVIGATE                                                                                          
-  ↑↓ setting · ←→         Question wait                                                  120  ▾     
-  section                 under auto, a question the lead asks you takes its recommended option…    
+  ↑↓ setting · ←→         Ask wait                                                       180  ▾     
+  section                 a call the gate asks you about waits this many seconds for your answe…    
   ctrl+k search ·                                                                                   
-  esc chat                Read before edit                                                  ● on    
+  esc chat                Unanswered ask                                              refuse  ▾     
+                          refuse turns down a call nobody answered in gateAskWaitSeconds and te…    
+                                                                                                    
+                          Question wait                                                  120  ▾     
+                          under auto, a question the lead asks you takes its recommended option…    
+                                                                                                    
+                          Read before edit                                                  ● on    
                           an edit or a write to a file this session has not read, or that chang…    
                                                                                                     
-                          Auto update                                                       ● on    
-                          on installs a newer tofu release in the background, looked up at most…    
-                                                                                                    
                         enter change  ·  shift+tab scope  ·  esc chat                               
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     

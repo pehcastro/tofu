@@ -5,7 +5,7 @@
   CATEGORIES              Thinking summary                                        summarized  ▾     
     Appearance    05      summarized asks Claude for a summary of its thinking; omitted asks fo…    
     Models & rol… 02                                                                                
-    Interaction   07      Images                                                        auto  ▾     
+    Interaction   09      Images                                                        auto  ▾     
   › Context       15      auto sends a pasted image only to a model that can see, inline always…    
     Files         03                                                                                
     Shell         05      Project instructions                                         32768  ▾     
@@ -35,7 +35,7 @@
   CATEGORIES              Thinking summary                                        summarized  ▾     
     Appearance    05      summarized asks Claude for a summary of its thinking; omitted asks fo…    
     Models & rol… 02                                                                                
-    Interaction   07     Instruction files                              esc             auto  ▾     
+    Interaction   09     Instruction files                              esc             auto  ▾     
   › Context       15     a folder with both AGENTS.md and CLAUDE.md sends    see, inline always…    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more               32768  ▾     
@@ -65,7 +65,7 @@
   CATEGORIES              Thinking summary                                        summarized  ▾     
     Appearance    05      summarized asks Claude for a summary of its thinking; omitted asks fo…    
     Models & rol… 02                                                                                
-    Interaction   07     Instruction files                              esc             auto  ▾     
+    Interaction   09     Instruction files                              esc             auto  ▾     
   › Context       15     a folder with both AGENTS.md and CLAUDE.md sends    see, inline always…    
     Files         03     one: agents-first sends AGENTS.md, claude-first                            
     Shell         05     sends CLAUDE.md, both sends both and costs more               32768  ▾     
