@@ -10,6 +10,35 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc6 - 2026-10-16
+
+Tofu stops forgetting you and stops stalling: memory reaches the lead after every fork, your standing orders survive, and nothing waits hours on a question nobody sees.
+
+### Added
+
+- When you repeat an instruction from earlier in the session, the lead gets a note quoting both messages and keeps it with `remember`. Jev decides what counts as a repeat: 7 of 14 repeats caught on a long session, against 1 before.
+- The lead keeps its sub-agent slots filled: every report ends with a board line naming how many sub-agents run, the tickets in review and the free work, and a lead that ends a turn with free work and empty slots is checked in on once tofu is idle. Any message you send drops the check-in and runs at once.
+
+### Changed
+
+- The chat shows the conversation and one status line. The lead's own reads, edits and shell calls live under the orchestrator in the sub-agents tab and in All activity; the status line names the newest call by its `[tool#id]`. Sub-agent rows read as sentences: `[&x] finished DESK-366 and waits for your review`. `chatShowsTools` on keeps the old rows.
+- A message you send while the lead works gets an answer in one line when it needs no new work, or a line saying when it will.
+- The lead gets a fresh memory view after every fork and every `tofu --continue`, so an entry added between sessions reaches it. Every sub-agent gets the memory too.
+- Standing orders ("always", "never", "from now on") are carried across forks in their own section and are never dropped for newer chat. The carry counts the bytes it sends.
+- A cron fire is never read or learned as your words. A job the lead makes fires on time, and a job fires more than once while one lead turn runs.
+- Crash notices from sub-agents no longer fill the memory episodes, and your lines are merged last.
+- The gate asks you only when a call changes the harness; a read-only command is never sent to you. An unanswered ask times out after 3 minutes (`gateAskWaitSeconds`) instead of stopping the turn and every cron fire behind it.
+- Shell sift asks Jev once per shell result instead of once per chunk.
+- A spawn late in a long session starts in under 100 ms instead of up to 20 minutes: its brief reads only the files it can place.
+- `subagents NAME` shows that sub-agent. The shell lock no longer waits on a kill or a sweep, so `subagents diagnose` answers in about 100 ms on a 15 MB log.
+
+### Fixed
+
+- A spawn is checked against the ticket it names, not the first ticket the brief mentions, and a ticket assigned to the spawning session is accepted.
+- A resumed sub-agent still moves its own ticket in a new generation.
+- Reopening a session tells the lead only of sub-agents cut off just then, not every one that ever errored.
+- Every goroutine in the command line and the interface recovers from a panic and writes a crash file.
+
 ## 0.5.15-rc5 - 2026-10-16
 
 A long session stays small: what tofu no longer needs leaves memory and disk, and closing takes milliseconds.

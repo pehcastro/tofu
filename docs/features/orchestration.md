@@ -182,9 +182,15 @@ agent. The lead's session must manage the board: `tofu boardy manager add
 
 ## What you see
 
-The chat stays on the conversation with the lead. A running
-sub-agent shows as one line, such as `running [&go-dev-1]`, and its report
-comes back folded under the lead's answer. One that has been on a call for
+The chat stays on the conversation with the lead. The lead's own reads,
+edits and shell calls are not rows in the chat: they sit under the
+orchestrator in the sub-agents tab and in All activity, and one status line
+above the composer names the newest call by its `[tool#id]`, such as
+`working | 1s bash sleep 3 · (2) tools · shell (1) [tool#100bad]`. A running
+sub-agent shows as one line saying what it works on, such as
+`running [&go-dev-1] TOFU-12 read the note`, and its report reads as a
+sentence, such as `[&go-dev-1] finished TOFU-12 and waits for your review`.
+One that has been on a call for
 `subAgentWatchSeconds` says what it is doing, such as `building, 12m`, and
 reads `stalled` only when nothing has moved for that long.
 
@@ -196,6 +202,12 @@ calls on the right. **All activity** shows every agent at once. Sub-agents
 settled for over two hours fold into one row there and in the chat; a click,
 `enter`, `f` or a search opens them. At 450 sub-agents this keeps the app at
 about 150 MB and a chat frame at about 2 ms.
+
+The lead keeps its slots filled. Each report it gets ends with a board line,
+such as `board: 0 of 4 sub-agents running; TOFU-1 is review; free todo:
+TOFU-5, TOFU-6`. A lead that ends its turn with free work and empty slots is
+checked in on after `subAgentCheckSeconds` while tofu is idle, and any
+message you send drops that check-in and runs at once.
 
 To run the lead alone: `tofu settings set turnMaySpawn false`.
 

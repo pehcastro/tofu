@@ -10,8 +10,11 @@ verbs: memory
 Memory is a short list of things you told tofu to keep, so you do not
 have to say them again. Each entry is one line, like `never run cargo
 with more than 2 jobs`, with your own words beside it. It opens each session as its own message
-after the system message, kept through a fork and a resume; a new entry
-joins next session, and a sub-agent gets only what the lead cites as `[memory#id]`.
+after the system message, written fresh at every fork and every resume, so
+an entry added between sessions reaches the lead; every sub-agent gets the
+same view. When you repeat an instruction, Jev spots it and the lead is told
+to keep it with `remember`. Orders like "always" or "from now on" carry
+across forks in their own section, and a cron prompt is never your words.
 
 A kind says what it is about: `person` (how you work), `project` (a fact
 the code does not say) or `reference` (where something outside lives).

@@ -49,8 +49,16 @@ your next entry away.
 
 **The cache stays warm.** Memory opens the session as its own message,
 after the system prompt, so remembering something mid-session doesn't
-rewrite the cached prompt. A sub-agent gets only the entries the lead cites
-in its brief as `[memory#m3]`, copied word for word, never the whole list.
+rewrite the cached prompt. It is written fresh at every fork and every
+`tofu --continue`, so an entry added between sessions reaches the lead, and
+every sub-agent gets the same view in its first request.
+
+**Saying it twice is enough.** When you repeat an instruction from earlier
+in the session, Jev spots the repeat and the lead gets a note quoting both
+messages, so it keeps the instruction with `remember` instead of waiting to
+hear it a third time. Orders such as "always", "never" or "from now on" are
+carried across every fork in their own section, and a cron prompt is never
+taken for your words.
 
 ## The conversation is the memory
 

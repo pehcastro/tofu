@@ -14,7 +14,9 @@ commands, and they share one list, one history and one set of limits.
 A fire during a turn reaches the model at its next step, like a line you
 type. A fire while tofu is idle starts a turn. The chat shows one line
 naming the job, and the model reads the prompt as the schedule's, never as
-yours, so it approves nothing.
+yours, so it approves nothing and is never carried or learned as your words.
+A job the model makes with its `cron` tool fires on time, and a job keeps
+firing while one long turn runs.
 
 The orchestrator has a `cron` tool. Under the rule `cron_edits` it may fix
 a schedule that misfires, stretch an interval when fires change nothing,

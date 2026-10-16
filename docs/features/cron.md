@@ -32,7 +32,9 @@ fits. Each change is one line in the chat and is recorded as `by agent`.
 **A fire never interrupts you.** During a turn, the prompt reaches the model
 at its next step, like a line you type. When tofu is idle, it starts a turn.
 The chat shows one line naming the job, and the model reads the prompt as
-the schedule's, never as yours.
+the schedule's, never as yours: it is not carried, remembered or learned as
+something you said. A job the orchestrator makes with its `cron` tool fires
+on time too, and a job keeps firing while one long turn runs.
 
 ## Guards
 
