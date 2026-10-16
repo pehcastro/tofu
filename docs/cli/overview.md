@@ -42,6 +42,7 @@ from tofu itself.
 tofu run --dir <path> [arguments] <task>
 tofu --continue [--json]
 tofu --temporary-project
+tofu --profile, with --continue or tofu run
 tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|reads|resume|rename|request|find|branch <name|id> [--json]
 tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--json]
 tofu context [<name|id>] [--json]
@@ -54,6 +55,14 @@ hours after its last use removes its folder under `~/.tofu/projects`, with its
 sessions, undo history and logs, and its registry entry, unless a running tofu
 still has it open; the project directory
 itself is never touched. Opening it once without the flag keeps it for good.
+
+`--profile` writes Go's own `runtime/pprof` profiles into
+`~/.tofu/projects/<project>/profile/<start time>-<pid>`, the folder it prints
+when it starts: every 3 minutes and at exit, `NNNN-cpu.pprof` for the minutes
+since the last one, `NNNN-heap.pprof` and `NNNN-goroutines.txt`. The last 5
+snapshots and the last 5 runs are kept; older ones are removed as new ones are
+written. Read one with `go tool pprof`. `TOFU_PPROF=<dir>` still writes one
+whole-run `cpu.pprof`, `heap-peak.pprof`, `heap-end.pprof` and `memstats.json`.
 
 ### Memory
 

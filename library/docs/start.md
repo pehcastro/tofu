@@ -90,6 +90,8 @@ hours after its last use removes its sessions, undo history and logs from
 opened is never touched. Open the
 project once without the flag and tofu keeps it for good.
 
+`tofu --continue --profile` (or `tofu run --profile`) prints a folder under the project's `profile` folder in `~/.tofu/projects` and writes into it, every 3 minutes and at exit, a CPU profile of those minutes, a heap profile and a goroutine dump, keeping the last 5 of each and the last 5 runs. Read one with `go tool pprof <file>`. Without the flag nothing is written.
+
 ## Check it
 
     tofu doctor

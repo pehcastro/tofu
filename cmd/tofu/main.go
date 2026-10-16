@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ const (
 	exitOK      = 0
 	exitVerdict = 1
 	exitUsage   = 2
+	profileFlag = "--profile"
 )
 
 const usage = `tofu is a coding agent harness.
@@ -29,6 +31,9 @@ Usage:
                           start the app in a project tofu forgets %d hours after
                           its last use: its sessions, undo history and logs;
                           tofu run takes the same flag
+  tofu --profile          start the app writing CPU and heap profiles and a goroutine
+                          dump into the project's profile folder, every few minutes
+                          and at exit; works with --continue and tofu run
   tofu <verb> [arguments]
 
 Verbs:
@@ -99,6 +104,7 @@ func main() {
 	stopProfile := sys.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])
+	args, profiled := withoutProjectFlag(args, profileFlag)
 	opensTheApp := len(args) == 0 || args[0] == "--continue"
 	if opensTheApp || args[0] == "migrate" {
 		copyLegacyStateDirs(os.Stderr)
@@ -113,6 +119,10 @@ func main() {
 		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), temporary, register)
 		letGo = sys.HoldProjectOpen(dir)
 	}
+	stopSnapshots := func() {}
+	if profiled {
+		stopSnapshots = startSnapshots(os.Stderr, dir)
+	}
 	if wd, err := os.Getwd(); err == nil && (opensTheApp || opens) {
 		moveProjectState(os.Stderr, wd)
 	}
@@ -121,8 +131,36 @@ func main() {
 	code := run(args, os.Stdin, os.Stdout, os.Stderr)
 	pages.Restore()
 	letGo()
+	stopSnapshots()
 	stopProfile()
 	os.Exit(code)
+}
+
+func withoutProjectFlag(args []string, flag string) ([]string, bool) {
+	rest := slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == flag })
+	if _, opens := openedProject(rest); !opens || len(rest) == len(args) {
+		return args, false
+	}
+	return rest, true
+}
+
+func startSnapshots(errOut io.Writer, project string) func() {
+	page := cli.Detect(errOut, os.Environ())
+	state, err := sys.ProjectStateDirAt(project)
+	var dir string
+	var stop func()
+	if err == nil {
+		dir, stop, err = sys.StartSnapshots(state)
+	}
+	if err != nil {
+		_ = page.Print(errOut, page.ErrorLine("tofu: profiling not started: "+err.Error(), ""))
+		return func() {}
+	}
+	_ = page.Print(errOut, []string{page.Receipt(cli.Changed, "profiling: CPU, heap and goroutines every "+sys.SnapshotEvery.String()+" and at exit, the last "+strconv.Itoa(sys.SnapshotsKept)+" kept", dir)})
+	return func() {
+		stop()
+		_ = page.Print(errOut, []string{page.Receipt(cli.Changed, "profile written", dir)})
+	}
 }
 
 func moveHomeKeys(errOut io.Writer) {
