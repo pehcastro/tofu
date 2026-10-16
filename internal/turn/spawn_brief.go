@@ -137,15 +137,22 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 		named = direct.root.realPaths(named)
 	}
 	var candidates []briefCandidate
+	listed := map[string]bool{}
 	for _, path := range named {
+		listed[ledgerKey(path)] = true
 		candidates = append(candidates, briefCandidate{path: path})
 	}
 	for _, message := range lead {
 		for _, call := range message.ToolCalls {
 			var leadRead readArgs
-			if call.Name == "read" && json.Unmarshal(call.Arguments, &leadRead) == nil {
+			if call.Name != "read" || json.Unmarshal(call.Arguments, &leadRead) != nil {
+				continue
+			}
+			key := ledgerKey(leadRead.Path)
+			if owned, _ := subagent.Matches(key, args.Owns); owned && !listed[key] {
 				candidates = append(candidates, briefCandidate{path: leadRead.Path, byLead: true})
 			}
+			listed[key] = true
 		}
 	}
 	var text strings.Builder
