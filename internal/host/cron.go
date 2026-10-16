@@ -121,6 +121,5 @@ func (h *Host) ended(out *emitter) {
 }
 
 func (h *Host) fireAfterTurn() {
-	due := h.cron.Due(context.Background(), h.now(), cron.TurnEnded)
-	safe.Go(h.report, "cron", func() { h.fire(due) })
+	h.fire(h.cron.Due(context.Background(), h.now(), cron.TurnEnded))
 }
