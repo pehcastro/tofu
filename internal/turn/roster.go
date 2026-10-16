@@ -35,6 +35,7 @@ type recordedSubAgent struct {
 	calls       []string
 	active      time.Time
 	report      string
+	reportedAt  time.Time
 	undelivered bool
 }
 
@@ -148,13 +149,13 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 					leadReports = append(leadReports, message.Content)
 				}
 				for _, told := range order {
-					told.undelivered = told.undelivered && !strings.Contains(message.Content, told.report)
+					told.undelivered = told.undelivered && (message.Role != llm.RoleUser.String() || !event.At.After(told.reportedAt))
 				}
 			case run == nil:
 			case event.Kind == session.EventReport:
 				var report session.ReportBody
 				_ = json.Unmarshal(event.Body, &report)
-				run.report, run.undelivered, reportEvents = report.Text, report.Text != "", true
+				run.report, run.reportedAt, run.undelivered, reportEvents = report.Text, event.At, report.Text != "", true
 			case event.Kind == session.EventAgentEnd:
 				var ended session.AgentEndBody
 				_ = json.Unmarshal(event.Body, &ended)
