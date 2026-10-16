@@ -4,7 +4,7 @@ The desk app, versioned on its own. A patch is fixes only; a minor adds features
 
 ## [0.2.0] - 2026-10-16
 
-The first build for daily use, installed at `C:\Users\Luiz\.local\bin\desk\`.
+The first build for daily use, at `apps/desk/target_release/motion/desk.exe`.
 
 ### Added
 
