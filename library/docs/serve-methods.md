@@ -51,7 +51,8 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `effort`; answers `turn`. `turn.steer` takes `session`, `expectedTurnId` and `text`; answers `turn` and `id`.
   `turn.sendNow` (capability `sendNow`) takes `id`, or none for every queued message; answers `ok`, errs
   `-32000` when no turn runs or the id is not queued. `turn.steered` follows each message the lead reads:
-  `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a `step`. `turn.unsteer` takes `text`,
+  `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a `step`. `turn.steerQueued` tells the
+  holder's clients a follower's steer is queued: `item` is its `id`, with `text`. `turn.unsteer` takes `text`,
   answers `removed`. `turn.stop` takes `turn`, `lead: true` stops the lead alone. `undo` takes `session`,
   `turns`; answers `turns`, `restored`, `removed`, `refused` (`path`, `why`) and `dry_run`
 - `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`, `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`

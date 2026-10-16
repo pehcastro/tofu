@@ -215,6 +215,11 @@ type Steered struct {
 	ReadAt time.Time `json:"readAt"`
 }
 
+type SteerQueued struct {
+	Identity
+	Text string `json:"text"`
+}
+
 type OriginKind string
 
 const (
@@ -1108,6 +1113,7 @@ func notifications() []method {
 		{name: "turn.account", params: TurnAccount{}},
 		{name: "turn.completed", params: TurnCompleted{}},
 		{name: "turn.steered", params: Steered{}},
+		{name: "turn.steerQueued", params: SteerQueued{}},
 		{name: "message.user", params: UserMessage{}},
 		{name: "message.started", params: Marker{}},
 		{name: "message.delta", params: Text{}},

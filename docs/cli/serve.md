@@ -80,6 +80,8 @@ started it.
   `shell.takeover` again for a fresh replay. `shell.started` and `session.state` say `terminal`,
   `holder` and `heldSince`.
 - `turn.account`: the account a turn spends, `picked` as it starts and `moved` off a spent one.
+- `turn.steerQueued` when another window following the session steers it: the message waits on the
+  holder's queue, `item` its id and `text` what was typed, until `turn.steered` says the lead read it.
 - `session.turns.updated`: the digest of a turn just ended, the row `session.turns` answers.
 - `quota.updated` when a session opens, after each turn, when a turn moves to another account, every
   five minutes, and as soon as a rate-limited account may be asked again. Each window says when it

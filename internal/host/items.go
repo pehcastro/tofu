@@ -154,6 +154,8 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		}
 		s.awaitLog(id.Item, session.RoleUser, event.Text)
 		return append(out, notify("turn.steered", &Steered{Identity: id, Text: event.Text, Step: event.Step, ReadAt: now}))
+	case EventSteerQueued:
+		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text}))
 	case EventToolCall:
 		var args struct {
 			Path string `json:"path"`
@@ -229,7 +231,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		spent := *event.Account
 		spent.Identity = s.identity(event.Agent, s.mint("account"))
 		return append(out, kept("turn.account", &spent))
-	case EventForkStart, EventResumed, EventRequesting, EventSteerQueued:
+	case EventForkStart, EventResumed, EventRequesting:
 		return out
 	}
 	panic("host: unknown event kind " + strconv.Itoa(int(event.Kind)))
