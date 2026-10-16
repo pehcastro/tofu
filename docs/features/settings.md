@@ -63,7 +63,7 @@ tofu settings
 Turn
     decisionCap             0                                default
     turnMaySpawn            true                             default
-    oneTurnPerProject       true                             default
+    oneWorkingSessionPerProject true                         default
     planEveryStep           true                             default
     sideChatAccess          read                             default
     subAgentsPerTurn        10                               default
@@ -80,10 +80,13 @@ Projects
     scratchMaxGB            50                               default
 ```
 
-`oneTurnPerProject` keeps one orchestrator per project: while one
-session runs a turn, a turn from another session in the same project
-is refused. Turn it off to run several sessions in one repository at
-once: `tofu settings set oneTurnPerProject false`.
+`oneWorkingSessionPerProject` keeps one working session per project:
+while one session in the project is working, another session that
+starts work is refused until it ends. Turn it off to let several
+sessions in one repository work at once:
+`tofu settings set oneWorkingSessionPerProject false`. A settings file
+that still holds `oneTurnPerProject` reads as the new key and is
+rewritten under it on the next write.
 
 `thinkingSummary` decides what a model sends back of its thinking.
 `summarized`, the default, asks for a summary, which streams to the

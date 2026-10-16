@@ -23,7 +23,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 - `session.open` replays the chat as events; `session.history` pages it. Opened while a turn runs, it keeps
   that turn going in its own session (capability `sessions`), each event naming its `session`; a request
   with no `session` means the session opened last, and `session.close` lets one go. Both run turns at once
-  only with `oneTurnPerProject` off; while it is on, the default, the second turn ends `failed`: project busy
+  only with `oneWorkingSessionPerProject` off; while it is on, the default, the second turn ends `failed`: project busy
 - `session.listed`: the open row of `session.list` again when a turn starts or ends, after a fork and a
   rename; `session.updated` follows every turn, a rename and a compaction, with `lastAt`, the last record;
   `session.turns.updated` carries the ended turn's `digest`, one row of `session.turns`

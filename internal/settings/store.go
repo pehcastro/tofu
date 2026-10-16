@@ -72,10 +72,19 @@ func (s *Store) reread(scope Scope) error {
 		return err
 	}
 	for _, spec := range s.table {
-		if old, present := texts[spec.Formerly]; present && spec.Formerly != "" {
+		if spec.Formerly == "" {
+			continue
+		}
+		if old, present := texts[spec.Formerly]; present {
 			delete(texts, spec.Formerly)
 			if _, set := texts[spec.Key]; !set {
 				texts[spec.Key] = cmp.Or(spec.Aliases[old], old)
+			}
+		}
+		if old, present := ints[spec.Formerly]; present {
+			delete(ints, spec.Formerly)
+			if _, set := ints[spec.Key]; !set {
+				ints[spec.Key] = old
 			}
 		}
 	}

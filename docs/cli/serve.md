@@ -33,7 +33,7 @@ status record names the `session` it belongs to. A request that names a `session
 and one that names none means the session opened last, so a client that holds one session sees
 nothing change. `status.list` with no `session` answers every open session, and `session.close` lets
 one go, refusing while its turn runs unless you pass `stop: true`. Two sessions run turns at once
-only with the setting `oneTurnPerProject` off; while it is on, the default, the second turn ends
+only with the setting `oneWorkingSessionPerProject` off; while it is on, the default, the second turn ends
 `failed` and says the project is busy.
 
 **It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x

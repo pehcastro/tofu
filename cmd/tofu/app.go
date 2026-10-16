@@ -707,7 +707,7 @@ func (e *appEngine) Renew() {
 }
 
 func (e *appEngine) OneTurnPerProject() bool {
-	return settingInt(e.dir, settingspkg.OneTurnPerProject, nil) != 0
+	return settingInt(e.dir, settingspkg.OneWorkingSessionPerProject, nil) != 0
 }
 
 func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {

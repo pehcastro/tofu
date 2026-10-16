@@ -17,7 +17,7 @@ The settings come in groups:
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, instructionSources, skills, memory, autoMemory, memoryFromAllUsers, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell, foldHidesShell
-- Turn: decisionCap, turnMaySpawn, oneTurnPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays and scratchMaxGB (the scratchpad)
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless
 

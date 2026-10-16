@@ -423,12 +423,12 @@ exit 0
         "kind": "bool"
       },
       {
-        "key": "oneTurnPerProject",
+        "key": "oneWorkingSessionPerProject",
         "category": "Turn",
         "value": true,
         "source": "default",
-        "label": "One turn per project",
-        "description": "while one session runs a turn in this project, a turn from any other session is refused; off lets several sessions run turns in one repository at once",
+        "label": "One working session per project",
+        "description": "while one session in this project is working, any other session waits; off lets several sessions in one repository work at once",
         "kind": "bool"
       },
       {

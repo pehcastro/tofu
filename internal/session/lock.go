@@ -38,7 +38,7 @@ type TurnBusyError struct {
 }
 
 func (e TurnBusyError) Error() string {
-	return fmt.Sprintf("session: process %d has been running a turn in this project since %s, and a project runs one turn at a time", e.PID, e.Since.Format(time.TimeOnly))
+	return fmt.Sprintf("session: a session is already working in this project, in process %d since %s, and this project lets one session work at a time", e.PID, e.Since.Format(time.TimeOnly))
 }
 
 func (s *Store) lock(id string) (*os.File, error) {

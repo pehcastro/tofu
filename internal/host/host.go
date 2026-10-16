@@ -39,7 +39,7 @@ func ImageToken(index int) string { return ImageTokenHead + strconv.Itoa(index) 
 
 var (
 	errTurnRunning = errors.New("a turn is running: wait for it to end, or stop it")
-	errProjectTurn = errors.New("another session this tofu holds is running a turn in this project, and a project runs one turn at a time: wait for it, or set oneTurnPerProject off")
+	errProjectTurn = errors.New("another session this tofu holds is already working in this project, and this project lets one session work at a time: wait for it, or set oneWorkingSessionPerProject off")
 )
 
 type Play func(ctx context.Context, pick Pick, task string, live Live)
