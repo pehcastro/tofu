@@ -184,7 +184,7 @@ const (
 
 	TypecheckDeadlineMillis    = 15000
 	TypecheckFirstCheckMillis  = 240000
-	TypecheckInlineMillis      = 400
+	TypecheckInlineMillis      = 800
 	TypecheckInlineFirstMillis = 3000
 	TypecheckWatchNoticeMillis = 2000
 	TypecheckLinesCap          = 20
