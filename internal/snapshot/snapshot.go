@@ -19,6 +19,7 @@ import (
 const (
 	largestUntrackedBytes = 10 << 20
 	ledgerLifetime        = 7 * 24 * time.Hour
+	undoableTurns         = 20
 	pruneGrace            = "1.hour.ago"
 	pinRefs               = "refs/undo/"
 	pruneLockName         = "prune.lock"
@@ -50,6 +51,9 @@ func (e Pruned) Error() string {
 }
 
 func (r Repo) Prune(ctx context.Context) error {
+	if info, err := os.Stat(r.prunedStamp()); err == nil && time.Since(info.ModTime()) < pruneEvery {
+		return nil
+	}
 	lock := filepath.Join(r.gitDir(), pruneLockName)
 	if info, err := os.Stat(lock); err == nil && time.Since(info.ModTime()) > pruneLockLifetime {
 		_ = os.Remove(lock)
@@ -60,9 +64,6 @@ func (r Repo) Prune(ctx context.Context) error {
 	}
 	_ = held.Close()
 	defer func() { _ = os.Remove(lock) }()
-	if info, err := os.Stat(r.prunedStamp()); err == nil && time.Since(info.ModTime()) < pruneEvery {
-		return nil
-	}
 	sessions := filepath.Dir(r.Session)
 	dirs, err := os.ReadDir(sessions)
 	if err != nil {
@@ -88,7 +89,7 @@ func (r Repo) Prune(ctx context.Context) error {
 			return err
 		}
 		trees := []string{}
-		for _, one := range entries {
+		for _, one := range entries[max(0, len(entries)-undoableTurns):] {
 			trees = append(trees, one.Start, one.End)
 		}
 		if indexed, err := live.writeTree(ctx); err == nil {
@@ -169,6 +170,15 @@ func (r Repo) Begin(ctx context.Context, turn string) error {
 	tree, err := r.track(ctx)
 	if err != nil {
 		return err
+	}
+	entries, err := r.entries()
+	if err != nil {
+		return err
+	}
+	if len(entries) >= undoableTurns {
+		if err := r.rewrite(entries[len(entries)-undoableTurns+1:]); err != nil {
+			return err
+		}
 	}
 	return r.append(entry{Turn: turn, Start: tree})
 }

@@ -520,13 +520,13 @@ func (r *record) begin(row Row) {
 		header := r.log.Header()
 		r.undo = &snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
 		r.undoBegun = make(chan struct{})
-		go func(repo snapshot.Repo, turn string, sessionStart bool) {
+		go func(repo snapshot.Repo, turn string) {
 			r.undoErr = repo.Begin(context.Background(), turn)
 			close(r.undoBegun)
-			if r.undoErr == nil && sessionStart {
+			if r.undoErr == nil {
 				_ = repo.Prune(context.Background())
 			}
-		}(*r.undo, r.turn, header.Turns == 1)
+		}(*r.undo, r.turn)
 	}
 }
 
