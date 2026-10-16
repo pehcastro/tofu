@@ -157,6 +157,8 @@ const (
 	recordedFlight     = konst.DriveSettleMillis * time.Millisecond
 	orchestratorCaller = ""
 	subAgentCaller     = "c"
+	memoryViewSource   = "memory view"
+	forkTaskSource     = "fork task"
 )
 
 type cassetteReply struct {
@@ -189,13 +191,14 @@ type recordedReply struct {
 }
 
 type cassette struct {
-	name    string
-	decks   map[string][]recordedReply
-	mutex   sync.Mutex
-	taken   map[string]int
-	callers map[string]string
-	last    llm.Request
-	sent    []sentRequest
+	name          string
+	decks         map[string][]recordedReply
+	mutex         sync.Mutex
+	taken         map[string]int
+	callers       map[string]string
+	firstOnSystem map[string]string
+	last          llm.Request
+	sent          []sentRequest
 }
 
 type sentRequest struct {
@@ -244,10 +247,11 @@ func readCassette(path string) (*cassette, error) {
 		return nil, err
 	}
 	deck := &cassette{
-		name:    filepath.Base(path),
-		decks:   map[string][]recordedReply{},
-		taken:   map[string]int{},
-		callers: map[string]string{},
+		name:          filepath.Base(path),
+		decks:         map[string][]recordedReply{},
+		taken:         map[string]int{},
+		callers:       map[string]string{},
+		firstOnSystem: map[string]string{},
 	}
 	for number, line := range strings.Split(string(body), "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -308,12 +312,18 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.last = request
-	conversation := ""
+	system, opening, opened := "", llm.Message{}, false
 	for _, message := range request.Messages {
-		if message.Role == llm.RoleUser {
-			conversation = message.Content
-			break
+		if message.Role == llm.RoleSystem && system == "" {
+			system = message.Content
 		}
+		if message.Role == llm.RoleUser && message.Origin.Source != memoryViewSource && !opened {
+			opening, opened = message, true
+		}
+	}
+	conversation := opening.Content
+	if _, known := c.callers[conversation]; !known && opening.Origin.Source == forkTaskSource {
+		conversation = cmp.Or(c.firstOnSystem[system], conversation)
 	}
 	name, known := c.callers[conversation]
 	if !known {
@@ -322,6 +332,7 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 			name = subAgentCaller + strconv.Itoa(len(c.callers))
 		}
 		c.callers[conversation] = name
+		c.firstOnSystem[system] = cmp.Or(c.firstOnSystem[system], conversation)
 	}
 	if c.taken[name] >= len(c.decks[name]) {
 		return recordedReply{}, fmt.Errorf("%s holds %d replies for %s and %s asked for one more", c.name, len(c.decks[name]), callerName(name), callerName(name))

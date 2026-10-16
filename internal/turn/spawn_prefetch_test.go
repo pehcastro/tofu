@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -28,7 +29,8 @@ func (s *prefetchScript) Ask(_ context.Context, request llm.Request) (llm.Decisi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	script := &s.lead
-	if strings.Contains(request.Messages[0].Content, s.brief) {
+	opening := request.Messages[slices.IndexFunc(request.Messages, func(message llm.Message) bool { return message.Origin.Source != "memory view" })]
+	if strings.Contains(opening.Content, s.brief) {
 		script = &s.subAgent
 		s.asked = append(s.asked, request)
 	}

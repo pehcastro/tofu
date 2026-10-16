@@ -31,7 +31,7 @@ func (m *recordingModel) Ask(_ context.Context, request llm.Request) (llm.Decisi
 	return next, nil
 }
 
-func TestTheMemoryViewOpensTheSessionOnceAfterTheSystemMessageThroughARememberAResumeAndAFork(t *testing.T) {
+func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachForkAndResume(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(strings.Repeat("a line of the parser\n", 2000)), 0o644); err != nil {
 		t.Fatal(err)
@@ -60,11 +60,19 @@ func TestTheMemoryViewOpensTheSessionOnceAfterTheSystemMessageThroughARememberAR
 		Session:        id,
 		NewID:          func() string { return "turn-memory" },
 	}
-	firstTurn := 0
-	for _, task := range []string{"read big.txt", "now read big.txt again"} {
-		config.Task, firstTurn, model.replies = task, len(model.asked), []llm.Decision{reading, done}
+	resumed := "[memory#m3] Mock rule saved between sessions"
+	forks := func(request llm.Request) int {
+		return len(slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return !strings.HasPrefix(message.Content, "this is fork ") }))
+	}
+	for at, next := range []struct{ task, memory, source string }{
+		{task: "read big.txt", memory: view},
+		{task: "now read big.txt again", memory: view + "\n" + saved},
+		{task: "read big.txt once more", memory: view + "\n" + saved + "\n" + resumed, source: "resume"},
+	} {
+		opened := len(model.asked)
+		config.Task, config.Memory, config.SessionSource, model.replies = next.task, next.memory, next.source, []llm.Decision{reading, done}
 		if _, err := turn.Run(context.Background(), config); err != nil {
-			t.Fatalf("running %q: %v", task, err)
+			t.Fatalf("running %q: %v", next.task, err)
 		}
 		events, err := store.Events(id)
 		if err != nil {
@@ -73,32 +81,33 @@ func TestTheMemoryViewOpensTheSessionOnceAfterTheSystemMessageThroughARememberAR
 		if config.History, err = turn.ConversationFrom(events); err != nil {
 			t.Fatal(err)
 		}
-		config.Memory = view + "\n" + saved
-	}
-
-	forkedAfterResume := false
-	for i, request := range model.asked {
-		if system := request.Messages[0]; system.Role != llm.RoleSystem || system.Content != "you are tofu" {
-			t.Errorf("request %d opens on %s %q, want the system message alone and unchanged", i+1, system.Role, system.Content)
-		}
-		at := slices.IndexFunc(request.Messages, func(message llm.Message) bool { return message.Content == view })
-		copies := len(slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Content != view }))
-		if at != 1 || copies != 1 || request.Messages[1].Role != llm.RoleUser {
-			t.Errorf("request %d holds the memory view %d times, first at message %d, want once as the user message after the system message", i+1, copies, at)
-		}
-		for _, message := range request.Messages {
-			forkedAfterResume = forkedAfterResume || i >= firstTurn && strings.HasPrefix(message.Content, "this is fork ")
-			if strings.Contains(message.Content, saved) {
-				t.Errorf("request %d carries the entry saved mid-session, so the opening changed under the cache", i+1)
+		forkedInTheTurn := false
+		for i, request := range model.asked[opened:] {
+			number := opened + i + 1
+			if system := request.Messages[0]; system.Role != llm.RoleSystem || system.Content != "you are tofu" {
+				t.Errorf("request %d opens on %s %q, want the system message alone and unchanged", number, system.Role, system.Content)
+			}
+			views := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Origin.Source != "memory view" })
+			if len(views) != 1 {
+				t.Fatalf("request %d holds %d memory views, want one", number, len(views))
+			}
+			forked := forks(request) > forks(model.asked[opened])
+			forkedInTheTurn = forkedInTheTurn || forked
+			want := next.memory
+			if at == 1 && !forked {
+				want = view
+			}
+			if views[0].Content != want {
+				t.Errorf("request %d of turn %d, forked %v, carries the memory view\n%s\nwant\n%s", number, at+1, forked, views[0].Content, want)
 			}
 		}
-	}
-	if !forkedAfterResume {
-		t.Fatalf("%d requests, the second turn's from request %d, and none after the resume forked", len(model.asked), firstTurn+1)
+		if at == 1 && !forkedInTheTurn {
+			t.Fatalf("the second turn never forked in %d requests, so no fork refreshed the view", len(model.asked)-opened)
+		}
 	}
 }
 
-func TestABriefCarriesTheMemoryTheLeadCitesVerbatimAndNoOther(t *testing.T) {
+func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines(t *testing.T) {
 	lines := map[string]string{
 		"m1":      "[memory#m1] Replies stay short and plain",
 		"m2":      "[memory#m2] The commit hook refuses attribution",
@@ -157,7 +166,17 @@ func TestABriefCarriesTheMemoryTheLeadCitesVerbatimAndNoOther(t *testing.T) {
 			if len(script.asked) == 0 {
 				t.Fatalf("the sub-agent was never asked; the lead read %q", answered)
 			}
-			first := script.asked[0].Messages[0].Content
+			opened := script.asked[0].Messages
+			views := slices.DeleteFunc(slices.Clone(opened), func(message llm.Message) bool { return message.Origin.Source != "memory view" })
+			if len(opened) < 2 || len(views) != 1 || opened[0].Origin.Source != "memory view" {
+				t.Fatalf("the sub-agent's first request holds %d memory views in %d messages, want one before the brief", len(views), len(opened))
+			}
+			for id, line := range lines {
+				if got := strings.Count(opened[0].Content, line); got != 1 {
+					t.Errorf("%s is in the sub-agent's memory view %d times, want once:\n%s", id, got, opened[0].Content)
+				}
+			}
+			first := opened[1].Content
 			if len(row.cited) == 0 {
 				if strings.Contains(first, "cited") || !strings.HasSuffix(first, row.brief) {
 					t.Fatalf("a brief citing nothing changed:\n%s", first)

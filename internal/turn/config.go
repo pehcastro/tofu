@@ -180,10 +180,27 @@ func (c Config) SystemMessage() string {
 const sourceMemoryView = "memory view"
 
 func (c Config) MemoryMessage() []llm.Message {
-	if strings.TrimSpace(c.Memory) == "" || len(c.History) > 0 {
+	if strings.TrimSpace(c.Memory) == "" {
 		return nil
 	}
 	return []llm.Message{{Role: llm.RoleUser, Content: c.Memory, Origin: llm.Origin{Source: sourceMemoryView}}}
+}
+
+func (c Config) opensGeneration() bool {
+	return len(c.History) == 0 || c.SessionSource != ""
+}
+
+func withoutMemoryViews(messages []llm.Message) []llm.Message {
+	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return message.Origin.Source == sourceMemoryView })
+}
+
+func (c Config) withFreshMemoryView(head []llm.Message) []llm.Message {
+	head = withoutMemoryViews(head)
+	at := slices.IndexFunc(head, func(message llm.Message) bool { return !standsAtTheHead(message) })
+	if at < 0 {
+		at = len(head)
+	}
+	return slices.Insert(head, at, c.MemoryMessage()...)
 }
 
 func TaskIn(first string) (string, bool) {

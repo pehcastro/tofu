@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -312,7 +313,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 	raise := "the person can raise either in the settings menu."
 	cite := ""
 	if t.Remembered != nil {
-		cite = "a sub-agent sees none of your memory: cite each entry it needs as [memory#id] in the task, and that line is copied above the brief word for word. "
+		cite = "a sub-agent opens on every entry of your memory; cite the entries this task turns on as [memory#id] in the task, and each line is copied above the brief word for word. "
 	}
 	if t.SettingsTool {
 		raise = "the person can raise either in the settings menu, and you can ask to with the settings tool, which the person answers."
@@ -656,7 +657,6 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
 	subAgent := t.base
-	subAgent.Memory = ""
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
 	}
@@ -666,10 +666,20 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	held.kept.Lock()
 	subAgent.System, subAgent.Environment, subAgent.History, subAgent.Prefix = held.system, held.environment, held.history, &held.prefix
 	held.kept.Unlock()
+	subAgent.Memory = ""
+	if t.Remembered != nil {
+		lines, err := t.Remembered()
+		if err != nil && t.base.Notify != nil {
+			t.base.Notify("sub-agent " + held.agent.ID + " starts without your memory: " + err.Error())
+		}
+		if len(lines) > 0 {
+			subAgent.Memory = "remembered for you and the lead, each entry as it is saved:\n" + strings.Join(slices.Sorted(maps.Values(lines)), "\n")
+		}
+	}
 	subAgent.SpawnedFrom, subAgent.Boundary, subAgent.Inbox, subAgent.Steering = t.orchestratorID, held.boundary, held.inbox, nil
 	subAgent.Person = t.orchestratorAnswers(held, site)
 	subAgent.AgentType = held.definition.Name
-	subAgent.Session, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", site.log, site.turn, site.call
+	subAgent.Session, subAgent.SessionSource, subAgent.Log, subAgent.Turn, subAgent.SpawnedBy = "", "", site.log, site.turn, site.call
 	if site.log == nil {
 		subAgent.Sessions = nil
 	}
