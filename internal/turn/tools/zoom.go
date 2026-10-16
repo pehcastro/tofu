@@ -14,6 +14,8 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/memory"
 	"tofu/internal/memtree"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -141,15 +143,19 @@ func (z *Zoom) Compact(ask turn.RecordedAsk) error {
 			break
 		}
 		var asking sync.WaitGroup
-		slots := make(chan struct{}, konst.MemtreeCompactionsAtOnce)
+		slots, report := make(chan struct{}, konst.MemtreeCompactionsAtOnce), sys.Crashes(z.Project)
 		for question := range asked {
 			slots <- struct{}{}
 			asking.Go(func() {
-				line, err := compact(context.Background(), question.before, question.left, question.right)
+				defer func() { <-slots }()
+				var line string
+				err := safe.Call(report, "memory compaction", func() (err error) {
+					line, err = compact(context.Background(), question.before, question.left, question.right)
+					return err
+				})
 				answering.Lock()
 				answers[question] = summaryAnswer{line, err}
 				answering.Unlock()
-				<-slots
 			})
 		}
 		asking.Wait()

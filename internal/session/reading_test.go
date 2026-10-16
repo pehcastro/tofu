@@ -69,7 +69,7 @@ func TestAMemoryModelCallBetweenTheLeadsRequestsIsNotOneOfItsSteps(t *testing.T)
 		eventOf(t, EventRequest, StepBody{Index: 2, Model: "sonnet"}),
 	}
 	events[2].ID = "request-2"
-	shown, err := DefaultSettings().view(events)
+	shown, err := DefaultSettings().shown(events, withSteps, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func readingOf(t *testing.T, reading Reading, kind EventKind) int {
 
 func TestEveryDeclaredKindHasAReading(t *testing.T) {
 	for _, events := range [][]Event{oneOfEachKind(t), oneOfEachWrittenKind(t)} {
-		shown, err := DefaultSettings().view(events)
+		shown, err := DefaultSettings().shown(events, withSteps, nil)
 		if err != nil {
 			t.Fatalf("view one event of every kind: %v", err)
 		}

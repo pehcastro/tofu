@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"tofu/internal/safe"
 )
 
 const (
@@ -289,7 +291,12 @@ func gitIdentity(dir string) (remote, root string) {
 		return strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
 	}
 	var both sync.WaitGroup
-	both.Go(func() { root = git("rev-list", "--max-parents=0", "HEAD") })
+	both.Go(func() {
+		_ = safe.Call(Crashes(dir), "git identity", func() error {
+			root = git("rev-list", "--max-parents=0", "HEAD")
+			return nil
+		})
+	})
 	remote = git("remote", "get-url", "origin")
 	both.Wait()
 	if parsed, err := url.Parse(remote); err == nil && parsed.User != nil {

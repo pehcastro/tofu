@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/settings"
 	"tofu/internal/sys"
 )
@@ -66,6 +67,7 @@ type relay struct {
 	installed    func() (string, error)
 	cursor       bool
 	replaced     error
+	report       safe.Report
 }
 
 func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
@@ -132,30 +134,37 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		return err
 	}
 	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
-		installed: func() (string, error) { return installed(installedHost.Path) }, cursor: cursorOn(home)}
+		installed: func() (string, error) { return installed(installedHost.Path) }, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(sys.StateDir(home)) }}
 	r.idle = time.AfterFunc(idleAfter, func() {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		if !r.closed && len(r.pending) == 0 {
-			r.show(statusIdle)
-		}
+		_ = safe.Call(r.report, "browser idle", func() error {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if !r.closed && len(r.pending) == 0 {
+				r.show(statusIdle)
+			}
+			return nil
+		})
 	})
-	go func() {
+	safe.Go(r.report, "browser accept", func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			go r.serve(conn)
+			safe.Go(r.report, "browser session", func() { r.serve(conn) })
 		}
-	}()
+	})
 
 	stopWatching := make(chan struct{})
 	defer close(stopWatching)
-	go r.watchInstall(installedHost.Path, stopWatching)
+	safe.Go(r.report, "browser install watch", func() {
+		safe.Loop(r.report, "browser install watch", stopWatching, func() { r.watchInstall(installedHost.Path, stopWatching) })
+	})
 
 	read := make(chan error, 1)
-	go func() { read <- r.readExtension(stdin) }()
+	safe.Go(r.report, "browser extension reader", func() {
+		read <- safe.Call(r.report, "browser extension reader", func() error { return r.readExtension(stdin) })
+	})
 	select {
 	case err = <-read:
 	case <-r.restart:
@@ -332,7 +341,12 @@ func (r *relay) serve(conn net.Conn) {
 		if requests.Decode(&req) != nil {
 			break
 		}
-		r.handle(s, req)
+		if err := safe.Call(r.report, "browser request", func() error {
+			r.handle(s, req)
+			return nil
+		}); err != nil {
+			s.send(result{ID: req.ID, Error: err.Error()})
+		}
 	}
 
 	r.mu.Lock()

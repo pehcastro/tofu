@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"tofu/internal/safe"
 )
 
 type API struct {
@@ -93,7 +95,12 @@ func (a API) Report(request ReportRequest) (ReportAnswer, error) {
 	var events []Event
 	var eventsErr error
 	var reading sync.WaitGroup
-	reading.Go(func() { events, eventsErr = store.Events(key, 0) })
+	reading.Go(func() {
+		eventsErr = safe.Call(store.crashed, "boardy report events", func() (err error) {
+			events, err = store.Events(key, 0)
+			return err
+		})
+	})
 	tickets, ticketsErr := store.Tickets(key)
 	reading.Wait()
 	epics, epicsErr := store.Epics(key)

@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"time"
+
+	"tofu/internal/safe"
 )
 
 const (
@@ -55,9 +57,10 @@ func StartProfile() (stop func()) {
 	}
 	runtime.MemProfileRate = profileMemoryRate
 	_ = pprof.StartCPUProfile(cpu)
-	started, done, sampled := time.Now(), make(chan struct{}), make(chan []memoryPoint)
-	go func() {
+	started, done, sampled := time.Now(), make(chan struct{}), make(chan []memoryPoint, 1)
+	safe.Go(Crashes("."), "profile sampler", func() {
 		var points []memoryPoint
+		defer func() { sampled <- points }()
 		var peak uint64
 		tick := time.NewTicker(profileSampleEvery)
 		defer tick.Stop()
@@ -70,12 +73,11 @@ func StartProfile() (stop func()) {
 			}
 			select {
 			case <-done:
-				sampled <- points
 				return
 			case <-tick.C:
 			}
 		}
-	}()
+	})
 	return func() {
 		close(done)
 		points := <-sampled

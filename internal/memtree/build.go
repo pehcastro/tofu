@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 type Compact func(ctx context.Context, before, left, right string) (string, error)
@@ -59,10 +61,15 @@ func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 		built.Calls++
 		running++
 		before := s.before(ref)
-		go func() {
-			text, err := compact(ctx, before, left, right)
-			done <- compacted{ref: ref, text: text, err: err}
-		}()
+		report := sys.Crashes(".")
+		safe.Go(report, "memtree compaction", func() {
+			finished := compacted{ref: ref}
+			finished.err = safe.Call(report, "memtree compaction", func() (err error) {
+				finished.text, err = compact(ctx, before, left, right)
+				return err
+			})
+			done <- finished
+		})
 	}
 	s.ready = failed
 	return built, nil

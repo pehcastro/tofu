@@ -17,6 +17,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 type Placement string
@@ -188,8 +190,9 @@ func scanTree(req Request, into *sweep, matched map[string]string, declared map[
 	var next atomic.Int64
 	var stop atomic.Bool
 	defer stop.Store(true)
+	report := sys.Crashes(req.Root)
 	for range min(runtime.GOMAXPROCS(0), len(req.Files)) {
-		go func() {
+		safe.Go(report, "search scan", func() {
 			var buffer []byte
 			for !stop.Load() {
 				index := int(next.Add(1)) - 1
@@ -201,10 +204,15 @@ func scanTree(req Request, into *sweep, matched map[string]string, declared map[
 					size = req.Sizes[index]
 				}
 				var file scannedFile
-				file, buffer = scanFile(req.Root, req.Files[index], size, into.pattern, buffer)
+				if err := safe.Call(report, "search scan", func() error {
+					file, buffer = scanFile(req.Root, req.Files[index], size, into.pattern, buffer)
+					return nil
+				}); err != nil {
+					file = scannedFile{err: err}
+				}
 				scanned[index] <- file
 			}
-		}()
+		})
 	}
 	for index, rel := range req.Files {
 		if into.lines >= konst.SearchCandidateScanCap {

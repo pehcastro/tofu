@@ -37,7 +37,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 3 packages · 10 rules",
+		"Imports · 3 packages · 11 rules",
 		"✗ 1 violations\n",
 		"  ✗ tofu/cmd             never tofu/bench\n",
 		"violations\n  ✗ tofu/cmd/tofu  imports tofu/bench/cost\n",
@@ -65,7 +65,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	}
 	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/turn", Rule: "under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
-		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/transport"}
+		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/safe, tofu/internal/transport"}
 	if len(report.Violations) != 1 || report.Violations[0] != want {
 		t.Fatalf("violations %+v, want only %+v", report.Violations, want)
 	}
@@ -84,7 +84,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, exitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 4 packages · 10 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 4 packages · 11 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {

@@ -16,6 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/models"
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 )
 
@@ -111,8 +112,14 @@ func Definitions(scan Scan) Found {
 		}
 	}
 	var reading sync.WaitGroup
+	report := sys.Crashes(scan.Project)
 	for i := range files {
-		reading.Go(func() { files[i].definition, files[i].err = read(files[i].layer.FS, files[i].match) })
+		reading.Go(func() {
+			files[i].err = safe.Call(report, "sub-agent discovery", func() (err error) {
+				files[i].definition, err = read(files[i].layer.FS, files[i].match)
+				return err
+			})
+		})
 	}
 	reading.Wait()
 	index := map[string]int{}

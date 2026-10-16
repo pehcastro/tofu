@@ -20,6 +20,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/search"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
@@ -415,12 +416,17 @@ type dirListing struct {
 func (w *walk) readAhead(dir string) {
 	listed := make(chan dirListing, 1)
 	w.ahead[dir] = listed
-	go func() {
-		w.readers <- struct{}{}
-		entries, err := os.ReadDir(dir)
-		<-w.readers
-		listed <- dirListing{entries: entries, err: err}
-	}()
+	report := sys.Crashes(string(w.root))
+	safe.Go(report, "glob read ahead", func() {
+		var read dirListing
+		read.err = safe.Call(report, "glob read ahead", func() (err error) {
+			w.readers <- struct{}{}
+			defer func() { <-w.readers }()
+			read.entries, err = os.ReadDir(dir)
+			return err
+		})
+		listed <- read
+	})
 }
 
 func (w *walk) list(dir string) ([]fs.DirEntry, error) {

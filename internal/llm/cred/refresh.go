@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 const (
@@ -129,15 +131,19 @@ func (m *Manager) refreshOnce(ctx context.Context, row Row, stale func(Credentia
 	if !joined {
 		running = &flight{done: make(chan struct{})}
 		m.inflight[row.ID] = running
-		go func() {
-			detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
-			defer cancel()
-			running.access, running.err = m.refreshLeased(detached, row, stale)
+		report := sys.Crashes(".")
+		safe.Go(report, "credential refresh", func() {
+			running.err = safe.Call(report, "credential refresh", func() (err error) {
+				detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
+				defer cancel()
+				running.access, err = m.refreshLeased(detached, row, stale)
+				return err
+			})
 			m.mu.Lock()
 			delete(m.inflight, row.ID)
 			m.mu.Unlock()
 			close(running.done)
-		}()
+		})
 	}
 	m.mu.Unlock()
 	select {

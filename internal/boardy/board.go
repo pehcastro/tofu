@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 )
 
@@ -228,8 +229,11 @@ func (s Store) Tickets(key string) ([]Ticket, error) {
 		return nil, err
 	}
 	paths, err := s.TicketFiles(key)
-	read, readErrs := make([]Ticket, len(paths)), make([]error, len(paths))
-	eachInParallel(len(paths), func(at int) { read[at], readErrs[at] = ReadTicket(paths[at]) })
+	read := make([]Ticket, len(paths))
+	readErrs := s.eachInParallel(len(paths), func(at int) (err error) {
+		read[at], err = ReadTicket(paths[at])
+		return err
+	})
 	tickets := make([]Ticket, 0, len(paths))
 	for at, ticket := range read {
 		if readErrs[at] != nil {
@@ -241,17 +245,23 @@ func (s Store) Tickets(key string) ([]Ticket, error) {
 	return tickets, err
 }
 
-func eachInParallel(count int, do func(at int)) {
+func (s Store) eachInParallel(count int, do func(at int) error) []error {
+	failed := make([]error, count)
 	var workers sync.WaitGroup
 	var next atomic.Int64
 	for range min(konst.BoardReadersMost, count) {
 		workers.Go(func() {
 			for at := int(next.Add(1)) - 1; at < count; at = int(next.Add(1)) - 1 {
-				do(at)
+				failed[at] = safe.Call(s.crashed, "boardy read", func() error { return do(at) })
 			}
 		})
 	}
 	workers.Wait()
+	return failed
+}
+
+func (s Store) crashed(p safe.Panic) {
+	p.Saved(filepath.Dir(s.Dir))
 }
 
 func (s Store) Create(key string, ticket Ticket) (Ticket, error) {

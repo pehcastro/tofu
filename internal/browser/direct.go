@@ -13,6 +13,8 @@ import (
 
 	"tofu/internal/browser/extension"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 type direct struct {
@@ -23,6 +25,7 @@ type direct struct {
 	sessions map[string]string
 	mu       sync.Mutex
 	casts    map[string]*[]ScreencastFrame
+	report   safe.Report
 }
 
 type pageTarget struct {
@@ -48,15 +51,15 @@ func serveDirect(cdp *cdpConn, profile string) (*Client, error) {
 		return nil, err
 	}
 	near, far := net.Pipe()
-	d := &direct{cdp: cdp, profile: profile, build: build, snapshot: string(source), sessions: map[string]string{}, casts: map[string]*[]ScreencastFrame{}}
-	go d.serve(far)
+	d := &direct{cdp: cdp, profile: profile, build: build, snapshot: string(source), sessions: map[string]string{}, casts: map[string]*[]ScreencastFrame{}, report: sys.Crashes(".")}
+	safe.Go(d.report, "browser direct", func() { d.serve(far) })
 	return &Client{conn: near, out: json.NewEncoder(near), in: json.NewDecoder(near)}, nil
 }
 
 func (d *direct) serve(conn net.Conn) {
 	defer func() { _ = d.cdp.ws.Close() }()
 	requests, answers := make(chan request), json.NewEncoder(conn)
-	go func() {
+	safe.Go(d.report, "browser direct reader", func() {
 		defer close(requests)
 		for decoder := json.NewDecoder(conn); ; {
 			var req request
@@ -65,9 +68,13 @@ func (d *direct) serve(conn net.Conn) {
 			}
 			requests <- req
 		}
-	}()
+	})
 	for req := range requests {
-		value, err := d.handle(req)
+		var value json.RawMessage
+		err := safe.Call(d.report, "browser request", func() (err error) {
+			value, err = d.handle(req)
+			return err
+		})
 		answer := result{ID: req.ID, OK: err == nil, Value: value}
 		if err != nil {
 			answer.Error = err.Error()
@@ -414,9 +421,9 @@ func (d *direct) screencast(session string, req request) (json.RawMessage, error
 			d.mu.Lock()
 			*frames = append(*frames, ScreencastFrame{Data: frame.Data, ChromeSeconds: frame.Metadata.Timestamp})
 			d.mu.Unlock()
-			go func() {
+			safe.Go(d.report, "browser frame ack", func() {
 				_, _ = d.cdp.send(session, "Page.screencastFrameAck", map[string]any{"sessionId": frame.Session})
-			}()
+			})
 		})
 		_, err := d.cdp.send(session, "Page.startScreencast", map[string]any{"format": "jpeg", "everyNthFrame": 1})
 		if err != nil {

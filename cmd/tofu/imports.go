@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -21,26 +22,21 @@ type importRule struct {
 }
 
 func importRules() []importRule {
-	return []importRule{
+	leaves := []string{"tofu/internal/sys", "tofu/internal/konst", "tofu/internal/safe"}
+	rules := []importRule{
 		{from: "tofu/cmd", scope: "tofu/bench"},
 		{from: "tofu/interface", scope: "tofu/bench"},
 		{from: "tofu/internal", scope: "tofu/bench"},
 		{from: "tofu/internal", scope: "tofu/cmd"},
 		{from: "tofu/internal", scope: "tofu/interface"},
 		{from: "tofu/library", scope: "tofu"},
-		{from: "tofu/internal/konst", scope: "tofu"},
-		{from: "tofu/internal/sys", scope: "tofu"},
-		{
-			from:  "tofu/internal/judge",
-			scope: "tofu/internal",
-			allow: []string{"tofu/internal/judge", "tofu/internal/sys", "tofu/internal/konst", "tofu/internal/transport"},
-		},
-		{
-			from:  "tofu/internal/point",
-			scope: "tofu/internal",
-			allow: []string{"tofu/internal/judge", "tofu/internal/rule", "tofu/internal/transform", "tofu/internal/sys", "tofu/internal/konst"},
-		},
+		{from: "tofu/internal/judge", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge"}, leaves, []string{"tofu/internal/transport"})},
+		{from: "tofu/internal/point", scope: "tofu/internal", allow: slices.Concat([]string{"tofu/internal/judge", "tofu/internal/rule", "tofu/internal/transform"}, leaves)},
 	}
+	for _, leaf := range leaves {
+		rules = append(rules, importRule{from: leaf, scope: "tofu", allow: leaves})
+	}
+	return rules
 }
 
 func (r importRule) String() string {

@@ -100,8 +100,8 @@ func (s Store) Events(key string, from int) ([]Event, error) {
 		}
 		lines = append(lines, slices.Clone(scanner.Bytes()))
 	}
-	events, decodeErrs := make([]Event, len(lines)), make([]error, len(lines))
-	eachInParallel(len(lines), func(at int) { decodeErrs[at] = json.Unmarshal(lines[at], &events[at]) })
+	events := make([]Event, len(lines))
+	decodeErrs := s.eachInParallel(len(lines), func(at int) error { return json.Unmarshal(lines[at], &events[at]) })
 	decoded, err := len(lines), scanner.Err()
 	if at := slices.IndexFunc(decodeErrs, func(err error) bool { return err != nil }); at >= 0 {
 		decoded, err = at, fmt.Errorf("%s line %d: %w", EventsFileName, skipped+at+1, decodeErrs[at])

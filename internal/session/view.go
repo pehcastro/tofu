@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+
+	"tofu/internal/safe"
 )
 
 type viewDepth int
@@ -15,9 +17,7 @@ const (
 	withoutSteps
 )
 
-func (s Settings) view(events []Event) ([]Event, error) { return s.shown(events, withSteps) }
-
-func (s Settings) shown(events []Event, depth viewDepth) ([]Event, error) {
+func (s Settings) shown(events []Event, depth viewDepth, report safe.Report) ([]Event, error) {
 	calls := map[string]Event{}
 	asked := map[string][]string{}
 	madeBy := map[string][]string{}
@@ -120,7 +120,10 @@ func (s Settings) shown(events []Event, depth viewDepth) ([]Event, error) {
 	var all sync.WaitGroup
 	for part := range ways {
 		all.Go(func() {
-			parts[part], failures[part] = showPart(events[part*len(events)/ways : (part+1)*len(events)/ways])
+			failures[part] = safe.Call(report, "session view", func() (err error) {
+				parts[part], err = showPart(events[part*len(events)/ways : (part+1)*len(events)/ways])
+				return err
+			})
 		})
 	}
 	all.Wait()

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/websocket"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 )
 
@@ -191,7 +192,8 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 		return nil, err
 	}
 	exited := make(chan error, 1)
-	go func() { exited <- command.Wait() }()
+	report := sys.Crashes(".")
+	safe.Go(report, "chrome wait", func() { exited <- safe.Call(report, "chrome wait", command.Wait) })
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); time.Now().Before(until); {
 		if conn, err := attachChrome(dir); err == nil {
 			return conn, nil

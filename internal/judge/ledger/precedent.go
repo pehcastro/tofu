@@ -1,12 +1,15 @@
 package ledger
 
 import (
+	"errors"
 	"math"
 	"slices"
 	"sync"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 const precedentShortlistMax = 10
@@ -128,11 +131,17 @@ func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
 	if err != nil {
 		return nil, err
 	}
-	found := make([][]Precedent, len(targets))
+	found, failed := make([][]Precedent, len(targets)), make([]error, len(targets))
 	var shortlisting sync.WaitGroup
+	report := sys.Crashes(".")
 	for i, target := range targets {
-		shortlisting.Go(func() { found[i] = Shortlist(target, points[target.Point]) })
+		shortlisting.Go(func() {
+			failed[i] = safe.Call(report, "precedent shortlist", func() error {
+				found[i] = Shortlist(target, points[target.Point])
+				return nil
+			})
+		})
 	}
 	shortlisting.Wait()
-	return found, nil
+	return found, errors.Join(failed...)
 }

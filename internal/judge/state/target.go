@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"tofu/internal/sys"
@@ -65,14 +66,16 @@ func TargetsOf(in ToolGateInput) WriteTargets {
 	case "read", "grep", "glob", "ls", "webfetch", "websearch", "todowrite", "task":
 		return nothingFound(NoWriteFound)
 	case "write", "edit", "notebookedit":
-		named, ok := in.Input["path"].(string)
-		if !ok {
-			named, ok = in.Input["file_path"].(string)
-		}
-		if !ok || strings.TrimSpace(named) == "" {
+		named, known := pathsNamed(in.Input)
+		if !known || len(named) == 0 {
 			return nothingFound(TargetUnknown)
 		}
-		return WriteTargets{Determination: TargetsResolved, Targets: []WriteTarget{describe(resolve(where.Cwd, named), where)}}
+		slices.Sort(named)
+		targets := make([]WriteTarget, len(named))
+		for i, one := range named {
+			targets[i] = describe(resolve(where.Cwd, one), where)
+		}
+		return WriteTargets{Determination: TargetsResolved, Targets: targets}
 	case "bash", "powershell", "shell":
 		command, ok := in.Input["command"].(string)
 		if !ok {
@@ -85,6 +88,34 @@ func TargetsOf(in ToolGateInput) WriteTargets {
 		return found
 	}
 	return nothingFound(TargetUnknown)
+}
+
+func pathsNamed(fields map[string]any) ([]string, bool) {
+	var named []string
+	for key, value := range fields {
+		switch {
+		case strings.EqualFold(key, "path") || strings.EqualFold(key, "file_path"):
+			text, ok := value.(string)
+			if !ok || strings.TrimSpace(text) == "" {
+				return nil, false
+			}
+			named = append(named, text)
+		case strings.EqualFold(key, "edits"):
+			edits, ok := value.([]any)
+			if !ok {
+				return nil, false
+			}
+			for _, edit := range edits {
+				inner, ok := edit.(map[string]any)
+				more, known := pathsNamed(inner)
+				if !ok || !known || len(more) == 0 {
+					return nil, false
+				}
+				named = append(named, more...)
+			}
+		}
+	}
+	return named, true
 }
 
 func resolve(base, target string) string {

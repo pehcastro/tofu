@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 const (
@@ -99,8 +102,19 @@ func startCallback(path, expectedState string, port int, portFallback, ipv6 bool
 		cb.deliver(w, r, expectedState)
 	})
 	cb.server = &http.Server{Handler: mux}
+	report := sys.Crashes(".")
 	for _, listener := range listeners {
-		go func(l net.Listener) { _ = cb.server.Serve(l) }(listener)
+		safe.Go(report, "login callback", func() {
+			if err := safe.Call(report, "login callback", func() error {
+				_ = cb.server.Serve(listener)
+				return nil
+			}); err != nil {
+				select {
+				case cb.results <- callbackResult{err: err}:
+				default:
+				}
+			}
+		})
 	}
 	return cb, nil
 }

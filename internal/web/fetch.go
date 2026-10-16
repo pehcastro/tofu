@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 type Page struct {
@@ -94,8 +96,12 @@ func (c *Client) Get(ctx context.Context, address string) (Page, error) {
 	if !joining {
 		shared = &flight{done: make(chan struct{})}
 		c.flights[key] = shared
-		go func() {
-			shared.page, shared.err = c.fetch(context.WithoutCancel(ctx), target)
+		report := sys.Crashes(".")
+		safe.Go(report, "web fetch", func() {
+			shared.err = safe.Call(report, "web fetch", func() (err error) {
+				shared.page, err = c.fetch(context.WithoutCancel(ctx), target)
+				return err
+			})
 			c.mutex.Lock()
 			if shared.err == nil {
 				c.pages[key] = shared.page
@@ -103,7 +109,7 @@ func (c *Client) Get(ctx context.Context, address string) (Page, error) {
 			delete(c.flights, key)
 			c.mutex.Unlock()
 			close(shared.done)
-		}()
+		})
 	}
 	c.mutex.Unlock()
 

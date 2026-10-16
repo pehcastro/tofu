@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 )
 
@@ -59,6 +60,8 @@ func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 func (s *Store) Project() string { return s.project }
 
 func (s *Store) State() string { return filepath.Dir(s.dir) }
+
+func (s *Store) crashed(p safe.Panic) { p.Saved(s.State()) }
 
 func (s *Store) AttachmentDir(id string) string {
 	return filepath.Join(filepath.Dir(s.dir), attachmentsName, id)
@@ -364,7 +367,7 @@ func (s *Store) Body(handle string) ([]Event, error) {
 }
 
 func (s *Store) Part(events []Event, part string) ([]Event, error) {
-	return s.settings.view(partOf(events, part))
+	return s.settings.shown(partOf(events, part), withSteps, s.crashed)
 }
 
 func (s *Store) Said(events []Event) (said []Event, steps int, err error) {
@@ -374,7 +377,7 @@ func (s *Store) Said(events []Event) (said []Event, steps int, err error) {
 			steps++
 		}
 	}
-	said, err = s.settings.shown(kept, withoutSteps)
+	said, err = s.settings.shown(kept, withoutSteps, s.crashed)
 	return said, steps, err
 }
 

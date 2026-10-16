@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/sys"
@@ -137,8 +138,16 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	stdin, _ := json.Marshal(payload)
 	results := make([]Result, len(chosen))
 	var running sync.WaitGroup
+	report := sys.Crashes(e.project)
 	for i, hook := range chosen {
-		running.Go(func() { results[i] = e.run(ctx, hook, stdin) })
+		running.Go(func() {
+			if err := safe.Call(report, "hook", func() error {
+				results[i] = e.run(ctx, hook, stdin)
+				return nil
+			}); err != nil {
+				results[i] = Result{At: time.Now(), Problem: err.Error()}
+			}
+		})
 	}
 	running.Wait()
 	for i := range results {

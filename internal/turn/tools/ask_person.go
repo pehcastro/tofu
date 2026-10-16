@@ -15,7 +15,9 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/subagent"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 )
 
@@ -137,7 +139,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 	if blocks, decided := turn.QuestionsBlockFrom(ctx); decided {
 		auto = !blocks
 	}
-	recorded := make(chan []string, 1)
+	recorded, report := make(chan []string, 1), sys.Crashes(".")
 	if auto && reversible && a.Judge != nil {
 		acting := *a.Judge
 		acting.Rule.Mode = gate.ModeEnforced
@@ -151,17 +153,31 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (turn.Result, e
 		}
 		recorded <- ids
 	} else {
-		go func() { recorded <- a.recordShadow(context.WithoutCancel(ctx), questions) }()
+		safe.Go(report, "ask record", func() {
+			var ids []string
+			defer func() { recorded <- ids }()
+			ids = a.recordShadow(context.WithoutCancel(ctx), questions)
+		})
 	}
 	replied := make(chan personReply, 1)
-	go func() { replied <- a.reply(ctx, raw, questions, auto) }()
+	safe.Go(report, "ask reply", func() {
+		var reply personReply
+		if err := safe.Call(report, "ask reply", func() error {
+			reply = a.reply(ctx, raw, questions, auto)
+			return nil
+		}); err != nil {
+			reply.err = err
+		}
+		replied <- reply
+	})
 	if !auto {
 		reply := answered(<-replied, questions)
 		a.backfill(<-recorded, reply.Outcome)
 		shown, err := json.Marshal(reply)
 		return turn.Result{Content: string(shown)}, err
 	}
-	go a.answerLater(a.Inbox.Open(pollOf(questions)), replied, recorded, questions)
+	open := a.Inbox.Open(pollOf(questions))
+	safe.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
 	return turn.Result{Content: askedAndWorking}, nil
 }
 

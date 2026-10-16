@@ -10,6 +10,8 @@ import (
 	"golang.org/x/net/websocket"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
+	"tofu/internal/sys"
 )
 
 type cdpConn struct {
@@ -19,6 +21,7 @@ type cdpConn struct {
 	waiting map[int64]chan cdpMessage
 	events  map[string]func(json.RawMessage)
 	done    chan struct{}
+	lost    error
 }
 
 type cdpMessage struct {
@@ -34,19 +37,22 @@ type cdpMessage struct {
 
 func newCDPConn(ws *websocket.Conn) *cdpConn {
 	c := &cdpConn{ws: ws, waiting: map[int64]chan cdpMessage{}, events: map[string]func(json.RawMessage){}, done: make(chan struct{})}
-	go c.read()
+	report := sys.Crashes(".")
+	safe.Go(report, "browser reader", func() {
+		defer close(c.done)
+		c.lost = safe.Call(report, "browser reader", c.read)
+	})
 	return c
 }
 
-func (c *cdpConn) read() {
-	defer close(c.done)
+func (c *cdpConn) read() error {
 	for {
 		var in struct {
 			cdpMessage
 			Params json.RawMessage `json:"params"`
 		}
 		if websocket.JSON.Receive(c.ws, &in) != nil {
-			return
+			return nil
 		}
 		c.mu.Lock()
 		waiter, event := c.waiting[in.ID], c.events[in.SessionID+" "+in.Method]
@@ -94,6 +100,9 @@ func (c *cdpConn) send(session, method string, params any) (json.RawMessage, err
 		}
 		return got.Result, nil
 	case <-c.done:
+		if c.lost != nil {
+			return nil, fmt.Errorf("%w: the debugging connection ended during %s: %w", ErrNotConnected, method, c.lost)
+		}
 		return nil, fmt.Errorf("%w: Chrome closed the debugging connection during %s", ErrNotConnected, method)
 	case <-time.After(konst.BrowserCallTimeoutMillis * time.Millisecond):
 		c.mu.Lock()
