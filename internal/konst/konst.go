@@ -281,6 +281,8 @@ const (
 	FinishedShellKeptHours    = 72
 )
 
+const TemporaryProjectIdleHours = 2
+
 const (
 	CatalogStaleHours = 24
 	CatalogRetryHours = 1

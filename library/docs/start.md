@@ -79,6 +79,17 @@ Work a task without the app, printing as it goes:
 
     tofu run --dir . "fix the failing test"
 
+Try tofu in a throwaway folder without keeping what it writes:
+
+    tofu --temporary-project
+    tofu run --temporary-project --dir . "fix the failing test"
+
+The project is registered as temporary, and the first tofu started two
+hours after its last use removes its sessions, undo history and logs from
+`~/.tofu/projects`, never while a tofu still has it open. The folder you
+opened is never touched. Open the
+project once without the flag and tofu keeps it for good.
+
 ## Check it
 
     tofu doctor

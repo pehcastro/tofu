@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/library/changelog"
 )
@@ -24,6 +25,10 @@ const usage = `tofu is a coding agent harness.
 Usage:
   tofu                    start the app in this directory
   tofu --continue         start the app on the session you last worked in
+  tofu --temporary-project
+                          start the app in a project tofu forgets %d hours after
+                          its last use: its sessions, undo history and logs;
+                          tofu run takes the same flag
   tofu <verb> [arguments]
 
 Verbs:
@@ -92,25 +97,30 @@ func loadLocalTimeZone() { _ = time.Local.String() }
 func main() {
 	go loadLocalTimeZone()
 	stopProfile := sys.StartProfile()
-	opensTheApp := len(os.Args) < 2 || os.Args[1] == "--continue"
-	if opensTheApp || os.Args[1] == "migrate" {
+	reapTemporaryProjects(os.Stderr)
+	args, temporary := temporaryProject(os.Args[1:])
+	opensTheApp := len(args) == 0 || args[0] == "--continue"
+	if opensTheApp || args[0] == "migrate" {
 		copyLegacyStateDirs(os.Stderr)
 	}
-	dir, opens := openedProject(os.Args[1:])
+	dir, opens := openedProject(args)
 	register := sys.Project.Register
 	if opensTheApp {
 		register = sys.Project.RegisterIdentityLater
 	}
+	letGo := func() {}
 	if opens {
-		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), register)
+		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), temporary, register)
+		letGo = sys.HoldProjectOpen(dir)
 	}
 	if wd, err := os.Getwd(); err == nil && (opensTheApp || opens) {
 		moveProjectState(os.Stderr, wd)
 	}
 	moveHomeKeys(os.Stderr)
 	pages := sys.ReadConsolePages()
-	code := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+	code := run(args, os.Stdin, os.Stdout, os.Stderr)
 	pages.Restore()
+	letGo()
 	stopProfile()
 	os.Exit(code)
 }
@@ -222,7 +232,7 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	case "preview":
 		return previewVerb(args[1:], out, errOut)
 	case "help", "-h", "--help":
-		_, _ = fmt.Fprint(out, usage)
+		_, _ = fmt.Fprintf(out, usage, konst.TemporaryProjectIdleHours)
 		return exitOK
 	default:
 		page := cli.Detect(errOut, os.Environ())

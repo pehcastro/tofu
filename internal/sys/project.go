@@ -1,6 +1,7 @@
 package sys
 
 import (
+	"bytes"
 	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/safe"
 )
 
@@ -25,6 +27,8 @@ const (
 	ProjectRegistryName = "projects.json"
 	ProjectFileName     = "project.toml"
 	projectLockName     = "projects.lock"
+	reapedDirName       = ".reaped"
+	projectOpenDirName  = "open"
 	projectNameLimit    = 40
 	projectHashLength   = 8
 	registryLockWait    = 3 * time.Second
@@ -33,12 +37,14 @@ const (
 )
 
 type ProjectEntry struct {
-	Folder  string    `json:"folder"`
-	Paths   []string  `json:"paths"`
-	Remote  string    `json:"remote,omitempty"`
-	Root    string    `json:"root_commit,omitempty"`
-	Legacy  string    `json:"legacy,omitempty"`
-	Created time.Time `json:"created"`
+	Folder    string    `json:"folder"`
+	Paths     []string  `json:"paths"`
+	Remote    string    `json:"remote,omitempty"`
+	Root      string    `json:"root_commit,omitempty"`
+	Legacy    string    `json:"legacy,omitempty"`
+	Created   time.Time `json:"created"`
+	Temporary bool      `json:"temporary,omitempty"`
+	Used      time.Time `json:"used,omitzero"`
 }
 
 type projectRegistry struct {
@@ -46,15 +52,17 @@ type projectRegistry struct {
 }
 
 type Project struct {
-	Path       string
-	State      string
-	Legacy     string
-	Registered bool
-	Moved      *ProjectEntry
-	home       string
-	remote     string
-	root       string
-	identified bool
+	Path         string
+	State        string
+	Legacy       string
+	Registered   bool
+	Temporary    bool
+	Moved        *ProjectEntry
+	home         string
+	remote       string
+	root         string
+	identified   bool
+	wasTemporary bool
 }
 
 func projectKey(path string) string {
@@ -144,60 +152,62 @@ func readProjectRegistry(home string) (projectRegistry, error) {
 	return registry, nil
 }
 
-func registeredFolder(home, path string) (string, error) {
+type registeredEntry struct {
+	Folder    string   `json:"folder"`
+	Paths     []string `json:"paths"`
+	Temporary bool     `json:"temporary"`
+}
+
+func registeredFolder(home, path string) (registeredEntry, error) {
 	name := filepath.Join(home, ProjectRegistryName)
 	file, err := os.Open(name)
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
+		return registeredEntry{}, nil
 	}
 	if err == nil {
 		defer func() { _ = file.Close() }()
-		var found string
+		var found registeredEntry
 		if found, err = folderHolding(json.NewDecoder(file), path); err == nil {
 			return found, nil
 		}
 	}
-	return "", fmt.Errorf("the project registry %s: %w", name, err)
+	return registeredEntry{}, fmt.Errorf("the project registry %s: %w", name, err)
 }
 
-func folderHolding(decoder *json.Decoder, path string) (string, error) {
+func folderHolding(decoder *json.Decoder, path string) (registeredEntry, error) {
+	var entry, found registeredEntry
 	open, err := decoder.Token()
 	if err != nil || open == nil {
-		return "", err
+		return found, err
 	}
 	if open != json.Delim('{') {
-		return "", fmt.Errorf("it holds %v where an object belongs", open)
+		return found, fmt.Errorf("it holds %v where an object belongs", open)
 	}
-	var entry struct {
-		Folder string   `json:"folder"`
-		Paths  []string `json:"paths"`
-	}
-	found := ""
 	for decoder.More() {
 		key, err := decoder.Token()
 		if err != nil {
-			return "", err
+			return found, err
 		}
 		if key != "projects" {
 			if err := decoder.Decode(&json.RawMessage{}); err != nil {
-				return "", err
+				return found, err
 			}
 			continue
 		}
 		if list, err := decoder.Token(); err != nil || list != json.Delim('[') {
-			return "", err
+			return found, err
 		}
 		for decoder.More() {
-			entry.Folder, entry.Paths = "", entry.Paths[:0]
+			entry = registeredEntry{Paths: entry.Paths[:0]}
 			if err := decoder.Decode(&entry); err != nil {
-				return "", err
+				return found, err
 			}
-			if found == "" && slices.ContainsFunc(entry.Paths, func(p string) bool { return samePath(p, path) }) {
-				found = entry.Folder
+			if found.Folder == "" && slices.ContainsFunc(entry.Paths, func(p string) bool { return samePath(p, path) }) {
+				found = registeredEntry{Folder: entry.Folder, Temporary: entry.Temporary}
 			}
 		}
 		if _, err := decoder.Token(); err != nil {
-			return "", err
+			return found, err
 		}
 	}
 	_, err = decoder.Token()
@@ -211,12 +221,12 @@ func locateProject(home, dir string) (Project, projectRegistry, error) {
 	}
 	project := Project{Path: resolvedPath(abs), home: home}
 	projects := filepath.Join(home, ProjectsDirName)
-	folder, err := registeredFolder(home, project.Path)
+	found, err := registeredFolder(home, project.Path)
 	if err != nil {
 		return Project{}, projectRegistry{}, err
 	}
-	if folder != "" {
-		project.State, project.Registered = filepath.Join(projects, folder), true
+	if found.Folder != "" {
+		project.State, project.Registered, project.wasTemporary = filepath.Join(projects, found.Folder), true, found.Temporary
 		return project, projectRegistry{}, nil
 	}
 	registry, err := readProjectRegistry(home)
@@ -342,13 +352,142 @@ func (p Project) RegisterIdentityLater() error {
 		if registry.folder(filepath.Base(p.State)) != nil {
 			return nil, fmt.Errorf("the project folder %s was taken by another project while %s was opening", p.State, p.Path)
 		}
-		entry := ProjectEntry{Folder: filepath.Base(p.State), Paths: []string{p.Path}, Remote: p.remote, Root: p.root, Created: time.Now().UTC()}
+		entry := ProjectEntry{Folder: filepath.Base(p.State), Paths: []string{p.Path}, Remote: p.remote, Root: p.root, Created: time.Now().UTC(), Temporary: p.Temporary, Used: usedNow(p.Temporary)}
 		if p.Legacy != "" {
 			entry.Legacy = filepath.Base(p.Legacy)
 		}
 		registry.Projects = append(registry.Projects, entry)
 		return &registry.Projects[len(registry.Projects)-1], nil
 	})
+}
+
+func usedNow(temporary bool) time.Time {
+	if temporary {
+		return time.Now().UTC()
+	}
+	return time.Time{}
+}
+
+func (p Project) Reopen() error {
+	if !p.wasTemporary {
+		return nil
+	}
+	return p.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
+		entry := registry.holding(p.Path)
+		if entry == nil {
+			return nil, fmt.Errorf("%s left the project registry while it was opening", p.Path)
+		}
+		entry.Temporary, entry.Used = p.Temporary, usedNow(p.Temporary)
+		return entry, nil
+	})
+}
+
+func ReapTemporaryProjects(home string, now time.Time) ([]string, error) {
+	projects := filepath.Join(home, ProjectsDirName)
+	reaped, err := reapIdle(home, projects, now)
+	if trash := filepath.Join(projects, reapedDirName); pathExists(trash) {
+		err = errors.Join(err, os.RemoveAll(trash))
+	}
+	return reaped, err
+}
+
+func reapIdle(home, projects string, now time.Time) ([]string, error) {
+	name := filepath.Join(home, ProjectRegistryName)
+	raw, err := os.ReadFile(name)
+	if errors.Is(err, fs.ErrNotExist) || err == nil && !bytes.Contains(raw, []byte(`"temporary": true`)) {
+		return nil, nil
+	}
+	var read projectRegistry
+	if err == nil {
+		err = json.Unmarshal(raw, &read)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("the project registry %s: %w", name, err)
+	}
+	idleSince := now.Add(-konst.TemporaryProjectIdleHours * time.Hour)
+	idle := slices.DeleteFunc(read.Projects, func(entry ProjectEntry) bool {
+		state := filepath.Join(projects, entry.Folder)
+		return !entry.Temporary || !ownStateFolder(entry.Folder) || slices.ContainsFunc(entry.Paths, func(path string) bool { return inside(state, path) }) || usedSince(entry, state, idleSince)
+	})
+	if len(idle) == 0 {
+		return nil, nil
+	}
+	var reaped []string
+	var failed []error
+	trash := filepath.Join(projects, reapedDirName)
+	err = Project{home: home}.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
+		if err := os.MkdirAll(trash, 0o755); err != nil {
+			return nil, err
+		}
+		registry.Projects = slices.DeleteFunc(registry.Projects, func(entry ProjectEntry) bool {
+			if !entry.Temporary || !slices.ContainsFunc(idle, func(was ProjectEntry) bool { return was.Folder == entry.Folder && was.Used.Equal(entry.Used) }) {
+				return false
+			}
+			state := filepath.Join(projects, entry.Folder)
+			if err := os.Rename(state, filepath.Join(trash, entry.Folder)); err != nil && pathExists(state) {
+				failed = append(failed, err)
+				return false
+			}
+			reaped = append(reaped, entry.Folder)
+			return true
+		})
+		return nil, nil
+	})
+	return reaped, errors.Join(append(failed, err)...)
+}
+
+func ownStateFolder(folder string) bool {
+	return folder != "." && filepath.IsLocal(folder) && filepath.Base(folder) == folder
+}
+
+func usedSince(entry ProjectEntry, state string, since time.Time) bool {
+	if entry.Used.After(since) {
+		return true
+	}
+	used := false
+	_ = filepath.WalkDir(state, func(path string, file fs.DirEntry, err error) error {
+		var info fs.FileInfo
+		if err == nil {
+			info, err = file.Info()
+		}
+		if used = err != nil && !errors.Is(err, fs.ErrNotExist) || err == nil && (info.ModTime().After(since) || !file.IsDir() && strings.HasSuffix(file.Name(), "lock") && heldLock(path)); used {
+			return fs.SkipAll
+		}
+		return nil
+	})
+	return used
+}
+
+func HoldProjectOpen(dir string) (release func()) {
+	release = func() {}
+	home, err := HomeConfigDir()
+	if err != nil {
+		return release
+	}
+	project, _, err := locateProject(home, dir)
+	open := filepath.Join(project.State, projectOpenDirName)
+	if err != nil || !project.Registered || os.MkdirAll(open, 0o755) != nil {
+		return release
+	}
+	stale, _ := filepath.Glob(filepath.Join(open, "*.lock"))
+	for _, path := range stale {
+		if !heldLock(path) {
+			_ = os.Remove(path)
+		}
+	}
+	lock, held, err := tryLock(filepath.Join(open, strconv.Itoa(os.Getpid())+".lock"))
+	if err != nil || held {
+		return release
+	}
+	return func() { _ = unlock(lock) }
+}
+
+func heldLock(path string) bool {
+	file, held, err := tryLock(path)
+	if err == nil && !held {
+		_ = file.Close()
+	}
+	return held || err != nil
 }
 
 func (p Project) MoveLegacy() (replacedHalfCopy bool, err error) {
@@ -402,8 +541,10 @@ func (p Project) editRegistry(edit func(*projectRegistry) (*ProjectEntry, error)
 	if err != nil {
 		return err
 	}
-	if err := WriteFile(filepath.Join(p.home, ProjectsDirName, entry.Folder, ProjectFileName), projectTOML(*entry), 0o644); err != nil {
-		return err
+	if entry != nil {
+		if err := WriteFile(filepath.Join(p.home, ProjectsDirName, entry.Folder, ProjectFileName), projectTOML(*entry), 0o644); err != nil {
+			return err
+		}
 	}
 	body, err := json.MarshalIndent(registry, "", "  ")
 	if err != nil {

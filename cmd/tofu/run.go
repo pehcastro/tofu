@@ -345,7 +345,7 @@ func (r runtime) subAgentOpener(opts runOpts) func(subagent.Definition, llm.Effo
 func runUsage() string {
 	return fmt.Sprintf(runUsageText,
 		llm.EffortList(llm.Efforts()), llm.EffortDefault,
-		llm.EffortList(anthropic.ReasoningEfforts()), strings.Join(thinkingSummaries(), " or "), shellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff)
+		llm.EffortList(anthropic.ReasoningEfforts()), strings.Join(thinkingSummaries(), " or "), shellSiftCost(), turn.LeadAloneMostNamedFiles, turn.InstructionsOff, konst.TemporaryProjectIdleHours)
 }
 
 const runUsageText = `tofu run works a task in a directory until it is done.
@@ -394,6 +394,10 @@ Arguments:
   --dry-run                    print the request that would be sent and send nothing
   --show-prompt                print the prompt the turn composes, part by part, and send nothing
   --agent <name>               with --show-prompt, print the prompt a spawn of that sub-agent composes for the task
+  --temporary-project          register a project tofu has not seen as temporary: the next tofu
+                               started %d hours after its last use removes its sessions, undo
+                               history and logs, never the directory itself; a later open without
+                               the flag keeps it for good
 
 TOFU_DRIVE_CASSETTE names a recorded model, read as tofu drive reads it, and
 then the run opens no live wire for the orchestrator or for any sub-agent.

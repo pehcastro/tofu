@@ -6,13 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/konst"
 	"tofu/internal/sys"
 )
 
-const relinkCommand = "tofu migrate --relink"
+const (
+	relinkCommand        = "tofu migrate --relink"
+	temporaryProjectFlag = "--temporary-project"
+)
 
 type relinkReport struct {
 	Path     string   `json:"path"`
@@ -36,7 +42,30 @@ func openedProject(args []string) (string, bool) {
 	return ".", opens
 }
 
-func openProject(out io.Writer, in io.Reader, dir string, mayAsk bool, register func(sys.Project) error) {
+func temporaryProject(args []string) ([]string, bool) {
+	rest := slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == temporaryProjectFlag })
+	if _, opens := openedProject(rest); !opens || len(rest) == len(args) {
+		return args, false
+	}
+	return rest, true
+}
+
+func reapTemporaryProjects(out io.Writer) {
+	home, err := sys.HomeConfigDir()
+	var reaped []string
+	if err == nil {
+		reaped, err = sys.ReapTemporaryProjects(home, time.Now())
+	}
+	page := cli.Detect(out, os.Environ())
+	if err != nil {
+		_ = page.Print(out, page.ErrorLine("temporary projects not all removed: "+err.Error(), ""))
+	}
+	if len(reaped) > 0 {
+		_ = page.Print(out, []string{page.Receipt(cli.Removed, plural(len(reaped), "temporary project")+" unused for "+strconv.Itoa(konst.TemporaryProjectIdleHours)+" hours", filepath.Join(home, sys.ProjectsDirName))})
+	}
+}
+
+func openProject(out io.Writer, in io.Reader, dir string, mayAsk, temporary bool, register func(sys.Project) error) {
 	if isDir, _ := sys.IsDir(dir); !isDir {
 		return
 	}
@@ -46,7 +75,14 @@ func openProject(out io.Writer, in io.Reader, dir string, mayAsk bool, register 
 		_ = page.Print(out, page.ErrorLine("the project folder of "+page.Path(dir)+" was not opened: "+err.Error(), ""))
 		return
 	}
-	if project.Registered || project.Moved != nil && offerRelink(page, out, in, project, mayAsk) {
+	project.Temporary = temporary
+	if project.Registered {
+		if err := project.Reopen(); err != nil {
+			_ = page.Print(out, page.ErrorLine("the project folder of "+page.Path(project.Path)+" was not marked used: "+err.Error(), ""))
+		}
+		return
+	}
+	if project.Moved != nil && offerRelink(page, out, in, project, mayAsk) {
 		return
 	}
 	var moved []string

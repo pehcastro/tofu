@@ -41,11 +41,19 @@ from tofu itself.
 ```
 tofu run --dir <path> [arguments] <task>
 tofu --continue [--json]
+tofu --temporary-project
 tofu session <name|id>, or tofu session list [--all], or tofu session info|trace|reads|resume|rename|request|find|branch <name|id> [--json]
 tofu session branch <name|id> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--json]
 tofu context [<name|id>] [--json]
 tofu shells list|log|stop|restart <name> [--json]
 ```
+
+`--temporary-project` registers a project tofu has not seen as temporary,
+`"temporary": true` in `~/.tofu/projects.json`. The first tofu started two
+hours after its last use removes its folder under `~/.tofu/projects`, with its
+sessions, undo history and logs, and its registry entry, unless a running tofu
+still has it open; the project directory
+itself is never touched. Opening it once without the flag keeps it for good.
 
 ### Memory
 
