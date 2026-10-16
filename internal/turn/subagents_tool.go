@@ -31,6 +31,7 @@ func (subAgentsTool) Definition() llm.Tool {
 		Description: "lists every sub-agent of this session and what it is doing now, and returns at once without waiting for any of them: " +
 			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, the last tool it called, the paths it holds, or that they are free until it resumes once it has ended or was released, and every grant, revoke and replace of them. " +
 			"use it rather than guessing whether a sub-agent still runs or who holds a path. " +
+			"name alone gives that one sub-agent's line. " +
 			"name with show read gives that sub-agent's report, the files it changed and its conversation, without resuming it. " +
 			"name with show diagnose gives what it is doing now: its open calls and how long each has run, its shells and their last lines, its last request, and its failed requests and calls since the last that worked",
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
@@ -51,14 +52,22 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 			return Result{}, fmt.Errorf("subagents: arguments are not the expected shape: %w", err)
 		}
 	}
-	switch {
-	case args.Name == "" && args.Show == "":
-	case args.Show == showRead:
+	switch args.Show {
+	case "":
+	case showRead:
 		return t.read(args.Name)
-	case args.Show == showDiagnose:
+	case showDiagnose:
 		return t.diagnose(ctx, args.Name)
 	default:
-		return Result{}, fmt.Errorf("subagents refused: name goes with show %s or %s, and show %q with name %q is neither", showRead, showDiagnose, args.Show, args.Name)
+		return Result{}, fmt.Errorf("subagents refused: show is %s or %s, and %q is neither", showRead, showDiagnose, args.Show)
+	}
+	agents := t.roster.SubAgents()
+	if args.Name != "" {
+		agent, found := t.roster.SubAgent(args.Name)
+		if !found {
+			return Result{}, t.unknown(args.Name)
+		}
+		agents = []subagent.SubAgent{agent}
 	}
 	effort := map[string]llm.Effort{}
 	for _, ran := range t.Spawned() {
@@ -66,7 +75,7 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 	}
 	now, listed := t.clock(), "no sub-agent has been spawned in this session"
 	var lines []string
-	for _, agent := range t.roster.SubAgents() {
+	for _, agent := range agents {
 		state, ran, until := agent.State.String(), "ran", agent.Active
 		switch agent.State {
 		case subagent.Working, subagent.InReview, subagent.Reopened:
@@ -101,7 +110,7 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 	if len(lines) > 0 {
 		listed = strings.Join(lines, "\n")
 	}
-	return Result{Content: listed, Command: "subagents"}, nil
+	return Result{Content: listed, Command: strings.TrimSpace("subagents " + args.Name), SubAgent: args.Name}, nil
 }
 
 func conversationText(history []llm.Message) string {

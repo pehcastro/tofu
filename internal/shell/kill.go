@@ -186,26 +186,42 @@ func (r *Registry) Owning(command string) []Shell {
 }
 
 func (r *Registry) terminate(name string, by Holder) (*live, error) {
+	entry, process, err := r.markKilled(name, by)
+	if err != nil {
+		return nil, err
+	}
+	killErr := killTree(entry.PID)
+	if killErr != nil && !errors.Is(killErr, ErrTreeGone) {
+		return nil, killErr
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ended := time.Now()
+	entry.Ended = &ended
+	if killErr != nil {
+		entry.State = Exited
+		return nil, errors.Join(fmt.Errorf("%w: %q", ErrNotRunning, name), r.writeLocked(entry))
+	}
+	entry.State = Killed
+	return process, r.writeLocked(entry)
+}
+
+func (r *Registry) markKilled(name string, by Holder) (Shell, *live, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry, err := r.readLocked(name)
 	if err != nil {
-		return nil, err
+		return entry, nil, err
 	}
 	if entry.State != Running {
-		return nil, fmt.Errorf("%w: %q", ErrNotRunning, name)
+		return entry, nil, fmt.Errorf("%w: %q", ErrNotRunning, name)
 	}
 	if err := entry.refusedToAgent(); by == HolderAgent && err != nil {
-		return nil, err
+		return entry, nil, err
 	}
 	process := r.running[name]
 	if process != nil {
 		process.killed = true
 	}
-	if err := killTree(entry.PID); err != nil {
-		return nil, err
-	}
-	ended := time.Now()
-	entry.State, entry.Ended = Killed, &ended
-	return process, r.writeLocked(entry)
+	return entry, process, nil
 }

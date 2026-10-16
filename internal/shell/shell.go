@@ -279,19 +279,26 @@ func (r *Registry) Prune() error {
 		return nil
 	}
 	kept := time.Now().Add(-konst.FinishedShellKeptHours * time.Hour)
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	for _, file := range files {
 		name, isState := strings.CutSuffix(file.Name(), stateSuffix)
 		if !isState {
 			continue
 		}
-		if entry, readErr := r.readLocked(name); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
-			_ = os.Remove(r.endedPath(name))
-			_ = os.Remove(r.logPath(name))
+		if entry, readErr := stateAt(r.endedPath(name)); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
+			r.removeEnded(name)
 		}
 	}
 	return errors.Join(err, os.WriteFile(filepath.Join(r.dir, prunedStampFile), []byte(time.Now().Format(time.RFC3339)), fileMode))
+}
+
+func (r *Registry) removeEnded(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, err := os.Stat(r.runningPath(name)); err == nil {
+		return
+	}
+	_ = os.Remove(r.endedPath(name))
+	_ = os.Remove(r.logPath(name))
 }
 
 func (r *Registry) PruneEvery(every time.Duration) error {
@@ -334,34 +341,38 @@ func removed(path string) error {
 
 func (r *Registry) Read(name string) (Shell, error) {
 	r.mu.Lock()
+	entry, err := r.readLocked(name)
+	_, awaitedHere := r.running[name]
+	r.mu.Unlock()
+	if err != nil || entry.State != Running || awaitedHere || treeAlive(entry.PID) {
+		return entry, err
+	}
+	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.readLocked(name)
+	if entry, err = r.readLocked(name); err != nil || entry.State != Running || r.running[name] != nil {
+		return entry, err
+	}
+	ended := time.Now()
+	entry.State, entry.Ended = Exited, &ended
+	return entry, r.writeLocked(entry)
 }
 
 func (r *Registry) readLocked(name string) (Shell, error) {
-	raw, err := os.ReadFile(r.runningPath(name))
+	entry, err := stateAt(r.runningPath(name))
 	if errors.Is(err, os.ErrNotExist) {
-		raw, err = os.ReadFile(r.endedPath(name))
+		return stateAt(r.endedPath(name))
 	}
+	return entry, err
+}
+
+func stateAt(path string) (Shell, error) {
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return Shell{}, err
 	}
 	var entry Shell
-	if err := json.Unmarshal(raw, &entry); err != nil {
-		return Shell{}, err
-	}
-	if entry.State != Running {
-		return entry, nil
-	}
-	if _, awaitedHere := r.running[entry.Name]; awaitedHere || treeAlive(entry.PID) {
-		return entry, nil
-	}
-	ended := time.Now()
-	entry.State, entry.Ended = Exited, &ended
-	if err := r.writeLocked(entry); err != nil {
-		return Shell{}, err
-	}
-	return entry, nil
+	err = json.Unmarshal(raw, &entry)
+	return entry, err
 }
 
 func (r *Registry) List() ([]Shell, error) {
