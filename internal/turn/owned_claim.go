@@ -73,11 +73,9 @@ func (t claimed) check(raw json.RawMessage) (string, error) {
 			note = heldNote(claims, unread)
 		}
 	} else {
-		path, err := pathArg(t.Name(), raw)
-		if err != nil {
+		if written, err = TargetPaths(t.Name(), raw); err != nil {
 			return "", err
 		}
-		written = []string{path}
 	}
 	tree, err := os.Getwd()
 	if err != nil {
@@ -91,7 +89,7 @@ func (t claimed) check(raw json.RawMessage) (string, error) {
 		}
 		for _, claim := range claims {
 			if held, _ := subagent.Matches(path, claim.Owns); held {
-				return "", fmt.Errorf("%s refused: %s is held by side chat %s while its turn runs: write it when that turn ends, or leave it to that chat", t.Name(), path, sideName(claim))
+				return "", fmt.Errorf("%s refused: %s is held by side chat %s while its turn runs: write it when that turn ends, or leave it to that chat%s", t.Name(), path, sideName(claim), NoneWritten(len(written)))
 			}
 		}
 	}

@@ -220,27 +220,19 @@ func (t sideWrite) Definition() llm.Tool {
 	return definition
 }
 
-func pathArg(tool string, raw json.RawMessage) (string, error) {
-	var args struct {
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(raw, &args); err != nil {
-		return "", fmt.Errorf("%s: arguments are not the expected shape: %w", tool, err)
-	}
-	return args.Path, nil
-}
-
 func (t sideWrite) refusal(raw json.RawMessage) error {
-	path, err := pathArg(t.Name(), raw)
+	paths, err := TargetPaths(t.Name(), raw)
 	if err != nil {
 		return err
 	}
-	err = t.boundary.Write(path)
-	if errors.As(err, &subagent.DeniedError{}) {
-		return SideRefusedError{Tool: t.Name(), What: path + " is left as it was", Owns: t.boundary.Owns()}
-	}
-	if err != nil {
-		return fmt.Errorf("%s: %w", t.Name(), err)
+	for _, path := range paths {
+		err = t.boundary.Write(path)
+		if errors.As(err, &subagent.DeniedError{}) {
+			return SideRefusedError{Tool: t.Name(), What: path + " is left as it was" + NoneWritten(len(paths)), Owns: t.boundary.Owns()}
+		}
+		if err != nil {
+			return fmt.Errorf("%s: %w", t.Name(), err)
+		}
 	}
 	return nil
 }

@@ -223,8 +223,11 @@ func personOnlyRefusal(ctx context.Context, config Config, request GateRequest) 
 	if config.Gate != nil && config.GateMode == GateEnforce || !PersonOnly(config.Project, request) {
 		return ""
 	}
-	_, refused := personRefusal(ctx, config.Person, request, GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true},
-		"this call did not run: only the person allows a call that changes tofu's settings or a harness file")
+	asked := "this call did not run: only the person allows a call that changes tofu's settings or a harness file"
+	if named, _ := harnessFileWritten(config.Project, request); named != "" && (request.Tool == "write" || request.Tool == "edit") {
+		asked += ", and it writes " + named
+	}
+	_, refused := personRefusal(ctx, config.Person, request, GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true}, asked)
 	return refused
 }
 
@@ -369,13 +372,14 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 }
 
 func keepsToScratch(boundary *subagent.Boundary, request GateRequest) bool {
-	var args struct{ Path, Command string }
+	var args struct{ Command string }
 	if json.Unmarshal(request.Args, &args) != nil {
 		return false
 	}
 	switch request.Tool {
 	case "write", "edit":
-		return boundary.Scratched(args.Path)
+		paths, err := TargetPaths(request.Tool, request.Args)
+		return err == nil && !slices.ContainsFunc(paths, func(target string) bool { return !boundary.Scratched(target) })
 	case bashToolName:
 		return boundary.KeepsToScratch(args.Command)
 	}
@@ -383,7 +387,7 @@ func keepsToScratch(boundary *subagent.Boundary, request GateRequest) bool {
 }
 
 func keepsToOwns(boundary *subagent.Boundary, request GateRequest) bool {
-	var args struct{ Path, Command string }
+	var args struct{ Command string }
 	if json.Unmarshal(request.written(), &args) != nil {
 		return false
 	}
@@ -396,7 +400,8 @@ func keepsToOwns(boundary *subagent.Boundary, request GateRequest) bool {
 	}
 	switch request.Tool {
 	case "write", "edit":
-		return owned(args.Path)
+		paths, err := TargetPaths(request.Tool, request.written())
+		return err == nil && !slices.ContainsFunc(paths, func(target string) bool { return !owned(target) })
 	case bashToolName:
 		touched := 0
 		for _, step := range subagent.ShellSteps(args.Command) {
@@ -455,6 +460,9 @@ func CallPlace(request GateRequest, cwd string) string {
 	switch {
 	case request.Code != nil:
 		return request.Tool + " " + codePlace + CodeSum(*request.Code)
+	case request.Tool == "edit":
+		paths, _ := TargetPaths(request.Tool, request.Args)
+		return request.Tool + " " + strings.Join(paths, " ")
 	case args.Path != "":
 		return request.Tool + " " + args.Path
 	case code:
@@ -576,7 +584,7 @@ func (e CodeEntry) Record(log string) {
 }
 
 func PersonOnly(project string, request GateRequest) bool {
-	var args struct{ Path, Command string }
+	var args struct{ Command string }
 	if json.Unmarshal(request.written(), &args) != nil {
 		return false
 	}
@@ -584,11 +592,24 @@ func PersonOnly(project string, request GateRequest) bool {
 	case SettingsToolName:
 		return true
 	case "write", "edit":
-		return reachesHarnessFile(project, args.Path)
+		_, reaches := harnessFileWritten(project, request)
+		return reaches
 	case bashToolName:
 		return shellChangesTheHarness(project, args.Command)
 	}
 	return false
+}
+
+func harnessFileWritten(project string, request GateRequest) (string, bool) {
+	paths, err := TargetPaths(request.Tool, request.written())
+	if err != nil {
+		return "", true
+	}
+	at := slices.IndexFunc(paths, func(target string) bool { return reachesHarnessFile(project, target) })
+	if at < 0 {
+		return "", false
+	}
+	return paths[at], true
 }
 
 func harnessFiles() []string {

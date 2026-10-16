@@ -36,17 +36,17 @@ func boundaryRefusal(tools Registry, call llm.ToolCall) string {
 }
 
 func (t ownedTool) refusal(raw json.RawMessage) error {
-	var args struct {
-		Path string `json:"path"`
+	paths, err := TargetPaths(t.Name(), raw)
+	if err != nil {
+		return err
 	}
-	if err := json.Unmarshal(raw, &args); err != nil {
-		return fmt.Errorf("%s: arguments are not the expected shape: %w", t.Name(), err)
-	}
-	if len(t.boundary.Owns()) == 0 && !t.boundary.Scratched(args.Path) {
-		return ReadOnlyError{Tool: t.Name()}
-	}
-	if err := t.boundary.Write(args.Path); err != nil {
-		return fmt.Errorf("%s: %w", t.Name(), err)
+	for _, path := range paths {
+		if len(t.boundary.Owns()) == 0 && !t.boundary.Scratched(path) {
+			return ReadOnlyError{Tool: t.Name()}
+		}
+		if err := t.boundary.Write(path); err != nil {
+			return fmt.Errorf("%s: %w%s", t.Name(), err, NoneWritten(len(paths)))
+		}
 	}
 	return nil
 }

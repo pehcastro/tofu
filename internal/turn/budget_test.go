@@ -124,7 +124,7 @@ func TestTheLeadSpendsOneLineBudgetAcrossDirectories(t *testing.T) {
 		{edit, "store/store.go", budget - 3*quarter - 1, ""},
 		{edit, "transfer/transfer.go", 1, RefusedOverLines},
 	} {
-		raw, _ := json.Marshal(map[string]string{"path": c.path, "content": lines(c.lines), "old_string": lines(c.lines), "new_string": lines(c.lines)})
+		raw, _ := json.Marshal(map[string]string{"path": c.path, "content": lines(c.lines), "old_string": "kept\n" + lines(c.lines), "new_string": "kept\n" + strings.Repeat("y\n", c.lines)})
 		_, err := c.tool.Run(context.Background(), raw)
 		var refusal SourceBudgetError
 		errors.As(err, &refusal)
@@ -134,6 +134,12 @@ func TestTheLeadSpendsOneLineBudgetAcrossDirectories(t *testing.T) {
 	}
 	if len(ran) != 7 {
 		t.Errorf("ran %d writes, want the seven inside the budget", len(ran))
+	}
+	quoted := WithSourceBudget([]Tool{ranTool{name: "edit", ran: &ran}}, nil)[0]
+	around := lines(budget)
+	raw, _ := json.Marshal(map[string]string{"path": "store/store.go", "old_string": around + "old\n" + around, "new_string": around + "new\n" + around})
+	if _, err := quoted.Run(context.Background(), raw); err != nil {
+		t.Errorf("an edit quoting %d lines around a one line change spent more than its diff: %v", 2*budget, err)
 	}
 }
 

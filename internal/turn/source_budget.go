@@ -156,7 +156,7 @@ func sameChangeByTool(step subagent.ShellStep, path string) string {
 			named = append(named, strconv.Quote(file))
 		}
 	}
-	return fmt.Sprintf("edit with old_string %q, new_string %q and replace_all true, one call per file: %s", old, replacement, strings.Join(named, ", "))
+	return fmt.Sprintf("one edit call with old_string %q, new_string %q and replace_all true for each file, the rest in edits: %s", old, replacement, strings.Join(named, ", "))
 }
 
 func runsScript(steps []subagent.ShellStep) bool {
@@ -248,14 +248,17 @@ type budgetArgs struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
 	Append  bool   `json:"append"`
-	Old     string `json:"old_string"`
-	New     string `json:"new_string"`
+	Old     string `json:"-"`
+	New     string `json:"-"`
 	Command string `json:"command"`
 }
 
 func (b *sourceBudget) linesChanged(tool string, args budgetArgs) int {
-	whole := max(linesIn(args.Content), linesIn(args.Old), linesIn(args.New))
-	if tool != "write" || args.Append || b.files == nil {
+	if tool == "edit" {
+		return changedLines(args.Old, args.New)
+	}
+	whole := linesIn(args.Content)
+	if args.Append || b.files == nil {
 		return whole
 	}
 	resolved, err := b.files.root.Resolve(args.Path)
@@ -391,12 +394,26 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (Result, err
 	if t.Name() == "bash" {
 		return t.runShell(ctx, raw, args.Command)
 	}
-	if sourceLanguage(args.Path) == "" {
-		return t.tool.Run(ctx, raw)
+	changes := []budgetArgs{args}
+	if t.Name() == "edit" {
+		edits, err := EditChanges(raw)
+		if err != nil {
+			return t.tool.Run(ctx, raw)
+		}
+		changes = make([]budgetArgs, len(edits))
+		for i, edit := range edits {
+			changes[i] = budgetArgs{Path: edit.Path, Old: edit.Old, New: edit.New}
+		}
 	}
-	lines := t.budget.linesChanged(t.Name(), args)
-	if t.budget.spent+lines > konst.OrchestratorSourceLinesPerTurn {
-		return Result{}, t.refuse(SourceBudgetError{Path: args.Path, Lines: lines, Reason: RefusedOverLines})
+	lines := 0
+	for _, change := range changes {
+		if sourceLanguage(change.Path) == "" {
+			continue
+		}
+		lines += t.budget.linesChanged(t.Name(), change)
+		if t.budget.spent+lines > konst.OrchestratorSourceLinesPerTurn {
+			return Result{}, t.refuse(SourceBudgetError{Path: change.Path, Lines: lines, Reason: RefusedOverLines})
+		}
 	}
 	result, err := t.tool.Run(ctx, raw)
 	if err == nil && result.FailureText == "" {
