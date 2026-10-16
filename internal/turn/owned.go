@@ -96,10 +96,23 @@ func (t ownedShell) Definition() llm.Tool {
 }
 
 func (t ownedShell) grammars() []subagent.Grammar {
-	if bash, found := t.tool.(*BashTool); found {
+	if bash, found := underlyingBash(t.tool); found {
 		return []subagent.Grammar{subagent.GrammarOf(bash.choice.Path)}
 	}
 	return []subagent.Grammar{subagent.POSIX, subagent.PowerShell}
+}
+
+func underlyingBash(tool Tool) (*BashTool, bool) {
+	for {
+		switch inner := tool.(type) {
+		case *BashTool:
+			return inner, true
+		case interface{ Uncached() Tool }:
+			tool = inner.Uncached()
+		default:
+			return nil, false
+		}
+	}
 }
 
 func (t ownedShell) refusal(raw json.RawMessage) error {

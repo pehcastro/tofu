@@ -48,6 +48,8 @@ const (
 	ColorMode                   = "colorMode"
 	Composer                    = "composer"
 	GatePrompt                  = "gatePrompt"
+	GateAskWaitSeconds          = "gateAskWaitSeconds"
+	GateAskTimeout              = "gateAskTimeout"
 	AskPersonWaitSeconds        = "askPersonWaitSeconds"
 	ReadBeforeEdit              = "readBeforeEdit"
 	AutoUpdate                  = "autoUpdate"
@@ -147,6 +149,11 @@ const (
 )
 
 const (
+	GateAskRefuse = "refuse"
+	GateAskAllow  = "allow"
+)
+
+const (
 	FeedsFull    = "full"
 	FeedsSummary = "summary"
 	FeedsOff     = "off"
@@ -237,8 +244,12 @@ func Default() []Spec {
 			Choices: []string{"auto", "truecolor", "256 colors", "ANSI 16"}},
 		{Key: Composer, Label: "Composer", Description: "Enter sends; Shift+Enter inserts a line break", Category: "Interaction", Kind: Text, DefaultText: "standard",
 			Choices: []string{"standard", "compact", "expanded"}},
-		{Key: GatePrompt, Label: "Confirmations", Description: "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer. A project hook, a rule override and the model changing a setting ask you in both", Category: "Interaction", Kind: Text, DefaultText: GatePromptAuto,
+		{Key: GatePrompt, Label: "Confirmations", Description: "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer or gateAskWaitSeconds passes. A project hook, a rule override and the model changing a setting ask you in both", Category: "Interaction", Kind: Text, DefaultText: GatePromptAuto,
 			Choices: []string{GatePromptAuto, GatePromptAsk}, Aliases: map[string]string{"run": GatePromptAuto}},
+		{Key: GateAskWaitSeconds, Label: "Ask wait", Description: "a call the gate asks you about waits this many seconds for your answer, under auto and under ask alike, and then gateAskTimeout decides it so the turn goes on; a cron job that fires while a call waits decides it at once. the next ask reads the new value", Category: "Interaction", Kind: Int, Default: konst.GateAskWaitSeconds,
+			Least: 1, Most: math.MaxInt32, Unit: "seconds an ask waits for you"},
+		{Key: GateAskTimeout, Label: "Unanswered ask", Description: "refuse turns down a call nobody answered in gateAskWaitSeconds and tells the lead why; allow runs it. A call only you may allow changes settings, hooks or the harness, which is why refuse is the default", Category: "Interaction", Kind: Text, DefaultText: GateAskRefuse,
+			Choices: []string{GateAskRefuse, GateAskAllow}},
 		{Key: AskPersonWaitSeconds, Label: "Question wait", Description: "under auto, a question the lead asks you takes its recommended option after this many seconds, and the lead never stops for it; the question stays open and a later answer still reaches the lead. under ask the lead waits with no timeout. the next turn reads the new value", Category: "Interaction", Kind: Int, Default: konst.AskPersonWaitSeconds,
 			Least: 1, Most: math.MaxInt32, Unit: "seconds before the recommended option is taken under auto"},
 		{Key: ReadBeforeEdit, Label: "Read before edit", Description: "an edit or a write to a file this session has not read, or that changed since it was read, is refused", Category: "Interaction", Kind: Bool, Default: 1},

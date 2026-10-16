@@ -167,6 +167,7 @@ const (
 	BashOutputHeldBytes   = 65536
 	BackgroundYieldMillis = 10000
 	BackgroundReadyMillis = 2000
+	GateAskWaitSeconds    = 180
 	BashSoftLimitMillis   = 30000
 	ShellWaitMillis       = 300000
 	ShellWaitMatchMillis  = 1000

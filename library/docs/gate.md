@@ -29,6 +29,15 @@ A call that changes tofu's settings, hooks or hook trust files waits for
 you in both modes unless jev denies it: through `settings`, `write`,
 `edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
 
+No ask waits forever. In both modes an ask waits `gateAskWaitSeconds`, 180
+by default, and the chat says the clock time it will be decided at. Then
+`gateAskTimeout` decides it: `refuse`, the default, turns the call down and
+the lead reads why, `nobody answered in 3m0s, and gateAskTimeout is refuse,
+so the call did not run`; `allow` runs it. Either way the turn goes on. A
+cron job that fires while a call waits decides the ask at once the same
+way, so its prompt reaches the turn rather than queueing behind you. A
+turn a cron job started asks nobody and refuses every ask.
+
 A sub-agent never asks you. Its ask goes to the lead that started it, with the call,
 the verdict and the risk; the lead answers allow, deny or `allow_here` within 5
 minutes, or the call is refused. `allow_here` allows every later call of that kind
@@ -61,7 +70,8 @@ stored key, and the value of any name above, reads `[key redacted]` there, even
 when the model runs `env` or `cat .env`.
 
 The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
-`gatePrompt` lives in `settings.json`, like every setting.
+`gatePrompt`, `gateAskWaitSeconds` and `gateAskTimeout` live in
+`settings.json`, like every setting, and the next ask reads a new value.
 
 ## Change it
 
@@ -79,6 +89,11 @@ Wait for you before a risky call, everywhere or in one project:
 
     tofu settings set gatePrompt ask
     tofu settings set --scope project gatePrompt ask
+
+Give yourself longer to answer an ask, or let an unanswered one run:
+
+    tofu settings set gateAskWaitSeconds 600
+    tofu settings set gateAskTimeout allow
 
 Run one task with the gate off, or forced to wait:
 
@@ -110,7 +125,9 @@ Each of these takes `--json` and prints one JSON document.
 
     tofu settings set gatePrompt run
 
-goes back to recording without waiting. When a verdict was wrong, write
+goes back to recording without waiting, and
+`tofu settings set gateAskTimeout refuse` turns an unanswered ask down
+again. When a verdict was wrong, write
 what it should have been onto its row in the ledger:
 
     tofu label --last allow

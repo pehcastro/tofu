@@ -30,6 +30,8 @@ func (c cited) Name() string { return c.tool.Name() }
 
 func (c cited) Definition() llm.Tool { return c.tool.Definition() }
 
+func (c cited) Uncached() turn.Tool { return c.tool }
+
 func (c cited) Run(ctx context.Context, raw json.RawMessage) (turn.Result, error) {
 	result, err := c.tool.Run(ctx, raw)
 	if err != nil {

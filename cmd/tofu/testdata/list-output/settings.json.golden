@@ -105,11 +105,35 @@ exit 0
         "value": "auto",
         "source": "default",
         "label": "Confirmations",
-        "description": "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer. A project hook, a rule override and the model changing a setting ask you in both",
+        "description": "auto lets jev decide at every gate and work never stops for you: only what it denies is refused, and what it would ask about runs and shows its verdict in the chat. ask stops on what jev would ask about until you answer or gateAskWaitSeconds passes. A project hook, a rule override and the model changing a setting ask you in both",
         "kind": "choice",
         "choices": [
           "auto",
           "ask"
+        ]
+      },
+      {
+        "key": "gateAskWaitSeconds",
+        "category": "Interaction",
+        "value": 180,
+        "source": "default",
+        "label": "Ask wait",
+        "description": "a call the gate asks you about waits this many seconds for your answer, under auto and under ask alike, and then gateAskTimeout decides it so the turn goes on; a cron job that fires while a call waits decides it at once. the next ask reads the new value",
+        "kind": "int",
+        "min": 1,
+        "unit": "seconds an ask waits for you"
+      },
+      {
+        "key": "gateAskTimeout",
+        "category": "Interaction",
+        "value": "refuse",
+        "source": "default",
+        "label": "Unanswered ask",
+        "description": "refuse turns down a call nobody answered in gateAskWaitSeconds and tells the lead why; allow runs it. A call only you may allow changes settings, hooks or the harness, which is why refuse is the default",
+        "kind": "choice",
+        "choices": [
+          "refuse",
+          "allow"
         ]
       },
       {

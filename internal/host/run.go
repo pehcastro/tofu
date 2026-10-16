@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,7 +19,9 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/llm"
 	"tofu/internal/session"
+	"tofu/internal/settings"
 	roster "tofu/internal/subagent"
+	"tofu/internal/sys"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -143,7 +146,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	var prepared Prepared
-	person, asking := awaitPerson(emit, h.asks, &prepared.Config), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(ctx, keptMemory(emit)), h.shells), h.questionsBlock)
+	person, asking := awaitPerson(emit, h.asks, &prepared.Config), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
 	if live.Origin.Kind == OriginCron {
 		person = unattended
 	} else {
@@ -446,6 +449,14 @@ func gateOffEvent(gateErr error) Event {
 	return Event{Kind: EventGateOff, Text: gateErr.Error(), GateWhy: missing.Why}
 }
 
+type cronFiredKey struct{}
+
+func (h *Host) cronFired() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.unread) > 0
+}
+
 func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person {
 	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
 		places, _ := config.ResolvedPlaces()
@@ -481,13 +492,29 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 			judged := gateDecision(request.Tool, decision)
 			asked.Decision = &judged
 		}
+		unanswered := unansweredIn(config.Project)
+		asked.Wait = unanswered.waited
 		reply, forget := book.wait(asked.ID, standsAt)
 		defer forget()
+		if fired, held := ctx.Value(cronFiredKey{}).(func() bool); held && fired() {
+			unanswered.cronFired = true
+			return unanswered.decide(emit, request, places.Log)
+		}
 		emit(asked)
 		defer emit(Event{Kind: EventResumed, ID: asked.ID, Agent: asked.Agent})
+		emit(Event{Kind: EventNote, Text: "if nobody answers by " + time.Now().Add(unanswered.waited).Format(time.TimeOnly) + ", in " + unanswered.waited.String() +
+			", " + settings.GateAskTimeout + " " + unanswered.outcome + " decides the ask about " + place})
+		timer := time.NewTimer(unanswered.waited)
+		defer timer.Stop()
 		started := time.Now()
 		select {
+		case <-timer.C:
+			return unanswered.decide(emit, request, places.Log)
 		case answered := <-reply:
+			if answered == unattendedNow {
+				unanswered.cronFired = true
+				return unanswered.decide(emit, request, places.Log)
+			}
 			if request.Code != nil {
 				turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person", Answer: codeAnswer(answered), Took: time.Since(started)}.Record(places.Log)
 			}
@@ -498,6 +525,48 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 			return turn.PersonDenied, ctx.Err()
 		}
 	}
+}
+
+const unattendedNow Answer = -1
+
+type unansweredAsk struct {
+	waited    time.Duration
+	outcome   string
+	cronFired bool
+}
+
+func unansweredIn(project string) unansweredAsk {
+	home, _ := sys.HomeConfigDir()
+	store, err := settings.Open(filepath.Join(home, settings.FileName), filepath.Join(sys.StateDir(project), settings.FileName))
+	if err != nil {
+		return unansweredAsk{waited: time.Duration(settings.DeclaredDefault(settings.GateAskWaitSeconds)) * time.Second, outcome: settings.GateAskRefuse}
+	}
+	outcome := settings.GateAskRefuse
+	if store.Text(settings.GateAskTimeout) == settings.GateAskAllow {
+		outcome = settings.GateAskAllow
+	}
+	return unansweredAsk{waited: time.Duration(store.Int(settings.GateAskWaitSeconds)) * time.Second, outcome: outcome}
+}
+
+func (u unansweredAsk) why() string {
+	if u.cronFired {
+		return "a cron job fired while it waited, so nobody is there to answer, and " + settings.GateAskTimeout + " is " + u.outcome
+	}
+	return "nobody answered in " + u.waited.String() + ", and " + settings.GateAskTimeout + " is " + u.outcome
+}
+
+func (u unansweredAsk) Error() string { return u.why() + ", so the call did not run" }
+
+func (u unansweredAsk) decide(emit func(Event), request turn.GateRequest, log string) (turn.PersonAnswer, error) {
+	answer, code, err, said := turn.PersonDenied, turn.CodeDeny, error(u), u.Error()
+	if u.outcome == settings.GateAskAllow {
+		answer, code, err, said = turn.PersonAllowedOnce, turn.CodeAllowOnce, nil, u.why()+", so the call runs"
+	}
+	if request.Code != nil {
+		turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "nobody, " + settings.GateAskTimeout + " " + u.outcome, Answer: code}.Record(log)
+	}
+	emit(Event{Kind: EventNote, Text: "the ask about " + askedPlace(request) + ": " + said})
+	return answer, err
 }
 
 func personAnswer(answered Answer) turn.PersonAnswer {

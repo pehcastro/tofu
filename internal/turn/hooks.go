@@ -31,7 +31,7 @@ func hookEngine(ctx context.Context, config Config, turnID string) (*hook.Engine
 		return held, nil
 	}
 	root, choice := config.Project, shell.Choice{}
-	if bash, found := config.Tools.byName[bashToolName].(*BashTool); found {
+	if bash, found := underlyingBash(config.Tools.byName[bashToolName]); found {
 		root, choice = cmp.Or(root, string(bash.root)), bash.choice
 	}
 	root, _ = filepath.Abs(cmp.Or(root, "."))

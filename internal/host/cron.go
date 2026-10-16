@@ -90,7 +90,17 @@ func (h *Host) fire(fires []cron.Fire) {
 		h.mu.Unlock()
 		h.note(fired.Line)
 		h.Steer(fired.Prompt)
+		h.answerNobody()
 	}
+}
+
+func (h *Host) answerNobody() {
+	h.asks.mu.Lock()
+	defer h.asks.mu.Unlock()
+	for _, waiting := range h.asks.waiting {
+		waiting.reply <- unattendedNow
+	}
+	h.asks.waiting = nil
 }
 
 func (h *Host) markRead(steered string) {
