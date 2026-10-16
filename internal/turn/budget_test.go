@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -221,5 +222,139 @@ func TestAFileTheShellPrintedWholeAfterCatCountsAsRead(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type scriptTool struct {
+	dir string
+	ran *[]string
+	run func(dir string)
+}
+
+func (t scriptTool) Name() string         { return "bash" }
+func (t scriptTool) Definition() llm.Tool { return llm.Tool{Name: "bash"} }
+func (t scriptTool) Run(_ context.Context, raw json.RawMessage) (Result, error) {
+	*t.ran = append(*t.ran, string(raw))
+	t.run(t.dir)
+	return Result{Content: "ok"}, nil
+}
+
+func scriptProject(t *testing.T, git bool) string {
+	dir := t.TempDir()
+	put := func(path, body string) {
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	numbered := func(name string, from, to int, value string) string {
+		var lines string
+		for i := from; i < to; i++ {
+			lines += fmt.Sprintf("var %s%d = %s\n", name, i, value)
+		}
+		return lines
+	}
+	put("a.go", numbered("a", 0, 10, "1"))
+	put("b.go", numbered("b", 0, 10, "1"))
+	put("notes.md", "# notes\n")
+	if git {
+		for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"}} {
+			if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v %s", args, err, out)
+			}
+		}
+	}
+	put("b.go", numbered("b", 0, 4, "2")+numbered("b", 4, 10, "1"))
+	return dir
+}
+
+func TestAScriptThatWritesSourceSpendsTheLinesItChanged(t *testing.T) {
+	rewrite := func(path, old, replacement string, count int) func(string) {
+		return func(dir string) {
+			body, _ := os.ReadFile(filepath.Join(dir, path))
+			_ = os.WriteFile(filepath.Join(dir, path), []byte(strings.Replace(string(body), old, replacement, count)), 0o644)
+		}
+	}
+	create := func(path string, lines int) func(string) {
+		return func(dir string) {
+			_ = os.WriteFile(filepath.Join(dir, path), []byte(strings.Repeat("x\n", lines)), 0o644)
+		}
+	}
+	for _, c := range []struct {
+		name    string
+		command string
+		run     func(string)
+		lines   int
+	}{
+		{"a python heredoc over every go file", "python - <<'E'\nimport glob\nE", func(dir string) {
+			rewrite("a.go", " = 1", " = 9", 1)(dir)
+			rewrite("b.go", " = 1", " = 9", 1)(dir)
+		}, 2},
+		{"a bash script file", "bash scratch/fix.sh", rewrite("a.go", " = 1", " = 3", 3), 3},
+		{"a node script making a file", "node fix.js", create("new.go", 5), 5},
+		{"a script run by path", "./fix.py", func(dir string) { _ = os.Remove(filepath.Join(dir, "a.go")) }, 10},
+		{"a script behind env", "env python3 fix.py", rewrite("a.go", " = 1", " = 4", 1), 1},
+		{"go run", "go run ./fix", rewrite("a.go", " = 1", " = 5", 2), 2},
+		{"a file dirty before the script", "python3 fix.py", rewrite("b.go", " = 2", " = 3", 1), 1},
+		{"a script writing markdown only", "python fix.py", rewrite("notes.md", "notes", "plans", 1), 0},
+		{"a generator's redirect target", "python gen.py > gen.go", create("gen.go", 20), 0},
+		{"a command that runs no script while a sub-agent writes", "go test ./...", rewrite("a.go", " = 1", " = 6", 10), 0},
+	} {
+		for _, git := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s git %v", c.name, git), func(t *testing.T) {
+				dir := scriptProject(t, git)
+				writer, err := NewWriteTool(dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var ran []string
+				shell := WithSourceBudget([]Tool{writer, scriptTool{dir: dir, ran: &ran, run: c.run}}, nil)[1]
+				raw, _ := json.Marshal(map[string]string{"command": c.command})
+				result, err := shell.Run(context.Background(), raw)
+				if err != nil || len(ran) != 1 {
+					t.Fatalf("ran %d times, error %v", len(ran), err)
+				}
+				if spent := shell.(budgetedTool).budget.spent; spent != c.lines {
+					t.Errorf("spent %d lines, want %d", spent, c.lines)
+				}
+				if told := strings.Contains(result.Content, fmt.Sprintf("changed %d source lines", c.lines)); told != (c.lines > 0) {
+					t.Errorf("told %v, want %v: %s", told, c.lines > 0, result.Content)
+				}
+			})
+		}
+	}
+}
+
+func TestAScriptPastTheBudgetRunsThenEveryFurtherWriteIsRefusedNamingIt(t *testing.T) {
+	dir := scriptProject(t, true)
+	writer, err := NewWriteTool(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget := konst.OrchestratorSourceLinesPerTurn
+	var ran []string
+	big := scriptTool{dir: dir, ran: &ran, run: func(dir string) {
+		_ = os.WriteFile(filepath.Join(dir, "big.go"), []byte(strings.Repeat("x\n", budget+50)), 0o644)
+	}}
+	tools := WithSourceBudget([]Tool{writer, big, ranTool{name: "edit", ran: &ran}}, nil)
+	shell, edit := tools[1], tools[2]
+	command := func(text string) json.RawMessage {
+		raw, _ := json.Marshal(map[string]string{"command": text})
+		return raw
+	}
+	result, err := shell.Run(context.Background(), command("python - <<'E'\nopen('big.go','w')\nE"))
+	if err != nil || !strings.Contains(result.Content, fmt.Sprintf("changed %d source lines", budget+50)) || !strings.Contains(result.Content, "is spent") {
+		t.Fatalf("the script that crossed the budget: error %v, told %q", err, result.Content)
+	}
+	_, err = shell.Run(context.Background(), command("node fix.js"))
+	var refusal SourceBudgetError
+	if !errors.As(err, &refusal) || refusal.Reason != RefusedSpentScript || len(ran) != 1 || !strings.Contains(err.Error(), "python - <<'E'") || !strings.Contains(err.Error(), "nothing ran") {
+		t.Errorf("a second script after the budget was spent: ran %d, error %v", len(ran), err)
+	}
+	raw, _ := json.Marshal(map[string]string{"path": "a.go", "old_string": "a", "new_string": "b"})
+	if _, err := edit.Run(context.Background(), raw); !errors.As(err, &refusal) || refusal.Reason != RefusedOverLines || !strings.Contains(err.Error(), "python - <<'E'") {
+		t.Errorf("an edit after a script spent the budget: %v", err)
+	}
+	if _, err := shell.Run(context.Background(), command("go test ./...")); err != nil || len(ran) != 2 {
+		t.Errorf("a command that runs no script was refused: %v", err)
 	}
 }
