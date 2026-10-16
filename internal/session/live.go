@@ -3,9 +3,12 @@ package session
 import (
 	"bytes"
 	"cmp"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,19 +19,21 @@ import (
 )
 
 type Log struct {
-	store   *Store
-	mu      sync.Mutex
-	file    *os.File
-	lock    *os.File
-	header  Header
-	seq     int
-	last    map[string]string
-	prompts map[string]string
-	redact  sys.KeyRedactor
-	blobs   map[string]bool
-	side    map[string]*os.File
-	watch   func(Event)
-	saved   fs.FileInfo
+	store      *Store
+	mu         sync.Mutex
+	file       *os.File
+	lock       *os.File
+	header     Header
+	seq        int
+	last       map[string]string
+	prompts    map[string][sha256.Size]byte
+	redact     sys.KeyRedactor
+	blobs      map[string]bool
+	blobsBytes int64
+	eventBytes int64
+	side       map[string]*os.File
+	watch      func(Event)
+	saved      fs.FileInfo
 }
 
 func (l *Log) Observe(watch func(Event)) {
@@ -37,7 +42,9 @@ func (l *Log) Observe(watch func(Event)) {
 	l.mu.Unlock()
 }
 
-func (s *Store) Open(header Header) (log *Log, err error) {
+func (s *Store) Open(header Header) (*Log, error) { return s.Reopen(header, nil) }
+
+func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 	if header.ID == "" {
 		header.ID = NewEventID()
 	}
@@ -59,12 +66,12 @@ func (s *Store) Open(header Header) (log *Log, err error) {
 			err = errors.Join(err, unlock(lock))
 		}
 	}()
-	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string]string{}, redact: s.redactor(), side: map[string]*os.File{}}
+	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string][sha256.Size]byte{}, redact: s.redactor(), side: map[string]*os.File{}}
 	kept, err := s.read(header.ID)
 	switch {
 	case err == nil:
 		log.header = kept
-		if err := log.resume(); err != nil {
+		if err := log.resume(closed); err != nil {
 			return nil, err
 		}
 	case errors.Is(err, fs.ErrNotExist):
@@ -108,9 +115,9 @@ func (s *Store) fresh(header Header) Header {
 	return header
 }
 
-func (l *Log) resume() error {
+func (l *Log) resume(closed *Log) error {
 	path := filepath.Join(l.store.Dir(l.header.ID), eventsName)
-	raw, err := os.ReadFile(path)
+	raw, from, err := l.unread(path, closed)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -118,7 +125,7 @@ func (l *Log) resume() error {
 		return err
 	}
 	if whole := bytes.LastIndexByte(raw, '\n') + 1; whole < len(raw) {
-		if err := os.Truncate(path, int64(whole)); err != nil {
+		if err := os.Truncate(path, from+int64(whole)); err != nil {
 			return err
 		}
 		raw = raw[:whole]
@@ -127,20 +134,46 @@ func (l *Log) resume() error {
 	if err != nil {
 		return err
 	}
+	l.eventBytes = from + int64(len(raw))
 	for _, event := range events {
 		l.seq = max(l.seq, event.Seq)
 		l.last[event.Agent] = event.ID
 		if event.Kind == EventPrompt {
-			l.prompts[event.Agent] = string(event.Body)
+			l.prompts[event.Agent] = sha256.Sum256(event.Body)
 		}
 	}
 	return nil
 }
 
+func (l *Log) unread(path string, closed *Log) ([]byte, int64, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	var from int64
+	if closed != nil && closed.header.ID == l.header.ID && endsALine(file, closed.eventBytes) {
+		from, l.seq, l.last, l.prompts = closed.eventBytes, closed.seq, closed.last, closed.prompts
+		if blobs, err := os.Stat(filepath.Join(l.store.Dir(l.header.ID), blobsName)); err == nil && blobs.Size() >= closed.blobsBytes {
+			l.blobs = closed.blobs
+		}
+	}
+	raw, err := io.ReadAll(io.NewSectionReader(file, from, math.MaxInt64-from))
+	return raw, from, errors.Join(err, file.Close())
+}
+
+func endsALine(file *os.File, at int64) bool {
+	if at <= 0 {
+		return false
+	}
+	end := make([]byte, 1)
+	_, err := file.ReadAt(end, at-1)
+	return err == nil && end[0] == '\n'
+}
+
 func (l *Log) Prompted(agent string, body any) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.prompts[agent] == string(marshalled(body))
+	return l.prompts[agent] == sha256.Sum256(marshalled(body))
 }
 
 func (l *Log) ID() string { return l.header.ID }
@@ -178,9 +211,9 @@ func (l *Log) Append(event Event, body any) (Event, error) {
 	if _, err := l.file.Write(append(line, '\n')); err != nil {
 		return Event{}, err
 	}
-	l.last[event.Agent], l.header.Head = event.ID, event.ID
+	l.last[event.Agent], l.header.Head, l.eventBytes = event.ID, event.ID, l.eventBytes+int64(len(line)+1)
 	if event.Kind == EventPrompt {
-		l.prompts[event.Agent] = string(event.Body)
+		l.prompts[event.Agent] = sha256.Sum256(event.Body)
 	}
 	if l.watch != nil {
 		watched := event
@@ -216,12 +249,24 @@ func (l *Log) Edit(change func(*Header)) error {
 func (l *Log) Close() error {
 	l.mu.Lock()
 	side := l.closeSide()
+	l.leaveResumable()
 	l.mu.Unlock()
 	closed := errors.Join(l.save(), l.file.Close(), side)
 	if l.lock == nil {
 		return closed
 	}
 	return errors.Join(closed, unlock(l.lock))
+}
+
+func (l *Log) leaveResumable() {
+	if events, err := l.file.Stat(); err != nil || events.Size() != l.eventBytes {
+		l.eventBytes = 0
+	}
+	if blobs, err := os.Stat(filepath.Join(l.store.Dir(l.header.ID), blobsName)); err == nil {
+		l.blobsBytes = blobs.Size()
+	} else {
+		l.blobs = nil
+	}
 }
 
 func (l *Log) save() error {

@@ -51,6 +51,7 @@ type Inbox struct {
 	wake     chan struct{}
 	held     map[string]*heldSubAgent
 	logs     map[*session.Log]int
+	rested   *session.Log
 	unclosed []error
 	asked    []*Asked
 	waits    []*context.CancelCauseFunc
@@ -648,7 +649,8 @@ func (b *Inbox) open(store *session.Store, header session.Header) (*session.Log,
 			return log, nil
 		}
 	}
-	log, err := store.Open(header)
+	log, err := store.Reopen(header, b.rested)
+	b.rested = nil
 	if err == nil {
 		b.logs[log] = 1
 	}
@@ -766,7 +768,11 @@ func (b *Inbox) releasing(log *session.Log) error {
 		return nil
 	}
 	delete(b.logs, log)
-	return log.Close()
+	err := log.Close()
+	if err == nil {
+		b.rested = log
+	}
+	return err
 }
 
 func Lead(ctx context.Context, config Config, typed <-chan string, heard func(string), ended func(Row, error)) error {
