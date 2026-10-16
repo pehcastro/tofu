@@ -26,4 +26,5 @@ rtk/
 
 apps/desk/**/.scratch/
 apps/desk/target-agent*/
+apps/desk/target_*/
 /target-agent*/
