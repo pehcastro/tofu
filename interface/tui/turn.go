@@ -761,11 +761,18 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 }
 
 func (a *App) refold() {
-	cut := a.options.Now().Add(-konst.SettledSubAgentFoldMinutes * time.Minute)
+	now := a.options.Now()
+	cut := now.Add(-konst.SettledSubAgentFoldMinutes * time.Minute)
 	folded := map[string]bool{}
+	a.foldDue = time.Time{}
 	for _, row := range a.allSubAgents {
-		if settledBefore(row, cut) {
+		at, settled := settledAt(row)
+		switch due := now.Add(at.Sub(cut)); {
+		case !settled:
+		case at.Before(cut):
 			folded[row.Name] = true
+		case a.foldDue.IsZero() || due.Before(a.foldDue):
+			a.foldDue = due
 		}
 	}
 	if !maps.Equal(folded, a.folded) {
@@ -773,6 +780,14 @@ func (a *App) refold() {
 		a.refilter()
 	}
 	a.showUnfolded()
+}
+
+func (a *App) foldLater() tea.Cmd {
+	if a.foldDue.IsZero() || !a.foldArmed.IsZero() && !a.foldDue.Before(a.foldArmed) {
+		return nil
+	}
+	a.foldArmed = a.foldDue
+	return tea.Tick(a.foldDue.Sub(a.options.Now()), func(time.Time) tea.Msg { return foldDueMsg{} })
 }
 
 func (a *App) toggleFold() {
@@ -803,12 +818,16 @@ func (a *App) ageWorking() {
 	}
 }
 
-func settledBefore(row subagent.Row, cut time.Time) bool {
+func settledAt(row subagent.Row) (time.Time, bool) {
 	switch row.State {
 	case roster.Working, roster.WaitingAnswer, roster.InReview, roster.Reopened:
-		return false
+		return time.Time{}, false
 	case roster.Parked, roster.Errored, roster.Finished:
-		return !row.Started.IsZero() && row.Ended.Before(cut) && row.Started.Add(row.Since).Before(cut)
+		at := row.Started.Add(row.Since)
+		if row.Ended.After(at) {
+			at = row.Ended
+		}
+		return at, !row.Started.IsZero()
 	}
 	panic("tui: unknown sub-agent state " + row.State.String())
 }

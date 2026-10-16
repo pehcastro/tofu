@@ -205,13 +205,9 @@ func crowdCassette(dir string) (string, error) {
 	for n := 1; n <= crowd; n++ {
 		spawns = append(spawns, map[string]any{"name": "spawn", "args": map[string]any{"task": fmt.Sprintf("mission%03d: read the note", n), "owns": []string{fmt.Sprintf("m%03d/**", n)}}})
 	}
-	continuation, latecomer := fmt.Sprintf("c%d", crowd+1), fmt.Sprintf("c%d", crowd+2)
 	replies := []any{
 		map[string]any{"text": "spawning the crowd", "tools": spawns},
-		map[string]any{"agent": continuation, "text": "the forked lead hands out one more task", "tools": []any{
-			map[string]any{"name": "spawn", "args": map[string]any{"task": "latecomer: read the note", "owns": []string{"late/**"}}},
-		}},
-		map[string]any{"agent": latecomer, "text": "the latecomer keeps working", "unfinished": true},
+		map[string]any{"agent": fmt.Sprintf("c%d", crowd+1), "text": "the forked lead waits on the crowd"},
 	}
 	for n := 1; n <= crowd; n++ {
 		replies = append(replies, map[string]any{"agent": fmt.Sprintf("c%d", n), "text": fmt.Sprintf("crowd report %d", n)})

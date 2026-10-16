@@ -263,6 +263,8 @@ type App struct {
 	allSubAgents   []subagent.Row
 	folded         map[string]bool
 	unfolded       bool
+	foldDue        time.Time
+	foldArmed      time.Time
 	kept           []feed.Event
 	keptIndex      map[string]int
 	moves          map[string]movement
@@ -308,6 +310,8 @@ type pathsMsg []string
 type pulseMsg struct{}
 
 type fillMsg struct{}
+
+type foldDueMsg struct{}
 
 type shellsMsg []shells.Entry
 
@@ -562,7 +566,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.ageWorking()
 	a.flushFeed()
 	a.syncFeed()
-	return a, caught(tea.Batch(cmd, a.startPulse(), a.reportStatus()))
+	return a, caught(tea.Batch(cmd, a.startPulse(), a.reportStatus(), a.foldLater()))
 }
 
 func (a *App) update(msg tea.Msg) tea.Cmd {
@@ -598,6 +602,10 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		if a.busy && !a.shellsTicking && a.pulse%shellPulses == 0 {
 			return a.pollShells()
 		}
+		return nil
+	case foldDueMsg:
+		a.foldArmed = time.Time{}
+		a.refold()
 		return nil
 	case fillMsg:
 		a.filling = false
