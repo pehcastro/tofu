@@ -89,6 +89,8 @@ type Host struct {
 	cronMove chan struct{}
 	readOnly error
 	turnLock *sync.Mutex
+	keys     func() keyMask
+	done     chan struct{}
 
 	audience  atomic.Pointer[audience]
 	following atomic.Pointer[following]
@@ -118,12 +120,13 @@ type Host struct {
 	turn      string
 	asking    AskingMode
 
-	reads  *turn.ReadLedger
-	inbox  *turn.Inbox
-	roster *roster.Roster
-	spent  *tokenTally
-	shown  map[string]bool
-	asks   *asks
+	reads   *turn.ReadLedger
+	inbox   *turn.Inbox
+	settled []<-chan struct{}
+	roster  *roster.Roster
+	spent   *tokenTally
+	shown   map[string]bool
+	asks    *asks
 
 	questions   *replies[answeredQuestion]
 	memoryPicks *replies[memory.Scope]
@@ -150,6 +153,8 @@ func New(cfg Config) (*Host, []string) {
 		cron:        &cron.Book{Check: cfg.Check, Changed: cronMove},
 		cronMove:    cronMove,
 		turnLock:    cfg.ProjectTurn,
+		keys:        sync.OnceValue(loadKeyMask),
+		done:        make(chan struct{}),
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
 		shown:       map[string]bool{},
@@ -338,6 +343,9 @@ func (h *Host) Standing() []StandingAnswer { return h.asks.standingNow() }
 
 func (h *Host) Close() {
 	h.mu.Lock()
+	if !h.closed {
+		close(h.done)
+	}
 	h.closed = true
 	if h.ticking != nil {
 		h.ticking.Stop()
@@ -345,16 +353,24 @@ func (h *Host) Close() {
 	if h.cancel != nil {
 		h.cancel()
 	}
-	turnOver := h.turnOver
+	h.settled = append(h.settled, h.inbox.CancelCompactions())
+	turnOver, settled := h.turnOver, h.settled
 	h.mu.Unlock()
-	givenUp := time.After(konst.HostCloseWaitMillis * time.Millisecond)
+	givenUp, stop := context.WithTimeout(context.Background(), konst.HostCloseWaitMillis*time.Millisecond)
+	defer stop()
 	for turnOver != nil {
 		select {
 		case <-turnOver:
 			turnOver = nil
-		case <-givenUp:
+		case <-givenUp.Done():
 			turnOver = nil
 		case <-h.events:
+		}
+	}
+	for _, over := range settled {
+		select {
+		case <-over:
+		case <-givenUp.Done():
 		}
 	}
 	h.mu.Lock()
@@ -366,13 +382,16 @@ func (h *Host) deliver(event Event) {
 	if a := h.audience.Load(); a != nil {
 		a.tell(event)
 	}
-	if !event.snapshot() {
-		h.events <- event
-		return
-	}
 	select {
 	case h.events <- event:
+		return
 	default:
+	}
+	if !event.snapshot() {
+		select {
+		case h.events <- event:
+		case <-h.done:
+		}
 	}
 }
 
@@ -440,6 +459,9 @@ func cronFile(store *session.Store, id string) string {
 func (h *Host) carry(resumed Carry) error {
 	if h.engine != nil {
 		h.engine.Renew()
+	}
+	if h.inbox != nil {
+		h.settled = append(h.settled, h.inbox.CancelCompactions())
 	}
 	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
 	h.ran, h.carried, h.prefix = nil, resumed.Messages, &turn.Prefix{}

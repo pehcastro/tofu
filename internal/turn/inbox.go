@@ -61,6 +61,9 @@ type Inbox struct {
 	led      bool
 	settling chan struct{}
 	queued   laterCompaction
+
+	compactions       context.Context
+	cancelCompactions context.CancelFunc
 }
 
 type laterCompaction struct {
@@ -712,6 +715,33 @@ func (b *Inbox) compacting(run func()) {
 		}
 		b.mu.Unlock()
 	}
+}
+
+func (b *Inbox) compactionScope() context.Context {
+	if b == nil {
+		return context.Background()
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.compactions == nil {
+		b.compactions, b.cancelCompactions = context.WithCancel(context.Background())
+	}
+	return b.compactions
+}
+
+func (b *Inbox) CancelCompactions() <-chan struct{} {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.cancelCompactions != nil {
+		b.cancelCompactions()
+	}
+	b.compactions, b.cancelCompactions = nil, nil
+	if b.settling != nil {
+		return b.settling
+	}
+	settled := make(chan struct{})
+	close(settled)
+	return settled
 }
 
 func (b *Inbox) compacted() {

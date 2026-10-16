@@ -271,8 +271,15 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	var recording sync.Mutex
+	compacting := config.Inbox.compactionScope()
 	compactionAsk := func(into *record, index int, charge func(float64)) RecordedAsk {
 		return func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error) {
+			if err := compacting.Err(); err != nil {
+				return llm.Decision{}, err
+			}
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			defer context.AfterFunc(compacting, cancel)()
 			id, started := session.NewEventID(), time.Now()
 			tapped, tap := llm.Tapped(ctx)
 			decision, timing, err := askCountingAttempts(tapped, model, request)
@@ -302,15 +309,21 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 		}
 		background := laterCompaction{drop: release, run: func() {
-			if err := keeper.Compact(compactionAsk(later, index, func(float64) {})); err != nil {
+			defer release()
+			if compacting.Err() != nil {
+				return
+			}
+			if err := keeper.Compact(compactionAsk(later, index, func(float64) {})); err != nil && compacting.Err() == nil {
 				later.notice(notSummarized + err.Error())
 			}
-			release()
 		}}
 		if holds && config.Inbox.compactLater(background) {
 			return
 		}
 		release()
+		if compacting.Err() != nil {
+			return
+		}
 		if err := keeper.Compact(compactionAsk(recorded, index, func(cost float64) { row.TotalCostUSD += cost })); err != nil {
 			row.Warnings = append(row.Warnings, notSummarized+err.Error())
 		}

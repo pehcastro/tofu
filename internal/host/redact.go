@@ -12,11 +12,10 @@ import (
 )
 
 type emitter struct {
-	h       *Host
-	mask    func(string) string
-	secrets []string
-	mu      sync.Mutex
-	lead    stream
+	h *Host
+	keyMask
+	mu   sync.Mutex
+	lead stream
 }
 
 type stream struct {
@@ -24,14 +23,22 @@ type stream struct {
 	sent string
 }
 
-func (h *Host) emitter() *emitter {
+type keyMask struct {
+	mask    func(string) string
+	secrets []string
+}
+
+func loadKeyMask() keyMask {
+	redactor := sys.LoadKeyRedactor()
 	stored, _ := sys.StoredKeys()
 	secrets := slices.Collect(maps.Values(stored))
 	for _, name := range sys.KeyNames() {
 		secrets = append(secrets, strings.TrimSpace(os.Getenv(name)))
 	}
-	return &emitter{h: h, mask: sys.LoadKeyRedactor().Redact, secrets: slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })}
+	return keyMask{mask: redactor.Redact, secrets: slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })}
 }
+
+func (h *Host) emitter() *emitter { return &emitter{h: h, keyMask: h.keys()} }
 
 func (e *emitter) emit(event Event) {
 	if event.Kind == EventSteered {
