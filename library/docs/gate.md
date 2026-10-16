@@ -29,24 +29,14 @@ A call that changes tofu's settings, hooks or hook trust files waits for
 you in both modes unless jev denies it: through `settings`, `write`,
 `edit`, or `bash` (including `tofu settings set` and `tofu hooks trust`).
 
-No ask waits forever. In both modes an ask waits `gateAskWaitSeconds`, 180
-by default, and the chat says the clock time it will be decided at. Then
-`gateAskTimeout` decides it: `refuse`, the default, turns the call down and
-the lead reads why, `nobody answered in 3m0s, and gateAskTimeout is refuse,
-so the call did not run`; `allow` runs it. Either way the turn goes on. A
-cron job that fires while a call waits decides the ask at once the same
-way, so its prompt reaches the turn rather than queueing behind you. A
-turn a cron job started asks nobody and refuses every ask.
+No ask waits forever: after `gateAskWaitSeconds`, 180 by default, `gateAskTimeout`
+decides it, `refuse` by default or `allow`, and the turn goes on. A cron fire decides
+a waiting ask at once the same way, and a turn a cron job started refuses every ask.
 
-A sub-agent never asks you. Its ask goes to the lead that started it, with the call,
-the verdict and the risk; the lead answers allow, deny or `allow_here` within 5
-minutes, or the call is refused. `allow_here` allows every later call of that kind
-from that sub-agent until its run ends, and a lead turn that only answers asks ends
-with no chat message. A PreToolUse hook's ask goes to the lead too. A call that would
-wait for you is refused, and the lead is not asked.
-`tofu session trace` shows the ask, `allowed by the orchestrator` when the
-lead let it run, `relaxed by` and the answer that lowered a verdict, and a
-verdict a GateVerdict hook changed. Every verdict is a ledger row.
+A sub-agent never asks you. Its ask goes to its lead, which answers allow, deny or
+`allow_here` within 5 minutes, or the call is refused; `allow_here` covers every later
+call of that kind until the run ends. A call that would wait for you is refused.
+`tofu session trace` shows each ask and who allowed it. Every verdict is a ledger row.
 
 ## Where it lives
 
@@ -61,13 +51,8 @@ OpenRouter judges when its key is found, TypeSafe when only its key is. With bot
 a call the first fails on a timeout, a rate limit or a refused key goes to the other.
 
 tofu never prints more of a key than its last four characters. With no key the
-gate is off: no tool call is judged, and the app says so. An older `~/.tofu/.env`
-is moved into the credential store on the next start, and `tofu login search
-brave` stores the web search key the same way.
-
-A key a tool prints never reaches the model, the session or the ledger. Every
-stored key, and the value of any name above, reads `[key redacted]` there, even
-when the model runs `env` or `cat .env`.
+gate is off and the app says so. A key a tool prints reads `[key redacted]` in
+the model, the session and the ledger, even after `env` or `cat .env`.
 
 The ledger is `~/.tofu/projects/<project>/log`, one folder per project.
 `gatePrompt`, `gateAskWaitSeconds` and `gateAskTimeout` live in
@@ -125,10 +110,8 @@ Each of these takes `--json` and prints one JSON document.
 
     tofu settings set gatePrompt run
 
-goes back to recording without waiting, and
-`tofu settings set gateAskTimeout refuse` turns an unanswered ask down
-again. When a verdict was wrong, write
-what it should have been onto its row in the ledger:
+goes back to recording without waiting. When a verdict was wrong, write what
+it should have been onto its row in the ledger:
 
     tofu label --last allow
     tofu label <id> deny
