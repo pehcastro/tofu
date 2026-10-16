@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm/quota"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	"tofu/internal/snapshot"
@@ -87,16 +88,25 @@ func Serve(cfg ServeConfig) error {
 	first := s.first()
 	first.stop, first.pumped = make(chan struct{}), make(chan struct{})
 	s.lanes.Store(&[]*lane{first})
-	written := make(chan error, 1)
-	go func() { written <- s.box.drain(cfg.Out) }()
+	written, read := make(chan error, 1), make(chan error, 1)
+	safe.Fatal(s.report, "serve outbox", func(died error) { written <- died }, func() { written <- s.box.drain(cfg.Out) })
 	quit := make(chan struct{})
 	var workers sync.WaitGroup
 	s.pumpOn(first)
-	workers.Go(func() { s.watchShells(quit) })
-	workers.Go(func() { s.pollQuota(quit) })
-	workers.Go(func() { s.watchBoardy(quit) })
-	workers.Go(func() { s.watchSettings(quit) })
-	err := s.read()
+	watch := func(unit string, watcher func(quit <-chan struct{})) {
+		workers.Go(func() { safe.Loop(s.report, unit, quit, func() { watcher(quit) }) })
+	}
+	watch("serve shells", s.watchShells)
+	watch("serve quota", s.pollQuota)
+	watch("serve boardy", s.watchBoardy)
+	watch("serve settings", s.watchSettings)
+	safe.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
+	var err error
+	select {
+	case err = <-read:
+	case err = <-written:
+		written <- nil
+	}
 	s.stopCommand()
 	lanes := s.tracked()
 	s.stopTurns(lanes...)
@@ -119,7 +129,10 @@ func (s *server) read() error {
 	lines.Buffer(nil, konst.ServeLineBytes)
 	for lines.Scan() {
 		if line := bytes.TrimSpace(lines.Bytes()); len(line) > 0 {
-			s.receive(line)
+			_ = safe.Call(s.report, "serve receive", func() error {
+				s.receive(line)
+				return nil
+			})
 		}
 	}
 	return lines.Err()
@@ -145,14 +158,23 @@ func (s *server) receive(line []byte) {
 		}
 	case in.ID == nil:
 	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
-		go func() {
-			result, err := s.call(in.Method, in.Params)
-			s.respond(in.ID, result, err)
-		}()
+		safe.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
 	default:
-		result, err := s.call(in.Method, in.Params)
-		s.respond(in.ID, result, err)
+		s.answer(in.ID, in.Method, in.Params)
 	}
+}
+
+func (s *server) answer(id json.RawMessage, method string, params json.RawMessage) {
+	var result any
+	err := safe.Call(s.report, method, func() (err error) {
+		result, err = s.call(method, params)
+		return err
+	})
+	s.respond(id, result, err)
+}
+
+func (s *server) report(p safe.Panic) {
+	s.focus().host.report(p)
 }
 
 func (s *server) respond(id json.RawMessage, result any, err error) {
@@ -197,7 +219,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "session.open":
 		result, err := handle(raw, s.open)
 		if err == nil {
-			go s.quota()
+			safe.Go(s.report, "serve quota", s.quota)
 		}
 		return result, err
 	case "session.close":
@@ -343,7 +365,7 @@ func (s *server) compact(p SessionParams) (any, error) {
 	named.items.session = compacted.Into
 	s.box.push(sessionUpdated(named.items.identity("", compacted.Into), labelled))
 	s.mu.Unlock()
-	go s.listed(named)
+	safe.Go(s.report, "serve list", func() { s.listed(named) })
 	return compacted, nil
 }
 
@@ -357,7 +379,8 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 		return nil, err
 	}
 	s.box.push(sessionUpdated(Identity{Session: header.ID, Item: header.ID}, labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID})))
-	go s.listed(s.focus())
+	focused := s.focus()
+	safe.Go(s.report, "serve list", func() { s.listed(focused) })
 	return Ack{OK: true}, nil
 }
 
@@ -701,7 +724,8 @@ func (s *server) publish(event Event) {
 	switch event.Kind {
 	case EventAwaitPerson:
 		if event.Questions != nil && !s.answers {
-			go l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, cmp.Or(s.client, "this client"))
+			by := cmp.Or(s.client, "this client")
+			safe.Go(s.report, "serve undelivered question", func() { l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, by) })
 			return
 		}
 		if event.Questions != nil {
@@ -719,14 +743,15 @@ func (s *server) publish(event Event) {
 			s.box.push(kept("approval.resolved", &ApprovalResolved{Identity: asked.Identity, Approval: event.ID, Decision: Cancelled, By: "tofu"}))
 		}
 	case EventTurnEnded:
-		go s.quota()
-		go s.listed(l)
-		go s.turnEnded(l, l.items.turn)
+		ended := l.items.turn
+		safe.Go(s.report, "serve quota", s.quota)
+		safe.Go(s.report, "serve list", func() { s.listed(l) })
+		safe.Go(s.report, "serve turn ended", func() { s.turnEnded(l, ended) })
 	case EventTurnStarted, EventForkEnd:
-		go s.listed(l)
+		safe.Go(s.report, "serve list", func() { s.listed(l) })
 	case EventAccount:
 		if event.Account.Reason == AccountReason(turn.AccountMoved) {
-			go s.quota()
+			safe.Go(s.report, "serve quota", s.quota)
 		}
 	}
 	for _, out := range l.items.translate(event, time.Now()) {

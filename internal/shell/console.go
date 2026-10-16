@@ -13,9 +13,16 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 )
 
 const programStatus = "\x1b]7501;"
+
+func pipeOut(report safe.Report, sink io.Writer, from io.Reader) {
+	if safe.Call(report, "shell output", func() error { _, _ = io.Copy(sink, from); return nil }) != nil {
+		_, _ = io.Copy(io.Discard, from)
+	}
+}
 
 type screenText struct {
 	out    io.Writer

@@ -7,6 +7,7 @@ import (
 
 	"tofu/internal/cron"
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {
@@ -21,7 +22,7 @@ func (h *Host) CronCommand(line string) (cron.Reply, error) {
 		return reply, err
 	}
 	if reply.CheckGoals && idle {
-		go h.fire(h.cron.Due(context.Background(), h.now(), cron.TurnEnded))
+		h.fireAfterTurn()
 	}
 	h.armCron()
 	return reply, nil
@@ -56,7 +57,10 @@ func (h *Host) armCron() {
 		h.mu.Lock()
 		h.ticking = nil
 		h.mu.Unlock()
-		h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
+		_ = safe.Call(h.report, "cron", func() error {
+			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
+			return nil
+		})
 		h.armCron()
 	})
 }
@@ -111,7 +115,12 @@ func (h *Host) ended(out *emitter) {
 	}
 	h.fire(unread)
 	if !stopped {
-		go h.fire(h.cron.Due(context.Background(), h.now(), cron.TurnEnded))
+		h.fireAfterTurn()
 	}
 	h.armCron()
+}
+
+func (h *Host) fireAfterTurn() {
+	due := h.cron.Due(context.Background(), h.now(), cron.TurnEnded)
+	safe.Go(h.report, "cron", func() { h.fire(due) })
 }

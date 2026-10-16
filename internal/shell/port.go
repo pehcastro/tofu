@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"tofu/internal/safe"
 	"tofu/internal/sys"
 )
 
@@ -58,10 +59,19 @@ type listener struct {
 func dialLoopbacks(port int, dial time.Duration) []Address {
 	addresses := []Address{{Host: ipv4Loopback}, {Host: ipv6Loopback}}
 	var dialing sync.WaitGroup
+	died := make([]error, len(addresses))
 	for i := range addresses {
-		dialing.Go(func() { addresses[i].Open = PortOpen(addresses[i].Host, port, dial) })
+		dialing.Go(func() {
+			died[i] = safe.Call(nil, "port dial", func() error {
+				addresses[i].Open = PortOpen(addresses[i].Host, port, dial)
+				return nil
+			})
+		})
 	}
 	dialing.Wait()
+	if at := slices.IndexFunc(died, func(err error) bool { return err != nil }); at >= 0 {
+		panic(died[at])
+	}
 	return addresses
 }
 

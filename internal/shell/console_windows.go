@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 )
 
 func closeHandles(handles ...windows.Handle) {
@@ -39,7 +40,7 @@ func (d device) resize(size Size) error {
 	return windows.ResizePseudoConsole(d.console, windows.Coord{X: int16(size.cols), Y: int16(size.rows)})
 }
 
-func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool) (tree, <-chan error, *terminal, error) {
+func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, report safe.Report) (tree, <-chan error, *terminal, error) {
 	var inRead, inWrite, outRead, outWrite, console windows.Handle
 	if err := windows.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
 		return tree{}, nil, nil, err
@@ -63,30 +64,32 @@ func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool) (
 	}
 	sink, term := readerFor(out, typed, device{input: inWrite, console: console})
 	drained := make(chan struct{})
-	go func() {
+	safe.Go(report, "shell output", func() {
+		defer close(drained)
 		rendered := os.NewFile(uintptr(outRead), "console")
-		_, _ = io.Copy(sink, rendered)
-		_ = rendered.Close()
-		close(drained)
-	}()
+		defer func() { _ = rendered.Close() }()
+		pipeOut(report, sink, rendered)
+	})
 	waited := make(chan error, 1)
-	go func() {
-		state, err := cmd.Process.Wait()
-		if term != nil {
-			term.end()
-		}
-		windows.ClosePseudoConsole(console)
-		select {
-		case <-drained:
-		case <-time.After(killWait):
-		}
-		closeHandles(inWrite)
-		cmd.ProcessState = state
-		if err == nil && !state.Success() {
-			err = &exec.ExitError{ProcessState: state}
-		}
-		waited <- err
-	}()
+	safe.Go(report, "shell wait", func() {
+		waited <- safe.Call(report, "shell wait", func() error {
+			state, err := cmd.Process.Wait()
+			if term != nil {
+				term.end()
+			}
+			windows.ClosePseudoConsole(console)
+			select {
+			case <-drained:
+			case <-time.After(killWait):
+			}
+			closeHandles(inWrite)
+			cmd.ProcessState = state
+			if err == nil && !state.Success() {
+				err = &exec.ExitError{ProcessState: state}
+			}
+			return err
+		})
+	})
 	return spawned, waited, term, nil
 }
 

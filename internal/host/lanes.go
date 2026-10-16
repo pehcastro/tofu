@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/status"
 )
@@ -247,25 +248,27 @@ func (s *server) pumpOn(l *lane) {
 		event.from = l.host
 		s.publish(event)
 	}
-	go func() {
+	safe.Go(l.host.report, "serve pump", func() {
 		defer close(l.pumped)
-		for {
-			select {
-			case event := <-l.host.Events():
-				deliver(event)
-			case <-l.host.cronMove:
-				s.mu.Lock()
-				id := l.items.identity("", "cron")
-				s.mu.Unlock()
-				s.box.push(merged("cron.updated", "", &CronUpdated{Identity: id, CronState: l.host.cronState()}))
-			case <-l.stop:
-				for events := l.host.Events(); len(events) > 0; {
-					deliver(<-events)
+		safe.Loop(l.host.report, "serve pump", l.stop, func() {
+			for {
+				select {
+				case event := <-l.host.Events():
+					deliver(event)
+				case <-l.host.cronMove:
+					s.mu.Lock()
+					id := l.items.identity("", "cron")
+					s.mu.Unlock()
+					s.box.push(merged("cron.updated", "", &CronUpdated{Identity: id, CronState: l.host.cronState()}))
+				case <-l.stop:
+					for events := l.host.Events(); len(events) > 0; {
+						deliver(<-events)
+					}
+					return
 				}
-				return
 			}
-		}
-	}()
+		})
+	})
 }
 
 func (l *lane) halt() {

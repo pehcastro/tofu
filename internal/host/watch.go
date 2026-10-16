@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	roster "tofu/internal/subagent"
 	"tofu/internal/turn"
@@ -166,20 +167,22 @@ func (l *leadStop) reset() {
 	l.stopped, l.cancel = false, nil
 }
 
-func (l *leadStop) listen(stops, sendNow <-chan struct{}) (quiet func()) {
+func (l *leadStop) listen(report safe.Report, stops, sendNow <-chan struct{}) (quiet func()) {
 	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-stops:
-				l.stop()
-			case <-sendNow:
-				l.sendNow()
-			case <-done:
-				return
+	safe.Go(report, "lead stop", func() {
+		safe.Loop(report, "lead stop", done, func() {
+			for {
+				select {
+				case <-stops:
+					l.stop()
+				case <-sendNow:
+					l.sendNow()
+				case <-done:
+					return
+				}
 			}
-		}
-	}()
+		})
+	})
 	return func() { close(done) }
 }
 
@@ -489,21 +492,23 @@ func (a *watcher) verdictOf(id, report string) (string, bool) {
 	return "", false
 }
 
-func (a *watcher) clockRunningSubAgents() (stop func()) {
+func (a *watcher) clockRunningSubAgents(report safe.Report) (stop func()) {
 	ticking, stopped := make(chan struct{}), make(chan struct{})
-	go func() {
+	safe.Go(report, "sub-agent clock", func() {
 		defer close(stopped)
 		every := time.NewTicker(konst.SubAgentRedrawMillis * time.Millisecond)
 		defer every.Stop()
-		for {
-			select {
-			case <-ticking:
-				return
-			case <-every.C:
-				a.redrawWhenChanged()
+		safe.Loop(report, "sub-agent clock", ticking, func() {
+			for {
+				select {
+				case <-ticking:
+					return
+				case <-every.C:
+					a.redrawWhenChanged()
+				}
 			}
-		}
-	}()
+		})
+	})
 	return func() {
 		close(ticking)
 		<-stopped

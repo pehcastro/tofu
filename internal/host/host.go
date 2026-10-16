@@ -19,6 +19,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/memory"
+	"tofu/internal/safe"
 	"tofu/internal/session"
 	"tofu/internal/shell"
 	roster "tofu/internal/subagent"
@@ -215,15 +216,18 @@ func (h *Host) begin(pick Pick, task string, origin Origin) {
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.cancel, h.turn, h.turnOver = true, false, false, cancel, turn.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
-	go func() {
+	safe.Go(h.report, "turn", func() {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
 		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin})
-		h.play(ctx, pick, task, live)
+		_ = safe.Call(func(p safe.Panic) { out.emit(Event{Kind: EventFailure, Text: p.Saved(h.stateDir())}) }, "turn", func() error {
+			h.play(ctx, pick, task, live)
+			return nil
+		})
 		cancel()
 		h.ended(out)
-	}()
+	})
 }
 
 func (h *Host) Turn() (string, bool) {
@@ -344,6 +348,15 @@ func (h *Host) deliver(event Event) {
 
 func (h *Host) note(text string) {
 	h.emitter().emit(Event{Kind: EventNote, Text: text})
+}
+
+func (h *Host) stateDir() string {
+	dir, _ := sys.ProjectStateDirAt(h.dir)
+	return dir
+}
+
+func (h *Host) report(p safe.Panic) {
+	h.note(p.Saved(h.stateDir()))
 }
 
 func (h *Host) hold(id string) error {

@@ -242,8 +242,8 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		emit(Event{Kind: EventForkEnd, Fork: &forked})
 		return nil
 	}
-	stopClocks := watch.clockRunningSubAgents()
-	stopListening := watch.stop.listen(live.LeadStop, h.sendNow)
+	stopClocks := watch.clockRunningSubAgents(h.report)
+	stopListening := watch.stop.listen(h.report, live.LeadStop, h.sendNow)
 	heard := func(typed string) { h.heardTyped(emit, typed) }
 	var reported []error
 	var reached limitReached

@@ -70,7 +70,7 @@ func TestSendNowCancelsTheAskInFlightAsSentNowAndAStopStaysAStop(t *testing.T) {
 	stops, sendNow := make(chan struct{}, 1), make(chan struct{}, 1)
 	model := heldAsk{asked: make(chan struct{}, 1)}
 	watch := &watcher{held: rosterHolding(t), now: time.Now, emit: func(Event) {}, stop: &leadStop{}, inner: model}
-	quiet := watch.stop.listen(stops, sendNow)
+	quiet := watch.stop.listen(nil, stops, sendNow)
 	defer quiet()
 	ask := func(signal chan struct{}) error {
 		answered := make(chan error, 1)

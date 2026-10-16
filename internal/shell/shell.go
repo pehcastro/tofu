@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/safe"
 )
 
 type State string
@@ -178,7 +180,7 @@ func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (*live
 		if typed {
 			cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 		}
-		if spawned, waited, term, err := startConsole(cmd, logFile, r.Lifetime, typed); err == nil {
+		if spawned, waited, term, err := startConsole(cmd, logFile, r.Lifetime, typed, r.toldIn(logFile)); err == nil {
 			return &live{tree: spawned, term: term, finished: make(chan struct{})}, waited, true, nil
 		}
 	}
@@ -188,9 +190,15 @@ func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (*live
 		_ = logFile.Close()
 		return nil, nil, false, err
 	}
-	waited := make(chan error, 1)
-	go func() { waited <- cmd.Wait() }()
+	waited, report := make(chan error, 1), r.toldIn(logFile)
+	safe.Go(report, "shell wait", func() { waited <- safe.Call(report, "shell wait", cmd.Wait) })
 	return &live{tree: spawned, finished: make(chan struct{})}, waited, false, nil
+}
+
+func (r *Registry) toldIn(log io.Writer) safe.Report {
+	return func(p safe.Panic) {
+		_, _ = io.WriteString(log, "\ntofu: "+p.Saved(filepath.Dir(r.dir))+"\n")
+	}
 }
 
 func (r *Registry) list(entry Shell, process *live) error {
@@ -202,7 +210,7 @@ func (r *Registry) list(entry Shell, process *live) error {
 
 func (r *Registry) keep(entry Shell, process *live, waited <-chan error, logFile *os.File) error {
 	err := r.list(entry, process)
-	go r.await(waited, logFile, entry, process)
+	safe.Go(r.toldIn(logFile), "shell await", func() { r.await(waited, logFile, entry, process) })
 	return err
 }
 
