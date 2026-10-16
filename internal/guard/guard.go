@@ -62,6 +62,7 @@ type event struct {
 		Command      string `json:"command"`
 		Prompt       string `json:"prompt"`
 		SubagentType string `json:"subagent_type"`
+		Ticket       string `json:"ticket"`
 	} `json:"tool_input"`
 }
 

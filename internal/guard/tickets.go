@@ -21,7 +21,7 @@ func requireTicket(env Env, ev event) (Answer, error) {
 		return Answer{}, nil
 	}
 	source := ticketsAt(env)
-	why, err := spawnRefusal(env.Root, source, kind, ev.ToolInput.Prompt)
+	why, err := spawnRefusal(env.Root, source, kind, ev.ToolInput.Ticket, ev.ToolInput.Prompt)
 	if why == "" {
 		return Answer{}, err
 	}
@@ -44,8 +44,11 @@ Do this instead:
 An investigation agent (Explore, Plan) is not gated, so use one if you need to understand the problem before you can write the ticket.`), err
 }
 
-func spawnRefusal(root string, source ticketSource, kind, prompt string) (string, error) {
-	id := citedTicket().FindString(prompt)
+func spawnRefusal(root string, source ticketSource, kind, named, prompt string) (string, error) {
+	id := named
+	if id == "" {
+		id = citedTicket().FindString(prompt)
+	}
 	if id == "" {
 		return "This brief cites no ticket.", nil
 	}
@@ -74,6 +77,10 @@ func spawnRefusal(root string, source ticketSource, kind, prompt string) (string
 				}
 			}
 		}
+	}
+	heldBySpawn := cited.Owner == "" || foldSuffix(cited.Owner, "/"+id)
+	if named != "" && !blank(kind) && heldBySpawn {
+		return "", err
 	}
 	if cited.Owner == "" {
 		return id + " has no owner (assignee on a board), so there is nothing to check this spawn's agent type against.", err
