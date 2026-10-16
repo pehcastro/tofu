@@ -10,6 +10,19 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc3 - 2026-10-15
+
+A long session stays light: ended shells leave memory, and a reopen sends each report once.
+
+### Changed
+
+- Only running shells are held, polled and drawn. An ended shell's record and log stay on disk: `tofu shells list` and the shells screen show running shells (`none running` when there are none), and `tofu shells log <name>` still prints an ended one for 72 hours. A one-shot command that ended leaves no record.
+
+### Fixed
+
+- A session with thousands of kept shells no longer grows the app by gigabytes: the shells poll read every ended shell four times a second and overlapping polls held every copy. With 10,000 kept shells the app stays near 60 MB, where 0.5.15-rc2 grew past 11 GB, and ctrl+c quits in about 0.1 s (`bench/flows`).
+- A reopened session no longer posts again a report the lead already read in an earlier generation.
+
 ## 0.5.15-rc2 - 2026-10-15
 
 Sub-agents survive a crash, a restart and a long session.
