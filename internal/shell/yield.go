@@ -74,6 +74,9 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		return Yielded{}, err
 	}
 	got := Yielded{Shell: Shell{Name: name, Command: command, Dir: cmd.Dir, Owner: owner, Call: wait.Call, TofuPID: r.self, PID: cmd.Process.Pid, State: Running, Started: started, Terminal: terminal, Port: wait.Port, Env: addedEnv(cmd.Env)}}
+	if wait.Kept == KeptBackground {
+		got.Shell.Kept = KeptBackground
+	}
 	if err := r.list(got.Shell, process); err != nil {
 		_ = killTree(cmd.Process.Pid)
 		process.tree.release()

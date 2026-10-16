@@ -401,7 +401,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	}
 	cmd := t.command(context.Background(), ctx, args.Command)
 	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), shell.Wait{
-		Within: konst.BackgroundYieldMillis * time.Millisecond,
+		Within: konst.BackgroundReadyMillis * time.Millisecond,
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
 		Port:   shell.NamedPort(string(t.root), args.Command, cmd.Env),
 		Kept:   shell.KeptBackground,
@@ -421,7 +421,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (Result, er
 	}
 	return exitedResult(args.Command, got.Output, *ran.ExitCode, fmt.Sprintf(
 		"bash: this ended inside the %d ms a background start waits, so nothing was kept on the shells screen and there is no shell name to wait on: a command that ends belongs in bash without background\n",
-		konst.BackgroundYieldMillis)), nil
+		konst.BackgroundReadyMillis)), nil
 }
 
 func deadlineResult(command, output string, deadline time.Duration) Result {
