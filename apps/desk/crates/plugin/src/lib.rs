@@ -1,4 +1,5 @@
 mod folder;
+mod grant;
 mod install;
 mod ladder;
 mod manifest;
@@ -20,17 +21,20 @@ use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder, Trap};
 
 pub use folder::{Entry, Folder, FsError, Op, Outcome, PathRefusal};
+use grant::{COMMAND_GRANT_FILE, COMMAND_GRANT_VERSION};
+pub use grant::{Grant, Grants, Withheld};
 pub use install::{Home, Origin, Refusal, Report};
 pub use ladder::since_v0_2_0::tofu::desk::types::{
     Badge, Choice, Editor, Event, Kind, Node, Table, Toggle, Tone,
 };
+pub use ladder::since_v0_3_0::exports::tofu::desk::commands::Command as Descriptor;
 pub use manifest::{
     Api, Capability, Command, Contributes, GRANT_VERSION, Id, IdRule, MAX_ID_LEN, Manifest, Mode,
+    NO_ARGS,
 };
 pub use scan::{Import, KEY_ENTROPY_BITS, KEY_PREFIXES, KeyLike, MIN_KEY_LEN, ScanReport, scan};
 
-use ladder::{since_v0_1_0, since_v0_2_0};
-use since_v0_2_0::tofu::desk::fs as guest_fs;
+use ladder::{since_v0_1_0, since_v0_2_0, since_v0_3_0};
 
 pub const TICK: Duration = Duration::from_millis(1);
 pub const RENDER_TICKS: u64 = 50;
@@ -51,13 +55,15 @@ pub enum Export {
     View,
     Rows,
     Handle,
+    Commands,
+    Run,
 }
 
 impl Export {
     fn ticks(self) -> u64 {
         match self {
-            Export::View | Export::Rows => RENDER_TICKS,
-            Export::Handle => COMMAND_TICKS,
+            Export::View | Export::Rows | Export::Commands => RENDER_TICKS,
+            Export::Handle | Export::Run => COMMAND_TICKS,
         }
     }
 
@@ -66,6 +72,8 @@ impl Export {
             Export::View => "view",
             Export::Rows => "rows",
             Export::Handle => "handle",
+            Export::Commands => "commands.list",
+            Export::Run => "commands.run",
         }
     }
 }
@@ -144,6 +152,22 @@ pub enum Error {
     Stopped {
         plugin: Id,
     },
+    CommandArgs {
+        command: String,
+        source: serde_json::Error,
+    },
+    Commands {
+        plugin: Id,
+        declared: Vec<String>,
+        exported: Vec<String>,
+    },
+    CommandGrant(serde_json::Error),
+    CommandGrantVersion(u32),
+    Withheld {
+        plugin: Id,
+        command: String,
+        why: Withheld,
+    },
 }
 
 impl fmt::Display for Error {
@@ -171,7 +195,7 @@ impl fmt::Display for Error {
             ),
             Error::Api(api) => write!(
                 f,
-                "api {api} is not supported, this desk speaks desk@0.1 and desk@0.2"
+                "api {api} is not supported, this desk speaks desk@0.1, desk@0.2 and desk@0.3"
             ),
             Error::Id(id, rule) => write!(f, "id {id} is refused: {rule}"),
             Error::Capability(c) => write!(f, "unknown capability {c}"),
@@ -237,6 +261,49 @@ impl fmt::Display for Error {
                 }
             }
             Error::Stopped { plugin } => write!(f, "plugin {plugin}: its worker has stopped"),
+            Error::CommandArgs { command, source } => write!(
+                f,
+                "{MANIFEST_FILE}: command {command} has args that are not a JSON schema: {source}"
+            ),
+            Error::Commands {
+                plugin,
+                declared,
+                exported,
+            } => write!(
+                f,
+                "plugin {plugin}: refused, {MANIFEST_FILE} names commands [{}] and its export lists [{}]",
+                declared.join(", "),
+                exported.join(", ")
+            ),
+            Error::CommandGrant(e) => write!(f, "{COMMAND_GRANT_FILE}: {e}"),
+            Error::CommandGrantVersion(version) => write!(
+                f,
+                "{COMMAND_GRANT_FILE}: version {version}, this desk reads {COMMAND_GRANT_VERSION}"
+            ),
+            Error::Withheld {
+                plugin,
+                command,
+                why: Withheld::PersonOnly,
+            } => write!(
+                f,
+                "plugin {plugin}: {command} is person only, its {MANIFEST_FILE} does not set agent = true, so only a person runs it from the desk"
+            ),
+            Error::Withheld {
+                plugin,
+                command,
+                why: Withheld::Ask,
+            } => write!(
+                f,
+                "plugin {plugin}: {command} is refused by its grant, ask, and the desk has no prompt to ask with yet: set Allow in Settings > Plugins > {plugin} > Agent control"
+            ),
+            Error::Withheld {
+                plugin,
+                command,
+                why: Withheld::Deny,
+            } => write!(
+                f,
+                "plugin {plugin}: {command} is refused by its grant, deny: set Allow in Settings > Plugins > {plugin} > Agent control to let agents run it"
+            ),
         }
     }
 }
@@ -279,18 +346,57 @@ impl State {
         op: Op,
         path: String,
         run: impl FnOnce(&Folder, &str) -> Result<T, FsError>,
-    ) -> Result<T, guest_fs::FsError> {
+    ) -> Result<T, FsError> {
         let done = run(&self.folder, &path);
         let outcome = Outcome::of(&done);
         self.activity.push(Activity::Fs { op, path, outcome });
-        done.map_err(|error| match error {
-            FsError::Denied(refusal) => guest_fs::FsError::Denied(refusal.to_string()),
-            FsError::Missing => guest_fs::FsError::Missing,
-            FsError::TooLarge(bytes) => guest_fs::FsError::TooLarge(bytes),
-            FsError::Io(error) => guest_fs::FsError::Failed(error.to_string()),
-        })
+        done
     }
 }
+
+macro_rules! guest_fs {
+    ($($fs:ident)::+) => {
+        impl From<FsError> for $($fs)::+::FsError {
+            fn from(error: FsError) -> Self {
+                match error {
+                    FsError::Denied(refusal) => Self::Denied(refusal.to_string()),
+                    FsError::Missing => Self::Missing,
+                    FsError::TooLarge(bytes) => Self::TooLarge(bytes),
+                    FsError::Io(error) => Self::Failed(error.to_string()),
+                }
+            }
+        }
+
+        impl $($fs)::+::Host for State {
+            fn read(&mut self, path: String) -> Result<Vec<u8>, $($fs)::+::FsError> {
+                Ok(self.fs(Op::Read, path, Folder::read)?)
+            }
+
+            fn write(&mut self, path: String, data: Vec<u8>) -> Result<(), $($fs)::+::FsError> {
+                Ok(self.fs(Op::Write, path, |folder, path| folder.write(path, &data))?)
+            }
+
+            fn list(&mut self, path: String) -> Result<Vec<$($fs)::+::Entry>, $($fs)::+::FsError> {
+                let entries = self.fs(Op::List, path, Folder::list)?;
+                Ok(entries
+                    .into_iter()
+                    .map(|entry| $($fs)::+::Entry {
+                        name: entry.name,
+                        folder: entry.folder,
+                        bytes: entry.bytes,
+                    })
+                    .collect())
+            }
+
+            fn remove(&mut self, path: String) -> Result<(), $($fs)::+::FsError> {
+                Ok(self.fs(Op::Remove, path, Folder::remove)?)
+            }
+        }
+    };
+}
+
+guest_fs!(since_v0_2_0::tofu::desk::fs);
+guest_fs!(since_v0_3_0::tofu::desk::fs);
 
 impl since_v0_1_0::tofu::desk::types::Host for State {}
 
@@ -318,29 +424,16 @@ impl since_v0_2_0::tofu::desk::host::Host for State {
     }
 }
 
-impl guest_fs::Host for State {
-    fn read(&mut self, path: String) -> Result<Vec<u8>, guest_fs::FsError> {
-        self.fs(Op::Read, path, Folder::read)
-    }
+impl since_v0_3_0::tofu::desk::types::Host for State {}
 
-    fn write(&mut self, path: String, data: Vec<u8>) -> Result<(), guest_fs::FsError> {
-        self.fs(Op::Write, path, |folder, path| folder.write(path, &data))
-    }
-
-    fn list(&mut self, path: String) -> Result<Vec<guest_fs::Entry>, guest_fs::FsError> {
-        let entries = self.fs(Op::List, path, Folder::list)?;
-        Ok(entries
-            .into_iter()
-            .map(|entry| guest_fs::Entry {
-                name: entry.name,
-                folder: entry.folder,
-                bytes: entry.bytes,
-            })
-            .collect())
-    }
-
-    fn remove(&mut self, path: String) -> Result<(), guest_fs::FsError> {
-        self.fs(Op::Remove, path, Folder::remove)
+impl since_v0_3_0::tofu::desk::host::Host for State {
+    fn notify(
+        &mut self,
+        title: String,
+        body: String,
+    ) -> Result<(), since_v0_3_0::tofu::desk::host::Denied> {
+        self.notice(title, body)
+            .map_err(|permission| since_v0_3_0::tofu::desk::host::Denied { permission })
     }
 }
 
@@ -375,6 +468,7 @@ pub struct Host {
     engine: Engine,
     linker_v0_1_0: Linker<State>,
     linker_v0_2_0: Linker<State>,
+    linker_v0_3_0: Linker<State>,
 }
 
 impl Host {
@@ -387,6 +481,9 @@ impl Host {
             .map_err(Error::Engine)?;
         let mut linker_v0_2_0 = Linker::new(&engine);
         since_v0_2_0::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker_v0_2_0, |s| s)
+            .map_err(Error::Engine)?;
+        let mut linker_v0_3_0 = Linker::new(&engine);
+        since_v0_3_0::Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker_v0_3_0, |s| s)
             .map_err(Error::Engine)?;
         let weak = engine.weak();
         thread::spawn(move || {
@@ -406,6 +503,7 @@ impl Host {
             engine,
             linker_v0_1_0,
             linker_v0_2_0,
+            linker_v0_3_0,
         })
     }
 
@@ -510,13 +608,38 @@ impl Host {
                 since_v0_2_0::Plugin::instantiate(&mut store, &component, &self.linker_v0_2_0)
                     .map_err(failed)?,
             ),
+            Api::V0_3_0 => Exports::V0_3_0(
+                since_v0_3_0::Plugin::instantiate(&mut store, &component, &self.linker_v0_3_0)
+                    .map_err(failed)?,
+            ),
         };
-        let instance = Instance {
+        let mut instance = Instance {
             id: id.clone(),
             store,
             exports,
         };
-        Ok((Plugin::spawn(instance)?, cache))
+        let commands = instance.call(Export::Commands, |exports, s| match exports {
+            Exports::V0_3_0(p) => p.tofu_desk_commands().call_list(s),
+            Exports::V0_1_0(_) | Exports::V0_2_0(_) => Ok(Vec::new()),
+        })?;
+        let mut declared: Vec<String> = plugin
+            .manifest
+            .contributes
+            .commands
+            .iter()
+            .map(|command| command.name.clone())
+            .collect();
+        let mut exported: Vec<String> = commands.iter().map(|c| c.id.clone()).collect();
+        declared.sort();
+        exported.sort();
+        if declared != exported {
+            return Err(Error::Commands {
+                plugin: id.clone(),
+                declared,
+                exported,
+            });
+        }
+        Ok((Plugin::spawn(instance, commands)?, cache))
     }
 
     fn compile(&self, id: &Id, wasm: &[u8]) -> Result<(Component, Cache), Error> {
@@ -607,10 +730,12 @@ enum Need {
 fn need_of(api: Api, interface: &str, func: &str) -> Option<Need> {
     match (api, interface, func) {
         (Api::V0_1_0, "tofu:desk/host@0.1.0", "notify")
-        | (Api::V0_2_0, "tofu:desk/host@0.2.0", "notify") => {
+        | (Api::V0_2_0, "tofu:desk/host@0.2.0", "notify")
+        | (Api::V0_3_0, "tofu:desk/host@0.3.0", "notify") => {
             Some(Need::Granted(Capability::Notify))
         }
-        (Api::V0_2_0, "tofu:desk/fs@0.2.0", "read" | "write" | "list" | "remove") => {
+        (Api::V0_2_0, "tofu:desk/fs@0.2.0", "read" | "write" | "list" | "remove")
+        | (Api::V0_3_0, "tofu:desk/fs@0.3.0", "read" | "write" | "list" | "remove") => {
             Some(Need::Free)
         }
         _ => None,
@@ -673,6 +798,7 @@ fn installed(dir: &Path, status: Status) -> Result<Installed, Error> {
 enum Exports {
     V0_1_0(since_v0_1_0::Plugin),
     V0_2_0(since_v0_2_0::Plugin),
+    V0_3_0(since_v0_3_0::Plugin),
 }
 
 struct Instance {
@@ -686,6 +812,7 @@ type Job = Box<dyn FnOnce(&mut Instance) + Send>;
 pub struct Plugin {
     id: Id,
     folder: Folder,
+    commands: Vec<Descriptor>,
     jobs: Sender<Job>,
 }
 
@@ -715,7 +842,7 @@ impl<T> Pending<T> {
 }
 
 impl Plugin {
-    fn spawn(mut instance: Instance) -> Result<Self, Error> {
+    fn spawn(mut instance: Instance, commands: Vec<Descriptor>) -> Result<Self, Error> {
         let id = instance.id.clone();
         let folder = instance.store.data().folder.clone();
         let (jobs, inbox) = mpsc::channel::<Job>();
@@ -730,11 +857,20 @@ impl Plugin {
                 path: PathBuf::from(id.as_str()),
                 source,
             })?;
-        Ok(Self { id, folder, jobs })
+        Ok(Self {
+            id,
+            folder,
+            commands,
+            jobs,
+        })
     }
 
     pub fn id(&self) -> &Id {
         &self.id
+    }
+
+    pub fn commands(&self) -> &[Descriptor] {
+        &self.commands
     }
 
     pub fn folder(&self) -> &Folder {
@@ -765,6 +901,7 @@ impl Plugin {
             let tree = i.call(Export::View, |exports, s| match exports {
                 Exports::V0_1_0(p) => p.call_view(s).map(ladder::tree),
                 Exports::V0_2_0(p) => p.call_view(s),
+                Exports::V0_3_0(p) => p.call_view(s).map(ladder::from_next),
             })?;
             i.checked(Export::View, tree)
         })
@@ -776,6 +913,7 @@ impl Plugin {
             let tree = i.call(Export::Rows, |exports, s| match exports {
                 Exports::V0_1_0(p) => p.call_rows(s, start, end).map(ladder::tree),
                 Exports::V0_2_0(p) => p.call_rows(s, start, end),
+                Exports::V0_3_0(p) => p.call_rows(s, start, end).map(ladder::from_next),
             })?;
             i.checked(Export::Rows, tree)
         })
@@ -789,6 +927,17 @@ impl Plugin {
                     None => Ok(()),
                 },
                 Exports::V0_2_0(p) => p.call_handle(s, &event),
+                Exports::V0_3_0(p) => p.call_handle(s, &ladder::to_next(&event)),
+            })
+        })
+    }
+
+    pub fn run(&self, command: String, args: String) -> Pending<Result<String, String>> {
+        let none = format!("plugin {} exports no command {command}", self.id);
+        self.ask(move |i| {
+            i.call(Export::Run, |exports, s| match exports {
+                Exports::V0_3_0(p) => p.tofu_desk_commands().call_run(s, &command, &args),
+                Exports::V0_1_0(_) | Exports::V0_2_0(_) => Ok(Err(none)),
             })
         })
     }

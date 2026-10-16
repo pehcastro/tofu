@@ -13,6 +13,7 @@ use crate::{
 pub struct Home {
     pub plugins: PathBuf,
     pub cache: PathBuf,
+    pub config: PathBuf,
 }
 
 impl Home {
@@ -28,6 +29,7 @@ impl Home {
         Self {
             plugins: tofu.join("plugins"),
             cache: tofu.join("desk").join("cache").join("plugins"),
+            config: tofu.join("desk").join("config"),
         }
     }
 }

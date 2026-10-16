@@ -176,9 +176,9 @@ fn run(verb: &str, rest: &[&str], json: bool) -> Result<Reply, Outcome> {
             hint: "run tofu-desk with no arguments for the verbs".to_owned(),
         });
     };
-    let (fields, required) = fields(method);
-    let usage = usage(method, &fields, &required);
-    let params = params(&fields, rest).map_err(|m| usage_outcome(m, usage.clone()))?;
+    let (fields, required, flags) = fields(method);
+    let usage = usage(method, &fields, &required, &flags);
+    let params = params(&fields, &flags, rest).map_err(|m| usage_outcome(m, usage.clone()))?;
     method
         .call(params.clone())
         .map_err(|e| usage_outcome(e.to_string(), usage))?;
@@ -261,7 +261,7 @@ fn usage_outcome(message: String, usage: String) -> Outcome {
     }
 }
 
-fn fields(method: Method) -> (Vec<String>, Vec<String>) {
+fn fields(method: Method) -> (Vec<String>, Vec<String>, Vec<String>) {
     let mut generator = SchemaGenerator::default();
     let described = method.describe(&mut generator);
     let defs = generator.take_definitions(true);
@@ -279,18 +279,36 @@ fn fields(method: Method) -> (Vec<String>, Vec<String>) {
             _ => Vec::new(),
         }
     };
-    (names("properties"), names("required"))
+    let flags = match &schema["properties"] {
+        Value::Object(map) => map
+            .iter()
+            .filter(|(_, field)| field["type"] == "boolean")
+            .map(|(name, _)| name.clone())
+            .collect(),
+        _ => Vec::new(),
+    };
+    (names("properties"), names("required"), flags)
 }
 
-fn params(fields: &[String], rest: &[&str]) -> Result<Value, String> {
+fn params(fields: &[String], flags: &[String], rest: &[&str]) -> Result<Value, String> {
     let mut params = Map::new();
     let mut positional = fields.iter();
     let mut rest = rest.iter();
     while let Some(&arg) = rest.next() {
         let (name, raw) = match arg.strip_prefix("--") {
-            Some(name) => {
-                let raw = rest.next().ok_or(format!("--{name} needs a value"))?;
-                (name.to_owned(), *raw)
+            Some(given) => {
+                let name = Some(given.replace('-', "_"))
+                    .filter(|name| fields.contains(name))
+                    .unwrap_or_else(|| given.to_owned());
+                let valued = matches!(rest.as_slice().first(), Some(&"true" | &"false"));
+                let raw = match flags.contains(&name) && !valued {
+                    true => "true",
+                    false => rest
+                        .next()
+                        .copied()
+                        .ok_or(format!("--{given} needs a value"))?,
+                };
+                (name, raw)
             }
             None => {
                 let name = positional
@@ -323,11 +341,13 @@ fn params(fields: &[String], rest: &[&str]) -> Result<Value, String> {
     Ok(Value::Object(params))
 }
 
-fn usage(method: Method, fields: &[String], required: &[String]) -> String {
+fn usage(method: Method, fields: &[String], required: &[String], flags: &[String]) -> String {
     let mut line = format!("tofu-desk {}", method.name());
     for field in fields {
         if required.contains(field) {
             line.push_str(&format!(" <{field}>"));
+        } else if flags.contains(field) {
+            line.push_str(&format!(" [--{}]", field.replace('_', "-")));
         } else {
             line.push_str(&format!(" [--{field} v]"));
         }

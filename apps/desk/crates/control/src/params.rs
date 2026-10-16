@@ -83,6 +83,7 @@ params! {
     PluginGrant { id: String, capability: String, mode: Access }
     PluginActivity { id: String, since: Option<String> }
     PluginStateQuery { id: String, uri: Option<String> }
+    PluginRun { id: String, command: String, args: Option<Value>, #[serde(default)] dry_run: bool }
     CommandList { plugin: Option<String>, #[serde(default)] agent_only: bool, cursor: Option<String> }
     CommandName { name: String }
     DrawBoard { board: String }

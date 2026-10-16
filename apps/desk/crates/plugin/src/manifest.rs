@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::{Component, Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Error;
 
@@ -9,6 +10,7 @@ use crate::Error;
 pub enum Api {
     V0_1_0,
     V0_2_0,
+    V0_3_0,
 }
 
 impl Api {
@@ -16,6 +18,7 @@ impl Api {
         match text {
             "desk@0.1" => Ok(Api::V0_1_0),
             "desk@0.2" => Ok(Api::V0_2_0),
+            "desk@0.3" => Ok(Api::V0_3_0),
             _ => Err(Error::Api(text.to_owned())),
         }
     }
@@ -148,9 +151,19 @@ impl fmt::Display for Id {
 #[serde(deny_unknown_fields)]
 pub struct Command {
     pub name: String,
+    pub title: String,
+    #[serde(default = "no_args")]
+    pub args: String,
+    #[serde(default)]
     pub description: String,
     #[serde(default)]
     pub agent: bool,
+}
+
+pub const NO_ARGS: &str = "{}";
+
+fn no_args() -> String {
+    NO_ARGS.to_owned()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -163,6 +176,61 @@ pub struct Contributes {
     pub commands: Vec<Command>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
+pub struct Link(String);
+
+impl Link {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for Link {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, String> {
+        let rest = text
+            .strip_prefix("https://")
+            .or_else(|| text.strip_prefix("http://"));
+        match rest {
+            Some(rest) if !rest.is_empty() && !text.contains(char::is_whitespace) => Ok(Link(text)),
+            _ => Err(format!(
+                "link {text:?} is not an http or https address without spaces"
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
+pub struct Banner(PathBuf);
+
+impl Banner {
+    pub fn as_path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for Banner {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, String> {
+        let path = PathBuf::from(&text);
+        let inside = path.components().next().is_some()
+            && path
+                .components()
+                .all(|part| matches!(part, Component::Normal(_)));
+        if inside {
+            Ok(Banner(path))
+        } else {
+            Err(format!(
+                "banner {text:?} is not a file inside the plugin folder"
+            ))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Manifest {
     pub id: Id,
@@ -171,6 +239,11 @@ pub struct Manifest {
     pub version: String,
     pub api: Api,
     pub tofu: String,
+    pub description: Option<String>,
+    pub author: Option<String>,
+    pub homepage: Option<Link>,
+    pub repository: Option<Link>,
+    pub banner: Option<Banner>,
     pub capabilities: BTreeMap<Capability, Vec<String>>,
     pub contributes: Contributes,
 }
@@ -184,6 +257,11 @@ struct Raw {
     version: String,
     api: String,
     tofu: String,
+    description: Option<String>,
+    author: Option<String>,
+    homepage: Option<Link>,
+    repository: Option<Link>,
+    banner: Option<Banner>,
     #[serde(default)]
     capabilities: toml::Table,
     #[serde(default)]
@@ -204,6 +282,14 @@ impl Manifest {
                 value => declare(&mut capabilities, &key, value)?,
             }
         }
+        for command in &raw.contributes.commands {
+            serde_json::from_str::<serde_json::Value>(&command.args).map_err(|source| {
+                Error::CommandArgs {
+                    command: command.name.clone(),
+                    source,
+                }
+            })?;
+        }
         Ok(Self {
             id: Id::parse(&raw.id)?,
             name: raw.name,
@@ -211,6 +297,11 @@ impl Manifest {
             version: raw.version,
             api: Api::parse(&raw.api)?,
             tofu: raw.tofu,
+            description: raw.description,
+            author: raw.author,
+            homepage: raw.homepage,
+            repository: raw.repository,
+            banner: raw.banner,
             capabilities,
             contributes: raw.contributes,
         })
@@ -244,7 +335,7 @@ fn declare(
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
     Allow,
