@@ -10,6 +10,30 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc4 - 2026-10-16
+
+tofu survives its own crashes, cleans up after itself, and can show where a long session spends its memory.
+
+### Added
+
+- `tofu --profile` (with `--continue`, `run`, `session` or `serve`) writes a CPU profile, a heap profile and a goroutine dump every 3 minutes and at exit into a folder it prints, keeping the last 5 snapshots and the last 5 runs.
+- `tofu --temporary-project` and `tofu run --temporary-project` mark a project temporary: the next tofu to start removes its sessions and logs once it has been unused for two hours, never while a tofu has it open and never the project's own files.
+- `tofu run --thinking-summary summarized|omitted` sets the thinking body for one run without changing settings.
+- `tofu serve` answers `boardy.questions`, `boardy.answer`, `boardy.plan` and `boardy.init`, and every boardy answer carries the board's `words`.
+- A model file can set `verbosity` and `reasoning_context`, sent on the codex wire as codex sends them; `codex-sub/gpt-5.6-sol` ships with `low` and `all_turns`, which cut its median output on `bench/rivals` from 4,268 to 3,830 tokens.
+
+### Changed
+
+- The setting `oneTurnPerProject` is now `oneWorkingSessionPerProject`, and its refusal says a session is already working in the project; a settings file with the old key keeps its value.
+- A python, node or bash script the lead runs counts the source lines it changed against the lead's 200-line budget; once spent, further scripts and edits are refused, naming the scripts that spent it.
+- Sub-agents settled for over two hours fold on a timer, so a quiet session folds them too.
+- A TypeScript edit waits up to 800 ms for the type check, so a busy machine still gets the verdict with the edit.
+
+### Fixed
+
+- A crash inside a host watcher, a serve request, a shell reader, a tool, the browser, a web fetch, a search, the memory build, a hook, a board or a session store ends only that unit, with the stack in a crash file; watchers restart and requests answer with an error.
+- A refused tool call's trace line names the command it refused.
+
 ## 0.5.15-rc3 - 2026-10-15
 
 A long session stays light: ended shells leave memory, and a reopen sends each report once.

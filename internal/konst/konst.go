@@ -1,6 +1,6 @@
 package konst
 
-const Version = "0.5.15-rc3"
+const Version = "0.5.15-rc4"
 
 const GateAskArgsBytes = 4096
 
