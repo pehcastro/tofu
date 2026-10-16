@@ -772,5 +772,22 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 }
 
 func (t *SpawnTool) ticketActor(ticket string) string {
-	return t.base.Session + "/" + ticket
+	if t.base.Sessions == nil {
+		return t.base.Session + "/" + ticket
+	}
+	familyOf := func(id string) string {
+		if identity, err := t.base.Sessions.Identity(id); err == nil {
+			return identity.Family
+		}
+		return id
+	}
+	family := familyOf(t.base.Session)
+	if t.base.Board != nil {
+		if held, err := t.base.Board.Get(ticket); err == nil {
+			if assigned, bySession := strings.CutSuffix(held.Assignee, "/"+ticket); bySession && assigned != family && familyOf(assigned) == family {
+				return held.Assignee
+			}
+		}
+	}
+	return family + "/" + ticket
 }
