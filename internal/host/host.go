@@ -157,7 +157,6 @@ func New(cfg Config) (*Host, []string) {
 		done:        make(chan struct{}),
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
-		shown:       map[string]bool{},
 		asks:        &asks{standing: map[string]Answer{}},
 		questions:   &replies[answeredQuestion]{},
 		memoryPicks: &replies[memory.Scope]{},
@@ -464,7 +463,7 @@ func (h *Host) carry(resumed Carry) error {
 		h.engine.Renew()
 	}
 	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
-	h.ran, h.carried, h.prefix = nil, resumed.Messages, &turn.Prefix{}
+	h.ran, h.carried, h.prefix, h.shown = nil, resumed.Messages, &turn.Prefix{}, map[string]bool{}
 	for _, message := range resumed.Messages {
 		if message.ToolCallID != "" {
 			h.shown[message.ToolCallID] = true

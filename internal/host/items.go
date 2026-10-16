@@ -44,6 +44,8 @@ type items struct {
 	minted   int
 	tools    map[string]openTool
 	agents   map[string]SubAgentRow
+	settled  map[string]bool
+	numbered int
 	unlogged []awaiting
 	logged   map[string]string
 }
@@ -352,15 +354,25 @@ func (s *items) agentChanges(rows []SubAgentRow, now time.Time) []outgoing {
 	var out []outgoing
 	for _, row := range rows {
 		was, known := s.agents[row.Name]
+		if !known && s.settled[row.Name] {
+			if ended(row.State) {
+				continue
+			}
+			was, known = SubAgentRow{State: roster.Finished}, true
+		}
 		s.agents[row.Name] = row
 		id := s.identity(row.Name, row.Name)
 		state := AgentState(row.State.String())
 		if !known {
-			out = append(out, kept("agent.started", &AgentStarted{Identity: id, Instance: row.Name, Kind: row.Agent, Number: len(s.agents), Task: row.Doing, Owns: row.Owns, Ticket: row.Ticket, Model: row.Model, State: state, StartedAt: row.Started}))
+			s.numbered++
+			out = append(out, kept("agent.started", &AgentStarted{Identity: id, Instance: row.Name, Kind: row.Agent, Number: s.numbered, Task: row.Doing, Owns: row.Owns, Ticket: row.Ticket, Model: row.Model, State: state, StartedAt: row.Started}))
 		} else if changed := agentDelta(id, was, row); changed != nil {
 			out = append(out, merged("agent.updated", row.Name, changed))
 		}
-		if ended(row.State) && (!known || !ended(was.State)) {
+		if !ended(row.State) {
+			continue
+		}
+		if !known || !ended(was.State) {
 			endedAt := row.Ended
 			if endedAt.IsZero() {
 				endedAt = now
@@ -368,6 +380,11 @@ func (s *items) agentChanges(rows []SubAgentRow, now time.Time) []outgoing {
 			id.Turn = cmp.Or(row.Turn, id.Turn)
 			out = append(out, kept("agent.ended", &AgentEnded{Identity: id, Instance: row.Name, State: state, Report: row.Report, EndedAt: endedAt, DurationMs: endedAt.Sub(row.Started).Milliseconds()}))
 		}
+		if s.settled == nil {
+			s.settled = map[string]bool{}
+		}
+		delete(s.agents, row.Name)
+		s.settled[row.Name] = true
 	}
 	return out
 }

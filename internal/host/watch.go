@@ -58,7 +58,7 @@ type watcher struct {
 	turnID    string
 	maxSteps  int
 	seen      map[string]bool
-	wrote     map[string]string
+	wrote     map[string]map[string]string
 	in        int
 	out       int
 	cacheRead int
@@ -264,7 +264,7 @@ func (a *watcher) called(call llm.ToolCall, asker string) {
 	if promotes {
 		a.spawns = append(a.spawns, id)
 	}
-	a.noteWholeFile(call)
+	a.noteWholeFile(call, asker)
 	a.marks.Unlock()
 	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker, Args: call.Arguments})
 }
@@ -272,6 +272,8 @@ func (a *watcher) called(call llm.ToolCall, asker string) {
 func (a *watcher) result(message llm.Message, asker string) {
 	killedWithNothingToShow := message.ToolOutcome == llm.ToolOutcomeAborted && message.ToolResultBytes == 0
 	a.marks.Lock()
+	created := a.wrote[asker][message.ToolCallID]
+	delete(a.wrote[asker], message.ToolCallID)
 	if a.seen[message.ToolCallID] || killedWithNothingToShow {
 		a.marks.Unlock()
 		return
@@ -298,10 +300,9 @@ func (a *watcher) result(message llm.Message, asker string) {
 			result.Diff = message.Content
 		}
 		if strings.HasPrefix(message.Content, createdFilePrefix) {
-			result.Created = a.wrote[message.ToolCallID]
+			result.Created = created
 		}
 	}
-	delete(a.wrote, message.ToolCallID)
 	a.marks.Unlock()
 	ended := byteSize(message.ToolResultBytes)
 	if result.Failed {
@@ -335,7 +336,7 @@ func (a *watcher) startedBy(call string) []SubAgentRow {
 	return nil
 }
 
-func (a *watcher) noteWholeFile(call llm.ToolCall) {
+func (a *watcher) noteWholeFile(call llm.ToolCall, asker string) {
 	var args struct {
 		Content string `json:"content"`
 	}
@@ -343,9 +344,12 @@ func (a *watcher) noteWholeFile(call llm.ToolCall) {
 		return
 	}
 	if a.wrote == nil {
-		a.wrote = map[string]string{}
+		a.wrote = map[string]map[string]string{}
 	}
-	a.wrote[call.ID] = args.Content
+	if a.wrote[asker] == nil {
+		a.wrote[asker] = map[string]string{}
+	}
+	a.wrote[asker][call.ID] = args.Content
 }
 
 func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.ToolCall) {
@@ -409,7 +413,14 @@ func (a *watcher) readCallsOf(agents []roster.SubAgent) {
 	if a.watched == nil {
 		a.watched = map[string]watchedAgent{}
 	}
+	if a.asked == nil {
+		a.asked = map[string][]Call{}
+	}
 	for _, agent := range moving {
+		if reopened := a.watched[agent.ID]; reopened.settled != nil {
+			earlier := slices.DeleteFunc(slices.Clone(reopened.calls), func(call Call) bool { return call.ID == "" })
+			a.asked[agent.ID] = append(earlier, a.asked[agent.ID]...)
+		}
 		a.watched[agent.ID] = watchedAgent{of: agent, calls: recordedOrCalling(recordedCalls(rows, agent.ID), a.asked[agent.ID], agent.Calling, agent.CallsDropped)}
 	}
 }
@@ -477,6 +488,10 @@ func (a *watcher) rowsOf(agents []roster.SubAgent) []SubAgentRow {
 		if watched := a.watched[row.Name]; ended(row.State) && sameRun(watched.of, moving[index]) {
 			watched.settled = &row
 			a.watched[row.Name] = watched
+			delete(a.asked, row.Name)
+			a.marks.Lock()
+			delete(a.wrote, row.Name)
+			a.marks.Unlock()
 		}
 	}
 	return rows
