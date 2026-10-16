@@ -111,8 +111,17 @@ func cargoDependencies(data []byte) ([]string, error) {
 }
 
 func Frameworks(root string, paths []string) ([]string, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
 	dirs := []string{"."}
 	for _, p := range paths {
+		if filepath.IsAbs(p) {
+			if p, err = filepath.Rel(absRoot, p); err != nil {
+				continue
+			}
+		}
 		literal, _, _ := strings.Cut(filepath.ToSlash(p), "*")
 		for dir := path.Dir(literal); dir != "." && dir != "/" && !strings.HasPrefix(dir, ".."); dir = path.Dir(dir) {
 			dirs = append(dirs, dir)

@@ -87,6 +87,30 @@ func TestAPackageJSONAboveTheProjectRootIsNotRead(t *testing.T) {
 	}
 }
 
+func TestAnAbsolutePathInTheTaskReadsOnlyThePackageJSONUnderTheProject(t *testing.T) {
+	root := project(t, map[string]string{
+		"package.json":          `{"dependencies": {"react": "19"}}`,
+		"apps/web/package.json": `{"dependencies": {"svelte": "5"}}`,
+		"../package.json":       `{"dependencies": {"vue": "3"}}`,
+	})
+	parent := filepath.Dir(root)
+	cases := []struct {
+		path string
+		want []string
+	}{
+		{filepath.Join(root, "apps", "web", "App.tsx"), []string{"react", "svelte"}},
+		{filepath.Join(root, "apps", "web", "*"), []string{"react", "svelte"}},
+		{filepath.Join(parent, "elsewhere", "x.ts"), []string{"react"}},
+		{filepath.Join(parent, "package.json"), []string{"react"}},
+	}
+	for _, c := range cases {
+		frameworks, err := Frameworks(root, []string{c.path})
+		if err != nil || !slices.Equal(frameworks, c.want) {
+			t.Errorf("path %s read %v, %v, want %v", c.path, frameworks, err, c.want)
+		}
+	}
+}
+
 func TestAPackageJSONThatIsNotJSONFailsByPath(t *testing.T) {
 	_, err := Frameworks(project(t, map[string]string{"package.json": `{"dependencies": `}), nil)
 	if err == nil || !strings.Contains(err.Error(), "package.json") {
