@@ -10,6 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc6-fix1 - 2026-10-16
+
+### Changed
+
+- A cron fire draws in the chat as one row, `cron c1 fired [expand]`, never as a message from you, whether it joins a running turn or starts one. `[expand]` or `ctrl+o` opens the full prompt under the orchestrator in the sub-agents tab.
+- Opening a session reads only the hashes of its stored blobs: on an 80 MB blob file memory peaks at 10 MB instead of 175 MB.
+
 ## 0.5.15-rc6 - 2026-10-16
 
 Tofu stops forgetting you and stops stalling: memory reaches the lead after every fork, your standing orders survive, and nothing waits hours on a question nobody sees.

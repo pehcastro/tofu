@@ -12,8 +12,9 @@ turn until its check command exits 0. Both are cron jobs, made by shorter
 commands, and they share one list, one history and one set of limits.
 
 A fire during a turn reaches the model at its next step, like a line you
-type. A fire while tofu is idle starts a turn. The chat shows one line
-naming the job, and the model reads the prompt as the schedule's, never as
+type. A fire while tofu is idle starts a turn. The chat shows one row,
+`cron c1 fired [expand]`, never a message from you; `[expand]` or `ctrl+o`
+opens the prompt in the sub-agents tab. The model reads the prompt as the schedule's, never as
 yours, so it approves nothing and is never carried or learned as your words.
 A job the model makes with its `cron` tool fires on time, and a job keeps
 firing while one long turn runs.
