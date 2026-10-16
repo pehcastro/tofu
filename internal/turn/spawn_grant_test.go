@@ -208,8 +208,8 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	if asked != 0 {
 		t.Errorf("the person was asked %d times", asked)
 	}
-	if _, err := os.Stat(seen); err != nil {
-		t.Errorf("the scratch folder %s is not there: %v", seen, err)
+	if _, err := os.Stat(seen); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the settled sub-agent's scratch folder %s is still there: %v", seen, err)
 	}
 	if _, err := os.Stat(filepath.Join(seen, "run.log")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("run.log is still in the scratch: %v", err)
