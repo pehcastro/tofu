@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"tofu/internal/learn/words"
 )
 
 const groupingTask = `Below are the messages one person typed to a coding agent run by tofu, a coding-agent harness, across many sessions, each with the end of what the agent said just before it. Find what kept going wrong.
@@ -118,14 +120,14 @@ func (r *Run) Group(answer string, known Known, by string) error {
 			refuse(n, "the title was refused: "+lineFault(title))
 			continue
 		}
-		var units []unit
+		var units []words.Unit
 		for _, m := range g.Messages {
 			if m < 0 || m >= len(r.Said) || used[m] {
 				refuse(n, fmt.Sprintf("message %d is not one to use", m))
 				continue
 			}
 			used[m] = true
-			units = append(units, unit{said: m, text: r.Said[m].Text})
+			units = append(units, words.Unit{Said: m, Text: r.Said[m].Text})
 		}
 		if len(units) == 0 {
 			refuse(n, "no message left")

@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"slices"
 	"time"
+
+	"tofu/internal/learn/words"
 )
 
 type JobRun struct {
@@ -34,8 +36,7 @@ type jobRun struct {
 }
 
 func (a jobRun) same(b jobRun) bool {
-	both := shared(a.stems, b.stems, nil)
-	return slices.Equal(a.tools, b.tools) && both >= StrongSharedWords && both*SharedOfShorter >= min(len(a.stems), len(b.stems))
+	return slices.Equal(a.tools, b.tools) && words.Alike(a.stems, b.stems, nil) > 0
 }
 
 func repeatedJobs(sittings []sitting, all []heard) []Job {
@@ -50,7 +51,7 @@ func repeatedJobs(sittings []sitting, all []heard) []Job {
 				until = h.At
 			}
 		}
-		run := jobRun{JobRun: JobRun{Session: asked.Session, At: asked.At, Text: asked.Text}, stems: stemsOf(asked.Text)}
+		run := jobRun{JobRun: JobRun{Session: asked.Session, At: asked.At, Text: asked.Text}, stems: words.Stems(asked.Text)}
 		for _, w := range sittings[asked.seat].worked {
 			if w.at.Before(asked.At) || !until.IsZero() && !w.at.Before(until) {
 				continue

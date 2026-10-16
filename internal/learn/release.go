@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/learn/words"
 	"tofu/internal/sys"
 )
 
@@ -78,7 +79,7 @@ func (f *Finding) markFixed(releases []Release) {
 	least, _ := builtOn(releases, last)
 	f.Built, f.FixedIn = builtText(releases, last), f.offered
 	if f.FixedIn == "" && f.byWords {
-		f.FixedIn = noteMatch(releases[:least], stemsOf(cmp.Or(strings.Join(f.words, " "), f.Title)+" "+f.Rule))
+		f.FixedIn = noteMatch(releases[:least], words.Stems(cmp.Or(strings.Join(f.words, " "), f.Title)+" "+f.Rule))
 	}
 	at := slices.IndexFunc(releases, func(r Release) bool { return r.Version == f.FixedIn })
 	if at < 0 || at >= least {
@@ -91,7 +92,7 @@ func (f *Finding) markFixed(releases []Release) {
 func noteMatch(newer []Release, stems []string) string {
 	for _, release := range slices.Backward(newer) {
 		for _, note := range release.Notes {
-			if both := shared(stemsOf(note), stems, nil); both >= FixNoteWords && 2*both >= len(stems) {
+			if both := words.Shared(words.Stems(note), stems, nil); both >= FixNoteWords && 2*both >= len(stems) {
 				return release.Version
 			}
 		}

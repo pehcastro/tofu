@@ -6,15 +6,9 @@ const (
 	CorroboratingPlaces    = 2
 	HighConfidenceSessions = 3
 	SharedTellingWords     = 2
-	StrongSharedWords      = 3
 	RepeatedJobTimes       = 2
 	FixNoteWords           = 3
 	QuotedRunWords         = 5
-	SharedOfShorter        = 3
-	TellingFloor           = 3
-	TellingShare           = 10
-	ShortMessageWords      = 30
-	ShortestWord           = 3
 	TurnTailBytes          = 600
 	CheckedBytes           = 160
 	StatementBytes         = 240

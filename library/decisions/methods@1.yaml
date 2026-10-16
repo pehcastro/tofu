@@ -7,6 +7,10 @@ methods:
     method: judged
     why: jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved
     cost: a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions
+  person_repeat:
+    method: judged
+    why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher
+    cost: about $0.0069 for 42 requests over that corpus, p50 276 ms, worst 412 ms
   browser_step:
     method: judged
     why: jev picks the right next action on 8 of 8 recorded pages, median 316 ms and 1340 input tokens a decision. it runs only under browserDriver goal. the default, browserDriver steps, where the turn's own model calls browser_observe and browser_act, is not measured against it

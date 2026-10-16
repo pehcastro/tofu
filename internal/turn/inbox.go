@@ -10,8 +10,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/learn/repeat"
+	"tofu/internal/learn/words"
 	"tofu/internal/llm"
 	"tofu/internal/session"
 )
@@ -62,6 +65,10 @@ type Inbox struct {
 	led      bool
 	settling chan struct{}
 	queued   laterCompaction
+	said     map[string][]PersonSaid
+	repeats  *repeat.Judge
+
+	repeatsRead bool
 
 	compactions       context.Context
 	cancelCompactions context.CancelFunc
@@ -325,6 +332,135 @@ func (b *Inbox) post(item string) {
 
 func SaidByThePerson(source string) bool {
 	return source == sourceTask || source == sourceTyped || source == sourceSteer
+}
+
+type PersonSaid struct {
+	Session string
+	At      *time.Time
+	Words   string
+	Quoted  string
+}
+
+const (
+	repeatNoteOpening = "the person has said this before"
+	repeatQuoteOpens  = `: "`
+)
+
+func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, error) {
+	newest, err := store.Header(id)
+	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
+		newest, err = store.Header(newest.ForkedInto)
+	}
+	if err != nil {
+		return nil, err
+	}
+	chain, err := store.Ancestors(newest.ID)
+	if err != nil {
+		return nil, err
+	}
+	slices.Reverse(chain)
+	var said []PersonSaid
+	for _, header := range append(chain, newest) {
+		b.mu.Lock()
+		kept, known := b.said[header.ID]
+		b.mu.Unlock()
+		if known && header.ID != newest.ID {
+			said = append(said, kept...)
+			continue
+		}
+		reading, err := store.Reading(header.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, message := range reading.Messages {
+			if task, typed := TaskIn(message.Content); typed && message.Role == session.RoleUser && SaidByThePerson(message.Origin) {
+				_, notes, _ := strings.Cut(message.Content, NotesAfterTheTask+repeatNoteOpening)
+				_, quoted, _ := strings.Cut(notes, repeatQuoteOpens)
+				quoted, _, _ = strings.Cut(quoted, `"`)
+				kept = append(kept, PersonSaid{Session: header.ID, At: message.TakenAt, Words: strings.TrimSpace(task), Quoted: quoted})
+			}
+		}
+		if header.ID != newest.ID {
+			b.mu.Lock()
+			if b.said == nil {
+				b.said = map[string][]PersonSaid{}
+			}
+			b.said[header.ID] = kept
+			b.mu.Unlock()
+		}
+		said = append(said, kept...)
+	}
+	return said, nil
+}
+
+func (b *Inbox) judgeRepeats(config Config) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.repeatsRead {
+		return
+	}
+	b.repeatsRead = true
+	places, err := config.ResolvedPlaces()
+	if err == nil {
+		b.repeats, err = repeat.New(config.Project, places.Log)
+	}
+	if err != nil && config.Notify != nil {
+		config.Notify("a repeated instruction goes unnoticed, since Jev cannot be asked: " + err.Error())
+	}
+}
+
+func (b *Inbox) repeatNote(store *session.Store, id, said string) string {
+	b.mu.Lock()
+	judge := b.repeats
+	b.mu.Unlock()
+	said = strings.TrimSpace(said)
+	if judge == nil || store == nil || id == "" || said == "" {
+		return ""
+	}
+	before, err := b.SaidInChain(store, id)
+	if err != nil {
+		return ""
+	}
+	texts := make([]string, len(before))
+	var quoted []string
+	for i, one := range before {
+		texts[i] = one.Words
+		if one.Session == id && one.Quoted != "" {
+			quoted = append(quoted, one.Quoted)
+		}
+	}
+	picked := slices.DeleteFunc(words.Candidates(texts, said), func(i int) bool {
+		flattened := strings.Join(strings.Fields(texts[i]), " ")
+		return before[i].Session == id && before[i].Quoted != "" || slices.ContainsFunc(quoted, func(q string) bool { return strings.HasPrefix(flattened, q) })
+	})
+	if len(picked) == 0 {
+		return ""
+	}
+	earlier := make([]repeat.Earlier, len(picked))
+	for i, at := range picked {
+		earlier[i].Text = texts[at]
+		if before[at].At != nil {
+			earlier[i].At = before[at].At.Format(time.RFC3339)
+		}
+	}
+	repeated, err := judge.Repeats(context.Background(), said, earlier)
+	if err != nil || repeated < 0 {
+		return ""
+	}
+	first := before[picked[repeated]]
+	when := "in an earlier message"
+	if first.At != nil {
+		when = "on " + first.At.Local().Format("Mon 2 Jan 15:04")
+	}
+	quote, cut := strings.Join(strings.Fields(first.Words), " "), ""
+	if len(quote) > words.RepeatQuoteBytes {
+		end := words.RepeatQuoteBytes
+		for !utf8.RuneStart(quote[end]) {
+			end--
+		}
+		quote, cut = quote[:end], "..."
+	}
+	return NotesAfterTheTask + repeatNoteOpening + ", " + when + repeatQuoteOpens + quote + `"` + cut + ". Having to say it again makes it a standing instruction: unless it only fits this one task, keep it with remember, quoting their words from either message."
 }
 
 func (b *Inbox) Remembered(note string) {
@@ -777,6 +913,10 @@ func (b *Inbox) releasing(log *session.Log) error {
 
 func Lead(ctx context.Context, config Config, typed <-chan string, heard func(string), ended func(Row, error)) error {
 	var failed []error
+	config.Inbox.judgeRepeats(config)
+	if SaidByThePerson(cmp.Or(config.TaskOrigin.Source, sourceTask)) {
+		config.Task += config.Inbox.repeatNote(config.Sessions, config.Session, config.Task)
+	}
 	for {
 		config.Inbox.mu.Lock()
 		config.Inbox.stopped, config.Inbox.led = false, true
@@ -785,10 +925,12 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		ended(row, err)
 		failed = append(failed, err)
 		next, said := config.Inbox.next(ctx, typed)
+		note := ""
 		if said != "" {
 			if heard != nil {
 				heard(said)
 			}
+			note = config.Inbox.repeatNote(config.Sessions, cmp.Or(row.Session, config.Session), said)
 			if config.Steering != nil {
 				said = strings.Join(append([]string{said}, config.Steering()...), "\n\n")
 			}
@@ -802,7 +944,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 			config.History = Sendable(row.Conversation)
 		}
 		config.TaskOrigin = originOf(next)
-		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(textsOf(next), "\n\n"), nil, nil, ""
+		config.Task, config.Images, config.NewID, config.SessionSource = strings.Join(textsOf(next), "\n\n")+note, nil, nil, ""
 		if said != "" && config.ImagesOf != nil {
 			config.Images = config.ImagesOf(said)
 		}

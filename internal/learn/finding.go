@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"tofu/internal/learn/words"
 	"tofu/internal/memory"
 )
 
@@ -246,10 +247,10 @@ func lostWords(found []Finding) []Finding {
 
 func needed(f Finding, entries []memory.Entry, retired map[string]bool) (memory.Entry, bool) {
 	for _, entry := range slices.DeleteFunc(slices.Clone(entries), func(e memory.Entry) bool { return retired[e.ID] }) {
-		stems := stemsOf(entry.Text + " " + entry.Said)
+		stems := words.Stems(entry.Text + " " + entry.Said)
 		places := map[string]bool{}
 		for _, q := range f.Quotes {
-			if q.At.After(entry.At) && shared(stemsOf(q.Text), stems, nil) >= SharedTellingWords {
+			if q.At.After(entry.At) && words.Shared(words.Stems(q.Text), stems, nil) >= SharedTellingWords {
 				places[q.Session] = true
 			}
 		}

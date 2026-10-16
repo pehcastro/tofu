@@ -1,0 +1,63 @@
+name: person_repeat
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  one request per message the person typed. state.said is the new message and
+  state.earlier holds earlier messages the same person typed in this chain of
+  sessions. standing is asked once, of said alone; repeats is the rubric, and
+  internal/learn/repeat asks it once for each earlier message in that one
+  request. internal/learn narrows the earlier messages by shared words and
+  recency only, never by a match. a note goes to the lead when standing is at
+  or above standing_at and the highest repeats answer is at or above
+  repeats_at, naming that earlier message. both sit at the middle of the noul
+  range, uncalibrated priors.
+
+thresholds:
+  standing_at: 0.5
+  repeats_at: 0.5
+
+state:
+  - said
+  - earlier
+  - rubric
+
+questions:
+  standing:
+    type: noul
+    instructions: >-
+      A person working with a coding agent typed the message in said. Judge
+      said alone: does it tell the agent how it should work, or complain that
+      the agent did not work the way it was told?
+    criteria:
+      true: >-
+        said gives or repeats an instruction, rule or correction about how the
+        agent should work from now on, or complains that the agent did not
+        work that way.
+      false: >-
+        said only gives a new task, describes a defect or a feature, reports
+        news, answers, approves, or asks for a one-off act such as a restart,
+        a go-ahead or carrying on.
+
+  repeats:
+    type: noul
+    instructions: >-
+      A person working with a coding agent typed the message in said. One
+      message in earlier is something the same person typed before. Decide
+      whether said gives again a standing instruction, rule or correction about
+      how the agent should work that this earlier message already gave, so the
+      person had to say the same thing twice. Judge what the two ask the agent
+      to do, not the words they share: the same request can be worded in
+      wholly different words, and two messages about the same subject can ask
+      for different things.
+    criteria:
+      true: >-
+        Both messages ask the agent for the same lasting behaviour, or said
+        corrects the agent for not doing what the earlier message asked: a way
+        of working, something to always or never do, or how to treat the
+        person.
+      false: >-
+        They ask for different things, or said only asks a question, gives a
+        new task, reports a problem seen for the first time, answers, approves,
+        or repeats a one-off request about a single moment such as a restart,
+        a status check or a go-ahead.

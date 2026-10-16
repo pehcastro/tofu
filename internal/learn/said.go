@@ -225,11 +225,8 @@ func distil(sittings []sitting, all []heard, read Read) ([]Said, Read) {
 }
 
 func wordsOf(raw string, wrapped []string) string {
-	words := raw
-	switch {
-	case strings.Contains(raw, turn.TheTaskFollows):
-		words, _ = turn.TaskIn(raw)
-	case strings.HasPrefix(raw, environment):
+	words, _ := turn.TaskIn(raw)
+	if strings.HasPrefix(raw, environment) && !strings.Contains(raw, turn.TheTaskFollows) {
 		shared := 0
 		for _, other := range slices.DeleteFunc(slices.Clone(wrapped), func(w string) bool { return w == raw }) {
 			n := 0

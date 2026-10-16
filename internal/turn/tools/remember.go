@@ -173,12 +173,14 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
 	}
-	typed, err := r.typedInChain()
+	typed, err := r.Inbox.SaidInChain(r.Store, r.Session)
 	if err != nil {
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	quote := strings.Join(strings.Fields(args.Said), " ")
-	if !slices.ContainsFunc(typed, func(words string) bool { return quote != "" && strings.Contains(words, quote) }) {
+	if !slices.ContainsFunc(typed, func(said turn.PersonSaid) bool {
+		return quote != "" && strings.Contains(strings.Join(strings.Fields(said.Words), " "), quote)
+	}) {
 		return turn.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation; copy their words exactly, or do not offer it", args.Said)
 	}
 	entry := memory.Entry{Scope: cmp.Or(args.Scope, args.Kind.Scope()), Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
@@ -237,33 +239,6 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	r.Inbox.Remembered(entry.Saved())
 	return turn.Result{Content: entry.Saved(), Command: entry.Ref()}, nil
-}
-
-func (r Remember) typedInChain() ([]string, error) {
-	newest, err := r.Store.Header(r.Session)
-	for err == nil && newest.ForkedInto != "" && newest.ForkedInto != newest.ID {
-		newest, err = r.Store.Header(newest.ForkedInto)
-	}
-	if err != nil {
-		return nil, err
-	}
-	ancestors, err := r.Store.Ancestors(newest.ID)
-	if err != nil {
-		return nil, err
-	}
-	var typed []string
-	for _, header := range append([]session.Header{newest}, ancestors...) {
-		reading, err := r.Store.Reading(header.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, message := range reading.Messages {
-			if words, said := turn.TaskIn(message.Content); said && message.Role == session.RoleUser && turn.SaidByThePerson(message.Origin) {
-				typed = append(typed, strings.Join(strings.Fields(words), " "))
-			}
-		}
-	}
-	return typed, nil
 }
 
 func distOf(probabilities map[string]float64) []ledger.Slice {
