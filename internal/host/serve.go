@@ -527,12 +527,18 @@ func (s *server) shellRead(p ShellParams) (any, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	watched := s.watched(p.Shell)
-	if err := s.follow(p.Shell, watched, sys.LoadKeyRedactor().Redact); err != nil {
+	read := s.shells[p.Shell]
+	if read == nil || read.state != shell.Running {
+		read = &watchedShell{}
+	}
+	if err := s.follow(p.Shell, read, sys.LoadKeyRedactor().Redact); err != nil {
 		return nil, err
 	}
-	offset := min(max(p.Offset, 0), len(watched.stream))
-	return ShellReadResult{Shell: p.Shell, Offset: offset, Text: watched.stream[offset:], Next: len(watched.stream)}, nil
+	if read != s.shells[p.Shell] {
+		read.keepTail()
+	}
+	offset := min(max(p.Offset, read.base), read.next())
+	return ShellReadResult{Shell: p.Shell, Offset: offset, Text: read.since(offset), Next: read.next()}, nil
 }
 
 func (s *server) shellKill(p ShellParams) (any, error) {
@@ -823,6 +829,7 @@ type watchedShell struct {
 	sent      int
 	cursor    shell.Cursor
 	stream    string
+	base      int
 	command   string
 	exitCode  *int
 	status    shellStatus
@@ -831,9 +838,24 @@ type watchedShell struct {
 	raw       int64
 }
 
+func (w *watchedShell) next() int { return w.base + len(w.stream) }
+
+func (w *watchedShell) since(at int) string { return w.stream[min(max(at-w.base, 0), len(w.stream)):] }
+
+func (w *watchedShell) keepTail() {
+	cut := len(w.stream) - konst.ShellTailBytes
+	if cut <= 0 {
+		return
+	}
+	for cut < len(w.stream) && !utf8.RuneStart(w.stream[cut]) {
+		cut++
+	}
+	w.stream, w.base = strings.Clone(w.stream[cut:]), w.base+cut
+}
+
 func (w *watchedShell) portPrinted() int {
-	port := shell.PortInOutput(w.stream[w.portFrom:])
-	w.portFrom = max(w.portFrom, strings.LastIndexByte(w.stream, '\n')+1)
+	port := shell.PortInOutput(w.since(w.portFrom))
+	w.portFrom = max(w.portFrom, w.base+strings.LastIndexByte(w.stream, '\n')+1)
 	return port
 }
 
@@ -922,6 +944,9 @@ func (s *server) scanShells(first bool) {
 			watched.announced, watched.state = true, one.State
 			continue
 		}
+		if !watched.announced && one.State == shell.Running && one.Ready == "" && time.Since(one.Started) < (konst.BackgroundReadyMillis+konst.ServeShellPollMillis)*time.Millisecond {
+			continue
+		}
 		id := focus.items.identity(one.Owner, one.Name)
 		_ = s.follow(one.Name, watched, mask)
 		learned := 0
@@ -932,16 +957,17 @@ func (s *server) scanShells(first bool) {
 			s.box.push(kept("shell.started", &ShellStarted{Identity: id, Shell: one.Name, Command: mask(one.Command), PID: one.PID, StartedAt: one.Started,
 				Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), ShellHolding: holdingOf(one), call: one.Call}))
 			if first {
-				watched.sent = len(watched.stream)
+				watched.sent = watched.next()
 			}
 		}
 		if learned > 0 {
 			s.box.push(kept("shell.ready", &ShellListening{Identity: id, Shell: one.Name, Port: learned}))
 		}
-		if len(watched.stream) > watched.sent {
-			s.box.push(merged("shell.output", one.Name, &ShellOutput{Identity: id, Shell: one.Name, Offset: watched.sent, Text: watched.stream[watched.sent:]}))
-			watched.sent = len(watched.stream)
+		if watched.next() > watched.sent {
+			s.box.push(merged("shell.output", one.Name, &ShellOutput{Identity: id, Shell: one.Name, Offset: watched.sent, Text: watched.since(watched.sent)}))
+			watched.sent = watched.next()
 		}
+		watched.keepTail()
 		if watched.holder == shell.HolderPerson {
 			if data, from := s.Shells.Raw(one.Name, watched.raw); len(data) > 0 {
 				s.box.push(merged("shell.raw", one.Name, &ShellRaw{Identity: id, Shell: one.Name, Offset: from, Data: data}))
@@ -957,12 +983,21 @@ func (s *server) scanShells(first bool) {
 		watched.announced, watched.state = true, one.State
 	}
 	for name, watched := range s.shells {
-		if listed[name] || !watched.announced || watched.state != shell.Running {
+		if !watched.announced {
 			continue
 		}
-		ended := time.Now()
-		s.box.push(kept("shell.exited", &ShellExited{Identity: focus.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
-		watched.state = shell.Exited
+		if !listed[name] && watched.state == shell.Running {
+			ended := time.Now()
+			s.box.push(kept("shell.exited", &ShellExited{Identity: focus.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
+			watched.state = shell.Exited
+		}
+		if watched.state == shell.Running {
+			continue
+		}
+		watched.stream, watched.base, watched.cursor = "", watched.next(), shell.Cursor{}
+		if !slices.ContainsFunc(watched.records(name), func(record status.Record) bool { return !focus.status.acked[record.ID] }) {
+			delete(s.shells, name)
+		}
 	}
 	s.reportStatus(focus)
 }
