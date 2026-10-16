@@ -30,9 +30,9 @@ var (
 )
 
 func CommitMsg(dir, file string) Answer {
-	body, read := messageBody(file)
-	if !read {
-		return Answer{}
+	body, err := messageBody(file)
+	if err != nil {
+		return refuseCommit("the message file could not be read: " + err.Error())
 	}
 	for _, line := range body {
 		switch {
@@ -71,8 +71,11 @@ func CommitMsg(dir, file string) Answer {
 }
 
 func ReleaseDocs(dir, file string) Answer {
-	body, read := messageBody(file)
-	if !read || len(body) == 0 {
+	body, err := messageBody(file)
+	if err != nil {
+		return refuse(1, "release refused: the message file could not be read: "+err.Error())
+	}
+	if len(body) == 0 {
 		return Answer{}
 	}
 	release := releaseSubject().FindStringSubmatch(body[0])
@@ -82,10 +85,10 @@ func ReleaseDocs(dir, file string) Answer {
 	return releaseDocs(dir, release[1], body)
 }
 
-func messageBody(file string) ([]string, bool) {
+func messageBody(file string) ([]string, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 	var body []string
 	for _, line := range newline().Split(string(data), -1) {
@@ -93,7 +96,7 @@ func messageBody(file string) ([]string, bool) {
 			body = append(body, line)
 		}
 	}
-	return body, true
+	return body, nil
 }
 
 func refuseCommit(why string) Answer {

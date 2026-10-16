@@ -42,12 +42,13 @@ type Board struct {
 func (b Board) Holding(status Status) bool { return slices.Contains(b.Holds, status) }
 
 type Store struct {
-	Dir string
+	Dir  string
+	Root string
 }
 
 func OpenStore(project string) (Store, error) {
 	state, err := sys.ProjectStateDirAt(project)
-	return Store{Dir: filepath.Join(state, BoardsDirName)}, err
+	return Store{Dir: filepath.Join(state, BoardsDirName), Root: project}, err
 }
 
 var boardKey = sys.LazyRegexp(`^[A-Z][A-Z0-9]{1,9}$`)

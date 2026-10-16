@@ -118,7 +118,7 @@ func TestTransitionWidenAndReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	closed, err := m.Create("OPS", ticketWith("closed", "cmd/tofu/**"), manager)
+	closed, err := m.Create("OPS", ticketWith("closed", "cmd/boji/**"), manager)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestTransitionWidenAndReferences(t *testing.T) {
 	}
 	_, err = m.Widen(mine.ID, []string{"internal/rule/load.go"}, manager)
 	refused(t, err, live.ID)
-	if _, err := m.Widen(mine.ID, []string{"cmd/tofu/main.go"}, manager); err != nil {
+	if _, err := m.Widen(mine.ID, []string{"cmd/boji/main.go"}, manager); err != nil {
 		t.Fatalf("a done ticket's owns do not block a widen: %v", err)
 	}
 	_, err = m.Widen(mine.ID, []string{"library/**"}, agent)

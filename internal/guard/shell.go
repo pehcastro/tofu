@@ -2,6 +2,7 @@ package guard
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -13,16 +14,17 @@ var (
 	scriptWritesGo         = sys.LazyRegexp(`(?is)(\.go['"]\s*,\s*['"][wax]|\.go['"]\s*\)\s*\.\s*write|writeFileSync\s*\(\s*['"][^'"\r\n]*\.go['"]|Set-Content[^\r\n]{0,60}\.go['"]|['"][^'"\r\n]*\.go['"][^\r\n]{0,40}\bmode\s*=\s*['"][wax])`)
 	scriptOpensForWrite    = sys.LazyRegexp(`(?is)\bopen\s*\([^)\r\n]{0,120},\s*['"][wax]`)
 	goWord                 = sys.LazyRegexp(`(?i)\.go\b`)
-	shellWritesSource      = sys.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\bsed\s+-i\b[^|]*\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
-	gitChangesTree         = sys.LazyRegexp(`(?i)\bgit\s+(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)\b`)
-	gitDiscardsWork        = sys.LazyRegexp(`(?i)\bgit\s+(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
-	gitStash               = sys.LazyRegexp(`(?i)\bgit\s+stash\b`)
+	shellWritesSource      = sys.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
+	sourceFile             = sys.LazyRegexp(`(?i)\.(go|ya?ml|json)\b`)
+	gitChangesTree         = sys.LazyRegexp(`(?i)` + gitThen + `(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)` + wordEnds)
+	gitDiscardsWork        = sys.LazyRegexp(`(?i)` + gitThen + `(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
+	gitStash               = sys.LazyRegexp(`(?i)` + gitThen + `stash\b`)
 	tofuRunsAtCommand      = sys.LazyRegexp(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
 	exeRuns                = sys.LazyRegexp(`(?i)\S+\.exe["']?\s+run\s`)
 	wireOpenrouter         = sys.LazyRegexp(`(?i)--wire[=\s]+openrouter`)
 	dryRun                 = sys.LazyRegexp(`(?i)--dry-run`)
 	liveCost               = sys.LazyRegexp(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
-	gitWorktree            = sys.LazyRegexp(`(?i)\bgit\s+worktree\b`)
+	gitWorktree            = sys.LazyRegexp(`(?i)` + gitThen + `worktree\b`)
 	goTestPattern          = sys.LazyRegexp(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
 	parallelBound          = sys.LazyRegexp(`(?i)-p[= ]\d`)
 	treeWide               = []func() *regexp.Regexp{
@@ -30,7 +32,12 @@ var (
 		sys.LazyRegexp(`(?i)\bgofmt\s+-w\s+\.`),
 		sys.LazyRegexp(`(?i)\bgo\s+run\b.*\bserve\b`),
 	}
-	gitPublishes = sys.LazyRegexp(`(?i)\bgit\s+(add|commit|push)\b`)
+	gitPublishes = sys.LazyRegexp(`(?i)` + gitThen + `(add|commit|push)` + wordEnds)
+)
+
+const (
+	gitThen  = `\bgit(\s+(-c\s*("[^"]*"|'[^']*'|\S+)|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix)(=|\s+)\S+|-[-\w]+))*\s+`
+	wordEnds = `([^\w-]|$)`
 )
 
 func shell(env Env, ev event) (Answer, error) {
@@ -59,7 +66,7 @@ func shellRefusal(env Env, ev event, command, stripped string) (string, error) {
 	switch {
 	case interpreterReadsScript().MatchString(command) && (scriptWritesGo().MatchString(command) || scriptOpensForWrite().MatchString(command) && goWord().MatchString(command)):
 		return interpreterRefusal, nil
-	case shellWritesSource().MatchString(stripped):
+	case shellWritesSource().MatchString(stripped) || sedEditsSource(stripped):
 		return shellWriteRefusal, nil
 	case gitChangesTree().MatchString(stripped):
 		if !blank(ev.AgentID) {
@@ -93,6 +100,49 @@ func stashes(command string) bool {
 		}
 	}
 	return false
+}
+
+func sedEditsSource(command string) bool {
+	for _, words := range shellWords(command) {
+		for at, word := range words {
+			if (word == "sed" || strings.HasSuffix(word, "/sed")) && sedTargetsSource(words[at+1:], slices.Contains(words[:at], "xargs")) {
+				return true
+			}
+			if strings.ContainsAny(word, " \t\n") && sedEditsSource(word) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func sedTargetsSource(args []string, filesFromStdin bool) bool {
+	inPlace, script := false, true
+	var files []string
+	for i := 0; i < len(args); i++ {
+		word := args[i]
+		switch {
+		case word == "":
+		case word == "-e" || word == "-f" || word == "--expression" || word == "--file":
+			script = false
+			i++
+		case strings.HasPrefix(word, "--expression=") || strings.HasPrefix(word, "--file="):
+			script = false
+		case strings.HasPrefix(word, "--"):
+			inPlace = inPlace || strings.HasPrefix(word, "--in-place")
+		case strings.HasPrefix(word, "-") && len(word) > 1:
+			flags, _, _ := strings.Cut(word[1:], ".")
+			inPlace = inPlace || strings.ContainsRune(flags, 'i')
+		case script:
+			script = false
+		default:
+			files = append(files, word)
+		}
+	}
+	maybeSource := func(file string) bool {
+		return file == "{}" || strings.ContainsAny(file, "$`") || sourceFile().MatchString(file)
+	}
+	return inPlace && (filesFromStdin && len(files) == 0 || slices.ContainsFunc(files, maybeSource))
 }
 
 func anyMatch(patterns []func() *regexp.Regexp, text string) bool {

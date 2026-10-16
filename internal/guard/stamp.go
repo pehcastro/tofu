@@ -1,12 +1,6 @@
 package guard
 
 import (
-	"cmp"
-	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"unicode"
@@ -15,85 +9,41 @@ import (
 )
 
 const (
-	FlowsStamps    = "flows"
-	TreewideStamps = "treewide"
+	FlowsStamps    = boardy.FlowsStamps
+	TreewideStamps = boardy.TreewideStamps
 )
 
-var flowsAreas = []string{"internal/turn", "internal/host", "internal/subagent", "interface/tui", "cmd/tofu"}
+func StampDir(repo string) string { return boardy.StampDir(repo) }
 
-func StampPath(repo, kind, tree string) string {
-	return filepath.Join(StampDir(repo), kind, tree)
-}
+func StampPath(repo, kind, tree string) string { return boardy.StampPath(repo, kind, tree) }
 
-func unstamped(repo string, kinds ...string) (string, []string, error) {
-	tree, err := gitOut(repo, "rev-parse", "HEAD^{tree}")
-	if err != nil {
-		return "", nil, err
-	}
-	var run []string
-	for _, kind := range kinds {
-		if lines := fileLines(StampPath(repo, kind, tree)); len(lines) == 0 || lines[0] != "tree "+tree {
-			run = append(run, "go run ./bench/"+kind)
-		}
-	}
-	return tree, run, nil
-}
+func HeadTree(repo string) (string, []string, error) { return boardy.HeadTree(repo) }
 
 func flowsRefusal(env Env, command string) string {
 	if !strings.Contains(command, "boardy") {
 		return ""
 	}
-	var gated, owned []string
 	source := ticketsAt(env)
 	for _, id := range doneMoves(command) {
-		moved, found, err := source.find(strings.ToUpper(id))
+		id = strings.ToUpper(id)
+		moved, _, err := source.find(id)
 		if err != nil {
 			return "The flows gate could not read " + id + ": " + err.Error()
 		}
-		if area := touchedArea(moved.Owns); found && area != "" {
-			gated = append(gated, id+" owns "+strings.Join(moved.Owns, ", ")+", which touches "+area)
-			for _, glob := range moved.Owns {
-				owned = append(owned, ":(glob,icase)"+glob)
-			}
+		if why := boardy.DoneRefusal(env.Root, moved.Owns); why != "" {
+			return boardy.RefusedError{Ticket: id, Why: why}.Error()
 		}
 	}
-	if len(gated) == 0 {
-		return ""
-	}
-	tree, run, err := unstamped(env.Root, FlowsStamps)
-	if err != nil {
-		return "A move to done is refused because HEAD's tree could not be read, so no stamp can be checked: " + err.Error()
-	}
-	dirty, err := uncommitted(env.Root, owned...)
-	if err != nil {
-		return "A move to done is refused because the owned paths could not be checked for uncommitted work: " + err.Error()
-	}
-	var why []string
-	if len(dirty) > 0 {
-		why = append(why, "These owned paths have uncommitted changes, so the work being closed is not the work a stamp covers. Commit them first:\n  "+strings.Join(dirty, "\n  "))
-	}
-	if len(run) > 0 {
-		why = append(why, "No passing flows stamp exists for HEAD's tree "+tree+". In a clean clone of HEAD, run: TOFU_STAMP_DIR="+StampDir(env.Root)+" go run ./bench/flows\nIt replays eight long-session flows on fresh homes in about six minutes and stamps the tree only when every flow passes.")
-	}
-	if len(why) == 0 {
-		return ""
-	}
-	return "A move to done is refused: " + strings.Join(gated, "; ") + ".\n\n" + strings.Join(why, "\n\n") + `
-
-On 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents.`
+	return ""
 }
 
 func releaseRefusal(dir string) string {
-	tree, run, err := unstamped(dir, FlowsStamps, TreewideStamps)
+	tree, run, err := boardy.Unstamped(dir, FlowsStamps, TreewideStamps)
 	if err != nil {
 		return "release refused: HEAD's tree could not be read, so no stamp can be checked: " + err.Error()
 	}
-	staged, err := gitOut(dir, "diff", "--cached", "--name-only", "HEAD")
-	if err != nil {
-		return "release refused: the staged files could not be read: " + err.Error()
-	}
 	var why []string
-	if outside := slices.DeleteFunc(strings.Fields(staged), releaseFile); len(outside) > 0 {
+	if outside := slices.DeleteFunc(gitLines(dir, "diff", "--cached", "--name-only", "HEAD"), releaseFile); len(outside) > 0 {
 		why = append(why, "these staged files are not release files, so the commit is not the stamped HEAD plus a version bump:\n  "+strings.Join(outside, "\n  "))
 	}
 	if len(run) > 0 {
@@ -108,18 +58,6 @@ func releaseRefusal(dir string) string {
 func releaseFile(path string) bool {
 	return path == "internal/konst/konst.go" || path == "CHANGELOG.md" ||
 		slices.ContainsFunc([]string{"docs/", "library/docs/", "library/changelog/"}, func(dir string) bool { return strings.HasPrefix(path, dir) })
-}
-
-func touchedArea(globs []string) string {
-	for _, glob := range globs {
-		literal, _, _ := strings.Cut(strings.ReplaceAll(glob, `\`, "/"), "*")
-		for _, area := range flowsAreas {
-			if foldPrefix(literal, area+"/") || foldPrefix(area+"/", literal) {
-				return area
-			}
-		}
-	}
-	return ""
 }
 
 func doneMoves(command string) []string {
@@ -178,38 +116,4 @@ func shellWords(command string) [][]string {
 	}
 	flush()
 	return append(commands, words)
-}
-
-func StampDir(repo string) string {
-	return cmp.Or(os.Getenv("TOFU_STAMP_DIR"), filepath.Join(repo, ".local"))
-}
-
-func HeadTree(repo string) (string, []string, error) {
-	tree, err := gitOut(repo, "rev-parse", "HEAD^{tree}")
-	if err != nil {
-		return "", nil, err
-	}
-	dirty, err := uncommitted(repo, "*.go")
-	return tree, dirty, err
-}
-
-func uncommitted(repo string, pathspecs ...string) ([]string, error) {
-	out, err := gitOut(repo, append([]string{"status", "--porcelain", "--untracked-files=all", "--"}, pathspecs...)...)
-	var paths []string
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) > 3 {
-			paths = append(paths, line[3:])
-		}
-	}
-	return paths, err
-}
-
-func gitOut(repo string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = repo
-	out, err := cmd.Output()
-	if exited := (*exec.ExitError)(nil); errors.As(err, &exited) {
-		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(exited.Stderr)))
-	}
-	return strings.TrimRight(string(out), "\r\n"), err
 }

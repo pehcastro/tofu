@@ -211,6 +211,11 @@ func (m Managed) validMove(board Board, ticket Ticket, to Status) error {
 			return err
 		}
 	}
+	if to == Done {
+		if why := DoneRefusal(m.Store.Root, ticket.Owns); why != "" {
+			return RefusedError{Ticket: ticket.ID, Why: why}
+		}
+	}
 	if to == Review || to == Done {
 		children, _ := filepath.Glob(filepath.Join(board.Dir, TicketsDirName, ticket.ID, "*.md"))
 		var live []string
