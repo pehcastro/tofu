@@ -193,7 +193,11 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 
 func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {
 	content := "error: " + reason
-	row := ToolCallRow{ID: id, Parent: parent, Author: author, Call: call.ID, Tool: call.Name, Args: call.Arguments, Error: reason, DurationMS: time.Since(started).Milliseconds()}
+	var asked struct {
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(call.Arguments, &asked)
+	row := ToolCallRow{ID: id, Parent: parent, Author: author, Call: call.ID, Tool: call.Name, Args: call.Arguments, Command: asked.Command, Error: reason, DurationMS: time.Since(started).Milliseconds()}
 	return row, llm.Message{
 		Role:            llm.RoleTool,
 		ToolCallID:      call.ID,
