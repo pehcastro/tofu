@@ -139,7 +139,7 @@ func (b *Boundary) codeCall(words []shellWord, stdin string, fed bool) (InlineCo
 }
 
 func (b *Boundary) HoldsTheTree() bool {
-	return slices.Contains(b.Owns(), "**")
+	return slices.ContainsFunc(b.Owns(), func(glob string) bool { return glob == "**" || wholeProject(glob) })
 }
 
 func (b *Boundary) Bash(command string, grammar Grammar) error {

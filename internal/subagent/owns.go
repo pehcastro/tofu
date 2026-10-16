@@ -179,7 +179,15 @@ func sharesAPath(a, b string) bool {
 	return reaches(0, 0)
 }
 
+func wholeProject(glob string) bool {
+	return glob != "" && gopath.Clean(glob) == "."
+}
+
 func ownedTree(glob string) string {
+	if wholeProject(glob) {
+		return "**"
+	}
+	glob = strings.TrimPrefix(glob, "./")
 	if directory, ok := strings.CutSuffix(glob, "/"); ok {
 		return directory + "/**"
 	}
@@ -236,9 +244,13 @@ func Matches(path string, owns []string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	rooted := gopath.IsAbs(target) || filepath.VolumeName(target) != ""
 	for _, glob := range owns {
 		if err := validGlob(glob); err != nil {
 			return false, err
+		}
+		if rooted && wholeProject(glob) {
+			continue
 		}
 		if globsMeet(ownedTree(glob), target) {
 			return true, nil
