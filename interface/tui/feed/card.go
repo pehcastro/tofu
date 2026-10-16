@@ -17,6 +17,7 @@ import (
 
 const (
 	cardCacheCap     = 2048
+	staleHeights     = 256
 	cardMinWidth     = 22
 	cardPadX         = 2
 	cardPadY         = 1
@@ -204,6 +205,23 @@ func (c *cardCache) hold(held heldHeight) *heldHeight {
 	}
 	c.heights[held.event.ID] = &held
 	return &held
+}
+
+func (c *cardCache) keepOnly(events []Event) {
+	shown := make(map[string]*heldHeight, len(events))
+	for index := range events {
+		if held, measured := c.heights[events[index].ID]; measured {
+			shown[events[index].ID] = held
+		}
+	}
+	c.heights, c.sheet = shown, nil
+	c.order = slices.DeleteFunc(c.order, func(id string) bool {
+		_, kept := shown[id]
+		if !kept {
+			delete(c.cards, id)
+		}
+		return !kept
+	})
 }
 
 func (m Model) card(width int, d draft) card {

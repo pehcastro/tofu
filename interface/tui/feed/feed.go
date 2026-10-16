@@ -65,6 +65,7 @@ type Event struct {
 	Added, Removed    int
 	At                time.Time
 	Elapsed           time.Duration
+	Thought           *strings.Builder
 }
 
 type Agent struct {
@@ -221,6 +222,9 @@ func (m Model) retained() []Event {
 }
 
 func (m *Model) SetEvents(events []Event) {
+	if len(m.cards.heights) > len(events)+staleHeights {
+		m.cards.keepOnly(events)
+	}
 	if m.scroll == 0 {
 		m.events, m.version = events, m.version+1
 		return

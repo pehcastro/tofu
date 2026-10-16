@@ -52,6 +52,7 @@ const (
 	readHead           = "read by the lead at step "
 	readClock          = "15:04"
 	foldKey            = "f"
+	readBackFailed     = "the folded sub-agents were not all read back from the session: "
 )
 
 func gateOffNote(why jev.Why) string {
@@ -125,16 +126,33 @@ func idPrefix(task string) (string, bool) {
 }
 
 func (a *App) jumpToID(typed string) {
-	for _, event := range a.happened {
-		if strings.HasPrefix(event.ID, typed) || strings.HasSuffix(event.ID, typed) {
-			a.unfoldFor(event.Actor)
-			a.show(screenAgents)
-			a.flushFeed()
-			a.feed.Focus(event.ID)
-			return
-		}
+	at := a.reach(func(event feed.Event) bool {
+		return strings.HasPrefix(event.ID, typed) || strings.HasSuffix(event.ID, typed)
+	})
+	if at < 0 {
+		a.view.Append(session.Entry{Kind: session.Note, Body: "nothing in sub-agents carries the id #" + typed})
+		return
 	}
-	a.view.Append(session.Entry{Kind: session.Note, Body: "nothing in sub-agents carries the id #" + typed})
+	a.show(screenAgents)
+	a.flushFeed()
+	a.feed.Focus(a.happened[at].ID)
+}
+
+func (a *App) reach(matches func(feed.Event) bool) int {
+	at := slices.IndexFunc(a.happened, matches)
+	if at >= 0 || len(a.hidden()) == 0 {
+		return at
+	}
+	a.toggleFold()
+	if at = slices.IndexFunc(a.happened, matches); at < 0 {
+		a.toggleFold()
+	}
+	a.syncFeed()
+	return at
+}
+
+func (a *App) reachedAt(id string) int {
+	return a.reach(func(event feed.Event) bool { return event.ID == id })
 }
 
 func (a *App) steer(task string) {
@@ -460,8 +478,8 @@ func (a *App) absorb(event Event) {
 		if event.Agent == "" {
 			a.view.TakePartial()
 		}
-		if at := a.happenedAt(short(event.ID)); event.ID != "" && at >= 0 {
-			a.forget(at)
+		if id := short(event.ID); event.ID != "" && a.happenedAt(id) >= 0 {
+			a.keepOnly(func(held feed.Event) bool { return held.ID != id })
 		}
 	case EventThinking:
 		if event.Agent == "" {
@@ -560,22 +578,53 @@ func (a *App) followSource(spent *host.TurnAccount) {
 	a.view.Append(session.Entry{Kind: session.Note, Body: "the turn moved to " + a.picked + ", so the next turn runs there too; pick another model to change it"})
 }
 
+func thinkingOf(event Event, at time.Time) feed.Event {
+	return feed.Event{ID: short(event.ID), Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindThinking, State: feed.StateComplete, At: at}
+}
+
 func (a *App) thought(event Event, at time.Time) {
-	id := short(event.ID)
-	thinking := feed.Event{ID: id, Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindThinking, State: feed.StateComplete, At: at}
-	if found := a.happenedAt(id); found >= 0 {
+	thinking := thinkingOf(event, at)
+	if found := a.happenedAt(thinking.ID); found >= 0 {
 		thinking = a.happened[found]
 	}
-	thinking.Body += event.Text
+	if thinking.Thought == nil {
+		thinking.Thought = &strings.Builder{}
+		thinking.Thought.WriteString(thinking.Body)
+	}
+	thinking.Thought.WriteString(event.Text)
+	thinking.Body = thinking.Thought.String()
 	a.record(thinking)
 }
 
-func (a *App) called(event Event, at time.Time) {
+func callOf(event Event, at time.Time) feed.Event {
 	call := feed.Event{ID: short(event.ID), Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindTool, Title: event.Tool, Body: event.Text, Detail: lines(event.Detail), At: at}
 	if event.Promote {
 		call.Kind, call.Title, call.Body, call.Detail = feed.KindSpawn, event.Text, event.Detail, nil
 	}
-	a.record(call)
+	return call
+}
+
+func finished(held *feed.Event, event Event, at time.Time) (feed.Event, edits.Edit, bool) {
+	done := feed.Event{ID: short(event.ID), Actor: orchestrator, Kind: feed.KindTool, At: at}
+	if held != nil {
+		done = *held
+		done.Detail = slices.Clone(done.Detail)
+		done.Elapsed = at.Sub(done.At)
+	}
+	done.State = feed.StateComplete
+	if event.Failed {
+		done.State = feed.StateFailed
+	}
+	done.Detail = append(done.Detail, lines(event.Text)...)
+	edit, changed := edits.Changed(event.Agent, done.Body, event.Diff, event.Created, event.ID, at)
+	if changed {
+		done.Kind, done.Op, done.Path, done.Added, done.Removed = feed.KindEdit, feed.Op(edit.Op()), edit.Path, edit.Added(), edit.Removed()
+	}
+	return done, edit, changed
+}
+
+func (a *App) called(event Event, at time.Time) {
+	a.record(callOf(event, at))
 	if event.Agent != "" {
 		return
 	}
@@ -591,24 +640,27 @@ func (a *App) called(event Event, at time.Time) {
 func (a *App) answered(event Event, at time.Time) {
 	a.subAgentCalls = slices.DeleteFunc(a.subAgentCalls, func(called string) bool { return called == event.ID })
 	a.view.Spawns = len(a.subAgentCalls)
+	var held *feed.Event
+	if found := a.happenedAt(short(event.ID)); found >= 0 {
+		held = &a.happened[found]
+	}
+	done, edit, edited := finished(held, event, at)
 	status := event.Text
-	finished := a.finish(short(event.ID), event.Text, event.Failed, at)
-	if finished.Kind == feed.KindSpawn && finished.Target == "" && len(event.SubAgents) > 0 {
-		a.spawnedAs(&finished, event.SubAgents[0])
-	}
-	if finished.Kind == feed.KindSpawn && a.view.Stopping {
-		finished.State = feed.StateStopped
-	}
-	if edit, changed := edits.Changed(event.Agent, finished.Body, event.Diff, event.Created, event.ID, at); changed {
+	if edited {
 		a.edits.Add(edit)
 		status = edit.Tally()
-		finished.Kind, finished.Op, finished.Path, finished.Added, finished.Removed = feed.KindEdit, feed.Op(edit.Op()), edit.Path, edit.Added(), edit.Removed()
 	}
-	a.record(finished)
+	if done.Kind == feed.KindSpawn && done.Target == "" && len(event.SubAgents) > 0 {
+		a.spawnedAs(&done, event.SubAgents[0])
+	}
+	if done.Kind == feed.KindSpawn && a.view.Stopping {
+		done.State = feed.StateStopped
+	}
+	a.record(done)
 	if event.Agent != "" {
 		return
 	}
-	if finished.Kind != feed.KindSpawn {
+	if done.Kind != feed.KindSpawn {
 		a.view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Failed})
 	}
 	a.rememberedByTheLead(event.Detail)
@@ -651,49 +703,120 @@ func (a *App) happenedAt(id string) int {
 }
 
 func (a *App) record(event feed.Event) {
+	if a.hidden()[event.Actor] {
+		return
+	}
 	if at := a.happenedAt(event.ID); at >= 0 {
 		a.happened[at] = event
 	} else {
 		a.happenedIndex[event.ID] = len(a.happened)
 		a.happened = append(a.happened, event)
 	}
-	if a.folding() {
-		a.keep(event)
-	}
 	a.feedStale = true
 }
 
-func (a *App) folding() bool { return len(a.folded) > 0 && !a.unfolded }
-
-func (a *App) keep(event feed.Event) {
-	if a.folded[event.Actor] {
-		return
+func (a *App) hidden() map[string]bool {
+	if a.unfolded {
+		return nil
 	}
-	if at, held := a.keptIndex[event.ID]; held {
-		a.kept[at] = event
-		return
-	}
-	a.keptIndex[event.ID] = len(a.kept)
-	a.kept = append(a.kept, event)
+	return a.folded
 }
 
-func (a *App) refilter() {
-	a.kept, a.keptIndex = nil, map[string]int{}
-	if a.folding() {
-		for _, event := range a.happened {
-			a.keep(event)
+func (a *App) fold(folded map[string]bool, unfolded bool) {
+	was := a.hidden()
+	a.folded, a.unfolded = folded, unfolded
+	now := a.hidden()
+	var shown []string
+	for name := range was {
+		if !now[name] {
+			shown = append(shown, name)
 		}
 	}
+	for name := range now {
+		if !was[name] {
+			a.keepOnly(func(event feed.Event) bool { return !now[event.Actor] })
+			break
+		}
+	}
+	a.merge(a.readBack(shown))
+}
+
+func (a *App) keepOnly(kept func(feed.Event) bool) {
+	var held []feed.Event
+	turnAt := a.happenedAtTurn
+	for index, event := range a.happened {
+		switch {
+		case kept(event):
+			held = append(held, event)
+		case index < a.happenedAtTurn:
+			turnAt--
+		}
+	}
+	a.reindex(held, turnAt)
+}
+
+func (a *App) merge(back []feed.Event) {
+	back = slices.DeleteFunc(back, func(event feed.Event) bool { return a.happenedAt(event.ID) >= 0 })
+	if len(back) == 0 {
+		return
+	}
+	merged, live, turnAt := make([]feed.Event, 0, len(a.happened)+len(back)), a.happened, a.happenedAtTurn
+	for _, event := range back {
+		for len(live) > 0 && !event.At.Before(live[0].At) {
+			merged, live = append(merged, live[0]), live[1:]
+		}
+		if len(a.happened)-len(live) <= a.happenedAtTurn {
+			turnAt++
+		}
+		merged = append(merged, event)
+	}
+	a.reindex(append(merged, live...), turnAt)
+}
+
+func (a *App) reindex(events []feed.Event, turnAt int) {
+	a.happened, a.happenedAtTurn, a.happenedIndex = events, turnAt, make(map[string]int, len(events))
+	for index, event := range events {
+		a.happenedIndex[event.ID] = index
+	}
 	a.feedStale = true
 }
 
-func (a *App) forget(at int) {
-	a.happened = slices.Delete(a.happened, at, at+1)
-	clear(a.happenedIndex)
-	for index, held := range a.happened {
-		a.happenedIndex[held.ID] = index
+func (a *App) readBack(names []string) []feed.Event {
+	if a.options.Host == nil || len(names) == 0 {
+		return nil
 	}
-	a.refilter()
+	logged, err := a.options.Host.SubAgentEvents(names)
+	if err != nil {
+		a.notify(readBackFailed + err.Error())
+	}
+	var back []feed.Event
+	index := map[string]int{}
+	for _, event := range logged {
+		var held *feed.Event
+		if found, read := index[short(event.ID)]; read {
+			held = &back[found]
+		}
+		var made feed.Event
+		at := event.Logged.At
+		switch event.Kind {
+		case EventThinking:
+			made = thinkingOf(event, at)
+			made.Body = event.Text
+		case EventToolCall:
+			made = callOf(event, at)
+		case EventToolResult:
+			made, _, _ = finished(held, event, at)
+		default:
+			continue
+		}
+		if held != nil {
+			*held = made
+			continue
+		}
+		index[made.ID] = len(back)
+		back = append(back, made)
+	}
+	return back
 }
 
 func (a *App) flushFeed() {
@@ -701,10 +824,6 @@ func (a *App) flushFeed() {
 		return
 	}
 	a.feedStale = false
-	if a.folding() {
-		a.feed.SetEvents(a.kept)
-		return
-	}
 	a.feed.SetEvents(a.happened)
 }
 
@@ -715,21 +834,6 @@ func (a *App) stopWhatStillRuns() {
 			a.record(held)
 		}
 	}
-}
-
-func (a *App) finish(id, output string, failed bool, at time.Time) feed.Event {
-	finished := feed.Event{ID: id, Actor: orchestrator, Kind: feed.KindTool, At: at}
-	if found := a.happenedAt(id); found >= 0 {
-		finished = a.happened[found]
-		finished.Detail = slices.Clone(finished.Detail)
-		finished.Elapsed = at.Sub(finished.At)
-	}
-	finished.State = feed.StateComplete
-	if failed {
-		finished.State = feed.StateFailed
-	}
-	finished.Detail = append(finished.Detail, lines(output)...)
-	return finished
 }
 
 func (a *App) judged(decision session.Decision, actor string) {
@@ -786,8 +890,7 @@ func (a *App) refold() {
 		}
 	}
 	if !maps.Equal(folded, a.folded) {
-		a.folded = folded
-		a.refilter()
+		a.fold(folded, a.unfolded)
 	}
 	a.showUnfolded()
 }
@@ -801,21 +904,20 @@ func (a *App) foldLater() tea.Cmd {
 }
 
 func (a *App) toggleFold() {
-	a.unfolded = !a.unfolded
+	a.fold(a.folded, !a.unfolded)
 	a.showUnfolded()
-	a.refilter()
 }
 
 func (a *App) unfoldFor(actor string) {
-	if a.folded[actor] && !a.unfolded {
+	if a.hidden()[actor] {
 		a.toggleFold()
 		a.syncFeed()
 	}
 }
 
 func (a *App) showUnfolded() {
-	folding := a.folding()
-	a.subAgents = slices.DeleteFunc(slices.Clone(a.allSubAgents), func(row subagent.Row) bool { return folding && a.folded[row.Name] })
+	hidden := a.hidden()
+	a.subAgents = slices.DeleteFunc(slices.Clone(a.allSubAgents), func(row subagent.Row) bool { return hidden[row.Name] })
 	a.view.SubAgents, a.edits.SubAgents = a.subAgents, a.subAgents
 }
 

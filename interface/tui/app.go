@@ -265,8 +265,6 @@ type App struct {
 	unfolded       bool
 	foldDue        time.Time
 	foldArmed      time.Time
-	kept           []feed.Event
-	keptIndex      map[string]int
 	moves          map[string]movement
 	liveShells     []shells.Entry
 	shellsTicking  bool

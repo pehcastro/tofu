@@ -4,7 +4,10 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -99,7 +102,8 @@ type searchDialog struct{ palette.Search }
 
 func (a *App) searchDialog() *searchDialog {
 	a.refreshSettingsRows()
-	return &searchDialog{palette.NewSearch("Search", "Screens, agents and events · enter opens", a.find)}
+	folded := sync.OnceValue(func() []feed.Event { return a.readBack(slices.Collect(maps.Keys(a.hidden()))) })
+	return &searchDialog{palette.NewSearch("Search", "Screens, agents and events · enter opens", func(query string) []palette.Result { return a.find(query, folded) })}
 }
 
 func (d *searchDialog) over(a *App, base string) string { return d.Over(base, a.width, a.height) }
@@ -123,7 +127,7 @@ func (a *App) found(choice palette.SearchChoice) tea.Cmd {
 		ref := choice.Result.Reference
 		actor, _, isAgent := agentOf(ref)
 		if _, id := pointer.SplitReference(ref); !isAgent {
-			if at := a.happenedAt(strings.TrimPrefix(id, "#")); at >= 0 {
+			if at := a.reachedAt(strings.TrimPrefix(id, "#")); at >= 0 {
 				actor = a.happened[at].Actor
 			}
 		}
@@ -143,7 +147,7 @@ func contains(text, query string) bool { return strings.Contains(strings.ToLower
 
 func settingLabel(row settings.Row) string { return row.Category + " / " + row.Label }
 
-func (a *App) find(query string) []palette.Result {
+func (a *App) find(query string, folded func() []feed.Event) []palette.Result {
 	var results []palette.Result
 	for index, name := range append(tabNames(), "settings") {
 		if contains(name, query) {
@@ -158,14 +162,14 @@ func (a *App) find(query string) []palette.Result {
 	if query == "" {
 		return results
 	}
-	for index := len(a.happened) - 1; index >= 0; index-- {
-		event := a.happened[index]
-		if event.Kind == feed.KindThinking && !a.flag(isettings.ShowThinking) {
-			continue
-		}
-		label := event.Kind.String() + "  " + event.Title + "  " + event.Body
-		if contains(label, query) {
-			results = append(results, palette.Result{Label: label, Reference: "[" + event.Kind.String() + "#" + event.ID + "]"})
+	thinkingShown := a.flag(isettings.ShowThinking)
+	for _, events := range [][]feed.Event{a.happened, folded()} {
+		for index := len(events) - 1; index >= 0; index-- {
+			event := events[index]
+			label := event.Kind.String() + "  " + event.Title + "  " + event.Body
+			if (thinkingShown || event.Kind != feed.KindThinking) && contains(label, query) {
+				results = append(results, palette.Result{Label: label, Reference: "[" + event.Kind.String() + "#" + event.ID + "]"})
+			}
 		}
 	}
 	for _, row := range a.settings.Rows {

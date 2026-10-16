@@ -27,7 +27,7 @@ func (a *App) follow(ref string) tea.Cmd {
 	case "message", "request", "session":
 		return a.show(screenChat)
 	}
-	at := a.happenedAt(id)
+	at := a.reachedAt(id)
 	if at < 0 || !kindMatches(kind, a.happened[at].Kind) {
 		return nil
 	}
