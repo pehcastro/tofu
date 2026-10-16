@@ -65,7 +65,7 @@ func (m *Model) reached() phase {
 		return requesting
 	case m.leadThinks:
 		return thinking
-	case m.Spawns > 0 && !slices.ContainsFunc(m.entries, Entry.running):
+	case len(m.Spawning) > 0 && !slices.ContainsFunc(m.entries, Entry.running):
 		return spawning
 	}
 	return working
@@ -196,7 +196,7 @@ func (m *Model) phaseSince() time.Duration {
 }
 
 func (m *Model) requestLine() string {
-	line, id := margin, m.cookedID
+	line, id, work, call := margin, m.cookedID, "", ""
 	switch {
 	case m.Busy:
 		word, style := m.phase.drawn()
@@ -205,6 +205,7 @@ func (m *Model) requestLine() string {
 		}
 		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince())+metaGap)
 		id = m.turnID
+		work, call = m.turnWork()
 	case !m.leadIdleSince.IsZero():
 		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
@@ -212,10 +213,23 @@ func (m *Model) requestLine() string {
 	default:
 		return ""
 	}
+	tag := ""
 	if short := trace.Short(id); short != "" {
-		line += look.TypedID(requestKind, short)
+		tag = look.TypedID(requestKind, short)
 	}
-	return line
+	if work != "" {
+		tail := metaGap
+		if call != "" {
+			tail += call + metaGap
+		}
+		line += look.Muted(widget.Fit(work, m.width-composerPadX-widget.Cells(line+tail+tag))) + tail
+	}
+	return line + tag
+}
+
+func (m *Model) Spawn(id, tool, text string) {
+	m.latestSpawn = Entry{Kind: Tool, ID: id, Head: tool, Body: text, Started: m.now(), turn: m.turns}
+	m.Spawning = append(m.Spawning, id)
 }
 
 func (m *Model) Spawned(name string) {
@@ -231,9 +245,34 @@ func (m *Model) Spawned(name string) {
 
 func (m *Model) Reported(id string, row subagent.Row) {
 	m.Append(Entry{
-		Kind: Tool, ID: id, Head: reportHead, Body: "[&" + row.Name + "]", Status: row.State.String(), Detail: row.Report,
+		Kind: Tool, ID: id, Head: reportHead, Body: m.reportWords(row), Status: row.State.String(), Detail: row.Report,
 		Failed: row.State == roster.Errored, Promoted: true,
 	})
+}
+
+func (m *Model) reportWords(row subagent.Row) string {
+	ticket := ""
+	if row.Ticket != "" {
+		ticket = " " + row.Ticket
+	}
+	who := "the lead"
+	if !m.Busy && m.leadIdleSince.IsZero() {
+		who = "your review"
+	}
+	name := "[&" + row.Name + "] "
+	switch row.State {
+	case roster.Finished:
+		return name + "finished" + ticket + " and waits for " + who
+	case roster.InReview:
+		return name + "finished" + ticket + " and waits for its done review"
+	case roster.Errored:
+		return name + "failed" + ticket
+	case roster.Parked:
+		return name + "stopped before finishing" + ticket
+	case roster.Working, roster.Reopened, roster.WaitingAnswer:
+		return name + "reported on" + ticket + " and keeps working"
+	}
+	panic("session: unknown sub-agent state " + strconv.Itoa(int(row.State)))
 }
 
 type spawnBatch struct {
@@ -279,8 +318,15 @@ func (m *Model) batchLines(batch spawnBatch) []string {
 			}
 			since = max(since, row.Since)
 			names = append(names, look.AgentRef(row.Name))
-			if row.State == roster.Working && row.Report != "" {
-				names = append(names, look.Muted(row.Report))
+			what := ""
+			switch {
+			case row.State == roster.Working && row.Report != "":
+				what = row.Report
+			case len(batch.running) == 1:
+				what = strings.TrimSpace(row.Ticket + " " + row.Doing)
+			}
+			if what != "" {
+				names = append(names, look.Muted(widget.Fit(oneLine(what), m.textWidth()-widget.Cells(wrapIndent))))
 			}
 		}
 		head := look.Style(look.Violet).Render(progress.Work(m.frame) + " " + word)

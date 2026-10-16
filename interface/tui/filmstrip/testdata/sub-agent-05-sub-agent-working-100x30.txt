@@ -8,8 +8,7 @@
     [&orchestrator]                                                                        14:32    
     handing the policy loader to a sub-agent                                                        
                                                                                                     
-    ⠁ spawning [&qa-1]  26s                                                                         
-    ⠁ read internal/judge/policy/resolve.go                              [tool#815e77]  [expand]    
+    ⠁ spawning [&qa-1] read the policy loader  26s                                                  
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,7 +21,8 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  52s  [request#91ccaf]                                                               
+                                                                                                    
+  ⠋ working  |  52s  read internal/judge/policy/resolve.go · (1)…  [tool#815e77]  [request#91ccaf]  
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

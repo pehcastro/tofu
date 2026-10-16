@@ -301,7 +301,7 @@ func (a *App) interrupt() tea.Cmd {
 			return tea.Quit
 		}
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
-	case subAgentsRun, a.view.LettingToolsFinish, a.running == 0 || len(a.subAgentCalls) > 0 || a.view.TakesAnswerDigits():
+	case subAgentsRun, a.view.LettingToolsFinish, a.running == 0 || len(a.view.Spawning) > 0 || a.view.TakesAnswerDigits():
 		a.stopTurn()
 	default:
 		a.view.LettingToolsFinish = true
@@ -392,7 +392,7 @@ func (a *App) leadTurnBegins() {
 	a.view.Follow()
 	a.status.Fresh = false
 	a.intro.shown = false
-	a.happenedAtTurn, a.keptAnswer, a.subAgentCalls, a.view.Spawns = len(a.happened), "", nil, 0
+	a.happenedAtTurn, a.keptAnswer, a.view.Spawning = len(a.happened), "", nil
 	a.leading, a.running = true, 0
 	a.view.Start()
 }
@@ -652,16 +652,14 @@ func (a *App) called(event Event, at time.Time) {
 	}
 	a.running++
 	if event.Promote {
-		a.subAgentCalls = append(a.subAgentCalls, event.ID)
-		a.view.Spawns = len(a.subAgentCalls)
+		a.view.Spawn(event.ID, event.Tool, event.Text)
 		return
 	}
 	a.view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail})
 }
 
 func (a *App) answered(event Event, at time.Time) {
-	a.subAgentCalls = slices.DeleteFunc(a.subAgentCalls, func(called string) bool { return called == event.ID })
-	a.view.Spawns = len(a.subAgentCalls)
+	a.view.Spawning = slices.DeleteFunc(a.view.Spawning, func(called string) bool { return called == event.ID })
 	var held *feed.Event
 	if found := a.happenedAt(a.shortOf(event.ID)); found >= 0 {
 		held = &a.happened[found]

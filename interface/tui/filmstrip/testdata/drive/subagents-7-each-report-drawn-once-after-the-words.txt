@@ -4,7 +4,7 @@ key enter
 wait waiting on 2 sub-agents
 release
 wait both are in
-once report [&c1]
-once report [&c2]
-before two sub-agents run and I wait for both reports. | report [&c1]
-before two sub-agents run and I wait for both reports. | report [&c2]
+once [&c1] finished
+once [&c2] finished
+before two sub-agents run and I wait for both reports. | [&c1] finished
+before two sub-agents run and I wait for both reports. | [&c2] finished

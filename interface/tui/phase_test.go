@@ -93,6 +93,7 @@ func TestAGapBetweenTwoCallsOfOneStepNeverDrawsThinkingAndNeverChangesColour(t *
 func TestACallShorterThanTheDwellNeverTakesTheRowAndIsStillCounted(t *testing.T) {
 	at := fixedStart()
 	app := phaseApp(t, &at)
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	app.Update(Event{Kind: EventStats, Model: "claude-opus-5"})
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/turn/loop.go"})
 	at = at.Add(2 * time.Second)
@@ -106,13 +107,11 @@ func TestACallShorterThanTheDwellNeverTakesTheRowAndIsStillCounted(t *testing.T)
 	row := turnRow(t, app)
 	app.Update(Event{Kind: EventToolResult, ID: "c2", Text: "42 lines, 1.1 KB"})
 
-	if strings.Contains(row, "CLAUDE.md") {
-		t.Errorf("a 20 ms call took the row: %q", row)
+	if strings.Contains(row, "CLAUDE.md") || !strings.Contains(row, "read internal/turn/loop.go") {
+		t.Errorf("a 20 ms call took the row from the call before it: %q", row)
 	}
-	finishTurn(app)
-	content := ansi.Strip(app.View().Content)
-	if !strings.Contains(content, "· (2) tools") {
-		t.Errorf("the ended turn does not count the short call\n%s", content)
+	if !strings.Contains(row, "(2) tools") {
+		t.Errorf("the turn line does not count the short call: %q", row)
 	}
 }
 
@@ -227,11 +226,11 @@ func TestTheRunningRowHoldsItsPlaceWhenAStepEndsAndNoStepIsSummarised(t *testing
 	app.Update(Event{Kind: EventRequesting})
 	at = at.Add(2 * time.Second)
 	after := plainRows(app.View())
-	if joined := strings.Join(before, "\n"); strings.Contains(joined, " tools") {
-		t.Errorf("the turn summarises itself while a step runs\n%s", joined)
+	if joined := strings.Join(before[:running], "\n"); strings.Contains(joined, "go test") || strings.Contains(joined, "loop.go") {
+		t.Errorf("a lead call draws a row above the status line while a step runs\n%s", joined)
 	}
-	if joined := strings.Join(after, "\n"); strings.Contains(joined, " tools") {
-		t.Errorf("the turn summarises itself once the step ends\n%s", joined)
+	if joined := strings.Join(after[:running], "\n"); strings.Contains(joined, "go test") || strings.Contains(joined, "loop.go") {
+		t.Errorf("a lead call draws a row above the status line once the step ends\n%s", joined)
 	}
 	if moved := rowOf(t, after, "working"); moved != running {
 		t.Errorf("the running row moved from %d to %d when the step ended\n%s", running, moved, strings.Join(after, "\n"))

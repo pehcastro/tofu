@@ -58,18 +58,18 @@ func TestTheRunningRowSitsBetweenTheTranscriptAndTheComposer(t *testing.T) {
 	rows := plainRows(view)
 	top := composerTopRow(t, view.Content)
 	running := spinningRows(rows)
-	if len(running) != 2 {
-		t.Fatalf("the frame carries %d spinning rows, want two, the progress line and the footer\n%s", len(running), strings.Join(rows, "\n"))
+	if len(running) != 1 {
+		t.Fatalf("the frame carries %d spinning rows, want the status line alone\n%s", len(running), strings.Join(rows, "\n"))
 	}
-	if running[1] != top-1-breathingRows {
+	if running[0] != top-1-breathingRows {
 		t.Errorf("the request row is row %d and the composer begins at row %d, want one breathing row between them\n%s",
-			running[1], top, strings.Join(rows, "\n"))
+			running[0], top, strings.Join(rows, "\n"))
 	}
-	if fold := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, " tools") }); fold >= 0 {
-		t.Errorf("row %d summarises a turn that has not ended\n%s", fold, strings.Join(rows, "\n"))
+	if call := slices.IndexFunc(rows[:running[0]], func(row string) bool { return strings.Contains(row, "CLAUDE.md") }); call >= 0 {
+		t.Errorf("row %d draws a lead call above the status line\n%s", call, strings.Join(rows, "\n"))
 	}
-	if !strings.Contains(rows[running[0]], "#") {
-		t.Errorf("the transcript's running line carries no id\n%s", rows[running[0]])
+	if !strings.Contains(rows[running[0]], "[tool#") {
+		t.Errorf("the status line carries no id for the call it names\n%s", rows[running[0]])
 	}
 	golden.Assert(t, "session-activity-80x24.golden", view.Content)
 }

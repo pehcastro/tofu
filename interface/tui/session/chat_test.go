@@ -166,6 +166,46 @@ func TestASubAgentSentBackByItsGateKeepsItsOneChatLineAndSaysWhy(t *testing.T) {
 	t.Logf("round one: %s\nround two: %s", first[0], second[0])
 }
 
+func TestASubAgentRowSaysWhatItWorksOnAndWhoItsReportWaitsFor(t *testing.T) {
+	at := time.Date(2026, 10, 16, 15, 0, 0, 0, time.UTC)
+	model := New(func() time.Time { return at }, counted(new(int)))
+	model.SetSize(120, 30)
+	model.Append(Entry{Kind: User, Body: "port the canvas"})
+	model.Start()
+	model.Returned()
+	model.Spawned("rust-dev-173")
+	working := subagent.Row{Name: "rust-dev-173", Ticket: "DESK-366", Doing: "port the canvas to gpui", State: roster.Working, Calls: []subagent.Call{{ID: "r1", Tool: "read", Text: "canvas.rs"}}}
+	model.SubAgents = []subagent.Row{working}
+	rowWith := func(text string) string {
+		for _, row := range strings.Split(ansi.Strip(model.View()), "\n") {
+			if strings.Contains(row, text) {
+				return strings.TrimSpace(row)
+			}
+		}
+		t.Fatalf("no row holds %q\n%s", text, ansi.Strip(model.View()))
+		return ""
+	}
+	if row := rowWith("running [&rust-dev-173]"); !strings.Contains(row, "DESK-366 port the canvas to gpui") {
+		t.Fatalf("a running sub-agent does not say what it works on: %q", row)
+	}
+	model.Stop()
+	finished := working
+	finished.State, finished.Report = roster.Finished, "ported the canvas"
+	model.Reported("report-1", finished)
+	if row := rowWith("[&rust-dev-173] finished"); !strings.Contains(row, "[&rust-dev-173] finished DESK-366 and waits for your review") || strings.Contains(row, "report [&") {
+		t.Fatalf("a report with the lead at rest does not say it waits for the person: %q", row)
+	}
+	model.WaitOn(1)
+	model.Reported("report-2", subagent.Row{Name: "rust-dev-174", State: roster.Finished, Report: "wrote it"})
+	if row := rowWith("[&rust-dev-174]"); !strings.Contains(row, "[&rust-dev-174] finished and waits for the lead") {
+		t.Fatalf("a ticketless report while the lead still waits on a sub-agent does not say the lead reads it next: %q", row)
+	}
+	model.Reported("report-3", subagent.Row{Name: "rust-dev-175", Ticket: "DESK-367", State: roster.Errored, Report: "the build broke"})
+	if row := rowWith("[&rust-dev-175]"); !strings.Contains(row, "[&rust-dev-175] failed DESK-367") {
+		t.Fatalf("an errored report does not say it failed: %q", row)
+	}
+}
+
 func TestSettledSubAgentNameIsDrawnInADifferentColourFromARunningOne(t *testing.T) {
 	model := New(fixed(), counted(new(int)))
 	model.SetSize(100, 30)

@@ -45,15 +45,11 @@ func (m *Model) blockAt(index int) (int, int) {
 	return start, end
 }
 
-func (m *Model) stillRunning(index int) bool {
-	return m.Busy && m.entries[index].turn == m.turns
-}
-
 func (m *Model) tailAnchor(rows int) (anchor, bool) {
 	total := 0
 	for index := len(m.entries) - 1; index >= 0; {
-		start, end := m.blockAt(index)
-		total += m.blockRows(start, end)
+		start, _ := m.blockAt(index)
+		total += len(m.blockLines(start))
 		if total >= rows {
 			return anchor{entry: start, line: total - rows}, total > rows || start > 0
 		}
@@ -67,7 +63,7 @@ func (m *Model) linesFrom(at anchor, rows int) []string {
 	skip := at.line
 	for index := at.entry; index < len(m.entries) && len(lines) < rows; {
 		start, end := m.blockAt(index)
-		rendered := m.blockLines(start, end)
+		rendered := m.blockLines(start)
 		index = end
 		if skip >= len(rendered) {
 			skip -= len(rendered)
@@ -92,12 +88,12 @@ func (m *Model) move(at anchor, lines int) anchor {
 		if at.entry == 0 {
 			return anchor{}
 		}
-		start, end := m.blockAt(at.entry - 1)
-		at.entry, at.line = start, m.blockRows(start, end)
+		start, _ := m.blockAt(at.entry - 1)
+		at.entry, at.line = start, len(m.blockLines(start))
 	}
 	for lines > 0 && at.entry < len(m.entries) {
 		start, end := m.blockAt(at.entry)
-		room := m.blockRows(start, end) - at.line
+		room := len(m.blockLines(start)) - at.line
 		if lines < room {
 			at.line += lines
 			return at
@@ -110,7 +106,7 @@ func (m *Model) move(at anchor, lines int) anchor {
 
 type rowKey struct {
 	revision, width, turns, entries int
-	showsTools, busy                bool
+	showsTools                      bool
 }
 
 type rowTable struct {
@@ -119,7 +115,7 @@ type rowTable struct {
 }
 
 func (m *Model) rowKey() rowKey {
-	return rowKey{m.revision, m.width, m.turns, len(m.entries), m.ChatShowsTools, m.Busy}
+	return rowKey{m.revision, m.width, m.turns, len(m.entries), m.ChatShowsTools}
 }
 
 func (m *Model) offset(at anchor) int {
@@ -129,7 +125,7 @@ func (m *Model) offset(at anchor) int {
 			start, end := m.blockAt(index)
 			rows := m.lead(start) + 1 + len(m.entries[start].displayLines())
 			if m.wrapped(&m.entries[start]) {
-				rows = m.blockRows(start, end)
+				rows = len(m.blockLines(start))
 			}
 			for inside := start + 1; inside <= end; inside++ {
 				before[inside] = before[start] + rows

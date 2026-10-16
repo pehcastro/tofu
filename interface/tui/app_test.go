@@ -185,13 +185,13 @@ func TestARunningCallCarriesItsElapsedTimeAndTheFooterSaysWhatIsHappening(t *tes
 		if !strings.Contains(frame, "working") {
 			t.Errorf("the frame does not say what state the turn is in\n%s", frame)
 		}
-		if !strings.Contains(frame, "bash for d in internal") {
-			t.Errorf("the running row does not say what is happening\n%s", frame)
-		}
+	}
+	if !strings.Contains(plainEarly, "read CLAUDE.md") || !strings.Contains(plainLater, "bash for d in internal") {
+		t.Errorf("the status line does not name the call that has run past the dwell\n--- early ---\n%s\n--- later ---\n%s", plainEarly, plainLater)
 	}
 	before, after := spun(plainEarly), spun(plainLater)
-	if len(before) != 2 || len(after) != len(before) {
-		t.Fatalf("want the running row and the status line spinning at both moments, got %q then %q", string(before), string(after))
+	if len(before) != 1 || len(after) != len(before) {
+		t.Fatalf("want the one status line spinning at both moments, got %q then %q", string(before), string(after))
 	}
 	for index := range before {
 		if before[index] == after[index] {
@@ -214,6 +214,7 @@ func TestTheModelsProseIsDrawnDifferentlyFromToolActivity(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := liveApp(t, &at)
 	app.Update(Event{Kind: EventDecision, Decision: asked()})
+	at = at.Add(session.PhaseDwell)
 	content := app.View().Content
 	spoken, called := styleOf(content, prose), styleOf(content, "bash for d in internal")
 	if spoken == "" || called == "" {
@@ -266,7 +267,7 @@ func TestACacheHitAndAMissRenderDifferentFooters(t *testing.T) {
 	}
 }
 
-func TestAnAllowedCallFoldsInChatAndCarriesNoVerdictOrDistributions(t *testing.T) {
+func TestAnAllowedCallDrawsNoChatRowAndCarriesNoVerdictOrDistributions(t *testing.T) {
 	app := sessionApp(t, 120, 36)
 	content := app.View().Content
 	if strings.Contains(content, "  allow") {
@@ -275,8 +276,8 @@ func TestAnAllowedCallFoldsInChatAndCarriesNoVerdictOrDistributions(t *testing.T
 	if strings.Contains(content, "0.04") {
 		t.Fatalf("the allowed call drew its distributions in chat\n%s", content)
 	}
-	if !strings.Contains(content, "(2) tools · jev 2") {
-		t.Fatalf("the allowed call did not fold into the turn's one running line\n%s", content)
+	if strings.Contains(content, "toolgate.go") || strings.Contains(content, ") tools") {
+		t.Fatalf("the allowed call left a row in the chat\n%s", content)
 	}
 }
 
@@ -646,7 +647,7 @@ func TestASubAgentsMessageIsNeverSpokenInTheOrchestratorsTranscript(t *testing.T
 }
 
 func TestAReportRidingTheDoneEventIsDrawnOnce(t *testing.T) {
-	const reportRow = "report [&sub-1]"
+	const reportRow = "[&sub-1] finished and waits for your review"
 	finished := []subagent.Row{{Name: "sub-1", Owns: []string{"note.txt"}, Doing: "read note.txt", State: roster.Finished, Report: "the note holds one line"}}
 	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: bothWires})
 	app.Init()
@@ -887,6 +888,7 @@ func TestFoldHidesShellIsASettingThatDropsTheShellCountFromTheRunningLine(t *tes
 	globalPath := filepath.Join(t.TempDir(), "settings.json")
 	app := settingsStoreApp(t, globalPath)
 	app.runCommand("chat")
+	app.Update(Event{Kind: EventRequesting})
 	app.Update(Event{Kind: EventToolCall, ID: "c1", Tool: "bash", Text: "go test ./..."})
 	before := ansi.Strip(app.View().Content)
 	if !strings.Contains(before, "shell (1)") {
@@ -1431,7 +1433,7 @@ func TestOutputArrivingWhileScrolledUpDoesNotMoveTheView(t *testing.T) {
 	app := longApp(t)
 	app.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	before := transcriptOf(app.View().Content)
-	app.Update(Event{Kind: EventToolCall, Tool: "bash", Text: "arrived while scrolled back"})
+	app.Update(Event{Kind: EventNote, Text: "arrived while scrolled back"})
 	after := transcriptOf(app.View().Content)
 	if after != before {
 		t.Fatalf("new output moved the view\n--- after ---\n%s\n--- before ---\n%s", after, before)
@@ -1441,12 +1443,12 @@ func TestOutputArrivingWhileScrolledUpDoesNotMoveTheView(t *testing.T) {
 func TestOutputArrivingAtTheTailMovesTheView(t *testing.T) {
 	app := longApp(t)
 	before := app.View().Content
-	app.Update(Event{Kind: EventToolCall, Tool: "bash", Text: "arrived at the tail"})
+	app.Update(Event{Kind: EventNote, Text: "arrived at the tail"})
 	after := app.View().Content
 	if after == before {
 		t.Fatal("new output at the tail left the view unmoved")
 	}
-	if !strings.Contains(ansi.Strip(after), ") tools") {
+	if !strings.Contains(ansi.Strip(after), "arrived at the tail") {
 		t.Fatalf("the following view did not draw the new entry\n%s", after)
 	}
 }
@@ -2021,7 +2023,8 @@ func TestAReportThatArrivesWhileTheLeadRequestsIsDrawnOnceAfterItsWords(t *testi
 	app.Update(Event{Kind: EventText, ID: "w2", Text: "the loader reads the lock first."})
 	app.Update(Event{Kind: EventDone, Text: "cooked for"})
 	chat := ansi.Strip(app.View().Content)
-	if strings.Count(chat, "report [&sub-2]") != 1 || strings.Index(chat, "the loader reads the lock first.") > strings.Index(chat, "report [&sub-2]") {
+	const reportRow = "[&sub-2] finished and waits for the lead"
+	if strings.Count(chat, reportRow) != 1 || strings.Index(chat, "the loader reads the lock first.") > strings.Index(chat, reportRow) {
 		t.Fatalf("the report is not drawn once, after the lead's words\n%s", chat)
 	}
 }

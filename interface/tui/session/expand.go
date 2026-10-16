@@ -69,7 +69,7 @@ func (m *Model) ExpandAt(x, row int) string {
 	row += from.line
 	for index := from.entry; index < len(m.entries); {
 		start, end := m.blockAt(index)
-		lines := m.blockLines(start, end)
+		lines := m.blockLines(start)
 		if row < len(lines) {
 			if last := m.entries[end-1]; last.Kind == Tool && pointer.TextHit(ansi.Strip(lines[row]), expandLabel, x) {
 				return last.ID

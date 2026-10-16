@@ -22,7 +22,7 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ stopping  |  4s  [request#91ccaf]                                                               
+  ⠋ stopping  |  4s  bash go test ./... · (2) tools · shell (1)  [tool#c2]  [request#91ccaf]        
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

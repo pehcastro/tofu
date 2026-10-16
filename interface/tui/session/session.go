@@ -65,7 +65,6 @@ type Entry struct {
 	recorded  string
 	askID     string
 	turn      int
-	intoTurn  time.Duration
 	streaming bool
 	taken     bool
 	asking    bool
@@ -112,7 +111,7 @@ func (e Entry) returned() bool { return e.Status != "" }
 func (e Entry) running() bool { return e.Kind == Tool && e.ID != "" && !e.returned() }
 
 func (e Entry) sticky() bool {
-	return e.Failed || e.Promoted || e.verdictShown() != ""
+	return e.Promoted || e.verdictShown() != ""
 }
 
 func (e Entry) label() string { return strings.TrimSpace(e.Head + " " + e.Body) }
@@ -127,7 +126,8 @@ type Model struct {
 	Paths              []string
 	SubAgents          []subagent.Row
 	Activity           []Activity
-	Spawns             int
+	Spawning           []string
+	latestSpawn        Entry
 	Question           []string
 	now                func() time.Time
 	leadIdleSince      time.Time
@@ -315,7 +315,7 @@ func (m *Model) Append(entry Entry) {
 	}
 	m.seal()
 	m.revision++
-	entry.Started, entry.turn, entry.intoTurn = m.now(), m.turns, m.elapsed(m.began)
+	entry.Started, entry.turn = m.now(), m.turns
 	if entry.Kind == User && entry.ID == "" {
 		entry.ID = m.mint()
 	}

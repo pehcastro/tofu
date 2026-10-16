@@ -5,7 +5,6 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⟩ bash git push origin develop                                            exit 128  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,7 +21,8 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  3s  [request#91ccaf]                                                                
+                                                                                                    
+  ⠋ working  |  3s  bash git push origin develop · (1) tools · shell…  [tool#c1]  [request#91ccaf]  
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

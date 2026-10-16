@@ -5,7 +5,6 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-    ⠁ read internal/turn/step8.go                                            [tool#c8]  [expand]    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -22,7 +21,8 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  12s  [request#91ccaf]                                                               
+                                                                                                    
+  ⠋ working  |  12s  read internal/turn/step8.go · (8) tools  [tool#c8]  [request#91ccaf]           
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"tofu/interface/tui/session"
 )
 
 func TestAReferenceFollowedFromTheChatRevealsAnEventRecordedWhileTheFeedWasHidden(t *testing.T) {
@@ -25,6 +27,7 @@ func TestALengthenedToolIDShowsInTheChatAndFollowsToItsOwnCard(t *testing.T) {
 	app := phaseApp(t, &at)
 	app.Update(Event{Kind: EventToolCall, ID: "call-1abc123", Tool: "read", Text: "first.go"})
 	app.Update(Event{Kind: EventToolCall, ID: "call-2abc123", Tool: "read", Text: "second.go"})
+	at = at.Add(session.PhaseDwell)
 	chat := ansi.Strip(app.View().Content)
 	if !strings.Contains(chat, "[tool#2abc123]") {
 		t.Fatalf("the chat does not show the second call by the feed's id 2abc123\n%s", chat)

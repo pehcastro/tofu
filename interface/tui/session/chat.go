@@ -2,9 +2,9 @@ package session
 
 import (
 	"cmp"
+	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -27,6 +27,7 @@ const (
 	orchestrator     = "orchestrator"
 	messageKind      = "message"
 	toolKind         = "tool"
+	spawnKind        = "spawn"
 	requestKind      = "request"
 	toolMarker       = "⟩ "
 	noteMarker       = "· "
@@ -37,17 +38,10 @@ const (
 	wholeErrorInWork = "the whole error is in work "
 )
 
-type foldCounts struct {
-	tools, jev, shell int
-	since             time.Duration
-	id                string
-}
-
 type drawKey struct {
 	width, lead, body                   int
 	status, verdict, spawn              string
 	latest, streaming, failed, promoted bool
-	fold                                foldCounts
 }
 
 type drawn struct {
@@ -89,24 +83,16 @@ func (m *Model) scrollMetrics(rows int) (int, int, anchor) {
 	return m.offset(anchor{entry: len(m.entries)}), m.offset(from), from
 }
 
-func (m *Model) blockLines(start, end int) []string {
-	key, live := m.drawKey(start, end)
+func (m *Model) blockLines(start int) []string {
+	if m.folds(start) {
+		return nil
+	}
+	key, live := m.drawKey(start)
 	cached := &m.entries[start].drawn
 	if !live && cached.lines != nil && cached.key == key {
 		return cached.lines
 	}
-	lines := make([]string, key.lead, key.lead+1)
-	if m.folds(start) {
-		fold, progress := m.foldShows(start, end)
-		if fold {
-			lines = append(lines, m.foldLine(key.fold))
-		}
-		if progress {
-			lines = append(lines, m.progressLine(m.entries[start:end]))
-		}
-	} else {
-		lines = append(lines, m.render(start)...)
-	}
+	lines := append(make([]string, key.lead, key.lead+1), m.render(start)...)
 	for index, line := range lines {
 		lines[index] = widget.Pad(line, m.width-trackCells)
 	}
@@ -116,17 +102,12 @@ func (m *Model) blockLines(start, end int) []string {
 	return lines
 }
 
-func (m *Model) drawKey(start, end int) (drawKey, bool) {
+func (m *Model) drawKey(start int) (drawKey, bool) {
 	entry := &m.entries[start]
 	key := drawKey{
 		width: m.width, lead: m.lead(start), body: len(entry.Body), status: entry.Status, verdict: entry.verdictShown(),
-		streaming: entry.streaming, failed: entry.Failed, promoted: entry.Promoted,
+		streaming: entry.streaming, failed: entry.Failed, promoted: entry.Promoted, latest: m.latestUser(start),
 	}
-	if m.folds(start) {
-		key.fold = m.foldCounts(start, end)
-		return key, m.liveFold(start, end)
-	}
-	key.latest = m.latestUser(start)
 	if len(entry.SubAgents) == 0 {
 		return key, entry.running()
 	}
@@ -137,34 +118,17 @@ func (m *Model) drawKey(start, end int) (drawKey, bool) {
 	return key, len(batch.running) > 0
 }
 
-func (m *Model) liveFold(start, end int) bool { return end == len(m.entries) || m.stillRunning(start) }
-
-func (m *Model) foldShows(start, end int) (bool, bool) {
-	return !m.stillRunning(start), end == len(m.entries) && m.Busy && m.entries[end-1].label() != ""
-}
-
-func (m *Model) blockRows(start, end int) int {
-	if !m.folds(start) || !m.liveFold(start, end) {
-		return len(m.blockLines(start, end))
-	}
-	rows := m.lead(start)
-	fold, progress := m.foldShows(start, end)
-	if fold {
-		rows++
-	}
-	if progress {
-		rows++
-	}
-	return rows
-}
-
 func (m *Model) lead(start int) int {
+	before := start - 1
+	for before >= 0 && m.folds(before) {
+		before--
+	}
 	switch {
-	case start == 0:
+	case before < 0:
 		return 0
 	case m.entries[start].Kind == User:
 		return turnGapRows
-	case m.entries[start].message() || m.entries[start-1].message():
+	case m.entries[start].message() || m.entries[before].message():
 		return 1
 	}
 	return 0
@@ -182,52 +146,51 @@ func (m *Model) latestUser(index int) bool {
 	return true
 }
 
-func (m *Model) foldCounts(start, end int) foldCounts {
-	fold := foldCounts{tools: end - start, since: m.foldSince(end), id: m.entries[end-1].ID}
-	for index := start; index < end; index++ {
-		if m.entries[index].Head == shellTool && !m.FoldHidesShell {
-			fold.shell++
+func (m *Model) turnWork() (string, string) {
+	var tools, jev, shell int
+	var named *Entry
+	for index := len(m.entries) - 1; index >= 0 && m.entries[index].turn == m.turns; index-- {
+		entry := &m.entries[index]
+		if !m.folds(index) {
+			continue
 		}
-		if m.entries[index].Decision != nil {
-			fold.jev++
+		if named == nil && cmp.Or(entry.Ended, m.now()).Sub(entry.Started) >= PhaseDwell {
+			named = entry
+		}
+		tools++
+		if entry.Head == shellTool && !m.FoldHidesShell {
+			shell++
+		}
+		if entry.Decision != nil {
+			jev++
 		}
 	}
-	return fold
-}
-
-func (m *Model) foldLine(fold foldCounts) string {
-	fields := []string{"(" + strconv.Itoa(fold.tools) + ") tools"}
-	if fold.jev > 0 {
-		fields = append(fields, "jev "+strconv.Itoa(fold.jev))
+	kind, spawn := toolKind, &m.latestSpawn
+	waitsOnSpawn := slices.Contains(m.Spawning, spawn.ID) && (named == nil || !named.running())
+	if spawn.ID != "" && spawn.turn == m.turns && (named == nil || waitsOnSpawn || spawn.Started.After(named.Started)) {
+		named, kind = spawn, spawnKind
 	}
-	if fold.shell > 0 {
-		fields = append(fields, "shell ("+strconv.Itoa(fold.shell)+")")
+	if tools == 0 && named == nil {
+		return "", ""
 	}
-	fields = append(fields, widget.Until(fold.since))
-	tail := m.expandTail(fold.id)
-	room := max(m.textWidth()-widget.Cells(tail), 1)
-	return continuation + look.Faint(widget.Pad(widget.Fit(noteMarker+strings.Join(fields, foldSeparator), room), room)) + tail
-}
-
-func (m *Model) foldSince(end int) time.Duration {
-	if end >= len(m.entries) {
-		return m.elapsed(m.began)
+	var fields []string
+	tag := ""
+	if named != nil {
+		fields = []string{oneLine(named.label())}
+		if short := m.FeedID(named.ID); short != "" {
+			tag = look.TypedID(kind, short)
+		}
 	}
-	return m.entries[end].intoTurn
-}
-
-func (m *Model) progressLine(fold []Entry) string {
-	latest := fold[len(fold)-1]
-	tail := m.expandTail(latest.ID)
-	room := max(m.textWidth()-widget.Cells(tail), 1)
-	return continuation + widget.Pad(progress.Line{Label: oneLine(latest.label()), Frame: m.frame, Live: true}.View(room), room) + tail
-}
-
-func (m *Model) expandTail(id string) string {
-	if short := m.FeedID(id); short != "" {
-		return gap + look.TypedID(toolKind, short) + expandMark(id)
+	if tools > 0 {
+		fields = append(fields, "("+strconv.Itoa(tools)+") tools")
 	}
-	return ""
+	if jev > 0 {
+		fields = append(fields, "jev "+strconv.Itoa(jev))
+	}
+	if shell > 0 {
+		fields = append(fields, "shell ("+strconv.Itoa(shell)+")")
+	}
+	return strings.Join(fields, foldSeparator), tag
 }
 
 func expandMark(id string) string {
@@ -338,6 +301,10 @@ func (m *Model) toolLine(entry Entry) string {
 		style = look.Style(look.Amber)
 	}
 	status, statusStyle := m.callStatus(entry)
+	label := entry.label()
+	if entry.Head == reportHead {
+		label, status = entry.Body, ""
+	}
 	marker := toolMarker
 	if entry.running() {
 		marker = progress.Work(m.frame) + " "
@@ -353,5 +320,5 @@ func (m *Model) toolLine(entry Entry) string {
 		right = gap + verdictStyle(entry.Decision.Verdict).Render(word) + right
 	}
 	room := max(m.textWidth()-widget.Cells(right), 1)
-	return style.Render(widget.Pad(widget.Fit(marker+oneLine(entry.label()), room), room)) + right
+	return style.Render(widget.Pad(widget.Fit(marker+oneLine(label), room), room)) + right
 }

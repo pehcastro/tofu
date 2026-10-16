@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,109 +12,99 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/interface/tui/frametime"
-	"tofu/interface/tui/look"
 	"tofu/internal/golden"
 	roster "tofu/internal/subagent"
 )
 
-func rawRowHolding(t *testing.T, app *App, text string) string {
-	t.Helper()
-	for _, line := range strings.Split(app.View().Content, "\n") {
-		if strings.Contains(ansi.Strip(line), text) {
-			return line
-		}
-	}
-	t.Fatalf("no row holds %q\n%s", text, app.View().Content)
-	return ""
-}
-
-func TestNoFoldLineDrawsWhileTheTurnRunsAndItArrivesFaintAtTheEnd(t *testing.T) {
+func TestTheLeadsToolCallsDrawNoChatRowAndTheTurnLineNamesTheLatest(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
-	app := startTurn(t, &at, runWidth, runHeight)
+	app := startTurn(t, &at, 120, runHeight)
 
-	startCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go"})
+	startCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go", decision: allowed()})
 	at = at.Add(callStep)
 	endCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148})
 	startCall(app, 1, runCall{tool: "bash", text: "go test ./internal/turn/..."})
 	at = at.Add(callStep)
-	endCall(app, 1, runCall{tool: "bash", text: "go test ./internal/turn/...", result: "ok 0.4s", bytes: 96})
 
-	if running := ansi.Strip(app.View().Content); strings.Contains(running, "(2) tools") {
-		t.Fatalf("a turn that has not ended summarises itself\n%s", running)
-	}
-
-	app.Update(Event{Kind: EventText, Text: runAnswer})
-	if spoken := ansi.Strip(app.View().Content); strings.Contains(spoken, "(2) tools") {
-		t.Fatalf("the answer arriving is not the end of the turn, and the summary drew anyway\n%s", spoken)
-	}
-
-	finishTurn(app)
-	final := rawRowHolding(t, app, "(2) tools")
-	if !strings.Contains(final, escapeOf(look.Style(look.FaintColor))) {
-		t.Fatalf("the fold line is not faint once the turn has ended\n%q", final)
-	}
-}
-
-func TestTheFoldLineElapsedCountsFromTheSendAndNeverRestarts(t *testing.T) {
-	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
-	app := startTurn(t, &at, runWidth, runHeight)
-
-	startCall(app, 0, runCall{tool: "read", text: "a"})
-	at = at.Add(callStep)
-	endCall(app, 0, runCall{tool: "read", text: "a", result: "ok", bytes: 10})
-	startCall(app, 1, runCall{tool: "read", text: "b"})
-	at = at.Add(callStep)
-	endCall(app, 1, runCall{tool: "read", text: "b", result: "ok", bytes: 10})
-	app.Update(Event{Kind: EventText, Text: "first note"})
-
-	at = at.Add(callStep)
-	startCall(app, 2, runCall{tool: "bash", text: "c"})
-	at = at.Add(callStep)
-	endCall(app, 2, runCall{tool: "bash", text: "c", result: "ok", bytes: 10})
-	startCall(app, 3, runCall{tool: "bash", text: "d"})
-	at = at.Add(callStep)
-	endCall(app, 3, runCall{tool: "bash", text: "d", result: "ok", bytes: 10})
-	finishTurn(app)
-
-	firstFold := rowHolding(t, app, "(2) tools")
-	if !strings.Contains(firstFold, "6s") {
-		t.Fatalf("the first fold does not read 6s since the send\n%s", firstFold)
-	}
-
-	secondFold := rowHolding(t, app, "(2) tools · shell (2)")
-	if !strings.Contains(secondFold, "15s") {
-		t.Fatalf("the second fold does not count from the send: %q, want 15s", secondFold)
-	}
-	if strings.Contains(secondFold, "6s") {
-		t.Fatalf("the second fold restarted from its own block instead of the send\n%s", secondFold)
-	}
-}
-
-func TestTheFoldLineNamesToolsJevShellAndTimeWithNoByteFigureOrToolName(t *testing.T) {
-	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
-	app := startTurn(t, &at, runWidth, runHeight)
-	startCall(app, 0, runCall{tool: "read", text: "internal/judge/policy/toolgate.go", decision: allowed()})
-	at = at.Add(callStep)
-	endCall(app, 0, runCall{tool: "read", text: "internal/judge/policy/toolgate.go", result: "412 lines, 11.8 KB", bytes: 11800})
-	startCall(app, 1, runCall{tool: "bash", text: "go test ./internal/judge/..."})
-	at = at.Add(callStep)
-	endCall(app, 1, runCall{tool: "bash", text: "go test ./internal/judge/...", result: "ok tofu/internal/judge 0.42s", bytes: 412})
-	app.Update(Event{Kind: EventText, Text: runAnswer})
-	finishTurn(app)
-
-	content := app.View().Content
-	row := rowHolding(t, app, "(2) tools")
-	for _, want := range []string{"(2) tools", "jev 1", "shell (1)", "6s"} {
+	row := turnRow(t, app)
+	for _, want := range []string{"(2) tools", "jev 1", "shell (1)", "bash go test ./internal/turn/...", "[tool#"} {
 		if !strings.Contains(row, want) {
-			t.Fatalf("the fold line does not say %q\n%s", want, row)
+			t.Fatalf("the turn line does not say %q while the lead works\n%s", want, row)
 		}
 	}
-	for _, unwanted := range []string{"KB", "bytes", "read ", "bash "} {
-		if strings.Contains(row, unwanted) {
-			t.Fatalf("the fold line names a tool or a byte figure, got %q in\n%s", unwanted, row)
+	running := ansi.Strip(app.View().Content)
+	if strings.Contains(running, "loop.go") || strings.Count(running, "go test") != 1 {
+		t.Fatalf("a lead tool call drew a row of its own in the chat\n%s", running)
+	}
+
+	at = at.Add(callStep)
+	endCall(app, 1, runCall{tool: "bash", text: "go test ./internal/turn/...", result: "ok 0.4s", bytes: 96})
+	app.Update(Event{Kind: EventText, Text: runAnswer})
+	finishTurn(app)
+	ended := ansi.Strip(app.View().Content)
+	for _, gone := range []string{"loop.go", "go test", "(2) tools", "[expand]"} {
+		if strings.Contains(ended, gone) {
+			t.Fatalf("the chat still carries %q once the turn has ended\n%s", gone, ended)
 		}
 	}
-	golden.Assert(t, "session-fold-line-80x24.golden", content)
+	if !strings.Contains(ended, runTask) || !strings.Contains(ended, "the gate reads the policy") {
+		t.Fatalf("the person's words or the lead's answer left the chat with the tool rows\n%s", ended)
+	}
+	golden.Assert(t, "session-lead-tools-out-of-chat-120x24.golden", app.View().Content)
+}
+
+func TestTheLeadsToolCallsLeaveNoExtraRowBetweenTwoMessages(t *testing.T) {
+	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	app := startTurn(t, &at, runWidth, runHeight)
+	app.Update(Event{Kind: EventText, Text: "first note"})
+	for index := range 3 {
+		startCall(app, index, runCall{tool: "read", text: "a.go"})
+		endCall(app, index, runCall{tool: "read", text: "a.go", result: "ok", bytes: 10})
+	}
+	app.Update(Event{Kind: EventText, Text: "second note"})
+	finishTurn(app)
+	rows := plainRows(app.View())
+	first := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "first note") })
+	second := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "second note") })
+	if first < 0 || second-first != 3 {
+		t.Fatalf("two messages around three folded calls sit %d rows apart, want 3: the words, one gap, the head\n%s", second-first, strings.Join(rows, "\n"))
+	}
+}
+
+func TestWhileASpawnIsOutstandingTheTurnLineNamesTheSpawnAndNotTheCallBefore(t *testing.T) {
+	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
+	app := startTurn(t, &at, 120, runHeight)
+	startCall(app, 0, runCall{tool: "bash", text: "sleep 3"})
+	at = at.Add(callStep)
+	endCall(app, 0, runCall{tool: "bash", text: "sleep 3", result: "ok", bytes: 2})
+	app.Update(Event{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read the note and say what it holds", Promote: true})
+	at = at.Add(callStep)
+	row := turnRow(t, app)
+	if strings.Contains(row, "sleep 3") || !strings.Contains(row, "spawn read the note and say what it holds") || !strings.Contains(row, "[spawn#s1]") {
+		t.Fatalf("the turn line does not name the outstanding spawn by its id: %q", row)
+	}
+	app.Update(Event{Kind: EventToolResult, ID: "s1", Text: "spawned"})
+	if row := turnRow(t, app); strings.Contains(row, "sleep 3") || !strings.Contains(row, "[spawn#s1]") {
+		t.Fatalf("a spawn that returned at once gave the line back to the call before it: %q", row)
+	}
+	startCall(app, 1, runCall{tool: "read", text: "note.txt"})
+	at = at.Add(callStep)
+	if row := turnRow(t, app); !strings.Contains(row, "read note.txt") || strings.Contains(row, "[spawn#s1]") {
+		t.Fatalf("a call newer than the spawn does not take the line: %q", row)
+	}
+}
+
+func TestChatShowsToolsOnStillDrawsEveryLeadCall(t *testing.T) {
+	app := settingsStoreApp(t, filepath.Join(t.TempDir(), "settings.json"))
+	switchOnToolDetail(t, app)
+	app.runCommand("chat")
+	app.Update(Event{Kind: EventRequesting})
+	startCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go"})
+	endCall(app, 0, runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148})
+	finishTurn(app)
+	if row := rowHolding(t, app, "read internal/turn/loop.go"); !strings.Contains(row, "84 lines") {
+		t.Fatalf("chatShowsTools on lost the call's own row and its status\n%s", row)
+	}
 }
 
 func TestATranscriptLongerThanThePaneAnchorsToTheBottomAndScrolls(t *testing.T) {

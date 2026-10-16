@@ -36,14 +36,14 @@
                   Commands                                                     esc                
                   Jump to a view or run an action                                   
     ✓ [&c2]  ✗ [                                                                    
-    · (1) tools   > Type to filter                                                  0]  [expand]
+                  > Type to filter                                                  
+    [&orchestrat                                                                    sage#9d4f11]
+    three sub-ag  >  chat                                                    /chat  d its suite.
+    [tool#9d4f10    the conversation and the composer                               
                                                                                     
-    [&orchestrat  >  chat                                                    /chat  sage#9d4f11]
-    three sub-ag    the conversation and the composer                               d its suite.
-    [tool#9d4f10                                                                    
-                    sub-agents                                         /sub-agents  
-    ⟩ report [&c    every tool call and every sub-agent, in one feed                ew  [expand]
-    ⟩ report [&c                                                                    ed  [expand]
+    ⟩ [&c2] fini    sub-agents                                         /sub-agents      [expand]
+    ⟩ [&c3] fail    every tool call and every sub-agent, in one feed                    [expand]
+                                                                                    
                     file-edits                                         /file-edits  
                     every changed line, who made it and where                       
                                                                                     

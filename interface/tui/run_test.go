@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/interface/tui/feed"
 	"tofu/interface/tui/session"
-	"tofu/interface/tui/theme"
 	"tofu/internal/golden"
 )
 
@@ -123,66 +123,53 @@ func callRows(content string) int {
 	return strings.Count(transcriptOf(content), "⟩ ")
 }
 
-func TestARunOfFourteenCallsDrawsNothingButItsProgressLineWhileItRuns(t *testing.T) {
+func TestARunOfFourteenCallsDrawsNothingButTheTurnLineWhileItRuns(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	calls := fourteenCalls()
 	app := runningApp(t, &at)
 	content := app.View().Content
 	golden.Assert(t, "session-run-80x24.golden", content)
 	plain := ansi.Strip(content)
-	if strings.Contains(plain, " tools") {
-		t.Errorf("the running run summarises a turn that has not ended\n%s", plain)
+	if row := turnRow(t, app); !strings.Contains(row, "bash go tool deadcode") || !strings.Contains(row, "[tool#c13]") {
+		t.Errorf("the turn line at eighty columns does not name the running call by its id: %q", row)
 	}
-	for _, unwanted := range []string{"read 6", "bash 7", "glob 1"} {
-		if strings.Contains(plain, unwanted) {
-			t.Errorf("the running run still names a tool by kind, got %q\n%s", unwanted, plain)
-		}
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: runHeight})
+	if row := turnRow(t, app); !strings.Contains(row, "(14) tools · shell (7)") {
+		t.Errorf("the turn line does not count the fourteen calls and the seven shell calls: %q", row)
 	}
+	app.Update(tea.WindowSizeMsg{Width: runWidth, Height: runHeight})
 	if rows := callRows(plain); rows != 0 {
 		t.Errorf("the running run drew %d call rows, want none\n%s", rows, plain)
 	}
 
 	endCall(app, len(calls)-1, calls[len(calls)-1])
 	finishTurn(app)
-	ended := ansi.Strip(app.View().Content)
-	for _, want := range []string{"(14) tools", "shell (7)", "42s"} {
-		if !strings.Contains(ended, want) {
-			t.Errorf("the ended run does not say %q\n%s", want, ended)
-		}
+	if ended := ansi.Strip(app.View().Content); strings.Contains(ended, " tools") || callRows(ended) != 0 {
+		t.Errorf("the ended run still draws its calls in the chat\n%s", ended)
 	}
 }
 
-func TestTheProgressLineReplacesItselfAndChangesColourWhenACallFinishes(t *testing.T) {
+func TestTheTurnLineNamesTheLatestCallAndDropsTheOneBefore(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
-	app := startTurn(t, &at, runWidth, runHeight)
+	app := startTurn(t, &at, 120, runHeight)
 	first := runCall{tool: "read", text: "internal/turn/loop.go", result: "84 lines, 2.1 KB", bytes: 2148}
 	second := runCall{tool: "bash", text: "go build ./...", result: "no output", bytes: 96}
 
 	startCall(app, 0, first)
-	running := app.View().Content
-	golden.Assert(t, "session-progress-running-80x24.golden", running)
-	if !strings.Contains(ansi.Strip(running), "read internal/turn/loop.go") {
-		t.Fatalf("the running progress line does not name the call\n%s", ansi.Strip(running))
-	}
-
 	at = at.Add(callStep)
-	endCall(app, 0, first)
-	finished := app.View().Content
-	golden.Assert(t, "session-progress-finished-80x24.golden", finished)
-	runningOpen := escapeOf(theme.Accent())
-	finishedOpen := escapeOf(theme.Added())
-	if !strings.Contains(running, runningOpen) {
-		t.Fatalf("the running frame does not carry the accent colour\n%s", running)
-	}
-	if !strings.Contains(finished, finishedOpen) {
-		t.Fatalf("the finished frame does not carry the finished colour\n%s", finished)
+	running := app.View().Content
+	golden.Assert(t, "session-progress-running-120x24.golden", running)
+	if row := turnRow(t, app); !strings.Contains(row, "read internal/turn/loop.go") {
+		t.Fatalf("the turn line does not name the running call: %q", row)
 	}
 
+	endCall(app, 0, first)
 	startCall(app, 1, second)
+	at = at.Add(callStep)
 	replaced := app.View().Content
-	golden.Assert(t, "session-progress-replaced-80x24.golden", replaced)
-	if strings.Contains(ansi.Strip(replaced), "internal/turn/loop.go") {
-		t.Fatalf("the progress line still names the finished call once a new one starts\n%s", ansi.Strip(replaced))
+	golden.Assert(t, "session-progress-replaced-120x24.golden", replaced)
+	if strings.Contains(ansi.Strip(replaced), "internal/turn/loop.go") || !strings.Contains(turnRow(t, app), "bash go build ./...") {
+		t.Fatalf("the turn line still names the finished call once a new one starts\n%s", ansi.Strip(replaced))
 	}
 	if callRows(ansi.Strip(replaced)) != 0 {
 		t.Fatalf("a second call grew the transcript with a call row\n%s", ansi.Strip(replaced))
@@ -200,37 +187,27 @@ func sixKindsOfCall() []runCall {
 	}
 }
 
-func TestTheCountedLineNeverNamesAToolAcrossSixKinds(t *testing.T) {
+func TestNoKindOfLeadCallLeavesARowOnceTheTurnEnds(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := wholeRun(t, &at, runWidth, runHeight, sixKindsOfCall())
 	finishTurn(app)
-	content := app.View().Content
-	row := ""
-	for _, line := range strings.Split(ansi.Strip(content), "\n") {
-		if strings.Contains(line, "(6) tools") {
-			row = line
+	plain := ansi.Strip(app.View().Content)
+	for _, call := range sixKindsOfCall() {
+		if strings.Contains(plain, call.text) {
+			t.Errorf("the %s call %q is still drawn in the chat\n%s", call.tool, call.text, plain)
 		}
 	}
-	if row == "" {
-		t.Fatalf("the counted line does not count all six calls\n%s", ansi.Strip(content))
-	}
-	for _, unwanted := range []string{"read ", "glob ", "grep ", "edit ", "fetch "} {
-		if strings.Contains(row, unwanted) {
-			t.Errorf("the counted line names a tool by kind, got %q\n%s", unwanted, row)
-		}
-	}
-	golden.Assert(t, "session-run-six-kinds-80x24.golden", content)
 }
 
-func TestTheRunCollapsesToOneDimLineWhenTheTurnEnds(t *testing.T) {
+func TestTheRunLeavesOnlyTheAnswerWhenTheTurnEnds(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := spokenApp(t, &at)
 	finishTurn(app)
 	content := app.View().Content
 	golden.Assert(t, "session-run-collapsed-80x24.golden", content)
 	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "· (14) tools · shell (7) · 42s") {
-		t.Errorf("the collapsed run is not one counted line\n%s", plain)
+	if strings.Contains(plain, " tools") {
+		t.Errorf("the ended run still draws a counted line\n%s", plain)
 	}
 	if !strings.Contains(plain, runAnswer) {
 		t.Errorf("the answer is not on the screen\n%s", plain)
@@ -286,7 +263,7 @@ func askedRun() []runCall {
 	})
 }
 
-func TestAShadowAskFoldsWithTheRestOfTheRun(t *testing.T) {
+func TestAShadowAskDrawsNoRowLikeTheRestOfTheRun(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := wholeRun(t, &at, runWidth, runHeight, askedRun())
 	finishTurn(app)
@@ -299,10 +276,7 @@ func TestAShadowAskFoldsWithTheRestOfTheRun(t *testing.T) {
 		}
 	}
 	if rows := callRows(plain); rows != 0 {
-		t.Errorf("the run drew %d call rows, want every call in the fold\n%s", rows, plain)
-	}
-	if !strings.Contains(plain, "(8) tools · jev 1 · shell (1)") {
-		t.Errorf("the one folded line does not count the eight calls and the judged one\n%s", plain)
+		t.Errorf("the run drew %d call rows, want none\n%s", rows, plain)
 	}
 }
 
@@ -315,24 +289,18 @@ func failedRun() []runCall {
 	})
 }
 
-func TestAFailedCallIsNeverFoldedAndTheRunBreaksAroundIt(t *testing.T) {
+func TestAFailedLeadCallLeavesTheChatAndStaysFailedInTheActivity(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	app := wholeRun(t, &at, runWidth, runHeight, failedRun())
 	finishTurn(app)
 	content := app.View().Content
 	golden.Assert(t, "session-run-failure-80x24.golden", content)
-	plain := ansi.Strip(content)
-	if !strings.Contains(plain, "⟩ bash go test ./internal/recall/…  FAIL tofu/internal/recall…  [expand]") {
-		t.Errorf("the failed call is not one row cut to eighty columns with its status and [expand]\n%s", plain)
+	if plain := ansi.Strip(content); strings.Contains(plain, "internal/recall") || callRows(plain) != 0 {
+		t.Errorf("the failed lead call is still a row in the chat\n%s", plain)
 	}
-	if rows := callRows(plain); rows != 1 {
-		t.Errorf("the run drew %d call rows, want the failed one alone\n%s", rows, plain)
-	}
-	if !strings.Contains(content, escapeOf(theme.Fail())+"FAIL tofu/internal/recall…") {
-		t.Errorf("the failure is drawn like every other result\n%q", content)
-	}
-	if folds := strings.Count(plain, " tools"); folds != 2 {
-		t.Errorf("the run folded into %d lines, want one on each side of the failure\n%s", folds, plain)
+	failed := app.happenedAt(app.shortOf("c4"))
+	if failed < 0 || app.happened[failed].State != feed.StateFailed {
+		t.Errorf("the failed call is not kept failed in the activity: %+v", app.happened)
 	}
 }
 
@@ -354,10 +322,10 @@ func twelveCalls() []runCall {
 	return calls
 }
 
-func TestTheCountsOnTheFoldedLineAreRight(t *testing.T) {
+func TestTheCountsOnTheTurnLineAreRight(t *testing.T) {
 	at := time.Date(2026, 9, 19, 14, 32, 0, 0, time.UTC)
 	calls := twelveCalls()
-	app := startTurn(t, &at, runWidth, runHeight)
+	app := startTurn(t, &at, 120, runHeight)
 	for index, one := range calls {
 		startCall(app, index, one)
 		at = at.Add(callStep)
@@ -366,14 +334,7 @@ func TestTheCountsOnTheFoldedLineAreRight(t *testing.T) {
 	last := runCall{tool: "edit", text: "internal/turn/loop.go", result: "1 hunk applied", bytes: 240}
 	startCall(app, len(calls), last)
 	endCall(app, len(calls), last)
-	finishTurn(app)
-	plain := ansi.Strip(app.View().Content)
-	if !strings.Contains(plain, "(13) tools · shell (4)") {
-		t.Errorf("the folded line does not count the tools and the shell calls\n%s", plain)
-	}
-	for _, unwanted := range []string{"read 5", "glob 3", "edit 1"} {
-		if strings.Contains(plain, unwanted) {
-			t.Errorf("the folded line still names a tool by kind, got %q\n%s", unwanted, plain)
-		}
+	if row := turnRow(t, app); !strings.Contains(row, "(13) tools · shell (4)") {
+		t.Errorf("the turn line does not count the tools and the shell calls: %q", row)
 	}
 }

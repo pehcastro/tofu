@@ -259,7 +259,6 @@ type App struct {
 	steered        map[string]string
 	sentNow        bool
 	stopCommand    context.CancelFunc
-	subAgentCalls  []string
 	subAgents      []subagent.Row
 	allSubAgents   []subagent.Row
 	folded         map[string]bool

@@ -5,7 +5,6 @@
     why does the gate read the policy first?                                                        
                                                                                                     
                                                                                                     
-                                                                                                    
     [&orchestrator]                                                                        14:32    
     the gate reads the policy before the wire, because a policy                                     
                                                                                                     
@@ -22,7 +21,8 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  ⠋ working  |  6s  [request#91ccaf]                                                                
+                                                                                                    
+  ⠋ working  |  6s  bash go test ./internal/judge/... · (2) tools · …  [tool#c2]  [request#91ccaf]  
                                                                                                     
                                                                                                     
   █ Ask tofu to build, inspect, or delegate                                                         

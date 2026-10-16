@@ -42,10 +42,7 @@ func TestASpawnIsNeverAToolRowInChat(t *testing.T) {
 func TestAPlainToolCallDoesNotPromote(t *testing.T) {
 	app := promoteApp(t, time.Now())
 	plain := ansi.Strip(app.View().Content)
-	if strings.Contains(plain, "⟩ read a.go") {
-		t.Fatalf("a plain tool call promoted on its own without the switch\n%s", plain)
-	}
-	if !strings.Contains(plain, "(1) tools") {
-		t.Fatalf("a plain tool call did not fold\n%s", plain)
+	if strings.Contains(plain, "read a.go") {
+		t.Fatalf("a plain tool call drew a chat row on its own without the switch\n%s", plain)
 	}
 }
