@@ -167,3 +167,12 @@ func (h *heldSubAgent) remember(round Row) {
 	defer h.kept.Unlock()
 	h.history = Sendable(round.Conversation)
 }
+
+func (h *heldSubAgent) forget(reload func() ([]llm.Message, error)) {
+	h.kept.Lock()
+	h.history, h.reload, h.prefix = nil, reload, Prefix{}
+	h.kept.Unlock()
+	h.forking.Lock()
+	h.forked = nil
+	h.forking.Unlock()
+}

@@ -22,6 +22,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
+	"tofu/internal/session"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
@@ -563,7 +564,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 			trace := held.trace
 			trace.site = site
 			_ = trace.end(held.agent.ID, subagent.Errored)
-			t.Inbox.ended(held, told, sourceReportForLead, false, site.log)
+			t.settle(ctx, held, told, sourceReportForLead, false, site.log)
 		}
 	}()
 	for {
@@ -580,7 +581,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 			source = sourceReport
 		}
 		if stopping || len(next) == 0 {
-			next = t.Inbox.ended(held, report, source, stopping, site.log)
+			next = t.settle(ctx, held, report, source, stopping, site.log)
 		}
 		if len(next) == 0 {
 			return
@@ -588,6 +589,31 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		task, taskOrigin, warm = strings.Join(textsOf(next), "\n\n"), originOf(next), nil
 		t.roster.Reached(held.agent.ID, subagent.Working, resumedWords)
 	}
+}
+
+func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report, source string, stopping bool, log *session.Log) []inboxItem {
+	stopped := stopShells(ctx, []string{held.agent.ID})
+	told := stopped.told()
+	if stopped.failed != nil {
+		told = append(told, "a shell of its was not killed: "+stopped.failed.Error())
+	}
+	if len(told) > 0 && report != "" {
+		report += "\n\nas it ended, " + strings.Join(told, ", ") + ". a server you need after a sub-agent reports, start yourself with bash and background: true."
+	}
+	next := t.Inbox.ended(held, report, source, stopping, log)
+	if len(next) > 0 {
+		return next
+	}
+	t.Inbox.mu.Lock()
+	defer t.Inbox.mu.Unlock()
+	if held.running {
+		return nil
+	}
+	_ = held.scratch.Settle(report)
+	if log != nil && t.base.Sessions != nil {
+		held.forget(readBack(t.base.Sessions, log.ID(), held.agent.ID))
+	}
+	return nil
 }
 
 func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *checkIn, limits SubAgentLimits) Config {

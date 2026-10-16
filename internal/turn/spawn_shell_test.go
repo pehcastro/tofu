@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 
 	"tofu/internal/llm"
@@ -41,8 +42,11 @@ func TestASubAgentsBackgroundShellIsOneTheLeadReachesByTheNameInItsReport(t *tes
 	if name[1] == "bash-1" {
 		t.Errorf("the sub-agent's shell took bash-1, the name the lead's own command already had")
 	}
+	if stopped := "its shells " + name[1] + " are killed"; !strings.Contains(report, stopped) {
+		t.Errorf("the report does not say %q:\n%s", stopped, report)
+	}
 	held, err := registry.Read(name[1])
-	if err != nil || held.State != shell.Running || held.Owner != "sub-1" || held.Kept != shell.KeptBackground {
-		t.Fatalf("the lead reads %s as %+v (%v), want running, owned by sub-1 and kept as background", name[1], held, err)
+	if err != nil || held.State == shell.Running || held.Owner != "sub-1" || held.Kept != shell.KeptBackground {
+		t.Fatalf("the lead reads %s as %+v (%v), want stopped once sub-1 ended, owned by sub-1 and kept as background", name[1], held, err)
 	}
 }

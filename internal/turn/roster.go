@@ -47,7 +47,6 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 	runs := recordedSubAgents(chain)
 	stopErr := endStoppedByTheRestart(store, runs)
 	store.ForgetRead()
-	unread := *store
 	for _, run := range runs {
 		agentID, restored := run.agent.ID, run.agent
 		restored.State, restored.Report = run.state, run.report
@@ -59,15 +58,20 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 		if run.undelivered {
 			inbox.reportAgain(run.report)
 		}
-		inbox.adopt(restoredHeld(run.agent, run.depth, func() ([]llm.Message, error) {
-			chain, err := sessionChain(&unread, id)
-			if err != nil {
-				return nil, err
-			}
-			return subAgentHistory(&unread, chain, agentID)
-		}))
+		inbox.adopt(restoredHeld(run.agent, run.depth, readBack(store, id, agentID)))
 	}
 	return stopErr
+}
+
+func readBack(store *session.Store, id, agentID string) func() ([]llm.Message, error) {
+	return func() ([]llm.Message, error) {
+		once := store.ReadOnce()
+		chain, err := sessionChain(once, id)
+		if err != nil {
+			return nil, err
+		}
+		return subAgentHistory(once, chain, agentID)
+	}
 }
 
 func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) error {
@@ -176,6 +180,9 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 }
 
 func (t *SpawnTool) recompose(held *heldSubAgent) error {
+	if _, err := held.conversation(); err != nil {
+		return fmt.Errorf("%s's conversation did not read back: %w", held.agent.ID, err)
+	}
 	if !held.restored {
 		return nil
 	}
@@ -187,9 +194,6 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	system, environment, err := t.SubAgents.prompt(t.base, definition, held.agent.Brief, owns)
 	if err != nil {
 		return err
-	}
-	if _, err := held.conversation(); err != nil {
-		return fmt.Errorf("%s's conversation did not read back: %w", held.agent.ID, err)
 	}
 	scratch, err := t.scratch(context.Background(), held.agent.ID)
 	if err != nil {

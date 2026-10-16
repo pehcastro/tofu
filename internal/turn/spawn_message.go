@@ -177,6 +177,9 @@ func (t *SpawnTool) send(ctx context.Context, to, text, from string) (Result, er
 		held.kept.Unlock()
 	}
 	err = t.recompose(held)
+	if err == nil && held.scratch.Root != "" {
+		err = held.scratch.Make()
+	}
 	var opened SubAgentModel
 	if err == nil {
 		opened, err = t.open(held.definition, held.askedEffort)
@@ -313,45 +316,62 @@ func (t *SpawnTool) kill(ctx context.Context, to string) (Result, error) {
 	for _, nested := range owners[1:] {
 		t.roster.Release(nested)
 	}
-	var killed, leftRunning []string
-	var failed []error
-	if registry := ShellRegistryFrom(ctx); registry != nil {
-		for _, running := range registry.Own() {
-			if !ownedBy(running.Owner, owners) {
-				continue
-			}
-			err := registry.AgentKill(running.Name)
-			var holding shell.HeldError
-			switch {
-			case errors.As(err, &holding):
-				leftRunning = append(leftRunning, running.Name)
-			case err != nil && !errors.Is(err, shell.ErrNotRunning):
-				failed = append(failed, err)
-			default:
-				killed = append(killed, running.Name)
-			}
-		}
-	}
+	stopped := stopShells(ctx, owners)
 	ended, shells := "was not running", "no shell of its was running"
 	if ran {
 		ended = "is killed and its run ends now"
 	}
-	var told []string
-	if len(killed) > 0 {
-		told = append(told, "its shells "+strings.Join(killed, ", ")+" are killed")
-	}
-	if len(leftRunning) > 0 {
-		told = append(told, "its shells "+strings.Join(leftRunning, ", ")+" are held by the person and were left running")
-	}
-	if len(told) > 0 {
+	if told := stopped.told(); len(told) > 0 {
 		shells = strings.Join(told, ", ")
 	}
 	said := to + " " + ended + ", " + shells + ", and " + freedWords(agent.Owns) + "."
 	if ran {
 		said += " its report, saying where it stopped, comes to you as a message."
 	}
-	if err := errors.Join(failed...); err != nil {
-		return Result{}, fmt.Errorf("message: %s a shell of its was not killed: %w", said, err)
+	if stopped.failed != nil {
+		return Result{}, fmt.Errorf("message: %s a shell of its was not killed: %w", said, stopped.failed)
 	}
 	return Result{Content: said + resumeWords, Command: "kill " + to, SubAgent: to}, nil
+}
+
+type stoppedShells struct {
+	killed, held []string
+	failed       error
+}
+
+func stopShells(ctx context.Context, owners []string) stoppedShells {
+	registry := ShellRegistryFrom(ctx)
+	if registry == nil {
+		return stoppedShells{}
+	}
+	var stopped stoppedShells
+	var failed []error
+	for _, running := range registry.Own() {
+		if !ownedBy(running.Owner, owners) {
+			continue
+		}
+		err := registry.AgentKill(running.Name)
+		var holding shell.HeldError
+		switch {
+		case errors.As(err, &holding):
+			stopped.held = append(stopped.held, running.Name)
+		case err != nil && !errors.Is(err, shell.ErrNotRunning):
+			failed = append(failed, err)
+		default:
+			stopped.killed = append(stopped.killed, running.Name)
+		}
+	}
+	stopped.failed = errors.Join(failed...)
+	return stopped
+}
+
+func (s stoppedShells) told() []string {
+	var told []string
+	if len(s.killed) > 0 {
+		told = append(told, "its shells "+strings.Join(s.killed, ", ")+" are killed")
+	}
+	if len(s.held) > 0 {
+		told = append(told, "its shells "+strings.Join(s.held, ", ")+" are held by the person and were left running")
+	}
+	return told
 }
