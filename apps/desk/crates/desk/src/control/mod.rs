@@ -4,8 +4,10 @@ mod dispatch;
 #[cfg(feature = "plugin-draw")]
 mod draw;
 mod editor;
+mod plugins;
 mod state;
 mod tabs;
+mod ui;
 mod workspace;
 
 use std::io;
@@ -77,8 +79,25 @@ pub fn serve(
         let mut journal = Vec::new();
         while let Ok(Asked { request, reply }) = asked.recv_async().await {
             let verb = dispatch::verb(&request.call);
-            let answer = cx
-                .update(|cx| dispatch::answer(request, window, &screens, &mut journal, &feed, cx));
+            let answer = match plugins::guest_run(&request.call) {
+                Some(running) => {
+                    let ran = match running {
+                        Ok(running) => {
+                            let waited = cx
+                                .background_executor()
+                                .spawn(async move { running.wait() });
+                            waited.await
+                        }
+                        Err(refused) => Err(refused),
+                    };
+                    ran.map_err(|(kind, message)| {
+                        Failure::new(Some(request.id), kind, message, Some(verb.to_owned()))
+                    })
+                }
+                None => cx.update(|cx| {
+                    dispatch::answer(request, window, &screens, &mut journal, &feed, cx)
+                }),
+            };
             match &answer {
                 Ok(_) => eprintln!("desk: control {verb} ok"),
                 Err(failure) => eprintln!("desk: control {verb} refused {}", failure.error.message),

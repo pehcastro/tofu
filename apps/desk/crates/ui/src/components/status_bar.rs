@@ -26,6 +26,11 @@ use crate::metrics::{HAIRLINE, ICON_SMALL, STATUS_BAR_HEIGHT, STATUS_ITEM_HEIGHT
 use crate::theme::{ColorToken, Theme};
 
 const NO_ACCOUNT: &str = "no account";
+const NO_BRANCH: &str = "no branch";
+const NO_SESSION: &str = "no session";
+const BRANCH_POP_WIDTH: f32 = 240.0;
+const NOT_A_REPO: &str = "This folder is not a git repository";
+const UP_TO_DATE: &str = "Up to date with its upstream";
 const NO_ACCOUNT_CONNECTED: &str = "No account connected";
 const NO_PICK: &str = "No model picked yet, so no account is predicted";
 const READING_QUOTA: &str = "Reading quota";
@@ -152,6 +157,7 @@ pub enum StatusPick {
 }
 
 type OnPick = Rc<dyn Fn(&StatusPick, &mut Window, &mut App)>;
+type OnBranch = Rc<dyn Fn(&bool, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
 pub struct StatusBar {
@@ -160,6 +166,54 @@ pub struct StatusBar {
     on_pick: OnPick,
     cron_menu: Option<AnyView>,
     quota_open: bool,
+    branch_popover: Option<(bool, OnBranch)>,
+}
+
+pub fn controls(status: &Status) -> Vec<(&'static str, SharedString)> {
+    let branch = status
+        .branch
+        .as_ref()
+        .map_or(NO_BRANCH.into(), |branch| match branch.ahead {
+            0 => branch.name.clone(),
+            ahead => format!("{} ↑{ahead}", branch.name).into(),
+        });
+    let session = match &status.session {
+        None => NO_SESSION.into(),
+        Some(name) if name.is_empty() => NEW_SESSION.into(),
+        Some(name) => name.clone(),
+    };
+    let group = status.session_group.iter().flat_map(|group| {
+        [
+            (
+                "Context",
+                group.context.as_ref().map_or("ctx".into(), |context| {
+                    format!("ctx {}", context.tokens).into()
+                }),
+            ),
+            (
+                "Classifier",
+                format!("classifier {}", group.classifier).into(),
+            ),
+            ("Cron", format!("cron {}", group.cron).into()),
+        ]
+    });
+    let limits = match (&status.accounts, &status.serving) {
+        (Accounts::Reading, _) => READING_QUOTA.into(),
+        (Accounts::Unread(_), _) => UNREAD.into(),
+        (Accounts::Read(_), Serving::Key(name)) => name.clone(),
+        (Accounts::Read(accounts), Serving::Account { at, .. }) => accounts
+            .get(*at)
+            .or(accounts.first())
+            .map_or(NO_ACCOUNT.into(), |account| account.provider.clone()),
+        (Accounts::Read(accounts), Serving::Unpicked) => accounts
+            .first()
+            .map_or(NO_ACCOUNT.into(), |account| account.provider.clone()),
+    };
+    [("Branch", branch), ("Session", session)]
+        .into_iter()
+        .chain(group)
+        .chain([("Limits", limits)])
+        .collect()
 }
 
 impl StatusBar {
@@ -174,7 +228,79 @@ impl StatusBar {
             on_pick: Rc::new(on_pick),
             cron_menu: None,
             quota_open: false,
+            branch_popover: None,
         }
+    }
+
+    pub fn branch_popover(
+        mut self,
+        open: bool,
+        on_open: impl Fn(&bool, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.branch_popover = Some((open, Rc::new(on_open)));
+        self
+    }
+
+    fn branch(&self, theme: &Theme) -> AnyElement {
+        let status = &self.status;
+        let fill = |item: Stateful<Div>| {
+            item.child(icon(
+                Icon::Branch,
+                ICON_SMALL,
+                theme.color(ColorToken::TextStatus),
+            ))
+            .map(|item| match &status.branch {
+                None => item.child(NO_BRANCH),
+                Some(branch) => item
+                    .child(branch.name.clone())
+                    .when(branch.ahead > 0, |item| {
+                        item.child(dim(format!("↑{}", branch.ahead), theme))
+                    }),
+            })
+        };
+        let Some((open, on_open)) = self.branch_popover.clone() else {
+            return fill(self.item(StatusPick::Branch, "Branch", theme)).into_any_element();
+        };
+        let toggle = on_open.clone();
+        let trigger = toggles_on_press(
+            fill(status_item("Branch", "Branch", theme)),
+            move |window, cx| toggle(&!open, window, cx),
+        );
+        let (name, line) = match &status.branch {
+            None => (
+                SharedString::from(NO_BRANCH),
+                SharedString::from(NOT_A_REPO),
+            ),
+            Some(Branch { name, ahead: 0 }) => (name.clone(), UP_TO_DATE.into()),
+            Some(Branch { name, ahead }) => (
+                name.clone(),
+                format!("{ahead} commits ahead of its upstream").into(),
+            ),
+        };
+        Popover::new("status-branch-pop", trigger)
+            .open(open)
+            .placement(Placement {
+                side: Side::Top,
+                align: Align::Start,
+                offset: POP_OFFSET,
+            })
+            .width(BRANCH_POP_WIDTH)
+            .child(
+                block(theme)
+                    .on_mouse_down_out(move |_, window, cx| on_open(&false, window, cx))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(ROW_GAP))
+                            .text_size(px(FONT_BODY))
+                            .text_color(ink(theme, T1))
+                            .child(icon(Icon::Branch, ICON_SMALL, ink(theme, T2)))
+                            .child(div().min_w_0().truncate().child(name)),
+                    )
+                    .child(line),
+            )
+            .into_any_element()
     }
 
     pub fn cron_menu(mut self, menu: Option<AnyView>) -> Self {
@@ -713,25 +839,11 @@ impl RenderOnce for StatusBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let status = &self.status;
-        let branch = self
-            .item(StatusPick::Branch, "Branch", &theme)
-            .child(icon(
-                Icon::Branch,
-                ICON_SMALL,
-                theme.color(ColorToken::TextStatus),
-            ))
-            .map(|item| match &status.branch {
-                None => item.child("no branch"),
-                Some(branch) => item
-                    .child(branch.name.clone())
-                    .when(branch.ahead > 0, |item| {
-                        item.child(dim(format!("↑{}", branch.ahead), &theme))
-                    }),
-            });
+        let branch = self.branch(&theme);
         let session = self
             .item(StatusPick::Session, "Session", &theme)
             .map(|item| match &status.session {
-                None => item.child("no session"),
+                None => item.child(NO_SESSION),
                 Some(name) if name.is_empty() => item.child(dim(NEW_SESSION, &theme)),
                 Some(name) => item.child(name.clone()),
             });

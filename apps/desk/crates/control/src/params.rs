@@ -70,7 +70,7 @@ params! {
     PaletteRun { id: String, args: Option<Value> }
     StatusClick { control: String }
     MaybeId { id: Option<String> }
-    NotifyShow { title: String, body: String, tone: Option<String> }
+    NotifyShow { title: String, #[serde(default)] body: String, tone: Option<String> }
     ThemeSet { name: Option<String>, mode: Option<Mode> }
     SettingKey { key: Option<String> }
     SettingSet { key: String, value: Value }

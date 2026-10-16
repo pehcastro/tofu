@@ -143,6 +143,10 @@ impl Palette {
         cx.notify();
     }
 
+    pub fn items(&self) -> &[PaletteEntry] {
+        &self.items
+    }
+
     pub fn marks(&mut self, marks: Vec<(SharedString, Glyph)>) {
         self.marks = marks;
     }

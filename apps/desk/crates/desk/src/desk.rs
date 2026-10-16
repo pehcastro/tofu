@@ -1,12 +1,19 @@
+#[cfg(feature = "screen-boardy")]
+use crate::modules::chat::BoardyMoved;
 use crate::modules::chat::Find;
-#[cfg(all(feature = "screen-work", feature = "screen-settings"))]
+#[cfg(all(
+    feature = "screen-work",
+    any(feature = "screen-settings", feature = "screen-boardy")
+))]
 use crate::modules::chat::SettingsMoved;
 #[cfg(feature = "screen-work")]
-use crate::modules::chat::{Chat, Listed, Touched};
+use crate::modules::chat::{Chat, Listed, TofuStopped, Touched};
 #[cfg(feature = "screen-work")]
 use crate::project::{self, Head, Picked};
 #[cfg(all(feature = "screen-work", feature = "screen-accounts"))]
 use crate::screens::accounts::Accounts as AccountsScreen;
+#[cfg(feature = "screen-boardy")]
+use crate::screens::boardy::Boardy as BoardyScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-classifier"))]
 use crate::screens::classifier::Classifier;
 #[cfg(all(feature = "screen-work", feature = "screen-context"))]
@@ -27,6 +34,8 @@ use crate::screens::usage::UsageScreen;
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
 use crate::title_bar::{Bell, ask_github, github, title_bar};
+#[cfg(feature = "screen-work")]
+use desk_core::boardy::Gate;
 use desk_core::control::{Control, TELL_BADGE};
 use desk_core::limits::TOAST_LIFETIME;
 #[cfg(feature = "screen-work")]
@@ -36,8 +45,12 @@ use desk_core::protocol::{
     AccountStateChanged, AccountStateChangedState, AccountStatusState, Accounts as AccountList,
     CronJob, QuotaWindow, Role, WindowStatus,
 };
+#[cfg(feature = "screen-boardy")]
+use desk_core::protocol::{NoParams, request::QuerySettings};
 #[cfg(feature = "screen-work")]
 use desk_core::query::Answer;
+#[cfg(feature = "screen-boardy")]
+use desk_core::settings::Settings;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
@@ -50,7 +63,7 @@ use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side, context_menu};
 use desk_ui::components::paint::{ink, ring};
-use desk_ui::components::palette::{Palette, PaletteItem};
+use desk_ui::components::palette::{Palette, PaletteEntry, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
 #[cfg(feature = "screen-work")]
@@ -94,6 +107,10 @@ use std::path::PathBuf;
 #[cfg(feature = "screen-work")]
 use std::time::Instant;
 
+#[cfg(feature = "screen-work")]
+#[path = "states/tofu_stopped.rs"]
+mod tofu_stopped;
+
 pub const WINDOW_TITLE: &str = "Tofu Desk";
 pub const BOARD_VIEWPORT_WIDTH: f32 = 1440.0;
 pub const BOARD_VIEWPORT_HEIGHT: f32 = 900.0;
@@ -114,6 +131,8 @@ const REOPEN_ID: &str = "tab.reopen";
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
 const EDITOR_SCREEN: &str = "editor";
+#[cfg(feature = "screen-work")]
+const BOARDY_SCREEN: &str = "boardy";
 #[cfg(feature = "screen-work")]
 const SAVE_AFTER: std::time::Duration = std::time::Duration::from_millis(500);
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -143,8 +162,9 @@ const fn mark(
     }
 }
 
-pub const SCREEN_MARKS: [ScreenMark; 11] = [
+pub const SCREEN_MARKS: [ScreenMark; 12] = [
     mark("editor", "Editor", Glyph::Code, ScreenGroup::Top),
+    mark("boardy", "Boardy", Glyph::Inbox, ScreenGroup::Top),
     mark("library", "Library", Glyph::Book, ScreenGroup::Top),
     mark("settings", "Settings", Glyph::Settings, ScreenGroup::Top),
     mark("accounts", "Accounts", Glyph::Person, ScreenGroup::Top),
@@ -272,6 +292,8 @@ struct ClosedScreen {
 pub struct Desk {
     sidebar_open: bool,
     toast: Option<Toast>,
+    toasts: u64,
+    branch_open: bool,
     screens: Vec<Screen>,
     shown: Shown,
     parked: Vec<Shown>,
@@ -295,6 +317,8 @@ pub struct Desk {
     menu_at: Option<Point<Pixels>>,
     #[cfg(feature = "screen-work")]
     cron: Entity<MenuButton>,
+    #[cfg(feature = "screen-work")]
+    gate: Option<Gate>,
 }
 
 #[cfg(feature = "screen-work")]
@@ -317,6 +341,7 @@ struct Projects {
     restored: bool,
     restoring: Option<String>,
     written: Option<project::Remembered>,
+    stopped: Option<TofuStopped>,
     _watch: Vec<gpui::Subscription>,
     _head: Option<Task<()>>,
     _reading: Option<Task<()>>,
@@ -330,10 +355,19 @@ struct Renaming {
     input: Entity<TextInput>,
 }
 
-struct Toast {
-    text: SharedString,
+pub struct Toast {
+    pub id: u64,
+    pub title: SharedString,
+    pub body: SharedString,
+    pub source: &'static str,
+    pub at: String,
     badge: Option<&'static str>,
-    _expiry: Task<gpui::Result<()>>,
+    _expiry: Option<Task<gpui::Result<()>>>,
+}
+
+pub enum Unpicked {
+    Off(String),
+    Failed(String),
 }
 
 pub fn desk_client() -> Size<Pixels> {
@@ -734,7 +768,12 @@ impl Desk {
         cx: &mut Context<Self>,
     ) -> Self {
         let palette = Palette::new(commands(&screens), window, cx);
-        let picked = cx.listener(|desk, id: &SharedString, window, cx| desk.picked(id, window, cx));
+        let picked = cx.listener(|desk, id: &SharedString, window, cx| {
+            eprintln!("desk: palette picked {id}");
+            if let Err(Unpicked::Off(why) | Unpicked::Failed(why)) = desk.pick(id, window, cx) {
+                eprintln!("desk: palette: {why}");
+            }
+        });
         let marks = SCREEN_MARKS
             .iter()
             .map(|mark| (format!("{SCREEN_ID}{}", mark.name).into(), mark.glyph))
@@ -751,6 +790,8 @@ impl Desk {
         let mut desk = Desk {
             sidebar_open: true,
             toast: None,
+            toasts: 0,
+            branch_open: false,
             screens,
             shown: Shown::new(name, view),
             parked: Vec::new(),
@@ -774,6 +815,8 @@ impl Desk {
             menu_at: None,
             #[cfg(feature = "screen-work")]
             cron: cron_button(cx),
+            #[cfg(feature = "screen-work")]
+            gate: None,
         };
         #[cfg(feature = "screen-work")]
         desk.adopt_launched(window, cx);
@@ -860,6 +903,12 @@ impl Desk {
         };
         let left = std::mem::replace(&mut self.shown, next);
         self.parked.push(left);
+        #[cfg(all(feature = "screen-work", feature = "screen-settings"))]
+        if let Body::View(view) = &self.shown.body
+            && let Ok(settings) = view.clone().downcast::<SettingsScreen>()
+        {
+            settings.update(cx, |settings, _| settings.showing());
+        }
         #[cfg(feature = "screen-work")]
         self.adopt_launched(window, cx);
         #[cfg(all(
@@ -873,7 +922,8 @@ impl Desk {
                 feature = "screen-forks",
                 feature = "screen-usage",
                 feature = "screen-accounts",
-                feature = "screen-settings"
+                feature = "screen-settings",
+                feature = "screen-boardy"
             )
         ))]
         self.feed_screens(cx);
@@ -894,32 +944,50 @@ impl Desk {
         focus.focus(window, cx);
     }
 
-    fn picked(&mut self, id: &SharedString, window: &mut Window, cx: &mut Context<Self>) {
-        eprintln!("desk: palette picked {id}");
+    pub fn palette_entries<'a>(&self, cx: &'a App) -> &'a [PaletteEntry] {
+        self.palette.read(cx).items()
+    }
+
+    pub fn pick(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<(), Unpicked> {
         if let Some(name) = id.strip_prefix(SCREEN_ID) {
-            return self.show(name, window, cx);
+            #[cfg(feature = "screen-work")]
+            if let Some(off) = self.gated_off(name) {
+                return Err(Unpicked::Off(off));
+            }
+            return self.open_screen(name, window, cx).map_err(Unpicked::Failed);
         }
         if id == OPEN_SETTINGS_ID {
-            return self.show(SETTINGS, window, cx);
+            return self
+                .open_screen(SETTINGS, window, cx)
+                .map_err(Unpicked::Failed);
         }
         #[cfg(feature = "screen-work")]
         if id == REOPEN_ID {
-            return self.reopen(window, cx);
+            self.reopen(window, cx);
+            return Ok(());
         }
         let action = id
             .strip_prefix(LAYOUT_ID)
             .and_then(|label| SHORTCUTS.iter().find(|shortcut| shortcut.label == label))
             .map(|shortcut| shortcut.action);
         match (action, &self.shown.body) {
-            (None, _) => eprintln!("desk: palette: {id} is not a command the desk knows"),
+            (None, _) => Err(Unpicked::Failed(format!(
+                "{id} is not a command the desk knows"
+            ))),
             #[cfg(feature = "screen-work")]
             (Some(action), Body::Work(work)) => {
                 work.update(cx, |work, cx| work.run(action, "", window, cx));
+                Ok(())
             }
-            (Some(action), Body::View(_) | Body::Whole(_)) => eprintln!(
-                "desk: palette: {action:?} needs the work screen, and {} shows",
+            (Some(action), Body::View(_) | Body::Whole(_)) => Err(Unpicked::Failed(format!(
+                "{action:?} needs the work screen, and {} shows",
                 self.shown.name
-            ),
+            ))),
         }
     }
 
@@ -989,7 +1057,7 @@ impl Desk {
             .screens
             .iter()
             .map(|screen| screen.name)
-            .filter(|name| screen_mark(name).is_some())
+            .filter(|name| screen_mark(name).is_some() && self.gated_off(name).is_none())
             .collect();
         let screen = self.tabbed.iter().position(|name| self.shown.name == *name);
         let (desk, picker) = (cx.weak_entity(), cx.weak_entity());
@@ -1194,10 +1262,19 @@ impl Desk {
                 work.update(cx, |work, _| {
                     work.fit(TILE_BOTTOM + STATUS_BAR_HEIGHT - WORKSPACE_EDGE)
                 });
+                let stopped = self.projects.stopped.as_ref().map(|stopped| {
+                    tofu_stopped::banner(
+                        stopped,
+                        theme,
+                        cx.listener(|desk, _: &ClickEvent, _, cx| desk.restart_tofu(cx)),
+                    )
+                });
                 div()
                     .flex_1()
                     .min_w_0()
+                    .relative()
                     .child(work.clone())
+                    .children(stopped)
                     .into_any_element()
             }
             Body::View(view) => div()
@@ -1238,7 +1315,14 @@ impl Desk {
                             .child(content),
                     ),
             )
-            .child(status_bar(&ActiveTheme::problems(cx), status, cx).cron_menu(cron_menu))
+            .child(
+                status_bar(&ActiveTheme::problems(cx), status, cx)
+                    .cron_menu(cron_menu)
+                    .branch_popover(
+                        self.branch_open,
+                        cx.listener(|desk, open: &bool, _, cx| desk.open_branch(*open, cx)),
+                    ),
+            )
             .into_any_element()
     }
 
@@ -1277,6 +1361,12 @@ impl Desk {
         self.toast(control.tell().into(), Some(TELL_BADGE), cx);
     }
 
+    pub fn open_branch(&mut self, open: bool, cx: &mut Context<Self>) {
+        eprintln!("desk: status branch popover open {open}");
+        self.branch_open = open;
+        cx.notify();
+    }
+
     fn toast(&mut self, text: SharedString, badge: Option<&'static str>, cx: &mut Context<Self>) {
         let expiry = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(TOAST_LIFETIME).await;
@@ -1285,12 +1375,54 @@ impl Desk {
                 cx.notify();
             })
         });
+        self.post(text, SharedString::default(), badge, Some(expiry), cx);
+    }
+
+    pub fn notify(
+        &mut self,
+        title: SharedString,
+        body: SharedString,
+        cx: &mut Context<Self>,
+    ) -> u64 {
+        self.post(title, body, None, None, cx)
+    }
+
+    fn post(
+        &mut self,
+        title: SharedString,
+        body: SharedString,
+        badge: Option<&'static str>,
+        expiry: Option<Task<gpui::Result<()>>>,
+        cx: &mut Context<Self>,
+    ) -> u64 {
+        self.toasts += 1;
         self.toast = Some(Toast {
-            text,
+            id: self.toasts,
+            title,
+            body,
+            source: if expiry.is_some() { "desk" } else { "control" },
+            at: chrono::Local::now().to_rfc3339(),
             badge,
             _expiry: expiry,
         });
         cx.notify();
+        self.toasts
+    }
+
+    pub fn shown_toast(&self) -> Option<&Toast> {
+        self.toast.as_ref()
+    }
+
+    pub fn dismiss_toast(&mut self, id: Option<u64>, cx: &mut Context<Self>) -> bool {
+        let shown = self
+            .toast
+            .as_ref()
+            .is_some_and(|toast| id.is_none_or(|id| id == toast.id));
+        if shown {
+            self.toast = None;
+            cx.notify();
+        }
+        shown
     }
 
     #[cfg(not(feature = "screen-work"))]
@@ -1332,7 +1464,7 @@ impl Desk {
     }
 
     #[cfg(not(feature = "screen-work"))]
-    fn status(&self, _: &App) -> Status {
+    pub fn status(&self, _: &App) -> Status {
         Status {
             accounts: Accounts::Read(Vec::new()),
             ..Status::default()
@@ -1368,8 +1500,28 @@ impl Desk {
             .collect()
     }
 
+    pub fn gated_off(&self, name: &str) -> Option<String> {
+        (name == BOARDY_SCREEN && !self.gate.is_some_and(|gate| gate.on)).then(|| {
+            format!(
+                "screen boardy is off in this project: set {} to boardy in Settings",
+                desk_core::boardy::MANAGEMENT
+            )
+        })
+    }
+
     pub fn modal(&self) -> bool {
         self.projects.confirming
+    }
+
+    fn restart_tofu(&mut self, cx: &mut Context<Self>) {
+        let Some(stopped) = self.projects.stopped.take() else {
+            return;
+        };
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return eprintln!("desk: restart: {NO_TOFU}");
+        };
+        chat.update(cx, |chat, cx| chat.reconnect(stopped.session, cx));
+        cx.notify();
     }
 
     pub fn work(&self) -> Option<&Entity<Work>> {
@@ -1686,14 +1838,33 @@ impl Desk {
                 |desk, _, expanded: &work::Expanded, window, cx| desk.expand(expanded, window, cx),
             ),
             cx.subscribe(&chat, |desk, _, _: &Listed, cx| {
+                #[cfg(feature = "screen-boardy")]
+                if desk.gate.is_none() {
+                    desk.reread_gate(cx);
+                }
                 desk.track_running(cx);
                 desk.restore_session(cx);
                 cx.notify();
             }),
             cx.subscribe(&chat, |desk, _, _: &Touched, cx| desk.reread_head(cx)),
+            cx.subscribe(&chat, |desk, _, stopped: &TofuStopped, cx| {
+                eprintln!(
+                    "desk: tofu stopped {} after {} ms",
+                    stopped.exit,
+                    stopped.exit.closed.elapsed().as_millis()
+                );
+                desk.projects.stopped = Some(stopped.clone());
+                cx.notify();
+            }),
             #[cfg(feature = "screen-settings")]
             cx.subscribe(&chat, |desk, _, _: &SettingsMoved, cx| {
                 desk.reread_settings(cx)
+            }),
+            #[cfg(feature = "screen-boardy")]
+            cx.subscribe(&chat, |desk, _, _: &SettingsMoved, cx| desk.reread_gate(cx)),
+            #[cfg(feature = "screen-boardy")]
+            cx.subscribe(&chat, |desk, _, moved: &BoardyMoved, cx| {
+                desk.boardy_moved(&moved.0, cx)
             }),
             cx.observe(&chat, |desk, _, cx| {
                 desk.track_running(cx);
@@ -1717,6 +1888,7 @@ impl Desk {
         self.projects.restored = false;
         self.projects.restoring = None;
         self.projects.written = None;
+        self.projects.stopped = None;
         let reading = folder.clone();
         self.projects._reading = Some(cx.spawn_in(window, async move |desk, cx| {
             let read = cx
@@ -1731,6 +1903,11 @@ impl Desk {
         }));
         self.projects.head = Some(Head::empty(folder));
         self.reread_head(cx);
+        #[cfg(feature = "screen-boardy")]
+        {
+            self.gate = None;
+            self.reread_gate(cx);
+        }
         #[cfg(any(
             feature = "screen-limits",
             feature = "screen-classifier",
@@ -1740,8 +1917,45 @@ impl Desk {
             feature = "screen-forks",
             feature = "screen-usage",
             feature = "screen-accounts",
-            feature = "screen-settings"
+            feature = "screen-settings",
+            feature = "screen-boardy"
         ))]
+        self.feed_screens(cx);
+        cx.notify();
+    }
+
+    #[cfg(feature = "screen-boardy")]
+    fn reread_gate(&mut self, cx: &mut Context<Self>) {
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return;
+        };
+        let desk = cx.weak_entity();
+        chat.update(cx, |chat, cx| {
+            chat.request::<QuerySettings>(&NoParams {}, cx, move |_, reply, cx| {
+                let read = reply.and_then(|report| {
+                    let settings = Settings::try_from(report).map_err(|error| error.to_string())?;
+                    Gate::read(&settings).map_err(|error| error.to_string())
+                });
+                cx.defer(move |cx| {
+                    if let Err(error) = desk.update(cx, |desk, cx| desk.gated(read, cx)) {
+                        eprintln!("desk: boardy gate answered after the desk closed: {error}");
+                    }
+                });
+            });
+        });
+    }
+
+    #[cfg(feature = "screen-boardy")]
+    fn gated(&mut self, read: Result<Gate, String>, cx: &mut Context<Self>) {
+        let gate = match read {
+            Ok(gate) => gate,
+            Err(error) => return eprintln!("desk: boardy gate unread: {error}"),
+        };
+        if self.gate == Some(gate) {
+            return;
+        }
+        eprintln!("desk: boardy gate on {} flow {:?}", gate.on, gate.flow);
+        self.gate = Some(gate);
         self.feed_screens(cx);
         cx.notify();
     }
@@ -1755,7 +1969,8 @@ impl Desk {
         feature = "screen-forks",
         feature = "screen-usage",
         feature = "screen-accounts",
-        feature = "screen-settings"
+        feature = "screen-settings",
+        feature = "screen-boardy"
     ))]
     fn feed_screens(&mut self, cx: &mut Context<Self>) {
         let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
@@ -1801,6 +2016,10 @@ impl Desk {
             if let Ok(settings) = view.clone().downcast::<SettingsScreen>() {
                 settings.update(cx, |settings, cx| settings.read_from(&chat, cx));
             }
+            #[cfg(feature = "screen-boardy")]
+            if let (Ok(boardy), Some(gate)) = (view.clone().downcast::<BoardyScreen>(), self.gate) {
+                boardy.update(cx, |boardy, cx| boardy.read_from(&chat, gate, cx));
+            }
             #[cfg(feature = "screen-usage")]
             if let Ok(usage) = view.downcast::<UsageScreen>() {
                 usage.update(cx, |usage, cx| usage.read_from(&chat, cx));
@@ -1819,6 +2038,20 @@ impl Desk {
             .collect();
         for settings in views {
             settings.update(cx, |settings, cx| settings.reread(cx));
+        }
+    }
+
+    #[cfg(feature = "screen-boardy")]
+    fn boardy_moved(&mut self, board: &str, cx: &mut Context<Self>) {
+        let views: Vec<Entity<BoardyScreen>> = std::iter::once(&self.shown)
+            .chain(&self.parked)
+            .filter_map(|shown| match &shown.body {
+                Body::View(view) => view.clone().downcast::<BoardyScreen>().ok(),
+                Body::Work(_) | Body::Whole(_) => None,
+            })
+            .collect();
+        for boardy in views {
+            boardy.update(cx, |boardy, cx| boardy.changed(board, cx));
         }
     }
 
@@ -1961,7 +2194,7 @@ impl Desk {
         Some(self.cron.clone().into())
     }
 
-    fn status(&self, cx: &App) -> Status {
+    pub fn status(&self, cx: &App) -> Status {
         let branch = self
             .projects
             .head
@@ -2275,7 +2508,10 @@ impl Render for Desk {
                 .flex()
                 .justify_center()
                 .child(toast(
-                    shown.text.clone(),
+                    match shown.body.is_empty() {
+                        true => shown.title.clone(),
+                        false => format!("{}: {}", shown.title, shown.body).into(),
+                    },
                     shown.badge,
                     &theme,
                     cx.listener(|desk, _: &ClickEvent, _, cx| {

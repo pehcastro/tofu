@@ -87,7 +87,7 @@ pub struct Rows {
     plugins: Option<(Entity<PluginsPage>, Subscription)>,
     stored: Result<Stored, String>,
     opened: Option<Instant>,
-    created: Rc<Cell<Option<Instant>>>,
+    showing: Rc<Cell<Option<Instant>>>,
 }
 
 struct Field {
@@ -118,8 +118,12 @@ impl Rows {
             plugins: None,
             stored: Stored::load(),
             opened: None,
-            created: Rc::new(Cell::new(Some(Instant::now()))),
+            showing: Rc::new(Cell::new(None)),
         }
+    }
+
+    pub fn showing(&mut self) {
+        self.showing.set(Some(Instant::now()));
     }
 
     pub fn install_plugin(&mut self, folder: PathBuf, cx: &mut Context<Self>) {
@@ -869,11 +873,11 @@ impl Render for Rows {
                     .child(page_body),
             ),
         );
-        let created = Rc::clone(&self.created);
+        let showing = Rc::clone(&self.showing);
         let first_frame = canvas(
             |_, _, _| {},
             move |_, (), _, _| {
-                if let Some(at) = created.take() {
+                if let Some(at) = showing.take() {
                     eprintln!(
                         "desk: settings: first frame {:.1}",
                         at.elapsed().as_secs_f64() * 1000.0

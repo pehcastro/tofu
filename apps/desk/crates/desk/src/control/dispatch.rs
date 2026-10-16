@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use super::change::{self, Answered, json};
 use super::workspace::{self, Step};
-use super::{capture, editor, state, tabs};
+use super::{capture, editor, state, tabs, ui};
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
@@ -105,6 +105,21 @@ fn respond(
         | Call::EditorFind(_) => Some(editor::answer(&call, window, cx)),
         Call::Capture(capture) => Some(capture::answer(capture, window, cx)),
         Call::StateGet(UriRef { uri }) => Some(state::get(uri, window, work.as_ref(), feed, cx)),
+        Call::PaletteList(_)
+        | Call::PaletteRun(_)
+        | Call::MenuInvoke(_)
+        | Call::StatusbarGet(_)
+        | Call::StatusbarClick(_)
+        | Call::NotifyList(_)
+        | Call::NotifyDismiss(_)
+        | Call::NotifyShow(_)
+        | Call::ThemeGet(_)
+        | Call::ThemeSet(_)
+        | Call::ClipboardGet(_)
+        | Call::ClipboardSet(_) => ui::answer(&call, window, cx),
+        Call::PluginCommands(_) | Call::PluginRun(_) => {
+            super::plugins::answer(&call, work.as_ref(), cx)
+        }
         #[cfg(feature = "plugin-draw")]
         Call::CommandRun(run) if run.name.starts_with("draw.") => {
             Some(super::draw::answer(run, work.as_ref(), cx))
@@ -236,6 +251,9 @@ fn screen_open(
                 .ok_or_else(|| gone("its root view is not the desk".to_owned()))?;
             let workspace = desk
                 .update(cx, |desk, window, cx| {
+                    if let Some(off) = desk.gated_off(name) {
+                        return Err(off);
+                    }
                     desk.open_screen(name, window, cx)?;
                     Ok(desk
                         .work()
