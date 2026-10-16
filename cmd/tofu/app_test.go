@@ -1431,7 +1431,7 @@ func TestEveryToolSaysWhetherItFailedAndHowBigItsResultWas(t *testing.T) {
 	}
 }
 
-func TestTheFoldLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
+func TestTheTurnLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 	dir := scratchProject(t)
 	driver := driveApp(t)
 	model := &queuedModel{decisions: []llm.Decision{
@@ -1449,14 +1449,22 @@ func TestTheFoldLineOnADrivenTurnNamesTheCountNotTheSize(t *testing.T) {
 	if total == 0 {
 		t.Fatal("the three results carried no bytes at all, so this test proves nothing")
 	}
-	screen := driver.view()
-	if !strings.Contains(screen, "(3) tools") {
-		t.Errorf("the fold line does not name the count\n%s", screen)
+	counted := ""
+	for _, frame := range driver.frames {
+		if plain := ansi.Strip(frame); strings.Contains(plain, "(3) tools") {
+			counted = plain
+		}
 	}
-	if strings.Contains(screen, widget.Size(total)) {
-		t.Errorf("the fold line still carries a byte figure\n%s", screen)
+	if counted == "" {
+		t.Fatalf("no frame of the running turn named the count of three calls\n%s", ansi.Strip(driver.view()))
 	}
-	t.Log("\n" + screen)
+	if strings.Contains(counted, widget.Size(total)) {
+		t.Errorf("the turn line carries a byte figure\n%s", counted)
+	}
+	if ended := ansi.Strip(driver.view()); strings.Contains(ended, "(3) tools") || strings.Contains(ended, "note.txt") {
+		t.Errorf("the ended turn still draws its calls in the chat\n%s", ended)
+	}
+	t.Log("\n" + counted)
 }
 
 func editsKey() tea.KeyPressMsg { return tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt} }
@@ -2758,8 +2766,8 @@ func TestASubAgentsReportTurnDrawsOneLineNamingItAndTheNextLeadTurnIsANewBlock(t
 		}
 		return found
 	}
-	reports, onIt, didIt := at("report [&sub-1]"), at("the sub-agent is on it"), at("the sub-agent did it")
-	if len(reports) != 1 || !strings.Contains(rows[reports[0]], "finished") || !strings.Contains(rows[reports[0]], "[expand]") {
+	reports, onIt, didIt := at("[&sub-1] finished"), at("the sub-agent is on it"), at("the sub-agent did it")
+	if len(reports) != 1 || !strings.Contains(rows[reports[0]], "and waits for") || !strings.Contains(rows[reports[0]], "[expand]") {
 		t.Fatalf("the report draws %d lines naming sub-1, want one carrying its state and an expand mark\n%s", len(reports), strings.Join(rows, "\n"))
 	}
 	if len(onIt) != 1 || len(didIt) != 1 || onIt[0] > reports[0] || didIt[0] < reports[0] {

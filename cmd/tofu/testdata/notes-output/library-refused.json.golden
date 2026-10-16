@@ -27,7 +27,7 @@ exit 1
     "models": 21,
     "subscriptions": 2,
     "roles": 0,
-    "questions": 17,
+    "questions": 19,
     "doc_pages": 32,
     "doc_entries": 101,
     "proxy": "rtk",
@@ -55,7 +55,7 @@ exit 1
       },
       {
         "name": "general",
-        "rules": 28,
+        "rules": 29,
         "thresholds": 7,
         "skills": 0,
         "agents": 2,

@@ -35,7 +35,7 @@ var flows = []flow{
 	{8, "10,000 kept shells: memory under 300 MB for 3 min, a report reaches the lead, ctrl+c quits within 3 s", false, keptShellsQuit},
 }
 
-var clockOnScreen = regexp.MustCompile(`(?:spawning|running) \[&sub-1\]\s+((?:\d+h )?(?:\d+m )?\d+s)`)
+var clockOnScreen = regexp.MustCompile(`(?m)(?:spawning|running) \[&sub-1\][^\n]*?  ((?:\d+h )?(?:\d+m )?\d+s)\s*[│┃]?\s*$`)
 
 func carries(r request, marks ...string) error {
 	for _, mark := range marks {

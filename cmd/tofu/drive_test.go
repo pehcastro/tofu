@@ -469,7 +469,7 @@ func settingsSaid(t *testing.T, printed, key string) string {
 	return ""
 }
 
-const foldedToolRow, fullToolRow = "(1) tools", "⟩ read note.txt"
+const answerAfterTheRead, fullToolRow = "note.txt holds one line", "⟩ read note.txt"
 
 func TestADrivenRunIgnoresASettingsFilePlantedInTheAmbientHome(t *testing.T) {
 	dir := drivenProject(t)
@@ -478,8 +478,8 @@ func TestADrivenRunIgnoresASettingsFilePlantedInTheAmbientHome(t *testing.T) {
 	if strings.Contains(printed, fullToolRow) {
 		t.Errorf("the run drew the full tool row, so it took chatShowsTools from a home the script never named:\n%s", printed)
 	}
-	if !strings.Contains(printed, foldedToolRow) {
-		t.Errorf("the run drew neither the folded count nor the full row, so the screen proves nothing:\n%s", printed)
+	if !strings.Contains(printed, answerAfterTheRead) {
+		t.Errorf("the run never drew the answer that follows the read, so a missing tool row proves nothing:\n%s", printed)
 	}
 	if said := settingsSaid(t, printed, settingspkg.ChatShowsTools); said != "false default" {
 		t.Errorf("the output says chatShowsTools resolved to %q, wanted the declared default", said)
