@@ -62,6 +62,8 @@ the schedule's, never as yours.
   `--prompt`, `--expires 48h` and `--until "<cmd>"` change the rest. A reason is required.
 - **Pause, resume or delete**: `/cron pause c1`, `/cron resume c1`, `/cron delete c1`.
 
+Jobs live in the session's `cron.json`, written only when a job fires, ends, expires or is changed, so a quiet session never rewrites it.
+
 ## Commands
 
 ```text

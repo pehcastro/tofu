@@ -71,7 +71,12 @@ With `replace_all` every exact occurrence is replaced and the result says how
 many, which is how a name is renamed through a file without `sed -i`.
 A whitespace-only mismatch is repaired when there's one candidate, and an
 edit that would leave a Go file unable to parse is refused with nothing
-written.
+written. An empty `old_string` on an existing file appends `new_string` to its end.
+
+One call can change several files with `edits`, a list of changes each with
+its own `path`, the way codex's patch and omp's edit do. They are all written
+or none is: every safety check reads every file in the call, and the result
+names the file that failed and gives a diff and a typecheck per file.
 
 | Parameter | Type | What it does |
 |---|---|---|
@@ -80,6 +85,7 @@ written.
 | `symbol` | string | or a Go declaration, such as `Resolve` or `Root.Resolve` |
 | `new_string` | string | what it becomes; empty deletes |
 | `replace_all` | boolean | replace every occurrence of `old_string`, not one |
+| `edits` | list | changes for several files at once, each with `path`, `old_string`, `new_string` |
 
 ## glob
 

@@ -10,6 +10,36 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc5 - 2026-10-16
+
+A long session stays small: what tofu no longer needs leaves memory and disk, and closing takes milliseconds.
+
+### Added
+
+- A second tofu on the same machine that opens a session another tofu holds follows it live: it replays the session, streams the running turn, and sends its prompts, steering, Esc, approvals and question and memory answers to the holder; if the holder dies it takes the session within about 15 ms. `tofu serve` answers `session.open` with `heldBy` and sends `turn.steerQueued` for a follower's steer.
+- One `edit` call can change several files with `edits`, all or none; every check reads every file in the call, and an empty `old_string` appends to a file. On the `bench/rivals` long edit, Sonnet's output fell from 11,290 to 6,826 tokens.
+- A sub-agent given `.` as its paths holds the whole project and nothing outside it.
+
+### Changed
+
+- A sub-agent that finishes stops the shells it started (a shell a person holds keeps running and the report names it), frees its conversation from memory until it is messaged again, and its scratch folder is removed. At 200 finished sub-agents memory fell from 206 MB to 6 MB.
+- Sub-agents folded in the chat and the sub-agents tab leave memory and are read back from the session when opened: at 450 sub-agents of 200 calls each, 18 MB instead of 155.
+- The host redraws only sub-agents that changed: one reply at 450 sub-agents costs 0.7 ms instead of 2.5.
+- `tofu serve` forgets a shell once it exits and keeps only a running shell's last 256 KB: 500 shells that printed 1 MB each hold 9.5 MB instead of 540.
+- A background command that never says it is ready returns after 2 s instead of 10, and its shell is listed from its start.
+- While tofu runs, ended shell records are pruned hourly, and artifacts no live session refers to and crash files are removed after 7 days, off the start-up path. The undo store prunes hourly and keeps the last 20 turns.
+- `cron.json` is written when a job changes, not every second.
+- A session reads its stored keys once and again only after a login; the credential store is opened twice per session instead of about ten times.
+- A memory compaction on one chat reuses the prompt cache once its prompt is long enough to be cached.
+- A lead script's changed lines count against the lead's budget without a sub-agent's writes made at the same time.
+
+### Fixed
+
+- Closing tofu cancels a memory compaction cleanly and leaves nothing running or writing: close takes about 20 ms instead of 3 s.
+- A framework rule no longer reads a path like `project\C:\Users\package.json` when the task names an absolute path.
+- A sub-agent's quoted log message that mentions a git command is no longer refused as one.
+- Feed events never share a short id in very long sessions, and a failed tool call stays failed when it is read back or resumed.
+
 ## 0.5.15-rc4 - 2026-10-16
 
 tofu survives its own crashes, cleans up after itself, and can show where a long session spends its memory.
