@@ -66,7 +66,7 @@ type watcher struct {
 	shows     sync.Mutex
 	spent     *tokenTally
 	asked     map[string][]Call
-	calls     map[string][]Call
+	watched   map[string]watchedAgent
 	spawns    []string
 	thoughts  atomic.Int64
 	stop      *leadStop
@@ -76,6 +76,17 @@ type watcher struct {
 	parents   map[string]string
 	drawn     []SubAgentRow
 	ticked    []roster.SubAgent
+}
+
+type watchedAgent struct {
+	of      roster.SubAgent
+	calls   []Call
+	settled *SubAgentRow
+}
+
+func sameRun(was, now roster.SubAgent) bool {
+	return was.State == now.State && was.Round == now.Round && was.Steps == now.Steps && was.Active.Equal(now.Active) &&
+		was.Report == now.Report && slices.Equal(was.Owns, now.Owns)
 }
 
 type tokenTally struct {
@@ -358,37 +369,56 @@ func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.Tool
 }
 
 func (a *watcher) sendSubAgents() {
-	a.readCalls()
-	a.draw()
+	if a.held == nil {
+		return
+	}
+	agents := a.held.SubAgents()
+	a.readCallsOf(agents)
+	if subAgents := a.rowsOf(agents); len(subAgents) > 0 {
+		a.shows.Lock()
+		a.drawn = subAgents
+		a.shows.Unlock()
+		a.emit(Event{Kind: EventSubAgent, SubAgents: subAgents})
+	}
 }
 
 func (a *watcher) readCalls() {
-	if a.held == nil {
+	if a.held != nil {
+		a.readCallsOf(a.held.SubAgents())
+	}
+}
+
+func (a *watcher) readCallsOf(agents []roster.SubAgent) {
+	var moving []roster.SubAgent
+	a.shows.Lock()
+	for _, agent := range agents {
+		if a.settledRow(agent) == nil {
+			moving = append(moving, agent)
+		}
+	}
+	a.shows.Unlock()
+	if len(moving) == 0 {
 		return
 	}
 	var rows []turn.Row
 	if a.spawner != nil {
 		rows = a.spawner.SubAgentRows()
 	}
-	rowsOf := rowsOfEachAgent(rows)
-	agents := a.held.SubAgents()
 	a.shows.Lock()
 	defer a.shows.Unlock()
-	if a.calls == nil {
-		a.calls = map[string][]Call{}
+	if a.watched == nil {
+		a.watched = map[string]watchedAgent{}
 	}
-	for _, agent := range agents {
-		a.calls[agent.ID] = recordedOrCalling(recordedCalls(rowsOf(agent.ID), agent.ID), a.asked[agent.ID], agent.Calling, agent.CallsDropped)
+	for _, agent := range moving {
+		a.watched[agent.ID] = watchedAgent{of: agent, calls: recordedOrCalling(recordedCalls(rows, agent.ID), a.asked[agent.ID], agent.Calling, agent.CallsDropped)}
 	}
 }
 
-func (a *watcher) draw() {
-	if subAgents := a.subAgents(); len(subAgents) > 0 {
-		a.shows.Lock()
-		a.drawn = subAgents
-		a.shows.Unlock()
-		a.emit(Event{Kind: EventSubAgent, SubAgents: subAgents})
+func (a *watcher) settledRow(agent roster.SubAgent) *SubAgentRow {
+	if watched := a.watched[agent.ID]; watched.settled != nil && sameRun(watched.of, agent) {
+		return watched.settled
 	}
+	return nil
 }
 
 func (a *watcher) redrawWhenChanged() {
@@ -432,7 +462,28 @@ func (a *watcher) subAgents() []SubAgentRow {
 func (a *watcher) rowsOf(agents []roster.SubAgent) []SubAgentRow {
 	a.shows.Lock()
 	defer a.shows.Unlock()
-	rows := SubAgentRows(agents, a.now(), a.maxSteps, a.spent.counts(), func(agent roster.SubAgent) []Call { return a.calls[agent.ID] })
+	rows := make([]SubAgentRow, len(agents))
+	var moving []roster.SubAgent
+	var at []int
+	for index, agent := range agents {
+		if settled := a.settledRow(agent); settled != nil {
+			rows[index] = *settled
+			continue
+		}
+		moving, at = append(moving, agent), append(at, index)
+	}
+	for index, row := range a.movingRows(moving) {
+		rows[at[index]] = row
+		if watched := a.watched[row.Name]; ended(row.State) && sameRun(watched.of, moving[index]) {
+			watched.settled = &row
+			a.watched[row.Name] = watched
+		}
+	}
+	return rows
+}
+
+func (a *watcher) movingRows(agents []roster.SubAgent) []SubAgentRow {
+	rows := SubAgentRows(agents, a.now(), a.maxSteps, a.spent.counts(), func(agent roster.SubAgent) []Call { return a.watched[agent.ID].calls })
 	for index := range rows {
 		if rows[index].State == roster.InReview && (a.spawner == nil || a.spawner.Review == nil) {
 			rows[index].State = roster.Finished
@@ -546,35 +597,16 @@ func hidingEarlier(kept []Call, hidden int) []Call {
 	return append([]Call{{Tool: strconv.Itoa(hidden) + earlierCallsHidden}}, kept...)
 }
 
-func rowsOfEachAgent(rows []turn.Row) func(id string) []turn.Row {
-	spawnedBy, withID, withSpawner := map[string]string{}, map[string][]int{}, map[string][]int{}
-	for index, row := range rows {
-		spawnedBy[row.ID] = row.SpawnedBy
-		withID[row.ID] = append(withID[row.ID], index)
-		withSpawner[row.SpawnedBy] = append(withSpawner[row.SpawnedBy], index)
-	}
-	return func(id string) []turn.Row {
-		members := withID[id]
-		if by := spawnedBy[id]; by != "" {
-			members = slices.Compact(slices.Sorted(slices.Values(slices.Concat(members, withSpawner[by]))))
-		}
-		held := make([]turn.Row, len(members))
-		for at, index := range members {
-			held[at] = rows[index]
-		}
-		return held
-	}
-}
-
 func recordedCalls(rows []turn.Row, id string) []Call {
 	spawnedBy := ""
-	for _, row := range rows {
-		if row.ID == id {
-			spawnedBy = row.SpawnedBy
+	for index := range rows {
+		if rows[index].ID == id {
+			spawnedBy = rows[index].SpawnedBy
 		}
 	}
 	var calls []Call
-	for _, row := range rows {
+	for index := range rows {
+		row := &rows[index]
 		if row.ID != id && (spawnedBy == "" || row.SpawnedBy != spawnedBy) {
 			continue
 		}
