@@ -11,6 +11,19 @@ import (
 	"tofu/interface/tui/pointer"
 )
 
+const FiredHead = "fired"
+
+func (e Entry) expandable() bool { return e.Kind == Tool && e.ID != "" || e.Head == FiredHead }
+
+func (m *Model) LastExpandable() (id string, call bool) {
+	for index := len(m.entries) - 1; index >= 0; index-- {
+		if entry := m.entries[index]; entry.expandable() {
+			return entry.ID, entry.Kind == Tool
+		}
+	}
+	return "", false
+}
+
 func (m *Model) Expansion(id string, width int) (string, []string, bool) {
 	at := slices.IndexFunc(m.entries, func(entry Entry) bool { return entry.Kind == Tool && entry.ID == id })
 	if at < 0 {
@@ -60,10 +73,10 @@ func (m *Model) CallBeside(id string, step int) string {
 	return id
 }
 
-func (m *Model) ExpandAt(x, row int) string {
+func (m *Model) ExpandAt(x, row int) (id string, call bool) {
 	rows := m.transcriptRows()
 	if row < 0 || row >= rows {
-		return ""
+		return "", false
 	}
 	_, _, from := m.scrollMetrics(rows)
 	row += from.line
@@ -71,13 +84,13 @@ func (m *Model) ExpandAt(x, row int) string {
 		start, end := m.blockAt(index)
 		lines := m.blockLines(start)
 		if row < len(lines) {
-			if last := m.entries[end-1]; last.Kind == Tool && pointer.TextHit(ansi.Strip(lines[row]), expandLabel, x) {
-				return last.ID
+			if last := m.entries[end-1]; last.expandable() && pointer.TextHit(ansi.Strip(lines[row]), expandLabel, x) {
+				return last.ID, last.Kind == Tool
 			}
-			return ""
+			return "", false
 		}
 		row -= len(lines)
 		index = end
 	}
-	return ""
+	return "", false
 }

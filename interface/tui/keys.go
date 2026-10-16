@@ -176,7 +176,7 @@ func composerRows() []keyRow {
 		}},
 		{composerGroup, []string{"up"}, "previous prompt", func(a *App) (tea.Cmd, bool) { return nil, a.view.HistoryUp() }},
 		{composerGroup, []string{"down"}, "next prompt", func(a *App) (tea.Cmd, bool) { return nil, a.view.HistoryDown() }},
-		{composerGroup, []string{"ctrl+o"}, "open the last tool call", func(a *App) (tea.Cmd, bool) { return a.expand(a.view.CallBeside("", -1)), true }},
+		{composerGroup, []string{"ctrl+o"}, "open the last tool call or cron fire", func(a *App) (tea.Cmd, bool) { return a.open(a.view.LastExpandable()), true }},
 		{composerGroup, []string{"ctrl+y"}, "copy the last answer", func(a *App) (tea.Cmd, bool) { return a.copyAnswer(), true }},
 		{composerGroup, []string{"alt+y"}, "copy the last tool call", func(a *App) (tea.Cmd, bool) {
 			call, found := a.view.LastCall()

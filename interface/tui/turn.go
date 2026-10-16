@@ -260,6 +260,14 @@ func (a *App) recorded(event Event) {
 	a.view.Recorded(said.Role, said.Content, event.Logged.ID, event.Logged.At)
 }
 
+func (a *App) cronFired(prompt string) {
+	title, _, _ := strings.Cut(prompt, " (")
+	full := a.mintID()
+	id := a.shortOf(full)
+	a.record(feed.Event{ID: id, FullID: full, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: title, Body: prompt, At: a.options.Now()})
+	a.view.Append(session.Entry{Kind: session.Note, Head: session.FiredHead, ID: id, Body: title})
+}
+
 func (a *App) mintID() string {
 	a.minted++
 	return strconv.FormatInt(a.options.Now().UnixNano(), 16) + strconv.Itoa(a.minted)
@@ -479,6 +487,9 @@ func (a *App) absorb(event Event) {
 			a.leadTurnBegins()
 		}
 		a.countCrons()
+		if event.Origin.Kind == host.OriginCron {
+			a.cronFired(event.Text)
+		}
 	case EventRequesting:
 		if !a.leading {
 			a.leadTurnBegins()
@@ -486,6 +497,8 @@ func (a *App) absorb(event Event) {
 		a.view.Requesting()
 	case EventTask:
 		switch {
+		case event.Origin.Kind == host.OriginCron:
+			a.cronFired(event.Text)
 		case event.Origin.Kind != host.OriginTofu:
 			a.view.Append(session.Entry{Kind: session.User, Body: event.Text})
 		case event.Origin.Source == turn.SourceReplyCut:
@@ -512,7 +525,11 @@ func (a *App) absorb(event Event) {
 	case EventToolResult:
 		a.answered(event, at)
 	case EventNote:
-		a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+		if event.Origin.Kind == host.OriginCron {
+			a.cronFired(event.Detail)
+		} else {
+			a.view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+		}
 		a.countCrons()
 	case EventDone:
 		a.leadTurnEnds(event.Text)

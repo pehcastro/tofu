@@ -186,8 +186,8 @@ func (a *App) click(x, y int, mods pointer.Mods) tea.Cmd {
 		a.shells.Click(x, y-bodyTop)
 		return nil
 	case screenChat:
-		if id := a.view.ExpandAt(x, y-bodyTop); id != "" {
-			return a.expand(id)
+		if id, call := a.view.ExpandAt(x, y-bodyTop); id != "" {
+			return a.open(id, call)
 		}
 		cmd := a.follow(ref)
 		if a.current != screenChat {

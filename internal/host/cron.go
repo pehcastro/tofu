@@ -90,7 +90,7 @@ func (h *Host) fire(fires []cron.Fire) {
 		h.unread = append(h.unread, fired)
 		inbox := h.inbox
 		h.mu.Unlock()
-		h.note(fired.Line)
+		h.emitter().emit(Event{Kind: EventNote, Text: fired.Line, Detail: fired.Prompt, Origin: origin})
 		inbox.PostFired(fired.Prompt, origin.recorded())
 		h.answerNobody()
 	}

@@ -36,6 +36,20 @@ func (a *App) follow(ref string) tea.Cmd {
 		a.edits.Open(id)
 		return cmd
 	}
+	return a.showInWork(id)
+}
+
+func (a *App) open(id string, call bool) tea.Cmd {
+	switch {
+	case call:
+		return a.expand(id)
+	case id != "":
+		return a.showInWork(id)
+	}
+	return nil
+}
+
+func (a *App) showInWork(id string) tea.Cmd {
 	cmd := a.show(screenAgents)
 	a.flushFeed()
 	a.feed.Focus(id)

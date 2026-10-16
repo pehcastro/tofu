@@ -230,7 +230,10 @@ func (m *Model) render(index int) []string {
 			return indented(m.batchLines(m.batchOf(entry.SubAgents)))
 		}
 		reference := ""
-		if entry.Head != "" && entry.ID != "" {
+		switch {
+		case entry.Head == FiredHead:
+			reference = expandMark(entry.ID)
+		case entry.Head != "" && entry.ID != "":
 			reference = gap + look.TypedID(entry.Head, entry.ID)
 		}
 		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker)-widget.Cells(reference), 1))
