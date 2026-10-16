@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +10,7 @@ import (
 	"tofu/internal/cron"
 )
 
-func TestAFiredJobStartsATurnWhenIdleAndSteersWhenBusy(t *testing.T) {
+func TestAFiredJobStartsATurnWhenIdleAndWaitsInTheLeadsInboxWhenBusy(t *testing.T) {
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 	picks, release := make(chan Pick, 2), make(chan struct{})
 	h, _ := New(Config{Now: func() time.Time { return at }, Play: func(ctx context.Context, pick Pick, _ string, live Live) {
@@ -30,13 +31,14 @@ func TestAFiredJobStartsATurnWhenIdleAndSteersWhenBusy(t *testing.T) {
 	if pick := <-picks; pick.Fired != "c1" {
 		t.Errorf("the first fire started a turn marked %q, want c1, so the push guard never knows", pick.Fired)
 	}
-	select {
-	case steered := <-h.steering.ready:
-		if !strings.Contains(steered, "cron c2 fired") {
-			t.Errorf("the second fire steered %q, want c2's prompt", steered)
-		}
-	case pick := <-picks:
-		t.Errorf("the second fire started a second turn, marked %q", pick.Fired)
+	h.mu.Lock()
+	unread := slices.Clone(h.unread)
+	h.mu.Unlock()
+	if len(unread) != 1 || !strings.Contains(unread[0].Prompt, "cron c2 fired") || !h.inbox.Holds(unread[0].Prompt) {
+		t.Errorf("the second fire is not waiting in the lead's inbox as c2's prompt: %+v", unread)
+	}
+	if len(h.steering.ready) > 0 {
+		t.Errorf("the second fire was steered, so the turn records it as the person's words")
 	}
 	release <- struct{}{}
 	if pick := <-picks; pick.Fired != "c2" {

@@ -50,12 +50,13 @@ func (h *Host) cronState() CronState {
 func (h *Host) armCron() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.ticking != nil || h.closed || h.readOnly != nil || h.cron.Live() == 0 {
+	if h.ticking != nil || h.closed || h.readOnly != nil {
 		return
 	}
 	h.ticking = time.AfterFunc(konst.CronPollMillis*time.Millisecond, func() {
 		h.mu.Lock()
 		h.ticking = nil
+		h.dropRead()
 		h.mu.Unlock()
 		_ = safe.Call(h.report, "cron", func() error {
 			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
@@ -87,9 +88,10 @@ func (h *Host) fire(fires []cron.Fire) {
 			continue
 		}
 		h.unread = append(h.unread, fired)
+		inbox := h.inbox
 		h.mu.Unlock()
 		h.note(fired.Line)
-		h.Steer(fired.Prompt)
+		inbox.PostFired(fired.Prompt, origin.recorded())
 		h.answerNobody()
 	}
 }
@@ -103,10 +105,32 @@ func (h *Host) answerNobody() {
 	h.asks.waiting = nil
 }
 
-func (h *Host) markRead(steered string) {
+func (h *Host) dropRead() {
+	h.unread = slices.DeleteFunc(h.unread, func(fired cron.Fire) bool { return !h.inbox.Holds(fired.Prompt) })
+}
+
+func (h *Host) finishRead() {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.unread = slices.DeleteFunc(h.unread, func(fired cron.Fire) bool { return fired.Prompt == steered })
+	h.dropRead()
+	var read []string
+	h.fired = slices.DeleteFunc(h.fired, func(id string) bool {
+		answered := !slices.ContainsFunc(h.unread, func(fired cron.Fire) bool { return fired.ID == id })
+		if answered {
+			read = append(read, id)
+		}
+		return answered
+	})
+	answer := h.answer
+	h.mu.Unlock()
+	h.finish(read, answer)
+}
+
+func (h *Host) finish(fired []string, answer string) {
+	for _, id := range fired {
+		if note := h.cron.Finished(id, answer); note != "" {
+			h.note(note)
+		}
+	}
 }
 
 func (h *Host) ended(out *emitter) {
@@ -115,14 +139,9 @@ func (h *Host) ended(out *emitter) {
 	h.running, h.cancel, h.fired, h.unread = false, nil, nil, nil
 	h.mu.Unlock()
 	out.emit(Event{Kind: EventTurnEnded})
-	for _, id := range fired {
-		if slices.ContainsFunc(unread, func(again cron.Fire) bool { return again.ID == id }) {
-			continue
-		}
-		if note := h.cron.Finished(id, answer); note != "" {
-			h.note(note)
-		}
-	}
+	h.finish(slices.DeleteFunc(fired, func(id string) bool {
+		return slices.ContainsFunc(unread, func(again cron.Fire) bool { return again.ID == id })
+	}), answer)
 	h.fire(unread)
 	if !stopped {
 		h.fireAfterTurn()

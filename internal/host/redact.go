@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"tofu/internal/sys"
+	"tofu/internal/turn/tools"
 )
 
 type emitter struct {
@@ -41,8 +42,8 @@ func loadKeyMask() keyMask {
 func (h *Host) emitter() *emitter { return &emitter{h: h, keyMask: h.keys()} }
 
 func (e *emitter) emit(event Event) {
-	if event.Kind == EventSteered {
-		e.h.markRead(event.Text)
+	if event.Kind == EventToolCall && event.Tool == tools.CronToolName {
+		e.h.armCron()
 	}
 	if event.Kind == EventTextDelta {
 		e.mu.Lock()
@@ -108,6 +109,9 @@ func (s *stream) upTo(mask func(string) string, end int) string {
 func (h *Host) heard(event Event) {
 	if event.Agent != "" || event.snapshot() {
 		return
+	}
+	if event.Kind == EventDone {
+		h.finishRead()
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

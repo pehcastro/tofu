@@ -40,6 +40,10 @@ const (
 	CarrySaidMessageBytes = 4000
 	CarryLastWordBytes    = 16000
 
+	CarryStandingBytes      = 8000
+	CarryStandingOrderBytes = 600
+	CarryStandingPhrases    = "always|never|from now on|keep|do not|don't|dont"
+
 	ForkTailTokens      = 20000
 	ForkTailRoomPercent = 50
 	ForkStateBytes      = 12000
@@ -388,6 +392,7 @@ const (
 	CronCheckTimeoutMillis = 60000
 	CronCheckTailBytes     = 600
 	CronSearchDays         = 366
+	CronPromptMark         = "), not typed by the person:\n"
 )
 
 const (

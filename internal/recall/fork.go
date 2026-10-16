@@ -21,14 +21,23 @@ type CarriedResult struct {
 }
 
 type Carry struct {
-	Text    string          `json:"text"`
-	State   string          `json:"state,omitempty"`
-	Facts   []string        `json:"facts,omitempty"`
-	Said    []string        `json:"said,omitempty"`
-	Results []CarriedResult `json:"results"`
+	Text            string          `json:"text"`
+	State           string          `json:"state,omitempty"`
+	Facts           []string        `json:"facts,omitempty"`
+	Said            []string        `json:"said,omitempty"`
+	Standing        []string        `json:"standing,omitempty"`
+	StandingDropped int             `json:"standing_dropped,omitempty"`
+	Results         []CarriedResult `json:"results"`
 }
 
 const SaidCarryHeading = "what the person said in this line of sessions, oldest first, each message word for word as one quoted line. it stands until the person says otherwise:\n"
+
+const (
+	standingCarryHeading = "the standing orders the person gave in this line of sessions, oldest first, each sentence word for word as one quoted line. " +
+		"they are kept apart from the messages above and outlive them, and each stands until the person says otherwise:\n"
+	standingMark    = "order: "
+	standingDropped = " older standing orders were dropped to keep this list under its cap"
+)
 
 func Crossed(cfg Config, bands Bands, c Conversation) bool {
 	return Measure(cfg, bands, c).Total() > bands.Target()
@@ -140,11 +149,20 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 		text.WriteString(line)
 		text.WriteString("\n")
 	}
-	said := saidSoFar(c)
-	if len(said) > 0 {
+	said, orders, dropped := personsWords(c)
+	if len(said)+len(orders) > 0 {
 		text.WriteString(SaidCarryHeading)
 		for _, words := range said {
 			text.WriteString(saidMark + strconv.Quote(words) + "\n")
+		}
+	}
+	if len(orders) > 0 {
+		text.WriteString(standingCarryHeading)
+		for _, order := range orders {
+			text.WriteString(standingMark + strconv.Quote(order) + "\n")
+		}
+		if dropped > 0 {
+			text.WriteString(strconv.Itoa(dropped) + standingDropped + "\n")
 		}
 	}
 	if snapshots := lastSnapshots(c); len(snapshots) > 0 {
@@ -164,42 +182,104 @@ func buildCarry(store *Store, c Conversation, signpostBytes int) (Carry, error) 
 	} else {
 		text.WriteString(carryHeldTail)
 	}
-	return Carry{Text: text.String(), Facts: facts, Said: said, Results: kept}, nil
+	return Carry{Text: text.String(), Facts: facts, Said: said, Standing: orders, StandingDropped: dropped, Results: kept}, nil
 }
 
 const saidMark = "said: "
 
-func saidSoFar(c Conversation) []string {
-	var said []string
+func personsWords(c Conversation) (said, orders []string, dropped int) {
+	var all, given []string
+	heard := func(words string) string {
+		if words = beforeCronFire(words); words != "" {
+			all = append(all, words)
+		}
+		return words
+	}
 	for _, entry := range c.Entries {
 		_, section, carried := strings.Cut(entry.Text, SaidCarryHeading)
 		switch {
 		case entry.Tool != "":
 		case entry.Said != "":
-			said = append(said, entry.Said)
+			given = append(given, ordersIn(heard(entry.Said))...)
 		case carried:
+			ordersKept := strings.Contains(section, standingCarryHeading)
 			for _, line := range strings.Split(section, "\n") {
-				quoted, marked := strings.CutPrefix(line, saidMark)
-				if words, err := strconv.Unquote(quoted); marked && err == nil {
-					said = append(said, words)
+				if count, found := strings.CutSuffix(line, standingDropped); found {
+					carriedDropped, _ := strconv.Atoi(count)
+					dropped = max(dropped, carriedDropped)
+				}
+				if quoted, marked := strings.CutPrefix(line, saidMark); marked {
+					if words, err := strconv.Unquote(quoted); err == nil {
+						if words = heard(words); !ordersKept {
+							given = append(given, ordersIn(words)...)
+						}
+					}
+				}
+				if quoted, marked := strings.CutPrefix(line, standingMark); marked {
+					if order, err := strconv.Unquote(quoted); err == nil {
+						given = append(given, order)
+					}
 				}
 			}
 		}
 	}
-	var kept []string
-	room := konst.CarrySaidBytes
-	for _, words := range slices.Backward(said) {
-		cut := cutWords(words, konst.CarrySaidMessageBytes)
-		if slices.Contains(kept, cut) {
+	said, _ = newestWithin(all, saidMark, konst.CarrySaidBytes, konst.CarrySaidMessageBytes)
+	orders, over := newestWithin(given, standingMark, konst.CarryStandingBytes, konst.CarryStandingOrderBytes)
+	return said, orders, dropped + over
+}
+
+func beforeCronFire(said string) string {
+	marked := strings.Index(said, konst.CronPromptMark)
+	if marked < 0 {
+		return said
+	}
+	return strings.TrimSpace(said[:strings.LastIndex(said[:marked], "\n")+1])
+}
+
+func ordersIn(said string) []string {
+	var orders []string
+	for _, line := range strings.Split(said, "\n") {
+		start := 0
+		for i := 0; i < len(line); i++ {
+			end := i + 1
+			if end < len(line) && (!strings.ContainsRune(".!?", rune(line[i])) || line[end] != ' ') {
+				continue
+			}
+			if sentence := strings.TrimSpace(line[start:end]); standing(sentence) {
+				orders = append(orders, sentence)
+			}
+			start = end
+		}
+	}
+	return orders
+}
+
+func standing(sentence string) bool {
+	words := strings.FieldsFunc(strings.ToLower(strings.ReplaceAll(sentence, "’", "'")), func(letter rune) bool {
+		return !unicode.IsLetter(letter) && letter != '\''
+	})
+	spaced := " " + strings.Join(words, " ") + " "
+	return slices.ContainsFunc(strings.Split(konst.CarryStandingPhrases, "|"), func(phrase string) bool {
+		return strings.Contains(spaced, " "+phrase+" ")
+	})
+}
+
+func newestWithin(items []string, mark string, room, each int) (kept []string, over int) {
+	seen := map[string]bool{}
+	for _, item := range slices.Backward(items) {
+		cut := cutWords(item, each)
+		if seen[cut] {
 			continue
 		}
-		if room -= len(cut); room < 0 {
-			break
+		seen[cut] = true
+		if room -= len(mark + strconv.Quote(cut) + "\n"); room < 0 {
+			over++
+			continue
 		}
 		kept = append(kept, cut)
 	}
 	slices.Reverse(kept)
-	return kept
+	return kept, over
 }
 
 const saidCutMark = " ..."

@@ -79,7 +79,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 			step++
 		}
 		entry := recall.Entry{Step: step, Text: message.Content, Images: len(message.Images)}
-		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && slices.Contains([]string{sourceTask, sourceTyped, sourceSteer}, message.Origin.Source) {
+		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || SaidByThePerson(message.Origin.Source)) {
 			entry.Said = task
 		}
 		for _, call := range message.ToolCalls {
@@ -92,6 +92,19 @@ func historyOf(messages []llm.Message) recall.Conversation {
 		conversation.Entries = append(conversation.Entries, entry)
 	}
 	return conversation
+}
+
+func (b *Inbox) PostFired(prompt, source string) {
+	b.mu.Lock()
+	b.items = append(b.items, inboxItem{text: prompt, source: source, posted: time.Now()})
+	b.mu.Unlock()
+	b.signal()
+}
+
+func (b *Inbox) Holds(text string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.ContainsFunc(b.items, func(item inboxItem) bool { return item.text == text })
 }
 
 const (

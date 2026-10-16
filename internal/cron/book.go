@@ -429,7 +429,7 @@ func fire(one pending, now time.Time) Fire {
 	}
 	job.Fires++
 	head := job.Noun() + " " + job.ID
-	prompt := head + " fired (" + spec.Schedule + ", v" + strconv.Itoa(job.Version()) + "), not typed by the person:\n" + spec.Prompt
+	prompt := head + " fired (" + spec.Schedule + ", v" + strconv.Itoa(job.Version()) + konst.CronPromptMark + spec.Prompt
 	line := head + " fired · " + spec.Schedule + " · " + firstLine(spec.Prompt)
 	if one.checked != "" {
 		prompt += "\n\nits check is not met yet: " + one.checked

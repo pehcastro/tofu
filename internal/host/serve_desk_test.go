@@ -17,12 +17,13 @@ import (
 )
 
 func TestDeskACronFireThatStartsATurnSaysSoOnlyByItsOriginAndDeleteAllEmptiesTheBook(t *testing.T) {
+	c2Joined := make(chan struct{})
 	play := func(ctx context.Context, _ Pick, task string, live Live) {
 		if !strings.Contains(task, "c1 fired") {
 			return
 		}
 		select {
-		case <-live.Steering:
+		case <-c2Joined:
 		case <-ctx.Done():
 		}
 	}
@@ -49,6 +50,9 @@ func TestDeskACronFireThatStartsATurnSaysSoOnlyByItsOriginAndDeleteAllEmptiesThe
 			var said Said
 			_ = json.Unmarshal(line.Params, &said)
 			notes = append(notes, said.Text)
+			if strings.Contains(said.Text, "c2 fired") {
+				close(c2Joined)
+			}
 		case "turn.started":
 			var started TurnStarted
 			_ = json.Unmarshal(line.Params, &started)
