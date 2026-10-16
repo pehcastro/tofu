@@ -1,57 +1,87 @@
-use std::cell::RefCell;
+mod shelf;
+mod side;
+
 use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
-use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use desk_core::buffer::Buffer;
-use desk_ui::component::control;
+use desk_core::home::Home;
+use desk_ui::component::{control, icon};
 use desk_ui::components::chat::{self, Block};
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::components::empty::{EmptyAction, empty_state};
-use desk_ui::components::form::{TextInput, segmented};
+use desk_ui::components::form::segmented;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::paint::{glyph, ink};
-use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_CHIP, RADIUS_ROW, T1, T2};
+use desk_ui::components::sheet::Sheet;
+use desk_ui::components::size::{FONT_BODY, FONT_SMALL, NUMBER_COLUMN, RADIUS_CHIP, T1};
 use desk_ui::components::tooltip::{Edge, tooltip};
+use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::ICON_SMALL;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, EntityInputHandler,
-    FocusHandle, Focusable, KeyDownEvent, PathPromptOptions, Render, ScrollHandle, SharedString,
-    Stateful, Subscription, Task, Window, div, prelude::*, px, relative,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, FocusHandle, Focusable,
+    Global, KeyDownEvent, PathPromptOptions, Render, ScrollHandle, SharedString, Stateful,
+    Subscription, Task, WeakEntity, Window, canvas, div, prelude::*, px,
 };
+use serde_json::{Map, Value};
 
 use desk_plugin::Capability;
 
 use crate::plugins::{Plugin, consent};
+use shelf::Shelf;
+use side::{Menu, Naming};
 
 const NOTES: &str = "notes";
+const DRAFT: &str = "untitled.md";
 const OPEN_NOTE: &str = "open";
+const SETTINGS_FILE: &str = "settings.json";
+const ASK_KEY: &str = "notepad.ask_on_close";
 const SAVE_IDLE: Duration = Duration::from_millis(700);
-const LIST_WIDTH: f32 = 200.0;
 const MODES: [&str; 2] = ["Raw", "Rendered"];
 const TOGGLE_KEY: &str = "e";
 const NEW_NOTE: &str = "New note";
 const OPEN_FILE: &str = "Open file...";
-const RENAME: &str = "Rename";
-const DELETE: &str = "Delete";
-const ACTIONS: [&str; 2] = [NEW_NOTE, OPEN_FILE];
+const NOTES_FOLDER: &str = "Open the notes folder";
+const SIDEBAR: &str = "Show or hide the notes";
+const NUMBERS: &str = "Show or hide line numbers";
+const CLOSE: &str = "Close note";
+const UNTITLED: &str = "Untitled";
+const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 const TOOL: f32 = 26.0;
-const LIST_SHARE: f32 = 0.35;
 
 pub fn mount(plugin: &'static Plugin, cx: &mut App) -> AnyView {
-    cx.new(|cx| Notepad::new(plugin, cx)).into()
+    let started = Instant::now();
+    cx.new(|cx| Notepad::new(plugin, started, cx)).into()
+}
+
+#[derive(Default)]
+struct Link {
+    live: Option<WeakEntity<Notepad>>,
+    untitled: bool,
+}
+
+impl Global for Link {}
+
+pub fn untitled(cx: &mut App) {
+    let live = cx
+        .try_global::<Link>()
+        .and_then(|link| link.live.as_ref()?.upgrade());
+    match live {
+        Some(notepad) => notepad.update(cx, |notepad, cx| notepad.leave(Next::Untitled, cx)),
+        None => cx.default_global::<Link>().untitled = true,
+    }
 }
 
 struct Page {
-    path: PathBuf,
+    path: Option<PathBuf>,
     editor: Entity<CodeEditor>,
-    saved: Rc<RefCell<String>>,
+    saved: String,
     seen: String,
+    dirty: bool,
     view: View,
     scroll: ScrollHandle,
     _edited: Subscription,
@@ -60,6 +90,16 @@ struct Page {
 enum View {
     Raw,
     Rendered(Vec<Block>),
+}
+
+enum Next {
+    Untitled,
+    Open(PathBuf),
+}
+
+enum Asking {
+    Leave(Next),
+    Delete(PathBuf),
 }
 
 fn rendered(editor: &Entity<CodeEditor>, cx: &App) -> View {
@@ -77,41 +117,80 @@ fn rendered(editor: &Entity<CodeEditor>, cx: &App) -> View {
 pub struct Notepad {
     plugin: &'static Plugin,
     folder: Result<PathBuf, String>,
-    notes: Vec<PathBuf>,
+    shelf: Shelf,
+    shut: BTreeSet<PathBuf>,
     rendered: BTreeSet<PathBuf>,
     focus: FocusHandle,
     page: Option<Page>,
-    renaming: Option<Entity<TextInput>>,
+    naming: Option<Naming>,
+    menu: Menu,
+    asking: Option<Asking>,
+    asks: bool,
+    sidebar: bool,
+    numbers: bool,
+    focus_pending: bool,
+    opened: Option<Instant>,
     problem: Option<SharedString>,
     saving: Option<Task<()>>,
 }
 
-fn write(
-    plugin: &Plugin,
-    path: &Path,
-    buffer: &Buffer,
-    saved: &RefCell<String>,
-) -> Result<(), String> {
-    if *buffer.rope() == *saved.borrow() {
-        return Ok(());
-    }
+fn write_file(plugin: &Plugin, path: &Path, text: &str) -> Result<(), String> {
     let what = format!("write {}", path.display());
     consent::check(&plugin.id, &plugin.folder()?, Capability::FsWrite, &what)?;
     let started = Instant::now();
-    let text = buffer.text();
-    fs::write(path, &text).map_err(|error| format!("{}: {error}", path.display()))?;
+    fs::write(path, text).map_err(|error| format!("{}: {error}", path.display()))?;
     eprintln!(
         "desk: notepad saved {} in {} ms",
         path.display(),
         started.elapsed().as_millis()
     );
-    *saved.borrow_mut() = text;
     Ok(())
+}
+
+fn free_note(notes: &Path) -> Result<PathBuf, String> {
+    let created = (1..=u32::MAX)
+        .map(|at| notes.join(format!("note-{at}.md")))
+        .find_map(
+            |path| match OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(_) => Some(Ok(path)),
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => None,
+                Err(error) => Some(Err(format!("{}: {error}", path.display()))),
+            },
+        );
+    created.unwrap_or_else(|| Err(format!("{} has no free note name", notes.display())))
+}
+
+fn asks_on_close() -> bool {
+    let read = Home::find()
+        .map_err(|error| error.to_string())
+        .and_then(|home| {
+            let path = home.config.join(SETTINGS_FILE);
+            match fs::read_to_string(&path) {
+                Ok(text) => serde_json::from_str::<Map<String, Value>>(&text)
+                    .map_err(|error| format!("{}: {error}", path.display()))
+                    .map(|values| values.get(ASK_KEY).cloned()),
+                Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(format!("{}: {error}", path.display())),
+            }
+        });
+    match read {
+        Ok(None) => true,
+        Ok(Some(Value::Bool(asks))) => asks,
+        Ok(Some(other)) => {
+            eprintln!("desk: notepad asks before closing, {ASK_KEY} holds {other}");
+            true
+        }
+        Err(error) => {
+            eprintln!("desk: notepad asks before closing, the settings did not read: {error}");
+            true
+        }
+    }
 }
 
 fn tool(
     label: &'static str,
-    mark: Glyph,
+    mark: impl IntoElement,
+    on: bool,
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
@@ -119,7 +198,8 @@ fn tool(
     let face = control(SharedString::from(format!("notepad-{label}")), label, theme)
         .size(px(TOOL))
         .rounded(px(RADIUS_CHIP))
-        .child(glyph(mark, ICON_SMALL, theme.color(ColorToken::TextIcon)));
+        .when(on, |face| face.bg(theme.color(ColorToken::StateActive)))
+        .child(mark);
     tooltip(
         SharedString::from(format!("notepad-{label}-tip")),
         face,
@@ -131,6 +211,18 @@ fn tool(
     )
 }
 
+fn answered(
+    cx: &mut Context<Notepad>,
+    act: fn(&mut Notepad, &mut Context<Notepad>),
+) -> impl Fn(&mut Window, &mut App) + 'static {
+    let notepad = cx.weak_entity();
+    move |_, cx| {
+        if let Err(error) = notepad.update(cx, act) {
+            eprintln!("desk: notepad is gone before its alert answered: {error}");
+        }
+    }
+}
+
 fn one_name(name: &str) -> bool {
     let mut parts = Path::new(name).components();
     matches!(
@@ -140,36 +232,54 @@ fn one_name(name: &str) -> bool {
 }
 
 impl Notepad {
-    fn new(plugin: &'static Plugin, cx: &mut Context<Self>) -> Self {
+    fn new(plugin: &'static Plugin, started: Instant, cx: &mut Context<Self>) -> Self {
         let folder = plugin.folder().and_then(|folder| {
             let notes = folder.join(NOTES);
             fs::create_dir_all(&notes).map_err(|error| format!("{}: {error}", notes.display()))?;
             Ok(folder)
         });
-        cx.on_release(|notepad, cx| notepad.save_now(cx)).detach();
+        let notes = folder
+            .as_ref()
+            .map(|folder| folder.join(NOTES))
+            .unwrap_or_default();
+        cx.on_release(|notepad, cx| notepad.keep(cx)).detach();
         cx.on_app_quit(|notepad, cx| {
-            notepad.save_now(cx);
+            notepad.keep(cx);
             async {}
         })
         .detach();
         let mut notepad = Notepad {
             plugin,
             folder,
-            notes: Vec::new(),
+            shelf: Shelf::new(notes),
+            shut: BTreeSet::new(),
             rendered: BTreeSet::new(),
             focus: cx.focus_handle(),
             page: None,
-            renaming: None,
+            naming: None,
+            menu: Menu::default(),
+            asking: None,
+            asks: asks_on_close(),
+            sidebar: true,
+            numbers: true,
+            focus_pending: true,
+            opened: Some(started),
             problem: None,
             saving: None,
         };
         notepad.list();
         notepad.restore(cx);
+        let weak = cx.weak_entity();
+        let link = cx.default_global::<Link>();
+        link.live = Some(weak);
+        if std::mem::take(&mut link.untitled) {
+            notepad.leave(Next::Untitled, cx);
+        }
         notepad
     }
 
-    fn notes_folder(&self) -> Option<PathBuf> {
-        self.folder.as_ref().ok().map(|folder| folder.join(NOTES))
+    fn draft(&self) -> Option<PathBuf> {
+        self.folder.as_ref().ok().map(|folder| folder.join(DRAFT))
     }
 
     fn fail(&mut self, problem: String) {
@@ -178,19 +288,11 @@ impl Notepad {
     }
 
     fn list(&mut self) {
-        let Some(notes) = self.notes_folder() else {
+        if self.folder.is_err() {
             return;
-        };
-        match fs::read_dir(&notes) {
-            Ok(entries) => {
-                self.notes = entries
-                    .filter_map(Result::ok)
-                    .map(|entry| entry.path())
-                    .filter(|path| path.is_file())
-                    .collect();
-                self.notes.sort();
-            }
-            Err(error) => self.fail(format!("{}: {error}", notes.display())),
+        }
+        if let Err(error) = self.shelf.reload() {
+            self.fail(error);
         }
     }
 
@@ -201,8 +303,11 @@ impl Notepad {
         let remembered = folder.join(OPEN_NOTE);
         let state = match fs::read_to_string(&remembered) {
             Ok(state) => state,
-            Err(error) if error.kind() == ErrorKind::NotFound => return,
-            Err(error) => return self.fail(format!("{}: {error}", remembered.display())),
+            Err(error) if error.kind() == ErrorKind::NotFound => String::new(),
+            Err(error) => {
+                self.fail(format!("{}: {error}", remembered.display()));
+                String::new()
+            }
         };
         let mut lines = state.lines().map(str::trim);
         let open = lines.next().unwrap_or_default();
@@ -211,9 +316,12 @@ impl Notepad {
             .map(PathBuf::from)
             .collect();
         match Path::new(open).is_file() {
-            true => self.show(PathBuf::from(open), cx),
-            false if open.is_empty() => {}
-            false => eprintln!("desk: notepad: {open} is gone, so nothing opens"),
+            true => self.load(Some(PathBuf::from(open)), cx),
+            false if open.is_empty() => self.load(None, cx),
+            false => {
+                eprintln!("desk: notepad: {open} is gone, so an untitled note opens");
+                self.load(None, cx);
+            }
         }
     }
 
@@ -222,7 +330,11 @@ impl Notepad {
             return;
         };
         let remembered = folder.join(OPEN_NOTE);
-        let open = self.page.as_ref().map_or(Path::new(""), |page| &page.path);
+        let open = self
+            .page
+            .as_ref()
+            .and_then(|page| page.path.as_deref())
+            .unwrap_or(Path::new(""));
         let state: Vec<String> = std::iter::once(open)
             .chain(self.rendered.iter().map(PathBuf::as_path))
             .map(|path| path.to_string_lossy().into_owned())
@@ -232,10 +344,28 @@ impl Notepad {
         }
     }
 
-    fn show(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        self.save_now(cx);
-        self.renaming = None;
-        let editor = match CodeEditor::plain(&path, cx) {
+    fn clear_draft(&mut self) {
+        let Some(draft) = self.draft() else {
+            return;
+        };
+        if let Err(error) = fs::write(&draft, "") {
+            self.fail(format!("{}: {error}", draft.display()));
+        }
+    }
+
+    fn load(&mut self, path: Option<PathBuf>, cx: &mut Context<Self>) {
+        self.saving = None;
+        let Some(draft) = self.draft() else {
+            return;
+        };
+        let shown = path.clone().unwrap_or(draft);
+        if path.is_none()
+            && let Err(error) = OpenOptions::new().create(true).append(true).open(&shown)
+        {
+            self.fail(format!("{}: {error}", shown.display()));
+            return cx.notify();
+        }
+        let editor = match CodeEditor::open(&shown, cx) {
             Ok(editor) => editor,
             Err(error) => {
                 self.fail(error);
@@ -243,19 +373,35 @@ impl Notepad {
             }
         };
         let text = editor.buffer().text();
-        let saved = Rc::new(RefCell::new(text.clone()));
-        let (plugin, target, written) = (self.plugin, path.clone(), saved.clone());
-        let editor = cx
-            .new(|_| editor.on_save(move |buffer, _, _| write(plugin, &target, buffer, &written)));
+        let saved = match path {
+            Some(_) => text.clone(),
+            None => String::new(),
+        };
+        let notepad = cx.weak_entity();
+        let editor = cx.new(|cx| {
+            let mut editor = editor.on_save(move |buffer, _, cx| {
+                let text = buffer.text();
+                notepad
+                    .update(cx, |notepad, cx| notepad.save(text, cx))
+                    .map_err(|error| error.to_string())
+                    .and_then(|saved| saved)
+            });
+            editor.colour_rest(cx);
+            editor
+        });
         let edited = cx.observe(&editor, |notepad: &mut Notepad, _, cx| notepad.edited(cx));
-        eprintln!("desk: notepad opened {}", path.display());
-        let view = match self.rendered.contains(&path) {
+        eprintln!("desk: notepad opened {}", shown.display());
+        let view = match path
+            .as_ref()
+            .is_some_and(|path| self.rendered.contains(path))
+        {
             true => rendered(&editor, cx),
             false => View::Raw,
         };
         self.page = Some(Page {
             path,
             editor,
+            dirty: text != saved,
             saved,
             seen: text,
             view,
@@ -263,27 +409,70 @@ impl Notepad {
             _edited: edited,
         });
         self.problem = None;
+        self.focus_pending = true;
         self.remember();
         cx.notify();
     }
 
-    fn save_now(&mut self, cx: &App) {
+    fn store(&mut self, text: String) -> Result<bool, String> {
+        let plugin = self.plugin;
+        let notes = self.shelf.root().to_path_buf();
+        let Some(page) = &mut self.page else {
+            return Ok(false);
+        };
+        if text == page.saved {
+            return Ok(false);
+        }
+        let named = page.path.is_none();
+        let path = match &page.path {
+            Some(path) => path.clone(),
+            None => free_note(&notes)?,
+        };
+        write_file(plugin, &path, &text)?;
+        page.path = Some(path);
+        page.dirty = text != page.seen;
+        page.saved = text;
+        Ok(named)
+    }
+
+    fn save(&mut self, text: String, cx: &mut Context<Self>) -> Result<(), String> {
+        if self.store(text)? {
+            self.clear_draft();
+            self.list();
+            self.remember();
+        }
+        cx.notify();
+        Ok(())
+    }
+
+    fn save_open(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        let Some(page) = &self.page else {
+            return Ok(());
+        };
+        let text = page.editor.read(cx).buffer().text();
+        self.save(text, cx)
+    }
+
+    fn keep(&mut self, cx: &App) {
         self.saving = None;
         let Some(page) = &self.page else {
             return;
         };
-        let written = write(
-            self.plugin,
-            &page.path,
-            page.editor.read(cx).buffer(),
-            &page.saved,
-        );
-        if let Err(error) = written {
+        let text = page.editor.read(cx).buffer().text();
+        let kept = match (page.path.is_some(), self.draft()) {
+            (true, _) => self.store(text).map(|_| ()),
+            (false, Some(draft)) => {
+                fs::write(&draft, text).map_err(|error| format!("{}: {error}", draft.display()))
+            }
+            (false, None) => Ok(()),
+        };
+        if let Err(error) = kept {
             self.fail(error);
         }
     }
 
     fn edited(&mut self, cx: &mut Context<Self>) {
+        let asks = self.asks;
         let Some(page) = &mut self.page else {
             return;
         };
@@ -292,15 +481,111 @@ impl Notepad {
             return;
         }
         page.seen = buffer.text();
+        let dirty = page.seen != page.saved;
+        if dirty != page.dirty {
+            page.dirty = dirty;
+            cx.notify();
+        }
+        if asks || !dirty {
+            return;
+        }
         self.saving = Some(cx.spawn(async move |notepad, cx| {
             cx.background_executor().timer(SAVE_IDLE).await;
-            if notepad
-                .update(cx, |notepad, cx| notepad.save_now(cx))
-                .is_err()
-            {
+            let saved = notepad.update(cx, |notepad, cx| {
+                if let Err(error) = notepad.save_open(cx) {
+                    notepad.fail(error);
+                }
+            });
+            if saved.is_err() {
                 eprintln!("desk: notepad closed before its idle save");
             }
         }));
+    }
+
+    fn leave(&mut self, next: Next, cx: &mut Context<Self>) {
+        let open = self.page.as_ref().and_then(|page| page.path.as_ref());
+        if let (Next::Open(path), Some(open)) = (&next, open)
+            && path == open
+        {
+            return;
+        }
+        let dirty = self.page.as_ref().is_some_and(|page| page.dirty);
+        if dirty && self.asks {
+            eprintln!("desk: notepad asks before closing {}", self.title());
+            self.asking = Some(Asking::Leave(next));
+            return cx.notify();
+        }
+        if dirty && let Err(error) = self.save_open(cx) {
+            self.fail(error);
+            return cx.notify();
+        }
+        self.go(next, cx);
+    }
+
+    fn go(&mut self, next: Next, cx: &mut Context<Self>) {
+        match next {
+            Next::Untitled => {
+                self.clear_draft();
+                self.load(None, cx);
+            }
+            Next::Open(path) => self.load(Some(path), cx),
+        }
+    }
+
+    fn save_and_leave(&mut self, cx: &mut Context<Self>) {
+        let Some(Asking::Leave(next)) = self.asking.take() else {
+            return;
+        };
+        match self.save_open(cx) {
+            Ok(()) => self.go(next, cx),
+            Err(error) => {
+                self.fail(error);
+                cx.notify();
+            }
+        }
+    }
+
+    fn discard_and_leave(&mut self, cx: &mut Context<Self>) {
+        let Some(Asking::Leave(next)) = self.asking.take() else {
+            return;
+        };
+        eprintln!("desk: notepad closes {} without saving", self.title());
+        if self.page.as_ref().is_some_and(|page| page.path.is_none()) {
+            self.clear_draft();
+        }
+        self.go(next, cx);
+    }
+
+    fn keep_open(&mut self, cx: &mut Context<Self>) {
+        self.asking = None;
+        cx.notify();
+    }
+
+    fn delete_confirmed(&mut self, cx: &mut Context<Self>) {
+        let Some(Asking::Delete(path)) = self.asking.take() else {
+            return;
+        };
+        self.remove(&path, cx);
+    }
+
+    fn shown(&self, path: &Path) -> String {
+        match path.strip_prefix(self.shelf.root()) {
+            Ok(rest) if rest.as_os_str().is_empty() => "Notes".to_owned(),
+            Ok(rest) => rest
+                .components()
+                .map(|part| part.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/"),
+            Err(_) => path.display().to_string(),
+        }
+    }
+
+    fn title(&self) -> String {
+        match self.page.as_ref().map(|page| page.path.as_deref()) {
+            Some(Some(path)) => self.shown(path),
+            Some(None) => UNTITLED.to_owned(),
+            None => "No note open".to_owned(),
+        }
     }
 
     fn set_view(&mut self, to_rendered: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -313,12 +598,14 @@ impl Notepad {
         match to_rendered {
             true => {
                 page.view = rendered(&page.editor, cx);
-                self.rendered.insert(page.path.clone());
+                self.rendered.extend(page.path.clone());
                 window.focus(&self.focus, cx);
             }
             false => {
                 page.view = View::Raw;
-                self.rendered.remove(&page.path);
+                if let Some(path) = &page.path {
+                    self.rendered.remove(path);
+                }
                 window.focus(&page.editor.focus_handle(cx), cx);
             }
         }
@@ -328,6 +615,10 @@ impl Notepad {
 
     fn toggle_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keys = &event.keystroke;
+        if self.asking.is_some() && keys.key == "escape" {
+            cx.stop_propagation();
+            return self.keep_open(cx);
+        }
         let Some(page) = &self.page else {
             return;
         };
@@ -337,32 +628,6 @@ impl Notepad {
         cx.stop_propagation();
         let to_rendered = matches!(page.view, View::Raw);
         self.set_view(to_rendered, window, cx);
-    }
-
-    fn new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(notes) = self.notes_folder() else {
-            return;
-        };
-        let created = (1..=u32::MAX)
-            .map(|at| notes.join(format!("note-{at}.md")))
-            .find_map(
-                |path| match OpenOptions::new().write(true).create_new(true).open(&path) {
-                    Ok(_) => Some(Ok(path)),
-                    Err(error) if error.kind() == ErrorKind::AlreadyExists => None,
-                    Err(error) => Some(Err(format!("{}: {error}", path.display()))),
-                },
-            );
-        let path = match created {
-            Some(Ok(path)) => path,
-            Some(Err(error)) => return self.fail(error),
-            None => return self.fail(format!("{} has no free note name", notes.display())),
-        };
-        eprintln!("desk: notepad new note {}", path.display());
-        self.list();
-        self.show(path, cx);
-        if let Some(page) = &self.page {
-            window.focus(&page.editor.focus_handle(cx), cx);
-        }
     }
 
     fn open_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -389,7 +654,7 @@ impl Notepad {
                 return eprintln!("desk: notepad: no file was picked");
             };
             if notepad
-                .update(cx, |notepad, cx| notepad.show(path, cx))
+                .update(cx, |notepad, cx| notepad.leave(Next::Open(path), cx))
                 .is_err()
             {
                 eprintln!("desk: notepad closed before the pick landed");
@@ -398,157 +663,20 @@ impl Notepad {
         .detach();
     }
 
-    fn is_note(&self, path: &Path) -> bool {
-        self.notes_folder().as_deref() == path.parent()
-    }
-
-    fn start_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(page) = &self.page else {
-            return;
-        };
-        let name = page
-            .path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let input = TextInput::new("Note name".into(), window, cx);
-        input.update(cx, |input, cx| {
-            input.replace_text_in_range(None, &name, window, cx)
-        });
-        window.focus(&input.focus_handle(cx), cx);
-        self.renaming = Some(input);
-        cx.notify();
-    }
-
-    fn rename_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let enter = match event.keystroke.key.as_str() {
-            "enter" => true,
-            "escape" => false,
-            _ => return,
-        };
-        cx.stop_propagation();
-        let Some(input) = self.renaming.take() else {
-            return;
-        };
-        cx.notify();
-        let name = input.read(cx).text().trim().to_owned();
-        let Some(from) = self.page.as_ref().map(|page| page.path.clone()) else {
-            return;
-        };
-        if !enter {
-            return eprintln!("desk: notepad: rename of {} cancelled", from.display());
-        }
-        if !one_name(&name) {
-            return self.fail(format!("{name:?} is not a file name"));
-        }
-        let to = from.with_file_name(&name);
-        if to.exists() {
-            return self.fail(format!("{} already exists", to.display()));
-        }
-        self.save_now(cx);
-        if let Err(error) = fs::rename(&from, &to) {
-            return self.fail(format!("{} -> {}: {error}", from.display(), to.display()));
-        }
+    fn open_notes(&mut self, cx: &mut Context<Self>) {
+        let notes = self.shelf.root();
         eprintln!(
-            "desk: notepad renamed {} -> {}",
-            from.display(),
-            to.display()
+            "desk: notepad shows {} in the file manager",
+            notes.display()
         );
-        if self.rendered.remove(&from) {
-            self.rendered.insert(to.clone());
-        }
-        self.page = None;
-        self.list();
-        self.show(to, cx);
-        match &self.page {
-            Some(Page {
-                view: View::Raw,
-                editor,
-                ..
-            }) => window.focus(&editor.focus_handle(cx), cx),
-            _ => window.focus(&self.focus, cx),
-        }
-    }
-
-    fn delete(&mut self, cx: &mut Context<Self>) {
-        let Some(page) = self.page.take() else {
-            return;
-        };
-        self.saving = None;
-        self.renaming = None;
-        match fs::remove_file(&page.path) {
-            Ok(()) => eprintln!("desk: notepad deleted {}", page.path.display()),
-            Err(error) => self.fail(format!("{}: {error}", page.path.display())),
-        }
-        self.rendered.remove(&page.path);
-        self.list();
-        self.remember();
-        cx.notify();
-    }
-
-    fn rows(&self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let open = self.page.as_ref().map(|page| page.path.as_path());
-        let hover = theme.color(ColorToken::StateHover);
-        self.notes
-            .iter()
-            .enumerate()
-            .map(|(at, path)| {
-                let name = path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                let picked = path.clone();
-                div()
-                    .id(("notepad-note", at))
-                    .px_2()
-                    .py_1()
-                    .rounded(px(RADIUS_ROW))
-                    .truncate()
-                    .cursor_pointer()
-                    .text_size(px(FONT_BODY))
-                    .text_color(ink(theme, if open == Some(path) { T1 } else { T2 }))
-                    .when(open == Some(path), |row| row.bg(hover))
-                    .hover(move |style| style.bg(hover))
-                    .on_click(cx.listener(move |notepad, _: &ClickEvent, _, cx| {
-                        notepad.show(picked.clone(), cx)
-                    }))
-                    .child(name)
-                    .into_any_element()
-            })
-            .collect()
+        cx.open_with_system(notes);
     }
 
     fn header(&self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let title: SharedString = match &self.page {
-            Some(page) if self.is_note(&page.path) => page
-                .path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default()
-                .into(),
-            Some(page) => page.path.display().to_string().into(),
-            None => "No note open".into(),
-        };
-        let note = self
-            .page
-            .as_ref()
-            .is_some_and(|page| self.is_note(&page.path));
-        let name = match &self.renaming {
-            Some(input) => div()
-                .flex_1()
-                .min_w_0()
-                .overflow_hidden()
-                .on_key_down(cx.listener(Self::rename_key))
-                .child(input.clone())
-                .into_any_element(),
-            None => div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(px(FONT_BODY))
-                .text_color(ink(theme, T1))
-                .child(title)
-                .into_any_element(),
+        let dirty = self.page.as_ref().is_some_and(|page| page.dirty);
+        let title = match dirty {
+            true => format!("\u{2022} {}", self.title()),
+            false => self.title(),
         };
         let selected = match self.page.as_ref().map(|page| &page.view) {
             Some(View::Rendered(_)) => 1,
@@ -569,21 +697,69 @@ impl Notepad {
                 }
             },
         );
-        let new = tool(NEW_NOTE, Glyph::FileAdd, theme, window, cx).on_click(
-            cx.listener(|notepad, _: &ClickEvent, window, cx| notepad.new_note(window, cx)),
-        );
-        let open = tool(OPEN_FILE, Glyph::Folder, theme, window, cx).on_click(
-            cx.listener(|notepad, _: &ClickEvent, window, cx| notepad.open_file(window, cx)),
-        );
-        let edits = (note && self.renaming.is_none()).then(|| {
-            [
-                tool(RENAME, Glyph::Pencil, theme, window, cx).on_click(cx.listener(
-                    |notepad, _: &ClickEvent, window, cx| notepad.start_rename(window, cx),
-                )),
-                tool(DELETE, Glyph::Trash, theme, window, cx)
-                    .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| notepad.delete(cx))),
-            ]
-        });
+        let mark = theme.color(ColorToken::TextIcon);
+        let sidebar = tool(
+            SIDEBAR,
+            icon(Icon::Sidebar, ICON_SMALL, mark),
+            self.sidebar,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| {
+            notepad.sidebar = !notepad.sidebar;
+            eprintln!("desk: notepad sidebar shown {}", notepad.sidebar);
+            cx.notify();
+        }));
+        let new = tool(
+            NEW_NOTE,
+            glyph(Glyph::FileAdd, ICON_SMALL, mark),
+            false,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| notepad.leave(Next::Untitled, cx)));
+        let open = tool(
+            OPEN_FILE,
+            glyph(Glyph::File, ICON_SMALL, mark),
+            false,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(cx.listener(|notepad, _: &ClickEvent, window, cx| notepad.open_file(window, cx)));
+        let notes = tool(
+            NOTES_FOLDER,
+            glyph(Glyph::Folder, ICON_SMALL, mark),
+            false,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| notepad.open_notes(cx)));
+        let numbers = tool(
+            NUMBERS,
+            div().text_size(px(FONT_SMALL)).text_color(mark).child("#"),
+            self.numbers,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| {
+            notepad.numbers = !notepad.numbers;
+            eprintln!("desk: notepad line numbers shown {}", notepad.numbers);
+            cx.notify();
+        }));
+        let close = tool(
+            CLOSE,
+            icon(Icon::Close, ICON_SMALL, mark),
+            false,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| notepad.leave(Next::Untitled, cx)));
         div()
             .flex()
             .flex_none()
@@ -592,42 +768,91 @@ impl Notepad {
             .px_2()
             .py_1()
             .min_w_0()
+            .bg(theme.color(ColorToken::CardsOuterFill))
+            .border_b_1()
+            .border_color(theme.color(ColorToken::Separator))
+            .child(sidebar)
             .child(new)
             .child(open)
-            .child(name)
-            .children(edits.into_iter().flatten())
+            .child(notes)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .px_1()
+                    .truncate()
+                    .text_size(px(FONT_BODY))
+                    .text_color(ink(theme, T1))
+                    .child(title),
+            )
+            .child(numbers)
+            .child(close)
             .child(modes.flex_none())
             .into_any_element()
     }
 
+    fn empty(
+        title: &'static str,
+        line: String,
+        labels: &[&'static str],
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let actions: Vec<EmptyAction> = labels
+            .iter()
+            .map(|label| EmptyAction {
+                label: (*label).into(),
+                glyph: None,
+                keys: None,
+            })
+            .collect();
+        let this = cx.weak_entity();
+        let state = empty_state(
+            "notepad-empty",
+            title,
+            Some(line.into()),
+            &actions,
+            &[],
+            theme,
+            move |at, window, cx| {
+                let picked = this.update(cx, |notepad, cx| match at {
+                    0 => notepad.go(Next::Untitled, cx),
+                    _ => notepad.open_file(window, cx),
+                });
+                if picked.is_err() {
+                    eprintln!("desk: notepad is gone");
+                }
+            },
+        );
+        div()
+            .flex()
+            .flex_1()
+            .min_h_0()
+            .items_center()
+            .justify_center()
+            .child(state)
+            .into_any_element()
+    }
+
     fn body(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        if let Err(error) = &self.folder {
-            return empty_state(
-                "notepad-no-folder",
-                "Notepad has no folder",
-                Some(error.clone().into()),
-                &[],
-                &[],
+        let surface = theme.color(ColorToken::CardsInnerFill);
+        match (&self.folder, &self.page) {
+            (Err(error), _) => Self::empty("Notepad has no folder", error.clone(), &[], theme, cx),
+            (Ok(_), None) => Self::empty(
+                "No note open",
+                "Start a new note or open any file.".to_owned(),
+                &[NEW_NOTE, OPEN_FILE],
                 theme,
-                |_, _, _| {},
-            )
-            .into_any_element();
-        }
-        match &self.page {
-            Some(Page {
-                view: View::Raw,
-                editor,
-                ..
-            }) => div()
-                .flex_1()
-                .min_h_0()
-                .child(editor.clone())
-                .into_any_element(),
-            Some(Page {
-                view: View::Rendered(blocks),
-                scroll,
-                ..
-            }) => div()
+                cx,
+            ),
+            (
+                Ok(_),
+                Some(Page {
+                    view: View::Rendered(blocks),
+                    scroll,
+                    ..
+                }),
+            ) => div()
                 .id("notepad-rendered")
                 .flex_1()
                 .min_h_0()
@@ -641,53 +866,92 @@ impl Notepad {
                 )
                 .child(chat::document("notepad-document", blocks, &[], theme))
                 .into_any_element(),
-            None => {
-                let actions: Vec<EmptyAction> = ACTIONS
-                    .iter()
-                    .map(|label| EmptyAction {
-                        label: (*label).into(),
-                        glyph: None,
-                        keys: None,
-                    })
-                    .collect();
-                let this = cx.weak_entity();
-                empty_state(
-                    "notepad-empty",
-                    "No note open",
-                    Some("Pick a note, start a new one, or open any file.".into()),
-                    &actions,
-                    &[],
-                    theme,
-                    move |at, window, cx| {
-                        let picked = this.update(cx, |notepad, cx| match at {
-                            0 => notepad.new_note(window, cx),
-                            _ => notepad.open_file(window, cx),
-                        });
-                        if picked.is_err() {
-                            eprintln!("desk: notepad is gone");
-                        }
-                    },
-                )
-                .into_any_element()
-            }
+            (Ok(_), Some(Page { editor, .. })) => div()
+                .relative()
+                .flex_1()
+                .min_h_0()
+                .child(editor.clone())
+                .when(!self.numbers, |body| {
+                    body.child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .h_full()
+                            .w(px(NUMBER_COLUMN))
+                            .bg(surface)
+                            .occlude(),
+                    )
+                })
+                .into_any_element(),
         }
+    }
+
+    fn alerts(&self, cx: &mut Context<Self>) -> [AnyElement; 2] {
+        let leaving = matches!(self.asking, Some(Asking::Leave(_)));
+        let deleting = match &self.asking {
+            Some(Asking::Delete(path)) => Some((self.shown(path), path.is_dir())),
+            _ => None,
+        };
+        let unsaved = Sheet::new(
+            "notepad-unsaved",
+            format!("Save changes to {}?", self.title()),
+        )
+        .modal()
+        .open(leaving)
+        .confirm("Save")
+        .on_confirm(answered(cx, Self::save_and_leave))
+        .aside("Don't save", answered(cx, Self::discard_and_leave))
+        .on_cancel(answered(cx, Self::keep_open))
+        .child(div().truncate().child(UNSAVED_BODY));
+        let gone = match deleting {
+            Some((_, true)) => "The folder and every note in it are deleted for good.",
+            _ => "The note is deleted for good.",
+        };
+        let delete = Sheet::new(
+            "notepad-delete",
+            format!(
+                "Delete {}?",
+                deleting.map(|(name, _)| name).unwrap_or_default()
+            ),
+        )
+        .modal()
+        .open(matches!(self.asking, Some(Asking::Delete(_))))
+        .confirm("Delete")
+        .on_confirm(answered(cx, Self::delete_confirmed))
+        .on_cancel(answered(cx, Self::keep_open))
+        .child(div().truncate().child(gone));
+        [unsaved.into_any_element(), delete.into_any_element()]
     }
 }
 
 impl Render for Notepad {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let list = div()
-            .id("notepad-notes")
-            .flex()
-            .flex_col()
-            .flex_none()
-            .w(relative(LIST_SHARE))
-            .max_w(px(LIST_WIDTH))
-            .h_full()
-            .p_1()
-            .overflow_y_scroll()
-            .children(self.rows(&theme, cx));
+        let raw = match &self.page {
+            Some(Page {
+                view: View::Raw,
+                editor,
+                ..
+            }) => Some(editor.focus_handle(cx)),
+            _ => None,
+        };
+        if std::mem::take(&mut self.focus_pending) {
+            window.focus(raw.as_ref().unwrap_or(&self.focus), cx);
+        }
+        let opened = self.opened.take().filter(|_| raw.is_some()).map(|started| {
+            canvas(
+                |_, _, _| {},
+                move |_, (), _, _| {
+                    eprintln!(
+                        "desk: notepad open to caret {} ms",
+                        started.elapsed().as_millis()
+                    );
+                },
+            )
+            .absolute()
+            .size_0()
+        });
         let problem = self.problem.clone().map(|problem| {
             div()
                 .px_2()
@@ -702,11 +966,14 @@ impl Render for Notepad {
             .flex_1()
             .min_w_0()
             .h_full()
+            .bg(theme.color(ColorToken::CardsInnerFill))
             .children(problem)
             .child(self.body(&theme, cx));
+        let side = self.sidebar.then(|| self.side(&theme, cx));
         let header = self.header(&theme, window, cx);
         div()
             .size_full()
+            .relative()
             .flex()
             .flex_col()
             .min_w_0()
@@ -719,8 +986,23 @@ impl Render for Notepad {
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
-                    .child(list)
+                    .children(side)
                     .child(main),
             )
+            .children(opened)
+            .children(self.alerts(cx))
+    }
+}
+
+impl Focusable for Notepad {
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        match &self.page {
+            Some(Page {
+                view: View::Raw,
+                editor,
+                ..
+            }) => editor.focus_handle(cx),
+            _ => self.focus.clone(),
+        }
     }
 }

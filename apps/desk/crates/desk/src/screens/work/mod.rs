@@ -32,7 +32,7 @@ use crate::modules::file_edits::{self, FileEdits};
 #[cfg(feature = "module-git")]
 use crate::modules::git;
 use crate::modules::replayed;
-use crate::modules::shells::{self, Kill, Shells};
+use crate::modules::shells::{self, Shells};
 use crate::modules::subagents::{self, ExpandAgent, Subagents};
 use crate::modules::terminal::{self, TabChanged, TerminalModule};
 use crate::plugins::{self, Plugin};
@@ -160,6 +160,15 @@ struct PluginViews {
 struct Mounts(Rc<RefCell<PluginViews>>);
 
 impl Mounts {
+    fn at(&self, at: (usize, TileId)) -> Option<AnyView> {
+        self.0
+            .borrow()
+            .open
+            .iter()
+            .find(|open| open.at == at)
+            .map(|open| open.view.clone())
+    }
+
     fn view(&self, plugin: &'static Plugin, at: (usize, TileId), cx: &mut App) -> AnyView {
         let mounted = self
             .0
@@ -242,16 +251,10 @@ fn build(
         Some(_) => chat::fed(store.clone(), window, cx),
         None => chat::live(project.clone(), store.clone(), window, cx),
     };
-    let killer = chat.downgrade();
-    let kill: Kill = Rc::new(move |shell, cx| {
-        killer
-            .update(cx, |chat, cx| chat.kill(shell, cx))
-            .unwrap_or_else(|_| eprintln!("desk: shells: the chat is gone, so nothing was killed"));
-    });
     let mounted = Mounted {
         subagents: subagents::mount(store.clone(), cx),
         file_edits: file_edits::mount(store.clone(), cx),
-        shells: shells::mount(store.clone(), kill, cx),
+        shells: shells::mount(store.clone(), chat.downgrade(), cx),
         terminals: Terminals::default(),
         mirrors: Mirrors::default(),
         plugins: Mounts::default(),
@@ -373,6 +376,8 @@ fn build(
             find,
             found: Vec::new(),
             query: String::new(),
+            seen: None,
+            picked_at: None,
             _watched: watched,
         }
     }))
@@ -390,7 +395,20 @@ pub struct Work {
     focus: FocusHandle,
     mounted: Mounted,
     replay: Option<Replay>,
+    seen: Option<Vec<(usize, TileId, Module)>>,
+    picked_at: Option<Instant>,
     _watched: [Subscription; 2],
+}
+
+#[cfg(feature = "plugin-notepad")]
+fn plugin_focus(view: AnyView, cx: &App) -> Option<FocusHandle> {
+    let notepad = view.downcast::<crate::modules::notepad::Notepad>().ok()?;
+    Some(notepad.read(cx).focus_handle(cx))
+}
+
+#[cfg(not(feature = "plugin-notepad"))]
+fn plugin_focus(_: AnyView, _: &App) -> Option<FocusHandle> {
+    None
 }
 
 fn glyph(module: &Module) -> Option<Glyph> {
@@ -927,6 +945,70 @@ impl Work {
         }
     }
 
+    fn focus_new_tile(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let now: Vec<(usize, TileId, Module)> = self
+            .board
+            .workspaces()
+            .iter()
+            .enumerate()
+            .flat_map(|(at, workspace)| {
+                workspace
+                    .tiles(EVERYWHERE)
+                    .into_iter()
+                    .flat_map(|(stack, _)| {
+                        let id = stack.id;
+                        stack
+                            .modules
+                            .iter()
+                            .map(move |module| (at, id, module.clone()))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let Some(seen) = self.seen.replace(now) else {
+            return;
+        };
+        let active = self.board.active();
+        let Some((tile, module)) = self.board.workspaces().get(active).and_then(|workspace| {
+            let stack = workspace.stack(workspace.focus()?)?;
+            Some((stack.id, stack.modules.get(stack.active)?.clone()))
+        }) else {
+            return;
+        };
+        if seen.contains(&(active, tile, module.clone())) {
+            return;
+        }
+        let started = self.picked_at.take().unwrap_or_else(Instant::now);
+        let work = cx.weak_entity();
+        window.defer(cx, move |window, cx| {
+            let handle = work.update(cx, |work, cx| match &module {
+                Module::Terminal => work
+                    .mounted
+                    .terminals
+                    .at(tile)
+                    .map(|terminal| terminal.read(cx).focus_handle(cx)),
+                Module::Plugin(_) => work
+                    .mounted
+                    .plugins
+                    .at((active, tile))
+                    .and_then(|view| plugin_focus(view, cx)),
+                _ => None,
+            });
+            match handle {
+                Ok(Some(handle)) => {
+                    handle.focus(window, cx);
+                    eprintln!(
+                        "desk: work: focused new {} tile in {} ms",
+                        name(&module),
+                        started.elapsed().as_millis()
+                    );
+                }
+                Ok(None) => {}
+                Err(_) => eprintln!("desk: work: the screen is gone"),
+            }
+        });
+    }
+
     fn keep_plugins(&self) {
         let mut views = self.mounted.plugins.0.borrow_mut();
         views.workspace = self.board.active();
@@ -1287,6 +1369,7 @@ impl Work {
         match pick {
             0 => self.board.add(),
             at if tiles.contains(&at) => {
+                self.picked_at = Some(Instant::now());
                 self.board.spawn(modules.get(at - tiles.start)?.clone());
             }
             at => {
@@ -1464,6 +1547,7 @@ impl Render for Work {
         }
         let theme = ActiveTheme::theme(cx);
         let board = self.board.board(&theme, window, cx);
+        self.focus_new_tile(window, cx);
         let edge = px(-WORKSPACE_EDGE);
         let band = div()
             .absolute()

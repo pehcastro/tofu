@@ -7,8 +7,8 @@ use desk_terminal::{Terminal, TerminalEvent, shells};
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::ColorToken;
 use gpui::{
-    AnyElement, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, SharedString,
-    Subscription, Task, Window, div, prelude::*,
+    AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    IntoElement, Render, SharedString, Subscription, Task, Window, div, prelude::*,
 };
 
 const FRAME_LOG: &str = "DESK_FRAME_LOG";
@@ -159,6 +159,12 @@ impl FrameLog {
             "desk: terminal frames while output streamed: {} frames, median {median:.2} ms, p95 {p95:.2} ms, worst {worst:.2} ms, {slow} over {SLOW_FRAME_MS} ms",
             intervals.len() + 1
         );
+    }
+}
+
+impl Focusable for TerminalModule {
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.terminal.focus_handle(cx)
     }
 }
 
