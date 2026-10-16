@@ -1,0 +1,3 @@
+{"text":"handing it to a sub-agent","tools":[{"name":"spawn","args":{"task":"think for seventy seconds inside one model call","owns":["note.txt"]}}]}
+{"agent":"c1","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"agent":"c1","text":"still thinking about the note","unfinished":true}

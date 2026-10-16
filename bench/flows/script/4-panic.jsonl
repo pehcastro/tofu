@@ -1,0 +1,6 @@
+{"text":"spawning two","tools":[{"name":"spawn","args":{"task":"first worker: report at once","owns":["one/**"]}},{"name":"spawn","args":{"task":"second worker: report at once","owns":["two/**"]}}]}
+{"text":"LEADGOESON one worker reported and one broke"}
+{"agent":"c1","text":"FLOWS-PANIC forced inside a sub-agent's model call"}
+{"agent":"c2","text":"SIBLINGREPORT the other worker is done"}
+{"text":"spare reply one"}
+{"text":"spare reply two"}

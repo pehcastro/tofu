@@ -1,0 +1,13 @@
+wait Ask tofu
+key alt+2
+wait DEAD  2
+screen
+key alt+1
+type did the workers finish
+key enter
+wait LEADONREPORT
+key alt+2
+wait DEAD  2
+key alt+1
+wait LEADONREPORT
+requests text

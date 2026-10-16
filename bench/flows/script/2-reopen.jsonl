@@ -1,0 +1,7 @@
+{"text":"messaging the restored workers","tools":[{"name":"message","args":{"to":"sub-1","text":"finish the users route"}},{"name":"message","args":{"to":"sub-2","text":"finish the users model"}}]}
+{"text":"LEADWAITS on the restored workers"}
+{"agent":"c1","text":"RESUMEDREPORT a restored worker is finished"}
+{"agent":"c2","text":"RESUMEDREPORT a restored worker is finished"}
+{"text":"LEADONREPORT the restored workers reported"}
+{"text":"LEADONREPORT spare one"}
+{"text":"LEADONREPORT spare two"}

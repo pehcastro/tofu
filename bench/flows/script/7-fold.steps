@@ -1,0 +1,12 @@
+type spawn the crowd
+key enter
+wait spawning [&sub-451]
+key alt+2
+wait 450 folded
+screen
+key ctrl+k
+type mission317
+wait mission317
+key enter
+wait sub-317 ran as
+screen

@@ -1,0 +1,7 @@
+{"text":"spawning three","tools":[{"name":"spawn","args":{"task":"reader: report at once","owns":["read/**"]}},{"name":"spawn","args":{"task":"writer: report after a pause","owns":["write/**"]}},{"name":"spawn","args":{"task":"holder: keep going","owns":["hold/**"]}}]}
+{"text":"LEADMIDREPLY the lead keeps writing","unfinished":true}
+{"agent":"c1","text":"READONCE the first report"}
+{"agent":"c2","tools":[{"name":"bash","args":{"command":"sleep 3"}}]}
+{"agent":"c2","text":"UNREADREPORT the second report"}
+{"agent":"c3","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"agent":"c3","text":"the third keeps writing","unfinished":true}

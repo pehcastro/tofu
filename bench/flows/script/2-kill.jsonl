@@ -1,0 +1,5 @@
+{"text":"spawning two","tools":[{"name":"spawn","args":{"task":"route worker: add the users route","owns":["routes/**"]}},{"name":"spawn","args":{"task":"model worker: add the users model","owns":["models/**"]}}]}
+{"agent":"c1","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"agent":"c1","thinking":"KILLEDMIDWAY the worker is thinking","text":"the worker keeps writing","unfinished":true}
+{"agent":"c2","tools":[{"name":"read","args":{"path":"note.txt"}}]}
+{"agent":"c2","thinking":"KILLEDMIDWAY the worker is thinking","text":"the worker keeps writing","unfinished":true}

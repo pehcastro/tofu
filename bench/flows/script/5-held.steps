@@ -1,0 +1,9 @@
+type hand a long call to a sub-agent
+key enter
+wait waiting on 1 sub-agent
+wait 20s [settings]
+screen
+wait 45s [settings]
+screen
+wait 1m 10s [settings]
+screen

@@ -1,0 +1,7 @@
+type run three workers
+key enter
+wait LEADMIDREPLY
+key alt+2
+wait DEAD  2
+requests
+wait the app is killed before this appears

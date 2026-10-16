@@ -1,0 +1,4 @@
+type hand a task that waits on the lead
+key enter
+wait CAPLEAD
+requests text

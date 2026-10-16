@@ -1,0 +1,5 @@
+wait Ask tofu
+type status of the workers
+key enter
+wait LEADAFTER
+requests text

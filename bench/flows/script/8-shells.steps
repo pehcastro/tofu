@@ -1,0 +1,7 @@
+type run a worker beside the kept shells
+key enter
+wait SHELLSANSWER
+wait | 3m [settings]
+requests text
+key ctrl+c
+key ctrl+c

@@ -1,0 +1,6 @@
+{"text":"handing it to a sub-agent","tools":[{"name":"spawn","args":{"task":"ask the lead, then finish","owns":["cap/**"]}}]}
+{"text":"the lead is still thinking about the question","unfinished":true}
+{"text":"CAPLEAD the worker reported"}
+{"text":"spare reply one"}
+{"agent":"c1","tools":[{"name":"ask","args":{"question":"may I write cap/x.txt","why":"it is the task","default":"write it"}}]}
+{"agent":"c1","text":"CAPREPORT finished after waiting on the lead"}
