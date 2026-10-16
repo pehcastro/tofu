@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"tofu/internal/memtree"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -41,6 +43,9 @@ func openEpisodes(project string) (*memtree.Store, error) {
 }
 
 func KeepEpisode(project string, item memtree.Item) error {
+	if item.Kind == memtree.KindWork && regexp.MustCompile(`^sub-agent \S+ is `+subagent.Errored.String()+`: `).MatchString(item.Text) {
+		return nil
+	}
 	store, err := openEpisodes(project)
 	if err != nil {
 		return err

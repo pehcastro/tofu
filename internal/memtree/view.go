@@ -59,7 +59,20 @@ func (s *Store) Advance(high, low int) error {
 	return os.Rename(s.base+".view.json.tmp", s.base+".view.json")
 }
 
+const (
+	KindPerson = "user"
+	KindLead   = "lead"
+	KindWork   = "work"
+)
+
 func (s *Store) shrink(lines []Ref, t, target int) []Ref {
+	heard := make([]int, len(s.items)+1)
+	for i, item := range s.items {
+		heard[i+1] = heard[i]
+		if item.Kind == KindPerson {
+			heard[i+1]++
+		}
+	}
 	for s.size(lines) > target {
 		best := -1
 		for k := 0; k+1 < len(lines); k++ {
@@ -70,7 +83,7 @@ func (s *Store) shrink(lines []Ref, t, target int) []Ref {
 			if _, built := s.nodes[Ref{a.Level + 1, a.Index / 2}]; !built {
 				continue
 			}
-			if best < 0 || moreDue(t, a, lines[best]) {
+			if best < 0 || mergesFirst(t, heard, a, lines[best]) {
 				best = k
 			}
 		}
@@ -82,7 +95,12 @@ func (s *Store) shrink(lines []Ref, t, target int) []Ref {
 	return lines
 }
 
-func moreDue(t int, a, b Ref) bool {
+func mergesFirst(t int, heard []int, a, b Ref) bool {
+	saidA := heard[a.ID()+2*a.Span()] - heard[a.ID()]
+	saidB := heard[b.ID()+2*b.Span()] - heard[b.ID()]
+	if saidA*b.Span() != saidB*a.Span() {
+		return saidA*b.Span() < saidB*a.Span()
+	}
 	sinceA := t - (a.ID() + 2*a.Span() - 1)
 	sinceB := t - (b.ID() + 2*b.Span() - 1)
 	return sinceA*b.Span() > sinceB*a.Span()

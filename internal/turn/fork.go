@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/memtree"
 	"tofu/internal/session"
 )
 
@@ -22,9 +23,9 @@ const (
 
 const (
 	sourceEpisodeView = "episode view"
-	episodeOfPerson   = "user"
-	episodeOfLead     = "lead"
-	episodeOfReport   = "work"
+	episodeOfPerson   = memtree.KindPerson
+	episodeOfLead     = memtree.KindLead
+	episodeOfReport   = memtree.KindWork
 )
 
 type RecordedAsk func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error)
