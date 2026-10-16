@@ -383,9 +383,10 @@ func (b *Book) Due(ctx context.Context, now time.Time, moment Moment) []Fire {
 	for _, one := range due {
 		fires = append(fires, fire(one, now))
 	}
-	if len(fires) > 0 {
-		b.changed()
+	if len(fires) == 0 {
+		return nil
 	}
+	b.changed()
 	if err := b.save(); err != nil {
 		fires = append(fires, Fire{Line: "cron jobs were not written: " + err.Error()})
 	}
