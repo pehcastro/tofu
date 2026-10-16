@@ -271,6 +271,7 @@ type App struct {
 	shellsPolling  bool
 	happened       []feed.Event
 	happenedIndex  map[string]int
+	lengthenedIDs  map[string]string
 	feedStale      bool
 	reached        []string
 	board          paste.Board
@@ -362,9 +363,11 @@ func New(options Options) *App {
 		moves:         map[string]movement{},
 		steered:       map[string]string{},
 		happenedIndex: map[string]int{},
+		lengthenedIDs: map[string]string{},
 		serving:       map[string]string{},
 		board:         paste.Default(options.Paste),
 	}
+	app.view.FeedID = app.shownID
 	if options.PromptHistory != "" {
 		app.prompts = isession.OpenPromptHistory(options.PromptHistory)
 	}

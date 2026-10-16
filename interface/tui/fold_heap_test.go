@@ -161,6 +161,22 @@ func TestFoldedSubAgentsLeaveTheHeapAndOpenFromTheSession(t *testing.T) {
 	t.Logf("opened: heap %.1f MB, %d feed events held", mb(heapAlloc()), len(app.happened))
 }
 
+func TestACrowdOf180000FeedEventsSharesNoShortID(t *testing.T) {
+	at := fixedStart()
+	app, _ := crowdApp(t, &at)
+	seen := make(map[string]bool, len(app.happened))
+	for _, event := range app.happened {
+		if seen[event.ID] {
+			t.Errorf("two feed events share the short id %s", event.ID)
+		}
+		seen[event.ID] = true
+	}
+	t.Logf("%d feed events held for %d streamed, %d short ids lengthened", len(app.happened), 2*heapAgents*heapCalls, len(app.lengthenedIDs))
+	if len(app.happened) != 2*heapAgents*heapCalls {
+		t.Errorf("the feed holds %d events, not the %d the crowd streamed", len(app.happened), 2*heapAgents*heapCalls)
+	}
+}
+
 func TestAFoldedSubAgentsThinkingOpensBySearch(t *testing.T) {
 	at := fixedStart()
 	app, rows := crowdApp(t, &at)

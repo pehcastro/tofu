@@ -118,7 +118,7 @@ func (a *App) activityOf(row subagent.Row, now time.Time, after time.Duration) (
 func openCall(call subagent.Call) bool { return call.Result == "" && !call.At.IsZero() }
 
 func (a *App) markStalled(call subagent.Call, stalled bool) {
-	at := a.happenedAt(short(call.ID))
+	at := a.happenedAt(a.shortOf(call.ID))
 	if at < 0 || a.happened[at].State != feed.StateRunning || slices.Contains(a.happened[at].Detail, stalledDetail) == stalled {
 		return
 	}

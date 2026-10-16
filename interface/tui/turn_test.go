@@ -20,6 +20,25 @@ func TestAReferenceFollowedFromTheChatRevealsAnEventRecordedWhileTheFeedWasHidde
 	}
 }
 
+func TestALengthenedToolIDShowsInTheChatAndFollowsToItsOwnCard(t *testing.T) {
+	at := fixedStart()
+	app := phaseApp(t, &at)
+	app.Update(Event{Kind: EventToolCall, ID: "call-1abc123", Tool: "read", Text: "first.go"})
+	app.Update(Event{Kind: EventToolCall, ID: "call-2abc123", Tool: "read", Text: "second.go"})
+	chat := ansi.Strip(app.View().Content)
+	if !strings.Contains(chat, "[tool#2abc123]") {
+		t.Fatalf("the chat does not show the second call by the feed's id 2abc123\n%s", chat)
+	}
+	app.follow("[tool#2abc123]")
+	app.Update(pulseMsg{})
+	if app.current != screenAgents || app.feed.Selected() != "2abc123" {
+		t.Fatalf("screen %v selected %q, want the sub-agents screen on 2abc123", app.current, app.feed.Selected())
+	}
+	if card := ansi.Strip(app.View().Content); !strings.Contains(card, "second.go") {
+		t.Fatalf("the followed card is not the second call\n%s", card)
+	}
+}
+
 func TestTheLeadsTextShowsWhileItsSpawnResultIsOutstanding(t *testing.T) {
 	const said = "reading the gate while c1 works"
 	spawned := Event{Kind: EventToolCall, ID: "s1", Tool: "spawn", Text: "read note.txt", Promote: true}

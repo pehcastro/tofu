@@ -73,6 +73,27 @@ func gateOffNote(why jev.Why) string {
 
 func short(id string) string { return strings.TrimPrefix(trace.Short(id), "#") }
 
+func (a *App) shownID(full string) string {
+	if longer, lengthened := a.lengthenedIDs[full]; lengthened {
+		return longer
+	}
+	return short(full)
+}
+
+func (a *App) shortOf(full string) string {
+	runes, base := []rune(full), short(full)
+	for length := len([]rune(a.shownID(full))); length < len(runes); length++ {
+		id := string(runes[len(runes)-length:])
+		if at := a.happenedAt(id); at < 0 || a.happened[at].FullID == full {
+			if id != base {
+				a.lengthenedIDs[full] = id
+			}
+			return id
+		}
+	}
+	return full
+}
+
 func (a *App) send() tea.Cmd {
 	task := a.view.Value()
 	if task == "" {
@@ -362,8 +383,8 @@ func (a *App) keptPartial() string {
 		return ""
 	}
 	id := a.mintID()
-	a.keptAnswer = short(id)
-	a.record(feed.Event{ID: a.keptAnswer, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: partialHead, Body: partial, At: a.options.Now()})
+	a.keptAnswer = a.shortOf(id)
+	a.record(feed.Event{ID: a.keptAnswer, FullID: id, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: partialHead, Body: partial, At: a.options.Now()})
 	return strconv.Itoa(len([]rune(partial))) + charactersKept + "[note#" + a.keptAnswer + "]"
 }
 
@@ -478,7 +499,7 @@ func (a *App) absorb(event Event) {
 		if event.Agent == "" {
 			a.view.TakePartial()
 		}
-		if id := short(event.ID); event.ID != "" && a.happenedAt(id) >= 0 {
+		if id := a.shortOf(event.ID); event.ID != "" && a.happenedAt(id) >= 0 {
 			a.keepOnly(func(held feed.Event) bool { return held.ID != id })
 		}
 	case EventThinking:
@@ -500,7 +521,7 @@ func (a *App) absorb(event Event) {
 		}
 	case EventFailure:
 		id := cmp.Or(event.ID, a.mintID())
-		a.record(feed.Event{ID: short(id), Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})
+		a.record(feed.Event{ID: a.shortOf(id), FullID: id, Actor: orchestrator, Kind: feed.KindFailure, State: feed.StateFailed, Title: strings.TrimSpace(failureHead + " " + event.Tool), Body: event.Text, At: at})
 		a.view.Append(session.Entry{Kind: session.Failure, ID: id, Body: event.Text})
 	case EventDecision:
 		if event.Decision == nil {
@@ -521,8 +542,9 @@ func (a *App) absorb(event Event) {
 	case EventGateOff:
 		if !a.gateOff {
 			a.gateOff = true
-			id := short(a.mintID())
-			a.record(feed.Event{ID: id, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: gateOffHead, Body: event.Text, At: at})
+			full := a.mintID()
+			id := a.shortOf(full)
+			a.record(feed.Event{ID: id, FullID: full, Actor: orchestrator, Kind: feed.KindNote, State: feed.StateComplete, Title: gateOffHead, Body: event.Text, At: at})
 			a.happenedAtTurn = len(a.happened)
 			a.view.Append(session.Entry{Kind: session.Note, ID: id, Body: gateOffNote(event.GateWhy)})
 		}
@@ -578,12 +600,12 @@ func (a *App) followSource(spent *host.TurnAccount) {
 	a.view.Append(session.Entry{Kind: session.Note, Body: "the turn moved to " + a.picked + ", so the next turn runs there too; pick another model to change it"})
 }
 
-func thinkingOf(event Event, at time.Time) feed.Event {
-	return feed.Event{ID: short(event.ID), Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindThinking, State: feed.StateComplete, At: at}
+func (a *App) thinkingOf(event Event, at time.Time) feed.Event {
+	return feed.Event{ID: a.shortOf(event.ID), FullID: event.ID, Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindThinking, State: feed.StateComplete, At: at}
 }
 
 func (a *App) thought(event Event, at time.Time) {
-	thinking := thinkingOf(event, at)
+	thinking := a.thinkingOf(event, at)
 	if found := a.happenedAt(thinking.ID); found >= 0 {
 		thinking = a.happened[found]
 	}
@@ -596,16 +618,16 @@ func (a *App) thought(event Event, at time.Time) {
 	a.record(thinking)
 }
 
-func callOf(event Event, at time.Time) feed.Event {
-	call := feed.Event{ID: short(event.ID), Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindTool, Title: event.Tool, Body: event.Text, Detail: lines(event.Detail), At: at}
+func (a *App) callOf(event Event, at time.Time) feed.Event {
+	call := feed.Event{ID: a.shortOf(event.ID), FullID: event.ID, Actor: cmp.Or(event.Agent, orchestrator), Kind: feed.KindTool, Title: event.Tool, Body: event.Text, Detail: lines(event.Detail), At: at}
 	if event.Promote {
 		call.Kind, call.Title, call.Body, call.Detail = feed.KindSpawn, event.Text, event.Detail, nil
 	}
 	return call
 }
 
-func finished(held *feed.Event, event Event, at time.Time) (feed.Event, edits.Edit, bool) {
-	done := feed.Event{ID: short(event.ID), Actor: orchestrator, Kind: feed.KindTool, At: at}
+func (a *App) finished(held *feed.Event, event Event, at time.Time) (feed.Event, edits.Edit, bool) {
+	done := feed.Event{ID: a.shortOf(event.ID), FullID: event.ID, Actor: orchestrator, Kind: feed.KindTool, At: at}
 	if held != nil {
 		done = *held
 		done.Detail = slices.Clone(done.Detail)
@@ -624,7 +646,7 @@ func finished(held *feed.Event, event Event, at time.Time) (feed.Event, edits.Ed
 }
 
 func (a *App) called(event Event, at time.Time) {
-	a.record(callOf(event, at))
+	a.record(a.callOf(event, at))
 	if event.Agent != "" {
 		return
 	}
@@ -641,10 +663,10 @@ func (a *App) answered(event Event, at time.Time) {
 	a.subAgentCalls = slices.DeleteFunc(a.subAgentCalls, func(called string) bool { return called == event.ID })
 	a.view.Spawns = len(a.subAgentCalls)
 	var held *feed.Event
-	if found := a.happenedAt(short(event.ID)); found >= 0 {
+	if found := a.happenedAt(a.shortOf(event.ID)); found >= 0 {
 		held = &a.happened[found]
 	}
-	done, edit, edited := finished(held, event, at)
+	done, edit, edited := a.finished(held, event, at)
 	status := event.Text
 	if edited {
 		a.edits.Add(edit)
@@ -793,19 +815,19 @@ func (a *App) readBack(names []string) []feed.Event {
 	index := map[string]int{}
 	for _, event := range logged {
 		var held *feed.Event
-		if found, read := index[short(event.ID)]; read {
+		if found, read := index[event.ID]; read {
 			held = &back[found]
 		}
 		var made feed.Event
 		at := event.Logged.At
 		switch event.Kind {
 		case EventThinking:
-			made = thinkingOf(event, at)
+			made = a.thinkingOf(event, at)
 			made.Body = event.Text
 		case EventToolCall:
-			made = callOf(event, at)
+			made = a.callOf(event, at)
 		case EventToolResult:
-			made, _, _ = finished(held, event, at)
+			made, _, _ = a.finished(held, event, at)
 		default:
 			continue
 		}
@@ -813,7 +835,7 @@ func (a *App) readBack(names []string) []feed.Event {
 			*held = made
 			continue
 		}
-		index[made.ID] = len(back)
+		index[event.ID] = len(back)
 		back = append(back, made)
 	}
 	return back
@@ -959,7 +981,7 @@ func (a *App) drawReport(subAgent subagent.Row) {
 }
 
 func (a *App) rosterCall(actor string, call subagent.Call) {
-	id := short(call.ID)
+	id := a.shortOf(call.ID)
 	if id == "" {
 		return
 	}
@@ -970,7 +992,7 @@ func (a *App) rosterCall(actor string, call subagent.Call) {
 	if call.Result != "" {
 		state = feed.StateComplete
 	}
-	a.record(feed.Event{ID: id, Actor: actor, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: cmp.Or(call.At, a.options.Now())})
+	a.record(feed.Event{ID: id, FullID: call.ID, Actor: actor, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: cmp.Or(call.At, a.options.Now())})
 }
 
 func settledPrefix(before, now []subagent.Call) int {

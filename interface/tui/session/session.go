@@ -177,6 +177,7 @@ type Model struct {
 	FoldHidesShell     bool
 	Welcome            func(width, rows int) []string
 	Notice             string
+	FeedID             func(full string) string
 }
 
 func New(now func() time.Time, prose Prose) Model {
@@ -194,7 +195,7 @@ func New(now func() time.Time, prose Prose) Model {
 	styles := look.ComposerStyles()
 	styles.Cursor.Shape = tea.CursorBar
 	composer.SetStyles(styles)
-	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}}
+	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, FeedID: tools.ShortID}
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }

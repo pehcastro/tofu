@@ -204,7 +204,7 @@ func (m *Model) foldLine(fold foldCounts) string {
 		fields = append(fields, "shell ("+strconv.Itoa(fold.shell)+")")
 	}
 	fields = append(fields, widget.Until(fold.since))
-	tail := expandTail(fold.id)
+	tail := m.expandTail(fold.id)
 	room := max(m.textWidth()-widget.Cells(tail), 1)
 	return continuation + look.Faint(widget.Pad(widget.Fit(noteMarker+strings.Join(fields, foldSeparator), room), room)) + tail
 }
@@ -218,13 +218,13 @@ func (m *Model) foldSince(end int) time.Duration {
 
 func (m *Model) progressLine(fold []Entry) string {
 	latest := fold[len(fold)-1]
-	tail := expandTail(latest.ID)
+	tail := m.expandTail(latest.ID)
 	room := max(m.textWidth()-widget.Cells(tail), 1)
 	return continuation + widget.Pad(progress.Line{Label: oneLine(latest.label()), Frame: m.frame, Live: true}.View(room), room) + tail
 }
 
-func expandTail(id string) string {
-	if short := trace.Short(id); short != "" {
+func (m *Model) expandTail(id string) string {
+	if short := m.FeedID(id); short != "" {
 		return gap + look.TypedID(toolKind, short) + expandMark(id)
 	}
 	return ""
@@ -325,7 +325,7 @@ func indented(lines []string) []string {
 
 func (m *Model) failureLine(entry Entry) string {
 	tail := ""
-	if short := trace.Short(entry.ID); short != "" {
+	if short := m.FeedID(entry.ID); short != "" {
 		tail = gap + look.Faint(wholeErrorInWork) + look.TypedID(toolKind, short)
 	}
 	room := max(m.textWidth()-widget.Cells(failureMarker+tail), 1)

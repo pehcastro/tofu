@@ -54,18 +54,19 @@ const (
 )
 
 type Event struct {
-	ID, Actor, Target string
-	Instance          int
-	Kind              Kind
-	State             State
-	Title, Body       string
-	Detail            []string
-	Path              string
-	Op                Op
-	Added, Removed    int
-	At                time.Time
-	Elapsed           time.Duration
-	Thought           *strings.Builder
+	ID, FullID     string
+	Actor, Target  string
+	Instance       int
+	Kind           Kind
+	State          State
+	Title, Body    string
+	Detail         []string
+	Path           string
+	Op             Op
+	Added, Removed int
+	At             time.Time
+	Elapsed        time.Duration
+	Thought        *strings.Builder
 }
 
 type Agent struct {

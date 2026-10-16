@@ -183,7 +183,18 @@ func callOf(event session.Event) llm.ToolCall {
 func resultOf(event session.Event) llm.Message {
 	var result session.ResultBody
 	_ = json.Unmarshal(event.Body, &result)
-	return llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: result.Content, ToolResultBytes: result.ResultBytes}
+	message := llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: result.Content, ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode}
+	switch result.ToolOutcome {
+	case "":
+		message.ToolOutcome = llm.ToolOutcomeUnset
+	case session.ToolOutcomeRan:
+		message.ToolOutcome = llm.ToolOutcomeRan
+	case session.ToolOutcomeAborted:
+		message.ToolOutcome = llm.ToolOutcomeAborted
+	default:
+		message.ToolOutcome = llm.ToolOutcomeFailed
+	}
+	return message
 }
 
 func startsATurn(source string) bool {

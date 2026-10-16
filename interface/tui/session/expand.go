@@ -9,7 +9,6 @@ import (
 
 	"tofu/interface/tui/look"
 	"tofu/interface/tui/pointer"
-	"tofu/interface/tui/trace"
 )
 
 func (m *Model) Expansion(id string, width int) (string, []string, bool) {
@@ -18,7 +17,7 @@ func (m *Model) Expansion(id string, width int) (string, []string, bool) {
 		return "", nil, false
 	}
 	entry := m.entries[at]
-	head := look.Sides(look.Title(entry.Head), look.TypedID(toolKind, trace.Short(entry.ID)), width)
+	head := look.Sides(look.Title(entry.Head), look.TypedID(toolKind, m.FeedID(entry.ID)), width)
 	body := hardWrapped(cmp.Or(entry.Detail, entry.Body), width, look.Muted)
 	if decision := entry.Decision; decision != nil {
 		body = append(append(body, "", verdictStyle(decision.Verdict).Render(decision.Verdict.String())), decisionLines(*decision, width)...)

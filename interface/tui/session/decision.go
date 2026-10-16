@@ -10,7 +10,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"tofu/interface/tui/look"
-	"tofu/interface/tui/trace"
 	"tofu/internal/host"
 	"tofu/internal/widget"
 )
@@ -136,7 +135,7 @@ func (m *Model) askLines() []string {
 		head = askMarker + "override " + overriding + "?"
 	}
 	id := ""
-	if short := trace.Short(entry.ID); short != "" {
+	if short := m.FeedID(entry.ID); short != "" {
 		id = askGap + look.TypedID(toolKind, short)
 	}
 	keys := ""
