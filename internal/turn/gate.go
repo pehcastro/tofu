@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -630,28 +631,89 @@ func readOnlyPrograms() []string {
 
 func shellChangesTheHarness(project, command string) bool {
 	written, unparsed := subagent.ShellWrites(command)
-	understood := unparsed == nil
-	for _, step := range subagent.ShellSteps(command) {
+	steps, dir, literalDir := subagent.ShellSteps(command), "", true
+	for _, step := range steps {
 		program, args := step.Program, step.Args
 		if program == "rtk" && len(args) > 0 {
 			program, args = args[0], args[1:]
 		}
-		helps := slices.Contains(args, "--help") || slices.Contains(args, "-h")
-		if program == "tofu" && !helps && (slices.Contains(args, "settings") && slices.Contains(args, "set") ||
-			slices.Contains(args, "hooks") && slices.Contains(args, "trust")) {
+		tofu := program == "tofu" && !slices.Contains(args, "--help") && !slices.Contains(args, "-h")
+		handed := func(arg string) bool { return handsAHarnessFile(project, dir, literalDir, arg) }
+		switch {
+		case program == "cd" && len(args) == 1 && literal(args[0]) && args[0] != "-":
+			dir = joinedOrAbsolute(dir, args[0])
+		case program == "cd":
+			literalDir = false
+		case tofu && slices.Contains(args, "hooks") && slices.Contains(args, "trust"):
+			return true
+		case tofu && slices.Contains(args, "settings") && slices.Contains(args, "set") && (len(steps) > 1 || !setsInAThrowawayHome(project, command, args)):
+			return true
+		case !slices.Contains(readOnlyPrograms(), program) && slices.ContainsFunc(args, handed):
 			return true
 		}
 		written = append(written, step.Changes...)
-		understood = understood && slices.Contains(readOnlyPrograms(), program)
 	}
-	if slices.ContainsFunc(written, func(changed string) bool { return reachesHarnessFile(project, changed) }) {
-		return true
-	}
-	lower := strings.ToLower(command)
-	return !understood && slices.ContainsFunc(harnessFiles(), func(file string) bool {
+	return slices.ContainsFunc(written, func(changed string) bool { return reachesHarnessFile(project, changed) }) ||
+		unparsed != nil && namesAHarnessFile(command)
+}
+
+func namesAHarnessFile(text string) bool {
+	lower := strings.ToLower(text)
+	return slices.ContainsFunc(harnessFiles(), func(file string) bool {
 		dir, _, _ := strings.Cut(file, "/")
 		return strings.Contains(lower, dir) && strings.Contains(lower, path.Base(file))
 	})
+}
+
+func handsAHarnessFile(project, dir string, literalDir bool, arg string) bool {
+	lower := strings.ToLower(arg)
+	switch {
+	case namesAHarnessFile(arg):
+		return true
+	case !literalDir:
+		return slices.ContainsFunc(harnessFiles(), func(file string) bool { return strings.Contains(lower, path.Base(file)) })
+	}
+	return reachesHarnessFile(project, joinedOrAbsolute(dir, arg))
+}
+
+func joinedOrAbsolute(dir, name string) string {
+	if filepath.IsAbs(name) {
+		return name
+	}
+	return filepath.Join(dir, name)
+}
+
+func literal(text string) bool {
+	return text != "" && !strings.ContainsAny(text, "$`~%\"'")
+}
+
+func setsInAThrowawayHome(project, command string, args []string) bool {
+	if scope := slices.Index(args, "--scope"); scope >= 0 && scope+1 < len(args) && args[scope+1] == "project" {
+		return false
+	}
+	read, home := "HOME", ""
+	if runtime.GOOS == "windows" {
+		read = "USERPROFILE"
+	}
+	for _, word := range strings.Fields(command) {
+		name, value, assigns := strings.Cut(word, "=")
+		if !assigns {
+			break
+		}
+		if name == read {
+			home = value
+		}
+	}
+	if !literal(home) {
+		return false
+	}
+	project, _ = filepath.Abs(project)
+	home = filepath.Clean(home)
+	if below, inside := within(project, home); filepath.IsAbs(home) && inside {
+		home = below
+	}
+	_, err := Root(project).Resolve(home)
+	return home != "." && err == nil
 }
 
 func reachesHarnessFile(project, written string) bool {
