@@ -87,12 +87,17 @@ pub struct PluginsPage {
     manifests: HashMap<String, Result<Manifest, String>>,
     stored: Result<Stored, String>,
     grants: Result<Grants, String>,
+    held: serde_json::Value,
     painted: Rc<Cell<Option<Instant>>>,
 }
 
 impl PluginsPage {
     pub fn new() -> Self {
+        let grants = Home::find()
+            .and_then(|home| Grants::load(&home))
+            .map_err(|error| error.to_string());
         PluginsPage {
+            held: held(&grants),
             shown: None,
             tab: Tab::Consent,
             problem: None,
@@ -100,9 +105,7 @@ impl PluginsPage {
             scans: HashMap::new(),
             manifests: HashMap::new(),
             stored: Stored::load(),
-            grants: Home::find()
-                .and_then(|home| Grants::load(&home))
-                .map_err(|error| error.to_string()),
+            grants,
             painted: Rc::new(Cell::new(None)),
         }
     }
@@ -641,6 +644,7 @@ impl PluginsPage {
         });
         match set {
             Ok(()) => {
+                self.held = held(&self.grants);
                 self.problem = None;
                 cx.notify();
             }
@@ -709,7 +713,11 @@ impl PluginsPage {
                     id: SharedString::from(format!("agent-{}", command.name)),
                     name: command.name.clone().into(),
                     about: about.into(),
-                    source: Source::Default,
+                    source: if self.held["grants"][manifest.id.as_str()][&command.name].is_null() {
+                        Source::Default
+                    } else {
+                        Source::Global
+                    },
                     control: control.into_any_element(),
                 }
             })
@@ -785,6 +793,15 @@ impl PluginsPage {
                 theme,
             ))
     }
+}
+
+fn held(grants: &Result<Grants, String>) -> serde_json::Value {
+    grants
+        .as_ref()
+        .ok()
+        .and_then(|grants| std::fs::read_to_string(grants.path()).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
 }
 
 fn gradient(id: &str) -> Background {

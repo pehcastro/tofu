@@ -1,5 +1,7 @@
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -11,26 +13,27 @@ use desk_ui::components::chip::flat_chip;
 use desk_ui::components::form::{TextInput, input, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::overlay::{MenuItem, menu};
-use desk_ui::components::paint::{ms, presented, tint};
+use desk_ui::components::paint::{ink, ms, presented, tint};
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::settings::{SettingRow, Source, page_title, setting_group_clickable};
-use desk_ui::components::skeleton::skeleton_lines;
+use desk_ui::components::size::T3;
 use desk_ui::components::tree::{IconPack, IconTheme, pick_pack, picked_pack};
 use desk_ui::live::ActiveTheme;
 use desk_ui::motion::{Phase, Presence, reduced_motion};
 use desk_ui::theme::{ColorToken, NumberToken, Theme};
 use gpui::{
     AnyElement, ClickEvent, Context, Div, Entity, EntityId, EntityInputHandler, Focusable, Image,
-    KeyDownEvent, MouseDownEvent, Render, SharedString, Subscription, WeakEntity, Window, deferred,
-    div, img, prelude::*, px, relative,
+    KeyDownEvent, MouseDownEvent, Render, SharedString, Subscription, WeakEntity, Window, canvas,
+    deferred, div, img, prelude::*, px, relative,
 };
 
 use super::fixture::{
     Control, DESK_NAV, DeskPage, FIRST_TOFU_PAGE, PLUGINS_GENERAL, PLUGINS_NAV, PageId, Scope,
-    Setting, TOFU_NAV,
+    Setting, TOFU_NAV, TOFU_PAGES,
 };
 use super::keys::KeysPage;
 use super::plugins::PluginsPage;
+use super::stored::Stored;
 use super::terminal::TerminalPage;
 use crate::modules::chat::Chat;
 use crate::plugins;
@@ -56,7 +59,15 @@ const SELECT_WIDTH: f32 = 132.0;
 const MENU_DROP: f32 = 32.0;
 const PROBLEM_TEXT: f32 = 12.0;
 const PROBLEM_GAP: f32 = 4.0;
-const READING_LINES: usize = 8;
+const WAITING: &str = "Waiting for tofu";
+const CHOICE_GAP: f32 = 2.0;
+const CHOICE_PAD: f32 = 2.0;
+const CHOICE_RADIUS: f32 = 8.0;
+const CHOICE_FILL: f32 = 0.04;
+const CHOICE_ON: f32 = 0.12;
+const CHOICE_PILL_X: f32 = 10.0;
+const CHOICE_PILL_Y: f32 = 3.0;
+const CHOICE_PILL_RADIUS: f32 = 6.0;
 const NO_TOFU: &str = "Settings reads tofu's settings from the tofu the work screen runs, and no work screen is open here.";
 
 pub struct Rows {
@@ -74,6 +85,9 @@ pub struct Rows {
     shells: Option<Entity<TerminalPage>>,
     keys: Option<Entity<KeysPage>>,
     plugins: Option<(Entity<PluginsPage>, Subscription)>,
+    stored: Result<Stored, String>,
+    opened: Option<Instant>,
+    created: Rc<Cell<Option<Instant>>>,
 }
 
 struct Field {
@@ -102,6 +116,9 @@ impl Rows {
             shells: None,
             keys: None,
             plugins: None,
+            stored: Stored::load(),
+            opened: None,
+            created: Rc::new(Cell::new(Some(Instant::now()))),
         }
     }
 
@@ -207,16 +224,6 @@ impl Rows {
         }
         self.switching.clear();
         self.answer.answered(read);
-        if let (PageId::Tofu(name), Some(read)) = (&self.page, &self.answer.read)
-            && !read
-                .value
-                .categories
-                .iter()
-                .any(|category| category.name == **name)
-            && let Some(first) = read.value.categories.first()
-        {
-            self.page = PageId::Tofu(first.name.clone().into());
-        }
         cx.notify();
     }
 
@@ -263,7 +270,7 @@ impl Rows {
                 let read = self.answer.read.as_ref()?;
                 match read.value.get(key)?.value {
                     Value::Switch(on) => Some(on),
-                    Value::Number(_) | Value::Text(_) => None,
+                    Value::Number(_) | Value::Text(_) | Value::Choice(..) => None,
                 }
             });
             let Some(on) = on else {
@@ -280,17 +287,46 @@ impl Rows {
             .groups
             .iter()
             .flat_map(|(_, settings)| settings.iter())
-            .find_map(|setting| match setting.control {
-                Control::Switch(start) if setting.key == key => Some((setting.key, start)),
-                Control::Switch(_) | Control::Pack => None,
-            });
-        let Some((key, start)) = found else {
+            .find(|setting| setting.key == key);
+        let Some(setting) = found else {
             return;
         };
-        let now = self.flipped.get(key).copied().unwrap_or(start);
-        self.flipped.insert(key, !now);
-        eprintln!("desk: settings {key} {now} -> {}", !now);
+        let key = setting.key;
+        match setting.control {
+            Control::Switch(start) => {
+                let now = self.flipped.get(key).copied().unwrap_or(start);
+                self.flipped.insert(key, !now);
+                eprintln!("desk: settings {key} {now} -> {}", !now);
+            }
+            Control::Stored => self.flip_stored(key),
+            Control::Pack => return,
+        }
         cx.notify();
+    }
+
+    fn flip_stored(&mut self, key: &'static str) {
+        let flipped = self
+            .stored
+            .as_mut()
+            .map_err(|e| e.clone())
+            .and_then(|stored| {
+                let on = !stored.switch(key);
+                stored.set_switch(key, on)?;
+                eprintln!(
+                    "desk: settings {key} {on} written to {}",
+                    stored.path().display()
+                );
+                Ok(())
+            });
+        match flipped {
+            Ok(()) => {
+                self.problems.remove(key);
+            }
+            Err(problem) => {
+                eprintln!("desk: settings {key} not written: {problem}");
+                self.problems.insert(key.to_owned(), sentence(&problem));
+            }
+        }
     }
 
     fn commit(&mut self, key: &str, cx: &mut Context<Self>) {
@@ -353,6 +389,35 @@ impl Rows {
                     }))
                     .into_any_element()
             }
+            Value::Choice(picked, choices) => div()
+                .flex()
+                .flex_none()
+                .gap(px(CHOICE_GAP))
+                .p(px(CHOICE_PAD))
+                .rounded(px(CHOICE_RADIUS))
+                .bg(ink(theme, CHOICE_FILL))
+                .text_size(px(PROBLEM_TEXT))
+                .children(choices.iter().map(|choice| {
+                    let on = choice == picked;
+                    let (written, value) = (key.clone(), choice.clone());
+                    div()
+                        .id(SharedString::from(format!("{key}-{choice}")))
+                        .px(px(CHOICE_PILL_X))
+                        .py(px(CHOICE_PILL_Y))
+                        .rounded(px(CHOICE_PILL_RADIUS))
+                        .cursor_pointer()
+                        .when(on, |pill| {
+                            pill.bg(ink(theme, CHOICE_ON))
+                                .text_color(theme.color(ColorToken::TextStrong))
+                        })
+                        .when(!on, |pill| pill.text_color(ink(theme, T3)))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.write(written.clone(), value.clone(), cx);
+                        }))
+                        .child(choice.clone())
+                }))
+                .into_any_element(),
             Value::Number(_) | Value::Text(_) => {
                 let input = self.field(&key, &setting.value, window, cx);
                 let entered = key.clone();
@@ -393,12 +458,9 @@ impl Rows {
         let mut list = HoverList::new("settings-nav", theme);
         let mut at = 0;
         let mut selected = None;
-        let tofu: Vec<PageId> = self
-            .answer
-            .read
+        let tofu: Vec<PageId> = TOFU_PAGES
             .iter()
-            .flat_map(|read| &read.value.categories)
-            .map(|category| PageId::Tofu(category.name.clone().into()))
+            .map(|name| PageId::Tofu((*name).into()))
             .collect();
         let desk: Vec<PageId> = DESK_NAV.1.iter().copied().map(PageId::Desk).collect();
         let installed: Vec<PageId> = [PageId::Plugins(None)]
@@ -421,6 +483,9 @@ impl Rows {
                     row(name.clone(), page == self.page, false, theme)
                         .child(name)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            if this.page != page && matches!(page, PageId::Plugins(None)) {
+                                this.opened = Some(Instant::now());
+                            }
                             this.page = page.clone();
                             cx.notify();
                         })),
@@ -586,12 +651,29 @@ impl Rows {
                     }))
                     .into_any_element()
             }
+            Control::Stored => {
+                let on = self
+                    .stored
+                    .as_ref()
+                    .is_ok_and(|stored| stored.switch(setting.key));
+                switch_bare(setting.key, setting.name, on, theme)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.flip(setting.key, cx);
+                    }))
+                    .into_any_element()
+            }
             Control::Pack => self.pack_picker(theme, window, cx).into_any_element(),
         };
+        let about = self
+            .problems
+            .get(setting.key)
+            .cloned()
+            .unwrap_or_else(|| setting.desc.into());
         SettingRow {
             id: setting.key.into(),
             name: setting.name.into(),
-            about: setting.desc.into(),
+            about,
             source: Source::Default,
             control,
         }
@@ -661,8 +743,8 @@ impl Rows {
         }
         let Some(read) = self.answer.read.clone() else {
             let reading = match &self.answer.failed {
-                Some(error) => frame::note(error.to_string(), theme),
-                None => skeleton_lines("settings-reading", READING_LINES, theme, cx),
+                Some(error) => frame::note(error.to_string(), theme).truncate(),
+                None => frame::note(WAITING, theme),
             };
             return div()
                 .child(page_title(name.to_owned(), None, theme))
@@ -767,7 +849,8 @@ impl Render for Rows {
             PageId::Tofu(name) => self.tofu_page(&name, &theme, window, cx),
             PageId::Plugins(shown) => {
                 let page = self.plugins_page(cx);
-                page.update(cx, |page, _| page.show(shown));
+                let opened = self.opened.take();
+                page.update(cx, |page, _| page.show(shown, opened));
                 page.into_any_element()
             }
         };
@@ -786,6 +869,20 @@ impl Render for Rows {
                     .child(page_body),
             ),
         );
+        let created = Rc::clone(&self.created);
+        let first_frame = canvas(
+            |_, _, _| {},
+            move |_, (), _, _| {
+                if let Some(at) = created.take() {
+                    eprintln!(
+                        "desk: settings: first frame {:.1}",
+                        at.elapsed().as_secs_f64() * 1000.0
+                    );
+                }
+            },
+        )
+        .absolute()
+        .size_0();
         frame::tile(
             frame::tabbed("settings", scope, None),
             &theme,
@@ -796,7 +893,8 @@ impl Render for Rows {
                 .relative()
                 .child(self.nav(&theme, cx))
                 .child(content)
-                .children(sheet),
+                .children(sheet)
+                .child(first_frame),
         )
     }
 }

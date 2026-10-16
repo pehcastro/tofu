@@ -1,6 +1,8 @@
 use desk_core::settings::Scope as WireScope;
 use gpui::SharedString;
 
+use super::stored::{GUIDES, VIM};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeskPage {
     Keys,
@@ -50,6 +52,16 @@ pub const DESK_NAV: (&str, [DeskPage; 4]) = (
 );
 pub const TOFU_NAV: &str = "tofu";
 pub const FIRST_TOFU_PAGE: &str = "Turn";
+pub const TOFU_PAGES: [&str; 8] = [
+    "Appearance",
+    "Interaction",
+    "Context",
+    "Files",
+    "Shell",
+    "Turn",
+    "Projects",
+    "Browser",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
@@ -68,6 +80,7 @@ impl Scope {
 
 pub enum Control {
     Switch(bool),
+    Stored,
     Pack,
 }
 
@@ -97,16 +110,35 @@ pub const FILE_ICONS: &str = "file-icons";
 
 const EDITOR: Page = Page {
     title: "Editor",
-    desc: "How the editor draws your files.",
-    groups: &[(
-        "Files",
-        &[Setting {
-            key: FILE_ICONS,
-            name: "File icons",
-            desc: "The icon pack the file tree and the file tabs draw.",
-            control: Control::Pack,
-        }],
-    )],
+    desc: "How the editor draws your files. Changes go to ~/.tofu/desk/config/settings.json.",
+    groups: &[
+        (
+            "Files",
+            &[Setting {
+                key: FILE_ICONS,
+                name: "File icons",
+                desc: "The icon pack the file tree and the file tabs draw.",
+                control: Control::Pack,
+            }],
+        ),
+        (
+            "Editing",
+            &[
+                Setting {
+                    key: VIM,
+                    name: "Vim",
+                    desc: "Normal, insert and visual modes, and :w to save. A file opened after the change uses it.",
+                    control: Control::Stored,
+                },
+                Setting {
+                    key: GUIDES,
+                    name: "Whitespace guides",
+                    desc: "A thin line at each indent level.",
+                    control: Control::Stored,
+                },
+            ],
+        ),
+    ],
 };
 
 const TERMINAL: Page = Page {
