@@ -49,30 +49,31 @@ func shell(env Env, ev event) (Answer, error) {
 	if reason := flowsRefusal(env, stripped); reason != "" {
 		return deny(reason), nil
 	}
-	reason, err := shellRefusal(env, ev, command, stripped)
+	git := withoutQuotedText(stripped)
+	reason, err := shellRefusal(env, ev, command, stripped, git)
 	if reason != "" {
 		return deny(reason), nil
 	}
 	if err != nil {
 		return Answer{}, err
 	}
-	if gitPublishes().MatchString(stripped) {
+	if gitPublishes().MatchString(git) {
 		return refuse(0, "NOTE: git add, commit and push need the owner's explicit approval in this turn. No agent, bot or harness is ever a co-author."), nil
 	}
 	return Answer{}, nil
 }
 
-func shellRefusal(env Env, ev event, command, stripped string) (string, error) {
+func shellRefusal(env Env, ev event, command, stripped, git string) (string, error) {
 	switch {
 	case interpreterReadsScript().MatchString(command) && (scriptWritesGo().MatchString(command) || scriptOpensForWrite().MatchString(command) && goWord().MatchString(command)):
 		return interpreterRefusal, nil
 	case shellWritesSource().MatchString(stripped) || sedEditsSource(stripped):
 		return shellWriteRefusal, nil
-	case gitChangesTree().MatchString(stripped):
+	case gitChangesTree().MatchString(git):
 		if !blank(ev.AgentID) {
 			return subagentGitRefusal, nil
 		}
-		if gitDiscardsWork().MatchString(stripped) || stashes(stripped) {
+		if gitDiscardsWork().MatchString(git) || stashes(git) {
 			return discardRefusal, nil
 		}
 		return "", nil
@@ -80,7 +81,7 @@ func shellRefusal(env Env, ev event, command, stripped string) (string, error) {
 		return openrouterRefusal, nil
 	case liveCost().MatchString(stripped) && !dryRun().MatchString(stripped):
 		return liveCostRefusal, nil
-	case gitWorktree().MatchString(stripped):
+	case gitWorktree().MatchString(git):
 		return worktreeRefusal, nil
 	case goTestPattern().MatchString(stripped) && !parallelBound().MatchString(stripped):
 		return unboundedTestRefusal, nil
@@ -98,6 +99,69 @@ func stashes(command string) bool {
 		if !readsOnly {
 			return true
 		}
+	}
+	return false
+}
+
+func withoutQuotedText(command string) string {
+	var out, word strings.Builder
+	var words []string
+	kept, inWord := 0, false
+	endWord := func() {
+		if inWord && (len(words) > 0 || !strings.Contains(word.String(), "=")) {
+			words = append(words, word.String())
+		}
+		word.Reset()
+		inWord = false
+	}
+	for at := 0; at < len(command); at++ {
+		b := command[at]
+		switch {
+		case b == '\'' || b == '"':
+			end := at + 1
+			for end < len(command) && command[end] != b {
+				if b == '"' && command[end] == '\\' {
+					end++
+				}
+				end++
+			}
+			end = min(end, len(command))
+			body := command[at+1 : end]
+			word.WriteString(body)
+			inWord = true
+			if quotesText(words) && (b == '\'' || !strings.ContainsAny(body, "$`")) {
+				out.WriteString(command[kept : at+1])
+				kept = end
+			}
+			at = end
+		case b == '\\' && at+1 < len(command):
+			at++
+			word.WriteByte(command[at])
+			inWord = true
+		case strings.IndexByte(";&|\n()`", b) >= 0:
+			endWord()
+			words = nil
+		case isSpace(b):
+			endWord()
+		default:
+			word.WriteByte(b)
+			inWord = true
+		}
+	}
+	return out.String() + command[kept:]
+}
+
+func quotesText(words []string) bool {
+	if len(words) == 0 {
+		return false
+	}
+	program := strings.ToLower(words[0])
+	program = strings.TrimSuffix(program[strings.LastIndexAny(program, `/\`)+1:], ".exe")
+	switch program {
+	case "grep", "rg":
+		return true
+	case "tofu", "boji":
+		return len(words) > 1 && words[1] == "boardy"
 	}
 	return false
 }
