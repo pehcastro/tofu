@@ -1,7 +1,7 @@
 use desk_control::params::{
-    FocusTarget, LayoutApply, LayoutSource, TabActivate, TabPick, TileOpen,
+    FocusTarget, LayoutApply, LayoutSource, TabActivate, TabPick, TileFocus, TileOpen,
 };
-use desk_control::replies::{Applied, FocusSet, TabActive, TileOpened, Tree};
+use desk_control::replies::{Applied, FocusSet, TabActive, TileFocused, TileOpened, Tree};
 use desk_control::shapes::{self, FocusKind};
 use desk_control::{Call, ErrorCode};
 use desk_tiling::{
@@ -33,6 +33,29 @@ pub fn answer(call: &Call, work: Option<&Entity<Work>>, cx: &mut App) -> Option<
             json(&Tree {
                 tree: tree(active(work, cx).and_then(Workspace::tree)),
             })
+        }),
+        Call::TileFocus(TileFocus { id, toward }) => work.and_then(|work| {
+            if id.is_some() == toward.is_some() {
+                return Err((
+                    ErrorCode::BadParams,
+                    "tile.focus takes a tile id or --toward left|right|top|bottom, one of them"
+                        .to_owned(),
+                ));
+            }
+            apply(
+                work,
+                false,
+                |held, area| match (id, toward) {
+                    (Some(tile), _) => held.focus_tile(TileId(*tile)),
+                    (None, Some(at)) => held.focus_toward(side(*at), area),
+                    (None, None) => Err(Refusal::NoSuchTile),
+                },
+                cx,
+            )?;
+            let focus = active(work, cx)
+                .and_then(Workspace::focus)
+                .ok_or_else(|| refused(Refusal::NoSuchTile))?;
+            json(&TileFocused { focus: focus.0 })
         }),
         Call::FocusSet(FocusTarget::Tile(tile)) => work.and_then(|work| {
             apply(work, false, |held, _| held.focus_tile(TileId(*tile)), cx)?;

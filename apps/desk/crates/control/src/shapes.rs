@@ -202,6 +202,35 @@ pub enum TaskState {
     Cancelled,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum EventKind {
+    #[serde(rename = "workspace.switched")]
+    WorkspaceSwitched,
+    #[serde(rename = "tile.opened")]
+    TileOpened,
+    #[serde(rename = "tile.closed")]
+    TileClosed,
+    #[serde(rename = "tile.focused")]
+    TileFocused,
+    #[serde(rename = "file.saved")]
+    FileSaved,
+    #[serde(rename = "draw.saved")]
+    DrawSaved,
+}
+
+impl EventKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            EventKind::WorkspaceSwitched => "workspace.switched",
+            EventKind::TileOpened => "tile.opened",
+            EventKind::TileClosed => "tile.closed",
+            EventKind::TileFocused => "tile.focused",
+            EventKind::FileSaved => "file.saved",
+            EventKind::DrawSaved => "draw.saved",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspacePick {

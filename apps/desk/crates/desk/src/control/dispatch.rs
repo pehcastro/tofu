@@ -1,4 +1,5 @@
-use desk_control::params::{ScreenList, ScreenOpen, WorkspaceScope};
+use desk_control::events::Feed;
+use desk_control::params::{ScreenList, ScreenOpen, UriRef, WorkspaceScope};
 use desk_control::replies::{
     Focus, Layout, ModuleInfo, Screen, ScreenCurrent, ScreenOpened, Tile, Workspace as Listed,
 };
@@ -11,7 +12,7 @@ use serde_json::Value;
 
 use super::change::{self, Answered, json};
 use super::workspace::{self, Step};
-use super::{capture, editor, tabs};
+use super::{capture, editor, state, tabs};
 use crate::desk::{Desk, ScreenGroup, screen_mark};
 use crate::plugins;
 
@@ -34,6 +35,24 @@ pub fn answer(
     window: AnyWindowHandle,
     screens: &[(&'static str, bool)],
     journal: &mut Vec<Step>,
+    feed: &Feed,
+    cx: &mut App,
+) -> Reply {
+    let touch = state::touched(&request.call);
+    let before = state::seen(window, cx);
+    let reply = respond(request, window, screens, journal, feed, cx);
+    if let Ok(value) = &reply {
+        state::emit(feed, &touch, before, state::seen(window, cx), value);
+    }
+    reply
+}
+
+fn respond(
+    request: Request,
+    window: AnyWindowHandle,
+    screens: &[(&'static str, bool)],
+    journal: &mut Vec<Step>,
+    feed: &Feed,
     cx: &mut App,
 ) -> Reply {
     let Request { id, call } = request;
@@ -85,6 +104,7 @@ pub fn answer(
         | Call::EditorTextReplace(_)
         | Call::EditorFind(_) => Some(editor::answer(&call, window, cx)),
         Call::Capture(capture) => Some(capture::answer(capture, window, cx)),
+        Call::StateGet(UriRef { uri }) => Some(state::get(uri, window, work.as_ref(), feed, cx)),
         #[cfg(feature = "plugin-draw")]
         Call::CommandRun(run) if run.name.starts_with("draw.") => {
             Some(super::draw::answer(run, work.as_ref(), cx))
@@ -264,7 +284,7 @@ pub(super) fn count(tiles: usize) -> u32 {
     u32::try_from(tiles).unwrap_or(u32::MAX)
 }
 
-fn listed(workspaces: &[Workspace], active: usize, area: Rect) -> Vec<Listed> {
+pub(super) fn listed(workspaces: &[Workspace], active: usize, area: Rect) -> Vec<Listed> {
     workspaces
         .iter()
         .enumerate()
@@ -283,7 +303,7 @@ fn listed(workspaces: &[Workspace], active: usize, area: Rect) -> Vec<Listed> {
         .collect()
 }
 
-fn tiles(workspace: &Workspace, area: Rect) -> Vec<Tile> {
+pub(super) fn tiles(workspace: &Workspace, area: Rect) -> Vec<Tile> {
     workspace
         .tiles(area)
         .into_iter()

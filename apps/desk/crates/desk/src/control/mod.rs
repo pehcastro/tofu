@@ -4,12 +4,14 @@ mod dispatch;
 #[cfg(feature = "plugin-draw")]
 mod draw;
 mod editor;
+mod state;
 mod tabs;
 mod workspace;
 
 use std::io;
 use std::time::{Duration, Instant};
 
+use desk_control::events::Feed;
 use desk_control::transport::{Reply, Server};
 use desk_control::{ErrorCode, Failure, Request};
 use gpui::{AnyWindowHandle, App};
@@ -23,7 +25,12 @@ pub struct Asked {
     reply: flume::Sender<Reply>,
 }
 
-pub fn start() -> io::Result<(Server, flume::Receiver<Asked>)> {
+pub struct Inbox {
+    asked: flume::Receiver<Asked>,
+    feed: Feed,
+}
+
+pub fn start() -> io::Result<(Server, Inbox)> {
     let (ask, asked) = flume::unbounded();
     let project = project::launch()
         .ok()
@@ -33,7 +40,8 @@ pub fn start() -> io::Result<(Server, flume::Receiver<Asked>)> {
         project.as_deref(),
         move |request| forward(&ask, request),
     )?;
-    Ok((server, asked))
+    let feed = server.feed();
+    Ok((server, Inbox { asked, feed }))
 }
 
 fn forward(ask: &flume::Sender<Asked>, request: Request) -> Reply {
@@ -60,7 +68,7 @@ fn forward(ask: &flume::Sender<Asked>, request: Request) -> Reply {
 }
 
 pub fn serve(
-    asked: flume::Receiver<Asked>,
+    Inbox { asked, feed }: Inbox,
     window: AnyWindowHandle,
     screens: Vec<(&'static str, bool)>,
     cx: &mut App,
@@ -69,8 +77,8 @@ pub fn serve(
         let mut journal = Vec::new();
         while let Ok(Asked { request, reply }) = asked.recv_async().await {
             let verb = dispatch::verb(&request.call);
-            let answer =
-                cx.update(|cx| dispatch::answer(request, window, &screens, &mut journal, cx));
+            let answer = cx
+                .update(|cx| dispatch::answer(request, window, &screens, &mut journal, &feed, cx));
             match &answer {
                 Ok(_) => eprintln!("desk: control {verb} ok"),
                 Err(failure) => eprintln!("desk: control {verb} refused {}", failure.error.message),

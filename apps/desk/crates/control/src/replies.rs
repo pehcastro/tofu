@@ -1,7 +1,7 @@
 use crate::error::ErrorCode;
 use crate::shapes::{
-    Access, Extent, FocusKind, Mode, Module, Node, PluginState, Range, Rect, ScreenGroup,
-    TaskState, TileId,
+    Access, EventKind, Extent, FocusKind, Mode, Module, Node, PluginState, Range, Rect,
+    ScreenGroup, TaskState, TileId,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -124,8 +124,9 @@ replies! {
     Snapshot { value: Value, revision: u64 }
     StateEntry { uri: String, revision: u64, bytes: u64 }
     Subscribed { uri: String, revision: u64 }
-    Event { cursor: String, #[serde(rename = "type")] kind: String, source: String, at: String, data: Value }
-    EventPage { events: Vec<Event>, resync: bool }
+    Following { head: u64 }
+    Event { cursor: u64, uri: String, revision: u64, kind: EventKind, at: u64 }
+    EventPage { events: Vec<Event>, resync: bool, head: u64 }
     AuditEntry { caller: String, command: String, args_hash: String, code: Option<ErrorCode>, ms: u64 }
     Verdict { verdict: String, reason: String }
     Check { name: String, passed: bool, detail: String }

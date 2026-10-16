@@ -42,6 +42,7 @@ params! {
     WorkspaceScope { workspace: Option<String> }
     TileRef { id: TileId }
     MaybeTile { id: Option<TileId> }
+    TileFocus { id: Option<TileId>, toward: Option<Side> }
     TileOpen { module: crate::shapes::Module, plugin: Option<String>, target: Option<Target>, args: Option<Value> }
     TileSwap { a: TileId, b: TileId }
     TileResize { id: TileId, side: Side, by: Resize }
@@ -87,7 +88,7 @@ params! {
     DrawBoard { board: String }
     DrawNode { key: String, label: String }
     DrawEdge { from: String, to: String, #[serde(default, skip_serializing_if = "Option::is_none")] label: Option<String> }
-    DrawDiagram { board: String, nodes: Vec<DrawNode>, edges: Vec<DrawEdge> }
+    DrawDiagram { board: String, nodes: Vec<DrawNode>, edges: Vec<DrawEdge>, layout: Option<String> }
     DrawShapes { board: String, shapes: Option<Vec<Value>>, #[serde(alias = "shapes-file")] shapes_file: Option<String> }
     DrawConnect { board: String, edges: Option<Vec<Value>>, #[serde(alias = "edges-file")] edges_file: Option<String> }
     DrawUpdate { board: String, patches: Option<Vec<Value>>, #[serde(alias = "patches-file")] patches_file: Option<String> }
@@ -106,7 +107,7 @@ params! {
     UndoToken { token: Option<String> }
     UriRef { uri: String }
     StateList { prefix: Option<String>, cursor: Option<String> }
-    Events { since: Option<String>, #[serde(default)] follow: bool, #[serde(default)] filter: Vec<String> }
+    EventsSince { cursor: u64 }
     Audit { since: Option<String>, caller: Option<String> }
     GateJudge { caller: String, command: String, arguments: Value, purpose: String }
     Conformance { plugin: String }
@@ -145,13 +146,6 @@ pub enum Switch {
 }
 
 pub const SWITCH_FORMS: &str = "workspace.switch takes to as a name, a decimal index, next, prev, or one of {\"id\": s}, {\"name\": s}, {\"index\": n}";
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum TileFocus {
-    Id(TileId),
-    Toward(Side),
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

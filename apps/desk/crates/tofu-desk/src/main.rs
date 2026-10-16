@@ -1,6 +1,6 @@
 mod instance;
 
-use desk_control::transport::Reply;
+use desk_control::transport::{Client, Reply};
 use desk_control::{ErrorCode, Id, JsonRpc, Method, Success, WireRequest};
 use instance::Found;
 use schemars::SchemaGenerator;
@@ -60,12 +60,12 @@ fn main() -> ExitCode {
         .iter()
         .copied()
         .partition(|arg| verb == "capture" && arg.ends_with(".png"));
-    let (line, exit) = match run(&verb, &rest).and_then(|reply| saved(reply, out.first().copied()))
-    {
-        Ok(reply) => replied(reply, json),
-        Err(outcome) if json => (envelope(&verb, &outcome).to_string(), outcome.exit),
-        Err(o) => (format!("✗ {}: {} → {}", o.code, o.message, o.hint), o.exit),
-    };
+    let (line, exit) =
+        match run(&verb, &rest, json).and_then(|reply| saved(reply, out.first().copied())) {
+            Ok(reply) => replied(reply, json),
+            Err(outcome) if json => (envelope(&verb, &outcome).to_string(), outcome.exit),
+            Err(o) => (format!("✗ {}: {} → {}", o.code, o.message, o.hint), o.exit),
+        };
     print_plain(&line, exit)
 }
 
@@ -167,7 +167,7 @@ fn io_outcome(e: &std::io::Error) -> Outcome {
     }
 }
 
-fn run(verb: &str, rest: &[&str]) -> Result<Reply, Outcome> {
+fn run(verb: &str, rest: &[&str], json: bool) -> Result<Reply, Outcome> {
     let Some(&method) = Method::ALL.iter().find(|m| m.name() == verb) else {
         return Err(Outcome {
             exit: Exit::Usage,
@@ -221,7 +221,35 @@ fn run(verb: &str, rest: &[&str]) -> Result<Reply, Outcome> {
         method: wire.to_owned(),
         params: Some(params),
     };
-    client.call(&request).map_err(|e| io_outcome(&e))
+    let reply = client.call(&request).map_err(|e| io_outcome(&e))?;
+    match (method, reply) {
+        (Method::EventsSubscribe, Ok(head)) => follow(client, head, json),
+        (_, reply) => Ok(reply),
+    }
+}
+
+fn follow(mut client: Client, head: Value, json: bool) -> Result<Reply, Outcome> {
+    let mut out = std::io::stdout().lock();
+    let (first, _) = replied(Ok(head), json);
+    writeln!(out, "{first}")
+        .and_then(|()| out.flush())
+        .map_err(|e| io_outcome(&e))?;
+    client
+        .listen(|line| {
+            let shown = match json {
+                true => line.to_owned(),
+                false => serde_json::from_str::<Value>(line)
+                    .map_or_else(|_| line.to_owned(), |notice| notice["params"].to_string()),
+            };
+            writeln!(out, "{shown}").and_then(|()| out.flush())
+        })
+        .map_err(|e| io_outcome(&e))?;
+    Err(Outcome {
+        exit: Exit::NotRunning,
+        code: ErrorCode::DeskNotRunning.name(),
+        message: "the desk closed the event stream".to_owned(),
+        hint: "start the desk, then catch up with tofu-desk events.since <cursor>".to_owned(),
+    })
 }
 
 fn usage_outcome(message: String, usage: String) -> Outcome {

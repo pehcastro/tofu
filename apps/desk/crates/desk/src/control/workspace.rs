@@ -114,6 +114,7 @@ fn change(call: &Call, board: &mut Board, journal: &mut Vec<Step>) -> Answered {
             let index = match to {
                 Switch::Id(id) | Switch::Name(id) => find(board, id)?,
                 Switch::Index(at) => at_index(&at.to_string())?,
+                Switch::Bare(Value::Number(at)) => at_index(&at.to_string())?,
                 Switch::Bare(Value::String(at)) if at.bytes().all(|b| b.is_ascii_digit()) => {
                     at_index(at)?
                 }

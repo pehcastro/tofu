@@ -1,5 +1,6 @@
 mod envelope;
 mod error;
+pub mod events;
 pub mod params;
 pub mod replies;
 pub mod shapes;

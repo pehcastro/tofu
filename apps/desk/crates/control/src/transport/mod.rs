@@ -1,8 +1,9 @@
 use crate::CONTRACT;
 use crate::envelope::{Failure, Id, JsonRpc, Request, Success, WireRequest, parse_line};
 use crate::error::ErrorCode;
-use crate::params::Initialize;
-use crate::replies::{Initialized, Pong};
+use crate::events::Feed;
+use crate::params::{EventsSince, Initialize};
+use crate::replies::{Following, Initialized, Pong};
 use crate::verbs::Call;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,6 +22,8 @@ type Handler = dyn Fn(Request) -> Reply + Send + Sync;
 
 const SUPPORTED_VERSION: u32 = 1;
 const PROBE_TIMEOUT: Duration = Duration::from_millis(200);
+const EVENT: &str = "events.event";
+const RESYNC: &str = "events.resync";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Instance {
@@ -37,10 +40,18 @@ struct Hello {
     token: String,
 }
 
+#[derive(Serialize)]
+struct Notice<'a, T> {
+    jsonrpc: JsonRpc,
+    method: &'a str,
+    params: T,
+}
+
 struct Shared {
     instance: Instance,
     started: Instant,
     handler: Box<Handler>,
+    feed: Feed,
 }
 
 pub struct Server {
@@ -77,6 +88,7 @@ impl Server {
             instance,
             started: Instant::now(),
             handler: Box::new(handle),
+            feed: Feed::default(),
         });
         let stop = Arc::new(AtomicBool::new(false));
         let accept = {
@@ -103,6 +115,10 @@ impl Server {
 
     pub fn instance(&self) -> &Instance {
         &self.shared.instance
+    }
+
+    pub fn feed(&self) -> Feed {
+        self.shared.feed.clone()
     }
 }
 
@@ -140,15 +156,20 @@ fn serve(shared: &Shared, stream: TcpStream) {
     }
     for line in lines {
         let Ok(line) = line else { return };
+        let mut following = None;
         let out = match parse_line(&line) {
+            Ok(Request {
+                id,
+                call: Call::EventsSubscribe(_),
+            }) => {
+                let head = shared.feed.head();
+                following = Some(head);
+                success(id, Following { head })
+            }
             Ok(request) => {
                 let id = request.id.clone();
                 match answer(shared, request) {
-                    Ok(result) => serde_json::to_string(&Success {
-                        jsonrpc: JsonRpc::V2,
-                        id,
-                        result,
-                    }),
+                    Ok(result) => success(id, result),
                     Err(failure) => serde_json::to_string(&failure),
                 }
             }
@@ -161,11 +182,55 @@ fn serve(shared: &Shared, stream: TcpStream) {
         {
             return;
         }
+        if let Some(head) = following {
+            return follow(&shared.feed, &mut writer, head);
+        }
     }
+}
+
+fn success(id: Id, result: impl Serialize) -> serde_json::Result<String> {
+    serde_json::to_string(&Success {
+        jsonrpc: JsonRpc::V2,
+        id,
+        result,
+    })
+}
+
+fn follow(feed: &Feed, writer: &mut TcpStream, mut cursor: u64) {
+    loop {
+        let page = feed.after(cursor);
+        cursor = page.head;
+        let lines = match page.resync {
+            true => vec![notice(RESYNC, &page)],
+            false => page
+                .events
+                .iter()
+                .map(|event| notice(EVENT, event))
+                .collect(),
+        };
+        let sent = lines.into_iter().try_for_each(|line| {
+            let line = line.map_err(io::Error::other)?;
+            writeln!(writer, "{line}")
+        });
+        if sent.and_then(|()| writer.flush()).is_err() {
+            return;
+        }
+    }
+}
+
+fn notice(method: &str, params: impl Serialize) -> serde_json::Result<String> {
+    serde_json::to_string(&Notice {
+        jsonrpc: JsonRpc::V2,
+        method,
+        params,
+    })
 }
 
 fn answer(shared: &Shared, request: Request) -> Reply {
     match request.call {
+        Call::EventsSince(EventsSince { cursor }) => {
+            serde_json::to_value(shared.feed.since(cursor)).map_err(|e| internal(&request.id, &e))
+        }
         Call::DeskPing(_) => {
             let uptime_ms = u64::try_from(shared.started.elapsed().as_millis()).unwrap_or(u64::MAX);
             serde_json::to_value(Pong { rev: 0, uptime_ms }).map_err(|e| internal(&request.id, &e))
@@ -304,5 +369,17 @@ impl Client {
         let success: Success<Value> = serde_json::from_value(value)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         Ok(Ok(success.result))
+    }
+
+    pub fn listen(&mut self, mut each: impl FnMut(&str) -> io::Result<()>) -> io::Result<()> {
+        self.reader.get_ref().set_read_timeout(None)?;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if self.reader.read_line(&mut line)? == 0 {
+                return Ok(());
+            }
+            each(line.trim_end())?;
+        }
     }
 }

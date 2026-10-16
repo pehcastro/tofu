@@ -183,7 +183,8 @@ verbs! {
     StateList "state.list" p::StateList => Vec<r::StateEntry>, [];
     StateSubscribe "state.subscribe" p::UriRef => r::Subscribed, [NotFound];
     StateUnsubscribe "state.unsubscribe" p::UriRef => r::Ack, [NotFound];
-    Events "events" p::Events => r::EventPage, [OverLimit];
+    EventsSubscribe "events.subscribe" p::Empty => r::Following, [];
+    EventsSince "events.since" p::EventsSince => r::EventPage, [];
     Audit "audit" p::Audit => Vec<r::AuditEntry>, [];
     GateJudge "gate.judge" p::GateJudge => r::Verdict, [Refused];
     Conformance "conformance" p::Conformance => r::ConformanceReport, [PluginUnavailable];

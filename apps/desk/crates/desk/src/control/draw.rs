@@ -11,8 +11,8 @@ use desk_control::{Call, ErrorCode, shapes};
 use desk_core::home::Home;
 use desk_tiling::{Module, Rect};
 use draw_doc::{
-    Edge, Graph, Link, Node, Patch, Scene, Shape, add_shapes, connect, delete, diagram, graph,
-    update,
+    Edge, Graph, Layout, Link, Node, Patch, Scene, Shape, add_shapes, connect, delete, diagram,
+    graph, update,
 };
 use gpui::{App, Entity, px};
 use serde::Deserialize;
@@ -40,6 +40,8 @@ struct Diagram {
     board: String,
     nodes: Vec<Node>,
     edges: Vec<Edge>,
+    #[serde(default)]
+    layout: Layout,
 }
 
 #[derive(Deserialize)]
@@ -85,19 +87,27 @@ pub fn answer(run: &CommandRun, work: Option<&Entity<Work>>, cx: &mut App) -> An
                 board,
                 nodes,
                 edges,
+                layout,
             } = parsed(args)?;
             let started = Instant::now();
             let path = tile::board(&board).map_err(bad)?;
             let graph = Graph { nodes, edges };
-            let text = diagram(&graph)
-                .and_then(|scene| scene.write())
-                .map_err(|error| bad(error.to_string()))?;
+            let laid = Instant::now();
+            let scene = diagram(&graph, layout).map_err(|error| bad(error.to_string()))?;
+            eprintln!(
+                "desk: draw layout {layout} {} nodes in {} ms",
+                graph.nodes.len(),
+                laid.elapsed().as_millis()
+            );
+            let text = scene.write().map_err(|error| bad(error.to_string()))?;
             focus(work, cx)?;
             tile::replace(path.clone(), &text, cx).map_err(refused)?;
             let (n, e) = (graph.nodes.len(), graph.edges.len());
             let ms = started.elapsed().as_millis();
             eprintln!("desk: draw diagram {n} nodes {e} edges in {ms} ms");
-            Ok(json!({ "board": board, "path": path, "nodes": n, "edges": e, "ms": ms }))
+            Ok(
+                json!({ "board": board, "path": path, "nodes": n, "edges": e, "layout": layout, "ms": ms }),
+            )
         }
         "draw.snapshot" => {
             let Snapshot {
