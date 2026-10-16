@@ -86,7 +86,7 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 		output, readErr := os.ReadFile(r.logPath(name))
 		r.mu.Lock()
 		delete(r.running, name)
-		_ = os.Remove(r.statePath(name))
+		_ = os.Remove(r.runningPath(name))
 		_ = os.Remove(r.logPath(name))
 		r.mu.Unlock()
 		close(process.finished)

@@ -100,32 +100,20 @@ func shellsList(o verbOutput, registry *shell.Registry) int {
 
 func shellsLines(page cli.Page, shells []shellReading, now time.Time) []string {
 	if len(shells) == 0 {
-		return page.Title("Shells", nil, cli.Verdict{Mark: cli.Idle, Text: "none registered"})
+		return page.Title("Shells", nil, cli.Verdict{Mark: cli.Idle, Text: "none running"})
 	}
-	running := 0
 	rows := make([]cli.Row, len(shells))
 	for i, one := range shells {
-		mark, state := cli.Idle, string(one.State)
+		mark, state := cli.Active, string(one.State)
 		switch {
 		case one.LeftOver():
 			mark, state = cli.Warn, "left over"
 		case one.HeldByPerson():
-			mark, state = cli.Active, "running, held by a person"
-		case one.State == shell.Running:
-			mark = cli.Active
-		case one.ExitCode != nil:
-			state += " " + strconv.Itoa(*one.ExitCode)
-		}
-		if one.State == shell.Running {
-			running++
+			state = "running, held by a person"
 		}
 		rows[i] = cli.Row{Mark: mark, Cells: []string{one.Name, state, "pid " + strconv.Itoa(one.PID), ownerName(one.Owner)}, Detail: one.Command + " · " + page.Path(one.Dir) + " · " + one.timing.Words(now)}
 	}
-	facts := []string{plural(len(shells), "shell")}
-	if running > 0 {
-		facts = append(facts, strconv.Itoa(running)+" running")
-	}
-	return append(append(page.Title("Shells", facts, cli.Verdict{}), ""), cli.Indent(page.Rows(rows)...)...)
+	return append(append(page.Title("Shells", []string{plural(len(shells), "shell") + " running"}, cli.Verdict{}), ""), cli.Indent(page.Rows(rows)...)...)
 }
 
 func shellsLog(o verbOutput, registry *shell.Registry, name string) int {

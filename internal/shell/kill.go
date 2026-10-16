@@ -20,16 +20,16 @@ func HitDeadline(after time.Duration) string {
 	return "hit the deadline after " + strconv.FormatFloat(after.Seconds(), 'f', -1, 64) + " s"
 }
 
-func (r *Registry) Kill(name string) error { return r.stop(name, 0, HolderPerson) }
+func (r *Registry) Kill(name string) error { return r.stop(name, HolderPerson) }
 
-func (r *Registry) AgentKill(name string) error { return r.stop(name, 0, HolderAgent) }
+func (r *Registry) AgentKill(name string) error { return r.stop(name, HolderAgent) }
 
-func (r *Registry) KillAtDeadline(name string, deadline time.Duration) error {
-	return r.stop(name, deadline, HolderAgent)
+func (r *Registry) KillAtDeadline(name string, _ time.Duration) error {
+	return r.stop(name, HolderAgent)
 }
 
-func (r *Registry) stop(name string, deadline time.Duration, by Holder) error {
-	process, err := r.terminate(name, deadline, by)
+func (r *Registry) stop(name string, by Holder) error {
+	process, err := r.terminate(name, by)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (r *Registry) restart(name string, by Holder) (Shell, error) {
 	if err != nil {
 		return Shell{}, err
 	}
-	if err := r.stop(name, 0, by); err != nil && !errors.Is(err, ErrNotRunning) {
+	if err := r.stop(name, by); err != nil && !errors.Is(err, ErrNotRunning) {
 		return Shell{}, err
 	}
 	return r.Start(entry.Dir, name, entry.Command, entry.Owner, entry.Env...)
@@ -185,7 +185,7 @@ func (r *Registry) Owning(command string) []Shell {
 	return owned
 }
 
-func (r *Registry) terminate(name string, deadline time.Duration, by Holder) (*live, error) {
+func (r *Registry) terminate(name string, by Holder) (*live, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry, err := r.readLocked(name)
@@ -206,6 +206,6 @@ func (r *Registry) terminate(name string, deadline time.Duration, by Holder) (*l
 		return nil, err
 	}
 	ended := time.Now()
-	entry.State, entry.Ended, entry.Deadline = Killed, &ended, deadline.Milliseconds()
+	entry.State, entry.Ended = Killed, &ended
 	return process, r.writeLocked(entry)
 }

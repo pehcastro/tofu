@@ -859,6 +859,19 @@ func (s *server) scanShells(first bool) {
 	if err != nil {
 		return
 	}
+	var ended []string
+	s.mu.Lock()
+	for name, watched := range s.shells {
+		if watched.state == shell.Running && !slices.ContainsFunc(found, func(one shell.Shell) bool { return one.Name == name }) {
+			ended = append(ended, name)
+		}
+	}
+	s.mu.Unlock()
+	for _, name := range ended {
+		if one, err := s.Shells.Read(name); err == nil {
+			found = append(found, one)
+		}
+	}
 	listening := s.listenersOf(found)
 	background := slices.DeleteFunc(found, shell.Shell.OneShot)
 	mask := func(text string) string { return text }

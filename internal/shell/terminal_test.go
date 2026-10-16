@@ -136,10 +136,8 @@ func TestADeadlineKillSaysSoAndAStopDoesNot(t *testing.T) {
 	if err := registry.KillAtDeadline(got.Shell.Name, 1500*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
-	entry, _ := registry.Read(got.Shell.Name)
-	tail, _ := registry.Tail(got.Shell.Name, DefaultTail)
-	if entry.State != Killed || !strings.HasPrefix(tail, "before") || !strings.HasSuffix(tail, "tofu: hit the deadline after 1.5 s and was killed") {
-		t.Errorf("state %s, tail %q", entry.State, tail)
+	if entry, err := registry.Read(got.Shell.Name); err == nil {
+		t.Errorf("a one-shot killed at its deadline is still recorded as %+v, want it gone", entry)
 	}
 	stopped := startKept(t, t.TempDir(), command)
 	tailWhile(t, stopped, func(tail string, _ Shell) bool { return strings.Contains(tail, "before") })

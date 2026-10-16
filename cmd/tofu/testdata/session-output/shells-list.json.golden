@@ -6,32 +6,7 @@ exit 0
   "ok": true,
   "at": "AT",
   "data": {
-    "shells": [
-      {
-        "name": "build",
-        "command": "go build ./...",
-        "dir": "HOME/project",
-        "owner": "",
-        "pid": 4242,
-        "state": "exited",
-        "started": "AT",
-        "ended": "AT",
-        "exit_code": 0,
-        "elapsed_ms": 60000,
-        "last_output": "AT"
-      },
-      {
-        "name": "web",
-        "command": "npm run dev",
-        "dir": "HOME/project",
-        "owner": "tofu",
-        "pid": 4343,
-        "state": "killed",
-        "started": "AT",
-        "ended": "AT",
-        "elapsed_ms": 0
-      }
-    ]
+    "shells": []
   },
   "problems": []
 }

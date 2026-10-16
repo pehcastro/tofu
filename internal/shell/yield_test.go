@@ -37,8 +37,9 @@ func TestAShortCommandReturnsItsOutputAndCodeAndLeavesNothingBehind(t *testing.T
 		t.Fatalf("a command ending inside the yield came back %+v with output %q, want exited 3 with short", ran, output)
 	}
 	left, _ := os.ReadDir(dir)
-	if len(left) != 1 || left[0].Name() != highestClaimedFile {
-		t.Fatalf("a command ending inside the yield left %v in the registry, want only the highest name ever claimed", left)
+	running, _ := os.ReadDir(filepath.Join(dir, runningDir))
+	if len(left) != 2 || left[0].Name() != highestClaimedFile || len(running) != 0 {
+		t.Fatalf("a command ending inside the yield left %v and running %v in the registry, want only the highest name ever claimed", left, running)
 	}
 }
 

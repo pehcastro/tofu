@@ -268,6 +268,7 @@ type App struct {
 	moves          map[string]movement
 	liveShells     []shells.Entry
 	shellsTicking  bool
+	shellsPolling  bool
 	happened       []feed.Event
 	happenedIndex  map[string]int
 	feedStale      bool
@@ -474,9 +475,10 @@ func (a *App) reloadStaleModels() tea.Cmd {
 
 func (a *App) pollShells() tea.Cmd {
 	poll := a.options.Shells
-	if poll == nil {
+	if poll == nil || a.shellsPolling {
 		return nil
 	}
+	a.shellsPolling = true
 	return func() tea.Msg { return shellsMsg(poll()) }
 }
 
@@ -650,6 +652,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		}
 		return a.watchSetup()
 	case shellsMsg:
+		a.shellsPolling = false
 		a.showShells(msg)
 		if a.shellsTicking || !slices.ContainsFunc(msg, func(entry shells.Entry) bool { return entry.State == shells.Running }) {
 			return nil

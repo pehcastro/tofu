@@ -55,7 +55,7 @@ func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T)
 
 	gone := run("sleep 30", shell.Wait{Within: 200 * time.Millisecond, Kept: shell.KeptMoved})
 	c.until(seen("shell.started", gone.Name), "shell.started for "+gone.Name)
-	listed := filepath.Join(dir, gone.Name+".json")
+	listed := filepath.Join(dir, "running", gone.Name+".json")
 	if err := os.Rename(listed, listed+".away"); err != nil {
 		t.Fatal(err)
 	}

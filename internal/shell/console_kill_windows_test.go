@@ -15,7 +15,7 @@ func TestAShellThatCannotBeListedLeavesNothingRunningOrHoldingItsLog(t *testing.
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			if err := os.Mkdir(filepath.Join(dir, "BASH-1.json"), dirMode); err != nil {
+			if err := os.MkdirAll(filepath.Join(dir, runningDir, "BASH-1.json"), dirMode); err != nil {
 				t.Fatal(err)
 			}
 			registry := OpenAt(dir)

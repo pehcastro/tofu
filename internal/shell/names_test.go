@@ -20,9 +20,9 @@ func TestAFinishedShellOutlivesTheNextLaunchAndItsNameIsNeverTakenAgain(t *testi
 		t.Fatal(err)
 	}
 	for _, kept := range []Shell{
-		{Name: "bash-1", State: Exited, Started: stale, Ended: &stale, ExitCode: &code},
-		{Name: "bash-2", State: Exited, Started: recent, Ended: &recent, ExitCode: &code},
-		{Name: "bash-3", State: Killed, Started: recent, Ended: &recent},
+		{Name: "bash-1", State: Exited, Started: stale, Ended: &stale, ExitCode: &code, Kept: KeptMoved},
+		{Name: "bash-2", State: Exited, Started: recent, Ended: &recent, ExitCode: &code, Kept: KeptMoved},
+		{Name: "bash-3", State: Killed, Started: recent, Ended: &recent, Kept: KeptBackground},
 	} {
 		if err := registry.writeLocked(kept); err != nil {
 			t.Fatal(err)
@@ -31,13 +31,17 @@ func TestAFinishedShellOutlivesTheNextLaunchAndItsNameIsNeverTakenAgain(t *testi
 	if err := registry.Prune(); err != nil {
 		t.Fatal(err)
 	}
-	listed, _ := registry.List()
 	var names []string
-	for _, one := range listed {
-		names = append(names, one.Name)
+	for _, name := range []string{"bash-1", "bash-2", "bash-3"} {
+		if _, err := registry.Read(name); err == nil {
+			names = append(names, name)
+		}
 	}
 	if len(names) != 2 || names[0] != "bash-2" || names[1] != "bash-3" {
-		t.Fatalf("after a launch the registry lists %v, want the two shells that ended a minute ago and not the one past the keep window", names)
+		t.Fatalf("after a launch the registry reads back %v, want the two shells that ended a minute ago and not the one past the keep window", names)
+	}
+	if listed, _ := registry.List(); len(listed) != 0 {
+		t.Fatalf("the registry lists %+v, want no ended shell in the live list", listed)
 	}
 	name, logFile, err := registry.claim()
 	if err != nil {

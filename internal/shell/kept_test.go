@@ -39,8 +39,8 @@ func TestTheRegistrySaysWhyAShellWasKeptWhereItRunsWhatMadeItReadyAndHowItEnded(
 		t.Fatalf("the moved build reads back as %+v (%v), want kept moved, ready waited, exited 4 with an end time", ended, err)
 	}
 	listed, _ := OpenAt(dir).List()
-	if len(listed) != 2 {
-		t.Fatalf("the registry lists %+v, want the server and the build and never the one-shot", listed)
+	if len(listed) != 1 {
+		t.Fatalf("the registry lists %+v, want only the running server: never the ended build or the one-shot", listed)
 	}
 	running := listed[0]
 	if running.Name != server.Shell.Name || running.Kept != KeptBackground || running.Ready != ReadyWaited || running.Port != port || running.Dir != work || running.LeftOver() {

@@ -36,10 +36,10 @@ type tailed struct {
 }
 
 type tailKey struct {
-	command, dir      string
-	terminal          bool
-	started, deadline int64
-	lines             int
+	command, dir string
+	terminal     bool
+	started      int64
+	lines        int
 }
 
 type logEnd struct {
@@ -65,7 +65,7 @@ func (t *Tails) Tail(r *Registry, name string, lines int) (string, error) {
 	if t.shells == nil {
 		t.shells = map[string]*tailed{}
 	}
-	key := tailKey{command: entry.Command, dir: entry.Dir, terminal: entry.Terminal, started: entry.Started.UnixNano(), deadline: entry.Deadline, lines: lines}
+	key := tailKey{command: entry.Command, dir: entry.Dir, terminal: entry.Terminal, started: entry.Started.UnixNano(), lines: lines}
 	held := t.shells[name]
 	moved := held == nil || held.key != key
 	if moved {
@@ -86,9 +86,6 @@ func (t *Tails) Tail(r *Registry, name string, lines int) (string, error) {
 		if named := lastLines(log.tail(), lines); named != "" {
 			parts = append(parts, log.path+", which the command writes to, ends:\n"+named)
 		}
-	}
-	if entry.Deadline > 0 {
-		parts = append(parts, "tofu: "+HitDeadline(time.Duration(entry.Deadline)*time.Millisecond)+" and was killed")
 	}
 	held.text = strings.TrimLeft(strings.Join(slices.DeleteFunc(parts, func(part string) bool { return part == "" }), "\n\n"), "\n")
 	return held.text, nil

@@ -35,9 +35,8 @@ the command ends or after another 30 s, with its exit code and last lines.
 Nothing is killed at a deadline, so a 10 minute build is not lost at 10
 minutes. A `timeout_ms` of 30,000 or less is a hard limit instead: the
 command is killed there and returns what it printed. The result and the
-session trace say `bash: hit the deadline after 3 s`, and the killed row
-stays on the **shells** tab ending `tofu: hit the deadline after 3 s and
-was killed`.
+session trace say `bash: hit the deadline after 3 s`, and nothing of it
+stays on the **shells** tab.
 
 The **shells** tab lists only the shells tofu keeps: a server or watcher
 started with `background: true`, and a command that moved to the
@@ -150,14 +149,16 @@ tofu shells list
 ```
 
 ```text
-Shells                                                         ○ none registered
+Shells                                                         ○ none running
 ```
 
 `tofu shells log|stop|restart <name>` act on one process, and every
-subcommand takes `--json`. A finished shell stays on the list for 72 hours.
-A new shell is numbered past every name still listed, so `bash-3` names one
-command, also across `tofu --continue`. With `--json`, each shell says why
-it was kept, `"kept": "background"` or `"moved"`, its folder, the port its
-command names, and its exit code once it ends. Each kept shell is also a
+subcommand takes `--json`. The list and the **shells** tab show running
+shells only: a shell that ends leaves both at once, and tofu stops reading
+it. Its record and log stay on disk for 72 hours, and `tofu shells log
+<name>` still prints them. A new shell is numbered past every name ever
+given, so `bash-3` names one command, also across `tofu --continue`. With
+`--json`, each shell says why it was kept, `"kept": "background"` or
+`"moved"`, its folder and the port its command names. Each kept shell is also a
 [program status](/docs/features/status) record, `shells/<name>`, so a
 terminal that reads OSC 7501 shows it working, done or failed.

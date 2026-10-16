@@ -22,8 +22,8 @@ the background it sleeps 5 s at most.
 
 A bash call with `timeout_ms` of 30,000 or less is the exception: the
 command is killed there. Its result and the session trace say `bash: hit
-the deadline after 3 s`, and its killed row on the shells screen ends
-`tofu: hit the deadline after 3 s and was killed`.
+the deadline after 3 s`, and nothing of it stays on the shells screen
+or on disk.
 
 A one-shot command, such as a test or a version check that ends inside
 its wait, is never a shell: neither the shells screen nor `tofu shells`
@@ -36,9 +36,8 @@ under the working line:
 
     [&orchestrator] running bash, 3s  |  fg 3
 
-Each row shows the command, who started it, its latest output and, once
-it ends, its exit code. The screen reads it four times a second while any
-shell runs, turn or no turn. A line reaches the log as the command writes
+Each row is a running shell: the command, who started it and its latest output. A shell that ends leaves the screen at once and tofu stops reading it;
+its record and log stay on disk for 72 hours, read by name with `tofu shells log`. The screen reads the running shells four times a second while any runs. A line reaches the log as the command writes
 it; a running shell that printed nothing says `nothing printed yet`.
 Python is told not to buffer its output.
 
@@ -58,7 +57,7 @@ pipe. Every other command stays on a pipe, because a terminal costs about
 a quarter of a millisecond a line and makes some tools draw progress
 bars. Exit code and log are the same either way.
 
-A person can take a kept shell over from a client that declares `takeover` to `tofu serve`, such as the desk: from then on every bash command runs in a terminal, foreground or background, and Take over on a running shell hands its keys to the person, with what it printed so far, colours included. Taking over and releasing never kill it.
+A person can take a kept shell over from a client that declares `takeover` to `tofu serve`, such as the desk: from then on every bash command runs in a terminal, foreground or background, and Take over on a running shell hands its keys to the person, with what it printed so far, colours included. Taking over and releasing never kill it, and a held shell that ends goes back to the agent and leaves the list.
 While the person holds it the agent backs off: its `shell` logs, wait, stop and restart answer `bash-3 is held by the person, who took it over at 21:03:11 ...`, a bash kill of it and a sub-agent kill leave it running, and the agent is told at take-over and again at release, with the person's note.
 The TUI and `tofu run` declare nothing, so their shells stay on pipes and a foreground `read x` ends at once, as before.
 
@@ -90,17 +89,17 @@ restart, keep more lines of output, or ask before a stop from the screen:
 
 ## Check it
 
-List every shell, who started it, whether it still runs, is `running, held by a person` or is `left over` from a tofu that closed, how long it
-ran and when it last printed. A finished one stays listed for 72 hours:
+List every running shell, who started it, whether it is `running, held by a person` or `left over` from a tofu that closed, how long it
+has run and when it last printed. An ended shell is not listed:
 
     tofu shells list
 
 With `--json` each also says why it was kept, `"kept": "background"` or `"moved"`, its folder as `dir`, the port its command names as `port`,
-what ended the wait as `ready` (`port`, `line` for a ready line, or `waited`), `"terminal": true` for one run in a terminal,
-`"holder": "person"` and `held_since` while a person holds it, and `exit_code` and `ended` once it ends.
+what ended the wait as `ready` (`port`, `line` for a ready line, or `waited`), `"terminal": true` for one run in a terminal
+and `"holder": "person"` and `held_since` while a person holds it.
 
 Print a shell's last lines, the same text `shell logs` gives the model,
-which also says `ran 1m 1s, last output 2s ago`:
+which also says `ran 1m 1s, last output 2s ago`. It reads an ended shell by name too, for 72 hours:
 
     tofu shells log bash-3
 

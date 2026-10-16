@@ -53,17 +53,13 @@ func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
 	if !strings.Contains(listed.Content, "partial") || listed.Outcome != ResultFailed || !strings.HasPrefix(listed.FailureText, "bash: hit the deadline after 2 s") {
 		t.Errorf("registry: outcome %v, content %q, failure %q", listed.Outcome, listed.Content, listed.FailureText)
 	}
-	shells, _ := registry.List()
-	if len(shells) != 1 || shells[0].State != shell.Killed {
-		t.Fatalf("the shells screen lists %+v, want the one killed at its deadline", shells)
-	}
-	if tail, _ := registry.Tail(shells[0].Name, shell.DefaultTail); !strings.HasSuffix(tail, "tofu: hit the deadline after 2 s and was killed") {
-		t.Errorf("the shells screen reads %q", tail)
+	if shells, _ := registry.List(); len(shells) != 0 {
+		t.Fatalf("the shells screen lists %+v, want nothing: a one-shot killed at its deadline leaves no row", shells)
 	}
 	quick, _ := json.Marshal(map[string]any{"command": "echo quick", "timeout_ms": 5000})
 	ended, err := tool.Run(ctx, quick)
-	if after, _ := registry.List(); err != nil || ended.Content != "quick\n" || ended.Outcome != ResultSucceeded || len(after) != 1 {
-		t.Errorf("a call inside its deadline came back %q (%v), and left %d rows where 1 was", ended.Content, err, len(after))
+	if after, _ := registry.List(); err != nil || ended.Content != "quick\n" || ended.Outcome != ResultSucceeded || len(after) != 0 {
+		t.Errorf("a call inside its deadline came back %q (%v), and left %d rows where none were", ended.Content, err, len(after))
 	}
 }
 

@@ -301,15 +301,17 @@ func TestOutputAForegroundCommandIsListedWhileItRuns(t *testing.T) {
 	if got := <-done; got.Ready != ReadyExited || !strings.Contains(got.Output, "fg 3") {
 		t.Fatalf("the command came back %+v", got)
 	}
-	if left, _ := os.ReadDir(dir); len(left) != 1 || left[0].Name() != highestClaimedFile {
-		t.Fatalf("a command that ended inside the wait left %v in the registry, want only the highest name ever claimed", left)
+	left, _ := os.ReadDir(dir)
+	running, _ := os.ReadDir(filepath.Join(dir, runningDir))
+	if len(left) != 2 || left[0].Name() != highestClaimedFile || len(running) != 0 {
+		t.Fatalf("a command that ended inside the wait left %v and running %v in the registry, want only the highest name ever claimed", left, running)
 	}
 }
 
 func TestOutputTailsMatchAFreshReadThroughEveryChange(t *testing.T) {
 	registry, dir := OpenAt(t.TempDir()), t.TempDir()
 	ended := time.Now()
-	entry := Shell{Name: "kept", Command: "npm run dev > run.out", Dir: dir, State: Exited, Started: ended.Add(-time.Minute), Ended: &ended}
+	entry := Shell{Name: "kept", Command: "npm run dev > run.out", Dir: dir, State: Exited, Started: ended.Add(-time.Minute), Ended: &ended, Kept: KeptBackground}
 	own, named := registry.logPath("kept"), filepath.Join(dir, "run.out")
 	appendTo := func(path, text string) {
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)

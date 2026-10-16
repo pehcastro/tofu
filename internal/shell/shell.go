@@ -33,6 +33,7 @@ const (
 	stagingSuffix      = ".writing"
 	claimedPrefix      = "bash-"
 	highestClaimedFile = "highest-claimed"
+	runningDir         = "running"
 	DefaultTail        = 200
 	dirMode            = 0o755
 	fileMode           = 0o644
@@ -54,7 +55,6 @@ type Shell struct {
 	Terminal  bool       `json:"terminal,omitempty"`
 	Holder    Holder     `json:"holder,omitempty"`
 	HeldSince *time.Time `json:"held_since,omitempty"`
-	Deadline  int64      `json:"deadline_ms,omitempty"`
 	Kept      Kept       `json:"kept,omitempty"`
 	Port      int        `json:"port,omitempty"`
 	Ready     Readiness  `json:"ready,omitempty"`
@@ -113,8 +113,11 @@ func (r *Registry) Own() []Shell {
 	return slices.DeleteFunc(found, func(one Shell) bool { return one.State != Running || one.TofuPID != r.self })
 }
 
-func (r *Registry) statePath(name string) string { return filepath.Join(r.dir, name+stateSuffix) }
-func (r *Registry) logPath(name string) string   { return filepath.Join(r.dir, name+logSuffix) }
+func (r *Registry) endedPath(name string) string { return filepath.Join(r.dir, name+stateSuffix) }
+func (r *Registry) runningPath(name string) string {
+	return filepath.Join(r.dir, runningDir, name+stateSuffix)
+}
+func (r *Registry) logPath(name string) string { return filepath.Join(r.dir, name+logSuffix) }
 
 var ErrRunning = errors.New("shell: already running under that name")
 
@@ -134,20 +137,20 @@ func (r *Registry) reserve(name string) error {
 	if existing, err := r.Read(name); err == nil && existing.State == Running {
 		return fmt.Errorf("%w: %q", ErrRunning, name)
 	}
-	return os.MkdirAll(r.dir, dirMode)
+	return os.MkdirAll(filepath.Join(r.dir, runningDir), dirMode)
 }
 
 func (r *Registry) claim() (string, *os.File, error) {
-	if err := os.MkdirAll(r.dir, dirMode); err != nil {
-		return "", nil, err
-	}
-	files, err := os.ReadDir(r.dir)
-	if err != nil {
+	if err := os.MkdirAll(filepath.Join(r.dir, runningDir), dirMode); err != nil {
 		return "", nil, err
 	}
 	everClaimed := filepath.Join(r.dir, highestClaimedFile)
-	recorded, _ := os.ReadFile(everClaimed)
+	recorded, unrecorded := os.ReadFile(everClaimed)
 	highest, _ := strconv.Atoi(string(recorded))
+	var files []os.DirEntry
+	if unrecorded != nil {
+		files, _ = os.ReadDir(r.dir)
+	}
 	for _, file := range files {
 		rest, claimed := strings.CutPrefix(file.Name(), claimedPrefix)
 		digits, _, _ := strings.Cut(rest, ".")
@@ -247,10 +250,13 @@ func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, p
 	if r.running[started.Name] == process {
 		delete(r.running, started.Name)
 	}
+	if started.Kept == "" {
+		_ = os.Remove(r.logPath(started.Name))
+	}
 	if process.killed {
 		return
 	}
-	if raw, err := os.ReadFile(r.statePath(started.Name)); err == nil {
+	if raw, err := os.ReadFile(r.runningPath(started.Name)); err == nil {
 		_ = json.Unmarshal(raw, &started)
 	}
 	ended := time.Now()
@@ -259,31 +265,55 @@ func (r *Registry) await(waited <-chan error, logFile *os.File, started Shell, p
 }
 
 func (r *Registry) Prune() error {
-	found, err := r.List()
+	files, err := os.ReadDir(r.dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	kept := time.Now().Add(-konst.FinishedShellKeptHours * time.Hour)
-	for _, one := range found {
-		if one.State != Running && (one.Ended == nil || one.Ended.Before(kept)) {
-			_ = os.Remove(r.statePath(one.Name))
-			_ = os.Remove(r.logPath(one.Name))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, file := range files {
+		name, isState := strings.CutSuffix(file.Name(), stateSuffix)
+		if !isState {
+			continue
+		}
+		if entry, readErr := r.readLocked(name); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
+			_ = os.Remove(r.endedPath(name))
+			_ = os.Remove(r.logPath(name))
 		}
 	}
 	return err
 }
 
 func (r *Registry) writeLocked(entry Shell) error {
+	path, other := r.runningPath(entry.Name), r.endedPath(entry.Name)
 	if entry.State != Running {
 		entry.Holder, entry.HeldSince = "", nil
+		path, other = other, path
+	}
+	if entry.State != Running && entry.Kept == "" {
+		_ = os.Remove(r.logPath(entry.Name))
+		return errors.Join(removed(path), removed(other))
 	}
 	raw, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return err
 	}
-	path := r.statePath(entry.Name)
 	staging := path + stagingSuffix
 	if err := os.WriteFile(staging, raw, fileMode); err != nil {
 		return err
 	}
-	return os.Rename(staging, path)
+	if err := os.Rename(staging, path); err != nil {
+		return err
+	}
+	return removed(other)
+}
+
+func removed(path string) error {
+	if err := os.Remove(path); !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func (r *Registry) Read(name string) (Shell, error) {
@@ -293,7 +323,10 @@ func (r *Registry) Read(name string) (Shell, error) {
 }
 
 func (r *Registry) readLocked(name string) (Shell, error) {
-	raw, err := os.ReadFile(r.statePath(name))
+	raw, err := os.ReadFile(r.runningPath(name))
+	if errors.Is(err, os.ErrNotExist) {
+		raw, err = os.ReadFile(r.endedPath(name))
+	}
 	if err != nil {
 		return Shell{}, err
 	}
@@ -316,7 +349,7 @@ func (r *Registry) readLocked(name string) (Shell, error) {
 }
 
 func (r *Registry) List() ([]Shell, error) {
-	files, err := os.ReadDir(r.dir)
+	files, err := os.ReadDir(filepath.Join(r.dir, runningDir))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -329,9 +362,10 @@ func (r *Registry) List() ([]Shell, error) {
 			continue
 		}
 		entry, err := r.Read(strings.TrimSuffix(file.Name(), stateSuffix))
-		if err != nil {
+		if err != nil || entry.State != Running {
 			continue
 		}
+		entry.Env = nil
 		shells = append(shells, entry)
 	}
 	sort.Slice(shells, func(i, j int) bool { return shells[i].Started.Before(shells[j].Started) })

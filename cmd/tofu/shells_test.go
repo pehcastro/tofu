@@ -42,10 +42,13 @@ func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 		t.Fatalf("shellsList exited %d\n%s", code, list.String())
 	}
 	t.Logf("tofu shells list\n%s", list.String())
-	for _, want := range []string{"dev-server", "running", "build", "exited", "echo compiling"} {
+	for _, want := range []string{"dev-server", "running"} {
 		if !strings.Contains(list.String(), want) {
 			t.Errorf("tofu shells list does not show %q\n%s", want, list.String())
 		}
+	}
+	if strings.Contains(list.String(), "build") || strings.Contains(list.String(), "echo compiling") {
+		t.Errorf("tofu shells list shows the ended build, want running shells only\n%s", list.String())
 	}
 
 	if code := shellsLog(verbOutput{verb: "shells log", out: &log, errOut: &log}, registry, "build"); code != exitOK {
