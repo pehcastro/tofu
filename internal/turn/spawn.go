@@ -183,6 +183,7 @@ type SpawnTool struct {
 	naming         *namingOrder
 	plans          map[string]agentPlan
 	built          *builtOncePerTurn
+	writes         *subagent.Writes
 }
 
 type builtOncePerTurn struct {
@@ -268,7 +269,7 @@ func (t *spawnTree) retain(rows []Row) {
 }
 
 func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
-	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}}
+	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}, writes: &subagent.Writes{}}
 }
 
 func (t *SpawnTool) Name() string { return "spawn" }
@@ -636,7 +637,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		case !offered(tool.Name()) && !strings.HasPrefix(tool.Name(), "scratch_"):
 			continue
 		case tool.Name() == "write" || tool.Name() == "edit":
-			tool = ownedTool{tool: tool, boundary: held.boundary}
+			tool = ownedTool{tool: wroteBySubAgent{tool: tool, writes: t.writes}, boundary: held.boundary}
 			definition = tool.Definition()
 		case tool.Name() == "bash":
 			tool = ownedShell{tool: tool, boundary: held.boundary}
@@ -651,7 +652,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	}
 	if offered(t.Name()) {
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: func() SubAgentLimits { return limits }, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
-			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built})
+			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built, writes: t.writes})
 	}
 	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
 	subAgent := t.base

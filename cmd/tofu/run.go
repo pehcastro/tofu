@@ -931,7 +931,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if !nodeProject(dir) {
 		own = slices.DeleteFunc(own, func(tool turn.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
 	}
-	orchestrating := append(append(turn.WithSourceBudget(own, prompt.subAgents.Defined), spawner), asking...)
+	orchestrating := append(turn.WithSourceBudget(append(own, spawner), prompt.subAgents.Defined), asking...)
 	if run.gate != nil {
 		spawner.SettingsTool = true
 		orchestrating = append(orchestrating, tools.NewSettings(settingsPaths(dir)))

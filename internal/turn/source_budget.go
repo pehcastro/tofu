@@ -208,7 +208,38 @@ func changedLines(before, after string) int {
 	return changed
 }
 
-func changedSince(before, after map[string]string, generated []string) int {
+type wroteBySubAgent struct {
+	tool   Tool
+	writes *subagent.Writes
+}
+
+func (t wroteBySubAgent) Name() string { return t.tool.Name() }
+
+func (t wroteBySubAgent) Definition() llm.Tool { return t.tool.Definition() }
+
+func (t wroteBySubAgent) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	paths, _ := TargetPaths(t.Name(), raw)
+	t.writes.Wrote(paths)
+	defer t.writes.Wrote(paths)
+	return t.tool.Run(ctx, raw)
+}
+
+func (b *sourceBudget) writtenBySubAgents(paths []string) []string {
+	root := b.files.root
+	var written []string
+	for _, path := range paths {
+		resolved, err := root.Resolve(path)
+		if err != nil {
+			continue
+		}
+		if relative, err := filepath.Rel(string(root), resolved); err == nil {
+			written = append(written, filepath.ToSlash(relative))
+		}
+	}
+	return written
+}
+
+func changedSince(before, after map[string]string, uncounted []string) int {
 	for file := range before {
 		if _, kept := after[file]; !kept {
 			after[file] = ""
@@ -216,7 +247,7 @@ func changedSince(before, after map[string]string, generated []string) int {
 	}
 	changed := 0
 	for file, body := range after {
-		if before[file] != body && !slices.Contains(generated, file) {
+		if before[file] != body && !slices.Contains(uncounted, file) {
 			changed += changedLines(before[file], body)
 		}
 	}
@@ -228,6 +259,7 @@ type sourceBudget struct {
 	scripts []ScriptSpend
 	enabled []subagent.Definition
 	files   *WriteTool
+	writes  *subagent.Writes
 }
 
 func (b *sourceBudget) spendScript(command string, lines int) string {
@@ -323,9 +355,12 @@ type budgetedTool struct {
 }
 
 func WithSourceBudget(tools []Tool, defined []subagent.Definition) []Tool {
-	budget := &sourceBudget{enabled: enabledSubAgents(defined)}
+	budget := &sourceBudget{enabled: enabledSubAgents(defined), writes: &subagent.Writes{}}
 	wrapped := slices.Clone(tools)
 	for i, tool := range wrapped {
+		if spawner, spawns := tool.(*SpawnTool); spawns {
+			budget.writes = spawner.writes
+		}
 		inner := tool
 		if memoised, cached := tool.(interface{ Uncached() Tool }); cached {
 			inner = memoised.Uncached()
@@ -379,10 +414,12 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn {
 		return Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
 	}
-	root := t.budget.files.root
+	root, mark := t.budget.files.root, t.budget.writes.Begin()
 	before := root.sources()
 	result, err := t.tool.Run(ctx, raw)
-	result.Content += t.budget.spendScript(command, changedSince(before, root.sources(), generatedFiles(steps)))
+	after := root.sources()
+	uncounted := append(generatedFiles(steps), t.budget.writtenBySubAgents(t.budget.writes.End(mark))...)
+	result.Content += t.budget.spendScript(command, changedSince(before, after, uncounted))
 	return result, err
 }
 
