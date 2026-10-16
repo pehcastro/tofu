@@ -4,6 +4,7 @@ git -c user.name=t -c user.email=t@example.com -c core.hooksPath=.nohooks commit
 git -c user.name=t -c user.email=t@example.com -c core.hooksPath=.nohooks commit -q --allow-empty -F release.msg
 cp CHANGELOG.next CHANGELOG.md
 git add CHANGELOG.md
+stamp
 -- release.msg --
 chore(release): 0.0.1
 -- CHANGELOG.md --

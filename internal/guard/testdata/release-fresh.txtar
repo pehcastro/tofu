@@ -1,6 +1,7 @@
 git init -q
 git add -A
 git -c user.name=t -c user.email=t@example.com -c core.hooksPath=.nohooks commit -q -m start
+stamp
 -- CHANGELOG.md --
 # Changelog
 

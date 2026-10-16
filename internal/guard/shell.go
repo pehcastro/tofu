@@ -39,6 +39,9 @@ func shell(env Env, ev event) (Answer, error) {
 		return Answer{}, nil
 	}
 	stripped := stripHeredocs(command)
+	if reason := flowsRefusal(env, stripped); reason != "" {
+		return deny(reason), nil
+	}
 	reason, err := shellRefusal(env, ev, command, stripped)
 	if reason != "" {
 		return deny(reason), nil

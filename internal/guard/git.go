@@ -60,10 +60,14 @@ func CommitMsg(dir, file string) Answer {
 	case strings.HasSuffix(subject, "."):
 		return refuseCommit("the subject ends with a period.")
 	}
-	if release := releaseSubject().FindStringSubmatch(subject); release != nil {
-		return releaseDocs(dir, release[1], body)
+	release := releaseSubject().FindStringSubmatch(subject)
+	if release == nil {
+		return Answer{}
 	}
-	return Answer{}
+	if why := releaseRefusal(dir); why != "" {
+		return refuse(1, why)
+	}
+	return releaseDocs(dir, release[1], body)
 }
 
 func ReleaseDocs(dir, file string) Answer {

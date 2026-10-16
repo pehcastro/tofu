@@ -333,6 +333,10 @@ func buildFixture(t *testing.T, name, repo string) fixture {
 			}
 			writeFile(t, filepath.Join(root, args[2]), data)
 			continue
+		case "stamp":
+			stampHead(t, root, FlowsStamps)
+			stampHead(t, root, TreewideStamps)
+			continue
 		case "tofu":
 			args[0] = tofu
 		}

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/guard"
 )
 
 type row struct {
@@ -38,7 +40,7 @@ func main() {
 }
 
 func run(only, src string, keep bool) (bool, error) {
-	repo, err := git("", nil, "rev-parse", "--show-toplevel")
+	repo, err := git("", "rev-parse", "--show-toplevel")
 	if err != nil {
 		return false, err
 	}
@@ -60,11 +62,15 @@ func run(only, src string, keep bool) (bool, error) {
 		defer func() { _ = os.RemoveAll(work) }()
 	}
 	tree, head := "none, built from "+src, "none"
+	var dirty []string
 	if stamped {
-		if tree, err = workingTree(repo, work); err != nil {
+		if tree, dirty, err = guard.HeadTree(repo); err != nil {
 			return false, err
 		}
-		head, _ = git(repo, nil, "rev-parse", "--short", "HEAD")
+		head, _ = git(repo, "rev-parse", "--short", "HEAD")
+	}
+	if len(dirty) > 0 {
+		fmt.Printf("no stamp will be written: %d uncommitted Go files, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", len(dirty))
 	}
 	machine, _ := os.Hostname()
 	fmt.Printf("flows: tree %s, HEAD %s, %s %s/%s %d cpu, GOMAXPROCS %s, %s\n",
@@ -91,8 +97,11 @@ func run(only, src string, keep bool) (bool, error) {
 		fmt.Println("no stamp: a flow failed")
 	case !stamped || len(chosen) != len(flows):
 		fmt.Println("no stamp: a stamp needs every flow on the repository's own tree")
+	case len(dirty) > 0:
+		fmt.Println("no stamp: the tree held uncommitted Go files")
+		return true, nil
 	default:
-		return false, stamp(repo, work, tree, head, rows)
+		return stamp(repo, tree, head, rows)
 	}
 	return failed, nil
 }
@@ -134,9 +143,9 @@ func printRow(r row) {
 	fmt.Printf("| %d | %s | %s | %4.0fs | %s |\n", r.number, r.name, result, r.took.Seconds(), r.evidence)
 }
 
-func git(dir string, env []string, args ...string) (string, error) {
+func git(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
-	cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
+	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
 		var exited *exec.ExitError
@@ -148,34 +157,20 @@ func git(dir string, env []string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func workingTree(repo, work string) (string, error) {
-	index := []string{"GIT_INDEX_FILE=" + filepath.Join(work, "flows.index")}
-	if _, err := git(repo, index, "read-tree", "HEAD"); err != nil {
-		return "", err
-	}
-	if _, err := git(repo, index, "add", "-A", "--", "*.go"); err != nil {
-		return "", err
-	}
-	return git(repo, index, "write-tree")
-}
-
-func stamp(repo, work, tree, head string, rows []row) error {
-	after, err := workingTree(repo, work)
-	if err != nil {
-		return err
-	}
-	if after != tree {
-		fmt.Printf("no stamp: the Go files changed during the run, from tree %s to %s\n", tree, after)
-		return nil
+func stamp(repo, tree, head string, rows []row) (bool, error) {
+	after, dirty, err := guard.HeadTree(repo)
+	if err != nil || after != tree || len(dirty) > 0 {
+		fmt.Printf("no stamp: the run was not on a clean HEAD from start to end: tree %s then %s, %d uncommitted Go files\n", tree, after, len(dirty))
+		return true, err
 	}
 	lines := []string{"tree " + tree, "head " + head, "date " + time.Now().Format(time.RFC3339)}
 	for _, r := range rows {
 		lines = append(lines, fmt.Sprintf("flow %d pass %.0fs %s", r.number, r.took.Seconds(), r.name))
 	}
-	path := filepath.Join(repo, ".local", "flows", tree)
+	path := guard.StampPath(repo, guard.FlowsStamps, tree)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+		return false, err
 	}
 	fmt.Println("stamp", path)
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+	return false, os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 }
