@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"tofu/internal/judge/ledger"
@@ -34,34 +36,53 @@ func recordedJudgedNouls() []float64 { return []float64{0.91, 0.62, 0.44, 0.18, 
 
 var chunkPosition = regexp.MustCompile(`chunk (\d+) of`)
 
-func judgedReply(index int, noul float64) string {
+func judgedReply(index int, ids []string, nouls []float64) string {
+	answers := make([]string, len(ids))
+	for i, id := range ids {
+		answers[i] = fmt.Sprintf(`%q:{"type":"noul","noul":%g}`, id, nouls[i])
+	}
 	return fmt.Sprintf(`{"model":"typesafe/jev-1.13-20260917","provider":"TypeSafe","id":"gen-recorded-%04d",`+
-		`"answers":{"still_needed":{"type":"noul","noul":%g}},`+
+		`"answers":{%s},`+
 		`"usage":{"input_tokens":1042,"output_tokens":12,"cost":%g}}`,
-		index+1, noul, recordedJudgedReplyCostUSD)
+		index+1, strings.Join(answers, ","), recordedJudgedReplyCostUSD)
 }
 
 func stubRecordedJudgedReplies(t *testing.T) {
 	t.Helper()
-	bodies := make([]string, 0, len(recordedJudgedNouls()))
-	for i, noul := range recordedJudgedNouls() {
-		bodies = append(bodies, judgedReply(i, noul))
-	}
+	var served atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asked, err := io.ReadAll(r.Body)
+		raw, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Errorf("reading the request the scorer sent: %v", err)
 		}
+		var asked struct {
+			Questions map[string]json.RawMessage `json:"questions"`
+		}
+		if err := json.Unmarshal(raw, &asked); err != nil {
+			t.Errorf("the scorer sent no json: %v", err)
+		}
+		ids := slices.Sorted(maps.Keys(asked.Questions))
+		nouls := make([]float64, len(ids))
+		for i, id := range ids {
+			nouls[i] = recordedJudgedNouls()[chunkAsked(t, id, string(raw))%len(recordedJudgedNouls())]
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, bodies[chunkAsked(t, string(asked))%len(bodies)])
+		_, _ = io.WriteString(w, judgedReply(int(served.Add(1))-1, ids, nouls))
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv(judgeEndpointEnvar, server.URL)
 	t.Setenv("OPENROUTER_KEY", "stub-key-not-a-real-credential")
 }
 
-func chunkAsked(t *testing.T, request string) int {
+func chunkAsked(t *testing.T, id, request string) int {
 	t.Helper()
+	if index, batched := strings.CutPrefix(id, sift.NeededQuestion+"_"); batched {
+		at, err := strconv.Atoi(index)
+		if err != nil {
+			t.Errorf("the question %q names no chunk index", id)
+		}
+		return at + 1
+	}
 	found := chunkPosition.FindStringSubmatch(request)
 	if found == nil {
 		t.Errorf("the request names no chunk position, so no recorded reply fits it: %.200s", request)
