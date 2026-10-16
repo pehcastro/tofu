@@ -229,7 +229,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		spent := *event.Account
 		spent.Identity = s.identity(event.Agent, s.mint("account"))
 		return append(out, kept("turn.account", &spent))
-	case EventForkStart, EventResumed, EventRequesting:
+	case EventForkStart, EventResumed, EventRequesting, EventSteerQueued:
 		return out
 	}
 	panic("host: unknown event kind " + strconv.Itoa(int(event.Kind)))

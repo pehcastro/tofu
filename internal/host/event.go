@@ -45,6 +45,7 @@ const (
 	EventPersisted
 	EventMemoryScoped
 	EventAccount
+	EventSteerQueued
 )
 
 type Event struct {
@@ -108,7 +109,7 @@ func (e Event) snapshot() bool {
 	switch e.Kind {
 	case EventPersisted:
 		return e.Logged == nil || e.Logged.Kind != session.EventMessage || e.Agent != ""
-	case EventContext, EventSubAgent:
+	case EventContext, EventSubAgent, EventSteerQueued:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
 		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,

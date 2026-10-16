@@ -56,6 +56,7 @@ type followReply struct {
 	OK      bool
 	Stands  bool
 	Steered string
+	Refused string `json:",omitempty"`
 }
 
 type followLine struct {
@@ -89,6 +90,7 @@ type following struct {
 	asked   int
 	waiting map[int]chan followReply
 	typed   string
+	unsent  string
 }
 
 func linked(conn net.Conn) link { return link{conn: conn, gone: make(chan struct{})} }
@@ -220,24 +222,30 @@ func (h *Host) serveSeat(a *audience, s *seat) {
 	defer a.drop(s)
 	asks := json.NewDecoder(s.conn)
 	for {
-		var ask followAsk
-		if asks.Decode(&ask) != nil {
+		var raw json.RawMessage
+		if err := asks.Decode(&raw); err != nil {
+			line, _ := json.Marshal(followLine{Reply: &followReply{Refused: err.Error()}})
+			_, _ = s.conn.Write(line)
 			return
 		}
-		reply := h.served(ask)
-		line, err := json.Marshal(followLine{Reply: &reply})
-		if err != nil || !s.send(line) {
+		reply := h.served(raw)
+		line, _ := json.Marshal(followLine{Reply: &reply})
+		if !s.send(line) {
 			return
 		}
 	}
 }
 
-func (h *Host) served(ask followAsk) followReply {
+func (h *Host) served(raw json.RawMessage) followReply {
+	var ask followAsk
+	if err := json.Unmarshal(raw, &ask); err != nil {
+		return followReply{ID: ask.ID, Refused: err.Error()}
+	}
 	reply := followReply{ID: ask.ID, OK: true}
 	switch ask.Op {
 	case followSend:
 		if _, running := h.Turn(); running {
-			h.Steer(ask.Text)
+			reply.Steered = h.steerFor(ask.Text)
 			break
 		}
 		_, pick := h.Settings()
@@ -256,7 +264,7 @@ func (h *Host) served(ask followAsk) followReply {
 	case followMemory:
 		reply.OK = h.AnswerMemory(ask.Asked, ask.Scope)
 	case followSteer:
-		reply.Steered = h.Steer(ask.Text)
+		reply.Steered = h.steerFor(ask.Text)
 	case followSendNow:
 		reply.OK = h.SendNow(ask.Text)
 	case followUnsteer:
@@ -267,6 +275,12 @@ func (h *Host) served(ask followAsk) followReply {
 		reply.OK = false
 	}
 	return reply
+}
+
+func (h *Host) steerFor(text string) string {
+	id := h.Steer(text)
+	h.emitter().emit(Event{Kind: EventSteerQueued, ID: id, Text: text})
+	return id
 }
 
 func (h *Host) dialHolder(id string, refused error) (*following, error) {
@@ -298,6 +312,11 @@ func (f *following) note(id string) string {
 func (f *following) ask(ask followAsk) followReply {
 	reply := make(chan followReply, 1)
 	f.mu.Lock()
+	if ask.Op == followSteer && ask.Text == f.unsent {
+		f.unsent = ""
+		f.mu.Unlock()
+		return followReply{}
+	}
 	f.asked++
 	ask.ID = f.asked
 	f.waiting[ask.ID] = reply
@@ -328,13 +347,19 @@ func (f *following) send(task string) bool {
 	f.mu.Lock()
 	f.typed = task
 	f.mu.Unlock()
-	return f.ask(followAsk{Op: followSend, Text: task}).OK
+	reply := f.ask(followAsk{Op: followSend, Text: task})
+	if reply.Refused != "" || reply.ID == 0 {
+		f.mu.Lock()
+		f.unsent = task
+		f.mu.Unlock()
+	}
+	return reply.OK
 }
 
 func (f *following) echoes(event Event) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	echo := event.Kind == EventTask && event.Text == f.typed
+	echo := (event.Kind == EventTask || event.Kind == EventSteerQueued) && event.Text == f.typed
 	if echo {
 		f.typed = ""
 	}
@@ -350,6 +375,9 @@ func (h *Host) heed(f *following, id string) {
 		}
 		var line followLine
 		_ = json.Unmarshal(raw, &line)
+		if line.Reply != nil && line.Reply.Refused != "" {
+			h.note("process " + strconv.Itoa(f.holder.PID) + " could not read what this tofu sent, so it did not run: " + line.Reply.Refused)
+		}
 		if line.Reply != nil {
 			f.mu.Lock()
 			waiting := f.waiting[line.Reply.ID]

@@ -143,6 +143,12 @@ func (a *App) steer(task string) {
 	}
 }
 
+func (a *App) queueSteeredElsewhere(task string) {
+	if !slices.Contains(a.view.Queued(), task) {
+		a.view.Queue(task, task, nil)
+	}
+}
+
 func (a *App) sendNow(task string) bool {
 	sent := a.options.Host != nil && a.options.Host.SendNow(a.steered[task])
 	if sent {
@@ -521,7 +527,11 @@ func (a *App) absorb(event Event) {
 		a.showLeadMemoryAsk()
 	case EventPersisted:
 		a.recorded(event)
+	case host.EventSteerQueued:
+		a.queueSteeredElsewhere(event.Text)
+		a.steered[event.Text] = event.ID
 	case EventSteered:
+		a.queueSteeredElsewhere(event.Text)
 		a.view.Delivered(event.Text, readHead+strconv.Itoa(event.Step)+" · "+at.Format(readClock))
 		a.sentNow = false
 	case EventForkStart:
