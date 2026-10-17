@@ -17,7 +17,11 @@ your own lead model groups your messages by what they are about, in one
 request on your subscription. tofu then checks every answer: a rule that
 copies your words, names someone or carries filler is refused, and so is
 a version or a setting that does not exist. `--local` sends nothing and
-groups only on several shared words, and says it is the weaker mode.
+groups only on several shared words, and says it is the weaker mode. Two
+corrections agree only when their shared words sit close together, within
+two neighbouring clauses of each, and a request to try again is a
+correction only when it speaks to the lead ("you did it again"), so a
+one-off request never becomes a rule.
 
 **Tofu's bugs are not your rules.** Each finding is a tofu defect, a tofu
 library rule, your own rule, a setting, or about your project, with the

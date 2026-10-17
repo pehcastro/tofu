@@ -35,7 +35,9 @@ in that file with its time, who made it and why. `tofu --continue` and
 Limits: 10 open jobs a session, 50 fires a job, once a minute at most, an
 expiry after 24 hours unless you name one, and a check that runs at most
 60 seconds. Three fires in a row with the same answer end the job. A turn a
-job started cannot run `git push`.
+job started cannot run `git push`. A job runs once, in the holder of its
+session, whichever window made it, and a fire past midnight sees the new
+date.
 
 ## Change it
 
@@ -60,7 +62,8 @@ Change a job; a reason is required and becomes the version's reason:
 `--prompt "<text>"`, `--expires 48h` and `--until "<cmd>"` change the
 rest. A schedule is a 5-field line (minute hour day month weekday),
 `@hourly`, `@daily`, `@weekly`, `@monthly`, `every <duration>`,
-`once at <15:04>` or `after each turn`.
+`once at <15:04>` or `after each turn`. An expired job comes back with
+`--expires 24h`; a job that ended any other way does not.
 
 Pause and resume without losing the job:
 

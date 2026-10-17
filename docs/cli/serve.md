@@ -42,7 +42,10 @@ terminal follow it, so closing one leaves the other running, and `session.open` 
 `expectedTurnId` to be refused instead. `turn.stop` stops the lead and leaves running sub-agents
 working; pass `everything: true` to stop them too. A client that attaches mid-turn gets the
 queued messages, pending approvals and working sub-agents at once, and `session.set` from any
-client sets the holder's asking and model for every client. When the lead forks,
+client sets the holder's asking and model for every client: the terminal's footer
+shows a pick another client made and keeps it, and offers its own default only
+to a holder with none. `/loop` and `/cron` made in any client run in the holder,
+and the trace row says which process fired them. When the lead forks,
 `session.forked` names the new session in `to`, and every client moves to it.
 
 **It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x

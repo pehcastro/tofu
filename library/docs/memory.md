@@ -21,7 +21,7 @@ the code does not say) or `reference` (where something outside lives).
 Memory is not for what a rule, `AGENTS.md` or `CLAUDE.md` already says,
 nor for the task in front of you. The conversation is kept too, as episodes: your words, the lead's
 answers and sub-agent reports, never tool output; their view follows memory, sized to the room the context
-leaves, through every fork, and the lead opens it with `zoom` and `recall`. `tofu settings set episodes off` keeps none.
+leaves, through every fork, and the lead opens it with `zoom` and `recall`. A fork writes the view fresh and leaves out your words the fork already carries, so each is sent once; a resume keeps the view it had, so its cache holds. `tofu settings set episodes off` keeps none.
 
 ## Where it lives
 

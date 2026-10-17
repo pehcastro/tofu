@@ -10,6 +10,24 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc10 - 2026-10-17
+
+A long night in one session: crons run where the session is held, the date moves at midnight, and a fork sends your words once.
+
+### Changed
+
+- A fork's episode view leaves out your words the fork already carries, so each is sent once: on a driven fork the view went from 3,648 bytes to 1,942. A resume keeps the view it had, so its cache holds, and the fork notice gives the real size after the fork.
+- An `edit` whose text appears once in a file unchanged since it was read is applied even outside the lines read; text that appears twice there, or a file changed since, is still refused.
+- `tofu learn` makes a rule only from corrections that agree within neighbouring clauses, and reads "again" as a correction only when it speaks to the lead, so a one-off request no longer becomes a rule.
+- `tofu boardy move` to the status a ticket already has prints that it is already there and exits 0. A name given with `--as` acts as that agent, never as the person, and an `--acceptance` typed without a dash is stored one line per check.
+- Opening one folded sub-agent by search opens only that one: 18.5 MB held where it was 166.7 MB with 450 folded.
+
+### Fixed
+
+- A `/loop` or `/cron` made in a fresh terminal runs: it fires in the session's holder instead of failing with "is open for writing", and the trace names the process that fired it.
+- The terminal's footer shows a model pick another client made and keeps it, and offers its own default only to a holder with none, so a cron runs on the model the footer shows.
+- The date the lead and its sub-agents are told moves at midnight in a running session, and an expired cron job comes back with `/cron edit c1 --expires 24h`.
+
 ## 0.5.15-rc9 - 2026-10-17
 
 Every client sees one live session, and codex keeps its prompt cache through a run.

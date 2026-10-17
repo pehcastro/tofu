@@ -81,7 +81,10 @@ before it acts on it. Where tofu departs:
 
 - **Sessions still exist.** tofu keeps sessions and forks, and the episode
   view is carried at every fork, after memory and before the session. A
-  fork needs no model call to write down where the work stands.
+  fork needs no model call to write down where the work stands. The view a
+  fork writes leaves out your words the fork already carries, so each is
+  sent once: on a driven fork the view went from 3,648 bytes to 1,942. A
+  resume keeps the view it had, so its cached prompt holds.
 - **No tool output in the log.** Episodes hold your words, the lead's
   replies and sub-agent reports. A tool result keeps its handle, which
   `lookup` and `artifact_fetch` read back exactly.

@@ -13,9 +13,12 @@ for the person. A sub-agent, `<session>/<ticket>`, and every other session
 is an agent: it moves its own ticket from doing to review with evidence in
 the Log, and its `tofu boardy new` becomes a triage request. Inside a tofu
 session `TOFU_SESSION` names the actor; outside one the command line is the
-person, named by `--as`. Every move checks the role, an Acceptance, a Log
+person; `--as orchestrator` acts as the lead and any other `--as` name as
+that agent, never as the person. Every move checks the role, an Acceptance, a Log
 for review, owns disjoint from every doing ticket, references, and then the
-board's before hooks.
+board's before hooks. A move to the status a ticket has says it is already
+there and exits 0, and an acceptance typed without a dash is stored one line
+per check.
 
 A hook is one YAML file:
 

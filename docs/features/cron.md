@@ -41,6 +41,10 @@ on time too, and a job keeps firing while one long turn runs.
 ## Guards
 
 - **An expiry on every job.** A job without one expires after 24 hours.
+- **One process fires it.** A job runs in the holder of its session,
+  whichever window made it, even a window that has sent nothing yet, and
+  fires once however many windows follow. Past midnight a fire sees the new
+  date.
 - **A missed fire runs once.** After an hour busy or asleep, a 1-minute loop
   fires once, not sixty times.
 - **No overlap.** A job does not fire again while the turn it started runs.
@@ -64,6 +68,7 @@ on time too, and a job keeps firing while one long turn runs.
   `/cron "once at 17:30" remind me to push`, or `/cron "@hourly" check the queue`.
 - **Change a job**: `/cron edit c1 --schedule "every 30m" --reason "the build is stable"`.
   `--prompt`, `--expires 48h` and `--until "<cmd>"` change the rest. A reason is required.
+  An expired job comes back with `--expires 24h`; a job that ended any other way does not.
 - **Pause, resume or delete**: `/cron pause c1`, `/cron resume c1`, `/cron delete c1`.
 
 Jobs live in the session's `cron.json`, written only when a job fires, ends, expires or is changed, so a quiet session never rewrites it.

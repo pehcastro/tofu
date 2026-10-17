@@ -144,7 +144,9 @@ default, in settings. With it on, both refuse a file changed since it was
 read, and `write` refuses replacing a file never read. `edit` refuses a file
 never read only when it is too large to show whole: an exact edit of a small
 one is applied, since the refusal would only print the file and let the same
-edit through.
+edit through. An exact edit whose text appears once in a file unchanged since
+it was read is applied even outside the lines read; text that appears twice
+there, or a file changed since, is refused.
 
 ```bash
 tofu settings get readBeforeEdit
