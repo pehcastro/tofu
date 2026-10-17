@@ -94,6 +94,9 @@ func TestDoneMoveNeedsAFlowsStampForHeadAndCommittedWork(t *testing.T) {
 		{name: "an uncommitted edit in an owned path", before: func() { put(t, repo, "internal/turn/turn.go", "package turn\n\nconst X = 1\n") }, command: move, refused: true, want: "internal/turn/turn.go"},
 		{name: "committed but not stamped", before: func() { commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/flows"},
 		{name: "stamped after the commit", before: func() { stampHead(t, repo, "flows") }, command: move},
+		{name: "a commit under apps only", before: func() { put(t, repo, "apps/desk/main.rs", "fn main() {}\n"); commitAll(t, repo) }, command: move},
+		{name: "a commit under internal/apps", before: func() { put(t, repo, "internal/apps/apps.go", "package apps\n"); commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/flows"},
+		{name: "stamped after internal/apps", before: func() { stampHead(t, repo, "flows") }, command: move},
 		{name: "an untracked file in an owned path", before: func() { put(t, repo, "internal/turn/new.go", "package turn\n") }, command: move, refused: true, want: "internal/turn/new.go"},
 	}
 	for _, step := range steps {
@@ -139,6 +142,10 @@ func TestHeadTreeWithNoGoFiles(t *testing.T) {
 	commitAll(t, repo)
 	if tree, dirty, err := HeadTree(repo); err != nil || len(tree) != 40 || len(dirty) != 0 {
 		t.Fatalf("tree %q, dirty %v, err %v", tree, dirty, err)
+	}
+	put(t, repo, "apps/desk/gen.go", "package gen\n")
+	if _, dirty, err := HeadTree(repo); err != nil || len(dirty) != 0 {
+		t.Fatalf("uncommitted Go under apps counted as dirty: %v, err %v", dirty, err)
 	}
 }
 

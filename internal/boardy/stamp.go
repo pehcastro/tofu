@@ -24,16 +24,30 @@ func StampPath(repo, kind, tree string) string {
 }
 
 func HeadTree(repo string) (string, []string, error) {
-	tree, err := gitOut(repo, "rev-parse", "HEAD^{tree}")
+	tree, err := headTreeWithoutApps(repo)
 	if err != nil {
 		return "", nil, err
 	}
-	dirty, err := uncommitted(repo, "*.go")
+	dirty, err := uncommitted(repo, "*.go", ":(exclude)apps/")
 	return tree, dirty, err
 }
 
+func headTreeWithoutApps(repo string) (string, error) {
+	listing, err := gitOut(repo, "", "ls-tree", "-z", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	var kept strings.Builder
+	for _, entry := range strings.Split(listing, "\x00") {
+		if _, name, _ := strings.Cut(entry, "\t"); entry != "" && name != "apps" {
+			kept.WriteString(entry + "\x00")
+		}
+	}
+	return gitOut(repo, kept.String(), "mktree", "-z")
+}
+
 func Unstamped(repo string, kinds ...string) (string, []string, error) {
-	tree, err := gitOut(repo, "rev-parse", "HEAD^{tree}")
+	tree, err := headTreeWithoutApps(repo)
 	if err != nil {
 		return "", nil, err
 	}
@@ -96,7 +110,7 @@ func flowsArea(globs []string) string {
 }
 
 func uncommitted(repo string, pathspecs ...string) ([]string, error) {
-	out, err := gitOut(repo, append([]string{"status", "--porcelain", "--untracked-files=all", "--"}, pathspecs...)...)
+	out, err := gitOut(repo, "", append([]string{"status", "--porcelain", "--untracked-files=all", "--"}, pathspecs...)...)
 	var paths []string
 	for _, line := range strings.Split(out, "\n") {
 		if len(line) > 3 {
@@ -106,9 +120,9 @@ func uncommitted(repo string, pathspecs ...string) ([]string, error) {
 	return paths, err
 }
 
-func gitOut(repo string, args ...string) (string, error) {
+func gitOut(repo, stdin string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
-	cmd.Dir = repo
+	cmd.Dir, cmd.Stdin = repo, strings.NewReader(stdin)
 	out, err := cmd.Output()
 	if exited := (*exec.ExitError)(nil); errors.As(err, &exited) {
 		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(exited.Stderr)))
