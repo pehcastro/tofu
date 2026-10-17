@@ -1,3 +1,4 @@
+mod create;
 mod look;
 mod sidebar;
 mod ticket;
@@ -10,19 +11,19 @@ use std::time::Instant;
 use desk_core::boardy::{ALL_VIEW, BoardyStore, COLUMNS, Flow, Gate};
 use desk_core::limits::TOAST_LIFETIME;
 use desk_core::protocol::boardy::{
-    AnswerRequest, AskedQuestion, BoardsAnswer, CreateRequest, GetAnswer, GetRequest, InitRequest,
-    ListRequest, LogRequest, MoveRequest, PlanAnswer, PlanRequest, QuestionsRequest, ReportAnswer,
-    ReportRequest, Request as Asked, Ticket, TriageRequest,
+    AnswerRequest, AskedQuestion, BoardsAnswer, GetAnswer, GetRequest, InitRequest, ListRequest,
+    LogRequest, MoveRequest, PlanAnswer, PlanRequest, QuestionsRequest, ReportAnswer,
+    ReportRequest, Request as Asked, TriageRequest,
 };
 use desk_core::protocol::request::{
-    BoardyAnswer, BoardyBoards, BoardyCreate, BoardyGet, BoardyInit, BoardyList, BoardyLog,
-    BoardyMove, BoardyPlan, BoardyQuestions, BoardyReport, BoardyTriage,
+    BoardyAnswer, BoardyBoards, BoardyGet, BoardyInit, BoardyList, BoardyLog, BoardyMove,
+    BoardyPlan, BoardyQuestions, BoardyReport, BoardyTriage,
 };
 use desk_core::protocol::{
-    BoardyTicketPriority, BoardyTicketStatus as Status, BoardyTicketType, BoardyTo,
-    BoardyTriageRequestAction, NoParams, Request,
+    BoardyTicketStatus as Status, BoardyTo, BoardyTriageRequestAction, NoParams, Request,
 };
-use desk_motion::FlipTracker;
+use desk_motion::tokens::{PANEL_IN_MS, PANEL_OUT_MS};
+use desk_motion::{FlipTracker, Presence};
 use desk_ui::components::chat::{Block, markdown};
 use desk_ui::components::form::{TextArea, TextInput};
 use desk_ui::components::overlay::{MenuItem, context_menu, toast};
@@ -35,7 +36,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use super::frame::{self, load_fonts, reread, titled};
+use super::frame::{self, load_fonts, titled};
 use crate::modules::chat::Chat;
 
 const NEWEST: usize = 5;
@@ -103,7 +104,9 @@ pub struct Boardy {
     menu_at: Option<Point<Pixels>>,
     flips: Entity<FlipTracker>,
     composer: Entity<TextArea>,
-    creating: Option<(Status, Entity<TextInput>)>,
+    wanted: Option<(String, Status)>,
+    draft: Option<create::Draft>,
+    shown: Presence,
     toast: Option<SharedString>,
     failed: Option<SharedString>,
     asking: usize,
@@ -153,7 +156,9 @@ impl Boardy {
             menu_at: None,
             flips: cx.new(|_| FlipTracker::default()),
             composer,
-            creating: None,
+            wanted: None,
+            draft: None,
+            shown: Presence::new(PANEL_IN_MS, PANEL_OUT_MS),
             toast: None,
             failed: None,
             asking: 0,
@@ -440,7 +445,6 @@ impl Boardy {
         eprintln!("desk: boardy shows {place:?}");
         self.place = place;
         self.at = 0;
-        self.creating = None;
         cx.notify();
     }
 
@@ -512,51 +516,6 @@ impl Boardy {
         self.send::<BoardyLog>(params, cx, |boardy, reply, cx| boardy.landed(reply, cx));
     }
 
-    fn create(&mut self, cx: &mut Context<Self>) {
-        let (Some((status, input)), Place::Board(board, _)) = (self.creating.take(), &self.place)
-        else {
-            return;
-        };
-        let title = input.read(cx).text().trim().to_owned();
-        if title.is_empty() {
-            return;
-        }
-        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        let params = CreateRequest {
-            board: Some(board.clone()),
-            ticket: Ticket {
-                acceptance: Vec::new(),
-                assignee: None,
-                blocks: Vec::new(),
-                component: None,
-                created: now.clone(),
-                depends: Vec::new(),
-                duplicates: Vec::new(),
-                epic: None,
-                id: String::new(),
-                labels: Vec::new(),
-                log: String::new(),
-                owns: Vec::new(),
-                parent: None,
-                points: None,
-                priority: BoardyTicketPriority::P2,
-                problem: String::new(),
-                questions: Vec::new(),
-                reason: None,
-                relates: Vec::new(),
-                scope: String::new(),
-                size: None,
-                spec: None,
-                sprint: None,
-                status,
-                title,
-                r#type: BoardyTicketType::Task,
-                updated: now,
-            },
-        };
-        self.send::<BoardyCreate>(params, cx, |boardy, reply, cx| boardy.landed(reply, cx));
-    }
-
     fn landed(
         &mut self,
         reply: Result<desk_core::protocol::boardy::TicketAnswer, String>,
@@ -600,17 +559,30 @@ impl Boardy {
         cx.notify();
     }
 
-    fn start_creating(&mut self, status: Status, window: &mut Window, cx: &mut Context<Self>) {
-        if !matches!(self.place, Place::Board(..)) {
-            return;
+    pub fn open_create(&mut self, status: Option<String>, cx: &mut Context<Self>) {
+        let status = status.map_or_else(|| self.flow.landing(), Status::from);
+        if let Status::Unknown(raw) = &status {
+            return self.say(format!("boardy has no status {raw}"), cx);
         }
-        let input = TextInput::new(
-            format!("New {} title, Enter to create", self.store.words.ticket).into(),
-            window,
-            cx,
+        let board = match &self.place {
+            Place::Board(board, _) => Some(board.clone()),
+            Place::Ticket(id) => id.split_once('-').map(|(board, _)| board.to_owned()),
+            Place::CatchUp | Place::Attention => None,
+        }
+        .or_else(|| self.store.boards.first().map(|board| board.key.clone()));
+        let words = &self.store.words;
+        let Some(board) = board else {
+            return self.say(
+                format!("tofu has no {} to hold a new {}", words.board, words.ticket),
+                cx,
+            );
+        };
+        eprintln!(
+            "desk: boardy: new {} in {board}, {}",
+            words.ticket,
+            look::label(&status)
         );
-        input.focus_handle(cx).focus(window, cx);
-        self.creating = Some((status, input));
+        self.wanted = Some((board, status));
         cx.notify();
     }
 
@@ -671,21 +643,24 @@ impl Boardy {
             cx.stop_propagation();
             return cx.notify();
         }
-        if self.creating.is_some() {
+        if self.drafting() {
             match key {
-                "enter" => self.create(cx),
-                "escape" => self.creating = None,
+                "enter" if event.keystroke.modifiers.secondary() => self.submit(window, cx),
+                "escape" => self.close_draft(window, cx),
                 _ => return,
             }
             cx.stop_propagation();
             return cx.notify();
+        }
+        if !self.focus.is_focused(window) {
+            return;
         }
         match key {
             "j" | "down" => self.step(1, cx),
             "k" | "up" => self.step(-1, cx),
             "]" => self.shift(1, cx),
             "[" => self.shift(-1, cx),
-            "c" => self.start_creating(self.flow.landing(), window, cx),
+            "c" => self.open_create(None, cx),
             "enter" => match self.order().get(self.at).cloned() {
                 Some(id) if !matches!(self.place, Place::Ticket(_)) => self.open_ticket(id, cx),
                 _ => return,
@@ -771,17 +746,20 @@ impl Render for Boardy {
             self.focused = true;
             self.focus.focus(window, cx);
         }
+        self.begin_draft(window, cx);
+        if !self.shown.mounted(started) {
+            self.draft = None;
+        }
         let body = match &self.place {
             Place::Ticket(_) => ticket::page(self, &theme, cx).into_any_element(),
             Place::CatchUp => views::catch_up(self, &theme, cx).into_any_element(),
             Place::Attention | Place::Board(..) => views::main(self, &theme, cx).into_any_element(),
         };
         let items = self.menu();
-        let trailing =
-            reread("boardy", self.asking > 0, &theme, cx, Self::refetch).into_any_element();
         let timed = self.timed(started);
+        let drafted = create::modal(self, &theme, window, cx);
         frame::tile(
-            titled("boardy", Some(trailing)),
+            titled("boardy", None),
             &theme,
             div()
                 .id("boardy")
@@ -815,6 +793,7 @@ impl Render for Boardy {
                         .flex_col()
                         .child(body),
                 )
+                .children(drafted)
                 .children(self.toast.clone().map(|said| {
                     div()
                         .absolute()

@@ -1,3 +1,4 @@
+pub mod boardy;
 pub mod bridge;
 pub mod buffer;
 pub mod control;

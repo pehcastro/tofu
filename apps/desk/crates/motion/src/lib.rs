@@ -2,10 +2,12 @@ use std::time::Duration;
 
 use gpui::{Animation, App};
 
+mod flip;
 mod glide;
 mod presence;
 pub mod tokens;
 
+pub use flip::{FlipTracker, Placed};
 pub use glide::{Glide, GlideKind};
 pub use presence::{Phase, Presence};
 

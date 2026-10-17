@@ -16,9 +16,10 @@ use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, T1, T2};
 use desk_ui::components::status_icon::status_icon;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, SharedString, div, prelude::*, px,
-    rgb_to_hsla,
+    AnyElement, App, ClickEvent, Context, CursorStyle, Div, FontWeight, SharedString, Window, div,
+    prelude::*, px, rgb_to_hsla,
 };
+use std::time::Instant;
 
 use super::look::{self, age, day, disc, kit, noun};
 use super::views::opener;
@@ -26,7 +27,11 @@ use super::{Boardy, Opened, Place};
 use crate::screens::frame::note;
 
 const PAD: f32 = 24.0;
-const COLUMN: f32 = 800.0;
+const COLUMN: f32 = 760.0;
+const PANEL: f32 = 280.0;
+const PANEL_LEAST: f32 = 220.0;
+const PANEL_MOST: f32 = 480.0;
+const HANDLE: f32 = 6.0;
 const TITLE_SCALE: f32 = 1.35;
 const GAP: f32 = 18.0;
 const BAR: f32 = 44.0;
@@ -100,23 +105,93 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
         .flex_col()
         .min_h_0()
         .child(top)
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .gap(px(PAD))
-                .px(px(PAD))
+        .child(Split {
+            body: ScrollArea::new("boardy-ticket")
                 .child(
-                    div().flex_1().min_w_0().h_full().child(
-                        ScrollArea::new("boardy-ticket").child(body(boardy, opened, theme, cx)),
-                    ),
+                    div()
+                        .w_full()
+                        .flex()
+                        .justify_center()
+                        .p(px(PAD))
+                        .child(body(boardy, opened, theme, cx)),
                 )
+                .into_any_element(),
+            panel: ScrollArea::new("boardy-properties")
                 .child(
-                    ScrollArea::new("boardy-properties")
+                    div()
+                        .py(px(PAD))
+                        .pr(px(PAD))
                         .child(properties(boardy, opened, theme, cx)),
-                ),
-        )
+                )
+                .into_any_element(),
+        })
+}
+
+struct Width {
+    px: f32,
+    moved: Option<Instant>,
+}
+
+struct Edge;
+
+struct Ghost;
+
+impl Render for Ghost {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+#[derive(IntoElement)]
+struct Split {
+    body: AnyElement,
+    panel: AnyElement,
+}
+
+impl RenderOnce for Split {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let width = window.use_keyed_state("boardy-panel-width", cx, |_, _| Width {
+            px: PANEL,
+            moved: None,
+        });
+        if let Some(moved) = width.update(cx, |width, _| width.moved.take()) {
+            eprintln!(
+                "desk: boardy: panel drag frame {:.2}",
+                moved.elapsed().as_secs_f64() * 1000.0
+            );
+        }
+        let shown = width.read(cx).px;
+        div()
+            .id("boardy-split")
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .on_drag_move::<Edge>(move |event, _, cx| {
+                let to = f32::from(event.bounds.right() - event.event.position.x);
+                width.update(cx, |width, cx| {
+                    width.px = to.clamp(PANEL_LEAST, PANEL_MOST);
+                    width.moved = Some(Instant::now());
+                    cx.notify();
+                });
+            })
+            .child(div().flex_1().min_w_0().h_full().child(self.body))
+            .child(
+                div()
+                    .id("boardy-panel-edge")
+                    .flex_none()
+                    .w(px(HANDLE))
+                    .h_full()
+                    .cursor(CursorStyle::ResizeColumn)
+                    .on_drag(Edge, |_, _, _, cx| cx.new(|_| Ghost)),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(shown - HANDLE))
+                    .h_full()
+                    .child(self.panel),
+            )
+    }
 }
 
 fn body(boardy: &Boardy, opened: &Opened, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
@@ -129,6 +204,7 @@ fn body(boardy: &Boardy, opened: &Opened, theme: &Theme, cx: &mut Context<Boardy
         .filter(|sub| sub.parent.as_deref() == Some(ticket.id.as_str()))
         .collect();
     div()
+        .w_full()
         .max_w(px(COLUMN))
         .flex()
         .flex_col()
