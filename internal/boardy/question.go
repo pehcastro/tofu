@@ -124,7 +124,7 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 	if err != nil {
 		return ticket, err
 	}
-	if m.role(board, actor) == RoleAgent && ticket.Assignee != actor {
+	if m.role(board, actor) == RoleAgent && !heldBy(ticket, actor) {
 		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("it is assigned to %q, and an agent asks only on its own ticket", ticket.Assignee)}
 	}
 	q = q.tidy()

@@ -191,7 +191,7 @@ func (m Managed) AskInLog(id, question, actor string) (Ticket, error) {
 
 func (m Managed) mayAppend(id, actor string) (Ticket, Board, error) {
 	ticket, board, err := m.ticketOnBoard(id)
-	if err == nil && m.role(board, actor) == RoleAgent && ticket.Assignee != actor {
+	if err == nil && m.role(board, actor) == RoleAgent && !heldBy(ticket, actor) {
 		err = RefusedError{Ticket: id, Why: fmt.Sprintf("it is assigned to %q, and an agent appends only to its own ticket's Log", ticket.Assignee)}
 	}
 	return ticket, board, err
@@ -252,7 +252,7 @@ func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) erro
 		}
 		return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("%s is not a manager of %s, and %s only closes a ticket", actor, ticket.Board(), RolePerson)}
 	case RoleAgent:
-		if ticket.Assignee != actor {
+		if !heldBy(ticket, actor) {
 			return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("it is assigned to %q, and an agent moves only its own ticket", ticket.Assignee)}
 		}
 		if ticket.Status != Doing || to != Review {

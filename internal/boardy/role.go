@@ -152,6 +152,11 @@ func (s Store) spawnedAs(ticketOrAgent string) string {
 	return ticketOrAgent
 }
 
+func heldBy(ticket Ticket, actor string) bool {
+	_, agent, bySubAgent := strings.Cut(actor, subAgentOfSession)
+	return ticket.Assignee == actor || bySubAgent && ticket.Assignee == agent
+}
+
 func (m Managed) actsForPerson(actor string) bool {
 	if m.Person == "" {
 		return actor != "" && !strings.Contains(actor, subAgentOfSession)
