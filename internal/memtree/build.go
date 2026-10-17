@@ -28,9 +28,7 @@ type compacted struct {
 
 func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 	var built Built
-	if !s.passesHighMark() {
-		return built, nil
-	}
+	summarizing := s.passesHighMark()
 	var failed []Ref
 	done := make(chan compacted, konst.MemtreeCompactionsAtOnce)
 	running := 0
@@ -59,6 +57,10 @@ func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 			if err := s.keep(ref, joined); err != nil {
 				return built, err
 			}
+			continue
+		}
+		if !summarizing {
+			failed = append(failed, ref)
 			continue
 		}
 		built.Calls++
