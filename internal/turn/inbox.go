@@ -29,7 +29,7 @@ const (
 	sourceStepCapNotice = "step cap notice"
 	sourceStopHook      = "stop hook"
 	sourceLastWord      = "last word"
-	sourceSpawnLine     = "spawn line"
+	SourceSpawnLine     = "spawn line"
 	sourceForkTask      = "fork task"
 	sourceForkCarry     = "fork carry"
 	sourceCheck         = "sub-agent check"

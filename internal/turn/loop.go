@@ -345,9 +345,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		episodesCarried = len(view)
 		return withEpisodes(head, view)
 	}
-	carried, view := config.History, []llm.Message(nil)
+	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool { return message.Origin.Source == SourceSpawnLine }), []llm.Message(nil)
 	if config.opensGeneration() {
-		carried, view = withoutMemoryViews(config.History), config.MemoryMessage()
+		carried, view = withoutMemoryViews(carried), config.MemoryMessage()
 	}
 	messages = slices.Concat(messages, carried, view)
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
@@ -1097,10 +1097,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				answered(decision.Content)
 				return finish(OutcomeStopped), nil
 			}
-			if started := startedSpawnsOnly(stepTools, stepRow.ToolCalls); config.SpawnedFrom == "" && len(started) > 0 {
-				if strings.TrimSpace(decision.Content) == "" {
-					messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: strings.Join(started, "\n"), Origin: llm.Origin{Source: sourceSpawnLine, TakenAt: now()}})
-				}
+			if config.SpawnedFrom == "" && onlyStartedSpawns(stepTools, stepRow.ToolCalls) {
 				keep(stepRow)
 				answered(decision.Content)
 				return finish(OutcomeStopped), nil

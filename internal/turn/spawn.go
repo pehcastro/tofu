@@ -291,15 +291,11 @@ func (t *SpawnTool) Spawned() []Spawned {
 	return slices.Clone(t.tree.ran)
 }
 
-func startedSpawnsOnly(tools Registry, calls []ToolCallRow) []string {
-	var started []string
-	for _, call := range calls {
-		if _, spawning := tools.byName[call.Tool].(*SpawnTool); !spawning || call.SubAgentID == "" || call.Error != "" {
-			return nil
-		}
-		started = append(started, call.Command)
-	}
-	return started
+func onlyStartedSpawns(tools Registry, calls []ToolCallRow) bool {
+	return len(calls) > 0 && !slices.ContainsFunc(calls, func(call ToolCallRow) bool {
+		_, spawning := tools.byName[call.Tool].(*SpawnTool)
+		return !spawning || call.SubAgentID == "" || call.Error != ""
+	})
 }
 
 func (t *SpawnTool) limits() SubAgentLimits {

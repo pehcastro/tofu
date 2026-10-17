@@ -79,6 +79,9 @@ func resumedChat(carry Carry, dir string) []Event {
 	}
 	lead.watch.emit(labelled)
 	for _, message := range carry.Messages {
+		if message.Origin.Source == turn.SourceSpawnLine {
+			continue
+		}
 		said := lead.recorded(message)
 		if said != nil && message.Role == llm.RoleUser && startsATurn(lead.origins[message.Content]) {
 			lead.turn, lead.watch.turnID = said.Turn, cmp.Or(said.Turn, carry.Session)
