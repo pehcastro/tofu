@@ -103,6 +103,13 @@ func (h *Host) Steer(text string) string {
 	return id
 }
 
+func (h *Host) queueTyped(text string) string {
+	if h.following.Load() != nil {
+		return h.Steer(text)
+	}
+	return h.steerFor(text)
+}
+
 func (h *Host) SendNow(id string) bool {
 	if f := h.following.Load(); f != nil {
 		return f.ask(followAsk{Op: followSendNow, Text: id}).OK

@@ -402,15 +402,6 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if l.running() {
-		return nil, errTurnRunning
-	}
-	s.mu.Lock()
-	commanding := s.command != nil
-	s.mu.Unlock()
-	if commanding {
-		return nil, errCommandRunning
-	}
 	_, picked := l.host.Settings()
 	pick, err := s.chosen(picked, p.ModelPick)
 	if err != nil {
@@ -436,11 +427,24 @@ func (s *server) send(p TurnSendParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !l.host.Send(pick, task+tokens) {
-		return nil, errTurnRunning
+	task += tokens
+	if !l.running() {
+		s.mu.Lock()
+		commanding := s.command != nil
+		s.mu.Unlock()
+		if commanding {
+			return nil, errCommandRunning
+		}
+		if l.host.Send(pick, task) {
+			turn, _ := l.host.Turn()
+			return TurnResult{Turn: turn}, nil
+		}
 	}
 	turn, _ := l.host.Turn()
-	return TurnResult{Turn: turn}, nil
+	if p.ExpectedTurnID != "" && p.ExpectedTurnID != turn {
+		return nil, &Refusal{Code: CodeRefused, Message: "turn " + strconv.Quote(turn) + " is running, not " + strconv.Quote(p.ExpectedTurnID) + ", so nothing was sent"}
+	}
+	return TurnResult{Turn: turn, Steered: l.host.queueTyped(task)}, nil
 }
 
 func (s *server) steer(p TurnSteerParams) (any, error) {

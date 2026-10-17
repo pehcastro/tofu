@@ -927,10 +927,11 @@ func (ShellState) enum() []string {
 }
 
 type TurnSendParams struct {
-	Session  string          `json:"session"`
-	Text     string          `json:"text"`
-	Mentions []string        `json:"mentions,omitempty"`
-	Images   []AttachedImage `json:"images,omitempty"`
+	Session        string          `json:"session"`
+	Text           string          `json:"text"`
+	Mentions       []string        `json:"mentions,omitempty"`
+	Images         []AttachedImage `json:"images,omitempty"`
+	ExpectedTurnID string          `json:"expectedTurnId,omitempty"`
 	ModelPick
 }
 
@@ -977,7 +978,8 @@ type ShellRunResult struct {
 }
 
 type TurnResult struct {
-	Turn string `json:"turn"`
+	Turn    string `json:"turn"`
+	Steered string `json:"steered,omitempty"`
 }
 
 type UndoParams struct {
