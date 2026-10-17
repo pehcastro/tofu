@@ -179,10 +179,12 @@ func (e Edit) plan(changes []turn.EditChange, several bool) (plannedEdit, error)
 	}
 	before := string(body)
 	text, endings := turn.EndingsOf(before)
-	after := text
+	after, quotedOnce := text, true
 	for _, change := range changes {
 		var note string
-		switch count := strings.Count(after, change.Old); {
+		count := strings.Count(after, change.Old)
+		quotedOnce = quotedOnce && change.Symbol == "" && change.Old != "" && count == 1
+		switch {
 		case change.Symbol != "":
 			after, err = replaceDeclaration(e.root, target, change.Symbol, after, change.New)
 		case change.Old == "":
@@ -213,7 +215,7 @@ func (e Edit) plan(changes []turn.EditChange, several bool) (plannedEdit, error)
 	if err != nil {
 		return plannedEdit{}, err
 	}
-	if err := e.ledger.Unshown(target, body, change); err != nil {
+	if err := e.ledger.Unshown(target, body, change); err != nil && !quotedOnce {
 		return plannedEdit{}, fmt.Errorf("edit: %w", err)
 	}
 	after = endings.Restore(after)
