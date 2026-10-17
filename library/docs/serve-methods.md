@@ -53,7 +53,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
   `-32000` when no turn runs or the id is not queued. `turn.steered` follows each message the lead reads:
   `item` is its `id`, with `text`, `step` and `readAt`; a batch shares a `step`. `turn.steerQueued` tells the
   holder's clients a follower's steer is queued: `item` is its `id`, with `text`. `turn.unsteer` takes `text`,
-  answers `removed`. `turn.stop` takes `turn`, `lead: true` stops the lead alone. `undo` takes `session`,
+  answers `removed`. `turn.stop` takes `turn`; it stops the lead and keeps running sub-agents, `everything: true` stops them too. `turn.send` during a turn queues a steer and answers `steered`, `expectedTurnId` refuses instead. `boardy.rows` answers the list's fields only. `undo` takes `session`,
   `turns`; answers `turns`, `restored`, `removed`, `refused` (`path`, `why`) and `dry_run`
 - `mention.resolve`: takes `ref` and `session`; answers `outcome` (`item`, `not_found` or `ambiguous`), and an item's `item`, `speaker` and first `line`
 - `shell.run`: takes `command`, runs it as `!` does, answers `output` and `stopped`. `shell.read` takes `shell` and `offset`; `shell.kill` `shell`

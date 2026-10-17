@@ -36,6 +36,12 @@ one go, refusing while its turn runs unless you pass `stop: true`. Two sessions 
 only with the setting `oneWorkingSessionPerProject` off; while it is on, the default, the second turn ends
 `failed` and says the project is busy.
 
+**No window owns a running session.** A session runs in a background holder; `tofu serve` and the
+terminal follow it, so closing one leaves the other running, and `session.open` names the holder in
+`heldBy`. `turn.send` while a turn runs queues the text as a steer and answers `steered`; pass
+`expectedTurnId` to be refused instead. `turn.stop` stops the lead and leaves running sub-agents
+working; pass `everything: true` to stop them too.
+
 **It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x
 faster than before, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the
 same output. An idle `tofu serve` uses about 0.35% of a core.
@@ -55,7 +61,7 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 | `status` | `status.list`, `status.ack` | every program status record of every open session as it stands, with when it entered its state and the approval or question a blocked one waits on; an acknowledged finished record clears |
 | `mention` | `mention.resolve` | the item a `ref` points at |
 | `takeover` | `shell.takeover`, `shell.input`, `shell.resize`, `shell.release` | a person borrows a kept shell: every bash command runs in a terminal once the client declares `takeover`, the take-over answers the raw output so far with its colours, keystrokes and sizes go in as base64 bytes, and the release hands it back to the agent with an optional note. Neither kills the process. A refusal is `-32000` with `data.reason`, one of `not_declared`, `unknown_shell`, `not_running`, `not_kept`, `not_in_terminal`, `other_process` and `not_held` |
-| `boardy` | `boardy.boards`, `boardy.list`, `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
+| `boardy` | `boardy.boards`, `boardy.list`, `boardy.rows` (the list's fields only, 349 KB instead of 11 MB on 1,500 tickets), `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
 | `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
 | `queries` | `query.context`, `query.rules`, `query.usage`, `query.settings`, `query.ledger` and the other `query.*` | the context items, rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the decisions of one session |
 

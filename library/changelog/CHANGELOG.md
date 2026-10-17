@@ -10,6 +10,31 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc8 - 2026-10-17
+
+A running session belongs to no window, opens fast however old it is, and the trace says who stopped what.
+
+### Added
+
+- A running session lives in a background holder that no window owns. The terminal and the desk follow it, see each other's messages at once, and closing one leaves the others running; ctrl+c with another client attached only detaches. Ten seconds after the last client closes, the holder ends the session.
+- `tofu session trace` prints a short summary of a session (turns, sub-agents and how they ended, errors, stops and who asked) with drill-down commands, and takes `--since 1h`, `--from` and `--to`, `--agent`, `--turn`, `--kind`, `--grep` and `--last`. On an 80-generation session a filtered query answers in under a second.
+- Every stop, cancel, close and park writes a trace row naming who asked (the key and screen, the serve client, a follower, the holder's grace, a crash) and what it took down; a parked sub-agent's row points at the row that parked it.
+- Every board event names its author (you, a Claude Code session, tofu's lead, a sub-agent or a hook) with its session and trace; the lead's brief, messages, a sub-agent's asks and the answers show on the ticket as a conversation.
+- `boardy.rows` over `tofu serve` sends a board's list in 349 KB instead of 11 MB.
+
+### Changed
+
+- Resuming an old session reads only the generations it must: on an 80-generation session with 532 MB of events, `tofu --continue` reaches input in 0.43 s instead of 5.5 s, and `session.open` over serve answers in 0.47 s instead of 5.1 s.
+- Session history pages over serve come from one cached replay: under 3 ms a page instead of about 700.
+- A message sent over serve while a turn runs is queued as a steer instead of refused; `expectedTurnId` keeps the strict refusal.
+- A stop that does not ask for everything stops only the lead and leaves running sub-agents working; `turn.stop` takes `everything` to stop them too. A second Esc no longer stops everything after a delay.
+- Memory summaries are written only when the episode view outgrows its limit: a short task makes none.
+- Memory summaries run on the session's own subscription; `memoryModel` empty means that.
+
+### Fixed
+
+- The started sub-agents are no longer drawn or sent as the lead's words.
+
 ## 0.5.15-rc7 - 2026-10-17
 
 A board runs itself: hooks enforce how work moves, the lead plans with epics and sprints, and an audit says what is wrong.
