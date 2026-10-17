@@ -20,6 +20,7 @@ use desk_ui::components::properties::properties_panel;
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, HOVER, T1, T2};
 use desk_ui::components::status_icon::status_icon;
+use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
     AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, CursorStyle, Div, Entity,
@@ -51,6 +52,7 @@ const PANEL: f32 = 280.0;
 const PANEL_LEAST: f32 = 220.0;
 const PANEL_MOST: f32 = 480.0;
 const HANDLE: f32 = 6.0;
+const STACK_BELOW: f32 = 720.0;
 const TITLE_SCALE: f32 = 1.35;
 const GAP: f32 = 18.0;
 const BAR: f32 = 44.0;
@@ -100,7 +102,12 @@ fn folded(text: &str) -> Option<String> {
     })
 }
 
-pub(super) fn page(boardy: &Boardy, theme: &Theme, wide: Pixels, cx: &mut Context<Boardy>) -> Div {
+pub(super) fn page(
+    boardy: &Boardy,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut Context<Boardy>,
+) -> Div {
     let Place::Ticket(id) = &boardy.place else {
         return div();
     };
@@ -160,7 +167,8 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, wide: Pixels, cx: &mut Contex
             .child(top)
             .child(div().p(px(PAD)).child(note(said, theme)));
     };
-    let side = (f32::from(wide) * SIDE_SHARE).clamp(SIDE_LEAST, SIDE_MOST);
+    let side = (f32::from(window.viewport_size().width) * SIDE_SHARE).clamp(SIDE_LEAST, SIDE_MOST);
+    let panel = properties(boardy, opened, theme, window, cx).into_any_element();
     div()
         .size_full()
         .flex()
@@ -169,27 +177,17 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, wide: Pixels, cx: &mut Contex
         .child(top)
         .child(Split {
             width: boardy.panel.clone(),
-            body: ScrollArea::new("boardy-ticket")
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .justify_center()
-                        .py(px(PAD))
-                        .pl(px(side))
-                        .pr(px(side.max(DIVIDER_GAP)))
-                        .child(body(boardy, opened, theme, cx)),
-                )
+            body: div()
+                .w_full()
+                .flex()
+                .justify_center()
+                .py(px(PAD))
+                .pl(px(side))
+                .pr(px(side.max(DIVIDER_GAP)))
+                .child(body(boardy, opened, theme, cx))
                 .into_any_element(),
-            panel: ScrollArea::new("boardy-properties")
-                .child(
-                    div()
-                        .py(px(PAD))
-                        .pl(px(PANEL_PAD))
-                        .pr(px(PAD))
-                        .child(properties(boardy, opened, theme, cx)),
-                )
-                .into_any_element(),
+            panel,
+            side,
             line: theme.color(ColorToken::Separator),
             lit: theme.color(ColorToken::FocusRing),
         })
@@ -199,6 +197,7 @@ pub(super) struct Width {
     px: f32,
     dragging: bool,
     right: Rc<Cell<Pixels>>,
+    stacked: Rc<Cell<bool>>,
     moved: Option<Instant>,
 }
 
@@ -208,6 +207,7 @@ impl Default for Width {
             px: PANEL,
             dragging: false,
             right: Rc::default(),
+            stacked: Rc::default(),
             moved: None,
         }
     }
@@ -218,6 +218,7 @@ struct Split {
     width: Entity<Width>,
     body: AnyElement,
     panel: AnyElement,
+    side: f32,
     line: Rgba,
     lit: Rgba,
 }
@@ -231,10 +232,41 @@ impl RenderOnce for Split {
                 moved.elapsed().as_secs_f64() * 1000.0
             );
         }
-        let (shown, right) = {
+        let (shown, right, stacked) = {
             let held = width.read(cx);
-            (held.px, held.right.clone())
+            (held.px, held.right.clone(), held.stacked.clone())
         };
+        let was = stacked.get();
+        let measure = canvas(
+            move |bounds, window, _| {
+                right.set(bounds.right());
+                let narrow = f32::from(bounds.size.width) < STACK_BELOW;
+                if narrow != stacked.get() {
+                    stacked.set(narrow);
+                    window.refresh();
+                }
+            },
+            |_, (), _, _| {},
+        )
+        .absolute()
+        .size_full();
+        if was {
+            return div()
+                .flex_1()
+                .min_h_0()
+                .relative()
+                .child(measure)
+                .child(
+                    ScrollArea::new("boardy-ticket").child(self.body).child(
+                        div()
+                            .pb(px(PAD))
+                            .pl(px(self.side))
+                            .pr(px(PAD))
+                            .child(self.panel),
+                    ),
+                )
+                .into_any_element();
+        }
         let (moving, lifting, pressing) = (width.clone(), width.clone(), width);
         div()
             .flex_1()
@@ -256,15 +288,14 @@ impl RenderOnce for Split {
             .on_mouse_up(MouseButton::Left, move |_, _, cx| {
                 lifting.update(cx, |width, _| width.dragging = false);
             })
+            .child(measure)
             .child(
-                canvas(
-                    move |bounds, _, _| right.set(bounds.right()),
-                    |_, (), _, _| {},
-                )
-                .absolute()
-                .size_full(),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .child(ScrollArea::new("boardy-ticket").child(self.body)),
             )
-            .child(div().flex_1().min_w_0().h_full().child(self.body))
             .child(
                 div()
                     .id("boardy-panel-edge")
@@ -288,12 +319,17 @@ impl RenderOnce for Split {
                     }),
             )
             .child(
-                div()
-                    .flex_none()
-                    .w(px(shown - HANDLE))
-                    .h_full()
-                    .child(self.panel),
+                div().flex_none().w(px(shown - HANDLE)).h_full().child(
+                    ScrollArea::new("boardy-properties").child(
+                        div()
+                            .py(px(PAD))
+                            .pl(px(PANEL_PAD))
+                            .pr(px(PAD))
+                            .child(self.panel),
+                    ),
+                ),
             )
+            .into_any_element()
     }
 }
 
@@ -440,6 +476,8 @@ fn mention(
         .flex()
         .items_center()
         .gap_1()
+        .max_w_full()
+        .min_w_0()
         .h(px(CHIP_HEIGHT))
         .px_1p5()
         .rounded(px(CHIP_RADIUS))
@@ -449,7 +487,7 @@ fn mention(
         .text_size(px(FONT_SMALL))
         .text_color(ink(theme, T1))
         .child(mark)
-        .child(one.label.clone())
+        .child(div().min_w_0().truncate().child(one.label.clone()))
         .on_click(
             cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, window, cx| {
                 boardy.follow(to.clone(), window, cx);
@@ -817,7 +855,8 @@ fn properties(
     boardy: &Boardy,
     opened: &Opened,
     theme: &Theme,
-    cx: &Context<Boardy>,
+    window: &mut Window,
+    cx: &mut Context<Boardy>,
 ) -> impl IntoElement {
     let ticket = &opened.answer.ticket;
     let actual = &opened.answer.actual;
@@ -963,12 +1002,21 @@ fn properties(
                     .items_center()
                     .gap_1()
                     .child(glyph(Glyph::Label, ICON, faint))
-                    .children(
-                        ticket
-                            .labels
-                            .iter()
-                            .map(|name| dot_chip(name.clone(), label)),
-                    )
+                    .children(ticket.labels.iter().enumerate().map(|(n, name)| {
+                        tooltip(
+                            SharedString::from(format!("boardy-label-tip-{n}")),
+                            div()
+                                .id(SharedString::from(format!("boardy-label-{n}")))
+                                .min_w_0()
+                                .max_w_full()
+                                .child(dot_chip(name.clone(), label)),
+                            Edge::Frame,
+                            name.clone(),
+                            theme,
+                            window,
+                            cx,
+                        )
+                    }))
                     .when(ticket.labels.is_empty(), |row| {
                         row.child(note("none", theme))
                     })
@@ -997,7 +1045,20 @@ fn properties(
                         ),
                         None => marked(Glyph::File, glob.clone()),
                     };
-                    (SharedString::default(), shown)
+                    let tipped = tooltip(
+                        SharedString::from(format!("boardy-owns-tip-{n}")),
+                        div()
+                            .id(SharedString::from(format!("boardy-owns-{n}")))
+                            .min_w_0()
+                            .max_w_full()
+                            .child(shown),
+                        Edge::Frame,
+                        glob.clone(),
+                        theme,
+                        window,
+                        cx,
+                    );
+                    (SharedString::default(), tipped.into_any_element())
                 })
                 .collect::<Vec<_>>(),
         )

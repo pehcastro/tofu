@@ -859,9 +859,7 @@ impl Render for Boardy {
             self.draft = None;
         }
         let body = match &self.place {
-            Place::Ticket(_) => {
-                ticket::page(self, &theme, window.viewport_size().width, cx).into_any_element()
-            }
+            Place::Ticket(_) => ticket::page(self, &theme, window, cx).into_any_element(),
             Place::CatchUp => views::catch_up(self, &theme, cx).into_any_element(),
             Place::Attention | Place::Board(..) => views::main(self, &theme, cx).into_any_element(),
         };
