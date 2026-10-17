@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -217,10 +218,46 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		spent.Reason, spent.FromAccount = AccountReason(taken.Reason), taken.From
 		emit(Event{Kind: EventAccount, Account: &spent})
 	}
+	announce := func(ended turn.Row, agent, into string) {
+		forked := forkOf(ended, into)
+		emit(Event{Kind: EventForkStart, Agent: agent})
+		emit(Event{Kind: EventNote, Text: forkWords(forked), Agent: agent})
+		emit(Event{Kind: EventForkEnd, Fork: &forked, Agent: agent})
+	}
+	var forking sync.Mutex
+	var awaitingSession *turn.Row
+	announceIntoSession := func(ended turn.Row, into string) {
+		announce(ended, "", into)
+		emit(labelledAs(sessions, Event{Kind: EventSession, ID: into, Root: into}))
+	}
+	announcedFromHeader := func(ended turn.Row) bool {
+		header, err := sessions.Header(ended.Session)
+		if err != nil || header.ForkedInto == "" {
+			return false
+		}
+		announceIntoSession(ended, header.ForkedInto)
+		return true
+	}
+	announceAwaitedIn := func(reached string) {
+		if awaitingSession == nil {
+			return
+		}
+		ended := *awaitingSession
+		awaitingSession = nil
+		if reached == ended.Session {
+			announce(ended, "", ended.ForkedInto)
+			return
+		}
+		announceIntoSession(ended, reached)
+	}
 	config.Appended = func(logged session.Event) {
 		emit(Event{Kind: EventPersisted, ID: logged.ID, Agent: logged.Agent, Logged: &logged})
+		forking.Lock()
+		defer forking.Unlock()
+		if awaitingSession != nil && logged.Kind == session.EventTurnStart && logged.Turn == awaitingSession.ForkedInto && announcedFromHeader(*awaitingSession) {
+			awaitingSession = nil
+		}
 	}
-	var endedSession atomic.Pointer[string]
 	config.Step = func(step turn.StepRow) {
 		steps.Store(int64(step.Index))
 		if prepared.Plan != nil {
@@ -229,20 +266,22 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		if step.Occupancy != nil {
 			emit(Event{Kind: EventContext, Context: Context{Used: step.Occupancy.Total(), Budget: prepared.Ceiling}})
 		}
-		if ended := endedSession.Swap(nil); ended != nil {
-			if header, err := sessions.Header(*ended); err == nil && header.ForkedInto != "" {
-				emit(labelledAs(sessions, Event{Kind: EventSession, ID: header.ForkedInto, Root: header.ForkedInto}))
-			}
-		}
 	}
 	config.EndedSession = func(ended turn.Row) error {
-		if ended.SpawnedFrom == "" && ended.Session != "" {
-			endedSession.Store(&ended.Session)
+		if ended.SpawnedFrom != "" {
+			announce(ended, ended.Root, ended.ForkedInto)
+			return nil
 		}
-		forked := forkOf(ended)
-		emit(Event{Kind: EventForkStart})
-		emit(Event{Kind: EventNote, Text: forkWords(forked)})
-		emit(Event{Kind: EventForkEnd, Fork: &forked})
+		if ended.Session == "" {
+			announce(ended, "", ended.ForkedInto)
+			return nil
+		}
+		forking.Lock()
+		defer forking.Unlock()
+		announceAwaitedIn(ended.Session)
+		if !announcedFromHeader(ended) {
+			awaitingSession = &ended
+		}
 		return nil
 	}
 	stopClocks := watch.clockRunningSubAgents(h.report)
@@ -254,6 +293,9 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		asking = scratched
 	}
 	leadErr := turn.Lead(asking, config, live.Steering, heard, func(row turn.Row, err error) {
+		forking.Lock()
+		announceAwaitedIn(row.Session)
+		forking.Unlock()
 		watch.stop.reset()
 		steps.Store(0)
 		if err != nil {
@@ -642,8 +684,8 @@ func unreported(err error, reported []error) error {
 	return errors.Join(unseen...)
 }
 
-func forkOf(ended turn.Row) Fork {
-	forked := Fork{From: ended.Session, To: ended.ForkedInto}
+func forkOf(ended turn.Row, into string) Fork {
+	forked := Fork{From: ended.Session, To: into}
 	if fork := ended.EndedInFork; fork != nil {
 		forked.Kind, forked.Before, forked.After = string(fork.Kind), fork.TokensBefore, fork.TokensAfter
 	}

@@ -204,9 +204,11 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		if event.Fork == nil {
 			return out
 		}
-		s.session = event.Fork.To
+		if event.Agent == "" {
+			s.session = event.Fork.To
+		}
 		forked := *event.Fork
-		return append(out, kept("session.forked", &SessionForked{Identity: s.identity("", forked.To), From: forked.From, To: forked.To, Kind: forked.Kind, Before: forked.Before, After: forked.After}))
+		return append(out, kept("session.forked", &SessionForked{Identity: s.identity(event.Agent, forked.To), From: forked.From, To: forked.To, Kind: forked.Kind, Before: forked.Before, After: forked.After}))
 	case EventAwaitPerson:
 		if event.Questions != nil {
 			asked := questionRequest(id, event)
