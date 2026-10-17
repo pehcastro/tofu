@@ -4,10 +4,10 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Axis, Bounds, ContentMask, Div, ElementId, Font, FontStyle, FontWeight,
-    HighlightStyle, LineFragment, ListHorizontalSizingBehavior, PathBuilder, Pixels, Point, Rgba,
-    ScrollHandle, ScrollStrategy, ShapedLine, SharedString, StyledText, TextAlign, TextRun,
-    UniformListScrollHandle, Window, canvas, combine_highlights, div, fill, font, point,
-    prelude::*, px, rgb_to_hsla, size, uniform_list,
+    HighlightStyle, LineFragment, LineWrapperHandle, ListHorizontalSizingBehavior, PathBuilder,
+    Pixels, Point, Rgba, ScrollHandle, ScrollStrategy, ShapedLine, SharedString, StyledText,
+    TextAlign, TextRun, UniformListScrollHandle, Window, canvas, combine_highlights, div, fill,
+    font, point, prelude::*, px, rgb_to_hsla, size, uniform_list,
 };
 
 use crate::components::chip::{mono, tabular};
@@ -177,6 +177,24 @@ pub struct Wrap {
     starts: Vec<usize>,
 }
 
+fn wrap_breaks(
+    wrappers: &mut HashMap<Heading, LineWrapperHandle>,
+    (text, heading): (String, Heading),
+    width: Pixels,
+    theme: &Theme,
+    cx: &App,
+) -> Rc<[usize]> {
+    wrappers
+        .entry(heading)
+        .or_insert_with(|| {
+            cx.text_system()
+                .line_wrapper(heading.font(theme), heading.size())
+        })
+        .wrap_line(&[LineFragment::text(&text)], width)
+        .map(|boundary| boundary.ix)
+        .collect()
+}
+
 pub fn wrap_width(bounds: Bounds<Pixels>) -> Pixels {
     bounds.size.width - px(NUMBER_COLUMN + WRAP_MARGIN)
 }
@@ -199,32 +217,55 @@ impl Wrap {
             false => HashMap::new(),
         };
         let mut wrappers = HashMap::new();
-        let mut starts = vec![0];
-        let mut next = 0;
-        let lines = keys
-            .enumerate()
-            .map(|(line, key)| {
-                let breaks = known.get(&key).cloned().unwrap_or_else(|| {
-                    let (text, heading) = text_of(line);
-                    wrappers
-                        .entry(heading)
-                        .or_insert_with(|| {
-                            cx.text_system()
-                                .line_wrapper(heading.font(theme), heading.size())
-                        })
-                        .wrap_line(&[LineFragment::text(&text)], width)
-                        .map(|boundary| boundary.ix)
-                        .collect()
-                });
-                next += breaks.len() + 1;
-                starts.push(next);
-                WrappedLine { key, breaks }
-            })
-            .collect();
-        Wrap {
+        let lines =
+            keys.enumerate()
+                .map(|(line, key)| {
+                    let breaks = known.get(&key).cloned().unwrap_or_else(|| {
+                        wrap_breaks(&mut wrappers, text_of(line), width, theme, cx)
+                    });
+                    WrappedLine { key, breaks }
+                })
+                .collect();
+        let mut wrap = Wrap {
             width,
             lines,
-            starts,
+            starts: vec![0],
+        };
+        wrap.restart(0);
+        wrap
+    }
+
+    pub fn splice(
+        &mut self,
+        old: Range<usize>,
+        fresh: Vec<(u64, String, Heading)>,
+        theme: &Theme,
+        cx: &App,
+    ) -> (Range<usize>, Range<usize>) {
+        let len = self.lines.len();
+        let old = old.start.min(len)..old.end.min(len);
+        let row = |wrap: &Wrap, line: usize| wrap.starts.get(line).copied().unwrap_or(0);
+        let gone = row(self, old.start)..row(self, old.end);
+        let came = old.start + fresh.len();
+        let mut wrappers = HashMap::new();
+        let lines: Vec<WrappedLine> = fresh
+            .into_iter()
+            .map(|(key, text, heading)| WrappedLine {
+                key,
+                breaks: wrap_breaks(&mut wrappers, (text, heading), self.width, theme, cx),
+            })
+            .collect();
+        self.lines.splice(old.clone(), lines);
+        self.restart(old.start);
+        (gone, row(self, old.start)..row(self, came))
+    }
+
+    fn restart(&mut self, from: usize) {
+        self.starts.truncate(from + 1);
+        let mut next = self.starts.last().copied().unwrap_or(0);
+        for line in self.lines.iter().skip(from) {
+            next += line.breaks.len() + 1;
+            self.starts.push(next);
         }
     }
 
@@ -283,6 +324,21 @@ impl Heights {
             Some(*top)
         });
         Heights(Some(std::iter::once(px(0.0)).chain(tops).collect()))
+    }
+
+    pub fn spliced(&self, old: Range<usize>, fresh: impl Iterator<Item = Heading>) -> Option<Self> {
+        let tops = self.0.as_ref()?;
+        let (first, end) = (*tops.get(old.start)?, *tops.get(old.end)?);
+        let mut spliced = Vec::with_capacity(tops.len());
+        spliced.extend_from_slice(tops.get(..=old.start)?);
+        let mut top = first;
+        for heading in fresh {
+            top += heading.height();
+            spliced.push(top);
+        }
+        let moved = top - end;
+        spliced.extend(tops.get(old.end + 1..)?.iter().map(|after| *after + moved));
+        Some(Heights(Some(spliced.into())))
     }
 
     fn is_measured(&self) -> bool {

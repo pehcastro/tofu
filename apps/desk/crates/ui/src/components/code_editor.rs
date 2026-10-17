@@ -518,13 +518,13 @@ pub struct CodeEditor {
     edited_since_found: bool,
     wrapping: bool,
     wrap: Rc<Wrap>,
-    wrap_stale: bool,
+    wrap_stale: Stale,
     wrap_reveal: Vec<usize>,
     gutter: bool,
     live: bool,
     parsed: markdown::Parsed,
     heights: Heights,
-    heights_stale: bool,
+    heights_stale: Stale,
     colour_stale: bool,
     frames: Option<Rc<RefCell<TypingFrames>>>,
     frames_flush: Option<Task<()>>,
@@ -548,11 +548,62 @@ pub struct CodeEditor {
     wrote: Option<Wrote>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stale {
+    Fresh,
+    Lines { at: usize, old: usize, new: usize },
+    Whole,
+}
+
+impl Stale {
+    fn then(self, next: Stale) -> Stale {
+        match (self, next) {
+            (Stale::Whole, _) | (_, Stale::Whole) => Stale::Whole,
+            (Stale::Fresh, next) => next,
+            (done, Stale::Fresh) => done,
+            (
+                Stale::Lines {
+                    at: first_at,
+                    old: first_old,
+                    new: first_new,
+                },
+                Stale::Lines { at, old, new },
+            ) => {
+                let start = first_at.min(at);
+                let end = (first_at + first_new).max(at + old);
+                Stale::Lines {
+                    at: start,
+                    old: end - first_new + first_old - start,
+                    new: end - old + new - start,
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct Phases {
+    wait: Option<f64>,
+    render: f64,
+    passes: f64,
+    rows: f64,
+}
+
 #[derive(Default)]
 struct TypingFrames {
     edited: Option<Instant>,
-    intervals: Vec<f64>,
+    pending: Phases,
+    intervals: Vec<(f64, Phases)>,
     mode: &'static str,
+}
+
+fn ms_since(at: Instant) -> f64 {
+    at.elapsed().as_secs_f64() * 1000.0
+}
+
+fn median(mut values: Vec<f64>) -> f64 {
+    values.sort_by(f64::total_cmp);
+    values.get(values.len() / 2).copied().unwrap_or_default()
 }
 
 impl TypingFrames {
@@ -564,17 +615,50 @@ impl TypingFrames {
         self.edited.get_or_insert_with(Instant::now);
     }
 
-    fn report(&mut self) {
-        let mut intervals = std::mem::take(&mut self.intervals);
-        intervals.sort_by(f64::total_cmp);
-        if let (Some(median), Some(worst)) = (intervals.get(intervals.len() / 2), intervals.last())
-        {
-            eprintln!(
-                "desk: editor typing {} frames, median {median:.2} ms, worst {worst:.2} ms{}",
-                intervals.len(),
-                self.mode
-            );
+    fn rendered(&mut self, started: Instant, passes: f64) {
+        let Some(edited) = self.edited else {
+            return;
+        };
+        let waited = started.saturating_duration_since(edited).as_secs_f64() * 1000.0;
+        self.pending.wait.get_or_insert(waited);
+        self.pending.render += ms_since(started);
+        self.pending.passes += passes;
+    }
+
+    fn rows(&mut self, started: Instant) {
+        if self.edited.is_some() {
+            self.pending.rows += ms_since(started);
         }
+    }
+
+    fn painted(&mut self) {
+        if let Some(edited) = self.edited.take() {
+            let phases = std::mem::take(&mut self.pending);
+            self.intervals.push((ms_since(edited), phases));
+        }
+    }
+
+    fn report(&mut self) {
+        let samples = std::mem::take(&mut self.intervals);
+        let Some(worst) = samples.iter().map(|(total, _)| *total).reduce(f64::max) else {
+            return;
+        };
+        let of = |phase: fn(&(f64, Phases)) -> f64| median(samples.iter().map(phase).collect());
+        let wait = |(_, phases): &(f64, Phases)| phases.wait.unwrap_or_default();
+        let rest = |(total, phases): &(f64, Phases)| {
+            total - phases.wait.unwrap_or_default() - phases.render - phases.rows
+        };
+        eprintln!(
+            "desk: editor typing {} frames, median {:.2} ms, worst {worst:.2} ms{}; median wait {:.2}, render {:.2} (full-note passes {:.2}), rows {:.2}, layout and paint {:.2} ms",
+            samples.len(),
+            of(|(total, _)| *total),
+            self.mode,
+            of(wait),
+            of(|(_, phases)| phases.render),
+            of(|(_, phases)| phases.passes),
+            of(|(_, phases)| phases.rows),
+            of(rest),
+        );
     }
 }
 
@@ -607,13 +691,13 @@ impl CodeEditor {
             edited_since_found: false,
             wrapping: false,
             wrap: Rc::default(),
-            wrap_stale: true,
+            wrap_stale: Stale::Whole,
             wrap_reveal: Vec::new(),
             gutter: true,
             live: false,
             parsed: markdown::Parsed::default(),
             heights: Heights::default(),
-            heights_stale: true,
+            heights_stale: Stale::Whole,
             colour_stale: false,
             frames: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
             frames_flush: None,
@@ -1384,13 +1468,13 @@ impl CodeEditor {
 
     pub fn set_gutter(&mut self, shown: bool) {
         self.gutter = shown;
-        self.wrap_stale = true;
+        self.wrap_stale = Stale::Whole;
     }
 
     pub fn set_live(&mut self, on: bool, cx: &mut Context<Self>) {
         self.live = on;
-        self.wrap_stale = true;
-        self.heights_stale = true;
+        self.wrap_stale = Stale::Whole;
+        self.heights_stale = Stale::Whole;
         if on || !std::mem::take(&mut self.colour_stale) {
             return;
         }
@@ -1408,27 +1492,46 @@ impl CodeEditor {
     }
 
     fn remeasure(&mut self) {
-        if !self.heights_stale {
+        let stale = std::mem::replace(&mut self.heights_stale, Stale::Fresh);
+        if stale == Stale::Fresh {
             return;
         }
-        self.heights_stale = false;
         if !self.live {
             self.heights = Heights::default();
             return;
         }
-        let lines = self.buffer.line_count();
-        self.parsed.trim(lines.saturating_mul(2));
-        let rope = self.buffer.rope();
-        let heading = |line: usize| {
-            rope.get_line(line)
-                .map_or(Heading::Body, |text| markdown::heading(text.chars()))
+        self.parsed.trim(self.buffer.line_count().saturating_mul(2));
+        let spliced = match stale {
+            Stale::Lines { at, old, new } if self.shown_lines.is_none() => {
+                let heading = |row: usize| {
+                    let line = self.wrapped().map_or(row, |wrap| wrap.locate(row).0);
+                    self.heading(line)
+                };
+                self.heights
+                    .spliced(at..at + old, (at..at + new).map(heading))
+            }
+            Stale::Fresh | Stale::Lines { .. } | Stale::Whole => None,
         };
-        self.heights = match self.wrapped() {
+        self.heights = spliced.unwrap_or_else(|| self.measured());
+    }
+
+    fn heading(&self, line: usize) -> Heading {
+        self.buffer
+            .rope()
+            .get_line(line)
+            .map_or(Heading::Body, |text| markdown::heading(text.chars()))
+    }
+
+    fn measured(&self) -> Heights {
+        match self.wrapped() {
             Some(wrap) => Heights::measured(
-                (0..lines).flat_map(|line| std::iter::repeat_n(heading(line), wrap.pieces(line))),
+                (0..self.buffer.line_count())
+                    .flat_map(|line| std::iter::repeat_n(self.heading(line), wrap.pieces(line))),
             ),
-            None => Heights::measured((0..self.row_count()).map(|row| heading(self.line_of(row)))),
-        };
+            None => {
+                Heights::measured((0..self.row_count()).map(|row| self.heading(self.line_of(row))))
+            }
+        }
     }
 
     pub fn live(&self) -> bool {
@@ -1441,12 +1544,46 @@ impl CodeEditor {
 
     fn rewrap(&mut self, cx: &App) {
         let width = wrap_width(self.bounds.get());
+        if !self.wrapping || width <= px(0.0) {
+            return;
+        }
         let reveal = match self.live {
             true => self.head_lines(),
             false => Vec::new(),
         };
-        let fresh = !self.wrap_stale && width == self.wrap.width() && reveal == self.wrap_reveal;
-        if !self.wrapping || width <= px(0.0) || fresh {
+        let theme = ActiveTheme::theme(cx);
+        let kept = width == self.wrap.width() && self.wrap.rows() > 0;
+        let stale = match std::mem::replace(&mut self.wrap_stale, Stale::Fresh) {
+            Stale::Fresh if kept => Stale::Lines {
+                at: 0,
+                old: 0,
+                new: 0,
+            },
+            stale => stale,
+        };
+        if let (Stale::Lines { at, old, new }, true) = (stale, kept) {
+            let moved = |line: usize| match line {
+                line if line < at => Some(line),
+                line if line >= at + old => Some(line - old + new),
+                _ => None,
+            };
+            let before: Vec<usize> = self.wrap_reveal.iter().filter_map(|l| moved(*l)).collect();
+            self.wrap_reveal = reveal;
+            if old + new > 0 {
+                self.respan(at..at + old, new, &theme, cx);
+            }
+            let mut touched: Vec<usize> = before
+                .iter()
+                .chain(&self.wrap_reveal)
+                .filter(|line| !(at..at + new).contains(line))
+                .filter(|line| before.contains(line) != self.wrap_reveal.contains(line))
+                .copied()
+                .collect();
+            touched.sort_unstable();
+            touched.dedup();
+            for line in touched {
+                self.respan(line..line + 1, 1, &theme, cx);
+            }
             return;
         }
         self.wrap_reveal = reveal;
@@ -1457,13 +1594,26 @@ impl CodeEditor {
             let drawn = self.drawn(line);
             (drawn.text, drawn.heading)
         };
-        let theme = ActiveTheme::theme(cx);
         self.wrap = Rc::new(Wrap::new(&self.wrap, keys, text_of, width, &theme, cx));
-        self.wrap_stale = false;
-        self.heights_stale = true;
+        self.heights_stale = Stale::Whole;
         if first {
             open_phase("wrap", started);
         }
+    }
+
+    fn respan(&mut self, old: Range<usize>, new: usize, theme: &Theme, cx: &App) {
+        let fresh = (old.start..old.start + new)
+            .map(|line| {
+                let drawn = self.drawn(line);
+                (self.wrap_key(line), drawn.text, drawn.heading)
+            })
+            .collect();
+        let (gone, came) = Rc::make_mut(&mut self.wrap).splice(old, fresh, theme, cx);
+        self.heights_stale = self.heights_stale.then(Stale::Lines {
+            at: gone.start,
+            old: gone.len(),
+            new: came.len(),
+        });
     }
 
     fn wrap_key(&self, line: usize) -> u64 {
@@ -1479,7 +1629,8 @@ impl CodeEditor {
 
     fn toggle_wrap(&mut self) {
         self.wrapping = !self.wrapping;
-        self.wrap_stale = true;
+        self.wrap_stale = Stale::Whole;
+        self.heights_stale = Stale::Whole;
         for caret in &mut self.carets {
             caret.goal = None;
         }
@@ -1498,12 +1649,14 @@ impl CodeEditor {
     }
 
     fn refold(&mut self) {
-        self.heights_stale = true;
         let folds = std::mem::take(&mut self.folds);
         self.folds = folds
             .into_keys()
             .filter_map(|header| Some((header, self.foldable(header)?)))
             .collect();
+        if self.shown_lines.is_some() || !self.folds.is_empty() {
+            self.heights_stale = Stale::Whole;
+        }
         if self.folds.is_empty() {
             self.shown_lines = None;
             return;
@@ -1817,9 +1970,12 @@ impl CodeEditor {
         }
     }
 
-    fn settle(&mut self, lines: usize) {
+    fn settle(&mut self, lines: usize, edited: Stale) {
         self.wrote = None;
-        self.wrap_stale = true;
+        self.wrap_stale = self.wrap_stale.then(edited);
+        if self.wrapped().is_none() {
+            self.heights_stale = self.heights_stale.then(edited);
+        }
         self.link = None;
         self.outlined = Outlined::Stale;
         match self.live {
@@ -1863,10 +2019,26 @@ impl CodeEditor {
         }
         let lines = self.buffer.line_count();
         let edits = self.line_edits(&ranges, text);
+        let rope = self.buffer.rope();
+        let span = ranges
+            .iter()
+            .filter_map(|range| {
+                let first = rope.try_char_to_line(range.start).ok()?;
+                Some((first, rope.try_char_to_line(range.end).ok()?.max(first)))
+            })
+            .reduce(|(first, last), (at, end)| (first.min(at), last.max(end)));
         match self.buffer.edit(&ranges, text) {
             Ok(()) => {
                 self.shift(&edits);
-                self.settle(lines);
+                let edited = span.map_or(Stale::Whole, |(at, last)| {
+                    let old = last - at + 1;
+                    Stale::Lines {
+                        at,
+                        old,
+                        new: (old + self.buffer.line_count()).saturating_sub(lines),
+                    }
+                });
+                self.settle(lines, edited);
                 if let Some(frames) = &self.frames {
                     let mode = match self.live {
                         true => ", rendered",
@@ -1965,7 +2137,7 @@ impl CodeEditor {
             let inserted = after.slice(start..new_len - tail).to_string();
             self.shift(&[LineEdit::new(line, line_start, &removed, &inserted)]);
         }
-        self.settle(lines);
+        self.settle(lines, Stale::Whole);
     }
 
     fn copy(&self, cx: &mut App) {
@@ -3084,6 +3256,7 @@ impl EntityInputHandler for CodeEditor {
 
 impl Render for CodeEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let started = Instant::now();
         let focused = self.focus.is_focused(window);
         let published = cx
             .try_global::<FocusedKeys>()
@@ -3100,8 +3273,10 @@ impl Render for CodeEditor {
         if matches!(self.outlined, Outlined::Stale) {
             self.outline_later(cx);
         }
+        let passes = Instant::now();
         self.rewrap(cx);
         self.remeasure();
+        let passes = ms_since(passes);
         self.active_guide = self.guides.then(|| self.guide_block()).flatten();
         let paints = self.paints.clone();
         let painting = paints.clone().map(|paints| {
@@ -3133,12 +3308,19 @@ impl Render for CodeEditor {
             self.buffer.line_count(),
             &self.scroll,
             move |rows, cx| {
-                source.update(cx, |editor, _| match &shown_lines {
-                    None => editor.rows(rows, shown),
-                    Some(lines) => rows
-                        .filter_map(|row| lines.get(row))
-                        .flat_map(|line| editor.rows(*line..*line + 1, shown))
-                        .collect(),
+                source.update(cx, |editor, _| {
+                    let started = Instant::now();
+                    let drawn = match &shown_lines {
+                        None => editor.rows(rows, shown),
+                        Some(lines) => rows
+                            .filter_map(|row| lines.get(row))
+                            .flat_map(|line| editor.rows(*line..*line + 1, shown))
+                            .collect(),
+                    };
+                    if let Some(frames) = &editor.frames {
+                        frames.borrow_mut().rows(started);
+                    }
+                    drawn
                 })
             },
         )
@@ -3231,12 +3413,7 @@ impl Render for CodeEditor {
                             eprintln!("desk: editor fold {ms:.2} ms");
                         }
                         if let Some(frames) = &frames {
-                            let mut frames = frames.borrow_mut();
-                            if let Some(edited) = frames.edited.take() {
-                                frames
-                                    .intervals
-                                    .push(edited.elapsed().as_secs_f64() * 1000.0);
-                            }
+                            frames.borrow_mut().painted();
                         }
                         if wrapped_at.is_some_and(|width| width != wrap_width(area)) {
                             cx.notify(entity.entity_id());
@@ -3251,6 +3428,9 @@ impl Render for CodeEditor {
             )
             .children(failure)
             .children(pill);
+        if let Some(frames) = &self.frames {
+            frames.borrow_mut().rendered(started, passes);
+        }
         div()
             .relative()
             .size_full()
