@@ -14,7 +14,7 @@ use desk_ui::components::paint::{glyph, ink, ring, tint};
 use desk_ui::components::settings::{SettingRow, Source, page_title, setting_group};
 use desk_ui::components::size::{FONT_BODY, FONT_SMALL, T2, T3};
 use desk_ui::live::ActiveTheme;
-use desk_ui::theme::{ColorToken, Theme};
+use desk_ui::theme::{ColorToken, Mode as ThemeMode, Theme};
 use gpui::{
     AnyElement, Background, ClickEvent, Context, Div, FontWeight, ObjectFit, PathPromptOptions,
     Render, SharedString, Window, canvas, div, hsla, img, linear_color_stop, linear_gradient,
@@ -428,7 +428,10 @@ impl PluginsPage {
                     .flex_col()
                     .mb_2p5()
                     .rounded(px(CARD_RADIUS))
-                    .bg(tint(theme.color(ColorToken::Shadow), CARD_FILL))
+                    .bg(match theme.mode() {
+                        ThemeMode::Dark => tint(theme.color(ColorToken::Shadow), CARD_FILL),
+                        ThemeMode::Light => theme.color(ColorToken::CardsInnerFill),
+                    })
                     .shadow(vec![ring(ink(theme, CARD_RING))])
                     .children(rows),
             )
