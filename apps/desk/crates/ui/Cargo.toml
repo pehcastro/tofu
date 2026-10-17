@@ -20,6 +20,7 @@ ratex-katex-fonts = "=0.1.14"
 ratex-layout = "=0.1.14"
 ratex-parser = "=0.1.14"
 ratex-types = "=0.1.14"
+regex = "1.13.1"
 serde_json = "1.0.144"
 
 [lints]

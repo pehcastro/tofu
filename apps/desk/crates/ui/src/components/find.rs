@@ -9,6 +9,8 @@ use gpui::{
     actions, div, prelude::*, px, radians, rgb_to_hsla,
 };
 
+use regex::{Regex, RegexBuilder};
+
 use crate::component::{control, icon};
 use crate::components::chip::tabular;
 use crate::components::code_editor::{Class, class};
@@ -37,6 +39,7 @@ const MATCH_TINT: f32 = 0.22;
 const CURRENT_TINT: f32 = 0.6;
 const PLACEHOLDER: &str = "Find";
 const NO_MATCHES: &str = "no matches";
+const INVALID: &str = "invalid pattern";
 const REPLACE_PLACEHOLDER: &str = "Replace";
 const KEY_CONTEXT: &str = "FindBar";
 
@@ -46,6 +49,7 @@ actions!(find, [NextField, PrevField]);
 pub struct Matching {
     pub case: bool,
     pub whole: bool,
+    pub regex: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,6 +66,10 @@ pub fn find_matching(text: &str, query: &str, matching: Matching) -> Vec<Range<u
     if query.is_empty() {
         return Vec::new();
     }
+    if matching.regex {
+        return compile(query, matching)
+            .map_or_else(|_| Vec::new(), |found| regex_ranges(text, &found));
+    }
     let found = match matching.case {
         true => text
             .match_indices(query)
@@ -76,6 +84,32 @@ pub fn find_matching(text: &str, query: &str, matching: Matching) -> Vec<Range<u
             .collect(),
         false => found,
     }
+}
+
+pub fn compile(query: &str, matching: Matching) -> Result<Regex, regex::Error> {
+    let pattern = match matching.whole {
+        true => format!(r"\b(?:{query})\b"),
+        false => query.to_owned(),
+    };
+    RegexBuilder::new(&pattern)
+        .case_insensitive(!matching.case)
+        .build()
+}
+
+fn regex_ranges(text: &str, pattern: &Regex) -> Vec<Range<usize>> {
+    let mut found = Vec::new();
+    let mut start = 0;
+    for line in text.split_inclusive('\n') {
+        let row = line.trim_end_matches(['\n', '\r']);
+        found.extend(
+            pattern
+                .find_iter(row)
+                .filter(|hit| !hit.is_empty())
+                .map(|hit| start + hit.start()..start + hit.end()),
+        );
+        start += line.len();
+    }
+    found
 }
 
 fn whole_word(text: &str, range: &Range<usize>) -> bool {
@@ -218,6 +252,7 @@ pub struct FindBar {
     on_pick: Option<OnPick>,
     groups: Vec<FindGroup>,
     matching: Matching,
+    invalid: bool,
     replace: Option<Entity<TextArea>>,
     on_replace: Option<OnReplace>,
 }
@@ -262,6 +297,7 @@ impl FindBar {
                 on_pick: None,
                 groups: Vec::new(),
                 matching: Matching::default(),
+                invalid: false,
                 replace: None,
                 on_replace: None,
             }
@@ -363,6 +399,9 @@ impl FindBar {
 
     fn select(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.current = at;
+        self.invalid = self.matching.regex
+            && !self.query.is_empty()
+            && compile(&self.query, self.matching).is_err();
         if let Some(on_change) = self.on_change.clone() {
             let query = self.query.clone();
             window.defer(cx, move |window, cx| on_change(&query, at, window, cx));
@@ -398,6 +437,7 @@ impl FindBar {
             ("enter", false) if replacing => self.replace(Replace::Current, window, cx),
             ("c", _) if toggles && held.alt => self.toggle(|on| on.case = !on.case, window, cx),
             ("w", _) if toggles && held.alt => self.toggle(|on| on.whole = !on.whole, window, cx),
+            ("r", _) if toggles && held.alt => self.toggle(|on| on.regex = !on.regex, window, cx),
             ("h", _) if toggles && held.secondary() => self.show_replace(window, cx),
             ("enter", false) if picking => self.pick(self.current, window, cx),
             ("enter", false) | ("down", _) => self.next(window, cx),
@@ -420,6 +460,7 @@ impl FindBar {
     fn count(&self) -> SharedString {
         match (self.query.is_empty(), self.total) {
             (true, _) => SharedString::default(),
+            (false, _) if self.invalid => INVALID.into(),
             (false, 0) => NO_MATCHES.into(),
             (false, total) => format!("{} of {total}", self.current + 1).into(),
         }
@@ -450,12 +491,15 @@ impl Render for FindBar {
         let dim = ink(&theme, T2);
         let mut row = div().flex().flex_row().items_center().gap(px(MENU_GAP));
         if self.on_replace.is_some() {
-            let (case, whole) = (self.matching.case, self.matching.whole);
+            let Matching { case, whole, regex } = self.matching;
             let flip_case = cx.listener(|bar, _: &ClickEvent, window, cx| {
                 bar.toggle(|on| on.case = !on.case, window, cx);
             });
             let flip_whole = cx.listener(|bar, _: &ClickEvent, window, cx| {
                 bar.toggle(|on| on.whole = !on.whole, window, cx);
+            });
+            let flip_regex = cx.listener(|bar, _: &ClickEvent, window, cx| {
+                bar.toggle(|on| on.regex = !on.regex, window, cx);
             });
             row = row
                 .child(small(
@@ -472,6 +516,15 @@ impl Render for FindBar {
                     "ab",
                     whole,
                     flip_whole,
+                    &theme,
+                    window,
+                    cx,
+                ))
+                .child(small(
+                    ("find-regex", "Regular expression (Alt+R)"),
+                    ".*",
+                    regex,
+                    flip_regex,
                     &theme,
                     window,
                     cx,

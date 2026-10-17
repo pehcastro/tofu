@@ -1636,6 +1636,7 @@ dependencies = [
  "ratex-layout",
  "ratex-parser",
  "ratex-types",
+ "regex",
  "serde_json",
 ]
 

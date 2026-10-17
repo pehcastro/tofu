@@ -1315,6 +1315,7 @@ impl CodeEditor {
         let matching = Matching {
             case: true,
             whole: self.word_at(last.start) == Some(last.clone()),
+            regex: false,
         };
         let taken = self.selections();
         let free: Vec<Range<usize>> = self
