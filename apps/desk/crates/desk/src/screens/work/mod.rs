@@ -1,3 +1,5 @@
+pub mod split;
+
 use std::cell::RefCell;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -15,7 +17,7 @@ use desk_ui::components::find::{FindBar, FindGroup, find_ranges};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
 use desk_ui::components::tabs::{Tab, TabEvent, TabFlag, header_tabs, new_tab_glyph};
-use desk_ui::components::tiling_board::{Host, Reopened, Settled, TilingBoard};
+use desk_ui::components::tiling_board::{Host, Reopened, Settled, TilingBoard, tile_menu};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::Theme;
@@ -25,7 +27,7 @@ use gpui::{
     prelude::*, px, relative,
 };
 
-use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark};
+use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark, screen_mark};
 use crate::modules::chat::cassette::{Replay, Step};
 use crate::modules::chat::{self, Chat, ChatMirror, Find};
 use crate::modules::file_edits::{self, FileEdits};
@@ -269,7 +271,7 @@ fn build(
         let bodies = mounted.clone();
         let titles = mounted.clone();
         let badges = mounted.clone();
-        let sessions = mounted.store.clone();
+        let head = mounted.chat.read(cx).head();
         let expandable = mounted.clone();
         let board = TilingBoard::new(
             workspaces,
@@ -304,9 +306,7 @@ fn build(
                     }
                 }),
                 subtitle: Box::new(move |tile, module, cx| match module {
-                    Module::Chat => {
-                        session(&sessions, cx).map(|name| div().child(name).into_any_element())
-                    }
+                    Module::Chat => Some(head.clone().into_any_element()),
                     Module::Terminal => badges
                         .terminals
                         .at(tile)
@@ -400,10 +400,14 @@ fn glyph(module: &Module) -> Option<Glyph> {
     }
 }
 
-enum ScreenRow {
-    Open(&'static ScreenMark),
-    Insights(Vec<&'static ScreenMark>),
+#[derive(Clone)]
+enum Plus {
+    Workspace,
+    Tile(Module),
+    Screen(&'static str),
 }
+
+const TOP_SCREENS: [&str; 3] = ["editor", "git", "boardy"];
 
 fn screen_row(mark: &ScreenMark) -> MenuItem {
     MenuItem::action(mark.label).icon(mark.glyph)
@@ -449,16 +453,6 @@ fn count(mounted: &Mounted, module: &Module, cx: &App) -> Option<u32> {
         | Module::Plugin(_) => return None,
     };
     u32::try_from(count).ok()
-}
-
-fn session(store: &Entity<Store>, cx: &App) -> Option<SharedString> {
-    let (id, session) = store.read(cx).sessions.iter().next()?;
-    let name = if session.name.is_empty() {
-        id
-    } else {
-        &session.name
-    };
-    Some(name.clone().into())
 }
 
 const EXCERPT_LEAD: usize = 24;
@@ -1214,61 +1208,69 @@ impl Work {
         cx.notify();
     }
 
-    fn plus_menu(openable: &[&'static str], chatting: bool) -> Vec<MenuItem> {
-        let new = MenuItem::Action {
-            label: "New workspace".into(),
-            keys: Some("Ctrl T".into()),
-            icon: Some(Icon::Plus.into()),
-        };
-        std::iter::once(new)
-            .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
-            .chain(
-                tile_modules()
-                    .iter()
-                    .map(|module| module_row(module, chatting))
-                    .collect::<Vec<_>>(),
-            )
-            .chain([MenuItem::Caption("Screens, open as a tab".into())])
-            .chain(
-                Self::screen_rows(openable)
-                    .into_iter()
-                    .map(|row| match row {
-                        ScreenRow::Open(mark) => screen_row(mark),
-                        ScreenRow::Insights(marks) => MenuItem::Submenu {
-                            label: "Insights".into(),
-                            icon: Some(Glyph::Sparkle.into()),
-                            items: marks.into_iter().map(screen_row).collect(),
-                        },
-                    }),
-            )
-            .collect()
-    }
-
-    fn screen_rows(openable: &[&'static str]) -> Vec<ScreenRow> {
-        let present = |group: ScreenGroup| -> Vec<&'static ScreenMark> {
+    fn plus_menu(openable: &[&'static str], chatting: bool) -> (Vec<MenuItem>, Vec<Option<Plus>>) {
+        let open = |mark: &&'static ScreenMark| openable.contains(&mark.name);
+        let grouped = |group: ScreenGroup| -> Vec<&'static ScreenMark> {
             SCREEN_MARKS
                 .iter()
-                .filter(|mark| mark.group == group && openable.contains(&mark.name))
+                .filter(|mark| mark.group == group && !TOP_SCREENS.contains(&mark.name))
+                .filter(open)
                 .collect()
         };
-        let insights = present(ScreenGroup::Insights);
-        present(ScreenGroup::Top)
+        let screens = |marks: &[&'static ScreenMark]| -> (Vec<MenuItem>, Vec<Option<Plus>>) {
+            marks
+                .iter()
+                .map(|mark| (screen_row(mark), Some(Plus::Screen(mark.name))))
+                .unzip()
+        };
+        let insights = grouped(ScreenGroup::Insights);
+        let (mut more, mut more_picks) = screens(&grouped(ScreenGroup::Top));
+        if !insights.is_empty() {
+            let (rows, picks) = screens(&insights);
+            more.push(MenuItem::Submenu {
+                label: "Insights".into(),
+                icon: Some(Glyph::Sparkle.into()),
+                items: rows,
+            });
+            more_picks.push(None);
+            more_picks.extend(picks);
+        }
+        let top: Vec<&'static ScreenMark> = TOP_SCREENS
+            .iter()
+            .filter_map(|name| screen_mark(name))
+            .filter(open)
+            .collect();
+        let (top, top_picks) = screens(&top);
+        let (tiles, tile_picks) = tile_menu(&tile_modules(), |module| module_row(module, chatting));
+        let mut rows = vec![
+            MenuItem::Action {
+                label: "New workspace".into(),
+                keys: Some("Ctrl T".into()),
+                icon: Some(Icon::Plus.into()),
+            },
+            MenuItem::Separator,
+        ];
+        rows.extend(top);
+        rows.push(MenuItem::Separator);
+        rows.push(MenuItem::Submenu {
+            label: "Tile".into(),
+            icon: Some(Icon::Plus.into()),
+            items: tiles,
+        });
+        rows.push(MenuItem::Submenu {
+            label: "More".into(),
+            icon: None,
+            items: more,
+        });
+        let picks = [Some(Plus::Workspace), None]
             .into_iter()
-            .map(ScreenRow::Open)
-            .chain((!insights.is_empty()).then_some(ScreenRow::Insights(insights)))
-            .collect()
-    }
-
-    fn screen_picks(openable: &[&'static str]) -> Vec<Option<&'static str>> {
-        Self::screen_rows(openable)
-            .into_iter()
-            .flat_map(|row| match row {
-                ScreenRow::Open(mark) => vec![Some(mark.name)],
-                ScreenRow::Insights(marks) => std::iter::once(None)
-                    .chain(marks.iter().map(|mark| Some(mark.name)))
-                    .collect(),
-            })
-            .collect()
+            .chain(top_picks)
+            .chain([None, None])
+            .chain(tile_picks.into_iter().map(|pick| pick.map(Plus::Tile)))
+            .chain([None])
+            .chain(more_picks)
+            .collect();
+        (rows, picks)
     }
 
     fn tab_menu(workspace: Option<&Workspace>, chatting: bool) -> Vec<MenuItem> {
@@ -1305,23 +1307,15 @@ impl Work {
         .collect()
     }
 
-    fn picked_plus(&mut self, pick: usize, openable: &[&'static str]) -> Option<Strip> {
-        let modules = tile_modules();
-        let tiles = 2..2 + modules.len();
+    fn picked_plus(&mut self, pick: Plus) -> Option<Strip> {
         match pick {
-            0 => self.board.add(),
-            at if tiles.contains(&at) => match modules.get(at - tiles.start)? {
-                Module::SourceControl => return Some(Strip::Open("git")),
-                module => {
-                    self.picked_at = Some(Instant::now());
-                    self.board.spawn(module.clone());
-                }
-            },
-            at => {
-                let picks = Self::screen_picks(openable);
-                let name = (*picks.get(at.checked_sub(tiles.end + 1)?)?)?;
-                return Some(Strip::Open(name));
+            Plus::Workspace => self.board.add(),
+            Plus::Tile(Module::SourceControl) => return Some(Strip::Open("git")),
+            Plus::Tile(module) => {
+                self.picked_at = Some(Instant::now());
+                self.board.spawn(module);
             }
+            Plus::Screen(name) => return Some(Strip::Open(name)),
         }
         None
     }
@@ -1377,7 +1371,6 @@ impl Work {
         let this = cx.weak_entity();
         let (pointer, plus, tab, picker) = (this.clone(), this.clone(), this.clone(), on.clone());
         let (tabbed, opener) = (this.clone(), this);
-        let opened: Vec<&'static str> = openable.to_vec();
         let strip = header_tabs(
             "work-workspaces",
             &workspaces,
@@ -1443,12 +1436,16 @@ impl Work {
                 .unwrap_or_else(|_| eprintln!("desk: work: the screen is gone"));
             })
             .child(strip.new_button(self.plus.clone()));
+        let (rows, picks) = Self::plus_menu(openable, chatting);
         self.plus.update(cx, |button, cx| {
-            button.items(Self::plus_menu(openable, chatting), cx);
+            button.items(rows, cx);
             button.on_pick(move |pick, window, cx| {
+                let Some(choice) = picks.get(*pick).cloned().flatten() else {
+                    return;
+                };
                 let strip = plus
                     .update(cx, |work, cx| {
-                        let strip = work.picked_plus(*pick, &opened);
+                        let strip = work.picked_plus(choice);
                         cx.notify();
                         strip
                     })

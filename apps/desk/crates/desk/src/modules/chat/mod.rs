@@ -1,4 +1,5 @@
 pub(crate) mod cassette;
+mod head;
 mod items;
 mod mention;
 mod mirror;
@@ -27,11 +28,12 @@ use desk_core::protocol::{
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
 use desk_ui::components::ask::{Act, Ask, Asking, Choice, Pick, Question, Shape, ask_bar};
-use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks};
+use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, hit_marks, note};
 use desk_ui::components::composer::{Composer, picker};
 use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
 use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
+use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::components::transcript::{Transcript, transcript};
 use desk_ui::components::tree::EditedFile;
 use desk_ui::live::ActiveTheme;
@@ -42,6 +44,7 @@ use gpui::{
 };
 
 use cassette::{Replay, Step};
+use head::SessionHead;
 use items::{Entry, Item};
 use mention::{Files, Mention, Menu};
 pub use mention::{Trace, mention};
@@ -66,6 +69,9 @@ const OTHER: &str = "Type your own answer";
 const HISTORY_PAGE: i64 = 200;
 const WORKING: &str = "working";
 const UNSENT: &str = "desk-unsent";
+const ASKING_FIXED: &str =
+    "the ask mode is set when a session opens; start a new session to change it";
+const FIXED_MODE: f32 = 0.5;
 const YES_NO: [&str; 2] = ["yes", "no"];
 const DECISIONS: [Decision; 3] = [
     Decision::AllowOnce,
@@ -106,6 +112,21 @@ struct History {
     asked: Instant,
     lines: Vec<Notification>,
     live: Vec<Notification>,
+    total: Option<i64>,
+    landed: bool,
+}
+
+impl History {
+    fn new(session: String, asked: Instant) -> Self {
+        History {
+            session,
+            asked,
+            lines: Vec::new(),
+            live: Vec::new(),
+            total: None,
+            landed: false,
+        }
+    }
 }
 
 struct Card {
@@ -158,6 +179,7 @@ pub struct Chat {
     history: Option<History>,
     painting: Option<(String, Instant)>,
     unsent: Vec<String>,
+    head: Entity<SessionHead>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
 }
@@ -429,6 +451,7 @@ impl Chat {
             });
             bar.on_close(move |window, cx| closed(&(), window, cx));
         });
+        let head = cx.new(|cx| SessionHead::new(store.clone(), cx));
         Chat {
             link,
             store,
@@ -472,6 +495,7 @@ impl Chat {
             history: None,
             painting: None,
             unsent: Vec::new(),
+            head,
             _drain: None,
             _flash: None,
         }
@@ -522,21 +546,24 @@ impl Chat {
     fn opened(&mut self, opened: SessionOpenResult, asked: Instant, cx: &mut Context<Self>) {
         self.store.update(cx, |store, _| {
             store.trace = Answer::default();
+            store.info = Answer::default();
+            store.info.want();
             store.sessions.entry(opened.session.clone()).or_default();
         });
-        self.painting = Some((opened.session.clone(), asked));
+        self.painting.get_or_insert((opened.session.clone(), asked));
         if opened.fresh {
             self.ledger = Some((opened.session.clone(), Some(0)));
         } else {
             self.ask_ledger(opened.session.clone(), cx);
             self.want_trace(cx);
-            self.history = Some(History {
-                session: opened.session.clone(),
-                asked,
-                lines: Vec::new(),
-                live: Vec::new(),
-            });
-            self.ask_history(None, cx);
+            if self
+                .history
+                .as_ref()
+                .is_none_or(|history| history.session != opened.session)
+            {
+                self.history = Some(History::new(opened.session.clone(), asked));
+                self.ask_history(None, cx);
+            }
         }
         self.ask_cron(opened.session.clone(), cx);
         self.set_opening(Opening::Open(opened.session), cx);
@@ -582,17 +609,22 @@ impl Chat {
         }
         lines.append(&mut history.lines);
         history.lines = lines;
+        history.total = Some(page.total);
+        history.landed = page.first == 0;
         let refused = self.replay(cx);
         if page.first > 0 {
             return self.ask_history(Some(page.first), cx);
         }
-        if let Some(history) = self.history.take() {
+        if let Some(history) = self.history.as_mut() {
             eprintln!(
                 "desk: session {session} history landed {} items in {} ms, {refused} refused",
                 history.lines.len(),
                 history.asked.elapsed().as_millis()
             );
+            history.lines = Vec::new();
+            history.live = Vec::new();
         }
+        self.ask_shells(cx);
     }
 
     fn replay(&mut self, cx: &mut Context<Self>) -> usize {
@@ -620,7 +652,6 @@ impl Chat {
                 .reset_transcript();
         });
         self.orders.remove(&id);
-        self.clear_view(cx);
         let refused = events
             .iter()
             .filter(|event| self.absorb(event, cx).is_err())
@@ -629,8 +660,46 @@ impl Chat {
             self.queue(&id, "", &format!("{UNSENT}-{at}"), text, cx);
         }
         self.store.update(cx, |_, cx| cx.notify());
-        self.refresh(cx);
+        self.rebuild(cx);
         refused
+    }
+
+    fn rebuild(&mut self, cx: &mut Context<Self>) {
+        let shown = std::mem::take(&mut self.items);
+        self.slots.clear();
+        self.restack(cx);
+        let kept = shown
+            .iter()
+            .rev()
+            .zip(self.items.iter().rev())
+            .take_while(|(was, now)| was == now)
+            .count();
+        let (old, count) = (0..shown.len() - kept, self.items.len() - kept);
+        self.transcript.splice(old.clone(), count);
+        cx.emit(Spliced::Rows {
+            old,
+            count,
+            after: self.items.len(),
+        });
+        self.refresh(cx);
+    }
+
+    fn loading(&self) -> Option<String> {
+        match (&self.history, &self.opening) {
+            (Some(history), _) if !history.landed => {
+                Some(match (self.items.is_empty(), history.total) {
+                    (_, None) => "loading history".to_owned(),
+                    (true, Some(total)) => {
+                        format!("loading history: {} of {total}", history.lines.len())
+                    }
+                    (false, Some(total)) => {
+                        format!("loading older history: {} of {total}", history.lines.len())
+                    }
+                })
+            }
+            (_, Opening::Pending) => Some("opening session".to_owned()),
+            _ => None,
+        }
     }
 
     fn want_trace(&mut self, cx: &mut Context<Self>) {
@@ -638,6 +707,10 @@ impl Chat {
             store.trace.want();
             store.trace.again();
         });
+    }
+
+    pub fn head(&self) -> AnyView {
+        self.head.clone().into()
     }
 
     pub fn open_id(&self) -> Option<&str> {
@@ -672,16 +745,18 @@ impl Chat {
             None => self.restart(cx),
         }
         self.problem = None;
-        self.history = None;
         self.unsent.clear();
         self.set_opening(Opening::Pending, cx);
+        let asked = Instant::now();
+        self.painting = session.clone().map(|id| (id, asked));
+        self.history = session.clone().map(|id| History::new(id, asked));
+        self.ask_history(None, cx);
         let params = SessionOpenParams {
             asking: Some(self.asking.clone()),
             session,
             replay: Some(0),
             ..SessionOpenParams::default()
         };
-        let asked = Instant::now();
         self.call::<request::SessionOpen>(&params, cx, move |chat, opened, cx| {
             eprintln!(
                 "desk: session {} opened, fresh {}",
@@ -963,7 +1038,9 @@ impl Chat {
     }
 
     fn apply(&mut self, event: &Event, cx: &mut Context<Self>) {
-        if let (Some(history), Event::Notification(notification)) = (&mut self.history, event) {
+        if let (Some(history), Event::Notification(notification)) = (&mut self.history, event)
+            && !history.landed
+        {
             history.live.push(notification.clone());
         }
         match self.absorb(event, cx) {
@@ -1133,11 +1210,45 @@ impl Chat {
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
+        let spliced = self.restack(cx);
         let Opening::Open(id) = &self.opening else {
             return;
         };
         let Some(session) = self.store.read(cx).sessions.get(id) else {
             return;
+        };
+        let kept = self.card.as_ref().is_some_and(|shown| {
+            session.approvals.contains_key(&shown.key) || session.questions.contains_key(&shown.key)
+        });
+        if !kept {
+            let shown = self.card.take().is_some();
+            self.card = session
+                .approvals
+                .values()
+                .next()
+                .map(|(asked_id, asked)| Card::approval(asked_id.clone(), asked, &self.project))
+                .or_else(|| session.questions.values().next().map(Card::question));
+            self.refocus |= shown || self.card.is_some();
+        }
+        let changed = !spliced.is_empty();
+        for rows in spliced {
+            if let Spliced::Rows { old, count, .. } = &rows {
+                self.transcript.splice(old.clone(), *count);
+            }
+            cx.emit(rows);
+        }
+        if changed && !self.query.is_empty() {
+            self.search(cx);
+        }
+        cx.notify();
+    }
+
+    fn restack(&mut self, cx: &mut Context<Self>) -> Vec<Spliced> {
+        let Opening::Open(id) = &self.opening else {
+            return Vec::new();
+        };
+        let Some(session) = self.store.read(cx).sessions.get(id) else {
+            return Vec::new();
         };
         let order = self.orders.get(id).map_or(&[][..], Vec::as_slice);
         let shown = Rc::make_mut(&mut self.items);
@@ -1187,7 +1298,6 @@ impl Chat {
                     (at..at + 1, 0)
                 }
             };
-            self.transcript.splice(old.clone(), count);
             spliced.push(Spliced::Rows {
                 old,
                 count,
@@ -1195,27 +1305,7 @@ impl Chat {
             });
             at += count;
         }
-        let kept = self.card.as_ref().is_some_and(|shown| {
-            session.approvals.contains_key(&shown.key) || session.questions.contains_key(&shown.key)
-        });
-        if !kept {
-            let shown = self.card.take().is_some();
-            self.card = session
-                .approvals
-                .values()
-                .next()
-                .map(|(asked_id, asked)| Card::approval(asked_id.clone(), asked, &self.project))
-                .or_else(|| session.questions.values().next().map(Card::question));
-            self.refocus |= shown || self.card.is_some();
-        }
-        let changed = !spliced.is_empty();
-        for rows in spliced {
-            cx.emit(rows);
-        }
-        if changed && !self.query.is_empty() {
-            self.search(cx);
-        }
-        cx.notify();
+        spliced
     }
 
     fn call<R: Request>(
@@ -1226,9 +1316,15 @@ impl Chat {
     ) where
         R::Result: 'static,
     {
-        self.request::<R>(params, cx, |chat, reply, cx| match reply {
+        self.request_typed::<R>(params, cx, |chat, reply, cx| match reply {
             Ok(result) => then(chat, result, cx),
-            Err(error) => chat.fail(error, cx),
+            Err(error) if error.turn_running() => {
+                eprintln!("desk: {} waits, a turn is running: {error}", R::METHOD);
+            }
+            Err(error) => {
+                eprintln!("desk: {} failed: {error:?}", R::METHOD);
+                chat.fail(error.to_string(), cx);
+            }
         });
     }
 
@@ -1240,26 +1336,40 @@ impl Chat {
     ) where
         R::Result: 'static,
     {
-        let Link::Ready(bridge) = &self.link else {
+        let Link::Ready(_) = &self.link else {
             return then(
                 self,
                 Err("tofu is not running, so nothing was sent".to_owned()),
                 cx,
             );
         };
+        self.request_typed::<R>(params, cx, |chat, reply, cx| {
+            let reply = reply.map_err(|error| {
+                eprintln!("desk: {} failed: {error:?}", R::METHOD);
+                error.to_string()
+            });
+            then(chat, reply, cx);
+        });
+    }
+
+    fn request_typed<R: Request>(
+        &mut self,
+        params: &R::Params,
+        cx: &mut Context<Self>,
+        then: impl FnOnce(&mut Self, Result<R::Result, BridgeError>, &mut Context<Self>) + 'static,
+    ) where
+        R::Result: 'static,
+    {
+        let Link::Ready(bridge) = &self.link else {
+            return then(self, Err(BridgeError::Closed), cx);
+        };
         let pending = match bridge.request::<R>(params) {
             Ok(pending) => pending,
-            Err(error) => return then(self, Err(error.to_string()), cx),
+            Err(error) => return then(self, Err(error), cx),
         };
         cx.spawn(async move |this, cx| {
             let reply = pending.reply().await;
-            this.update(cx, |chat, cx| {
-                let reply = reply.map_err(|error| {
-                    eprintln!("desk: {} failed: {error:?}", R::METHOD);
-                    error.to_string()
-                });
-                then(chat, reply, cx)
-            })
+            this.update(cx, |chat, cx| then(chat, reply, cx))
         })
         .detach();
     }
@@ -1785,6 +1895,7 @@ impl Chat {
             Ok(steered) => {
                 eprintln!("desk: steer {} queued on turn {}", steered.id, steered.turn);
                 chat.queue(&session, &steered.turn, &steered.id, &text, cx);
+                chat.refresh(cx);
             }
             Err(error) if !retried => {
                 eprintln!("desk: turn.steer refused, asking again: {error}");
@@ -1803,13 +1914,17 @@ impl Chat {
             text: text.clone(),
             ..TurnSendParams::default()
         };
-        self.request::<request::TurnSend>(&params, cx, move |chat, sent, cx| match sent {
+        self.request_typed::<request::TurnSend>(&params, cx, move |chat, sent, cx| match sent {
             Ok(sent) => eprintln!("desk: turn {} sent", sent.turn),
             Err(error) if !retried => {
                 eprintln!("desk: turn.send refused, asking again: {error}");
                 chat.deliver(session, text, true, cx);
             }
-            Err(error) => chat.fail(error, cx),
+            Err(error) if error.turn_running() => {
+                eprintln!("desk: turn.send refused twice, a turn runs: {error}");
+                chat.hold(&session, text, cx);
+            }
+            Err(error) => chat.fail(error.to_string(), cx),
         });
     }
 
@@ -1818,6 +1933,7 @@ impl Chat {
         eprintln!("desk: {item} held until the turn ends");
         self.queue(session, "", &item, &text, cx);
         self.unsent.push(text);
+        self.refresh(cx);
     }
 
     fn flush(&mut self, session: String, cx: &mut Context<Self>) {
@@ -1846,7 +1962,6 @@ impl Chat {
             .entry(session.to_owned())
             .or_default()
             .extend(grown.map(Entry::Message));
-        self.refresh(cx);
     }
 
     fn stop(&mut self, cx: &mut Context<Self>) {
@@ -1858,6 +1973,7 @@ impl Chat {
                 session,
                 turn,
                 lead: None,
+                everything: None,
             },
             cx,
             |_, _, _| {},
@@ -1866,9 +1982,9 @@ impl Chat {
 
     fn flip(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.opening, Opening::Closed) {
-            return self.fail(
-                "asking is fixed once the session opens: tofu serve has no live switch".to_owned(),
-                cx,
+            return eprintln!(
+                "desk: asking stays {} once the session opens: tofu serve has no live switch",
+                String::from(self.asking.clone())
             );
         }
         self.asking = match self.asking {
@@ -2140,6 +2256,19 @@ impl Render for Chat {
             .is_some_and(|shown| shown.asking.waiting());
         let mode = picker("chat-asking", String::from(self.asking.clone()), &theme)
             .on_click(cx.listener(|chat, _: &ClickEvent, _, cx| chat.flip(cx)));
+        let mode = match self.opening {
+            Opening::Closed => mode.into_any_element(),
+            Opening::Pending | Opening::Open(_) => tooltip(
+                "chat-asking-tip",
+                mode.opacity(FIXED_MODE),
+                Edge::Frame,
+                ASKING_FIXED,
+                &theme,
+                window,
+                cx,
+            )
+            .into_any_element(),
+        };
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let pick = cx.listener(|chat, at: &usize, window, cx| chat.pick(*at, window, cx));
         let unmention = cx.listener(|chat, at: &usize, _, cx| chat.remove_mention(*at, cx));
@@ -2184,6 +2313,17 @@ impl Render for Chat {
             Link::Recorded(replay) => Some(replay.meter()),
             Link::Starting | Link::Ready(_) | Link::Gone | Link::Fed => None,
         };
+        let loading = self.loading().map(|said| {
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .flex()
+                .justify_center()
+                .px(px(ROW_INSET))
+                .child(note(said, &theme))
+        });
         div()
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(|chat, event: &KeyDownEvent, window, cx| {
@@ -2207,6 +2347,7 @@ impl Render for Chat {
                     .min_h_0()
                     .when(self.finding, |area| area.pt(px(FIND_RESERVE)))
                     .child(rows)
+                    .children(loading)
                     .child(self.find.clone()),
             )
             .child(

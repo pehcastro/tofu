@@ -228,22 +228,36 @@ fn crowded(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
 }
 
 fn plus_menu(theme: &Theme, cx: &mut Context<Book>) -> impl IntoElement {
-    let items: Vec<MenuItem> = [MenuItem::Action {
-        label: "New workspace".into(),
-        keys: Some("Ctrl T".into()),
-        icon: Some(Icon::Plus.into()),
-    }]
-    .into_iter()
-    .chain([MenuItem::Caption("Tiles, open in this workspace".into())])
-    .chain([
-        MenuItem::action("Chat").icon(Glyph::Chat),
-        MenuItem::action("Sub-agents").icon(Glyph::Agents),
-        MenuItem::action("File edits").icon(Glyph::File),
-        MenuItem::action("Shells").icon(Glyph::Terminal),
-    ])
-    .chain([MenuItem::Caption("Screens, open as a tab".into())])
-    .chain([MenuItem::action("theme").icon(Icon::Sidebar)])
-    .collect();
+    let items = [
+        MenuItem::Action {
+            label: "New workspace".into(),
+            keys: Some("Ctrl T".into()),
+            icon: Some(Icon::Plus.into()),
+        },
+        MenuItem::Separator,
+        MenuItem::action("Editor").icon(Glyph::Code),
+        MenuItem::action("Git").icon(Glyph::Branch),
+        MenuItem::action("Boardy").icon(Glyph::Inbox),
+        MenuItem::Separator,
+        MenuItem::Submenu {
+            label: "Tile".into(),
+            icon: Some(Icon::Plus.into()),
+            items: vec![
+                MenuItem::action("Chat").icon(Glyph::Chat),
+                MenuItem::action("Sub-agents").icon(Glyph::Agents),
+                MenuItem::action("File edits").icon(Glyph::File),
+                MenuItem::action("Shells").icon(Glyph::Terminal),
+            ],
+        },
+        MenuItem::Submenu {
+            label: "More".into(),
+            icon: None,
+            items: vec![
+                MenuItem::action("Settings").icon(Glyph::Settings),
+                MenuItem::action("Theme").icon(Glyph::Palette),
+            ],
+        },
+    ];
     menu(
         "chrome-plus-menu",
         &items,

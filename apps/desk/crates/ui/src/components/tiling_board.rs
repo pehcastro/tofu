@@ -1045,22 +1045,7 @@ impl<V: 'static> TilingBoard<V> {
                 None => row,
             }
         };
-        let (plugins, built_in): (Vec<&Module>, Vec<&Module>) = self
-            .host
-            .spawnable
-            .iter()
-            .partition(|module| matches!(module, Module::Plugin(_)));
-        let mut rows: Vec<MenuItem> = built_in.iter().map(|module| row(module)).collect();
-        let mut picks: Vec<Option<Module>> = built_in.into_iter().cloned().map(Some).collect();
-        if !plugins.is_empty() {
-            rows.push(MenuItem::Submenu {
-                label: "Plugins".into(),
-                icon: Some(Glyph::Rocket.into()),
-                items: plugins.iter().map(|module| row(module)).collect(),
-            });
-            picks.push(None);
-            picks.extend(plugins.into_iter().cloned().map(Some));
-        }
+        let (rows, picks) = tile_menu(&self.host.spawnable, row);
         let plus = window
             .use_keyed_state(plus_id.clone(), cx, |_, cx| {
                 let button = MenuButton::new("Add a tab".into(), rows, cx);
@@ -1550,4 +1535,25 @@ impl<V: 'static> TilingBoard<V> {
             });
         div().flex_1().min_w_0().p(px(WORKSPACE_EDGE)).child(board)
     }
+}
+
+pub fn tile_menu(
+    modules: &[Module],
+    row: impl Fn(&Module) -> MenuItem,
+) -> (Vec<MenuItem>, Vec<Option<Module>>) {
+    let (plugins, built_in): (Vec<&Module>, Vec<&Module>) = modules
+        .iter()
+        .partition(|module| matches!(module, Module::Plugin(_)));
+    let mut rows: Vec<MenuItem> = built_in.iter().map(|module| row(module)).collect();
+    let mut picks: Vec<Option<Module>> = built_in.into_iter().cloned().map(Some).collect();
+    if !plugins.is_empty() {
+        rows.push(MenuItem::Submenu {
+            label: "Plugins".into(),
+            icon: Some(Glyph::Rocket.into()),
+            items: plugins.iter().map(|module| row(module)).collect(),
+        });
+        picks.push(None);
+        picks.extend(plugins.into_iter().cloned().map(Some));
+    }
+    (rows, picks)
 }
