@@ -3,7 +3,9 @@ package host
 import (
 	"cmp"
 	"encoding/json"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"tofu/internal/llm"
@@ -47,6 +49,7 @@ const (
 	typedByThePerson   = "typed by the person"
 	steeredByThePerson = "steer"
 	cronSource         = "cron "
+	firedInProcess     = ", fired in process "
 	reportSource       = "sub-agent report"
 	gateAskSource      = "sub-agent gate ask"
 	taskSource         = "task"
@@ -268,7 +271,7 @@ func (o Origin) recorded() string {
 	if o.Kind != OriginCron {
 		return ""
 	}
-	return cronSource + o.Job + " " + o.Schedule
+	return cronSource + o.Job + " " + o.Schedule + firedInProcess + strconv.Itoa(os.Getpid())
 }
 
 func (l *resumedLead) originOf(content string) Origin {
@@ -281,6 +284,7 @@ func (l *resumedLead) originOf(content string) Origin {
 
 func originFrom(source string) Origin {
 	if fired, isCron := strings.CutPrefix(source, cronSource); isCron {
+		fired, _, _ = strings.Cut(fired, firedInProcess)
 		job, schedule, _ := strings.Cut(fired, " ")
 		return Origin{Kind: OriginCron, Job: job, Schedule: schedule}
 	}

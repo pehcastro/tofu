@@ -12,6 +12,9 @@ import (
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {
+	if err := h.reachHolder(); err != nil {
+		return cron.Reply{}, err
+	}
 	if f := h.following.Load(); f != nil {
 		reply := f.ask(followAsk{Op: followCron, Text: line})
 		switch {
@@ -67,8 +70,12 @@ func (h *Host) armCron() {
 	h.ticking = time.AfterFunc(konst.CronPollMillis*time.Millisecond, func() {
 		h.mu.Lock()
 		h.ticking = nil
+		readOnly := h.readOnly != nil
 		h.dropRead()
 		h.mu.Unlock()
+		if readOnly {
+			return
+		}
 		_ = safe.Call(h.report, "cron", func() error {
 			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
 			return nil

@@ -251,16 +251,21 @@ func (h *Host) settle(asking AskingMode, pick Pick) {
 	}
 }
 
+func (h *Host) reachHolder() error {
+	if !h.detached || h.following.Load() != nil {
+		return nil
+	}
+	id := h.pendingID()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, err := h.holdOrFollow(id)
+	return err
+}
+
 func (h *Host) Send(pick Pick, task string) bool {
-	if h.detached && h.following.Load() == nil {
-		id := h.pendingID()
-		h.mu.Lock()
-		_, err := h.holdOrFollow(id)
-		h.mu.Unlock()
-		if err != nil {
-			h.note(err.Error())
-			return false
-		}
+	if err := h.reachHolder(); err != nil {
+		h.note(err.Error())
+		return false
 	}
 	if f := h.following.Load(); f != nil {
 		h.mu.Lock()
