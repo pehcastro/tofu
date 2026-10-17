@@ -16,11 +16,11 @@ type Skill struct {
 
 func NewSkill(skills []skill.Skill) Skill { return Skill{skills: skills} }
 
-func (s Skill) Name() string { return "skill" }
+func (s Skill) Name() string { return turn.SkillToolName }
 
 func (s Skill) Definition() llm.Tool {
 	return llm.Tool{
-		Name: "skill",
+		Name: turn.SkillToolName,
 		Description: "loads a skill the system prompt lists, by name, and returns its SKILL.md without the front matter. " +
 			"path reads another file inside that skill's folder, relative to it, when the skill's body names one",
 		Parameters: map[string]any{

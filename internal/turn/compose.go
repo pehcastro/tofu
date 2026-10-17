@@ -9,6 +9,7 @@ import (
 	"maps"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -65,6 +66,8 @@ type ComposeSpec struct {
 }
 
 const concernSkills rule.Concern = "skills"
+
+const SkillToolName = "skill"
 
 const referencesOnDemand = "your references, each read whole with the " + referenceToolName + " tool when the work reaches it:"
 
@@ -223,10 +226,32 @@ func Compose(spec ComposeSpec) (Composed, error) {
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {
 		return slices.Index(order, a.Concern) - slices.Index(order, b.Concern)
 	})
-	if listing := skill.Listing(spec.Skills, spec.WindowTokens); listing != "" {
-		composed.Parts = append(composed.Parts, PromptPart{Concern: concernSkills, Text: listing})
+	if len(spec.Agent.Tools) == 0 || slices.Contains(spec.Agent.Tools, SkillToolName) {
+		if listing := skill.Listing(spec.Skills, spec.WindowTokens); listing != "" {
+			composed.Parts = append(composed.Parts, PromptPart{Concern: concernSkills, Text: listing})
+		}
+		return composed, nil
 	}
+	if len(spec.Skills) == 0 {
+		return composed, nil
+	}
+	text := "you have no " + SkillToolName + " tool and load no skill yourself. the skills loaded for you above: " + cmp.Or(strings.Join(spec.Agent.Skills, ", "), "none")
+	if named := skillsNamedIn(spec.Task, spec.Skills, spec.Agent.Skills); len(named) > 0 {
+		text += ". your brief names " + strings.Join(named, ", ") + ", which you cannot load: work without it and say so in your report"
+	}
+	composed.Parts = append(composed.Parts, PromptPart{Concern: concernSkills, Text: text})
 	return composed, nil
+}
+
+func skillsNamedIn(task string, skills []skill.Skill, loaded []string) []string {
+	var named []string
+	for _, one := range skills {
+		word := regexp.MustCompile(`(^|[^\w-])` + regexp.QuoteMeta(one.Name) + `($|[^\w-])`)
+		if !slices.Contains(loaded, one.Name) && word.MatchString(task) {
+			named = append(named, one.Name)
+		}
+	}
+	return named
 }
 
 func (c Composed) System() string {

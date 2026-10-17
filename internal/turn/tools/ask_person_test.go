@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/turn"
 	"tofu/internal/turn/tools"
 )
@@ -58,7 +59,7 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 		{"five questions", `{"questions":[` + strings.Repeat(question("x", "h", "choice", two, `,"recommended":0`)+",", 4) + question("y", "h", "choice", two, `,"recommended":0`) + `]}`, "1 to 4"},
 		{"two ids alike", `{"questions":[` + question("x", "h", "choice", two, `,"recommended":0`) + "," + question("x", "h", "choice", two, `,"recommended":0`) + `]}`, "twice"},
 		{"no id", `{"questions":[` + question("", "h", "choice", two, `,"recommended":0`) + `]}`, "id"},
-		{"a header of thirteen", `{"questions":[` + question("x", "abcdefghijklm", "choice", two, `,"recommended":0`) + `]}`, "header"},
+		{"a header one rune over", `{"questions":[` + question("x", strings.Repeat("é", konst.AskPersonHeaderRunes+1), "choice", two, `,"recommended":0`) + `]}`, "header"},
 		{"one option", `{"questions":[` + question("x", "h", "choice", option("a"), `,"recommended":0`) + `]}`, "2 to 4"},
 		{"five options", `{"questions":[` + question("x", "h", "multi", two+","+two+","+option("c"), `,"recommended":0`) + `]}`, "2 to 4"},
 		{"a label of six words", `{"questions":[` + question("x", "h", "choice", option("one two three four five six")+","+option("b"), `,"recommended":0`) + `]}`, "1 to 5 words"},

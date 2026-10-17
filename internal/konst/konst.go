@@ -491,7 +491,7 @@ const (
 	AskPersonQuestionsMost  = 4
 	AskPersonOptionsLeast   = 2
 	AskPersonOptionsMost    = 4
-	AskPersonHeaderRunes    = 12
+	AskPersonHeaderRunes    = 30
 	AskPersonLabelWordsMost = 5
 	BoardTLDRRunesMost      = 120
 	BoardELI5LinesMost      = 3
