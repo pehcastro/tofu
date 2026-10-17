@@ -18,6 +18,7 @@ pub mod empty;
 pub mod feed;
 pub mod file_edits;
 pub mod find;
+pub mod flow;
 pub mod flip;
 pub mod fork_chain;
 pub mod form;

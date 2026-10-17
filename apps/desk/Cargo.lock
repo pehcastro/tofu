@@ -1627,6 +1627,7 @@ dependencies = [
  "desk_markdown",
  "desk_motion",
  "desk_tiling",
+ "draw_doc",
  "flume",
  "gpui-ce",
  "image",

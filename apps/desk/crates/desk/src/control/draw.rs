@@ -38,10 +38,27 @@ struct Board {
 #[serde(deny_unknown_fields)]
 struct Diagram {
     board: String,
-    nodes: Vec<Node>,
-    edges: Vec<Edge>,
     #[serde(default)]
-    layout: Layout,
+    nodes: Vec<Node>,
+    #[serde(default)]
+    edges: Vec<Edge>,
+    layout: Option<Layout>,
+    flow: Option<String>,
+    #[serde(alias = "flow-file")]
+    flow_file: Option<String>,
+}
+
+fn flow_text(flow: Option<String>, flow_file: Option<String>) -> Result<Option<String>, Refused> {
+    match (flow, flow_file) {
+        (None, None) => Ok(None),
+        (Some(text), None) => Ok(Some(text)),
+        (None, Some(file)) => fs::read_to_string(&file)
+            .map(Some)
+            .map_err(|error| (ErrorCode::NotFound, format!("{file}: {error}"))),
+        (Some(_), Some(_)) => Err(bad(
+            "give the flow as --flow text or --flow-file, not both".to_owned()
+        )),
+    }
 }
 
 #[derive(Deserialize)]
@@ -88,21 +105,38 @@ pub fn answer(run: &CommandRun, work: Option<&Entity<Work>>, cx: &mut App) -> An
                 nodes,
                 edges,
                 layout,
+                flow,
+                flow_file,
             } = parsed(args)?;
             let started = Instant::now();
             let path = tile::board(&board).map_err(bad)?;
-            let graph = Graph { nodes, edges };
-            let laid = Instant::now();
-            let scene = diagram(&graph, layout).map_err(|error| bad(error.to_string()))?;
+            let (text, n, e, layout) = match flow_text(flow, flow_file)? {
+                Some(_) if !nodes.is_empty() || !edges.is_empty() => {
+                    return Err(bad(
+                        "give either a flow or nodes and edges, not both".to_owned()
+                    ));
+                }
+                Some(_) if layout.is_some_and(|layout| layout != Layout::Layered) => {
+                    return Err(bad("a flow is always laid out layered".to_owned()));
+                }
+                Some(source) => {
+                    let drawn = tile::flow_board(&source).map_err(bad)?;
+                    (drawn.text, drawn.nodes, drawn.edges, Layout::Layered)
+                }
+                None => {
+                    let layout = layout.unwrap_or_default();
+                    let graph = Graph { nodes, edges };
+                    let scene = diagram(&graph, layout).map_err(|error| bad(error.to_string()))?;
+                    let text = scene.write().map_err(|error| bad(error.to_string()))?;
+                    (text, graph.nodes.len(), graph.edges.len(), layout)
+                }
+            };
             eprintln!(
-                "desk: draw layout {layout} {} nodes in {} ms",
-                graph.nodes.len(),
-                laid.elapsed().as_millis()
+                "desk: draw layout {layout} {n} nodes in {} ms",
+                started.elapsed().as_millis()
             );
-            let text = scene.write().map_err(|error| bad(error.to_string()))?;
             focus(work, cx)?;
             tile::replace(path.clone(), &text, cx).map_err(refused)?;
-            let (n, e) = (graph.nodes.len(), graph.edges.len());
             let ms = started.elapsed().as_millis();
             eprintln!("desk: draw diagram {n} nodes {e} edges in {ms} ms");
             Ok(

@@ -36,15 +36,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn crates() -> Graph {
-    let node = |key: &str| Node {
-        key: key.to_owned(),
-        label: key.to_owned(),
-    };
-    let edge = |from: &str, to: &str| Edge {
-        from: from.to_owned(),
-        to: to.to_owned(),
-        label: None,
-    };
+    let node = |key: &str| Node::new(key, key);
+    let edge = |from: &str, to: &str| Edge::new(from, to, None);
     Graph {
         nodes: [
             "desk",
@@ -71,22 +64,17 @@ fn crates() -> Graph {
 
 fn generated(count: usize) -> Graph {
     let nodes = (0..count)
-        .map(|at| Node {
-            key: format!("k{at}"),
-            label: format!("node {at}"),
-        })
+        .map(|at| Node::new(format!("k{at}"), format!("node {at}")))
         .collect();
     let mut edges: Vec<Edge> = (1..count)
-        .map(|at| Edge {
-            from: format!("k{}", (at - 1) / 3),
-            to: format!("k{at}"),
-            label: None,
-        })
+        .map(|at| Edge::new(format!("k{}", (at - 1) / 3), format!("k{at}"), None))
         .collect();
-    edges.extend((0..count.saturating_sub(5)).step_by(7).map(|at| Edge {
-        from: format!("k{at}"),
-        to: format!("k{}", at + 5),
-        label: Some("uses".to_owned()),
+    edges.extend((0..count.saturating_sub(5)).step_by(7).map(|at| {
+        Edge::new(
+            format!("k{at}"),
+            format!("k{}", at + 5),
+            Some("uses".to_owned()),
+        )
     }));
     Graph { nodes, edges }
 }

@@ -4,36 +4,57 @@ use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
-use desk_canvas::{
-    BACKGROUNDS, Canvas, FILLS, Framing, LINES, Pick, STROKES, Tool, ToolChanged, WIDTHS,
-};
+mod export;
+mod image;
+mod marks;
+mod menu;
+mod panel;
+
+use desk_canvas::{Ask, BLANK, Backdrop, Canvas, Changed, Framing, Pick, Tool, View};
 use desk_plugin::{Capability, Home};
-use desk_ui::components::button::{ButtonKind, button};
-use desk_ui::components::empty::empty_state;
-use desk_ui::components::form::segmented;
-use desk_ui::components::paint::ink;
-use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_ROW, T1, T2};
+use desk_ui::components::form::TextInput;
+use desk_ui::components::glyph::Glyph;
+use desk_ui::components::overlay::{MenuItem, context_menu};
+use desk_ui::components::paint::{drop, glyph, ink, ring, tint};
+use desk_ui::components::size::{FONT_BODY, FONT_SMALL, T1, T2};
 use desk_ui::components::tooltip::{Edge, tooltip};
+use desk_ui::components::width::Width;
 use desk_ui::live::ActiveTheme;
 use desk_ui::theme::{ColorToken, Theme};
-use draw_doc::{DocError, Op, Rect, Scene, bounds};
+use draw_doc::{DocError, Look, Op, Rect, Scene, bounds, flow, flow_scene};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, Context, Entity, Focusable, Global,
-    KeyDownEvent, Pixels, Render, SharedString, StyleRefinement, WeakEntity, Window, div,
-    prelude::*, px,
+    AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, Context, Div, ElementId, Entity,
+    Focusable, Global, KeyDownEvent, KeyUpEvent, Pixels, Point, Render, SharedString, Stateful,
+    StyleRefinement, WeakEntity, Window, div, prelude::*, px,
 };
-use serde_json::{Value, json};
+use serde::Deserialize;
+use serde_json::{Map, Value, json};
 
 use crate::plugins::{Plugin, consent};
+use crate::screens::work::Work;
+use desk_tiling::Module;
+use marks::ICON_BOX;
 
 const EXTENSION: &str = "excalidraw";
-const GRID_SHAPES: usize = 10_000;
-const GRID_COLUMNS: usize = 100;
-const GRID_PITCH: (f64, f64) = (160.0, 120.0);
-const GRID_SHAPE: (f64, f64) = (120.0, 80.0);
-const SWATCH: f32 = 14.0;
-const SWATCH_RING: f32 = 1.0;
-const GRID_KINDS: [&str; 5] = ["rectangle", "ellipse", "diamond", "text", "arrow"];
+const UNTITLED: &str = "untitled";
+const INSET: f32 = 12.0;
+const ISLAND_PAD: f32 = 4.0;
+const ISLAND_RADIUS: f32 = 8.0;
+const ISLAND_RING: f32 = 0.08;
+const ISLAND_SHADOW: f32 = 0.5;
+const ISLAND_SHADOW_Y: f32 = 1.0;
+const ISLAND_SHADOW_BLUR: f32 = 6.0;
+const TOOL_BOX: f32 = 36.0;
+const TOOL_ON: f32 = 0.18;
+const DIGIT_FONT: f32 = 9.0;
+const DIGIT_INSET: f32 = 3.0;
+const ZOOM_BOX: f32 = 30.0;
+const READOUT_WIDTH: f32 = 52.0;
+const PANEL_WIDTH: f32 = 200.0;
+const DOCK_LEAST: f32 = 640.0;
+const MENU_WIDTH: f32 = 232.0;
+const EXPORT_PAD: f32 = 16.0;
+const EXPORT_MOST_PX: u32 = 4096;
 
 pub const PLUGIN: &str = "tofu.draw";
 
@@ -41,9 +62,11 @@ pub fn mount(plugin: &'static Plugin, cx: &mut App) -> AnyView {
     cx.new(|cx| Draw::new(plugin, cx)).into()
 }
 
+#[derive(Default)]
 struct Link {
     live: Option<WeakEntity<Draw>>,
     pending: Option<PathBuf>,
+    claimed: Vec<PathBuf>,
 }
 
 impl Global for Link {}
@@ -58,10 +81,7 @@ pub fn show(path: PathBuf, cx: &mut App) {
             draw.open(path, cx);
             cx.notify();
         }),
-        None => cx.set_global(Link {
-            live: None,
-            pending: Some(path),
-        }),
+        None => cx.default_global::<Link>().pending = Some(path),
     }
 }
 
@@ -106,10 +126,75 @@ pub fn replace(path: PathBuf, text: &str, cx: &mut App) -> Result<(), String> {
     Ok(())
 }
 
+pub struct FlowBoard {
+    pub text: String,
+    pub nodes: usize,
+    pub edges: usize,
+}
+
+pub fn flow_board(source: &str) -> Result<FlowBoard, String> {
+    let parsed = flow(source).map_err(|error| error.to_string())?;
+    let scene = flow_scene(&parsed, Look::Ui).map_err(|error| error.to_string())?;
+    let written = scene.write().map_err(|error| error.to_string())?;
+    let ui = Backdrop {
+        look: Look::Ui,
+        ..BLANK
+    };
+    Ok(FlowBoard {
+        text: with_backdrop(&written, &ui)?,
+        nodes: parsed.graph.nodes.len(),
+        edges: parsed.graph.edges.len(),
+    })
+}
+
+pub fn open_flow(source: &str, window: &mut Window, cx: &mut App) -> Result<PathBuf, String> {
+    let drawn = flow_board(source)?;
+    let Some(Some(desk)) = window.root::<crate::desk::Desk>() else {
+        return Err("the chat is not inside the desk".to_owned());
+    };
+    let work = desk
+        .read(cx)
+        .work()
+        .cloned()
+        .ok_or("the work screen is not open")?;
+    let path = untitled(&folder()?, cx)?;
+    replace(path.clone(), &drawn.text, cx)?;
+    reveal(&work, cx)?;
+    eprintln!(
+        "desk: draw opened a {} node flow from chat as {}",
+        drawn.nodes,
+        path.display()
+    );
+    Ok(path)
+}
+
+fn reveal(work: &Entity<Work>, cx: &mut App) -> Result<(), String> {
+    let draw = Module::Plugin(PLUGIN.to_owned());
+    work.update(cx, |work, cx| {
+        let board = work.board_mut();
+        board.apply(true, |held, area| {
+            let found = held.tiles(area).into_iter().find_map(|(stack, _)| {
+                Some((
+                    stack.id,
+                    stack.modules.iter().position(|module| *module == draw)?,
+                ))
+            });
+            match found {
+                Some((tile, at)) => held.activate(tile, at),
+                None => held.open(draw.clone(), area),
+            }
+        });
+        cx.notify();
+        board.refusal().map_or(Ok(()), |refusal| {
+            Err(format!("the draw tile did not open: {refusal:?}"))
+        })
+    })
+}
+
 pub fn store(path: &Path, text: &str) -> Result<(), String> {
     let found =
         crate::plugins::find(PLUGIN).ok_or(format!("plugin {PLUGIN} is not in this desk"))?;
-    write(found, path, text)
+    write(found, path, text.as_bytes())
 }
 
 fn showing(path: &Path, cx: &App) -> Option<Entity<Draw>> {
@@ -158,24 +243,82 @@ pub fn fit(path: &Path, keys: Option<&[String]>, cx: &mut App) -> Result<(Rect, 
     })
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Kept {
+    Fresh,
+    Restyled,
+    Disk,
+}
+
+enum Menu {
+    Closed,
+    Open,
+    Export,
+    Rename(Entity<TextInput>),
+}
+
+enum Note {
+    Problem(SharedString),
+    Done(SharedString),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Export {
+    Idle,
+    Asked,
+    Hidden,
+}
+
+#[derive(Deserialize)]
+struct BoardLook {
+    #[serde(rename = "appState")]
+    state: Option<AppState>,
+}
+
+#[derive(Deserialize)]
+struct AppState {
+    #[serde(rename = "viewBackgroundColor")]
+    color: Option<String>,
+    #[serde(rename = "gridModeEnabled")]
+    dots: Option<bool>,
+    #[serde(rename = "tofuLook")]
+    look: Option<String>,
+}
+
+const UI_LOOK: &str = "ui";
+
 pub struct Draw {
     plugin: &'static Plugin,
     folder: Result<PathBuf, String>,
     canvas: Entity<Canvas>,
     board: Option<PathBuf>,
-    picker: Option<Vec<PathBuf>>,
-    problem: Option<SharedString>,
+    kept: Kept,
+    menu: Menu,
+    note: Option<Note>,
     opening: Option<(Instant, usize)>,
+    export: Export,
+    shown_tool: Option<Tool>,
+    switch_frames: Vec<f64>,
+    styles_open: bool,
+    picker: Option<menu::Picker>,
+    context: Option<(Point<Pixels>, bool)>,
+    picking: bool,
+    opacity_drag: Option<u8>,
+    more_open: bool,
 }
 
-fn write(plugin: &Plugin, path: &Path, text: &str) -> Result<(), String> {
+fn permit(plugin: &Plugin, path: &Path) -> Result<(), String> {
     let what = format!("write {}", path.display());
-    consent::check(&plugin.id, &plugin.folder()?, Capability::FsWrite, &what)?;
+    consent::check(&plugin.id, &plugin.folder()?, Capability::FsWrite, &what)
+}
+
+fn write(plugin: &Plugin, path: &Path, bytes: &[u8]) -> Result<(), String> {
+    permit(plugin, path)?;
     let at = |error: std::io::Error| format!("{}: {error}", path.display());
     if let Some(folder) = path.parent() {
         fs::create_dir_all(folder).map_err(at)?;
     }
-    fs::write(path, text).map_err(at)
+    fs::write(path, bytes).map_err(at)
 }
 
 fn listed(folder: &Path) -> Result<Vec<PathBuf>, String> {
@@ -201,46 +344,61 @@ fn listed(folder: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(boards.into_iter().map(|(_, path)| path).collect())
 }
 
-fn grid(count: usize) -> Result<Scene, String> {
-    let elements: Vec<Value> = (0..count)
-        .map(|at| {
-            let x = (at % GRID_COLUMNS) as f64 * GRID_PITCH.0;
-            let y = (at / GRID_COLUMNS) as f64 * GRID_PITCH.1;
-            let kind = GRID_KINDS
-                .get(at % GRID_KINDS.len())
-                .copied()
-                .unwrap_or("rectangle");
-            let mut element = json!({
-                "id": format!("bench-{at}"),
-                "type": kind,
-                "x": x,
-                "y": y,
-                "width": GRID_SHAPE.0,
-                "height": GRID_SHAPE.1,
-                "strokeColor": "#1e1e1e",
-                "backgroundColor": "#a5d8ff",
-                "fillStyle": "solid",
-                "strokeWidth": 1,
-                "strokeStyle": "dashed",
-                "roundness": null,
-            });
-            match kind {
-                "text" => {
-                    element["text"] = json!(format!("shape {at}"));
-                    element["fontSize"] = json!(20);
-                }
-                "arrow" => {
-                    element["points"] = json!([[0.0, 0.0], [GRID_SHAPE.0, GRID_SHAPE.1]]);
-                    element["endArrowhead"] = json!("arrow");
-                }
-                _ => {}
-            }
-            element
-        })
-        .collect();
-    let file =
-        json!({ "type": "excalidraw", "version": 2, "source": "tofu-draw", "elements": elements });
-    Scene::read(&file.to_string()).map_err(|error| format!("grid board: {error}"))
+fn untitled(folder: &Path, cx: &App) -> Result<PathBuf, String> {
+    let claimed = cx
+        .try_global::<Link>()
+        .map(|link| link.claimed.as_slice())
+        .unwrap_or_default();
+    (1..=u32::MAX)
+        .map(|at| folder.join(format!("{UNTITLED}-{at}.{EXTENSION}")))
+        .find(|path| !path.exists() && !claimed.contains(path))
+        .ok_or_else(|| format!("{} has no free board name", folder.display()))
+}
+
+fn backdrop(text: &str) -> Result<Backdrop, String> {
+    let look = serde_json::from_str::<BoardLook>(text)
+        .map_err(|error| error.to_string())?
+        .state;
+    let ui = match look.as_ref().and_then(|look| look.look.as_deref()) {
+        None => Look::Sketch,
+        Some(UI_LOOK) => Look::Ui,
+        Some(other) => return Err(format!("unknown board look {other}: use ui")),
+    };
+    Ok(Backdrop {
+        color: look.as_ref().and_then(|look| look.color.clone()),
+        dots: look.and_then(|look| look.dots).unwrap_or(BLANK.dots),
+        look: ui,
+    })
+}
+
+fn latest_backdrop(folder: &Path) -> Result<Backdrop, String> {
+    let Some(latest) = listed(folder)?.into_iter().next() else {
+        return Ok(BLANK);
+    };
+    fs::read_to_string(&latest)
+        .map_err(|error| error.to_string())
+        .and_then(|text| backdrop(&text))
+        .map_err(|error| format!("{}: {error}", latest.display()))
+}
+
+fn with_backdrop(text: &str, backdrop: &Backdrop) -> Result<String, String> {
+    let mut file: Map<String, Value> =
+        serde_json::from_str(text).map_err(|error| error.to_string())?;
+    let mut state = match file.remove("appState") {
+        Some(Value::Object(state)) => state,
+        _ => Map::new(),
+    };
+    match &backdrop.color {
+        Some(color) => state.insert("viewBackgroundColor".to_owned(), json!(color)),
+        None => state.remove("viewBackgroundColor"),
+    };
+    state.insert("gridModeEnabled".to_owned(), json!(backdrop.dots));
+    match backdrop.look {
+        Look::Ui => state.insert("tofuLook".to_owned(), json!(UI_LOOK)),
+        Look::Sketch => state.remove("tofuLook"),
+    };
+    file.insert("appState".to_owned(), Value::Object(state));
+    serde_json::to_string(&file).map_err(|error| error.to_string())
 }
 
 fn name(path: &Path) -> String {
@@ -249,15 +407,50 @@ fn name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+fn start() -> Framing {
+    Framing::At(View::new(0.0, 0.0, 1.0))
+}
+
+fn island(theme: &Theme) -> Div {
+    let shadow = theme.color(ColorToken::Shadow);
+    div()
+        .bg(tint(theme.color(ColorToken::ToastFill), 1.0))
+        .rounded(px(ISLAND_RADIUS))
+        .text_color(ink(theme, T1))
+        .shadow(vec![
+            ring(ink(theme, ISLAND_RING)),
+            drop(
+                tint(shadow, shadow.alpha * ISLAND_SHADOW),
+                ISLAND_SHADOW_Y,
+                ISLAND_SHADOW_BLUR,
+            ),
+        ])
+}
+
+fn face(id: impl Into<ElementId>, on: bool, theme: &Theme) -> Stateful<Div> {
+    let hover = theme.color(ColorToken::StateHover);
+    div()
+        .id(id)
+        .relative()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(px(TOOL_BOX))
+        .rounded(px(ISLAND_RADIUS))
+        .cursor_pointer()
+        .map(|face| match on {
+            true => face.bg(tint(theme.color(ColorToken::FocusRing), TOOL_ON)),
+            false => face.hover(move |style| style.bg(hover)),
+        })
+}
+
 impl Draw {
     fn new(plugin: &'static Plugin, cx: &mut Context<Self>) -> Self {
-        let pending = cx
-            .try_global::<Link>()
-            .and_then(|link| link.pending.clone());
-        cx.set_global(Link {
-            live: Some(cx.weak_entity()),
-            pending: None,
-        });
+        let weak = cx.weak_entity();
+        let link = cx.default_global::<Link>();
+        link.live = Some(weak);
+        let pending = link.pending.take();
         cx.on_release(|draw, cx| draw.save(cx)).detach();
         cx.on_app_quit(|draw, cx| {
             draw.save(cx);
@@ -265,26 +458,48 @@ impl Draw {
         })
         .detach();
         let canvas = cx.new(|cx| Canvas::new(Scene::new(), cx));
-        cx.subscribe(&canvas, |_, _, _: &ToolChanged, cx| cx.notify())
+        cx.subscribe(&canvas, |_, _, _: &Changed, cx| cx.notify())
             .detach();
+        cx.subscribe(&canvas, |draw, _, ask: &Ask, cx| match ask {
+            Ask::Menu { at, shape } => {
+                draw.dismiss("context menu");
+                draw.context = Some((*at, *shape));
+                cx.notify();
+            }
+            Ask::Image(image) => draw.paste_image(image, cx),
+        })
+        .detach();
+        let folder = folder();
+        canvas.update(cx, |canvas, _| canvas.set_folder(folder.clone().ok()));
         let mut draw = Draw {
             plugin,
-            folder: folder(),
+            folder,
             canvas,
             board: None,
-            picker: None,
-            problem: None,
+            kept: Kept::Fresh,
+            menu: Menu::Closed,
+            note: None,
             opening: None,
+            export: Export::Idle,
+            shown_tool: None,
+            switch_frames: Vec::new(),
+            styles_open: false,
+            picker: None,
+            context: None,
+            picking: false,
+            opacity_drag: None,
+            more_open: false,
         };
-        if let Some(path) = pending {
-            draw.open(path, cx);
+        match pending {
+            Some(path) => draw.open(path, cx),
+            None => draw.fresh(cx),
         }
         draw
     }
 
     fn fail(&mut self, problem: String) {
         eprintln!("desk: draw: {problem}");
-        self.problem = Some(problem.into());
+        self.note = Some(Note::Problem(problem.into()));
     }
 
     fn save(&mut self, cx: &App) {
@@ -293,90 +508,99 @@ impl Draw {
         }
     }
 
-    fn store(&self, cx: &App) -> Result<(), String> {
-        let Some(path) = &self.board else {
+    fn store(&mut self, cx: &App) -> Result<(), String> {
+        let Some(path) = self.board.clone() else {
             return Ok(());
         };
-        let scene = self.canvas.read(cx).scene();
-        let text = scene.write().map_err(|error| error.to_string())?;
-        write(self.plugin, path, &text)?;
-        eprintln!(
-            "desk: draw saved {} {} shapes",
-            path.display(),
-            scene.elements().len()
-        );
+        let canvas = self.canvas.read(cx);
+        let shapes = canvas.scene().elements().len();
+        if self.kept == Kept::Fresh && shapes == 0 {
+            return Ok(());
+        }
+        let scene = canvas.scene().write().map_err(|error| error.to_string())?;
+        let text = with_backdrop(&scene, canvas.backdrop())?;
+        let path = match path.parent() {
+            Some(folder) if self.kept != Kept::Disk && path.exists() => untitled(folder, cx)?,
+            _ => path,
+        };
+        write(self.plugin, &path, text.as_bytes())?;
+        eprintln!("desk: draw saved {} {shapes} shapes", path.display());
+        self.board = Some(path);
+        self.kept = Kept::Disk;
         Ok(())
     }
 
-    fn open(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+    fn fresh(&mut self, cx: &mut Context<Self>) {
         self.save(cx);
-        self.picker = None;
+        self.menu = Menu::Closed;
         let started = Instant::now();
-        let read = fs::read_to_string(&path)
-            .map_err(|error| error.to_string())
-            .and_then(|text| Scene::read(&text).map_err(|error| error.to_string()));
-        let scene = match read {
-            Ok(scene) => scene,
-            Err(error) => return self.fail(format!("{}: {error}", path.display())),
-        };
-        let shapes = scene.elements().len();
-        self.canvas
-            .update(cx, |canvas, cx| canvas.show(scene, Framing::Fit, cx));
-        eprintln!("desk: draw opened {}", path.display());
-        self.board = Some(path);
-        self.opening = Some((started, shapes));
-        self.problem = None;
-    }
-
-    fn new_board(&mut self, stem: &str, scene: Result<Scene, String>, cx: &mut Context<Self>) {
         let folder = match &self.folder {
             Ok(folder) => folder.clone(),
             Err(error) => return self.fail(error.clone()),
         };
-        let Some(path) = (1..=u32::MAX)
-            .map(|at| folder.join(format!("{stem}-{at}.{EXTENSION}")))
-            .find(|path| !path.exists())
-        else {
-            return self.fail(format!("{} has no free board name", folder.display()));
+        let backdrop = latest_backdrop(&folder).unwrap_or_else(|error| {
+            self.fail(error);
+            BLANK
+        });
+        let path = match untitled(&folder, cx) {
+            Ok(path) => path,
+            Err(error) => return self.fail(error),
         };
-        let written = scene
-            .and_then(|scene| scene.write().map_err(|error| error.to_string()))
-            .and_then(|text| write(self.plugin, &path, &text));
-        match written {
-            Ok(()) => self.open(path, cx),
-            Err(error) => self.fail(error),
-        }
+        cx.default_global::<Link>().claimed.push(path.clone());
+        self.canvas.update(cx, |canvas, cx| {
+            canvas.show(Scene::new(), start(), cx);
+            canvas.set_backdrop(backdrop, cx);
+        });
+        eprintln!("desk: draw new board {}", path.display());
+        self.board = Some(path);
+        self.kept = Kept::Fresh;
+        self.opening = Some((started, 0));
     }
 
-    fn pick(&mut self) {
-        if self.picker.take().is_some() {
-            return;
-        }
-        let listing = match &self.folder {
-            Ok(folder) => listed(folder),
-            Err(error) => Err(error.clone()),
+    fn open(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.save(cx);
+        self.menu = Menu::Closed;
+        let started = Instant::now();
+        let read = fs::read_to_string(&path)
+            .map_err(|error| error.to_string())
+            .and_then(|text| {
+                let scene = Scene::read(&text).map_err(|error| error.to_string())?;
+                Ok((scene, backdrop(&text)?))
+            });
+        let (scene, backdrop) = match read {
+            Ok(read) => read,
+            Err(error) => return self.fail(format!("{}: {error}", path.display())),
         };
-        match listing {
-            Ok(boards) => self.picker = Some(boards),
-            Err(error) => self.fail(error),
-        }
+        let shapes = scene.elements().len();
+        let framing = match shapes {
+            0 => start(),
+            _ => Framing::Fit,
+        };
+        self.canvas.update(cx, |canvas, cx| {
+            canvas.show(scene, framing, cx);
+            canvas.set_backdrop(backdrop, cx);
+        });
+        eprintln!("desk: draw opened {}", path.display());
+        self.board = Some(path);
+        self.kept = Kept::Disk;
+        self.opening = Some((started, shapes));
+        self.note = None;
     }
 
-    fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let keys = &event.keystroke;
-        if keys.key == "s" && keys.modifiers.secondary() && !keys.modifiers.shift {
-            cx.stop_propagation();
-            self.save(cx);
-            cx.notify();
-            return;
+    fn restyle(&mut self, change: impl FnOnce(&mut Backdrop), cx: &mut Context<Self>) {
+        self.canvas.update(cx, |canvas, cx| {
+            let mut backdrop = canvas.backdrop().clone();
+            change(&mut backdrop);
+            canvas.set_backdrop(backdrop, cx);
+        });
+        if self.kept == Kept::Fresh {
+            self.kept = Kept::Restyled;
         }
-        let plain = !keys.modifiers.secondary() && !keys.modifiers.alt;
-        let tool = Tool::of_key(&keys.key);
-        let typing = self.canvas.read(cx).typing();
-        if !plain || typing || (tool.is_none() && keys.key != "q") || self.board.is_none() {
-            return;
-        }
-        cx.stop_propagation();
+        self.save(cx);
+        cx.notify();
+    }
+
+    fn use_tool(&mut self, tool: Option<Tool>, window: &mut Window, cx: &mut Context<Self>) {
         self.canvas.update(cx, |canvas, cx| {
             match tool {
                 Some(tool) => canvas.set_tool(tool, cx),
@@ -386,197 +610,312 @@ impl Draw {
         });
     }
 
-    fn tools(
+    fn key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.picker.is_some() || matches!(self.menu, Menu::Rename(_)) {
+            return;
+        }
+        let keys = &event.keystroke;
+        if keys.key == "s" && keys.modifiers.secondary() && !keys.modifiers.shift {
+            cx.stop_propagation();
+            self.save(cx);
+            cx.notify();
+            return;
+        }
+        let typing = self.canvas.read(cx).typing();
+        if keys.key == "space" && !typing {
+            cx.stop_propagation();
+            self.canvas.update(cx, |canvas, cx| {
+                canvas.hold_space(true, cx);
+                canvas.focus_handle(cx).focus(window, cx);
+            });
+            return;
+        }
+        let plain = !keys.modifiers.secondary() && !keys.modifiers.alt;
+        let tool = Tool::of_key(&keys.key);
+        if !plain || typing || (tool.is_none() && keys.key != "q") {
+            return;
+        }
+        cx.stop_propagation();
+        self.use_tool(tool, window, cx);
+    }
+
+    fn escape(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.key == "escape" && self.dismiss("escape") {
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+
+    fn dismiss(&mut self, by: &str) -> bool {
+        let open = !matches!(self.menu, Menu::Closed)
+            || self.styles_open
+            || self.more_open
+            || self.context.is_some()
+            || self.picker.is_some();
+        if open {
+            eprintln!("desk: draw: popover closed by {by}");
+            self.menu = Menu::Closed;
+            self.styles_open = false;
+            self.more_open = false;
+            self.context = None;
+            self.picker = None;
+        }
+        open
+    }
+
+    fn key_up(&mut self, event: &KeyUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.key == "space" {
+            self.canvas
+                .update(cx, |canvas, cx| canvas.hold_space(false, cx));
+        }
+    }
+
+    fn tool_menu(
         &self,
+        tool: Tool,
+        at: usize,
+        button: AnyElement,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let sections = panel::sections(tool, tool == Tool::Arrow);
+        if sections.is_empty() {
+            return button;
+        }
+        let canvas = self.canvas.read(cx);
+        let mut flat: Vec<Option<Pick>> = Vec::new();
+        let mut items = Vec::with_capacity(sections.len());
+        for section in sections {
+            flat.push(None);
+            flat.extend(section.picks.iter().copied().map(Some));
+            items.push(MenuItem::Submenu {
+                label: section.title.into(),
+                icon: None,
+                items: section
+                    .picks
+                    .iter()
+                    .map(|pick| match canvas.defaults(*pick) {
+                        true => MenuItem::action(pick.name()).icon(Glyph::Check),
+                        false => MenuItem::action(pick.name()),
+                    })
+                    .collect(),
+            });
+        }
+        context_menu(items)
+            .id(("draw-tool-menu", at))
+            .on_pick(cx.listener(move |draw, picked: &usize, window, cx| {
+                let Some(Some(pick)) = flat.get(*picked).copied() else {
+                    return;
+                };
+                eprintln!("desk: draw: tool menu {} {pick:?}", tool.name());
+                draw.use_tool(Some(tool), window, cx);
+                draw.canvas
+                    .update(cx, |canvas, cx| canvas.set_default(pick, cx));
+            }))
+            .child(button)
+            .into_any_element()
+    }
+
+    fn toolbar(
+        &self,
+        narrow: bool,
         theme: &Theme,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> Stateful<Div> {
         let (active, locked) = self.canvas.read(cx).tool();
-        let picks = Tool::ALL
-            .into_iter()
-            .map(|tool| (Some(tool), tool.name(), tool.key(), tool == active))
-            .chain([(None, "Lock", "q", locked)]);
-        let mut row = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap_0p5()
-            .px_2()
-            .pb_1()
-            .overflow_hidden();
-        for (at, (tool, name, key, on)) in picks.enumerate() {
-            let face = button(("draw-tool", at), name, None, ButtonKind::Text, theme)
-                .px_2()
-                .when(on, |face| {
-                    face.bg(theme.color(ColorToken::ButtonPrimary))
-                        .text_color(theme.color(ColorToken::ButtonPrimaryText))
-                })
+        let accent = theme.color(ColorToken::FocusRing);
+        let plain = ink(theme, T1);
+        let lock = face("draw-lock", locked, theme)
+            .child(glyph(
+                Glyph::Lock,
+                ICON_BOX,
+                if locked { accent } else { plain },
+            ))
+            .on_click(
+                cx.listener(|draw, _: &ClickEvent, window, cx| draw.use_tool(None, window, cx)),
+            );
+        let mut tools = vec![
+            tooltip(
+                "draw-lock-tip",
+                lock,
+                Edge::Frame,
+                "Keep the tool after drawing  Q",
+                theme,
+                window,
+                cx,
+            )
+            .into_any_element(),
+            div()
+                .w(px(1.0))
+                .h(px(ICON_BOX))
+                .mx_1()
+                .bg(theme.color(ColorToken::Separator))
+                .into_any_element(),
+        ];
+        for (at, tool) in Tool::ALL.into_iter().enumerate() {
+            let on = tool == active;
+            let button = face(("draw-tool", at), on, theme)
+                .child(marks::paint(
+                    marks::of_tool(tool),
+                    if on { accent } else { plain },
+                ))
+                .child(
+                    div()
+                        .absolute()
+                        .right(px(DIGIT_INSET))
+                        .bottom(px(0.0))
+                        .text_size(px(DIGIT_FONT))
+                        .text_color(ink(theme, T2))
+                        .children(tool.digit()),
+                )
                 .on_click(cx.listener(move |draw, _: &ClickEvent, window, cx| {
-                    draw.canvas.update(cx, |canvas, cx| {
-                        match tool {
-                            Some(tool) => canvas.set_tool(tool, cx),
-                            None => canvas.toggle_lock(cx),
-                        }
-                        canvas.focus_handle(cx).focus(window, cx);
-                    });
+                    draw.use_tool(Some(tool), window, cx)
                 }));
-            let tip = format!("{name}  {}", key.to_uppercase());
-            row = row.child(tooltip(
+            let key = tool.key().to_uppercase();
+            let tip = match tool.digit() {
+                Some(digit) => format!("{}  {key} or {digit}", tool.name()),
+                None => format!("{}  {key}", tool.name()),
+            };
+            let tipped = tooltip(
                 ("draw-tool-tip", at),
-                face,
+                button,
                 Edge::Frame,
                 tip,
                 theme,
                 window,
                 cx,
-            ));
+            );
+            tools.push(self.tool_menu(tool, at, tipped.into_any_element(), cx));
         }
-        row
+        tools.push(self.more(theme, cx));
+        if narrow {
+            tools.push(self.compact(theme, window, cx));
+        }
+        island(theme)
+            .id("draw-toolbar")
+            .occlude()
+            .flex()
+            .flex_wrap()
+            .justify_center()
+            .items_center()
+            .max_w_full()
+            .gap_0p5()
+            .p(px(ISLAND_PAD))
+            .children(tools)
     }
 
-    fn styles(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<impl IntoElement> {
-        if !self.canvas.read(cx).styling() {
-            return None;
-        }
-        let swatch = |at: usize, pick: Pick| {
-            let ring = match self.canvas.read(cx).picked(pick) {
-                true => theme.color(ColorToken::FocusRing),
-                false => theme.color(ColorToken::ButtonFill),
-            };
-            let face = match pick.swatch(theme) {
-                Some(color) => div().size(px(SWATCH)).rounded_full().bg(color),
-                None => div()
-                    .size(px(SWATCH))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(ink(theme, T2)),
-            };
-            div()
-                .id(("draw-swatch", at))
-                .flex_none()
-                .p(px(SWATCH_RING))
-                .rounded_full()
-                .border_2()
-                .border_color(ring)
-                .cursor_pointer()
-                .aria_label(format!("{} {}", pick.field(), pick.value()))
-                .on_click(cx.listener(move |draw, _: &ClickEvent, window, cx| {
-                    draw.canvas
-                        .update(cx, |canvas, cx| canvas.restyle(pick, window, cx));
-                }))
-                .child(face)
-        };
-        let strokes: Vec<_> = STROKES
-            .map(Pick::Stroke)
-            .into_iter()
-            .enumerate()
-            .map(|(at, pick)| swatch(at, pick))
-            .collect();
-        let fills: Vec<_> = BACKGROUNDS
-            .map(Pick::Background)
-            .into_iter()
-            .enumerate()
-            .map(|(at, pick)| swatch(at + STROKES.len(), pick))
-            .collect();
-        let canvas = self.canvas.read(cx);
-        let picks = |picks: Vec<Pick>| {
-            let chosen = picks
-                .iter()
-                .position(|pick| canvas.picked(*pick))
-                .unwrap_or(usize::MAX);
-            let target = self.canvas.clone();
-            (
-                chosen,
-                move |at: &usize, window: &mut Window, cx: &mut App| {
-                    if let Some(pick) = picks.get(*at).copied() {
-                        target.update(cx, |canvas, cx| canvas.restyle(pick, window, cx));
-                    }
-                },
+    fn bottom(
+        &self,
+        narrow: bool,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        div()
+            .absolute()
+            .left(px(INSET))
+            .right(px(INSET))
+            .bottom(px(INSET))
+            .flex()
+            .flex_wrap_reverse()
+            .items_end()
+            .gap(px(ISLAND_PAD * 2.0))
+            .child(self.zoom(theme, cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_grow_1()
+                    .min_w_0()
+                    .justify_center()
+                    .child(self.toolbar(narrow, theme, window, cx)),
             )
+    }
+
+    fn zoom(&self, theme: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
+        let percent = format!("{:.0}%", self.canvas.read(cx).zoom() * 100.0);
+        let nudge = |id: &'static str, label: &'static str, steps: f64, cx: &mut Context<Self>| {
+            face(id, false, theme)
+                .size(px(ZOOM_BOX))
+                .child(label)
+                .on_click(cx.listener(move |draw, _: &ClickEvent, _, cx| {
+                    draw.canvas
+                        .update(cx, |canvas, cx| canvas.nudge_zoom(steps, cx));
+                }))
         };
-        let (fill, on_fill) = picks(FILLS.map(Pick::Fill).to_vec());
-        let (width, on_width) = picks(WIDTHS.map(Pick::Width).to_vec());
-        let (line, on_line) = picks(LINES.map(Pick::Line).to_vec());
+        island(theme)
+            .id("draw-zoom")
+            .occlude()
+            .flex_none()
+            .flex()
+            .items_center()
+            .p(px(ISLAND_PAD))
+            .text_size(px(FONT_BODY))
+            .child(nudge("draw-zoom-out", "-", -1.0, cx))
+            .child(
+                face("draw-zoom-reset", false, theme)
+                    .h(px(ZOOM_BOX))
+                    .w(px(READOUT_WIDTH))
+                    .child(percent)
+                    .on_click(cx.listener(|draw, _: &ClickEvent, _, cx| {
+                        draw.canvas.update(cx, |canvas, cx| canvas.zoom_to(1.0, cx));
+                    })),
+            )
+            .child(nudge("draw-zoom-in", "+", 1.0, cx))
+    }
+
+    fn note(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<Div> {
+        let (text, color) = match self.note.as_ref()? {
+            Note::Problem(text) => (text.clone(), theme.color(ColorToken::StatusDanger)),
+            Note::Done(text) => (text.clone(), ink(theme, T2)),
+        };
         Some(
             div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .top(px(INSET))
                 .flex()
-                .flex_none()
-                .items_center()
-                .gap_1()
-                .px_2()
-                .pb_1()
-                .overflow_hidden()
-                .children(strokes)
-                .child(div().w_2())
-                .children(fills)
-                .child(segmented(
-                    "draw-fill",
-                    &["Solid", "Hatch"],
-                    fill,
-                    theme,
-                    on_fill,
-                ))
-                .child(segmented(
-                    "draw-width",
-                    &["1", "2", "4"],
-                    width,
-                    theme,
-                    on_width,
-                ))
-                .child(segmented(
-                    "draw-line",
-                    &["Line", "Dash", "Dot"],
-                    line,
-                    theme,
-                    on_line,
-                )),
+                .justify_center()
+                .child(
+                    island(theme)
+                        .id("draw-note")
+                        .occlude()
+                        .max_w(px(MENU_WIDTH * 2.0))
+                        .px_2()
+                        .py_1()
+                        .truncate()
+                        .cursor_pointer()
+                        .text_size(px(FONT_SMALL))
+                        .text_color(color)
+                        .child(text)
+                        .on_click(cx.listener(|draw, _: &ClickEvent, _, cx| {
+                            draw.note = None;
+                            cx.notify();
+                        })),
+                ),
         )
     }
 
-    fn rows(&self, boards: &[PathBuf], theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        if boards.is_empty() {
-            let folder = self.folder.as_ref().map(|f| f.display().to_string());
-            let line = format!("No .{EXTENSION} files in {}", folder.unwrap_or_default());
-            return empty_state(
-                "draw-none",
-                "No boards",
-                Some(line.into()),
-                &[],
-                &[],
-                theme,
-                |_, _, _| {},
-            )
-            .into_any_element();
-        }
-        let hover = theme.color(ColorToken::StateHover);
-        div()
-            .id("draw-boards")
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_h_0()
-            .p_1()
-            .overflow_y_scroll()
-            .children(boards.iter().enumerate().map(|(at, path)| {
-                let picked = path.clone();
-                div()
-                    .id(("draw-board", at))
-                    .px_2()
-                    .py_1()
-                    .rounded(px(RADIUS_ROW))
-                    .truncate()
-                    .cursor_pointer()
-                    .text_size(px(FONT_BODY))
-                    .text_color(ink(theme, T2))
-                    .hover(move |style| style.bg(hover))
-                    .on_click(cx.listener(move |draw, _: &ClickEvent, _, cx| {
-                        draw.open(picked.clone(), cx);
-                        cx.notify();
-                    }))
-                    .child(name(path))
-            }))
-            .into_any_element()
+    fn time_switch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let started = Instant::now();
+        let this = cx.weak_entity();
+        window.on_next_frame(move |_, cx| {
+            let ms = started.elapsed().as_secs_f64() * 1000.0;
+            let timed = this.update(cx, |draw, _| {
+                draw.switch_frames.push(ms);
+                let mut sorted = draw.switch_frames.clone();
+                sorted.sort_by(f64::total_cmp);
+                let median = sorted.get(sorted.len() / 2).copied().unwrap_or_default();
+                let worst = sorted.last().copied().unwrap_or_default();
+                eprintln!(
+                    "desk: draw tool switch frames: {} frames, median {median:.2} ms, worst {worst:.2} ms",
+                    sorted.len()
+                );
+            });
+            if let Err(error) = timed {
+                eprintln!("desk: draw: tool switch timing: the draw tile is gone: {error}");
+            }
+        });
     }
 }
 
@@ -585,106 +924,52 @@ impl Render for Draw {
         if let Some((started, shapes)) = self.opening.take() {
             window.on_next_frame(move |_, _| {
                 eprintln!(
-                    "desk: draw opened {shapes} shapes in {} ms",
+                    "desk: draw open to first paint {} ms {shapes} shapes",
                     started.elapsed().as_millis()
                 )
             });
         }
+        if self.export == Export::Asked {
+            self.hide_for_export(window, cx);
+        }
+        let tool = self.canvas.read(cx).tool().0;
+        if self.shown_tool.replace(tool).is_some_and(|was| was != tool) {
+            self.time_switch(window, cx);
+        }
         let theme = ActiveTheme::theme(cx);
-        let title: SharedString = match &self.board {
-            Some(path) => name(path).into(),
-            None => "No board open".into(),
-        };
-        let header = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap_2()
-            .px_2()
-            .py_1()
-            .min_w_0()
-            .child(
-                button("draw-new", "New board", None, ButtonKind::Plain, &theme).on_click(
-                    cx.listener(|draw, _: &ClickEvent, _, cx| {
-                        draw.new_board("untitled", Ok(Scene::new()), cx);
-                        cx.notify();
-                    }),
-                ),
-            )
-            .child(
-                button(
-                    "draw-grid",
-                    "10,000 shapes",
-                    None,
-                    ButtonKind::Plain,
-                    &theme,
-                )
-                .on_click(cx.listener(|draw, _: &ClickEvent, _, cx| {
-                    draw.new_board("shapes-10000", grid(GRID_SHAPES), cx);
-                    cx.notify();
-                })),
-            )
-            .child(
-                button("draw-open", "Open", None, ButtonKind::Plain, &theme).on_click(cx.listener(
-                    |draw, _: &ClickEvent, _, cx| {
-                        draw.pick();
-                        cx.notify();
-                    },
-                )),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_size(px(FONT_BODY))
-                    .text_color(ink(&theme, T1))
-                    .child(title),
-            );
-        let problem = self.problem.clone().map(|problem| {
-            div()
-                .px_2()
-                .truncate()
-                .text_size(px(FONT_SMALL))
-                .text_color(theme.color(ColorToken::StatusDanger))
-                .child(problem)
-        });
-        let body = match (&self.picker, &self.board) {
-            (Some(boards), _) => self.rows(boards, &theme, cx),
-            (None, Some(_)) => div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .flex_col()
-                .child(self.tools(&theme, window, cx))
-                .children(self.styles(&theme, cx))
-                .child(
-                    div().flex_1().min_h_0().child(
-                        self.canvas
-                            .clone()
-                            .cached(StyleRefinement::default().size_full()),
-                    ),
-                )
-                .into_any_element(),
-            (None, None) => empty_state(
-                "draw-empty",
-                "No board open",
-                Some("Start a new board, or open one from your boards folder.".into()),
-                &[],
-                &[],
-                &theme,
-                |_, _, _| {},
-            )
-            .into_any_element(),
+        let width = Width::of(format!("draw-width-{}", cx.entity_id()), window, cx);
+        let narrow = width.get(cx).is_some_and(|width| width < px(DOCK_LEAST));
+        self.styles_open &= narrow;
+        let overlays: Vec<AnyElement> = match self.export {
+            Export::Idle => {
+                let mut overlays = vec![self.bottom(narrow, &theme, window, cx).into_any_element()];
+                if !narrow {
+                    overlays.extend(
+                        self.docked(&theme, window, cx)
+                            .map(IntoElement::into_any_element),
+                    );
+                }
+                overlays.extend(self.note(&theme, cx).map(IntoElement::into_any_element));
+                overlays.push(self.menu(&theme, cx));
+                overlays.extend(self.context_menu(&theme, cx));
+                overlays.extend(self.picker_sheet(&theme, cx));
+                overlays
+            }
+            Export::Asked | Export::Hidden => Vec::new(),
         };
         div()
+            .relative()
             .size_full()
-            .flex()
-            .flex_col()
             .min_w_0()
+            .child(width.probe())
+            .capture_key_down(cx.listener(Self::escape))
             .on_key_down(cx.listener(Self::key))
-            .child(header)
-            .children(problem)
-            .child(body)
+            .on_key_up(cx.listener(Self::key_up))
+            .child(
+                self.canvas
+                    .clone()
+                    .cached(StyleRefinement::default().size_full()),
+            )
+            .children(overlays)
     }
 }

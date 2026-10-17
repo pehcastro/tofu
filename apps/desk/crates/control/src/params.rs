@@ -89,7 +89,7 @@ params! {
     DrawBoard { board: String }
     DrawNode { key: String, label: String }
     DrawEdge { from: String, to: String, #[serde(default, skip_serializing_if = "Option::is_none")] label: Option<String> }
-    DrawDiagram { board: String, nodes: Vec<DrawNode>, edges: Vec<DrawEdge>, layout: Option<String> }
+    DrawDiagram { board: String, #[serde(default)] nodes: Vec<DrawNode>, #[serde(default)] edges: Vec<DrawEdge>, layout: Option<String>, flow: Option<String>, #[serde(alias = "flow-file")] flow_file: Option<String> }
     DrawShapes { board: String, shapes: Option<Vec<Value>>, #[serde(alias = "shapes-file")] shapes_file: Option<String> }
     DrawConnect { board: String, edges: Option<Vec<Value>>, #[serde(alias = "edges-file")] edges_file: Option<String> }
     DrawUpdate { board: String, patches: Option<Vec<Value>>, #[serde(alias = "patches-file")] patches_file: Option<String> }

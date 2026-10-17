@@ -1,14 +1,20 @@
+mod clip;
 mod diagram;
 mod edit;
 mod element;
+mod export;
+mod flow;
 mod layout;
 mod scene;
 
 use std::fmt;
 
-pub use diagram::{Edge, Graph, Line, Node, diagram, graph};
+pub use clip::{Landing, clip, paste, unclip};
+pub use diagram::{Edge, Graph, Line, Node, NodeKind, diagram, graph};
 pub use edit::{Color, Link, Patch, Shape, ShapeKind, add_shapes, bounds, connect, delete, update};
 pub use element::{ArrowEnd, BindMode, Binding, BoundElement, BoundKind, Element, Rect};
+pub use export::{html, mermaid, svg};
+pub use flow::{Direction, Flow, Look, flow, flow_scene};
 pub use layout::Layout;
 pub use scene::{Op, Scene};
 
@@ -30,6 +36,10 @@ pub enum DocError {
         len: usize,
     },
     Unwind(Box<DocError>, Box<DocError>),
+    Flow {
+        line: usize,
+        problem: String,
+    },
 }
 
 impl fmt::Display for DocError {
@@ -50,6 +60,8 @@ impl fmt::Display for DocError {
             DocError::Unwind(first, unwind) => {
                 write!(f, "{first}, and undoing the partial step failed: {unwind}")
             }
+            DocError::Flow { line: 0, problem } => write!(f, "flow: {problem}"),
+            DocError::Flow { line, problem } => write!(f, "flow line {line}: {problem}"),
         }
     }
 }
@@ -64,7 +76,8 @@ impl std::error::Error for DocError {
             | DocError::UnknownKey(_)
             | DocError::DuplicateKey(_)
             | DocError::NotAnArrow(_)
-            | DocError::OutOfRange { .. } => None,
+            | DocError::OutOfRange { .. }
+            | DocError::Flow { .. } => None,
         }
     }
 }

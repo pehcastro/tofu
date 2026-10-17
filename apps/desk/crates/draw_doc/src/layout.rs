@@ -435,15 +435,8 @@ mod tests {
     const KINDS: [Layout; 4] = [Layout::Layered, Layout::Tree, Layout::Grid, Layout::Radial];
 
     fn org_chart() -> Graph {
-        let node = |key: &str| Node {
-            key: key.to_owned(),
-            label: key.to_owned(),
-        };
-        let edge = |from: &str, to: &str| Edge {
-            from: from.to_owned(),
-            to: to.to_owned(),
-            label: None,
-        };
+        let node = |key: &str| Node::new(key, key);
+        let edge = |from: &str, to: &str| Edge::new(from, to, None);
         Graph {
             nodes: [
                 "ceo", "cto", "cfo", "coo", "eng", "platform", "security", "finance", "legal",
@@ -660,17 +653,16 @@ mod tests {
         let edges = generated(500);
         let graph = Graph {
             nodes: (0..500)
-                .map(|at| Node {
-                    key: format!("k{at}"),
-                    label: format!("node {at}"),
-                })
+                .map(|at| Node::new(format!("k{at}"), format!("node {at}")))
                 .collect(),
             edges: edges
                 .iter()
-                .map(|&(from, to)| Edge {
-                    from: format!("k{from}"),
-                    to: format!("k{to}"),
-                    label: (to == from + 5).then(|| "uses".to_owned()),
+                .map(|&(from, to)| {
+                    Edge::new(
+                        format!("k{from}"),
+                        format!("k{to}"),
+                        (to == from + 5).then(|| "uses".to_owned()),
+                    )
                 })
                 .collect(),
         };

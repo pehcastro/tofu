@@ -154,7 +154,7 @@ fn ids(scene: &Scene) -> HashSet<String> {
         .collect()
 }
 
-fn union(rects: impl Iterator<Item = Rect>) -> Option<Rect> {
+pub(crate) fn union(rects: impl Iterator<Item = Rect>) -> Option<Rect> {
     rects.reduce(|a, b| Rect {
         min_x: a.min_x.min(b.min_x),
         min_y: a.min_y.min(b.min_y),
