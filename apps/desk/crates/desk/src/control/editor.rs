@@ -136,13 +136,6 @@ mod enabled {
                 path,
                 regex,
             }) => {
-                if *regex {
-                    return Err((
-                        ErrorCode::BadParams,
-                        "editor.find --regex is not built: the desk carries no regex engine"
-                            .to_owned(),
-                    ));
-                }
                 if pattern.is_empty() {
                     return Err((
                         ErrorCode::BadParams,
@@ -154,7 +147,14 @@ mod enabled {
                     .map(|path| inside_project(path, cx))
                     .transpose()?;
                 let hits = on_editor(desk, cx, |editor, _, cx| {
-                    Ok(editor.find_text(pattern, only.as_deref(), FIND_MOST + 1, cx))
+                    editor
+                        .find_text(pattern, *regex, only.as_deref(), FIND_MOST + 1, cx)
+                        .map_err(|error| {
+                            (
+                                ErrorCode::BadParams,
+                                format!("{pattern} is not a valid pattern: {error}"),
+                            )
+                        })
                 })?;
                 if hits.len() > FIND_MOST {
                     return Err((

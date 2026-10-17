@@ -384,9 +384,19 @@ impl Heights {
     }
 }
 
-pub fn reveal_row(scroll: &UniformListScrollHandle, heights: &Heights, row: usize) {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reveal {
+    Minimal,
+    Centre,
+}
+
+pub fn reveal_row(scroll: &UniformListScrollHandle, heights: &Heights, row: usize, how: Reveal) {
     if !heights.is_measured() {
-        scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+        let strategy = match how {
+            Reveal::Minimal => ScrollStrategy::Nearest,
+            Reveal::Centre => ScrollStrategy::Center,
+        };
+        scroll.scroll_to_item(row, strategy);
         return;
     }
     let base = scroll.0.borrow().base_handle.clone();
@@ -394,12 +404,11 @@ pub fn reveal_row(scroll: &UniformListScrollHandle, heights: &Heights, row: usiz
     let seen = -offset.y;
     let view = base.bounds().size.height;
     let (top, bottom) = (heights.top(row), heights.top(row + 1) + px(CODE_PAD_TOP));
-    let to = if top < seen {
-        top
-    } else if bottom > seen + view {
-        bottom - view
-    } else {
-        return;
+    let to = match how {
+        Reveal::Centre => (top + px(CODE_PAD_TOP) + bottom - view) / 2.0,
+        Reveal::Minimal if top < seen => top,
+        Reveal::Minimal if bottom > seen + view => bottom - view,
+        Reveal::Minimal => return,
     };
     base.set_offset(point(offset.x, -to.max(px(0.0))));
 }
@@ -492,6 +501,7 @@ pub struct CodeView {
     stripe: Option<Stripe>,
     rows: RowMap,
     heights: Heights,
+    centre: Option<usize>,
 }
 
 pub fn code_view(
@@ -510,6 +520,7 @@ pub fn code_view(
         stripe: None,
         rows: RowMap::default(),
         heights: Heights::default(),
+        centre: None,
     }
 }
 
@@ -541,6 +552,11 @@ impl CodeView {
 
     pub fn heights(mut self, heights: Heights) -> Self {
         self.heights = heights;
+        self
+    }
+
+    pub fn centre(mut self, row: Option<usize>) -> Self {
+        self.centre = row;
         self
     }
 }
@@ -900,6 +916,27 @@ impl RenderOnce for CodeView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let count = self.rows.count(self.count);
         let base = self.scroll.0.borrow().base_handle.clone();
+        let placed = !self.heights.is_measured() || base.bounds().size.height > px(0.0);
+        let unplaced = match (self.centre, placed) {
+            (Some(row), true) => {
+                reveal_row(&self.scroll, &self.heights, row, Reveal::Centre);
+                None
+            }
+            (centre, _) => centre,
+        };
+        let view = window.current_view();
+        let centre_once_placed = unplaced.map(|row| {
+            let (scroll, heights) = (self.scroll.clone(), self.heights.clone());
+            canvas(
+                |_, _, _| {},
+                move |_, _, _, cx| {
+                    reveal_row(&scroll, &heights, row, Reveal::Centre);
+                    cx.notify(view);
+                },
+            )
+            .absolute()
+            .size_0()
+        });
         let source = RowSource {
             lines: self.lines,
             marks: self.marks.clone(),
@@ -978,6 +1015,7 @@ impl RenderOnce for CodeView {
             .when(self.rows.wrap.is_none(), |view| {
                 view.child(bar(Axis::Horizontal))
             })
+            .children(centre_once_placed)
     }
 }
 

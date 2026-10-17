@@ -22,7 +22,7 @@ use gpui::{
 
 use crate::components::chat::fail;
 use crate::components::code::{
-    Blank, CodeLine, FoldMark, Guides, Heading, Heights, Marks, Stripe, TAB_STOP, Wrap,
+    Blank, CodeLine, FoldMark, Guides, Heading, Heights, Marks, Reveal, Stripe, TAB_STOP, Wrap,
     code_origin, code_place, code_shape, code_view, reveal_row, wrap_width,
 };
 use crate::components::find::{FindBar, Matching, Replace, find_matching};
@@ -525,6 +525,7 @@ pub struct CodeEditor {
     parsed: markdown::Parsed,
     heights: Heights,
     heights_stale: Stale,
+    centring: bool,
     colour_stale: bool,
     frames: Option<Rc<RefCell<TypingFrames>>>,
     frames_flush: Option<Task<()>>,
@@ -698,6 +699,7 @@ impl CodeEditor {
             parsed: markdown::Parsed::default(),
             heights: Heights::default(),
             heights_stale: Stale::Whole,
+            centring: false,
             colour_stale: false,
             frames: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
             frames_flush: None,
@@ -879,7 +881,8 @@ impl CodeEditor {
     pub fn jump(&mut self, row: usize, col: usize, cx: &mut Context<Self>) {
         self.carets = vec![Caret::at(self.at_place((row, col)))];
         self.vim_clamp();
-        self.reveal();
+        self.unfold_carets();
+        self.centring = true;
         self.touch(cx);
     }
 
@@ -948,7 +951,12 @@ impl CodeEditor {
             self.vim_clamp();
         }
         if at_end {
-            reveal_row(&self.scroll, &self.heights, self.row_of(last));
+            reveal_row(
+                &self.scroll,
+                &self.heights,
+                self.row_of(last),
+                Reveal::Minimal,
+            );
         }
         let fade = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(STRIPE_SOLID).await;
@@ -2172,15 +2180,18 @@ impl CodeEditor {
 
     fn reveal(&mut self) {
         self.unfold_carets();
-        if let Some(caret) = self.carets.last()
-            && let Ok(line) = self.buffer.char_to_line(caret.head)
-        {
-            let row = match self.wrapped() {
-                Some(wrap) => self.visual(caret.head, wrap).map_or(line, |(row, _)| row),
-                None => self.row_of(line),
-            };
-            reveal_row(&self.scroll, &self.heights, row);
+        if let Some(row) = self.caret_row() {
+            reveal_row(&self.scroll, &self.heights, row, Reveal::Minimal);
         }
+    }
+
+    fn caret_row(&self) -> Option<usize> {
+        let head = self.carets.last()?.head;
+        let line = self.buffer.char_to_line(head).ok()?;
+        Some(match self.wrapped() {
+            Some(wrap) => self.visual(head, wrap).map_or(line, |(row, _)| row),
+            None => self.row_of(line),
+        })
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -3277,6 +3288,9 @@ impl Render for CodeEditor {
         let passes = Instant::now();
         self.rewrap(cx);
         self.remeasure();
+        let centre = std::mem::take(&mut self.centring)
+            .then(|| self.caret_row())
+            .flatten();
         let passes = ms_since(passes);
         self.active_guide = self.guides.then(|| self.guide_block()).flatten();
         let paints = self.paints.clone();
@@ -3330,7 +3344,8 @@ impl Render for CodeEditor {
         .shown(self.shown_lines.clone())
         .marks(self.lit_marks(&entity.downgrade()))
         .stripe(self.stripe(window))
-        .heights(self.heights.clone());
+        .heights(self.heights.clone())
+        .centre(centre);
         let reloaded = self.wrote.as_mut().and_then(|wrote| wrote.unlogged.take());
         let failure = self.failure.clone().map(|(what, error)| {
             div()

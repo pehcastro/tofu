@@ -21,6 +21,7 @@ use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
 use desk_ui::components::code_editor::{Asked, CodeEditor, Highlight, Jump, Way, open_phase};
 use desk_ui::components::empty::empty_state;
+use desk_ui::components::find::{Matching, compile};
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::history::inline_blame;
@@ -809,7 +810,7 @@ impl Editor {
     ) {
         self.open_path(path.to_path_buf(), Open::Pinned, window, cx);
         if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
-            jump_once_laid_out(code.clone(), (row, col), window, cx);
+            code.update(cx, |code, cx| code.jump(row, col, cx));
         }
     }
 
@@ -881,10 +882,20 @@ impl Editor {
     pub(crate) fn find_text(
         &self,
         pattern: &str,
+        regex: bool,
         only: Option<&Path>,
         most: usize,
         cx: &App,
-    ) -> Vec<Hit> {
+    ) -> Result<Vec<Hit>, String> {
+        let matching = Matching {
+            case: true,
+            whole: false,
+            regex,
+        };
+        let compiled = regex
+            .then(|| compile(pattern, matching))
+            .transpose()
+            .map_err(|error| error.to_string())?;
         let mut paths = match only {
             Some(path) => vec![path.to_path_buf()],
             None => files_under(&self.folder.listing, |_| true),
@@ -901,7 +912,15 @@ impl Editor {
                 },
             };
             for (line, row) in text.lines().enumerate() {
-                for (at, _) in row.match_indices(pattern) {
+                let starts: Vec<usize> = match &compiled {
+                    Some(found) => found
+                        .find_iter(row)
+                        .filter(|hit| !hit.is_empty())
+                        .map(|hit| hit.start())
+                        .collect(),
+                    None => row.match_indices(pattern).map(|(at, _)| at).collect(),
+                };
+                for at in starts {
                     let col = row.get(..at).map_or(0, |before| before.chars().count());
                     hits.push(Hit {
                         path: path.clone(),
@@ -910,12 +929,12 @@ impl Editor {
                         text: row.to_owned(),
                     });
                     if hits.len() >= most {
-                        return hits;
+                        return Ok(hits);
                     }
                 }
             }
         }
-        hits
+        Ok(hits)
     }
 
     fn reread(&mut self, path: PathBuf, seen: Instant, cx: &mut Context<Self>) {
@@ -2853,20 +2872,6 @@ fn described(marks: &Marks) -> String {
         })
         .collect();
     lines.join(", ")
-}
-
-fn jump_once_laid_out(
-    code: Entity<CodeEditor>,
-    (row, col): (usize, usize),
-    window: &mut Window,
-    cx: &mut App,
-) {
-    code.update(cx, |code, cx| code.jump(row, col, cx));
-    window.on_next_frame(move |window, _| {
-        window.on_next_frame(move |_, cx| {
-            code.update(cx, |code, cx| code.jump(row, col, cx));
-        });
-    });
 }
 
 pub(crate) fn language(code: &CodeEditor) -> String {

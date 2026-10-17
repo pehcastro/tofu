@@ -6,7 +6,7 @@ use desk_ui::components::palette::{Palette, PaletteDetail, PaletteEntry, Palette
 use gpui::{Context, Entity, SharedString, Subscription, Task, Window};
 
 use super::listing::Listing;
-use super::{Editor, Hit, Open, Page, files_under, jump_once_laid_out};
+use super::{Editor, Hit, Open, Page, files_under};
 
 const FIND_MOST: usize = 500;
 const FIND_LARGEST: u64 = 1024 * 1024;
@@ -46,8 +46,7 @@ impl Surfaces {
         let goto = worded(GOTO_PROMPT, GOTO_PROMPT, window, cx);
         let quick = worded(QUICK_PROMPT, QUICK_NONE, window, cx);
         let find = worded(FIND_PROMPT, FIND_NONE, window, cx);
-        let submitted =
-            cx.listener(|editor, query: &str, window, cx| editor.go_to_line(query, window, cx));
+        let submitted = cx.listener(|editor, query: &str, _, cx| editor.go_to_line(query, cx));
         let opened =
             cx.listener(|editor, id: &SharedString, window, cx| editor.quick_pick(id, window, cx));
         let found =
@@ -116,7 +115,7 @@ impl Editor {
         }));
     }
 
-    fn go_to_line(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
+    fn go_to_line(&mut self, query: &str, cx: &mut Context<Self>) {
         let Ok(line) = query.trim().parse::<usize>() else {
             return eprintln!("desk: editor goto refused {query:?}, not a line number");
         };
@@ -124,7 +123,7 @@ impl Editor {
             return eprintln!("desk: editor goto {line} with no file open");
         };
         let last = code.read(cx).buffer().line_count().max(1);
-        jump_once_laid_out(code.clone(), (line.clamp(1, last) - 1, 0), window, cx);
+        code.update(cx, |code, cx| code.jump(line.clamp(1, last) - 1, 0, cx));
         eprintln!("desk: editor goto {line}");
     }
 
