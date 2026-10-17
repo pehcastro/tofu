@@ -37,6 +37,12 @@ func (l *lane) running() bool {
 	return running
 }
 
+func (l *lane) asks(asking AskingMode) {
+	if asking != "" {
+		l.host.SetAsking(asking)
+	}
+}
+
 func (s *server) first() *lane {
 	return &lane{host: s.Host, release: s.Release, items: &s.items, pending: s.pending, asked: s.asked, status: &s.status}
 }
@@ -134,14 +140,12 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 }
 
 func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
-	if p.Asking != "" {
-		l.host.SetAsking(p.Asking)
-	}
 	if p.Session == "" {
 		id, err := l.host.OpenFresh()
 		if err != nil {
 			return nil, busy(err)
 		}
+		l.asks(p.Asking)
 		s.mu.Lock()
 		l.items.session, l.replay = id, []HistoryLine{}
 		s.mu.Unlock()
@@ -152,11 +156,13 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		return nil, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	chat, err := l.host.Resume(carry)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, busy(err)
 	}
+	defer l.asks(p.Asking)
+	defer s.mu.Unlock()
 	if store, err := session.OpenIn(s.Host.dir); err == nil {
 		if side, found, _ := store.Side(carry.Session); found && side.Model != "" {
 			asking, pick := l.host.Settings()
@@ -181,9 +187,7 @@ func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Asking != "" {
-		l.host.SetAsking(p.Asking)
-	}
+	l.asks(p.Asking)
 	read := newItems(carry.Session)
 	lines := read.all(resumedChat(carry, s.Host.dir))
 	replay := freeze(lines)
