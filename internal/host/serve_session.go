@@ -158,7 +158,7 @@ func (s *server) shellsNow() []ShellNow {
 
 func (s *server) set(p SessionSetParams) (any, error) {
 	focus := s.focus()
-	asking, picked := focus.host.Settings()
+	_, picked := focus.host.Settings()
 	pick, err := s.chosen(picked, p.ModelPick)
 	if err != nil {
 		return nil, err
@@ -166,13 +166,11 @@ func (s *server) set(p SessionSetParams) (any, error) {
 	if err := checkAsking(p.Asking); err != nil {
 		return nil, err
 	}
-	asking = cmp.Or(p.Asking, asking)
-	focus.host.SetAsking(asking)
-	focus.host.Choose(pick)
-	s.mu.Lock()
-	id := focus.items.identity("", "settings")
-	s.mu.Unlock()
-	s.box.push(merged("session.settings", "", &SessionSettings{Identity: id, Asking: asking, Pick: s.shown(pick)}))
+	if p.ModelPick == (ModelPick{}) {
+		pick = Pick{}
+	}
+	focus.host.Settle(p.Asking, pick)
+	s.settingsShown(focus)
 	return Ack{OK: true}, nil
 }
 

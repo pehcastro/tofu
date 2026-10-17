@@ -45,6 +45,7 @@ const (
 	followRemember  followOp = "remember"
 	followCron      followOp = "cron"
 	followRoster    followOp = "roster"
+	followSettings  followOp = "settings"
 )
 
 type followAsk struct {
@@ -57,6 +58,7 @@ type followAsk struct {
 	Scope    memory.Scope `json:",omitempty"`
 	By       string
 	Pick     Pick
+	Asking   AskingMode     `json:",omitempty"`
 	Images   []pendingImage `json:",omitempty"`
 	Command  string         `json:",omitempty"`
 	Stopped  bool           `json:",omitempty"`
@@ -75,8 +77,14 @@ type followReply struct {
 }
 
 type followLine struct {
-	Event *Event       `json:",omitempty"`
-	Reply *followReply `json:",omitempty"`
+	Event    *Event        `json:",omitempty"`
+	Reply    *followReply  `json:",omitempty"`
+	Settings *heldSettings `json:",omitempty"`
+}
+
+type heldSettings struct {
+	Asking AskingMode
+	Pick   Pick
 }
 
 type audience struct {
@@ -89,6 +97,7 @@ type audience struct {
 	partial  string
 	asks     []Event
 	steers   []Event
+	held     heldSettings
 }
 
 type link struct {
@@ -111,6 +120,7 @@ type following struct {
 	waiting map[int]chan followReply
 	typed   string
 	unsent  string
+	chose   Pick
 }
 
 func linked(conn net.Conn) link { return link{conn: conn, gone: make(chan struct{})} }
@@ -137,7 +147,7 @@ func (h *Host) openAudience(store *session.Store, id string, a *audience) {
 	}
 	a.mu.Lock()
 	moved := a.listener
-	a.listener = listener
+	a.listener, a.held = listener, heldSettings{Asking: h.asking, Pick: h.pick}
 	a.mu.Unlock()
 	if moved != nil {
 		_ = moved.Close()
@@ -158,6 +168,9 @@ func (h *Host) admit(a *audience, listener net.Listener) {
 			a.mu.Unlock()
 			_ = conn.Close()
 			continue
+		}
+		if line, err := json.Marshal(followLine{Settings: &a.held}); err == nil {
+			s.send(line)
 		}
 		for _, event := range h.catchUp(a) {
 			if line, err := json.Marshal(followLine{Event: &event}); err == nil {
@@ -207,10 +220,21 @@ func (a *audience) tell(event Event) {
 	case EventSteerQueued:
 		a.steers = append(a.steers, event)
 	}
+	a.broadcast(followLine{Event: &event})
+}
+
+func (a *audience) settle(held heldSettings) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.held = held
+	a.broadcast(followLine{Settings: &held})
+}
+
+func (a *audience) broadcast(said followLine) {
 	if len(a.seats) == 0 {
 		return
 	}
-	line, err := json.Marshal(followLine{Event: &event})
+	line, err := json.Marshal(said)
 	if err != nil {
 		return
 	}
@@ -359,6 +383,8 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		h.DropSteering()
 	case followAttach:
 		a.attach(s)
+	case followSettings:
+		h.Settle(ask.Asking, ask.Pick)
 	case followRan:
 		h.Ran(ask.Command, ask.Text, ask.Stopped)
 	case followRemember:
@@ -402,12 +428,16 @@ func (h *Host) dialHolder(id string, refused error) (*following, error) {
 }
 
 func (h *Host) follow(f *following, id string) {
+	settled := followAsk{Op: followSettings, Asking: h.asking, Pick: h.pick}
 	h.following.Store(f)
 	h.readOnly = f.holder
 	safe.Go(h.report, "follow", func() { h.heed(f) })
 	_ = h.loadCron(id)
 	if os.Getenv(HolderVariable) != id {
-		safe.Go(h.report, "follow attach", func() { f.ask(followAsk{Op: followAttach}) })
+		safe.Go(h.report, "follow attach", func() {
+			f.ask(followAsk{Op: followAttach})
+			f.ask(settled)
+		})
 	}
 }
 
@@ -487,6 +517,14 @@ func (f *following) send(pick Pick, task string, images []pendingImage) bool {
 	return reply.OK
 }
 
+func (f *following) chosen(pick Pick) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	moved := f.chose != pick
+	f.chose = pick
+	return moved
+}
+
 func (f *following) echoes(event Event) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -506,6 +544,11 @@ func (h *Host) heed(f *following) {
 		}
 		var line followLine
 		_ = json.Unmarshal(raw, &line)
+		if held := line.Settings; held != nil {
+			h.mu.Lock()
+			h.asking, h.pick = held.Asking, held.Pick
+			h.mu.Unlock()
+		}
 		if line.Reply != nil && line.Reply.Refused != "" {
 			h.note("process " + strconv.Itoa(f.holder.PID) + " could not read what this tofu sent, so it did not run: " + line.Reply.Refused)
 		}

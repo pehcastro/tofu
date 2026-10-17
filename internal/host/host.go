@@ -219,9 +219,36 @@ func (h *Host) Carried() []llm.Message {
 }
 
 func (h *Host) Choose(pick Pick) {
+	f := h.following.Load()
+	switch {
+	case f == nil:
+		h.Settle("", pick)
+	case f.chosen(pick):
+		safe.Go(h.report, "follow pick", func() { h.Settle("", pick) })
+	}
+}
+
+func (h *Host) SetAsking(asking AskingMode) { h.Settle(asking, Pick{}) }
+
+func (h *Host) Settle(asking AskingMode, pick Pick) {
 	h.mu.Lock()
-	h.pick = pick
+	h.settle(asking, pick)
 	h.mu.Unlock()
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followSettings, Asking: asking, Pick: pick})
+	}
+}
+
+func (h *Host) settle(asking AskingMode, pick Pick) {
+	was := heldSettings{Asking: h.asking, Pick: h.pick}
+	h.asking = cmp.Or(asking, h.asking)
+	if pick != (Pick{}) {
+		h.pick = pick
+	}
+	now := heldSettings{Asking: h.asking, Pick: h.pick}
+	if a := h.audience.Load(); a != nil && now != was {
+		a.settle(now)
+	}
 }
 
 func (h *Host) Send(pick Pick, task string) bool {
@@ -246,7 +273,7 @@ func (h *Host) Send(pick Pick, task string) bool {
 	if h.running {
 		return false
 	}
-	h.pick = Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort}
+	h.settle("", Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort})
 	h.begin(pick, task, Origin{Kind: OriginPerson})
 	return true
 }
@@ -293,12 +320,6 @@ func (h *Host) Turn() (string, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.turn, h.running
-}
-
-func (h *Host) SetAsking(asking AskingMode) {
-	h.mu.Lock()
-	h.asking = asking
-	h.mu.Unlock()
 }
 
 func (h *Host) Settings() (AskingMode, Pick) {

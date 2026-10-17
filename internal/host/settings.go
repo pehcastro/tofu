@@ -21,8 +21,9 @@ type SettingsChanged struct {
 type settingsFiles map[SettingScope]map[string]string
 
 type settingsSeen struct {
-	mu    sync.Mutex
-	files settingsFiles
+	mu      sync.Mutex
+	files   settingsFiles
+	session heldSettings
 }
 
 func readSettingsFiles(dir string) settingsFiles {
@@ -102,6 +103,29 @@ func (s *server) watchSettings(quit <-chan struct{}) {
 			return
 		case <-every.C:
 			s.settingsMoved()
+			s.sessionSettingsMoved()
 		}
 	}
+}
+
+func (s *server) sessionSettingsMoved() {
+	focus := s.focus()
+	asking, pick := focus.host.Settings()
+	s.seen.mu.Lock()
+	moved := s.seen.session != heldSettings{Asking: asking, Pick: pick}
+	s.seen.mu.Unlock()
+	if moved {
+		s.settingsShown(focus)
+	}
+}
+
+func (s *server) settingsShown(focus *lane) {
+	asking, pick := focus.host.Settings()
+	s.seen.mu.Lock()
+	s.seen.session = heldSettings{Asking: asking, Pick: pick}
+	s.seen.mu.Unlock()
+	s.mu.Lock()
+	id := focus.items.identity("", "settings")
+	s.mu.Unlock()
+	s.box.push(merged("session.settings", "", &SessionSettings{Identity: id, Asking: asking, Pick: s.shown(pick)}))
 }
