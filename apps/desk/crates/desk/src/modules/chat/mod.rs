@@ -20,9 +20,10 @@ use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
     Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
     PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionHistory,
-    SessionHistoryParams, SessionInfo, SessionListParams, SessionOpenParams, SessionOpenResult,
-    SessionParams, SessionRenameParams, SessionSetParams, SessionState, SessionTrace, ShellParams,
-    StatusListParams, TurnCompleted, TurnParams, TurnSendParams, request, subagent,
+    SessionHistoryParams, SessionHolder, SessionInfo, SessionListParams, SessionOpenParams,
+    SessionOpenResult, SessionParams, SessionRenameParams, SessionSetParams, SessionState,
+    SessionTrace, ShellParams, StatusListParams, TurnCompleted, TurnParams, TurnSendParams,
+    request, subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
@@ -32,7 +33,6 @@ use desk_ui::components::composer::{Composer, picker};
 use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
 use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side};
-use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::components::transcript::{Transcript, transcript};
 use desk_ui::components::tree::EditedFile;
 use desk_ui::live::ActiveTheme;
@@ -67,9 +67,6 @@ const DOCK_INSET: f32 = 16.0;
 const OTHER: &str = "Type your own answer";
 const HISTORY_PAGE: i64 = 200;
 const WORKING: &str = "working";
-const ASKING_FIXED: &str =
-    "the ask mode is set when a session opens; start a new session to change it";
-const FIXED_MODE: f32 = 0.5;
 const YES_NO: [&str; 2] = ["yes", "no"];
 const DECISIONS: [Decision; 3] = [
     Decision::AllowOnce,
@@ -78,6 +75,13 @@ const DECISIONS: [Decision; 3] = [
 ];
 
 type Opened = Result<(Bridge, InitializeResult), BridgeError>;
+
+fn holder(held: Option<&SessionHolder>) -> String {
+    held.map_or_else(
+        || "this desk's tofu".to_owned(),
+        |held| format!("tofu pid {} since {}", held.pid, held.since),
+    )
+}
 
 actions!(desk, [Find]);
 
@@ -743,16 +747,35 @@ impl Chat {
         self.painting = session.clone().map(|id| (id, asked));
         self.history = session.clone().map(|id| History::new(id, asked));
         self.ask_history(None, cx);
+        let wanted = session.clone().unwrap_or_default();
         let params = SessionOpenParams {
             asking: Some(self.asking.clone()),
             session,
             replay: Some(0),
             ..SessionOpenParams::default()
         };
-        self.call::<request::SessionOpen>(&params, cx, move |chat, opened, cx| {
+        self.request_typed::<request::SessionOpen>(&params, cx, move |chat, reply, cx| {
+            let opened = match reply {
+                Ok(opened) => opened,
+                Err(error) if error.turn_running() => {
+                    return eprintln!("desk: session.open waits, a turn is running: {error}");
+                }
+                Err(error) => {
+                    if let Some(held) = error.held_by() {
+                        eprintln!(
+                            "desk: session attach {wanted} held by {}, which shares nothing, so tofu refused it",
+                            holder(Some(&held))
+                        );
+                    }
+                    eprintln!("desk: session.open failed: {error:?}");
+                    return chat.fail(error.to_string(), cx);
+                }
+            };
             eprintln!(
-                "desk: session {} opened, fresh {}",
-                opened.session, opened.fresh
+                "desk: session attach {} held by {}, fresh {}",
+                opened.session,
+                holder(opened.held_by.as_ref()),
+                opened.fresh
             );
             if let Some(at) = chat.reopening.take() {
                 eprintln!(
@@ -1132,6 +1155,9 @@ impl Chat {
                     settings.pick.model.as_deref().unwrap_or("none")
                 );
                 self.pick = settings.pick.clone();
+                if let Some(asking) = &settings.asking {
+                    self.asking = asking.clone();
+                }
                 self.fill_models(cx);
             }
             Event::Notification(
@@ -1894,18 +1920,31 @@ impl Chat {
     }
 
     fn flip(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.opening, Opening::Closed) {
-            return eprintln!(
-                "desk: asking stays {} once the session opens: tofu serve has no live switch",
-                String::from(self.asking.clone())
-            );
+        if matches!(self.opening, Opening::Pending) {
+            return eprintln!("desk: asking waits for the session to open");
         }
-        self.asking = match self.asking {
+        let was = self.asking.clone();
+        self.asking = match was {
             SessionAsking::Auto => SessionAsking::Ask,
             SessionAsking::Ask | SessionAsking::Unknown(_) => SessionAsking::Auto,
         };
-        eprintln!("desk: asking {}", String::from(self.asking.clone()));
+        let asking = String::from(self.asking.clone());
+        eprintln!("desk: asking {asking}");
         cx.notify();
+        if matches!(self.opening, Opening::Closed) {
+            return;
+        }
+        let params = SessionSetParams {
+            asking: Some(self.asking.clone()),
+            ..SessionSetParams::default()
+        };
+        self.request::<request::SessionSet>(&params, cx, move |chat, reply, cx| match reply {
+            Ok(ack) => eprintln!("desk: session.set asking {asking} answered ok {}", ack.ok),
+            Err(error) => {
+                chat.asking = was;
+                chat.fail(format!("session.set asking {asking}: {error}"), cx);
+            }
+        });
     }
 
     fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
@@ -2169,19 +2208,6 @@ impl Render for Chat {
             .is_some_and(|shown| shown.asking.waiting());
         let mode = picker("chat-asking", String::from(self.asking.clone()), &theme)
             .on_click(cx.listener(|chat, _: &ClickEvent, _, cx| chat.flip(cx)));
-        let mode = match self.opening {
-            Opening::Closed => mode.into_any_element(),
-            Opening::Pending | Opening::Open(_) => tooltip(
-                "chat-asking-tip",
-                mode.opacity(FIXED_MODE),
-                Edge::Frame,
-                ASKING_FIXED,
-                &theme,
-                window,
-                cx,
-            )
-            .into_any_element(),
-        };
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let pick = cx.listener(|chat, at: &usize, window, cx| chat.pick(*at, window, cx));
         let unmention = cx.listener(|chat, at: &usize, _, cx| chat.remove_mention(*at, cx));

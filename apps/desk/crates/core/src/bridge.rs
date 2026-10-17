@@ -16,7 +16,7 @@ use serde_json::Value;
 use crate::limits;
 use crate::protocol::{
     InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId, ServerRequest,
-    request,
+    SessionHolder, request,
 };
 
 #[cfg(windows)]
@@ -95,10 +95,12 @@ impl fmt::Display for BridgeError {
     }
 }
 
+const SESSION_HELD: i64 = -32001;
+
 const REFUSAL_SENTENCES: [(i64, &str); 3] = [
     (
-        -32001,
-        "This session is busy. Make sure it is not open in another tofu window or command line.",
+        SESSION_HELD,
+        "Another tofu holds this session and does not share it, so the desk shows its history and cannot follow it live.",
     ),
     (
         -32700,
@@ -131,6 +133,17 @@ const TURN_RUNNING: &str = "a turn is running";
 impl BridgeError {
     pub fn turn_running(&self) -> bool {
         matches!(self, BridgeError::Refused(refusal) if refusal.code == -32000 && refusal.message.starts_with(TURN_RUNNING))
+    }
+
+    pub fn held_by(&self) -> Option<SessionHolder> {
+        match self {
+            BridgeError::Refused(Refusal {
+                code: SESSION_HELD,
+                data: Some(data),
+                ..
+            }) => serde_json::from_value(data.clone()).ok(),
+            _ => None,
+        }
     }
 }
 
