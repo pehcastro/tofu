@@ -42,7 +42,7 @@ Use the space up to the ruler, and give it by value:
 3. Then findings, open questions and tofu's replies.
 4. Least of all, tool steps: what was done to what, and the outcome.
 
-Avoid omissions. Name a minor item in a word or two rather than drop it: an absent item can never be found. Copy names, numbers, ids, paths and errors exactly. Tag each item with its kind ("user: ...; lead: ..."), and credit quoted text to its real author. Never make anything look further along than it was. If told the line is too long, shorten it. Non-ASCII characters cost 2-4 bytes. Never write an em dash: use a colon, a comma or parentheses.`
+Avoid omissions. Name a minor item in a word or two rather than drop it: an absent item can never be found. Copy names, numbers, ids, paths and errors exactly. Tag each item with its kind ("user: ...; lead: ..."), and credit quoted text to its real author. Never make anything look further along than it was. Non-ASCII characters cost 2-4 bytes. Never write an em dash: use a colon, a comma or parentheses.`
 
 const compactionExample = `user: rename --fast to --quick, keep --fast working for one release, ask before touching config.toml; lead: renamed in cli/flags.go, --fast prints a warning; work: [Tester] TestFlags failed (want 3 flags, got 4), fixed the table, not the code; user: commit it; lead: committed 4f2a9c1; open: the warning wording`
 
@@ -260,14 +260,28 @@ func (m memoryModel) compactor(ask turn.RecordedAsk) memtree.Compact {
 	}
 	var mu sync.Mutex
 	chatsBeingWritten := map[string]chan struct{}{}
-	ruler := strings.Repeat("-", len(compactionExample))
+	system := fmt.Sprintf("%s\n\nYour line is about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\nYour line has at most %d words: rewrite <input> shorter, never join or copy it.",
+		compactionSystem, len(compactionExample), konst.MemtreeLineBytes, strings.Repeat("-", len(compactionExample)), compactionExample, len(strings.Fields(compactionExample)))
+	chatStep := konst.MemtreeCompactionsAtOnce * konst.MemtreeLineBytes
 	return func(ctx context.Context, before, left, right string) (string, error) {
+		messages := []llm.Message{{Role: llm.RoleSystem, Content: system}, {Role: llm.RoleUser, Content: "<chat>\n"}}
+		cachedChat, offset, sharedEnd := 0, 0, len(before)/chatStep*chatStep
+		for line := range strings.Lines(before) {
+			offset += len(line)
+			message := llm.Message{Role: llm.RoleUser, Content: line}
+			if offset <= sharedEnd {
+				cachedChat = offset
+			} else {
+				message.Origin.Source = anthropic.SourceAfterTheCachedPrefix
+			}
+			messages = append(messages, message)
+		}
 		mu.Lock()
 		account, err := m.held.forTurn().Pick(ctx)
-		chatCached, anotherCallWritesThisChat := chatsBeingWritten[before]
+		chatCached, anotherCallWritesThisChat := chatsBeingWritten[before[:cachedChat]]
 		if err == nil && !anotherCallWritesThisChat {
 			chatCached = make(chan struct{})
-			chatsBeingWritten[before] = chatCached
+			chatsBeingWritten[before[:cachedChat]] = chatCached
 		}
 		mu.Unlock()
 		if err != nil {
@@ -284,43 +298,28 @@ func (m memoryModel) compactor(ask turn.RecordedAsk) memtree.Compact {
 		if right != "" {
 			task, input = "merge these two adjacent lines", left+"\n"+right
 		}
-		asked := fmt.Sprintf("\n</chat>\n\nCompaction: %s into one line of about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\n<input>\n%s\n</input>\n<input> is %d words. Your line has at most %d: rewrite it shorter, never join or copy it.",
-			task, len(compactionExample), konst.MemtreeLineBytes, ruler, compactionExample, input, len(strings.Fields(input)), len(strings.Fields(compactionExample)))
-		messages := []llm.Message{{Role: llm.RoleSystem, Content: compactionSystem}, {Role: llm.RoleUser, Content: "<chat>\n"}}
-		for line := range strings.Lines(before) {
-			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: line})
-		}
-		messages = append(messages, afterTheCachedPrefix(llm.RoleUser, asked))
-		asking := func(why string, messages []llm.Message) (string, error) {
-			decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, m.wire, account.Model, llm.Request{Messages: messages})
-			return compactionLine(decision, err)
-		}
-		line, err := asking("memory model: "+task, messages)
+		messages = append(messages, llm.Message{Role: llm.RoleUser, Origin: llm.Origin{Source: anthropic.SourceAfterTheCachedPrefix},
+			Content: fmt.Sprintf("\n</chat>\n\nCompaction: %s into one line.\n<input>\n%s\n</input>\n<input> is %d words.", task, input, len(strings.Fields(input)))})
+		decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), "memory model: "+task, m.wire, account.Model, llm.Request{Messages: messages})
 		if !anotherCallWritesThisChat {
 			mu.Lock()
-			delete(chatsBeingWritten, before)
+			delete(chatsBeingWritten, before[:cachedChat])
 			close(chatCached)
 			mu.Unlock()
 		}
-		if err != nil || len(line) <= konst.MemtreeLineBytes {
-			return line, err
+		if err != nil {
+			return "", err
 		}
-		retry := fmt.Sprintf("Too long: your line is %d bytes, over the %d-byte limit. Write the whole line again for the same <input>, cutting just enough of the least valuable items to fit before this cut:\n%s| <- LIMIT", len(line), konst.MemtreeLineBytes, line[:konst.MemtreeLineBytes])
-		return asking("memory model: the same line again, under the limit", append(messages, afterTheCachedPrefix(llm.RoleAssistant, line), afterTheCachedPrefix(llm.RoleUser, retry)))
+		line := strings.TrimSpace(decision.Content)
+		if decision.Outcome != llm.OutcomeMessage || line == "" {
+			return "", fmt.Errorf("the memory model wrote no line: outcome %s, refusal %q", decision.Outcome, decision.Refusal)
+		}
+		if len(line) <= konst.MemtreeLineBytes {
+			return line, nil
+		}
+		if cut := strings.LastIndexByte(line[:konst.MemtreeLineBytes+1], ' '); cut > 0 {
+			line = strings.TrimRight(line[:cut], ",;: ")
+		}
+		return line, nil
 	}
-}
-
-func afterTheCachedPrefix(role llm.Role, text string) llm.Message {
-	return llm.Message{Role: role, Content: text, Origin: llm.Origin{Source: anthropic.SourceAfterTheCachedPrefix}}
-}
-
-func compactionLine(decision llm.Decision, err error) (string, error) {
-	if err != nil {
-		return "", err
-	}
-	line := strings.TrimSpace(decision.Content)
-	if decision.Outcome != llm.OutcomeMessage || line == "" {
-		return "", fmt.Errorf("the memory model wrote no line: outcome %s, refusal %q", decision.Outcome, decision.Refusal)
-	}
-	return line, nil
 }
