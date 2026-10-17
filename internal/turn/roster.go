@@ -52,6 +52,7 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 	}
 	runs := recordedSubAgents(sessionChain(lineage))
 	stopErr := endStoppedByTheRestart(store, runs)
+	store.ForgetRead()
 	roster.RecallWith(spawnedIn(store, lineage))
 	for _, run := range runs {
 		agentID, restored := run.agent.ID, run.agent
@@ -121,13 +122,16 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 }
 
 func spawnedIn(store *session.Store, lineage []session.Generation) func() []subagent.SubAgent {
+	var unread []string
+	for _, generation := range lineage {
+		if generation.Unread {
+			unread = append(unread, generation.Header.ID)
+		}
+	}
 	return func() []subagent.SubAgent {
 		var spawned []subagent.SubAgent
-		for _, generation := range lineage {
-			if !generation.Unread {
-				continue
-			}
-			events, _ := store.Spawns(generation.Header.ID)
+		for _, id := range unread {
+			events, _ := store.Spawns(id)
 			for _, event := range events {
 				var body session.SpawnBody
 				if json.Unmarshal(event.Body, &body) == nil {
