@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"tofu/internal/rule"
 )
 
 type Epic struct {
@@ -61,7 +63,26 @@ func (s Store) Epics(key string) ([]Epic, error) {
 }
 
 func (s Store) SaveEpic(key string, epic Epic) error {
-	return s.savePlan(key, "epics", epic.ID, epic.Text, "title", epic.Title, "done", fmt.Sprint(epic.Done), "milestone", epic.Milestone)
+	epics, _ := s.Epics(key)
+	at := slices.IndexFunc(epics, func(e Epic) bool { return e.ID == epic.ID })
+	m := Managed{Local: Local{Store: s}}
+	planned := subject{event: rule.HookEpicCreate, key: key, ticket: Ticket{Front: Front{Title: epic.Title, Epic: epic.ID}}}
+	if at < 0 {
+		if err := m.gate(&planned); err != nil {
+			return err
+		}
+	}
+	if err := s.savePlan(key, "epics", epic.ID, epic.Text, "title", epic.Title, "done", fmt.Sprint(epic.Done), "milestone", epic.Milestone); err != nil {
+		return err
+	}
+	switch {
+	case at < 0:
+		return m.after(planned)
+	case epic.Done && !epics[at].Done && epic.Milestone != "" && !slices.ContainsFunc(epics, func(e Epic) bool { return e.ID != epic.ID && e.Milestone == epic.Milestone && !e.Done }):
+		planned.event, planned.ticket.Title = rule.HookMilestoneReach, epic.Milestone
+		return m.after(planned)
+	}
+	return nil
 }
 
 func (s Store) Milestones(key string) ([]Milestone, error) {

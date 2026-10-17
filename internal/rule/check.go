@@ -29,8 +29,6 @@ func Builtins() map[string]Checker {
 		"test_assertion":      {Subject: SubjectGoPackage, Check: checkTestAssertion},
 		"test_mock_boundary":  {Subject: SubjectGoPackage, Check: checkTestMockBoundary},
 		"test_boundary_cases": {Subject: SubjectGoPackage, Check: checkTestBoundaryCases},
-		CheckerCommand:        {Subject: SubjectBoardEvent, Check: checkCommand},
-		CheckerPersonApproves: {Subject: SubjectBoardEvent, Check: checkPersonApproves},
 	}
 }
 
@@ -39,28 +37,22 @@ const (
 	CheckerPersonApproves = "person_approves"
 )
 
-func checkCommand(r Rule, a Artifact) ([]Finding, error) {
-	be, ok := a.(BoardEvent)
-	if !ok {
-		return nil, artifactMismatch(SubjectBoardEvent, a)
-	}
-	argv := commandWords(r.Command)
+func RunCommand(command, ticketPath string, env []string) (string, bool, error) {
+	argv := commandWords(command)
 	for i := range argv {
-		argv[i] = strings.ReplaceAll(argv[i], "{ticket}", be.Path)
+		argv[i] = strings.ReplaceAll(argv[i], "{ticket}", ticketPath)
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Env = append(os.Environ(), "TOFU_BOARD_EVENT="+string(be.Event), "TOFU_TICKET="+be.Path, "TOFU_TICKET_ID="+be.Ticket,
-		"TOFU_FROM="+be.From, "TOFU_TO="+be.To, "TOFU_ACTOR="+be.Actor)
+	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
 	var exit *exec.ExitError
 	if err != nil && !errors.As(err, &exit) {
-		return nil, fmt.Errorf("rule %q runs %q: %w", r.ID, argv[0], err)
+		return "", false, fmt.Errorf("runs %q: %w", argv[0], err)
 	}
 	if err == nil {
-		return nil, nil
+		return "", false, nil
 	}
-	detail := strings.TrimSpace(strings.Join([]string{r.Text, strings.TrimSpace(string(output))}, "\n"))
-	return []Finding{{Target: be.Ticket, Detail: cmp.Or(detail, fmt.Sprintf("%s exited %d", argv[0], exit.ExitCode()))}}, nil
+	return cmp.Or(strings.TrimSpace(string(output)), fmt.Sprintf("%s exited %d", argv[0], exit.ExitCode())), true, nil
 }
 
 func commandWords(command string) []string {
@@ -87,17 +79,6 @@ func commandWords(command string) []string {
 		words = append(words, word.String())
 	}
 	return words
-}
-
-func checkPersonApproves(r Rule, a Artifact) ([]Finding, error) {
-	be, ok := a.(BoardEvent)
-	if !ok {
-		return nil, artifactMismatch(SubjectBoardEvent, a)
-	}
-	if be.ByPerson {
-		return nil, nil
-	}
-	return []Finding{{Target: be.Ticket, Detail: cmp.Or(r.Text, "this waits for the person to approve it")}}, nil
 }
 
 func checkComments(_ Rule, a Artifact) ([]Finding, error) {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
 
@@ -37,6 +38,10 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 		return Ticket{}, err
 	}
 	ticket.ID, ticket.Status = "", Triage
+	s := subject{event: rule.HookTriageRequest, key: key, ticket: ticket, to: Triage, actor: actor}
+	if err := m.gate(&s); err != nil {
+		return Ticket{}, err
+	}
 	req := Request{By: actor, At: time.Now().UTC().Truncate(time.Second), Ticket: ticket}
 	err := m.Store.locked(key, triageCounterName, func() error {
 		dir := filepath.Join(m.Store.BoardDir(key), TriageDirName)
@@ -62,7 +67,7 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 		return Ticket{}, err
 	}
 	ticket.Reason = fmt.Sprintf("request %s waits in the triage of %s for a manager", req.ID, key)
-	return ticket, m.Store.Record(key, Event{Kind: Requested, Actor: actor, To: Triage, Text: req.ID + " " + ticket.Title})
+	return ticket, errors.Join(m.Store.Record(key, Event{Kind: Requested, Actor: actor, To: Triage, Text: req.ID + " " + ticket.Title}), m.after(s))
 }
 
 func (s Store) Requests(key string) ([]Request, error) {
@@ -109,7 +114,11 @@ func (m Managed) Accept(key, id, actor string) (Ticket, error) {
 		ticket := req.Ticket
 		ticket.Status, ticket.Reason = Backlog, ""
 		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, req.By)))
-		if accepted, err = m.create(key, ticket, actor, ""); err != nil {
+		accepting := subject{event: rule.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
+		if err := m.gate(&accepting); err != nil {
+			return err
+		}
+		if accepted, err = m.create(key, accepting.ticket, actor, ""); err != nil {
 			return err
 		}
 		return os.Remove(m.Store.requestPath(key, id))
@@ -117,7 +126,10 @@ func (m Managed) Accept(key, id, actor string) (Ticket, error) {
 	if err != nil {
 		return accepted, err
 	}
-	return accepted, m.Store.Record(key, Event{Ticket: accepted.ID, Kind: Accepted, Actor: actor, From: Triage, To: accepted.Status, Text: id})
+	err = m.Store.Record(key, Event{Ticket: accepted.ID, Kind: Accepted, Actor: actor, From: Triage, To: accepted.Status, Text: id})
+	done := m.subjectOf(rule.HookTriageAccept, key, accepted, accepted.Status, actor, 0)
+	done.from = Triage
+	return accepted, errors.Join(err, m.after(done))
 }
 
 func (m Managed) Drop(key, id, reason, actor string) error {

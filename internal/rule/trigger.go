@@ -274,14 +274,6 @@ func boardTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 	return Trigger{event: event, to: d.to}, nil
 }
 
-func (t Trigger) On() Event { return t.event }
-
-func (t Trigger) To() string { return t.to }
-
-func (t Trigger) FiresOn(e BoardEvent) bool {
-	return t.event != EventNone && t.event == e.Event && (t.to == "" || t.to == e.To)
-}
-
 func (t Trigger) firesFor(task Task) (bool, string) {
 	if t.AlwaysOn() {
 		return true, "always on, the rule declares no trigger"
@@ -316,7 +308,7 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 	if t.scope != "" {
 		reached := ""
 		for _, p := range task.Paths {
-			if scopeReaches(t.scope, p) {
+			if ScopeReaches(t.scope, p) {
 				reached = p
 				break
 			}
@@ -358,7 +350,7 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 	return true, strings.Join(why, " and ")
 }
 
-func scopeReaches(scope, held string) bool {
+func ScopeReaches(scope, held string) bool {
 	if !strings.Contains(held, "*") {
 		matched, err := subagent.Matches(held, []string{scope})
 		return err == nil && matched

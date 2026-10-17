@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/rule"
 )
 
 type SprintState string
@@ -71,6 +73,15 @@ func (s Store) SetSprint(key, id string, state SprintState) error {
 	if !slices.ContainsFunc(sprints, func(sprint Sprint) bool { return sprint.ID == id }) {
 		return fmt.Errorf("the board %s has no sprint %s", key, id)
 	}
+	m := Managed{Local: Local{Store: s}}
+	changed := func(sprint Sprint) subject {
+		event := map[SprintState]rule.HookEvent{Active: rule.HookSprintOpen, Closed: rule.HookSprintClose}[sprint.State]
+		return subject{event: event, key: key, ticket: Ticket{Front: Front{Title: sprint.Title, Sprint: sprint.ID}}}
+	}
+	asked := changed(Sprint{ID: id, State: state})
+	if err := m.gate(&asked); err != nil {
+		return err
+	}
 	for _, sprint := range sprints {
 		switch {
 		case sprint.ID == id:
@@ -84,6 +95,9 @@ func (s Store) SetSprint(key, id string, state SprintState) error {
 			continue
 		}
 		if err := s.SaveSprint(key, sprint); err != nil {
+			return err
+		}
+		if err := m.after(changed(sprint)); err != nil {
 			return err
 		}
 	}

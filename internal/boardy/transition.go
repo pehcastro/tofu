@@ -19,6 +19,9 @@ func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error)
 	if err != nil {
 		return Ticket{}, err
 	}
+	if err := m.Store.planned(key, ticket.Front); err != nil {
+		return Ticket{}, err
+	}
 	if m.role(board, actor) != RoleManager {
 		return m.request(key, ticket, actor)
 	}
@@ -26,11 +29,16 @@ func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error)
 }
 
 func (m Managed) create(key string, ticket Ticket, actor, replaces string) (Ticket, error) {
+	return m.created(key, ticket, actor, replaces, 0)
+}
+
+func (m Managed) created(key string, ticket Ticket, actor, replaces string, depth int) (Ticket, error) {
 	board, err := m.Store.Board(key)
 	if err != nil {
 		return Ticket{}, err
 	}
-	if err := m.vetCreate(board, ticket, cmp.Or(ticket.Status, Backlog), replaces); err != nil {
+	status := cmp.Or(ticket.Status, Backlog)
+	if err := m.vetCreate(board, ticket, status, replaces); err != nil {
 		return Ticket{}, err
 	}
 	preview, err := os.CreateTemp(m.Store.BoardDir(key), ".tofu-create-*.md")
@@ -39,13 +47,20 @@ func (m Managed) create(key string, ticket Ticket, actor, replaces string) (Tick
 	}
 	_, err = preview.Write(ticket.Markdown())
 	err = errors.Join(err, preview.Close())
+	s := subject{event: rule.HookTicketCreate, key: key, ticket: ticket, path: preview.Name(), to: status, actor: actor, depth: depth}
 	if err == nil {
-		err = m.gate(key, rule.BoardEvent{Event: rule.EventCreate, Path: preview.Name(), To: string(cmp.Or(ticket.Status, Backlog)), Actor: actor, ByPerson: m.actsForPerson(actor)})
+		err = m.gate(&s)
 	}
 	if err = errors.Join(err, os.Remove(preview.Name())); err != nil {
 		return Ticket{}, err
 	}
-	return m.Local.Create(key, ticket, actor)
+	made, err := m.Local.Create(key, s.ticket, actor)
+	if err != nil {
+		return made, err
+	}
+	s.ticket = made
+	s.path, _ = m.Store.TicketPath(made.ID)
+	return made, m.after(s)
 }
 
 func (m Managed) Move(id string, to Status, reason, actor string) (Ticket, error) {
@@ -53,12 +68,26 @@ func (m Managed) Move(id string, to Status, reason, actor string) (Ticket, error
 	if err != nil {
 		return ticket, err
 	}
-	e := m.moveEvent(ticket, to, actor)
-	fired, err := m.vetMove(board, ticket, e)
-	if err = errors.Join(m.Store.recordFired(board.Key, e, fired), err); err != nil {
+	if err := m.mayMove(m.role(board, actor), ticket, to, actor); err != nil {
 		return ticket, err
 	}
-	return m.Local.Move(id, to, reason, actor)
+	return m.move(board, ticket, to, reason, actor, 0)
+}
+
+func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor string, depth int) (Ticket, error) {
+	if err := m.validMove(board, ticket, to); err != nil {
+		return ticket, err
+	}
+	s := m.subjectOf(moveEvent(to), board.Key, ticket, to, actor, depth)
+	if err := m.gate(&s); err != nil {
+		return ticket, err
+	}
+	moved, err := m.Local.Move(ticket.ID, to, reason, actor)
+	if err != nil {
+		return moved, err
+	}
+	s.ticket = moved
+	return moved, m.after(s)
 }
 
 func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]Fired, error) {
@@ -67,9 +96,13 @@ func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]
 		return nil, err
 	}
 	to = cmp.Or(to, ticket.Status)
+	hook := event.Hook()
 	switch event {
 	case rule.EventMove, rule.EventClose:
-		return m.vetMove(board, ticket, m.moveEvent(ticket, to, actor))
+		hook = moveEvent(to)
+		if err = m.mayMove(m.role(board, actor), ticket, to, actor); err == nil {
+			err = m.validMove(board, ticket, to)
+		}
 	case rule.EventCreate:
 		err = m.vetCreate(board, ticket, to, "")
 	case rule.EventWiden:
@@ -80,24 +113,19 @@ func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]
 	if err != nil {
 		return nil, err
 	}
-	return m.Store.fire(board.Key, m.boardEvent(event, ticket, to, actor))
+	hooks, err := m.Store.hooks(board.Key)
+	if err != nil {
+		return nil, err
+	}
+	fired, _, err := m.weigh(hooks, rule.WhenBefore, m.subjectOf(hook, board.Key, ticket, to, actor, 0))
+	return fired, err
 }
 
-func (m Managed) moveEvent(ticket Ticket, to Status, actor string) rule.BoardEvent {
+func moveEvent(to Status) rule.HookEvent {
 	if !to.Live() {
-		return m.boardEvent(rule.EventClose, ticket, to, actor)
+		return rule.HookTicketClose
 	}
-	return m.boardEvent(rule.EventMove, ticket, to, actor)
-}
-
-func (m Managed) vetMove(board Board, ticket Ticket, e rule.BoardEvent) ([]Fired, error) {
-	if err := m.mayMove(m.role(board, e.Actor), ticket, Status(e.To), e.Actor); err != nil {
-		return nil, err
-	}
-	if err := m.validMove(board, ticket, Status(e.To)); err != nil {
-		return nil, err
-	}
-	return m.Store.fire(board.Key, e)
+	return rule.HookTicketMove
 }
 
 func (m Managed) vetCreate(board Board, ticket Ticket, status Status, replaces string) error {
@@ -118,22 +146,39 @@ func (m Managed) mayWiden(board Board, ticket Ticket, actor string) error {
 }
 
 func (m Managed) Comment(id, text, actor string) (Ticket, error) {
-	return m.appendLog(id, text, actor, Event{Kind: Commented, Text: text})
-}
-
-func (m Managed) AskInLog(id, question, actor string) (Ticket, error) {
-	return m.appendLog(id, "question for a manager: "+question, actor, Event{Kind: Asked, Text: question})
-}
-
-func (m Managed) appendLog(id, text, actor string, event Event) (Ticket, error) {
-	ticket, board, err := m.ticketOnBoard(id)
+	ticket, board, err := m.mayAppend(id, actor)
 	if err != nil {
 		return ticket, err
 	}
-	if m.role(board, actor) == RoleAgent && ticket.Assignee != actor {
-		return ticket, RefusedError{Ticket: id, Why: fmt.Sprintf("it is assigned to %q, and an agent appends only to its own ticket's Log", ticket.Assignee)}
+	return m.comment(board, ticket, text, actor, 0)
+}
+
+func (m Managed) comment(board Board, ticket Ticket, text, actor string, depth int) (Ticket, error) {
+	s := m.subjectOf(rule.HookTicketLog, board.Key, ticket, ticket.Status, actor, depth)
+	if err := m.gate(&s); err != nil {
+		return ticket, err
 	}
-	return m.Local.appendLog(id, text, actor, event)
+	logged, err := m.appendLog(ticket.ID, text, actor, Event{Kind: Commented, Text: text})
+	if err != nil {
+		return logged, err
+	}
+	s.ticket = logged
+	return logged, m.after(s)
+}
+
+func (m Managed) AskInLog(id, question, actor string) (Ticket, error) {
+	if ticket, _, err := m.mayAppend(id, actor); err != nil {
+		return ticket, err
+	}
+	return m.appendLog(id, "question for a manager: "+question, actor, Event{Kind: Asked, Text: question})
+}
+
+func (m Managed) mayAppend(id, actor string) (Ticket, Board, error) {
+	ticket, board, err := m.ticketOnBoard(id)
+	if err == nil && m.role(board, actor) == RoleAgent && ticket.Assignee != actor {
+		err = RefusedError{Ticket: id, Why: fmt.Sprintf("it is assigned to %q, and an agent appends only to its own ticket's Log", ticket.Assignee)}
+	}
+	return ticket, board, err
 }
 
 func (m Managed) Widen(id string, owns []string, actor string) (Ticket, error) {
@@ -151,17 +196,22 @@ func (m Managed) Widen(id string, owns []string, actor string) (Ticket, error) {
 	if err := m.ownsFree(board.Key, ticket.Front, added, ticket.Status, ""); err != nil {
 		return ticket, err
 	}
-	if err := m.gate(board.Key, m.boardEvent(rule.EventWiden, ticket, ticket.Status, actor)); err != nil {
+	s := m.subjectOf(rule.HookTicketWiden, board.Key, ticket, ticket.Status, actor, 0)
+	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
 	widened, err := m.Store.Edit(id, func(t *Ticket) error {
 		t.Owns = append(t.Owns, added...)
 		return nil
 	})
+	if err == nil {
+		err = m.Store.Record(board.Key, Event{Ticket: id, Kind: Widened, Actor: actor, Text: strings.Join(added, ", ")})
+	}
 	if err != nil {
 		return widened, err
 	}
-	return widened, m.Store.Record(board.Key, Event{Ticket: id, Kind: Widened, Actor: actor, Text: strings.Join(added, ", ")})
+	s.ticket = widened
+	return widened, m.after(s)
 }
 
 func (m Managed) ticketOnBoard(id string) (Ticket, Board, error) {
@@ -171,11 +221,6 @@ func (m Managed) ticketOnBoard(id string) (Ticket, Board, error) {
 	}
 	board, err := m.Store.Board(ticket.Board())
 	return ticket, board, err
-}
-
-func (m Managed) boardEvent(event rule.Event, ticket Ticket, to Status, actor string) rule.BoardEvent {
-	path, _ := m.Store.TicketPath(ticket.ID)
-	return rule.BoardEvent{Event: event, Ticket: ticket.ID, Path: path, From: string(ticket.Status), To: string(to), Actor: actor, ByPerson: m.actsForPerson(actor)}
 }
 
 func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) error {

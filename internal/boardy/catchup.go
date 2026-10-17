@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode"
 
+	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
 
@@ -138,6 +139,14 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 		}
 	}
 	text := fmt.Sprintf("the person answered Q%d %s: %s", q.ID, q.TLDR, done.Logged)
+	asked, board, err := m.ticketOnBoard(open.Ticket)
+	if err != nil {
+		return done, err
+	}
+	s := m.subjectOf(rule.HookQuestionAnswer, board.Key, asked, asked.Status, actor, 0)
+	if err := m.gate(&s); err != nil {
+		return done, err
+	}
 	ticket, err := m.Store.Edit(open.Ticket, func(t *Ticket) error {
 		t.Questions = slices.DeleteFunc(t.Questions, func(left Question) bool { return left.ID == q.ID })
 		t.Log = strings.TrimSpace(t.Log + "\n" + logLine(actor, text))
@@ -145,6 +154,10 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 	})
 	if err == nil {
 		err = m.Store.Record(ticket.Board(), Event{Ticket: ticket.ID, Kind: Answered, Actor: actor, Text: text})
+	}
+	if err == nil {
+		s.ticket = ticket
+		err = m.after(s)
 	}
 	if err != nil || len(ticket.Questions) > 0 || ticket.Status != NeedsDecision {
 		return done, err

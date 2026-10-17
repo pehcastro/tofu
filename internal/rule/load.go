@@ -22,7 +22,7 @@ func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
 		if err != nil {
 			return err
 		}
-		if declared(data, "kind") == ThresholdKind {
+		if declared(data, "kind") == ThresholdKind || declared(data, "when") != "" {
 			return nil
 		}
 		one, err := parseFile(data, path.Join(root, name))

@@ -16,16 +16,17 @@ import (
 
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
+	"tofu/internal/rule"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|lint|boards|held|manager|triage|assign|hand|widen|check|view|report|epic|sprint|ask|catchup [--json]"
+const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|view|audit|report|epic|sprint|ask|catchup [--json]"
 
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--scope text] [--acceptance text] [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b] [--epic E] [--sprint S] [--scope text] [--acceptance text] [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns] [--json]"
 	case "held":
@@ -40,6 +41,12 @@ func boardyUsageOf(subcommand string) string {
 		return "tofu boardy lint [--board KEY] [--json]"
 	case "boards":
 		return "tofu boardy boards [--json]"
+	case "set":
+		return "tofu boardy set <ticket> [--epic E] [--sprint S] [--as name] [--json]"
+	case "tick":
+		return "tofu boardy tick [--board KEY] [--json]"
+	case "fire":
+		return "tofu boardy fire agent.spawn|agent.report|lead.attach [ticket] [--board KEY] [--when before|after] [--as name] [--json]"
 	}
 	return cmp.Or(boardyManageUsage(subcommand), boardyViewUsageOf(subcommand), boardyDecideUsage(subcommand))
 }
@@ -89,11 +96,28 @@ func boardyVerb(args []string, out, errOut io.Writer) int {
 	}
 	actor, person := boardyIdentity(flags["as"])
 	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: person}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
-	switch args[0] {
+	sizes := store.EventSizes()
+	code := call.run(args[0])
+	for _, nudge := range store.NudgesSince(sizes) {
+		_, _ = fmt.Fprintln(errOut, "nudge "+nudge)
+	}
+	return code
+}
+
+func (call boardyCall) run(subcommand string) int {
+	switch subcommand {
 	case "manager", "triage", "hand", "assign", "widen", "check":
-		return call.manage(args[0])
+		return call.manage(subcommand)
+	case "set":
+		return call.plan()
+	case "tick":
+		return call.tick()
+	case "fire":
+		return call.fire()
 	case "view":
 		return call.view()
+	case "audit":
+		return call.audit()
 	case "report":
 		return call.report()
 	case "epic":
@@ -186,7 +210,7 @@ func (c boardyCall) create() int {
 	if err != nil {
 		return c.o.fail(err)
 	}
-	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Spec: c.flags["spec"], Parent: c.flags["parent"]}, Scope: c.flags["scope"]}
+	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Scope: c.flags["scope"]}
 	if acceptance := c.flags["acceptance"]; acceptance != "" {
 		ticket.Acceptance = []string{acceptance}
 	}
@@ -392,6 +416,7 @@ func (c boardyCall) show() int {
 			{Label: "spec", Text: dash(ticket.Spec)},
 			{Label: "owns", Text: strings.Join(ticket.Owns, ", ")},
 			{Label: "depends", Text: strings.Join(ticket.Depends, ", ")},
+			{Label: "relates", Text: strings.Join(ticket.Relates, ", ")},
 			{Label: "updated", Text: ticket.Updated.Local().Format(time.DateTime)},
 			{Label: "file", Text: page.Path(path)},
 		})...)
@@ -461,13 +486,77 @@ func (c boardyCall) log() int {
 	return c.receipt(ticket, err, cli.Changed, "logged on "+ticket.ID)
 }
 
-func (c boardyCall) lint() int {
-	boards, err := c.store.Boards()
-	if key := c.flags["board"]; key != "" && err == nil {
-		var board boardy.Board
-		board, err = c.store.Board(key)
-		boards = []boardy.Board{board}
+func (c boardyCall) plan() int {
+	if len(c.args) != 1 {
+		return c.o.usage(errors.New("name one " + c.words.Ticket))
 	}
+	ticket, err := c.managed.Plan(c.args[0], c.flags["epic"], c.flags["sprint"], c.actor)
+	return c.receipt(ticket, err, cli.Changed, ticket.ID+" is in "+c.words.Epic+" "+dash(ticket.Epic)+", "+c.words.Sprint+" "+dash(ticket.Sprint))
+}
+
+func (c boardyCall) tick() int {
+	boards, err := c.named()
+	ran := map[string][]string{}
+	for at := 0; err == nil && at < len(boards); at++ {
+		ran[boards[at].Key], err = c.managed.Tick(boards[at].Key)
+	}
+	if err != nil {
+		return c.o.fail(err)
+	}
+	return c.o.done(true, ran, func(page cli.Page) []string {
+		rows := make([]cli.Row, 0, len(boards))
+		for _, board := range boards {
+			text := "nothing due"
+			if hooks := ran[board.Key]; len(hooks) > 0 {
+				text = "ran " + strings.Join(hooks, ", ")
+			}
+			rows = append(rows, cli.Row{Mark: cli.Done, Cells: []string{board.Key, text}})
+		}
+		return append(page.Title("tick", []string{plural(len(boards), c.words.Board)}, cli.Verdict{}), page.Rows(rows)...)
+	})
+}
+
+func (c boardyCall) fire() int {
+	if len(c.args) < 1 || len(c.args) > 2 {
+		return c.o.usage(errors.New("name an event, and a " + c.words.Ticket + " unless it is " + string(rule.HookLeadAttach)))
+	}
+	event, when := rule.HookEvent(c.args[0]), rule.When(cmp.Or(c.flags["when"], string(rule.WhenAfter)))
+	if !slices.Contains([]rule.HookEvent{rule.HookAgentSpawn, rule.HookAgentReport, rule.HookLeadAttach}, event) {
+		return c.o.usage(fmt.Errorf("%q is not fired by hand: %s, %s or %s, and every other event fires from the command that does it", event, rule.HookAgentSpawn, rule.HookAgentReport, rule.HookLeadAttach))
+	}
+	if when != rule.WhenBefore && when != rule.WhenAfter {
+		return c.o.usage(fmt.Errorf("--when is %s or %s", rule.WhenBefore, rule.WhenAfter))
+	}
+	id := ""
+	key, err := c.board()
+	if len(c.args) == 2 {
+		var ref boardy.Ref
+		id = c.args[1]
+		ref, err = boardy.SplitID(id)
+		key = ref.Key
+	}
+	if err == nil {
+		err = c.managed.Fire(when, event, key, id, c.actor)
+	}
+	if err != nil {
+		return c.o.fail(err)
+	}
+	return c.o.done(true, map[string]string{"event": string(event), "when": string(when), "board": key, "ticket": id}, func(page cli.Page) []string {
+		return []string{page.Receipt(cli.Done, "fired "+string(when)+" "+string(event)+" on "+cmp.Or(id, key), "")}
+	})
+}
+
+func (c boardyCall) named() ([]boardy.Board, error) {
+	key := c.flags["board"]
+	if key == "" {
+		return c.store.Boards()
+	}
+	board, err := c.store.Board(key)
+	return []boardy.Board{board}, err
+}
+
+func (c boardyCall) lint() int {
+	boards, err := c.named()
 	if err != nil {
 		return c.o.fail(err)
 	}

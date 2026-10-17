@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/rule"
 	"tofu/internal/sys"
 )
 
@@ -130,6 +131,10 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 	if err := q.complete(); err != nil {
 		return ticket, RefusedError{Ticket: id, Why: err.Error()}
 	}
+	s := m.subjectOf(rule.HookQuestionAsk, board.Key, ticket, ticket.Status, actor, 0)
+	if err := m.gate(&s); err != nil {
+		return ticket, err
+	}
 	asked, err := m.Store.Edit(id, func(t *Ticket) error {
 		for _, open := range t.Questions {
 			q.ID = max(q.ID, open.ID)
@@ -138,10 +143,14 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 		t.Questions = append(t.Questions, q)
 		return nil
 	})
+	if err == nil {
+		err = m.Store.Record(board.Key, Event{Ticket: id, Kind: Asked, Actor: actor, Text: fmt.Sprintf("Q%d %s", q.ID, q.TLDR)})
+	}
 	if err != nil {
 		return asked, err
 	}
-	return asked, m.Store.Record(board.Key, Event{Ticket: id, Kind: Asked, Actor: actor, Text: fmt.Sprintf("Q%d %s", q.ID, q.TLDR)})
+	s.ticket = asked
+	return asked, m.after(s)
 }
 
 func decidable(ticket Ticket) error {
