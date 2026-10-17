@@ -16,7 +16,7 @@ use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, T1, T2};
 use desk_ui::components::status_icon::status_icon;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, App, ClickEvent, Context, CursorStyle, Div, FontWeight, MouseButton,
+    AnyElement, App, ClickEvent, Context, CursorStyle, Div, Entity, FontWeight, MouseButton,
     MouseMoveEvent, Pixels, Rgba, SharedString, Window, canvas, div, prelude::*, px, rgb_to_hsla,
 };
 use std::cell::Cell;
@@ -108,6 +108,7 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
         .min_h_0()
         .child(top)
         .child(Split {
+            width: boardy.panel.clone(),
             body: ScrollArea::new("boardy-ticket")
                 .child(
                     div()
@@ -131,15 +132,27 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
         })
 }
 
-struct Width {
+pub(super) struct Width {
     px: f32,
     dragging: bool,
     right: Rc<Cell<Pixels>>,
     moved: Option<Instant>,
 }
 
+impl Default for Width {
+    fn default() -> Self {
+        Width {
+            px: PANEL,
+            dragging: false,
+            right: Rc::default(),
+            moved: None,
+        }
+    }
+}
+
 #[derive(IntoElement)]
 struct Split {
+    width: Entity<Width>,
     body: AnyElement,
     panel: AnyElement,
     line: Rgba,
@@ -147,13 +160,8 @@ struct Split {
 }
 
 impl RenderOnce for Split {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let width = window.use_keyed_state("boardy-panel-width", cx, |_, _| Width {
-            px: PANEL,
-            dragging: false,
-            right: Rc::default(),
-            moved: None,
-        });
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let width = self.width;
         if let Some(moved) = width.update(cx, |width, _| width.moved.take()) {
             eprintln!(
                 "desk: boardy: panel drag frame {:.2}",
