@@ -203,10 +203,11 @@ Context
       on applies the user local memory every author kept in this repository's
       .tofu folder; off applies only yours. Project local memory applies to
       everyone either way
-    memoryModel                  claude-sub/claude-haiku-4-5-20251001
+    memoryModel                  empty
       any text
-      the subscription model that writes memory summaries, one line of at most
-      512 bytes each, as source/model; never the OpenRouter key
+      the model that writes memory summaries, one line of at most 512 bytes
+      each, as source/model; empty takes the model the library marks memory: yes
+      for the session's own source; never the OpenRouter key
     learn                        false
       true or false
       on lets tofu learn send a window around each message you typed to Jev for
@@ -225,8 +226,7 @@ Files
       Author filters in edit feeds
 
 Shell
-    persistentRegistry           false                                 on the
-      next start
+    persistentRegistry           false               on the next start
       true or false
       a running shell outlives tofu and the next launch lists it; off stops
       every shell on exit, even when tofu is killed

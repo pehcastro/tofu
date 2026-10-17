@@ -1,4 +1,5 @@
 subscription: claude-sub
 use: allowed
 vision: yes
+memory: yes
 efforts:

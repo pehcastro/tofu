@@ -277,7 +277,7 @@ func Default() []Spec {
 			Choices: []string{EpisodesOn, EpisodesOff}},
 		{Key: MemoryFromAllUsers, Label: "Memory from all users", Description: "on applies the user local memory every author kept in this repository's .tofu folder; off applies only yours. Project local memory applies to everyone either way", Category: "Context", Kind: Text, DefaultText: AllUsersOff,
 			Choices: []string{AllUsersOn, AllUsersOff}},
-		{Key: MemoryModel, Label: "Memory model", Description: "the subscription model that writes memory summaries, one line of at most 512 bytes each, as source/model; never the OpenRouter key", Category: "Context", Kind: Text, DefaultText: "claude-sub/claude-haiku-4-5-20251001"},
+		{Key: MemoryModel, Label: "Memory model", Description: "the model that writes memory summaries, one line of at most 512 bytes each, as source/model; empty takes the model the library marks memory: yes for the session's own source; never the OpenRouter key", Category: "Context", Kind: Text},
 		{Key: Learn, Label: "Learn", Description: "on lets tofu learn send a window around each message you typed to Jev for labels, and write each proposal with your lead model, after printing how many windows and bytes; off runs tofu learn on this machine only", Category: "Context", Kind: Bool},
 		{Key: DiffContext, Label: "Diff context", Description: "Lines around changed hunks, at most the " + strconv.Itoa(konst.DiffContextLinesDefault) + " each diff carries", Category: "Files", Kind: Text, DefaultText: strconv.Itoa(konst.DiffContextLinesDefault),
 			Choices: lineCounts(konst.DiffContextLinesTight, konst.DiffContextLinesDefault, konst.DiffContextLinesWide, konst.DiffContextLinesWidest)},

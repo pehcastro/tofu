@@ -896,10 +896,10 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	if opts.agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, func()) {
 			if run.memory == nil {
-				opened := openMemoryModel(dir)
+				opened := openMemoryModel(dir, run.orchestrator)
 				return opened.compactor(ask), opened.release
 			}
-			return run.memory.model(dir).compactor(ask), func() {}
+			return run.memory.model(dir, run.orchestrator).compactor(ask), func() {}
 		}}
 		asking = append(asking, zoom, tools.Recall{Zoom: zoom})
 	}

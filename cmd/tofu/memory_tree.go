@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -10,9 +11,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"tofu/internal/konst"
 	"tofu/internal/llm"
+	"tofu/internal/llm/cred"
 	"tofu/internal/llm/models"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/memtree"
@@ -100,7 +103,11 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 		return o.fail(err)
 	}
 	var asked, hits, fresh, read, written, writtenForAnHour atomic.Int64
-	memoryModel := openMemoryModel(dir)
+	session, err := chooseModel(runOpts{dir: dir, wire: wireSubscription})
+	if err != nil {
+		return o.fail(err)
+	}
+	memoryModel := openMemoryModel(dir, session)
 	defer memoryModel.release()
 	compact := memoryModel.compactor(func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
 		asked.Add(1)
@@ -139,13 +146,26 @@ type memoryModel struct {
 	err        error
 }
 
-func openMemoryModel(dir string) memoryModel {
-	opened := memoryModel{slug: settingText(dir, settingspkg.MemoryModel, nil)}
-	library, err := modelLibrary(dir)
-	var model models.Model
-	if err == nil {
-		model, err = library.Select(opened.slug)
+func openMemoryModel(dir string, session models.Model) memoryModel {
+	set := settingText(dir, settingspkg.MemoryModel, nil)
+	deck, err := readCassette(os.Getenv(cassetteVariable))
+	open, signedIn := openAppWire, storedLogin
+	if deck != nil {
+		open, signedIn = driveWire(deck), func(models.Subscription) bool { return true }
 	}
+	var library models.Library
+	if err == nil {
+		library, err = modelLibrary(dir)
+	}
+	var model models.Model
+	switch {
+	case err != nil:
+	case set != "":
+		model, err = library.Select(set)
+	default:
+		model, err = sessionMemoryWriter(library, session, signedIn)
+	}
+	opened := memoryModel{slug: cmp.Or(set, model.Slug())}
 	if err == nil && library.WireOf(model) == wireKey {
 		err = fmt.Errorf("%s is reached through the OpenRouter key, which is for Jev only: set %s to a subscription model", opened.slug, settingspkg.MemoryModel)
 	}
@@ -158,18 +178,32 @@ func openMemoryModel(dir string) memoryModel {
 	if len(model.Efforts) > 0 {
 		opts.effort = defaultEffort(model.Efforts)
 	}
-	open := openAppWire
-	deck, err := readCassette(os.Getenv(cassetteVariable))
-	if deck != nil {
-		open = driveWire(deck)
-	}
-	if err == nil {
-		var wire appWire
-		wire, err = open(opts)
-		opened.held = wire.held
-	}
-	opened.err = err
+	wire, err := open(opts)
+	opened.held, opened.err = wire.held, err
 	return opened
+}
+
+func sessionMemoryWriter(library models.Library, session models.Model, signedIn func(models.Subscription) bool) (models.Model, error) {
+	if model, marked := library.MemoryWriter(session.Source()); marked {
+		return model, nil
+	}
+	for _, source := range models.AllSubscriptions() {
+		if model, marked := library.MemoryWriter(string(source)); marked && signedIn(source) {
+			return model, nil
+		}
+	}
+	return models.Model{}, fmt.Errorf("no model of %s is marked memory: %s and no signed-in subscription has one, so the session writes no memory summaries: sign in with tofu login llm %s, or set %s",
+		session.Source(), models.MemoryWrites, models.ClaudeSub, settingspkg.MemoryModel)
+}
+
+func storedLogin(source models.Subscription) bool {
+	store, err := openStoredCredentials()
+	if err != nil || store == nil {
+		return false
+	}
+	defer func() { _ = store.Close() }()
+	row, found, err := store.Row(cred.Provider(source))
+	return err == nil && found && row.Unusable(time.Now()) == ""
 }
 
 func (m memoryModel) release() {
@@ -179,28 +213,31 @@ func (m memoryModel) release() {
 }
 
 type sessionMemoryModel struct {
-	mu     sync.Mutex
-	opened *memoryModel
-	closed bool
+	mu       sync.Mutex
+	bySource map[string]memoryModel
+	closed   bool
 }
 
 var errMemoryModelClosed = errors.New("the session that held the memory model has ended")
 
-func (s *sessionMemoryModel) model(dir string) memoryModel {
+func (s *sessionMemoryModel) model(dir string, session models.Model) memoryModel {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
 		return memoryModel{err: errMemoryModelClosed}
 	}
-	if s.opened != nil {
-		return *s.opened
+	if opened, held := s.bySource[session.Source()]; held {
+		return opened
 	}
-	opened := openMemoryModel(dir)
+	opened := openMemoryModel(dir, session)
 	if opened.err != nil {
 		opened.release()
 		return opened
 	}
-	s.opened = &opened
+	if s.bySource == nil {
+		s.bySource = map[string]memoryModel{}
+	}
+	s.bySource[session.Source()] = opened
 	return opened
 }
 
@@ -208,8 +245,8 @@ func (s *sessionMemoryModel) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
-	if s.opened != nil {
-		s.opened.release()
+	for _, opened := range s.bySource {
+		opened.release()
 	}
 }
 

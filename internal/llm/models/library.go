@@ -140,6 +140,21 @@ func (v Vision) valid() bool {
 	return false
 }
 
+type MemoryWriter string
+
+const (
+	MemoryUnstated MemoryWriter = ""
+	MemoryWrites   MemoryWriter = "yes"
+)
+
+func (m MemoryWriter) valid() bool {
+	switch m {
+	case MemoryUnstated, MemoryWrites:
+		return true
+	}
+	return false
+}
+
 type PlanTool string
 
 const (
@@ -206,6 +221,7 @@ type Model struct {
 	Use              Use
 	Kind             Kind
 	Vision           Vision
+	Memory           MemoryWriter
 	Plan             PlanTool
 	Verbosity        Verbosity
 	ReasoningContext ReasoningContext
@@ -239,6 +255,11 @@ func (m Model) Slug() string {
 		return string(m.Provider) + "/" + m.ID
 	}
 	return m.ID
+}
+
+func (m Model) Source() string {
+	source, _, _ := strings.Cut(m.Slug(), "/")
+	return source
 }
 
 func (m Model) VendorSlug() string { return string(m.Provider) + "/" + m.ID }
@@ -362,4 +383,13 @@ func (c Library) Default(subscription Subscription) (Model, error) {
 		}
 	}
 	return Model{}, fmt.Errorf("the model library has no default for the %s subscription", subscription)
+}
+
+func (c Library) MemoryWriter(source string) (Model, bool) {
+	for _, model := range c.Models {
+		if model.Source() == source && model.Memory == MemoryWrites && model.Use != UseExcluded {
+			return model, true
+		}
+	}
+	return Model{}, false
 }

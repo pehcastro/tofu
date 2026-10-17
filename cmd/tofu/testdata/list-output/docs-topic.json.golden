@@ -214,10 +214,10 @@ exit 0
       {
         "key": "memoryModel",
         "category": "Context",
-        "default": "claude-sub/claude-haiku-4-5-20251001",
+        "default": "empty",
         "takes": "any text",
         "restart": false,
-        "description": "the subscription model that writes memory summaries, one line of at most 512 bytes each, as source/model; never the OpenRouter key"
+        "description": "the model that writes memory summaries, one line of at most 512 bytes each, as source/model; empty takes the model the library marks memory: yes for the session's own source; never the OpenRouter key"
       },
       {
         "key": "learn",

@@ -115,7 +115,7 @@ type Contract struct {
 
 func Contracts() []Contract {
 	return []Contract{
-		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "plan", "verbosity", "reasoning_context", "efforts", "from", "found"}},
+		{Kind: modelsDir, Required: []string{"use"}, Optional: []string{"subscription", "reason", "notice", "window", "kind", "vision", "memory", "plan", "verbosity", "reasoning_context", "efforts", "from", "found"}},
 		{Kind: subscriptionsDir, Required: []string{"provider", "wire", "windows"}, Optional: []string{"not_models"}},
 		{Kind: rolesDir, Required: []string{"model"}},
 	}
@@ -321,6 +321,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		Use:              Use(from.values["use"]),
 		Kind:             Kind(cmp.Or(from.values["kind"], string(KindLLM))),
 		Vision:           Vision(from.values["vision"]),
+		Memory:           MemoryWriter(from.values["memory"]),
 		Plan:             PlanTool(from.values["plan"]),
 		Verbosity:        Verbosity(from.values["verbosity"]),
 		ReasoningContext: ReasoningContext(from.values["reasoning_context"]),
@@ -339,6 +340,9 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 	}
 	if !model.Vision.valid() {
 		return model, &Broken{File: from.file, Field: "vision", Why: fmt.Sprintf("vision is %s or %s, or left out when nobody has checked, found %q", VisionSees, VisionBlind, model.Vision)}
+	}
+	if !model.Memory.valid() {
+		return model, &Broken{File: from.file, Field: "memory", Why: fmt.Sprintf("memory is %s on the model that writes its source's memory summaries, or left out, found %q", MemoryWrites, model.Memory)}
 	}
 	if !model.Plan.valid() {
 		return model, &Broken{File: from.file, Field: "plan", Why: fmt.Sprintf("plan is %s or %s, or left out to offer the plan tool, found %q", PlanOffered, PlanWithheld, model.Plan)}
