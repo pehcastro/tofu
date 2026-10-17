@@ -113,7 +113,7 @@ fn number<T: std::str::FromStr>(text: &str, what: &'static str) -> Result<T, Git
     text.parse().map_err(|_| unreadable(what, text))
 }
 
-fn refs(decorations: &str) -> Result<Vec<Ref>, GitError> {
+fn refs(decorations: &str) -> Vec<Ref> {
     let mut refs = Vec::new();
     for item in decorations.split(", ").filter(|item| !item.is_empty()) {
         let full = match item.strip_prefix("HEAD -> ") {
@@ -137,14 +137,14 @@ fn refs(decorations: &str) -> Result<Vec<Ref>, GitError> {
         } else if full == "refs/stash" {
             (RefKind::Stash, "stash")
         } else {
-            return Err(unreadable("ref decoration", item));
+            continue;
         };
         refs.push(Ref {
             name: name.to_owned(),
             kind,
         });
     }
-    Ok(refs)
+    refs
 }
 
 fn commit(record: &str) -> Result<(Commit, &str), GitError> {
@@ -169,7 +169,7 @@ fn commit(record: &str) -> Result<(Commit, &str), GitError> {
         email: (*email).to_owned(),
         when: number(when, "commit time")?,
         subject: (*subject).to_owned(),
-        refs: refs(decorations)?,
+        refs: refs(decorations),
     };
     Ok((commit, rest.first().copied().unwrap_or("")))
 }

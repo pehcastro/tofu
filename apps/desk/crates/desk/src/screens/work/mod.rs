@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -29,8 +29,6 @@ use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark};
 use crate::modules::chat::cassette::{Replay, Step};
 use crate::modules::chat::{self, Chat, ChatMirror, Find};
 use crate::modules::file_edits::{self, FileEdits};
-#[cfg(feature = "module-git")]
-use crate::modules::git;
 use crate::modules::replayed;
 use crate::modules::shells::{self, Shells};
 use crate::modules::subagents::{self, ExpandAgent, Subagents};
@@ -101,27 +99,7 @@ struct Mounted {
     terminals: Terminals,
     mirrors: Mirrors,
     plugins: Mounts,
-    source_control: SourceControl,
     project: PathBuf,
-}
-
-#[derive(Clone, Default)]
-struct SourceControl(Rc<RefCell<Option<Result<AnyView, SharedString>>>>);
-
-impl SourceControl {
-    fn view(&self) -> Option<Result<AnyView, SharedString>> {
-        self.0.borrow().clone()
-    }
-}
-
-#[cfg(feature = "module-git")]
-fn mount_git(project: &Path, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    git::mount(project, window, cx).map(Into::into)
-}
-
-#[cfg(not(feature = "module-git"))]
-fn mount_git(_: &Path, _: &mut Window, _: &mut App) -> Result<AnyView, String> {
-    Err("source control needs the git module: rebuild with --features module-git".to_owned())
 }
 
 #[derive(Default)]
@@ -258,7 +236,6 @@ fn build(
         terminals: Terminals::default(),
         mirrors: Mirrors::default(),
         plugins: Mounts::default(),
-        source_control: SourceControl::default(),
         project,
         store,
         chat,
@@ -636,21 +613,7 @@ fn body(
             )
             .into_any_element(),
         },
-        Module::SourceControl => match mounted.source_control.view() {
-            Some(Ok(view)) => view.into_any_element(),
-            Some(Err(why)) => empty_state(
-                "work-source-control-refused",
-                "Source control did not open",
-                Some(why),
-                &[],
-                &[],
-                theme,
-                |_, _, _| {},
-            )
-            .into_any_element(),
-            None => div().into_any_element(),
-        },
-        Module::Editor | Module::Browser => empty_state(
+        Module::Editor | Module::Browser | Module::SourceControl => empty_state(
             SharedString::from(format!("work-empty-{}", module.name())),
             module.name().to_owned(),
             Some("not mounted in the work screen yet".into()),
@@ -776,13 +739,7 @@ fn expand(
                 );
             }
         },
-        Module::SourceControl => match mounted.source_control.view() {
-            Some(Ok(view)) => tiled(view, None, cx),
-            Some(Err(_)) | None => {
-                return eprintln!("desk: work: source control did not open, so it does not expand");
-            }
-        },
-        Module::Editor | Module::Browser => {
+        Module::Editor | Module::Browser | Module::SourceControl => {
             return eprintln!(
                 "desk: work: {} is not mounted, so it does not expand",
                 module.name()
@@ -927,21 +884,6 @@ impl Work {
             }
             let mirror = chat::mirror(self.mounted.chat.clone(), window, cx);
             tiles.open.push((at, mirror));
-        }
-    }
-
-    fn keep_source_control(&self, window: &mut Window, cx: &mut App) {
-        let placed = !self.placed(&Module::SourceControl).is_empty();
-        let mut held = self.mounted.source_control.0.borrow_mut();
-        match (placed, held.is_some()) {
-            (true, false) => {
-                *held = Some(mount_git(&self.mounted.project, window, cx).map_err(Into::into));
-            }
-            (false, true) => {
-                *held = None;
-                eprintln!("desk: source control closed, so it stops watching the tree");
-            }
-            (true, true) | (false, false) => {}
         }
     }
 
@@ -1368,10 +1310,13 @@ impl Work {
         let tiles = 2..2 + modules.len();
         match pick {
             0 => self.board.add(),
-            at if tiles.contains(&at) => {
-                self.picked_at = Some(Instant::now());
-                self.board.spawn(modules.get(at - tiles.start)?.clone());
-            }
+            at if tiles.contains(&at) => match modules.get(at - tiles.start)? {
+                Module::SourceControl => return Some(Strip::Open("git")),
+                module => {
+                    self.picked_at = Some(Instant::now());
+                    self.board.spawn(module.clone());
+                }
+            },
             at => {
                 let picks = Self::screen_picks(openable);
                 let name = (*picks.get(at.checked_sub(tiles.end + 1)?)?)?;
@@ -1537,7 +1482,6 @@ impl Render for Work {
         self.keep_terminals(cx);
         self.keep_mirrors(window, cx);
         self.keep_plugins();
-        self.keep_source_control(window, cx);
         let above = window
             .focused(cx)
             .is_none_or(|held| held != self.focus && self.focus.within_focused(window, cx));

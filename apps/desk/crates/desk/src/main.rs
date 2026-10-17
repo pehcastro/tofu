@@ -10,6 +10,8 @@ mod title_bar;
 mod screens {
     #[cfg(feature = "screen-accounts")]
     pub mod accounts;
+    #[cfg(feature = "screen-boardy")]
+    pub mod boardy;
     #[cfg(feature = "screen-classifier")]
     pub mod classifier;
     #[cfg(feature = "screen-context")]
@@ -23,7 +25,8 @@ mod screens {
         feature = "screen-library",
         feature = "screen-context",
         feature = "screen-session",
-        feature = "screen-forks"
+        feature = "screen-forks",
+        feature = "screen-boardy"
     ))]
     pub mod frame;
     #[cfg(feature = "screen-intro")]
@@ -59,8 +62,6 @@ mod modules {
     pub mod editor;
     #[cfg(any(feature = "module-file-edits", feature = "screen-work"))]
     pub mod file_edits;
-    #[cfg(feature = "module-git")]
-    pub mod git;
     #[cfg(feature = "plugin-notepad")]
     pub mod notepad;
     #[cfg(any(
@@ -94,8 +95,6 @@ use desk_ui::icon::Icon;
 use gpui::{App, AppContext, Context, EmptyView, KeystrokeEvent, Window, WindowHandle};
 #[cfg(feature = "module-editor")]
 use modules::editor::{open_dir, open_file};
-#[cfg(feature = "module-git")]
-use modules::git::open_repo;
 #[cfg(feature = "screen-settings")]
 use screens::settings::install_plugin;
 
@@ -132,26 +131,16 @@ fn open_dir(
     Err("--dir needs the editor: rebuild with --features module-editor".to_owned())
 }
 
-#[cfg(not(feature = "module-git"))]
-fn open_repo(
-    _: &std::path::Path,
-    _: Option<&str>,
-    _: &mut gpui::Window,
-    _: &mut App,
-) -> Result<gpui::AnyView, String> {
-    Err("--repo needs the git module: rebuild with --features module-git".to_owned())
-}
-
-const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>] [--repo <path>]] | [--install-plugin <folder>]\n\
+const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>]] | [--install-plugin <folder>]\n\
 --install-plugin installs the plugin in <folder> and opens Settings > Plugins on its consent sheet\n\
 --file opens a file in the editor screen\n\
 --dir lists a folder in the editor screen's file tree\n\
---repo opens a git repository in the git screen\n\
-screens: work settings accounts theme library classifier usage limits context session forks intro onboarding platforms\n\
+screens: work settings boardy accounts theme library classifier usage limits context session forks intro onboarding platforms\n\
 modules: chat subagents file-edits shells git editor browser data-studio";
-const SCREENS: [&str; 15] = [
+const SCREENS: [&str; 16] = [
     "work",
     "settings",
+    "boardy",
     "editor",
     "accounts",
     "theme",
@@ -181,7 +170,6 @@ const INSTALL: &str =
 enum Target {
     File(PathBuf),
     Dir(PathBuf, Option<PathBuf>),
-    Repo(PathBuf),
     Plugin(PathBuf),
 }
 
@@ -211,6 +199,7 @@ fn screen(name: &str) -> Result<Open, String> {
     let (feature, open) = match name {
         "work" => gated!("screen-work", screens::work::open),
         "settings" => gated!("screen-settings", screens::settings::open),
+        "boardy" => gated!("screen-boardy", screens::boardy::open),
         "accounts" => gated!("screen-accounts", screens::accounts::open),
         "theme" => gated!("screen-theme", screens::theme::open),
         "library" => gated!("screen-library", screens::library::open),
@@ -226,7 +215,7 @@ fn screen(name: &str) -> Result<Open, String> {
         "subagents" => gated!("module-subagents", modules::subagents::open),
         "file-edits" => gated!("module-file-edits", modules::file_edits::open),
         "shells" => gated!("module-shells", modules::shells::open),
-        "git" => gated!("module-git", modules::git::open),
+        "git" => gated!("screen-work", desk::git::open),
         "editor" => gated!("module-editor", modules::editor::open),
         "browser" => gated!("module-browser", modules::browser::open),
         "data-studio" => gated!("module-data-studio", modules::data_studio::open),
@@ -249,7 +238,7 @@ fn parse(args: &[String]) -> Result<Launch, String> {
             target: Some(Target::Plugin(PathBuf::from(folder))),
         })),
         [flag, name, rest @ ..] if flag == "--screen" => {
-            let (mut board, mut file, mut dir, mut repo) = (None, None, None, None);
+            let (mut board, mut file, mut dir) = (None, None, None);
             for pair in rest.chunks(2) {
                 match pair {
                     [flag, id] if flag == "--board" && board.is_none() => board = Some(id.clone()),
@@ -259,16 +248,12 @@ fn parse(args: &[String]) -> Result<Launch, String> {
                     [flag, path] if flag == "--dir" && name == "editor" && dir.is_none() => {
                         dir = Some(PathBuf::from(path))
                     }
-                    [flag, path] if flag == "--repo" && name == "git" && repo.is_none() => {
-                        repo = Some(PathBuf::from(path))
-                    }
                     _ => return Err(USAGE.to_owned()),
                 }
             }
-            let target = match (dir, file, repo) {
-                (Some(dir), file, _) => Some(Target::Dir(dir, file)),
-                (None, Some(file), _) => Some(Target::File(file)),
-                (None, None, repo) => repo.map(Target::Repo),
+            let target = match (dir, file) {
+                (Some(dir), file) => Some(Target::Dir(dir, file)),
+                (None, file) => file.map(Target::File),
             };
             Ok(Launch::Screen(ScreenLaunch {
                 open: screen(name)?,
@@ -462,7 +447,6 @@ fn open_launch(launch: Launch, cx: &mut App) -> Result<WindowHandle<Desk>, Strin
                 Some(Target::Dir(dir, file)) => {
                     open_dir(dir, file.as_deref(), board.as_deref(), window, cx)
                 }
-                Some(Target::Repo(path)) => open_repo(path, board.as_deref(), window, cx),
                 Some(Target::Plugin(folder)) => install_plugin(folder, window, cx),
                 None => open(board.as_deref(), window, cx),
             };

@@ -55,6 +55,13 @@ fn respond(
     feed: &Feed,
     cx: &mut App,
 ) -> Reply {
+    let screens: Vec<(&'static str, bool)> = screens
+        .iter()
+        .copied()
+        .filter(|(name, _)| *name != "git")
+        .chain([("git", cfg!(feature = "screen-work"))])
+        .collect();
+    let screens = screens.as_slice();
     let Request { id, call } = request;
     let verb = verb(&call);
     let fail = |kind, message: String| {

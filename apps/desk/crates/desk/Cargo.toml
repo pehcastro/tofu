@@ -11,6 +11,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 desk_canvas = { workspace = true, optional = true }
 desk_control = { path = "../control" }
 desk_core.workspace = true
+desk_motion.workspace = true
 desk_perf = { path = "../perf", default-features = false }
 desk_plugin.workspace = true
 desk_ui.workspace = true
@@ -25,8 +26,9 @@ serde_json = "1.0.149"
 toml = { version = "1.1.6", default-features = false, features = ["std", "serde", "parse"] }
 
 [features]
-default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-usage"]
+default = ["screen-work", "module-subagents", "module-file-edits", "module-shells", "screen-limits", "screen-classifier", "screen-library", "screen-context", "screen-session", "screen-forks", "screen-usage", "screen-boardy"]
 screen-work = []
+screen-boardy = ["screen-work"]
 screen-settings = []
 screen-accounts = []
 screen-theme = []
@@ -40,7 +42,6 @@ screen-forks = []
 module-subagents = []
 module-file-edits = []
 module-shells = []
-module-git = []
 module-editor = []
 module-browser = []
 module-data-studio = []
@@ -49,7 +50,7 @@ screen-intro = []
 screen-onboarding = ["screen-intro"]
 plugin-notepad = ["screen-work"]
 plugin-draw = ["screen-work", "dep:desk_canvas", "dep:draw_doc"]
-all-screens = ["plugin-notepad", "plugin-draw", "screen-work", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "module-subagents", "module-file-edits", "module-shells", "module-git", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
+all-screens = ["plugin-notepad", "plugin-draw", "screen-work", "screen-boardy", "screen-settings", "screen-accounts", "screen-theme", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "module-subagents", "module-file-edits", "module-shells", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
 
 [lints]
 workspace = true

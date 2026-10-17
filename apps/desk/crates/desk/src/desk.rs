@@ -162,9 +162,14 @@ const fn mark(
     }
 }
 
-pub const SCREEN_MARKS: [ScreenMark; 12] = [
+#[cfg(feature = "screen-work")]
+#[path = "screens/git/mod.rs"]
+pub mod git;
+
+pub const SCREEN_MARKS: [ScreenMark; 13] = [
     mark("editor", "Editor", Glyph::Code, ScreenGroup::Top),
     mark("boardy", "Boardy", Glyph::Inbox, ScreenGroup::Top),
+    mark("git", "Git", Glyph::Branch, ScreenGroup::Top),
     mark("library", "Library", Glyph::Book, ScreenGroup::Top),
     mark("settings", "Settings", Glyph::Settings, ScreenGroup::Top),
     mark("accounts", "Accounts", Glyph::Person, ScreenGroup::Top),
@@ -767,6 +772,15 @@ impl Desk {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        #[cfg(feature = "screen-work")]
+        let screens: Vec<Screen> = screens
+            .into_iter()
+            .filter(|screen| screen.name != "git")
+            .chain([Screen {
+                name: "git",
+                open: git::open,
+            }])
+            .collect();
         let palette = Palette::new(commands(&screens), window, cx);
         let picked = cx.listener(|desk, id: &SharedString, window, cx| {
             eprintln!("desk: palette picked {id}");
@@ -1631,6 +1645,10 @@ impl Desk {
                     .iter()
                     .map(|screen| screen.name)
                     .find(|name| *name == kept.name && screen_mark(name).is_some())?;
+                if self.gate.is_some() && self.gated_off(name).is_some() {
+                    eprintln!("desk: restore: skipped {name}, off in this project");
+                    return None;
+                }
                 Some((name, kept))
             })
             .collect();
@@ -1956,6 +1974,23 @@ impl Desk {
         }
         eprintln!("desk: boardy gate on {} flow {:?}", gate.on, gate.flow);
         self.gate = Some(gate);
+        let open = self.tabbed.contains(&BOARDY_SCREEN)
+            || self.shown.name == BOARDY_SCREEN
+            || self.parked.iter().any(|p| p.name == BOARDY_SCREEN);
+        if !gate.on && open {
+            self.parked.retain(|p| p.name != BOARDY_SCREEN);
+            self.tabbed.retain(|name| *name != BOARDY_SCREEN);
+            self.closed_screens
+                .retain(|closed| closed.name != BOARDY_SCREEN);
+            self.held.retain(|held| held.name != BOARDY_SCREEN);
+            if self.shown.name == BOARDY_SCREEN
+                && let Some(at) = self.parked.iter().position(|p| p.name == WORK_SCREEN)
+            {
+                self.shown = self.parked.remove(at);
+            }
+            eprintln!("desk: boardy off, closed its tab");
+            self.remember_state(cx);
+        }
         self.feed_screens(cx);
         cx.notify();
     }
