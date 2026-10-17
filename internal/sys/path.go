@@ -1,6 +1,7 @@
 package sys
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -46,10 +47,34 @@ func HomeConfigDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := usableHome(home); err != nil {
+		return "", err
+	}
 	if testing.Testing() && !inside(os.TempDir(), home) {
 		return StateDir(filepath.Join(testStateParent(), "home")), nil
 	}
 	return StateDir(home), nil
+}
+
+func usableHome(home string) error {
+	if !filepath.IsAbs(home) {
+		return fmt.Errorf("home %q is not an absolute path", home)
+	}
+	for dir := home; ; dir = filepath.Dir(dir) {
+		info, err := os.Stat(dir)
+		if err == nil && info.IsDir() {
+			return nil
+		}
+		if err == nil {
+			return fmt.Errorf("home %s is unusable: %s is a file, not a directory", home, dir)
+		}
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("home %s is unusable: %w", home, err)
+		}
+		if filepath.Dir(dir) == dir {
+			return fmt.Errorf("home %s is unusable: no part of it exists", home)
+		}
+	}
 }
 
 func testStateParent() string {
