@@ -884,13 +884,14 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 		if err != nil {
 			return turn.Config{}, nil, err
 		}
-		board := boardy.Managed{Local: boardy.Local{Store: store}}
+		board := boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: sessionID}
 		config.Board, config.TicketGrant, config.TicketTools = &board, tools.TicketGrant, tools.TicketTools
 		leadTickets, err := tools.TicketTools(board, sessionID)
 		if err != nil {
 			return turn.Config{}, nil, err
 		}
 		asking = append(asking, leadTickets...)
+		config.Environment += leadAttached(board, sessionID, run)
 	}
 	if opts.agent == "" && episodesOn(dir) {
 		zoom := &tools.Zoom{Project: dir, Compactor: func(ask turn.RecordedAsk) (memtree.Compact, func()) {
@@ -952,6 +953,26 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 	}
 	config.Tools = run.leadTools(orchestrating)
 	return config, spawner, nil
+}
+
+func leadAttached(board boardy.Managed, session string, run runtime) string {
+	if run.sessions != nil {
+		if begun, _ := sys.Exists(run.sessions.EventsPath(session)); begun {
+			return ""
+		}
+	}
+	sizes := board.Store.EventSizes()
+	boards, err := board.Store.Boards()
+	for _, managed := range boards {
+		if board.Manages(managed.Key, session, "") == nil {
+			err = errors.Join(err, board.Fire(rule.WhenAfter, rule.HookLeadAttach, managed.Key, "", session))
+		}
+	}
+	said := turn.BoardNudges(board.Store, sizes)
+	if err != nil {
+		said += "\n\na board hook on lead.attach failed: " + err.Error()
+	}
+	return said
 }
 
 func nodeProject(dir string) bool {

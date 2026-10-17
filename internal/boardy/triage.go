@@ -102,7 +102,14 @@ func (s Store) readRequest(key, id string) (Request, error) {
 }
 
 func (m Managed) Accept(key, id, actor string) (Ticket, error) {
+	return m.AcceptPlanned(key, id, "", "", actor)
+}
+
+func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, error) {
 	if err := m.Manages(key, actor, "accept a triage request"); err != nil {
+		return Ticket{}, err
+	}
+	if err := m.Store.planned(key, Front{Epic: epic, Sprint: sprint}); err != nil {
 		return Ticket{}, err
 	}
 	var accepted Ticket
@@ -112,7 +119,7 @@ func (m Managed) Accept(key, id, actor string) (Ticket, error) {
 			return err
 		}
 		ticket := req.Ticket
-		ticket.Status, ticket.Reason = Backlog, ""
+		ticket.Status, ticket.Reason, ticket.Epic, ticket.Sprint = Backlog, "", cmp.Or(epic, ticket.Epic), cmp.Or(sprint, ticket.Sprint)
 		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, req.By)))
 		accepting := subject{event: rule.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
 		if err := m.gate(&accepting); err != nil {

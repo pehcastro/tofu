@@ -18,6 +18,7 @@ const (
 type Managed struct {
 	Local
 	Person string
+	Lead   string
 }
 
 type RefusedError struct {
@@ -56,7 +57,7 @@ func (m Managed) role(board Board, actor string) Role {
 	switch {
 	case slices.Contains(board.Managers, actor):
 		return RoleManager
-	case forPerson && (len(board.Managers) == 0 || slices.Contains(board.Managers, cmp.Or(m.Person, string(RolePerson)))):
+	case (forPerson || actor != "" && actor == m.Lead) && (len(board.Managers) == 0 || slices.Contains(board.Managers, cmp.Or(m.Person, string(RolePerson)))):
 		return RoleManager
 	case forPerson:
 		return RolePerson

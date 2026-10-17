@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/boardy"
 	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
@@ -259,6 +260,14 @@ func (t *SpawnTool) boardLine(reports string) string {
 		}
 	}
 	return line + "; free todo: " + listed(w.free)
+}
+
+func BoardNudges(store boardy.Store, sizes map[string]int64) string {
+	nudges := store.NudgesSince(sizes)
+	if len(nudges) == 0 {
+		return ""
+	}
+	return "\n\na board hook nudges you: " + strings.Join(nudges, "; ")
 }
 
 func marked(prose string) string {

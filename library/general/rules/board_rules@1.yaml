@@ -1,0 +1,8 @@
+id: board_rules
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+mode: off
+text: the board runs hooks on its own events, and most people never write one, so you do. when the person corrects how the board is run the same way a second time, such as a ticket made without an epic or a review left open, or when a check you run by hand repeats on every ticket, add a board hook with board_rule that does it: test it against a ticket first, then add it, and say so in one line, such as added the board hook epic_at_create, which refuses a ticket with no epic; board_rule remove takes it out. a hook that refuses blocks the actor, so prefer nudge or record until the same miss has happened twice. a board hook is the board's own rule: a lesson about code or about the person goes to the library or to memory instead.
+notes: ships off and turns on in a project that has a board, unless projectManagement is set to something other than boardy. an audit found the lead had no tool for an epic and put 0 of 331 new tickets in one, while the person corrected the same board habit by hand turn after turn. it guards against a board rule that lives only in the conversation.

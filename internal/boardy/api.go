@@ -52,6 +52,9 @@ func (a API) Init(request InitRequest) (BoardsAnswer, error) {
 	if _, err := a.Board.Store.Init(request.Key, request.Name); err != nil {
 		return BoardsAnswer{}, err
 	}
+	if err := a.Board.Store.WriteStarterHooks(request.Key); err != nil {
+		return BoardsAnswer{}, err
+	}
 	return a.Boards()
 }
 
@@ -369,6 +372,8 @@ type TriageRequest struct {
 	Action  TriageAction `json:"action"`
 	Request string       `json:"request,omitempty"`
 	Reason  string       `json:"reason,omitempty"`
+	Epic    string       `json:"epic,omitempty"`
+	Sprint  string       `json:"sprint,omitempty"`
 }
 
 type TriageAnswer struct {
@@ -388,7 +393,7 @@ func (a API) Triage(request TriageRequest) (TriageAnswer, error) {
 	case TriageList:
 	case TriageAccept:
 		var ticket Ticket
-		ticket, err = a.Board.Accept(key, request.Request, a.Actor)
+		ticket, err = a.Board.AcceptPlanned(key, request.Request, request.Epic, request.Sprint, a.Actor)
 		answer.Accepted = &ticket
 	case TriageDrop:
 		err = a.Board.Drop(key, request.Request, request.Reason, a.Actor)

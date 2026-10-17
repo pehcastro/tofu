@@ -23,6 +23,7 @@ import (
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/anthropic"
 	"tofu/internal/recall"
+	"tofu/internal/rule"
 	"tofu/internal/session"
 	"tofu/internal/settings"
 	"tofu/internal/subagent"
@@ -390,7 +391,12 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	if t.writesNothing && (len(args.Owns) > 0 || args.Ticket != "") {
 		return Result{}, ReadOnlyError{Tool: t.Name()}
 	}
+	var boardSizes map[string]int64
 	if args.Ticket != "" && t.base.Board != nil {
+		boardSizes = t.base.Board.Store.EventSizes()
+		if err := t.base.Board.Fire(rule.WhenBefore, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
+			return Result{}, fmt.Errorf("spawn: %w%s", err, BoardNudges(t.base.Board.Store, boardSizes))
+		}
 		if args.Owns, err = t.base.TicketGrant(*t.base.Board, args.Ticket, t.base.Session, t.ticketActor(args.Ticket)); err != nil {
 			return Result{}, fmt.Errorf("spawn: %w", err)
 		}
@@ -512,7 +518,14 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 	started = true
 	t.Inbox.hold(held, site.log)
 	go t.background(runCtx, cancel, held, opened, site, task, llm.Origin{}, warm)
-	return Result{Content: narrowed + clampedWords(effort, opened) + held.runningWords(), Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
+	said := narrowed + clampedWords(effort, opened) + held.runningWords()
+	if boardSizes != nil {
+		if err := t.base.Board.Fire(rule.WhenAfter, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
+			said += "\n\na board hook after agent.spawn failed: " + err.Error()
+		}
+		said += BoardNudges(t.base.Board.Store, boardSizes)
+	}
+	return Result{Content: said, Command: subAgentID + " running: " + agent.Mission, SubAgent: subAgentID}, nil
 }
 
 func (t *SpawnTool) proseStore() *recall.Store {
@@ -769,6 +782,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		if err := t.base.Board.Store.RecordTicket(reported); err != nil {
 			text += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
 		}
+		text += t.reportedOnBoard(agent.Ticket, reported.Actor, reported.Text)
 	}
 	if runs := held.runsAs(); runs != "" {
 		text = agent.ID + " ran" + runs + "\n\n" + text
@@ -779,6 +793,21 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text), report.Completion
 	}
 	return text, report.Completion
+}
+
+func (t *SpawnTool) reportedOnBoard(id, actor, report string) string {
+	board := t.base.Board
+	sizes := board.Store.EventSizes()
+	var said string
+	if ticket, err := board.Get(id); err == nil && ticket.Status == boardy.Doing {
+		if _, err := board.Comment(id, "report: "+report, actor); err != nil {
+			said += "\n\nthis report was not written to " + id + "'s Log: " + err.Error()
+		}
+	}
+	if err := board.Fire(rule.WhenAfter, rule.HookAgentReport, "", id, actor); err != nil {
+		said += "\n\na board hook after agent.report failed: " + err.Error()
+	}
+	return said + BoardNudges(board.Store, sizes)
 }
 
 func (t *SpawnTool) ticketActor(ticket string) string {

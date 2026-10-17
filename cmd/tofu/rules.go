@@ -68,6 +68,7 @@ type ruleStack struct {
 const (
 	boardLeadRule     = "board_lead"
 	boardSubAgentRule = "board_sub_agent"
+	boardRulesRule    = "board_rules"
 	keepsSlotsRule    = "keeps_slots"
 )
 
@@ -75,7 +76,7 @@ func ruleSetting(id string) string {
 	switch id {
 	case verifySubAgentsRule:
 		return settingspkg.VerifySubAgents
-	case boardLeadRule, boardSubAgentRule, keepsSlotsRule:
+	case boardLeadRule, boardSubAgentRule, boardRulesRule, keepsSlotsRule:
 		return boardy.ManagementSetting
 	}
 	return ""
