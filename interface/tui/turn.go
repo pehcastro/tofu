@@ -934,7 +934,7 @@ func (a *App) refold() {
 	for _, row := range a.allSubAgents {
 		at, settled := settledAt(row)
 		switch due := now.Add(at.Sub(cut)); {
-		case !settled:
+		case !settled, a.openedFolded[row.Name]:
 		case at.Before(cut):
 			folded[row.Name] = true
 		case a.foldDue.IsZero() || due.Before(a.foldDue):
@@ -956,15 +956,20 @@ func (a *App) foldLater() tea.Cmd {
 }
 
 func (a *App) toggleFold() {
+	if a.unfolded {
+		clear(a.openedFolded)
+	}
 	a.fold(a.folded, !a.unfolded)
-	a.showUnfolded()
+	a.refold()
 }
 
 func (a *App) unfoldFor(actor string) {
-	if a.hidden()[actor] {
-		a.toggleFold()
-		a.syncFeed()
+	if !a.hidden()[actor] {
+		return
 	}
+	a.openedFolded[actor] = true
+	a.refold()
+	a.syncFeed()
 }
 
 func (a *App) showUnfolded() {

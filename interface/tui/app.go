@@ -268,6 +268,7 @@ type App struct {
 	allSubAgents   []subagent.Row
 	folded         map[string]bool
 	unfolded       bool
+	openedFolded   map[string]bool
 	foldDue        time.Time
 	foldArmed      time.Time
 	moves          map[string]movement
@@ -366,6 +367,7 @@ func New(options Options) *App {
 		started:       options.Now(),
 		reports:       map[string]string{},
 		moves:         map[string]movement{},
+		openedFolded:  map[string]bool{},
 		steered:       map[string]string{},
 		happenedIndex: map[string]int{},
 		lengthenedIDs: map[string]string{},
