@@ -96,7 +96,8 @@ before it acts on it. Where tofu departs:
   key. Its calls read their own shared part from cache.
 - **Entries get the same tree.** Each of the four scopes is its own log,
   tree and view, so `zoom` and `recall` work on entries as well as
-  episodes.
+  episodes, and `recall [tool#9da86e]` returns that call's record, from
+  this session or any it was forked from.
 
 On a bench of 30 questions about earlier work across chains that forked
 again and again, the episode view made 0 fork-summary calls per 100

@@ -10,6 +10,21 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc11 - 2026-10-17
+
+Old work is cheap to reach: recall finds a call by its id, and search over hundreds of folded sub-agents stops reading them all.
+
+### Changed
+
+- `recall` given a call's reference, such as `[tool#9da86e]`, returns that call's record, its arguments and its result, from this session or any it was forked from, and says plainly when no call has that id.
+- Search over 450 folded sub-agents builds a label only for what matches and streams the session file instead of parsing it whole: from ctrl+k to the found event it allocates 1.26 GB where it took 4.64 GB.
+- An `ask_person` header holds up to 30 characters, where 12 refused ordinary headers.
+- A sub-agent with no skill tool is told which skills were loaded for it, and a brief naming a skill it cannot load is answered with a note instead of a skill it never gets.
+
+### Fixed
+
+- A release commit refuses a docs page that breaks the docs contract, so a page over its length no longer goes out unnoticed.
+
 ## 0.5.15-rc10-fix1 - 2026-10-17
 
 ### Fixed

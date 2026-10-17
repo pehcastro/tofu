@@ -13,7 +13,7 @@ question.
 
 A call carries 1 to 4 questions. Each has:
 
-- a header of at most 12 characters, and one sentence
+- a header of at most 30 characters, and one sentence
 - a type: `choice`, `multi`, `text` or `yesno`
 - 2 to 4 options of 1 to 5 words, each with a description and an
   optional preview, for `choice` and `multi`

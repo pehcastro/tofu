@@ -44,7 +44,9 @@ reads, while a sub-agent can still load it by name.
 
 A sub-agent file can name skills in its own front matter, as
 `skills: release-note, changelog`, and those are loaded into that
-sub-agent's prompt when it starts.
+sub-agent's prompt when it starts. A sub-agent without the skill tool is
+told which skills were loaded for it, and a brief that names one it cannot
+load gets a note to work without it.
 
 ## Change it
 
