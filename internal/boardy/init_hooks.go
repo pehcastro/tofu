@@ -9,6 +9,12 @@ type starterHook struct{ id, source string }
 
 func starterHooks() []starterHook {
 	return []starterHook{
+		{"epic_suggest", `id: epic_suggest
+when: before
+on: ticket.create
+do: set epic jev board_epic@1
+if:
+  epic: empty`},
 		{"epic_at_create", `id: epic_at_create
 when: before
 on: ticket.create
@@ -18,11 +24,12 @@ text: every ticket belongs to an epic: name one from epic list, or make it first
 		{"evidence_at_review", `id: evidence_at_review
 when: before
 on: ticket.move
-do: field log
+do: contract
 then: refuse
-text: a ticket reaches review with the evidence for each acceptance line in force in its Log: what was run and what it printed
+text: a ticket reaches review with evidence for each acceptance line, what was run and what it printed, in the last sub-agent report's contract or, with no report, a Log line for each
 if:
-  to: review`},
+  to: review
+  actor: lead, sub-agent, hook`},
 		{"report_to_review", `id: report_to_review
 when: after
 on: agent.report

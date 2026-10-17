@@ -72,19 +72,22 @@ const (
 type Do string
 
 const (
-	DoCommand Do = "command"
-	DoJev     Do = "jev"
-	DoField   Do = "field"
-	DoPerson  Do = "person"
-	DoCreate  Do = "create"
-	DoMove    Do = "move"
-	DoAssign  Do = "assign"
-	DoLog     Do = "log"
-	DoNotify  Do = "notify"
-	DoSet     Do = "set"
+	DoCommand  Do = "command"
+	DoJev      Do = "jev"
+	DoField    Do = "field"
+	DoPerson   Do = "person"
+	DoContract Do = "contract"
+	DoCreate   Do = "create"
+	DoMove     Do = "move"
+	DoAssign   Do = "assign"
+	DoLog      Do = "log"
+	DoNotify   Do = "notify"
+	DoSet      Do = "set"
 )
 
-func (d Do) Check() bool { return slices.Contains([]Do{DoCommand, DoJev, DoField, DoPerson}, d) }
+func (d Do) Check() bool {
+	return slices.Contains([]Do{DoCommand, DoJev, DoField, DoPerson, DoContract}, d)
+}
 
 func (d Do) effect() bool {
 	return slices.Contains([]Do{DoCreate, DoMove, DoAssign, DoLog, DoNotify, DoSet}, d)
@@ -109,6 +112,15 @@ type Conditions struct {
 type Action struct {
 	Do  Do
 	Arg string
+}
+
+func (a Action) Setting() (field, value, asks string) {
+	field, value, _ = strings.Cut(a.Arg, " ")
+	value = strings.TrimSpace(value)
+	if set, fromJev := strings.CutPrefix(value, string(DoJev)+" "); fromJev {
+		return field, "", strings.TrimSpace(set)
+	}
+	return field, value, ""
 }
 
 type Hook struct {
@@ -289,7 +301,7 @@ func (h Hook) valid() error {
 	case h.Every > 0 && h.Every < konst.CronMinIntervalSeconds*time.Second:
 		why = fmt.Sprintf("runs every %s, under the %ds minimum", h.Every, konst.CronMinIntervalSeconds)
 	case !do.Check() && !do.effect():
-		why = fmt.Sprintf("does %q, and do is a check (command, jev, field, person) or an effect (create, move, assign, log, notify, set)", do)
+		why = fmt.Sprintf("does %q, and do is a check (command, jev, field, person, contract) or an effect (create, move, assign, log, notify, set)", do)
 	case do.Check() && !slices.Contains([]Then{ThenRefuse, ThenNudge, ThenAsk, ThenRecord}, h.Then):
 		why = fmt.Sprintf("runs the check %s, and then says what its failure does: %s, %s, %s or %s", do, ThenRefuse, ThenNudge, ThenAsk, ThenRecord)
 	case do.effect() && h.Then != "":
@@ -298,9 +310,9 @@ func (h Hook) valid() error {
 		why = fmt.Sprintf("runs after and declares then %s, and an after hook cannot stop what already happened", h.Then)
 	case h.When == WhenBefore && do.effect() && do != DoSet:
 		why = fmt.Sprintf("runs before and does %s, and before a hook runs a check or a set", do)
-	case (do == DoPerson) != (h.Action.Arg == ""):
-		why = fmt.Sprintf("does %s, and every do but person names what it works on", do)
-	case !h.On.ticketed() && slices.Contains([]Do{DoMove, DoAssign, DoLog, DoSet}, do):
+	case (do == DoPerson || do == DoContract) != (h.Action.Arg == ""):
+		why = fmt.Sprintf("does %s, and every do but person and contract names what it works on", do)
+	case !h.On.ticketed() && slices.Contains([]Do{DoMove, DoAssign, DoLog, DoSet, DoContract}, do):
 		why = fmt.Sprintf("is on %s, which has no ticket to %s", h.On, do)
 	case do == DoSet && len(strings.Fields(h.Action.Arg)) < 2:
 		why = "does set, which names a field and its value"

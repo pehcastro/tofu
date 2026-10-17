@@ -1,11 +1,13 @@
 package boardy
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,6 +17,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/rule"
+	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
 
@@ -108,11 +111,12 @@ func validHook(h rule.Hook) error {
 			errs = append(errs, fmt.Errorf("%q is not a ticket field: %s", h.Action.Arg, strings.Join(ticketFields(), ", ")))
 		}
 	case rule.DoSet:
-		field, value, _ := strings.Cut(h.Action.Arg, " ")
-		if settable := []string{"epic", "sprint", "assignee", "priority", "component", "spec", "size"}; !slices.Contains(settable, field) {
+		field, value, asks := h.Action.Setting()
+		switch settable := []string{"epic", "sprint", "assignee", "priority", "component", "spec", "size"}; {
+		case !slices.Contains(settable, field):
 			errs = append(errs, fmt.Errorf("set names %q, and a hook sets one of %s", field, strings.Join(settable, ", ")))
-		} else {
-			errs = append(errs, new(Ticket).set(field, strings.TrimSpace(value)))
+		case asks == "":
+			errs = append(errs, new(Ticket).set(field, value))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
@@ -206,7 +210,11 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 	case rule.DoPerson:
 		return cmp.Or(h.Text, "this waits for the person to approve it"), m.actorKind(s.actor) != rule.ActorPerson, nil
 	case rule.DoJev:
-		return "the Jev question set " + h.Action.Arg + " is not wired to board hooks, so the check fails closed", true, nil
+		answer, said := m.askJev(h.Action.Arg, s)
+		return strings.TrimSpace(h.Text + "\n" + said), answer == "", nil
+	case rule.DoContract:
+		missing := m.unevidenced(s)
+		return cmp.Or(h.Text, "a ticket moves on with evidence for each acceptance line") + ": " + missing, missing != "", nil
 	case rule.DoCommand:
 		output, failed, err := rule.RunCommand(h.Action.Arg, s.path, []string{"TOFU_BOARD_EVENT=" + string(s.event), "TOFU_TICKET=" + s.path,
 			"TOFU_TICKET_ID=" + s.ticket.ID, "TOFU_FROM=" + string(s.from), "TOFU_TO=" + string(s.to), "TOFU_ACTOR=" + s.actor})
@@ -218,6 +226,43 @@ func (m Managed) check(h rule.Hook, s subject) (string, bool, error) {
 	panic("boardy: unknown check " + string(h.Action.Do))
 }
 
+func (m Managed) unevidenced(s subject) string {
+	lines := len(subagent.TicketContract(s.ticket.ID, s.ticket.Acceptance, "", false).Claims)
+	if lines == 0 {
+		return s.ticket.ID + " has no acceptance lines to evidence"
+	}
+	events, err := m.Store.Events(s.key, 0)
+	if err != nil {
+		return "its reports could not be read: " + err.Error()
+	}
+	var last subagent.Summary
+	found := false
+	for _, event := range events {
+		if summary, ok := subagent.ReadSummary(event.Text); ok && event.Ticket == s.ticket.ID && event.Kind == Reported {
+			last, found = summary, true
+		}
+	}
+	logged := 0
+	for line := range strings.Lines(s.ticket.Log) {
+		if strings.HasPrefix(line, "- ") {
+			logged++
+		}
+	}
+	switch {
+	case !found && logged < lines:
+		return fmt.Sprintf("no sub-agent report on %s carries a contract, and its Log has %d lines for %d acceptance lines", s.ticket.ID, logged, lines)
+	case !found:
+		return ""
+	case last.Partial:
+		return "its last report is partial: the sub-agent was stopped before it finished"
+	case last.Lines != lines:
+		return fmt.Sprintf("its last contract covers %d acceptance lines and Acceptance now has %d", last.Lines, lines)
+	case last.Omitted > 0:
+		return fmt.Sprintf("its last contract omits %d of %d acceptance lines", last.Omitted, last.Lines)
+	}
+	return ""
+}
+
 type trial struct {
 	detail          string
 	failed, blocked bool
@@ -226,12 +271,8 @@ type trial struct {
 
 func (m Managed) try(h rule.Hook, s subject) (trial, error) {
 	detail, failed, err := m.check(h, s)
-	then := h.Then
-	if h.Action.Do == rule.DoJev && h.When == rule.WhenBefore {
-		then = rule.ThenAsk
-	}
-	blocked := failed && (then == rule.ThenRefuse || then == rule.ThenAsk && m.actorKind(s.actor) != rule.ActorPerson)
-	return trial{detail: detail, failed: failed, blocked: blocked, then: then}, err
+	blocked := failed && (h.Then == rule.ThenRefuse || h.Then == rule.ThenAsk && m.actorKind(s.actor) != rule.ActorPerson)
+	return trial{detail: detail, failed: failed, blocked: blocked, then: h.Then}, err
 }
 
 func (m Managed) entered(key string, ticket Ticket) time.Time {
@@ -292,10 +333,14 @@ func hookText(id, what string, event rule.HookEvent, detail string) string {
 	return fmt.Sprintf("%s (%s, %s): %s", id, what, event, detail)
 }
 
-func (e Event) Nudge() (string, bool) {
-	id, rest, found := strings.Cut(e.Text, " ("+string(rule.ThenNudge)+", ")
-	_, detail, _ := strings.Cut(rest, "): ")
-	return id + ": " + detail, found && e.Kind == RuleFired
+func (e Event) hookSaid(whats ...string) (string, bool) {
+	for _, what := range whats {
+		if id, rest, found := strings.Cut(e.Text, " ("+what+", "); found && e.Kind == RuleFired {
+			_, detail, _ := strings.Cut(rest, "): ")
+			return id + ": " + detail, true
+		}
+	}
+	return "", false
 }
 
 func (s Store) EventSizes() map[string]int64 {
@@ -310,24 +355,37 @@ func (s Store) EventSizes() map[string]int64 {
 }
 
 func (s Store) NudgesSince(sizes map[string]int64) []string {
+	nudges, _ := s.saidSince(sizes, string(rule.ThenNudge), string(rule.DoSet))
+	return nudges
+}
+
+func (s Store) NotifiesSince(sizes map[string]int64) ([]string, map[string]int64) {
+	return s.saidSince(sizes, string(rule.DoNotify))
+}
+
+func (s Store) saidSince(sizes map[string]int64, whats ...string) ([]string, map[string]int64) {
 	boards, _ := s.Boards()
-	var nudges []string
+	var said []string
+	read := map[string]int64{}
+	maps.Copy(read, sizes)
 	for _, board := range boards {
 		raw, err := os.ReadFile(filepath.Join(board.Dir, EventsFileName))
-		if err != nil || int64(len(raw)) <= sizes[board.Key] {
+		start, end := sizes[board.Key], int64(bytes.LastIndexByte(raw, '\n')+1)
+		if err != nil || end <= start {
 			continue
 		}
-		for line := range strings.Lines(string(raw[sizes[board.Key]:])) {
+		read[board.Key] = end
+		for line := range strings.Lines(string(raw[start:end])) {
 			var event Event
 			if json.Unmarshal([]byte(line), &event) != nil {
 				continue
 			}
-			if text, isNudge := event.Nudge(); isNudge {
-				nudges = append(nudges, text)
+			if text, found := event.hookSaid(whats...); found {
+				said = append(said, text)
 			}
 		}
 	}
-	return nudges
+	return said, read
 }
 
 func (m Managed) record(s subject, fired []Fired) error {
@@ -351,19 +409,15 @@ func (m Managed) gate(s *subject) error {
 	if err != nil {
 		return err
 	}
-	fired, sets, err := m.weigh(hooks, rule.WhenBefore, *s)
-	if err = errors.Join(m.record(*s, fired), err); err != nil {
-		return err
-	}
+	_, sets, _ := m.weigh(slices.DeleteFunc(slices.Clone(hooks), func(h rule.Hook) bool { return h.Action.Do != rule.DoSet }), rule.WhenBefore, *s)
 	for _, h := range sets {
-		if err := m.set(h, s); err != nil {
-			return err
-		}
-		if err := m.note(h, *s, s.expand(h.Action.Arg)); err != nil {
+		said, err := m.set(h, s)
+		if err = errors.Join(err, m.note(h, *s, said)); err != nil {
 			return err
 		}
 	}
-	return nil
+	fired, _, err := m.weigh(hooks, rule.WhenBefore, *s)
+	return errors.Join(m.record(*s, fired), err)
 }
 
 func (m Managed) after(s subject) error {
@@ -413,7 +467,7 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 			_, err = m.comment(board, ticket, arg, actor, depth)
 		}
 	case rule.DoSet:
-		err = m.set(h, &s)
+		arg, err = m.set(h, &s)
 	case rule.DoNotify:
 	}
 	if err != nil {
@@ -422,14 +476,22 @@ func (m Managed) effect(h rule.Hook, s subject) error {
 	return m.note(h, s, arg)
 }
 
-func (m Managed) set(h rule.Hook, s *subject) error {
-	field, value, _ := strings.Cut(h.Action.Arg, " ")
-	value = s.expand(strings.TrimSpace(value))
+func (m Managed) set(h rule.Hook, s *subject) (string, error) {
+	field, value, asks := h.Action.Setting()
+	value = s.expand(value)
+	said := field + " " + value
+	if asks != "" {
+		var why string
+		if value, why = m.askJev(asks, *s); value == "" {
+			return field + " left as it was: " + why, nil
+		}
+		said = field + " " + value + ": " + why
+	}
 	if err := s.ticket.set(field, value); err != nil || s.ticket.ID == "" {
-		return err
+		return said, err
 	}
 	_, err := m.Store.Edit(s.ticket.ID, func(t *Ticket) error { return t.set(field, value) })
-	return err
+	return said, err
 }
 
 func (m Managed) Fire(when rule.When, event rule.HookEvent, key, id, actor string) error {

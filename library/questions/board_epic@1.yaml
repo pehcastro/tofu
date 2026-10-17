@@ -1,0 +1,36 @@
+name: board_epic
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by a board hook that sets a ticket's epic from Jev's answer, written
+  do: set epic jev board_epic@1. state.ticket is the ticket being made or
+  changed and state.epics holds the board's open epics. internal/boardy adds
+  one option per open epic after none, named by the epic's id, with its title
+  and text as the criteria. the hook sets the epic when Jev chooses an epic at
+  or above epic_at, and leaves it empty on none, below it, or on any failure,
+  where the board's epic check then refuses. epic_at sits at the middle, an
+  uncalibrated prior.
+
+thresholds:
+  epic_at: 0.5
+
+state:
+  - ticket
+  - epics
+
+questions:
+  epic:
+    type: choice
+    instructions: >-
+      A ticket on a project board, in `ticket`, is placed in an epic: the
+      larger piece of work it is part of. `epics` holds the board's open
+      epics, and each option past none is one of them, named by its id.
+      Choose the epic this ticket's work belongs to. Judge what the ticket
+      asks for against what each epic is about, not the words they share.
+    escape: none
+    options:
+      - name: none
+        criteria: >-
+          No open epic is about the work this ticket asks for, or more than
+          one fits it equally well.

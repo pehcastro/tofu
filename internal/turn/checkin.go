@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -105,10 +106,31 @@ func (t *SpawnTool) watch(held *heldSubAgent, check *checkIn) func() {
 }
 
 const (
-	sourceLeadCheckIn  = "lead check-in"
-	leadCheckInOpening = "lead check-in: the last turn ended"
-	leadBoardReadFile  = "lead-board.json"
+	sourceLeadCheckIn    = "lead check-in"
+	leadCheckInOpening   = "lead check-in: the last turn ended"
+	leadBoardReadFile    = "lead-board.json"
+	leadNotifiedFile     = "lead-notified.json"
+	boardNotifiesOpening = "board hooks notify you: "
 )
+
+func boardNotifies(board *boardy.Managed) string {
+	if board == nil {
+		return ""
+	}
+	path := filepath.Join(filepath.Dir(board.Store.Dir), leadNotifiedFile)
+	var sizes map[string]int64
+	if raw, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(raw, &sizes)
+	}
+	notes, read := board.Store.NotifiesSince(sizes)
+	if raw, err := json.Marshal(read); err == nil && !maps.Equal(read, sizes) {
+		_ = sys.WriteFile(path, raw, 0o600)
+	}
+	if len(notes) == 0 {
+		return ""
+	}
+	return NotesAfterTheTask + boardNotifiesOpening + strings.Join(notes, "; ")
+}
 
 type leadWork struct {
 	running, limit int
