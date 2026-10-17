@@ -13,7 +13,11 @@ import (
 
 func (s *Store) line(ref Ref) string {
 	text, built := s.nodes[ref]
-	if !built {
+	switch {
+	case built:
+	case ref.Level == 0:
+		text = clip(s.items[ref.Index].rendered())
+	default:
 		text = "(not summarized yet: zoom it)"
 	}
 	return strconv.Itoa(ref.ID()) + "+" + strconv.Itoa(ref.Span()) + "|" + strings.ReplaceAll(text, "\n", " ")
@@ -37,6 +41,7 @@ func (s *Store) View() string {
 
 func (s *Store) Advance(high, low int) error {
 	v := s.view
+	v.High = high
 	for {
 		if size := s.size(v.Lines); size > high || v.Merging && size > low {
 			v.Lines = s.shrink(v.Lines, v.T, low)

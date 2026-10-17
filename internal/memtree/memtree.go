@@ -32,6 +32,7 @@ type node struct {
 
 type savedView struct {
 	T       int   `json:"t"`
+	High    int   `json:"high,omitempty"`
 	Merging bool  `json:"merging"`
 	Lines   []Ref `json:"lines"`
 }

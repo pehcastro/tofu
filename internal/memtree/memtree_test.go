@@ -223,6 +223,7 @@ func TestAKilledBuildResumesAndBuildsNoNodeTwice(t *testing.T) {
 		}
 		return nil
 	}}
+	s.view.Merging = true
 	built, err := s.Build(context.Background(), first.compact)
 	if err != nil {
 		t.Fatal(err)
@@ -247,6 +248,7 @@ func TestAKilledBuildResumesAndBuildsNoNodeTwice(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = again.Close() })
 	var second counter
+	again.view.Merging = true
 	if _, err := again.Build(context.Background(), second.compact); err != nil {
 		t.Fatal(err)
 	}
@@ -281,6 +283,7 @@ func TestLinesAreFreeUpTo512BytesAndClippedAtARuneAbove(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	s.view.Merging = true
 	built, err := s.Build(context.Background(), func(context.Context, string, string, string) (string, error) {
 		return strings.Repeat("é", 100) + string(rune(8212)) + strings.Repeat("é", 300), nil
 	})
@@ -320,6 +323,7 @@ func TestACompactionReadsTheBuiltViewBeforeItsNode(t *testing.T) {
 	}
 	seen := map[string]string{}
 	var mu sync.Mutex
+	s.view.Merging = true
 	_, err := s.Build(context.Background(), func(_ context.Context, before, left, right string) (string, error) {
 		mu.Lock()
 		seen[left+right] = before
@@ -346,6 +350,7 @@ func TestACompactionReadsTheBuiltViewBeforeItsNode(t *testing.T) {
 		}
 	}
 	var read string
+	bulk.view.Merging = true
 	if _, err := bulk.Build(context.Background(), func(_ context.Context, before, _, _ string) (string, error) {
 		read = before
 		return "line", nil
@@ -396,6 +401,7 @@ func TestZoomOpensALineDownToTheRawItem(t *testing.T) {
 		}
 	}
 	var c counter
+	s.view.Merging = true
 	if _, err := s.Build(context.Background(), c.compact); err != nil {
 		t.Fatal(err)
 	}
@@ -425,6 +431,7 @@ func TestAFailedCompactionIsRetriedByTheNextBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	refusing := counter{fail: func(int64) error { return errors.New("refused") }}
+	s.view.Merging = true
 	built, err := s.Build(context.Background(), refusing.compact)
 	if err != nil || len(built.Failed) != 1 {
 		t.Fatalf("a refused compaction gave %d failures, %v", len(built.Failed), err)
@@ -432,10 +439,11 @@ func TestAFailedCompactionIsRetriedByTheNextBuild(t *testing.T) {
 	if err := s.Advance(4096, 2048); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(s.View(), "aaaa") || !strings.Contains(s.View(), "0+1|") {
-		t.Fatalf("an unbuilt long item shows in the view as %q", s.View())
+	if view := s.View(); !strings.HasPrefix(view, "0+1|user: "+strings.Repeat("a", 506)+"\n") {
+		t.Fatalf("an unbuilt long item shows in the view as %q, want its first 512 bytes", view)
 	}
 	var c counter
+	s.view.Merging = true
 	if _, err := s.Build(context.Background(), c.compact); err != nil || c.calls.Load() != 1 {
 		t.Fatalf("the next build made %d calls, %v", c.calls.Load(), err)
 	}
@@ -469,5 +477,51 @@ func TestAHandWrittenLogKeepsItsLastLineAndRefusesABrokenOne(t *testing.T) {
 	if s, err := Open(broken); err == nil {
 		_ = s.Close()
 		t.Fatal("a malformed line in the middle of the log was read")
+	}
+}
+
+func TestAViewUnderItsHighMarkCallsNothingAndPassingItBuildsInOneBatch(t *testing.T) {
+	s, _ := openLog(t)
+	var c counter
+	const budget = 4096
+	appended := 0
+	for ; appended < 3; appended++ {
+		if err := s.Append(sized(900, appended)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Advance(budget, budget/2); err != nil {
+		t.Fatal(err)
+	}
+	if built, err := s.Build(context.Background(), c.compact); err != nil || c.calls.Load() != 0 || built.Free != 0 {
+		t.Fatalf("three long items in a view of %d bytes under its %d byte high mark made %d calls and %d free nodes, %v", len(s.View()), budget, c.calls.Load(), built.Free, err)
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(s.View(), "\n"), "\n") {
+		if !strings.Contains(line, "+1|user: ") || len(line) > 520 {
+			t.Fatalf("an unsummarized item shows as %q, %d bytes, want its first 512 bytes", line[:min(len(line), 60)], len(line))
+		}
+	}
+	for ; len(s.View()) <= budget; appended++ {
+		if err := s.Append(sized(900, appended)); err != nil {
+			t.Fatal(err)
+		}
+		before := c.calls.Load()
+		passes := s.size(s.view.Lines)+len(s.line(Ref{Index: appended}))+1 > budget
+		if _, err := s.Build(context.Background(), c.compact); err != nil {
+			t.Fatal(err)
+		}
+		if called := c.calls.Load() > before; called != passes {
+			t.Fatalf("item %d: the view passes its high mark %v and the build called the model %v", appended, passes, called)
+		}
+		if err := s.Advance(budget, budget/2); err != nil {
+			t.Fatal(err)
+		}
+		if passes {
+			break
+		}
+	}
+	_, merged := s.nodes[Ref{Level: 1}]
+	if view := s.View(); len(view) > budget || !merged {
+		t.Fatalf("after the batch the view is %d bytes and the batch merged 0+2 %v:\n%s", len(view), merged, view)
 	}
 }

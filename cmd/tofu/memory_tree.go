@@ -121,7 +121,11 @@ func memoryTree(o verbOutput, store *memtree.Store, budget int) int {
 		writtenForAnHour.Add(int64(decision.CacheWrite1h))
 		return decision, err
 	})
-	built, err := store.Build(context.Background(), compact)
+	var built memtree.Built
+	err = store.Advance(budget, budget/2)
+	if err == nil {
+		built, err = store.Build(context.Background(), compact)
+	}
 	if err == nil {
 		err = store.Advance(budget, budget/2)
 	}

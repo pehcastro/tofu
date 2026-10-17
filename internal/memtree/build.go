@@ -28,6 +28,9 @@ type compacted struct {
 
 func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 	var built Built
+	if !s.passesHighMark() {
+		return built, nil
+	}
 	var failed []Ref
 	done := make(chan compacted, konst.MemtreeCompactionsAtOnce)
 	running := 0
@@ -73,6 +76,14 @@ func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 	}
 	s.ready = failed
 	return built, nil
+}
+
+func (s *Store) passesHighMark() bool {
+	size := s.size(s.view.Lines)
+	for id := s.view.T; id < len(s.items); id++ {
+		size += len(s.line(Ref{Index: id})) + 1
+	}
+	return s.view.Merging || size > cmp.Or(s.view.High, konst.MemtreeViewBytes)
 }
 
 func (s *Store) halves(ref Ref) (string, string) {
