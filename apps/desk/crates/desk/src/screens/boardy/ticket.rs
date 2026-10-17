@@ -16,9 +16,11 @@ use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, T1, T2};
 use desk_ui::components::status_icon::status_icon;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, App, ClickEvent, Context, CursorStyle, Div, FontWeight, SharedString, Window, div,
-    prelude::*, px, rgb_to_hsla,
+    AnyElement, App, ClickEvent, Context, CursorStyle, Div, FontWeight, MouseButton,
+    MouseMoveEvent, Pixels, Rgba, SharedString, Window, canvas, div, prelude::*, px, rgb_to_hsla,
 };
+use std::cell::Cell;
+use std::rc::Rc;
 use std::time::Instant;
 
 use super::look::{self, age, day, disc, kit, noun};
@@ -124,34 +126,32 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
                         .child(properties(boardy, opened, theme, cx)),
                 )
                 .into_any_element(),
+            line: theme.color(ColorToken::Separator),
+            lit: theme.color(ColorToken::FocusRing),
         })
 }
 
 struct Width {
     px: f32,
+    dragging: bool,
+    right: Rc<Cell<Pixels>>,
     moved: Option<Instant>,
-}
-
-struct Edge;
-
-struct Ghost;
-
-impl Render for Ghost {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-    }
 }
 
 #[derive(IntoElement)]
 struct Split {
     body: AnyElement,
     panel: AnyElement,
+    line: Rgba,
+    lit: Rgba,
 }
 
 impl RenderOnce for Split {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let width = window.use_keyed_state("boardy-panel-width", cx, |_, _| Width {
             px: PANEL,
+            dragging: false,
+            right: Rc::default(),
             moved: None,
         });
         if let Some(moved) = width.update(cx, |width, _| width.moved.take()) {
@@ -160,29 +160,61 @@ impl RenderOnce for Split {
                 moved.elapsed().as_secs_f64() * 1000.0
             );
         }
-        let shown = width.read(cx).px;
+        let (shown, right) = {
+            let held = width.read(cx);
+            (held.px, held.right.clone())
+        };
+        let (moving, lifting, pressing) = (width.clone(), width.clone(), width);
         div()
-            .id("boardy-split")
             .flex_1()
             .min_h_0()
             .flex()
-            .on_drag_move::<Edge>(move |event, _, cx| {
-                let to = f32::from(event.bounds.right() - event.event.position.x);
-                width.update(cx, |width, cx| {
+            .relative()
+            .on_mouse_move(move |event: &MouseMoveEvent, _, cx| {
+                moving.update(cx, |width, cx| {
+                    if !width.dragging || event.pressed_button != Some(MouseButton::Left) {
+                        width.dragging = false;
+                        return;
+                    }
+                    let to = f32::from(width.right.get() - event.position.x);
                     width.px = to.clamp(PANEL_LEAST, PANEL_MOST);
                     width.moved = Some(Instant::now());
                     cx.notify();
                 });
             })
+            .on_mouse_up(MouseButton::Left, move |_, _, cx| {
+                lifting.update(cx, |width, _| width.dragging = false);
+            })
+            .child(
+                canvas(
+                    move |bounds, _, _| right.set(bounds.right()),
+                    |_, (), _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
             .child(div().flex_1().min_w_0().h_full().child(self.body))
             .child(
                 div()
                     .id("boardy-panel-edge")
+                    .group("boardy-panel-edge")
+                    .flex()
                     .flex_none()
+                    .justify_center()
                     .w(px(HANDLE))
                     .h_full()
-                    .cursor(CursorStyle::ResizeColumn)
-                    .on_drag(Edge, |_, _, _, cx| cx.new(|_| Ghost)),
+                    .cursor(CursorStyle::ResizeLeftRight)
+                    .child(
+                        div()
+                            .w(px(1.0))
+                            .h_full()
+                            .bg(self.line)
+                            .group_hover("boardy-panel-edge", move |mark| mark.bg(self.lit)),
+                    )
+                    .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                        cx.stop_propagation();
+                        pressing.update(cx, |width, _| width.dragging = true);
+                    }),
             )
             .child(
                 div()
