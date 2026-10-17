@@ -10,6 +10,26 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc9 - 2026-10-17
+
+Every client sees one live session, and codex keeps its prompt cache through a run.
+
+### Added
+
+- A client that attaches to a running session gets its live state: queued messages, pending approvals and questions, the sub-agents that are working, and the running turn. A second client opens a running session in about 20 ms instead of 3 s.
+- Session settings live in the holder: asking, the model pick and effort set from any client, over serve or in a terminal, apply to the next request and every attached client sees them.
+
+### Changed
+
+- codex-sub sends a run over one websocket with `previous_response_id`, as codex does, and falls back to https when the socket fails. On the rivals task every request after the first now reads at least as much from the cache as the one before. A session keeps one thread, window and turn id and sends the turn-state token back.
+- A window with 450 folded sub-agents holds 24 MB instead of 82: the opening chat is freed once it is drawn.
+- A memory summary over 512 bytes is cut at a word instead of asked again: 97 calls for 97 summaries where it took 120.
+
+### Fixed
+
+- `session.forked` names the new session in `to`, a fork is announced even when its header edit fails, and a sub-agent's fork no longer switches the session serve shows.
+- Opening a second session over serve with an asking setting no longer changes the first session's.
+
 ## 0.5.15-rc8 - 2026-10-17
 
 A running session belongs to no window, opens fast however old it is, and the trace says who stopped what.

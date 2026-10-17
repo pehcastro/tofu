@@ -40,7 +40,10 @@ only with the setting `oneWorkingSessionPerProject` off; while it is on, the def
 terminal follow it, so closing one leaves the other running, and `session.open` names the holder in
 `heldBy`. `turn.send` while a turn runs queues the text as a steer and answers `steered`; pass
 `expectedTurnId` to be refused instead. `turn.stop` stops the lead and leaves running sub-agents
-working; pass `everything: true` to stop them too.
+working; pass `everything: true` to stop them too. A client that attaches mid-turn gets the
+queued messages, pending approvals and working sub-agents at once, and `session.set` from any
+client sets the holder's asking and model for every client. When the lead forks,
+`session.forked` names the new session in `to`, and every client moves to it.
 
 **It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x
 faster than before, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the

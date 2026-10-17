@@ -20,6 +20,11 @@ spending its own plan's quota. On one five-route task, the Codex command
 line read 580,201 input tokens and took 285 s; tofu read 111,543 and took
 66 s.
 
+A run talks to Codex over one websocket, as the Codex command line does:
+each request after the first sends only what is new with
+`previous_response_id`, so the prompt cache holds through the run, and if
+the socket fails tofu falls back to https for that request.
+
 ## Signing in and using it
 
 - Sign in: `tofu login llm codex-sub`. Add `--paste` when port 1455 is
