@@ -118,7 +118,8 @@ func crowdApp(t *testing.T, at *time.Time) (*App, []subagent.Row) {
 }
 
 func TestFoldedSubAgentsLeaveTheHeapAndOpenFromTheSession(t *testing.T) {
-	at := fixedStart()
+	at, baseline := fixedStart(), heapAlloc()
+	held := func() uint64 { return max(heapAlloc(), baseline) - baseline }
 	app, rows := crowdApp(t, &at)
 	at = at.Add(konst.SettledSubAgentFoldMinutes*time.Minute + time.Hour)
 	app.Update(Event{Kind: EventSubAgent, SubAgents: slices.Clone(rows)})
@@ -127,10 +128,10 @@ func TestFoldedSubAgentsLeaveTheHeapAndOpenFromTheSession(t *testing.T) {
 	if screen := ansi.Strip(app.View().Content); !strings.Contains(screen, fmt.Sprintf("%d folded", heapAgents)) {
 		t.Fatalf("the crowd did not fold\n%s", screen)
 	}
-	folded, thought := heapAlloc(), uint64(heapAgents*heapCalls*heapThoughtChunks*heapChunk)
-	t.Logf("folded, at once: heap %.1f MB, %d feed events held, %.1f MB of thinking streamed", mb(folded), len(app.happened), mb(thought))
+	folded, thought := held(), uint64(heapAgents*heapCalls*heapThoughtChunks*heapChunk)
+	t.Logf("folded, at once: the app holds %.1f MB over a %.1f MB baseline, %d feed events held, %.1f MB of thinking streamed", mb(folded), mb(baseline), len(app.happened), mb(thought))
 	if folded > thought/3 {
-		t.Errorf("the folded heap is %.1f MB, over a third of the %.1f MB of thinking the crowd streamed", mb(folded), mb(thought))
+		t.Errorf("the folded app holds %.1f MB, over a third of the %.1f MB of thinking the crowd streamed", mb(folded), mb(thought))
 	}
 	samples := []uint64{folded}
 	for tick := time.Duration(0); tick < heapSettledFor; tick += heapHostTick {
@@ -141,12 +142,12 @@ func TestFoldedSubAgentsLeaveTheHeapAndOpenFromTheSession(t *testing.T) {
 			app.View()
 		}
 		if (tick+heapHostTick)%(5*time.Minute) == 0 {
-			samples = append(samples, heapAlloc())
-			t.Logf("folded, %v later: heap %.1f MB, %d feed events held", tick+heapHostTick, mb(samples[len(samples)-1]), len(app.happened))
+			samples = append(samples, held())
+			t.Logf("folded, %v later: the app holds %.1f MB, %d feed events held", tick+heapHostTick, mb(samples[len(samples)-1]), len(app.happened))
 		}
 	}
 	if last := samples[len(samples)-1]; last > folded+folded*heapFlatPercent/100 {
-		t.Errorf("the folded heap grew from %.1f MB to %.1f MB over %v of host updates", mb(folded), mb(last), heapSettledFor)
+		t.Errorf("the folded app grew from %.1f MB to %.1f MB over %v of host updates", mb(folded), mb(last), heapSettledFor)
 	}
 
 	searched := heapName(heapSearched)
@@ -158,7 +159,11 @@ func TestFoldedSubAgentsLeaveTheHeapAndOpenFromTheSession(t *testing.T) {
 	if !strings.Contains(opened, "[&"+searched+"]") || !strings.Contains(opened, heapPath(heapSearched, heapCalls-1)) {
 		t.Fatalf("the search for mission%03d did not open %s with its calls\n%s", heapSearched, searched, opened)
 	}
-	t.Logf("opened: heap %.1f MB, %d feed events held", mb(heapAlloc()), len(app.happened))
+	openedHeld := held()
+	t.Logf("opened: the app holds %.1f MB, %d feed events held", mb(openedHeld), len(app.happened))
+	if openedHeld > thought/3 {
+		t.Errorf("opening %s left the app holding %.1f MB, over a third of the %.1f MB of thinking the crowd streamed", searched, mb(openedHeld), mb(thought))
+	}
 }
 
 func TestACrowdOf180000FeedEventsSharesNoShortID(t *testing.T) {
