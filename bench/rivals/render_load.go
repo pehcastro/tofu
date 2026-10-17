@@ -133,7 +133,7 @@ func loadMarkdown(rep report) string {
 	l := rep.load
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n## Load: memory and CPU as sub-agents are added\n\nFrom `%s`, live arm: one run per rung, each sub-agent reads one file and repeats its first line. MiB per sub-agent is the least squares slope over every rung.\n\n", ladderFile)
-	b.WriteString("| tool | version | dates | rungs | peak RSS at 0, MiB | peak RSS at the top rung, MiB | MiB per sub-agent, peak | MiB per sub-agent, steady | peak commit at the top rung, MiB | CPU at the top rung, s | cores at the top rung |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| tool | version | dates | rungs | peak RSS at 0, MiB | peak RSS at the top rung, MiB | MiB per sub-agent, peak | MiB per sub-agent, steady | peak reserved memory at the top rung, MiB | CPU at the top rung, s | cores at the top rung |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, one := range l.ladders {
 		first, top := one.rungs[0], one.top()
 		fmt.Fprintf(&b, "| %s | %s | %s | %d to %d sub-agents | %.0f | %.0f | %.1f | %.1f | %.0f | %.1f | %.2f |\n", one.label(), cmp.Or(top.Version, "not recorded"), top.Date, first.Agents, top.Agents,
@@ -154,7 +154,7 @@ func loadMarkdown(rep report) string {
 func subagentTable(rep report) string {
 	var b strings.Builder
 	b.WriteString("\n### Memory per sub-agent on the subagents task\n\nFrom `runs/subagents`: peak tree RSS of a run divided by the sub-agents it started, on a real task with a live model, so the lead's own memory is spread across them.\n\n| arm | build | runs | sub-agents | peak memory, MiB | MiB per sub-agent |\n|---|---|---|---|---|---|\n")
-	peak := measures[slices.IndexFunc(measures, func(m measure) bool { return m.name == "peak memory" })]
+	peak := rep.measure("peak memory")
 	agents := measure{"sub-agents", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Agents) })}
 	for _, a := range present(rep.subagents) {
 		rows := rep.subagents[a.Name]

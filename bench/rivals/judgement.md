@@ -21,6 +21,14 @@ Read off the rival's own stdout or rollout of the first run of each arm; the mod
 | tofu-gpt | medium, `--effort medium` | none, `--thinking-summary omitted` |
 | codex-gpt | medium, `-c model_reasoning_effort="medium"` | none: the rollout `turn_context` says `summary: none` |
 
+## Observations
+
+| measure | model | observation |
+|---|---|---|
+| fresh input, conversation | claude-sonnet-5-5 | tofu's own conversation is cached like the rivals'; the 2,784 tokens are its memory summaries, sent uncached; TOFU-1482 caches them. |
+| fresh input, conversation | gpt-5.6-sol | tofu's first request sends 7,556 tokens uncached where codex reads its system prompt from cache, and runs 1 and 2 lost the cache mid-run; TOFU-1521. |
+| peak reserved memory | every model | memory Windows promised the process tree, in RAM or the page file; peak memory, the RSS, is only what was in RAM. |
+
 ## Fresh input, by source
 
 Fresh input is the prompt the provider served from no cache. Split per request from `tofu session trace` of each run's work folder and, for codex, the `last_token_usage` of its rollout; every total equals the run file's `fresh_in`.

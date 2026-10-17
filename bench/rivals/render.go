@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -30,9 +31,13 @@ func (rep report) title() string {
 			rivals = append(rivals, toolName(a.Tool))
 		}
 	}
-	tofu := slices.IndexFunc(rep.present, func(a arm) bool { return a.Tool == "tofu" })
 	last := len(rivals) - 1
-	return fmt.Sprintf("bench rivals: tofu %s against %s and %s", rep.now[rep.present[tofu].Name][0].Version, strings.Join(rivals[:last], ", "), rivals[last])
+	return fmt.Sprintf("bench rivals: tofu %s against %s and %s", rep.tofuVersion(), strings.Join(rivals[:last], ", "), rivals[last])
+}
+
+func (rep report) tofuVersion() string {
+	tofu := slices.IndexFunc(rep.present, func(a arm) bool { return a.Tool == "tofu" })
+	return rep.now[rep.present[tofu].Name][0].Version
 }
 
 func (rep report) scope() string {
@@ -72,31 +77,55 @@ func counted(n int, one, many string) string {
 func verdictTable(rep report, o outcome) string {
 	heads := map[outcome]string{won: "Where tofu wins", lost: "Where tofu loses", tied: "Where it is a tie"}
 	var b strings.Builder
-	fmt.Fprintf(&b, "\n## %s\n\n| pairing | measure | tofu | rival | tofu is | difference | on %s |\n|---|---|---|---|---|---|---|\n", heads[o], rep.since)
+	fmt.Fprintf(&b, "\n## %s\n\n| pairing | measure | tofu | rival | tofu is | difference | on %s | why |\n|---|---|---|---|---|---|---|---|\n", heads[o], rep.since)
 	for _, p := range rep.matchups {
 		for _, d := range p.duels {
 			if d.result == o {
-				fmt.Fprintf(&b, "| %s, %s | %s | %s | %s | %s | %s | %s |\n", toolName(p.rival.Tool), p.model, d.m.label(), d.m.spread(d.tofu), d.m.spread(d.rival), d.howMuch(), d.difference(), d.before)
+				fmt.Fprintf(&b, "| %s, %s | %s | %s | %s | %s | %s | %s | %s |\n", toolName(p.rival.Tool), p.model, d.m.label(), d.m.spread(d.tofu), d.m.spread(d.rival), d.howMuch(), d.difference(), d.before, rep.why(d, p.model))
 			}
 		}
 	}
 	return b.String()
 }
 
+func (rep report) why(d duel, model string) string {
+	if text := rep.observe(d.m.name, model); text != "" {
+		return text
+	}
+	if r, _ := d.ratio(); d.result == lost && (r > 1.5 || math.IsInf(r, 1)) {
+		return "cause not measured"
+	}
+	return ""
+}
+
+func (rep report) observe(name, model string) string {
+	for _, o := range rep.observations {
+		if o.measure == name && (o.model == model || o.model == everyModel) {
+			return o.text
+		}
+	}
+	return ""
+}
+
 func sideCostTable(rep report) string {
 	var b strings.Builder
-	b.WriteString("\n## What tofu spends that the others do not\n\ntofu's memory model runs beside the conversation and no rival has one, so it is not a row above; its tokens are inside tofu's token totals.\n\n| arm | memory model calls per run | memory model |\n|---|---|---|\n")
+	b.WriteString("\n## What tofu spends that the others do not\n\ntofu's memory model writes summaries beside the conversation and no rival has one; the conversation rows above leave its tokens out.\n\n| arm | memory model calls per run | uncached input to it | memory model |\n|---|---|---|---|\n")
 	calls := measure{"memory model calls", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Auxiliary) })}
+	summaries := rep.measure(memorySummaries)
 	for _, a := range rep.present {
 		rows := rep.now[a.Name]
 		if a.Tool != "tofu" {
 			continue
 		}
 		s, _ := statOf(rows, calls)
+		input := "not recorded"
+		if t, ok := statOf(rows, summaries); ok {
+			input = summaries.spread(t)
+		}
 		side := distinct(rows, func(r row) string {
 			return strings.Join(slices.DeleteFunc(slices.Clone(r.Models), func(m string) bool { return m == r.Model }), ", ")
 		})
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", a.Name, calls.spread(s), side)
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", a.Name, calls.spread(s), input, side)
 	}
 	return b.String()
 }
@@ -104,7 +133,7 @@ func sideCostTable(rep report) string {
 func changeTable(rep report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n## Change since %s, medians\n\n| measure | %s |\n|---|%s\n", rep.since, strings.Join(armNames(rep.present), " | "), strings.Repeat("---|", len(rep.present)))
-	for _, m := range measures {
+	for _, m := range rep.measures {
 		cells := []string{m.label()}
 		for _, a := range rep.present {
 			cells = append(cells, change(m, rep.then[a.Name], rep.now[a.Name]))
@@ -139,13 +168,13 @@ func armNames(present []arm) []string {
 func mediansTable(rep report) string {
 	var b strings.Builder
 	heads := []string{"arm", "runs"}
-	for _, m := range measures {
+	for _, m := range rep.measures {
 		heads = append(heads, m.label())
 	}
 	fmt.Fprintf(&b, "\n## Medians per arm, lowest to highest in brackets\n\n| %s |\n|%s\n", strings.Join(heads, " | "), strings.Repeat("---|", len(heads)))
 	for _, a := range rep.present {
 		cells := []string{a.Name, fmt.Sprint(len(rep.now[a.Name]))}
-		for _, m := range measures {
+		for _, m := range rep.measures {
 			cell := "not recorded"
 			if s, ok := statOf(rep.now[a.Name], m); ok {
 				cell = m.spread(s)
@@ -201,7 +230,7 @@ func conditionsTable(rep report) string {
 func appendixMarkdown(rep report) (string, error) {
 	var b strings.Builder
 	b.WriteString("\n## Appendix\n\nEvery table below is printed from the run files as they are.\n")
-	fmt.Fprintf(&b, "\nProcess tree: %s.\n", treeMethod)
+	fmt.Fprintf(&b, "\nProcess tree: %s.\n", strings.ReplaceAll(treeMethod, "peak commit", "peak reserved memory"))
 	runsTable(&b, rep.now)
 	wallTable(&b, rep.now)
 	toolTable(&b, rep.now)
@@ -210,7 +239,7 @@ func appendixMarkdown(rep report) (string, error) {
 }
 
 func runsTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n### Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MiB | peak commit MiB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n### Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MiB | peak reserved MiB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		for _, r := range byArm[a.Name] {
 			fmt.Fprintf(b, "| %s | %d | %d | %.1f | %.1f | %.0f | %.0f | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | +%d/-%d | %s |\n",

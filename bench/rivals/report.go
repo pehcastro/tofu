@@ -37,20 +37,81 @@ func always(value func(row) float64) func(row) (float64, bool) {
 	return func(r row) (float64, bool) { return value(r), true }
 }
 
-var measures = []measure{
-	{"quality", "points", "higher", "lower", 0, true, always(func(r row) float64 { got, _ := r.Score.quality(); return float64(got) })},
-	{wallTime, "s", "faster", "slower", 1, false, always(func(r row) float64 { return seconds(r.WallMS) })},
-	{"CPU time", "s", "less", "more", 1, false, always(func(r row) float64 { return seconds(r.Tree.CPUMS) })},
-	{"CPU use", "cores", "less", "more", 2, false, always(func(r row) float64 { return float64(r.Tree.CPUMS) / float64(r.WallMS) })},
-	{"peak memory", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakTreeRSS)) })},
-	{"peak commit", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakCommit)) })},
-	{"processes started", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tree.Processes) })},
-	{"model requests", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Requests) })},
-	{"total input", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.in()) })},
-	{"fresh input", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.FreshIn) })},
-	{"output", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.Out) })},
-	{"failed tool calls", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(failedCalls(r)) })},
-	{"tool time", "s", "less", "more", 1, false, always(toolSeconds)},
+const memorySummaries = "fresh input, tofu's memory summaries"
+
+func newMeasures(summaries map[string]tokens) []measure {
+	conversation := func(value func(r row, summary tokens) float64) func(row) (float64, bool) {
+		return func(r row) (float64, bool) {
+			if r.Tool != "tofu" {
+				return value(r, tokens{}), true
+			}
+			summary, ok := summaries[r.file()]
+			return value(r, summary), ok
+		}
+	}
+	return []measure{
+		{"quality", "points", "higher", "lower", 0, true, always(func(r row) float64 { got, _ := r.Score.quality(); return float64(got) })},
+		{wallTime, "s", "faster", "slower", 1, false, always(func(r row) float64 { return seconds(r.WallMS) })},
+		{"CPU time", "s", "less", "more", 1, false, always(func(r row) float64 { return seconds(r.Tree.CPUMS) })},
+		{"CPU use", "cores", "less", "more", 2, false, always(func(r row) float64 { return float64(r.Tree.CPUMS) / float64(r.WallMS) })},
+		{"peak memory", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakTreeRSS)) })},
+		{"peak reserved memory", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakCommit)) })},
+		{"processes started", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tree.Processes) })},
+		{"model requests", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Requests) })},
+		{"total input, conversation", "tokens", "fewer", "more", 0, false, conversation(func(r row, s tokens) float64 { return float64(r.Tokens.in() - s.FreshIn) })},
+		{"fresh input, conversation", "tokens", "fewer", "more", 0, false, conversation(func(r row, s tokens) float64 { return float64(r.Tokens.FreshIn - s.FreshIn) })},
+		{"output, conversation", "tokens", "fewer", "more", 0, false, conversation(func(r row, s tokens) float64 { return float64(r.Tokens.Out - s.Out) })},
+		{memorySummaries, "tokens", "fewer", "more", 0, false, func(r row) (float64, bool) {
+			s, ok := summaries[r.file()]
+			return float64(s.FreshIn), ok && r.Tool == "tofu"
+		}},
+		{"failed tool calls", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(failedCalls(r)) })},
+		{"tool time", "s", "less", "more", 1, false, always(toolSeconds)},
+	}
+}
+
+func summaryTokens(r row) (tokens, bool) {
+	home := filepath.Join(r.Work, "home")
+	if _, err := os.Stat(home); r.Tool != "tofu" || r.Work == "" || err != nil {
+		return tokens{}, false
+	}
+	repo := filepath.Join(r.Work, "repo")
+	env := append(os.Environ(), "HOME="+home, "USERPROFILE="+home, "APPDATA="+filepath.Join(home, "AppData", "Roaming"), "LOCALAPPDATA="+filepath.Join(home, "AppData", "Local"))
+	sessions := list(decode(toolOutput(repo, env, "tofu", "session", "list", "--json"))["data"], "sessions")
+	if len(sessions) == 0 {
+		return tokens{}, false
+	}
+	var used tokens
+	for _, m := range list(decode(toolOutput(repo, env, "tofu", "session", "trace", str(sessions[0], "id"), "--json"))["data"], "memory") {
+		used.add(num(m, "usage", "input_tokens"), 0, 0, num(m, "usage", "output_tokens"))
+	}
+	return used, true
+}
+
+const (
+	observationsHeading = "## Observations"
+	everyModel          = "every model"
+)
+
+type observation struct {
+	measure, model, text string
+}
+
+func readObservations(section string) []observation {
+	var out []observation
+	for _, line := range strings.Split(section, "\n") {
+		if !strings.HasPrefix(line, "| ") || strings.HasPrefix(line, "| measure ") {
+			continue
+		}
+		if parts := cells(line); len(parts) == 3 {
+			out = append(out, observation{parts[0], parts[1], parts[2]})
+		}
+	}
+	return out
+}
+
+func (rep report) measure(name string) measure {
+	return rep.measures[slices.IndexFunc(rep.measures, func(m measure) bool { return m.name == name })]
 }
 
 var perAgent = measure{"memory per sub-agent", "MiB", "less", "more", 0, false, func(r row) (float64, bool) {
@@ -225,6 +286,8 @@ type report struct {
 	now, then    map[string][]row
 	subagents    map[string][]row
 	load         load
+	measures     []measure
+	observations []observation
 	present      []arm
 	matchups     []matchup
 	setAside     []row
@@ -285,7 +348,15 @@ func writeReport(args []string) error {
 	if err != nil {
 		return err
 	}
-	rep := report{batch: *batch, since: *since, now: byArm(now), then: byArm(earlier), subagents: byArm(subagents), load: machine, setAside: setAside, method: string(method)}
+	summaries := map[string]tokens{}
+	for _, r := range append(slices.Clone(now), earlier...) {
+		if used, ok := summaryTokens(r); ok {
+			summaries[r.file()] = used
+		}
+	}
+	notes, rest := splitSection(string(method), observationsHeading)
+	rep := report{batch: *batch, since: *since, now: byArm(now), then: byArm(earlier), subagents: byArm(subagents), load: machine, measures: newMeasures(summaries),
+		observations: readObservations(notes), setAside: setAside, method: rest}
 	rep.present = present(rep.now)
 	rep.matchups = matchups(rep)
 	appendix, err := appendixMarkdown(rep)
@@ -314,7 +385,7 @@ func matchups(rep report) []matchup {
 				continue
 			}
 			p := matchup{rival: theirs, model: rep.now[mine.Name][0].Model}
-			for _, m := range measures {
+			for _, m := range rep.measures {
 				tofu, okTofu := statOf(rep.now[mine.Name], m)
 				rival, okRival := statOf(rep.now[theirs.Name], m)
 				if !okTofu || !okRival {

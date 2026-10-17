@@ -1,73 +1,73 @@
 # bench rivals: tofu 0.5.15-rc7 against Claude Code, omp and codex
 
-- **tofu against Claude Code on claude-sonnet-5-5**: tofu ahead, 5 wins, 2 losses, 6 ties. Wall time is a tie, tofu 1.2x slower at the median (37.7 s against 31.8 s); biggest wins: peak commit 3.1x less, peak memory 2.1x less.
-- **tofu against omp on claude-sonnet-5-5**: tofu ahead, 3 wins, 2 losses, 8 ties. Wall time is a tie, tofu 1.1x slower at the median (37.7 s against 33.8 s); biggest wins: peak commit 4.3x less, peak memory 2.8x less.
+- **tofu against Claude Code on claude-sonnet-5-5**: tofu ahead, 5 wins, 2 losses, 6 ties. Wall time is a tie, tofu 1.2x slower at the median (37.7 s against 31.8 s); biggest wins: peak reserved memory 3.1x less, peak memory 2.1x less.
+- **tofu against omp on claude-sonnet-5-5**: tofu ahead, 3 wins, 0 losses, 10 ties. Wall time is a tie, tofu 1.1x slower at the median (37.7 s against 33.8 s); biggest wins: peak reserved memory 4.3x less, peak memory 2.8x less.
 - **tofu against codex on gpt-5.6-sol**: tofu ahead, 8 wins, 1 loss, 4 ties. Wall time is a win, tofu 1.3x faster at the median (66.1 s against 83.4 s); biggest wins: CPU time 2.1x less, tool time 2.0x less.
 
 15 live runs, 2026-10-17 01:52 to 02:08, from `runs/0.5.15-rc7`, against the runs of 2026-10-13 directly under `runs/`. A measure is a win or a loss only when the two spreads do not meet; otherwise it is a tie.
 
 ## Where tofu wins
 
-| pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 |
-|---|---|---|---|---|---|---|
-| Claude Code, claude-sonnet-5-5 | CPU time, s | 30.4 [26.5 to 46.9] | 48.5 [48.0 to 59.0] | 1.6x less | -18.1 s | tie |
-| Claude Code, claude-sonnet-5-5 | CPU use, cores | 0.85 [0.80 to 0.88] | 1.55 [1.52 to 1.57] | 1.8x less | -0.70 cores | win |
-| Claude Code, claude-sonnet-5-5 | peak memory, MiB | 281 [275 to 297] | 592 [577 to 624] | 2.1x less | -311 MiB | win |
-| Claude Code, claude-sonnet-5-5 | peak commit, MiB | 333 [333 to 338] | 1,028 [911 to 1,034] | 3.1x less | -695 MiB | win |
-| Claude Code, claude-sonnet-5-5 | processes started | 284 [280 to 382] | 521 [516 to 599] | 1.8x fewer | -237 | win |
-| omp, claude-sonnet-5-5 | CPU use, cores | 0.85 [0.80 to 0.88] | 1.43 [1.09 to 1.63] | 1.7x less | -0.58 cores | win |
-| omp, claude-sonnet-5-5 | peak memory, MiB | 281 [275 to 297] | 789 [722 to 826] | 2.8x less | -508 MiB | win |
-| omp, claude-sonnet-5-5 | peak commit, MiB | 333 [333 to 338] | 1,437 [1,357 to 1,447] | 4.3x less | -1,104 MiB | win |
-| codex, gpt-5.6-sol | wall time, s | 66.1 [52.8 to 66.1] | 83.4 [69.8 to 89.2] | 1.3x faster | -17.3 s | tie |
-| codex, gpt-5.6-sol | CPU time, s | 29.3 [26.0 to 31.6] | 60.2 [59.5 to 70.7] | 2.1x less | -30.9 s | win |
-| codex, gpt-5.6-sol | CPU use, cores | 0.48 [0.44 to 0.49] | 0.85 [0.67 to 0.86] | 1.8x less | -0.37 cores | win |
-| codex, gpt-5.6-sol | peak memory, MiB | 304 [304 to 307] | 496 [462 to 528] | 1.6x less | -192 MiB | win |
-| codex, gpt-5.6-sol | peak commit, MiB | 333 [331 to 334] | 593 [589 to 594] | 1.8x less | -260 MiB | win |
-| codex, gpt-5.6-sol | processes started | 288 | 499 [485 to 510] | 1.7x fewer | -211 | tie |
-| codex, gpt-5.6-sol | total input | 78,985 [77,921 to 90,596] | 126,689 [124,597 to 131,509] | 1.6x fewer | -47,704 tokens | loss |
-| codex, gpt-5.6-sol | tool time, s | 11.0 [9.7 to 11.5] | 21.9 [21.8 to 26.8] | 2.0x less | -10.9 s | win |
+| pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 | why |
+|---|---|---|---|---|---|---|---|
+| Claude Code, claude-sonnet-5-5 | CPU time, s | 30.4 [26.5 to 46.9] | 48.5 [48.0 to 59.0] | 1.6x less | -18.1 s | tie |  |
+| Claude Code, claude-sonnet-5-5 | CPU use, cores | 0.85 [0.80 to 0.88] | 1.55 [1.52 to 1.57] | 1.8x less | -0.70 cores | win |  |
+| Claude Code, claude-sonnet-5-5 | peak memory, MiB | 281 [275 to 297] | 592 [577 to 624] | 2.1x less | -311 MiB | win |  |
+| Claude Code, claude-sonnet-5-5 | peak reserved memory, MiB | 333 [333 to 338] | 1,028 [911 to 1,034] | 3.1x less | -695 MiB | win | memory Windows promised the process tree, in RAM or the page file; peak memory, the RSS, is only what was in RAM. |
+| Claude Code, claude-sonnet-5-5 | processes started | 284 [280 to 382] | 521 [516 to 599] | 1.8x fewer | -237 | win |  |
+| omp, claude-sonnet-5-5 | CPU use, cores | 0.85 [0.80 to 0.88] | 1.43 [1.09 to 1.63] | 1.7x less | -0.58 cores | win |  |
+| omp, claude-sonnet-5-5 | peak memory, MiB | 281 [275 to 297] | 789 [722 to 826] | 2.8x less | -508 MiB | win |  |
+| omp, claude-sonnet-5-5 | peak reserved memory, MiB | 333 [333 to 338] | 1,437 [1,357 to 1,447] | 4.3x less | -1,104 MiB | win | memory Windows promised the process tree, in RAM or the page file; peak memory, the RSS, is only what was in RAM. |
+| codex, gpt-5.6-sol | wall time, s | 66.1 [52.8 to 66.1] | 83.4 [69.8 to 89.2] | 1.3x faster | -17.3 s | tie |  |
+| codex, gpt-5.6-sol | CPU time, s | 29.3 [26.0 to 31.6] | 60.2 [59.5 to 70.7] | 2.1x less | -30.9 s | win |  |
+| codex, gpt-5.6-sol | CPU use, cores | 0.48 [0.44 to 0.49] | 0.85 [0.67 to 0.86] | 1.8x less | -0.37 cores | win |  |
+| codex, gpt-5.6-sol | peak memory, MiB | 304 [304 to 307] | 496 [462 to 528] | 1.6x less | -192 MiB | win |  |
+| codex, gpt-5.6-sol | peak reserved memory, MiB | 333 [331 to 334] | 593 [589 to 594] | 1.8x less | -260 MiB | win | memory Windows promised the process tree, in RAM or the page file; peak memory, the RSS, is only what was in RAM. |
+| codex, gpt-5.6-sol | processes started | 288 | 499 [485 to 510] | 1.7x fewer | -211 | tie |  |
+| codex, gpt-5.6-sol | total input, conversation | 75,776 [75,197 to 87,890] | 126,689 [124,597 to 131,509] | 1.7x fewer | -50,913 tokens | not recorded |  |
+| codex, gpt-5.6-sol | tool time, s | 11.0 [9.7 to 11.5] | 21.9 [21.8 to 26.8] | 2.0x less | -10.9 s | win |  |
 
 ## Where tofu loses
 
-| pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 |
-|---|---|---|---|---|---|---|
-| Claude Code, claude-sonnet-5-5 | fresh input | 2,784 [2,778 to 4,177] | 6 [6 to 8] | 464x more | +2,778 tokens | loss |
-| Claude Code, claude-sonnet-5-5 | output | 2,892 [2,758 to 2,997] | 1,747 [1,733 to 2,092] | 1.7x more | +1,145 tokens | tie |
-| omp, claude-sonnet-5-5 | fresh input | 2,784 [2,778 to 4,177] | 12 [10 to 12] | 232x more | +2,772 tokens | loss |
-| omp, claude-sonnet-5-5 | output | 2,892 [2,758 to 2,997] | 2,435 [1,308 to 2,490] | 1.2x more | +457 tokens | loss |
-| codex, gpt-5.6-sol | fresh input | 28,897 [17,161 to 28,900] | 10,677 [10,337 to 12,213] | 2.7x more | +18,220 tokens | tie |
+| pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 | why |
+|---|---|---|---|---|---|---|---|
+| Claude Code, claude-sonnet-5-5 | fresh input, conversation | 12 [10 to 12] | 6 [6 to 8] | 2.0x more | +6 tokens | not recorded | tofu's own conversation is cached like the rivals'; the 2,784 tokens are its memory summaries, sent uncached; TOFU-1482 caches them. |
+| Claude Code, claude-sonnet-5-5 | output, conversation | 2,376 [2,368 to 2,503] | 1,747 [1,733 to 2,092] | 1.4x more | +629 tokens | not recorded |  |
+| codex, gpt-5.6-sol | fresh input, conversation | 26,173 [13,952 to 26,194] | 10,677 [10,337 to 12,213] | 2.5x more | +15,496 tokens | not recorded | tofu's first request sends 7,556 tokens uncached where codex reads its system prompt from cache, and runs 1 and 2 lost the cache mid-run; TOFU-1521. |
 
 ## Where it is a tie
 
-| pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 |
-|---|---|---|---|---|---|---|
-| Claude Code, claude-sonnet-5-5 | quality | 10 | 10 | level | +0 points | tie |
-| Claude Code, claude-sonnet-5-5 | wall time, s | 37.7 [31.0 to 53.4] | 31.8 [30.6 to 38.1] | 1.2x slower | +5.9 s | loss |
-| Claude Code, claude-sonnet-5-5 | model requests | 5 [4 to 5] | 3 [3 to 4] | 1.7x more | +2 | loss |
-| Claude Code, claude-sonnet-5-5 | total input | 75,837 [61,308 to 76,306] | 71,443 [71,244 to 95,937] | 1.1x more | +4,394 tokens | loss |
-| Claude Code, claude-sonnet-5-5 | failed tool calls | 0 [0 to 1] | 0 | level | +0 | loss |
-| Claude Code, claude-sonnet-5-5 | tool time, s | 11.7 [9.3 to 31.9] | 17.4 [17.3 to 21.5] | 1.5x less | -5.7 s | tie |
-| omp, claude-sonnet-5-5 | quality | 10 | 10 | level | +0 points | tie |
-| omp, claude-sonnet-5-5 | wall time, s | 37.7 [31.0 to 53.4] | 33.8 [31.6 to 47.8] | 1.1x slower | +3.9 s | loss |
-| omp, claude-sonnet-5-5 | CPU time, s | 30.4 [26.5 to 46.9] | 52.2 [45.2 to 55.0] | 1.7x less | -21.8 s | tie |
-| omp, claude-sonnet-5-5 | processes started | 284 [280 to 382] | 298 [293 to 390] | 1.0x fewer | -14 | loss |
-| omp, claude-sonnet-5-5 | model requests | 5 [4 to 5] | 5 [4 to 5] | level | +0 | loss |
-| omp, claude-sonnet-5-5 | total input | 75,837 [61,308 to 76,306] | 65,280 [54,782 to 70,848] | 1.2x more | +10,557 tokens | loss |
-| omp, claude-sonnet-5-5 | failed tool calls | 0 [0 to 1] | 0 | level | +0 | loss |
-| omp, claude-sonnet-5-5 | tool time, s | 11.7 [9.3 to 31.9] | 14.5 [11.9 to 16.0] | 1.2x less | -2.8 s | loss |
-| codex, gpt-5.6-sol | quality | 10 | 10 | level | +0 points | tie |
-| codex, gpt-5.6-sol | model requests | 7 [7 to 8] | 7 | level | +0 | loss |
-| codex, gpt-5.6-sol | output | 3,488 [3,351 to 3,987] | 4,238 [3,333 to 5,082] | 1.2x fewer | -750 tokens | tie |
-| codex, gpt-5.6-sol | failed tool calls | 0 | 0 | level | +0 | tie |
+| pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 | why |
+|---|---|---|---|---|---|---|---|
+| Claude Code, claude-sonnet-5-5 | quality | 10 | 10 | level | +0 points | tie |  |
+| Claude Code, claude-sonnet-5-5 | wall time, s | 37.7 [31.0 to 53.4] | 31.8 [30.6 to 38.1] | 1.2x slower | +5.9 s | loss |  |
+| Claude Code, claude-sonnet-5-5 | model requests | 5 [4 to 5] | 3 [3 to 4] | 1.7x more | +2 | loss |  |
+| Claude Code, claude-sonnet-5-5 | total input, conversation | 73,071 [57,141 to 73,534] | 71,443 [71,244 to 95,937] | 1.0x more | +1,628 tokens | not recorded |  |
+| Claude Code, claude-sonnet-5-5 | failed tool calls | 0 [0 to 1] | 0 | level | +0 | loss |  |
+| Claude Code, claude-sonnet-5-5 | tool time, s | 11.7 [9.3 to 31.9] | 17.4 [17.3 to 21.5] | 1.5x less | -5.7 s | tie |  |
+| omp, claude-sonnet-5-5 | quality | 10 | 10 | level | +0 points | tie |  |
+| omp, claude-sonnet-5-5 | wall time, s | 37.7 [31.0 to 53.4] | 33.8 [31.6 to 47.8] | 1.1x slower | +3.9 s | loss |  |
+| omp, claude-sonnet-5-5 | CPU time, s | 30.4 [26.5 to 46.9] | 52.2 [45.2 to 55.0] | 1.7x less | -21.8 s | tie |  |
+| omp, claude-sonnet-5-5 | processes started | 284 [280 to 382] | 298 [293 to 390] | 1.0x fewer | -14 | loss |  |
+| omp, claude-sonnet-5-5 | model requests | 5 [4 to 5] | 5 [4 to 5] | level | +0 | loss |  |
+| omp, claude-sonnet-5-5 | total input, conversation | 73,071 [57,141 to 73,534] | 65,280 [54,782 to 70,848] | 1.1x more | +7,791 tokens | not recorded |  |
+| omp, claude-sonnet-5-5 | fresh input, conversation | 12 [10 to 12] | 12 [10 to 12] | level | +0 tokens | not recorded | tofu's own conversation is cached like the rivals'; the 2,784 tokens are its memory summaries, sent uncached; TOFU-1482 caches them. |
+| omp, claude-sonnet-5-5 | output, conversation | 2,376 [2,368 to 2,503] | 2,435 [1,308 to 2,490] | 1.0x fewer | -59 tokens | not recorded |  |
+| omp, claude-sonnet-5-5 | failed tool calls | 0 [0 to 1] | 0 | level | +0 | loss |  |
+| omp, claude-sonnet-5-5 | tool time, s | 11.7 [9.3 to 31.9] | 14.5 [11.9 to 16.0] | 1.2x less | -2.8 s | loss |  |
+| codex, gpt-5.6-sol | quality | 10 | 10 | level | +0 points | tie |  |
+| codex, gpt-5.6-sol | model requests | 7 [7 to 8] | 7 | level | +0 | loss |  |
+| codex, gpt-5.6-sol | output, conversation | 3,186 [2,968 to 3,501] | 4,238 [3,333 to 5,082] | 1.3x fewer | -1,052 tokens | not recorded |  |
+| codex, gpt-5.6-sol | failed tool calls | 0 | 0 | level | +0 | tie |  |
 
 ## What tofu spends that the others do not
 
-tofu's memory model runs beside the conversation and no rival has one, so it is not a row above; its tokens are inside tofu's token totals.
+tofu's memory model writes summaries beside the conversation and no rival has one; the conversation rows above leave its tokens out.
 
-| arm | memory model calls per run | memory model |
-|---|---|---|
-| tofu-sonnet | 3 [3 to 4] | claude-haiku-4-5-20251001 |
-| tofu-gpt | 3 | claude-haiku-4-5-20251001 |
+| arm | memory model calls per run | uncached input to it | memory model |
+|---|---|---|---|
+| tofu-sonnet | 3 [3 to 4] | 2,772 [2,766 to 4,167] | claude-haiku-4-5-20251001 |
+| tofu-gpt | 3 | 2,724 [2,706 to 3,209] | claude-haiku-4-5-20251001 |
 
 ## Change since 2026-10-13, medians
 
@@ -78,30 +78,31 @@ tofu's memory model runs beside the conversation and no rival has one, so it is 
 | CPU time, s | 53.0 → 30.4, -43% | 57.5 → 48.5, -16% | 55.5 → 52.2, -6% | 55.8 → 29.3, -47% | 67.1 → 60.2, -10% |
 | CPU use, cores | 0.84 → 0.85, +2% | 1.07 → 1.55, +44% | 1.46 → 1.43, -2% | 0.18 → 0.48, +164% | 0.58 → 0.85, +46% |
 | peak memory, MiB | 393 → 281, -28% | 616 → 592, -4% | 872 → 789, -10% | 393 → 304, -23% | 543 → 496, -9% |
-| peak commit, MiB | 541 → 333, -38% | 1,017 → 1,028, +1% | 1,484 → 1,437, -3% | 535 → 333, -38% | 593 → 593, +0% |
+| peak reserved memory, MiB | 541 → 333, -38% | 1,017 → 1,028, +1% | 1,484 → 1,437, -3% | 535 → 333, -38% | 593 → 593, +0% |
 | processes started | 427 → 284, -33% | 572 → 521, -9% | 377 → 298, -21% | 477 → 288, -40% | 482 → 499, +4% |
 | model requests | 11 → 5, -55% | 6 → 3, -50% | 4 → 5, +25% | 27 → 7, -74% | 7 → 7, +0% |
-| total input | 234,241 → 75,837, -68% | 151,458 → 71,443, -53% | 54,983 → 65,280, +19% | 494,279 → 78,985, -84% | 125,052 → 126,689, +1% |
-| fresh input | 1,194 → 2,784, +133% | 12 → 6, -50% | 10 → 12, +20% | 83,143 → 28,897, -65% | 10,876 → 10,677, -2% |
-| output | 3,874 → 2,892, -25% | 4,316 → 1,747, -60% | 1,854 → 2,435, +31% | 8,401 → 3,488, -58% | 4,447 → 4,238, -5% |
+| total input, conversation | not recorded → 73,071 | 151,458 → 71,443, -53% | 54,983 → 65,280, +19% | not recorded → 75,776 | 125,052 → 126,689, +1% |
+| fresh input, conversation | not recorded → 12 | 12 → 6, -50% | 10 → 12, +20% | not recorded → 26,173 | 10,876 → 10,677, -2% |
+| output, conversation | not recorded → 2,376 | 4,316 → 1,747, -60% | 1,854 → 2,435, +31% | not recorded → 3,186 | 4,447 → 4,238, -5% |
+| fresh input, tofu's memory summaries | not recorded → 2,772 | not recorded | not recorded | not recorded → 2,724 | not recorded |
 | failed tool calls | 4 → 0, -100% | 0 → 0 | 0 → 0 | 3 → 0, -100% | 0 → 0 |
 | tool time, s | 21.2 → 11.7, -45% | 19.9 → 17.4, -12% | 16.8 → 14.5, -14% | 19.3 → 11.0, -43% | 25.4 → 21.9, -14% |
 
 ## Medians per arm, lowest to highest in brackets
 
-| arm | runs | quality | wall time, s | CPU time, s | CPU use, cores | peak memory, MiB | peak commit, MiB | processes started | model requests | total input | fresh input | output | failed tool calls | tool time, s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 3 | 10 | 37.7 [31.0 to 53.4] | 30.4 [26.5 to 46.9] | 0.85 [0.80 to 0.88] | 281 [275 to 297] | 333 [333 to 338] | 284 [280 to 382] | 5 [4 to 5] | 75,837 [61,308 to 76,306] | 2,784 [2,778 to 4,177] | 2,892 [2,758 to 2,997] | 0 [0 to 1] | 11.7 [9.3 to 31.9] |
-| claude-sonnet | 3 | 10 | 31.8 [30.6 to 38.1] | 48.5 [48.0 to 59.0] | 1.55 [1.52 to 1.57] | 592 [577 to 624] | 1,028 [911 to 1,034] | 521 [516 to 599] | 3 [3 to 4] | 71,443 [71,244 to 95,937] | 6 [6 to 8] | 1,747 [1,733 to 2,092] | 0 | 17.4 [17.3 to 21.5] |
-| omp-sonnet | 3 | 10 | 33.8 [31.6 to 47.8] | 52.2 [45.2 to 55.0] | 1.43 [1.09 to 1.63] | 789 [722 to 826] | 1,437 [1,357 to 1,447] | 298 [293 to 390] | 5 [4 to 5] | 65,280 [54,782 to 70,848] | 12 [10 to 12] | 2,435 [1,308 to 2,490] | 0 | 14.5 [11.9 to 16.0] |
-| tofu-gpt | 3 | 10 | 66.1 [52.8 to 66.1] | 29.3 [26.0 to 31.6] | 0.48 [0.44 to 0.49] | 304 [304 to 307] | 333 [331 to 334] | 288 | 7 [7 to 8] | 78,985 [77,921 to 90,596] | 28,897 [17,161 to 28,900] | 3,488 [3,351 to 3,987] | 0 | 11.0 [9.7 to 11.5] |
-| codex-gpt | 3 | 10 | 83.4 [69.8 to 89.2] | 60.2 [59.5 to 70.7] | 0.85 [0.67 to 0.86] | 496 [462 to 528] | 593 [589 to 594] | 499 [485 to 510] | 7 | 126,689 [124,597 to 131,509] | 10,677 [10,337 to 12,213] | 4,238 [3,333 to 5,082] | 0 | 21.9 [21.8 to 26.8] |
+| arm | runs | quality | wall time, s | CPU time, s | CPU use, cores | peak memory, MiB | peak reserved memory, MiB | processes started | model requests | total input, conversation | fresh input, conversation | output, conversation | fresh input, tofu's memory summaries | failed tool calls | tool time, s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| tofu-sonnet | 3 | 10 | 37.7 [31.0 to 53.4] | 30.4 [26.5 to 46.9] | 0.85 [0.80 to 0.88] | 281 [275 to 297] | 333 [333 to 338] | 284 [280 to 382] | 5 [4 to 5] | 73,071 [57,141 to 73,534] | 12 [10 to 12] | 2,376 [2,368 to 2,503] | 2,772 [2,766 to 4,167] | 0 [0 to 1] | 11.7 [9.3 to 31.9] |
+| claude-sonnet | 3 | 10 | 31.8 [30.6 to 38.1] | 48.5 [48.0 to 59.0] | 1.55 [1.52 to 1.57] | 592 [577 to 624] | 1,028 [911 to 1,034] | 521 [516 to 599] | 3 [3 to 4] | 71,443 [71,244 to 95,937] | 6 [6 to 8] | 1,747 [1,733 to 2,092] | not recorded | 0 | 17.4 [17.3 to 21.5] |
+| omp-sonnet | 3 | 10 | 33.8 [31.6 to 47.8] | 52.2 [45.2 to 55.0] | 1.43 [1.09 to 1.63] | 789 [722 to 826] | 1,437 [1,357 to 1,447] | 298 [293 to 390] | 5 [4 to 5] | 65,280 [54,782 to 70,848] | 12 [10 to 12] | 2,435 [1,308 to 2,490] | not recorded | 0 | 14.5 [11.9 to 16.0] |
+| tofu-gpt | 3 | 10 | 66.1 [52.8 to 66.1] | 29.3 [26.0 to 31.6] | 0.48 [0.44 to 0.49] | 304 [304 to 307] | 333 [331 to 334] | 288 | 7 [7 to 8] | 75,776 [75,197 to 87,890] | 26,173 [13,952 to 26,194] | 3,186 [2,968 to 3,501] | 2,724 [2,706 to 3,209] | 0 | 11.0 [9.7 to 11.5] |
+| codex-gpt | 3 | 10 | 83.4 [69.8 to 89.2] | 60.2 [59.5 to 70.7] | 0.85 [0.67 to 0.86] | 496 [462 to 528] | 593 [589 to 594] | 499 [485 to 510] | 7 | 126,689 [124,597 to 131,509] | 10,677 [10,337 to 12,213] | 4,238 [3,333 to 5,082] | not recorded | 0 | 21.9 [21.8 to 26.8] |
 
 ## Load: memory and CPU as sub-agents are added
 
 From `bench/scale/results.jsonl`, live arm: one run per rung, each sub-agent reads one file and repeats its first line. MiB per sub-agent is the least squares slope over every rung.
 
-| tool | version | dates | rungs | peak RSS at 0, MiB | peak RSS at the top rung, MiB | MiB per sub-agent, peak | MiB per sub-agent, steady | peak commit at the top rung, MiB | CPU at the top rung, s | cores at the top rung |
+| tool | version | dates | rungs | peak RSS at 0, MiB | peak RSS at the top rung, MiB | MiB per sub-agent, peak | MiB per sub-agent, steady | peak reserved memory at the top rung, MiB | CPU at the top rung, s | cores at the top rung |
 |---|---|---|---|---|---|---|---|---|---|---|
 | tofu, claude-sonnet-5-5 | 0.5.14 75d2b58b | 2026-10-14 | 0 to 10 sub-agents | 35 | 47 | 0.7 | 0.7 | 103 | 1.4 | 0.07 |
 | Claude Code, claude-sonnet-5-5 | not recorded | 2026-10-13 | 0 to 10 sub-agents | 227 | 292 | 4.3 | 4.7 | 395 | 4.8 | 0.24 |
@@ -179,6 +180,7 @@ Read off the rival's own stdout or rollout of the first run of each arm; the mod
 | tofu-gpt | medium, `--effort medium` | none, `--thinking-summary omitted` |
 | codex-gpt | medium, `-c model_reasoning_effort="medium"` | none: the rollout `turn_context` says `summary: none` |
 
+
 ## Fresh input, by source
 
 Fresh input is the prompt the provider served from no cache. Split per request from `tofu session trace` of each run's work folder and, for codex, the `last_token_usage` of its rollout; every total equals the run file's `fresh_in`.
@@ -204,11 +206,11 @@ Fresh input is the prompt the provider served from no cache. Split per request f
 
 Every table below is printed from the run files as they are.
 
-Process tree: a Windows job object holds the whole process tree from its first instruction: CPU is the job's total user plus kernel time, peak tree RSS is the largest sum of every live member's working set sampled every 250 ms, peak commit is the job's PeakJobMemoryUsed.
+Process tree: a Windows job object holds the whole process tree from its first instruction: CPU is the job's total user plus kernel time, peak tree RSS is the largest sum of every live member's working set sampled every 250 ms, peak reserved memory is the job's PeakJobMemoryUsed.
 
 ### Every run
 
-| arm | rep | exit | wall s | CPU s | peak tree RSS MiB | peak commit MiB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |
+| arm | rep | exit | wall s | CPU s | peak tree RSS MiB | peak reserved MiB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | tofu-sonnet | 1 | 0 | 53.4 | 46.9 | 275 | 338 | 382 | 5 | 2778 | 67079 | 5980 | 2892 | 12 | 1 | 1 | 5 | 5 | +41/-6 | setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped |
 | tofu-sonnet | 2 | 0 | 37.7 | 30.4 | 297 | 333 | 280 | 4 | 4177 | 51542 | 5589 | 2997 | 11 | 0 | 0 | 5 | 5 | +85/-6 | setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped |

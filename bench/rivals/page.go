@@ -67,6 +67,8 @@ th.v{text-align:right}
 .fill{height:18px;border-radius:4px;background:var(--rival);flex:none}
 .row.mine .fill{background:var(--tofu)}
 .up{color:var(--bad)}.down{color:var(--good)}
+.obs{margin:6px 0 0;padding:8px 10px;border-radius:8px;background:var(--track);color:var(--soft);font-size:12.5px;line-height:1.45}
+td.why{color:var(--soft);font-size:12.5px;min-width:240px}
 details{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 22px;margin:12px 0}
 summary{cursor:pointer;font-weight:600}
 details h2{font-size:18px;margin:28px 0 10px}details h3{font-size:15px;margin:22px 0 8px}
@@ -79,7 +81,7 @@ details thead th{text-transform:none;letter-spacing:0}
 func renderPage(rep report, appendix string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>%s</title><style>%s</style></head><body><main>\n", html.EscapeString(rep.title()), pageStyle)
-	fmt.Fprintf(&b, "<header><p class=\"kicker\">bench rivals · batch %s · %s</p><h1>%s</h1><p class=\"lede\">%s</p></header>\n", html.EscapeString(rep.batch), html.EscapeString(rep.days()), html.EscapeString(rep.title()), inline(rep.scope()))
+	fmt.Fprintf(&b, "<header><p class=\"kicker\">bench rivals · batch %s</p><h1>%s</h1><p class=\"lede\">%d runs · %s · tofu %s</p></header>\n", html.EscapeString(rep.batch), html.EscapeString(rep.title()), rep.runs(), rep.days()[:10], html.EscapeString(rep.tofuVersion()))
 	hero(&b, rep)
 	b.WriteString("<p class=\"summary\">")
 	for i, p := range rep.matchups {
@@ -137,9 +139,6 @@ func hero(b *strings.Builder, rep report) {
 		fmt.Fprintf(b, "<div class=\"panel\"><p class=\"kicker\">%s</p><div class=\"headline\"><b class=\"n\">%s %s</b>%s</div>", html.EscapeString(p.model), big, word, html.EscapeString(what))
 		fmt.Fprintf(b, "<div class=\"pair\"><div class=\"mine\" title=\"%s\"><span>tofu, %s</span><strong class=\"n\">%s</strong></div><div title=\"%s\"><span>%s, %s</span><strong class=\"n\">%s</strong></div></div>",
 			rangeTitle(d.m, d.tofu), d.m.name, withUnit(d.m, d.tofu.mid), rangeTitle(d.m, d.rival), rival, d.m.name, withUnit(d.m, d.rival.mid))
-		if wall := p.wall(); d.m.name != wallTime {
-			fmt.Fprintf(b, "<p class=\"record\">Wall time is a %s: <span class=\"n\">%s</span> against <span class=\"n\">%s</span>.</p>", wall.result, withUnit(wall.m, wall.tofu.mid), withUnit(wall.m, wall.rival.mid))
-		}
 		b.WriteString("</div>\n")
 	}
 	b.WriteString("</div>\n")
@@ -160,8 +159,12 @@ func armsOn(rep report, model string) []arm {
 }
 
 func measureRows(b *strings.Builder, rep report) {
-	b.WriteString("<section><h2>Every measure, every arm</h2><p class=\"sub\">One row per measure, every arm on the same scale, grouped by model. The value is the median of three runs and the range under it is lowest to highest. <span class=\"tag good\">best</span> marks the winner of a model group: best median, and no other arm's range reaches it.</p>\n")
-	for _, m := range measures {
+	fmt.Fprintf(b, "<section><h2>Every measure, every arm</h2><p class=\"sub\">median of %d runs · range under it · best = clear winner</p>\n", len(rep.now[rep.present[0].Name]))
+	for _, m := range rep.measures {
+		absent := "not recorded"
+		if m.name == memorySummaries {
+			absent = "no memory model"
+		}
 		scale := 0.0
 		for _, a := range rep.present {
 			if s, ok := statOf(rep.now[a.Name], m); ok {
@@ -172,7 +175,11 @@ func measureRows(b *strings.Builder, rep report) {
 		if m.higherWins {
 			direction = "higher is better"
 		}
-		fmt.Fprintf(b, "<div class=\"measure\"><div class=\"what\"><h3>%s</h3><span class=\"dir\">%s</span></div><div class=\"groups\">", html.EscapeString(m.name), direction)
+		footnote := ""
+		if text := rep.observe(m.name, everyModel); text != "" {
+			footnote = "<span class=\"dir\">" + html.EscapeString(text) + "</span>"
+		}
+		fmt.Fprintf(b, "<div class=\"measure\"><div class=\"what\"><h3>%s</h3><span class=\"dir\">%s</span>%s</div><div class=\"groups\">", html.EscapeString(m.name), direction, footnote)
 		for _, model := range models(rep) {
 			on := armsOn(rep, model)
 			stats := make([]stat, len(on))
@@ -188,7 +195,7 @@ func measureRows(b *strings.Builder, rep report) {
 					class += " mine"
 				}
 				if !recorded[i] {
-					fmt.Fprintf(b, "<div class=\"%s\"><span class=\"who\">%s</span><span class=\"lo\">not recorded</span></div>", class, html.EscapeString(toolName(a.Tool)))
+					fmt.Fprintf(b, "<div class=\"%s\"><span class=\"who\">%s</span><span class=\"lo\">%s</span></div>", class, html.EscapeString(toolName(a.Tool)), absent)
 					continue
 				}
 				best, spread := "", ""
@@ -201,11 +208,29 @@ func measureRows(b *strings.Builder, rep report) {
 				fmt.Fprintf(b, "<div class=\"%s\" title=\"%s\"><span class=\"who\">%s</span><div class=\"bar\"><div class=\"fill\" style=\"width:%.1f%%\"></div><span class=\"val\"><span class=\"n\">%s</span>%s%s</span></div></div>",
 					class, rangeTitle(m, stats[i]), html.EscapeString(toolName(a.Tool)), share(stats[i].mid, scale), withUnit(m, stats[i].mid), best, spread)
 			}
+			if note := rep.groupNote(m, model); note != "" {
+				fmt.Fprintf(b, "<p class=\"obs\">%s</p>", html.EscapeString(note))
+			}
 			b.WriteString("</div>")
 		}
 		b.WriteString("</div></div>\n")
 	}
 	b.WriteString("</section>\n")
+}
+
+func (rep report) groupNote(m measure, model string) string {
+	shared := rep.observe(m.name, everyModel)
+	for _, p := range rep.matchups {
+		for _, d := range p.duels {
+			if why := rep.why(d, model); p.model == model && d.m.name == m.name && why != "" && why != shared {
+				return why
+			}
+		}
+	}
+	if text := rep.observe(m.name, model); text != shared {
+		return text
+	}
+	return ""
 }
 
 func share(v, scale float64) float64 {
@@ -244,7 +269,7 @@ func rowWinner(m measure, stats []stat, recorded []bool) int {
 }
 
 func changes(b *strings.Builder, rep report) {
-	shown := []string{wallTime, "total input", "peak memory", "CPU time", "model requests"}
+	shown := []string{wallTime, "total input, conversation", "peak memory", "CPU time", "model requests"}
 	fmt.Fprintf(b, "<section><h2>Since %s</h2><p class=\"sub\">Median now, with the median on %s and the change under it. Green moved the better way.</p><div class=\"scroll\"><table><thead><tr><th>arm</th>", rep.since, rep.since)
 	for _, name := range shown {
 		fmt.Fprintf(b, "<th class=\"v\">%s</th>", name)
@@ -253,7 +278,7 @@ func changes(b *strings.Builder, rep report) {
 	for _, a := range rep.present {
 		fmt.Fprintf(b, "<tr><td><strong>%s</strong><span class=\"dir\">%s</span></td>", html.EscapeString(toolName(a.Tool)), html.EscapeString(rep.now[a.Name][0].Model))
 		for _, name := range shown {
-			m := measures[slices.IndexFunc(measures, func(m measure) bool { return m.name == name })]
+			m := rep.measure(name)
 			after, _ := statOf(rep.now[a.Name], m)
 			before, ok := statOf(rep.then[a.Name], m)
 			note := "<span class=\"lo\">not recorded then</span>"
@@ -331,14 +356,14 @@ func loadSection(b *strings.Builder, rep report) {
 }
 
 func losses(b *strings.Builder, rep report, fresh string) {
-	b.WriteString("<section><h2>Where tofu loses</h2><p class=\"sub\">Decided losses only: the two ranges do not meet.</p><div class=\"scroll\"><table><thead><tr><th>measure</th><th>against</th><th class=\"v\">tofu</th><th class=\"v\">rival</th><th class=\"v\">tofu is</th></tr></thead><tbody>\n")
+	b.WriteString("<section><h2>Where tofu loses</h2><p class=\"sub\">Decided losses only: the two ranges do not meet.</p><div class=\"scroll\"><table><thead><tr><th>measure</th><th>against</th><th class=\"v\">tofu</th><th class=\"v\">rival</th><th class=\"v\">tofu is</th><th>why</th></tr></thead><tbody>\n")
 	for _, p := range rep.matchups {
 		for _, d := range p.duels {
 			if d.result != lost {
 				continue
 			}
-			fmt.Fprintf(b, "<tr><td>%s</td><td>%s<span class=\"dir\">%s</span></td><td class=\"v\" title=\"%s\"><span class=\"n\">%s</span></td><td class=\"v\" title=\"%s\"><span class=\"n\">%s</span></td><td class=\"v\"><span class=\"tag bad\">%s</span></td></tr>\n",
-				html.EscapeString(d.m.name), toolName(p.rival.Tool), html.EscapeString(p.model), rangeTitle(d.m, d.tofu), withUnit(d.m, d.tofu.mid), rangeTitle(d.m, d.rival), withUnit(d.m, d.rival.mid), html.EscapeString(d.howMuch()))
+			fmt.Fprintf(b, "<tr><td>%s</td><td>%s<span class=\"dir\">%s</span></td><td class=\"v\" title=\"%s\"><span class=\"n\">%s</span></td><td class=\"v\" title=\"%s\"><span class=\"n\">%s</span></td><td class=\"v\"><span class=\"tag bad\">%s</span></td><td class=\"why\">%s</td></tr>\n",
+				html.EscapeString(d.m.name), toolName(p.rival.Tool), html.EscapeString(p.model), rangeTitle(d.m, d.tofu), withUnit(d.m, d.tofu.mid), rangeTitle(d.m, d.rival), withUnit(d.m, d.rival.mid), html.EscapeString(d.howMuch()), html.EscapeString(rep.why(d, p.model)))
 		}
 	}
 	b.WriteString("</tbody></table></div>\n" + markdownHTML(strings.Replace(fresh, "## ", "### ", 1)) + markdownHTML(strings.Replace(sideCostTable(rep), "## ", "### ", 1)) + "</section>\n")
