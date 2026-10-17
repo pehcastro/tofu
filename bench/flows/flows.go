@@ -221,7 +221,7 @@ func crowdCassette(dir string) (string, error) {
 	}
 	replies := []any{
 		map[string]any{"text": "spawning the crowd", "tools": spawns},
-		map[string]any{"agent": fmt.Sprintf("c%d", crowd+1), "text": "the forked lead waits on the crowd"},
+		map[string]any{"text": "the forked lead waits on the crowd"},
 	}
 	for n := 1; n <= crowd; n++ {
 		replies = append(replies, map[string]any{"agent": fmt.Sprintf("c%d", n), "text": fmt.Sprintf("crowd report %d", n)})
