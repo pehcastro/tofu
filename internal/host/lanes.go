@@ -151,6 +151,8 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	chat, err := l.host.Resume(carry)
 	if err != nil {
 		return nil, busy(err)
@@ -166,8 +168,6 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	read := newItems(carry.Session)
 	lines := read.all(chat)
 	replay := freeze(lines)
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	maps.Copy(read.logged, l.items.logged)
 	*l.items, l.replay = read, replay
 	for _, line := range newest(lines, p.Replay) {

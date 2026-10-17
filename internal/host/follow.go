@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ const (
 	followRan       followOp = "ran"
 	followRemember  followOp = "remember"
 	followCron      followOp = "cron"
+	followRoster    followOp = "roster"
 )
 
 type followAsk struct {
@@ -68,7 +70,8 @@ type followReply struct {
 	Steered string
 	Refused string `json:",omitempty"`
 	Cron    cron.Reply
-	Failed  string `json:",omitempty"`
+	Failed  string        `json:",omitempty"`
+	Agents  []SubAgentRow `json:",omitempty"`
 }
 
 type followLine struct {
@@ -84,6 +87,8 @@ type audience struct {
 	changed  chan struct{}
 	started  *Event
 	partial  string
+	asks     []Event
+	steers   []Event
 }
 
 type link struct {
@@ -154,7 +159,7 @@ func (h *Host) admit(a *audience, listener net.Listener) {
 			_ = conn.Close()
 			continue
 		}
-		for _, event := range a.catchUp() {
+		for _, event := range h.catchUp(a) {
 			if line, err := json.Marshal(followLine{Event: &event}); err == nil {
 				s.send(line)
 			}
@@ -166,14 +171,19 @@ func (h *Host) admit(a *audience, listener net.Listener) {
 	}
 }
 
-func (a *audience) catchUp() []Event {
-	if a.started == nil {
-		return nil
+func (h *Host) catchUp(a *audience) []Event {
+	var caught []Event
+	if a.started != nil {
+		caught = append(caught, *a.started)
+		if a.partial != "" {
+			caught = append(caught, Event{Kind: EventTextDelta, Text: a.partial})
+		}
 	}
-	if a.partial == "" {
-		return []Event{*a.started}
-	}
-	return []Event{*a.started, {Kind: EventTextDelta, Text: a.partial}}
+	h.steering.mu.Lock()
+	queued := h.steering.queued()
+	h.steering.mu.Unlock()
+	a.steers = slices.DeleteFunc(a.steers, func(steer Event) bool { return !slices.Contains(queued, steer.ID) })
+	return append(append(caught, a.asks...), a.steers...)
 }
 
 func (a *audience) tell(event Event) {
@@ -188,6 +198,14 @@ func (a *audience) tell(event Event) {
 		a.partial += event.Text
 	case endsTheLeadReply(event):
 		a.partial = ""
+	}
+	switch event.Kind {
+	case EventAwaitPerson:
+		a.asks = append(a.asks, event)
+	case EventResumed:
+		a.asks = slices.DeleteFunc(a.asks, func(asked Event) bool { return asked.ID == event.ID })
+	case EventSteerQueued:
+		a.steers = append(a.steers, event)
 	}
 	if len(a.seats) == 0 {
 		return
@@ -350,6 +368,11 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		if reply.Cron, err = h.CronCommand(ask.Text); err != nil {
 			reply.OK, reply.Failed = false, err.Error()
 		}
+	case followRoster:
+		h.mu.Lock()
+		held := h.roster
+		h.mu.Unlock()
+		reply.Agents = SubAgentRows(held.SubAgents(), time.Now(), 0, nil, nil)
 	default:
 		reply.OK = false
 	}
@@ -384,7 +407,32 @@ func (h *Host) follow(f *following, id string) {
 	safe.Go(h.report, "follow", func() { h.heed(f) })
 	_ = h.loadCron(id)
 	if os.Getenv(HolderVariable) != id {
-		f.ask(followAsk{Op: followAttach})
+		safe.Go(h.report, "follow attach", func() { f.ask(followAsk{Op: followAttach}) })
+	}
+}
+
+func heldRoster(store *session.Store, id string) []SubAgentRow {
+	conn, err := net.DialTimeout(followNetwork, store.Channel(id), followDialWait)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = conn.Close() }()
+	asked, _ := json.Marshal(followAsk{ID: 1, Op: followRoster})
+	if conn.SetDeadline(time.Now().Add(followReplyWait)) != nil {
+		return nil
+	}
+	if _, err := conn.Write(asked); err != nil {
+		return nil
+	}
+	lines := json.NewDecoder(conn)
+	for {
+		var line followLine
+		if lines.Decode(&line) != nil {
+			return nil
+		}
+		if line.Reply != nil && line.Reply.ID == 1 {
+			return line.Reply.Agents
+		}
 	}
 }
 

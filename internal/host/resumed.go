@@ -71,7 +71,8 @@ func resumedChat(carry Carry, dir string) []Event {
 		chat = append(chat, redacted(event, mask))
 	}, turnID: carry.Session, seen: map[string]bool{}, spawner: &turn.SpawnTool{}}
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
-	if store, err := carry.reading(dir); err == nil {
+	store, err := carry.reading(dir)
+	if err == nil {
 		lead.read(store, carry.Session)
 		labelled = labelledAs(store, labelled)
 		store.ForgetRead()
@@ -111,7 +112,7 @@ func resumedChat(carry Carry, dir string) []Event {
 			lead.watch.emit(Event{Kind: EventPersisted, ID: said.ID, Logged: said})
 		}
 	}
-	lead.parkTheRunning()
+	lead.settleTheRunning(store, carry.Session)
 	return chat
 }
 
@@ -316,14 +317,26 @@ func (l *resumedLead) show(spawned ...SubAgentRow) {
 	l.watch.emit(Event{Kind: EventSubAgent, SubAgents: l.rows})
 }
 
-func (l *resumedLead) parkTheRunning() {
-	parked := false
+func (l *resumedLead) settleTheRunning(store *session.Store, id string) {
+	if !slices.ContainsFunc(l.rows, func(row SubAgentRow) bool { return row.State == roster.Working }) {
+		return
+	}
+	live := heldRoster(store, id)
+	for _, held := range live {
+		if held.State == roster.Working && !l.drawn(held.Name) {
+			l.rows = append(l.rows, held)
+		}
+	}
 	for i := range l.rows {
 		row := &l.rows[i]
 		if row.State != roster.Working {
 			continue
 		}
-		row.State, parked = roster.Parked, true
+		if at := slices.IndexFunc(live, func(held SubAgentRow) bool { return held.Name == row.Name }); at >= 0 {
+			row.State, row.Steps, row.Report = live[at].State, live[at].Steps, cmp.Or(live[at].Report, row.Report)
+			continue
+		}
+		row.State = roster.Parked
 		run := l.runs[row.Name]
 		for _, ended := range []roster.State{roster.Errored, roster.Finished} {
 			if ended.String() == run.Status {
@@ -337,9 +350,7 @@ func (l *resumedLead) parkTheRunning() {
 			}
 		}
 	}
-	if parked {
-		l.show()
-	}
+	l.show()
 }
 
 func (carry Carry) taskIn(content string) string {
