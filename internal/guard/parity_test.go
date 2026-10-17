@@ -212,6 +212,10 @@ func guardSide() side {
 		return side{name: "guard", run: func(t *testing.T, step parityStep, stdin []byte, fx fixture, base, msgFile string) outcome {
 			t.Setenv("HOME", fx.home)
 			t.Setenv("USERPROFILE", fx.home)
+			for _, unset := range outsideAnyHarness() {
+				name, _, _ := strings.Cut(unset, "=")
+				t.Setenv(name, "")
+			}
 			var answer Answer
 			switch step.Rule {
 			case "git commit-msg":
@@ -263,7 +267,7 @@ func runProcess(t *testing.T, cmd *exec.Cmd, stdin []byte, fx fixture, base stri
 	var stdout, stderr bytes.Buffer
 	cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr = fx.root, bytes.NewReader(stdin), &stdout, &stderr
 	temp, cache := filepath.Join(base, "temp"), filepath.Join(base, "cache")
-	cmd.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+fx.root, "TEMP="+temp, "TMP="+temp, "TMPDIR="+temp,
+	cmd.Env = append(append(os.Environ(), outsideAnyHarness()...), "CLAUDE_PROJECT_DIR="+fx.root, "TEMP="+temp, "TMP="+temp, "TMPDIR="+temp,
 		"LOCALAPPDATA="+cache, "XDG_CACHE_HOME="+cache, "HOME="+fx.home, "USERPROFILE="+fx.home)
 	err := cmd.Run()
 	code := cmd.ProcessState.ExitCode()
@@ -341,12 +345,16 @@ func buildFixture(t *testing.T, name, repo string) fixture {
 			args[0] = tofu
 		}
 		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir, cmd.Env = root, append(os.Environ(), "HOME="+home, "USERPROFILE="+home, "NO_COLOR=1")
+		cmd.Dir, cmd.Env = root, append(append(os.Environ(), outsideAnyHarness()...), "HOME="+home, "USERPROFILE="+home, "NO_COLOR=1")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%s: %v\n%s", line, err, out)
 		}
 	}
 	return built
+}
+
+func outsideAnyHarness() []string {
+	return []string{"CLAUDECODE=", "CLAUDE_CODE_SESSION_ID=", "TOFU_SESSION="}
 }
 
 func writeFile(t *testing.T, path string, data []byte) {

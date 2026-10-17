@@ -1,21 +1,22 @@
 git init -q
 tofu settings set --scope project projectManagement boardy
 tofu boardy init --key TOFU --name demo
-tofu boardy new --board TOFU --owns internal/alpha/** --acceptance alpha-builds alpha
+tofu boardy epic new E1 demo --board TOFU
+tofu boardy new --board TOFU --epic E1 --owns internal/alpha/** --acceptance alpha-builds alpha
 tofu boardy assign TOFU-1 go-dev
 tofu boardy move TOFU-1 doing
-tofu boardy new --board TOFU --owns internal/alpha/x.go --acceptance x overlap
+tofu boardy new --board TOFU --epic E1 --owns internal/alpha/x.go --acceptance x overlap
 tofu boardy assign TOFU-2 go-dev
-tofu boardy new --board TOFU --owns internal/beta/** --acceptance beta-builds beta
+tofu boardy new --board TOFU --epic E1 --owns internal/beta/** --acceptance beta-builds beta
 tofu boardy assign TOFU-3 go-dev
-tofu boardy new --board TOFU --owns internal/gamma/** gamma
+tofu boardy new --board TOFU --epic E1 --owns internal/gamma/** gamma
 tofu boardy assign TOFU-4 go-dev
-tofu boardy new --board TOFU --owns internal/rho/** --acceptance rho rho
+tofu boardy new --board TOFU --epic E1 --owns internal/rho/** --acceptance rho rho
 tofu boardy assign TOFU-5 go-dev
 tofu boardy move TOFU-5 doing
 tofu boardy log TOFU-5 short
 tofu boardy move TOFU-5 review
-tofu boardy new --board TOFU --owns internal/omega/** --acceptance omega omega
+tofu boardy new --board TOFU --epic E1 --owns internal/omega/** --acceptance omega omega
 tofu boardy move TOFU-6 dropped
 -- .gitignore --
 .local
