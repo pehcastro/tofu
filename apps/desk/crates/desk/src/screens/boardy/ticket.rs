@@ -1,14 +1,15 @@
 use chrono::Utc;
-use desk_core::boardy::{Speaker, spoken};
+use desk_core::boardy::{Speaker, report_echoes, spoken};
 use desk_core::protocol::boardy::{Event, Row, Ticket};
 use desk_core::protocol::{
-    BoardyEventKind as Kind, BoardyStatus as Status, BoardyTicketType as TicketType,
+    BoardyAuthorKind as AuthorKind, BoardyEventKind as Kind, BoardyStatus as Status,
+    BoardyTicketType as TicketType,
 };
 use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus, AvatarSize, avatar};
 use desk_ui::components::breadcrumb::{OnCrumb, breadcrumb};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::caption;
-use desk_ui::components::chat::document;
+use desk_ui::components::chat::{Block, document, markdown};
 use desk_ui::components::composer::Composer;
 use desk_ui::components::dot_chip::{dot_chip, icon_chip};
 use desk_ui::components::glyph::Glyph;
@@ -19,11 +20,11 @@ use desk_ui::components::properties::properties_panel;
 use desk_ui::components::scroll::ScrollArea;
 use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, HOVER, T1, T2};
 use desk_ui::components::status_icon::status_icon;
-use desk_ui::theme::{ColorToken, Theme};
+use desk_ui::theme::{ColorToken, Theme, WordToken};
 use gpui::{
-    AnyElement, App, Bounds, ClickEvent, Context, CursorStyle, Div, Entity, FontWeight,
-    MouseButton, MouseMoveEvent, Pixels, Rgba, SharedString, Window, canvas, div, prelude::*, px,
-    rgb_to_hsla,
+    AnyElement, App, Bounds, ClickEvent, ClipboardItem, Context, CursorStyle, Div, Entity,
+    FontWeight, MouseButton, MouseMoveEvent, Pixels, Rgba, SharedString, Window, canvas, div,
+    prelude::*, px, rgb_to_hsla,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -56,6 +57,48 @@ const BAR: f32 = 44.0;
 const ICON: f32 = 14.0;
 const BUBBLE_RADIUS: f32 = 10.0;
 const BUBBLE_FILL: f32 = 0.035;
+const REPLY_INDENT: f32 = 48.0;
+const FOLD_LINES: usize = 6;
+const FOLD_CHARS: usize = 480;
+const PERSON: &str = "you";
+
+pub(super) enum Said {
+    Quiet,
+    Echo,
+    Spoken {
+        full: Vec<Block>,
+        short: Option<Vec<Block>>,
+        refs: Vec<Ref>,
+    },
+}
+
+pub(super) fn said(events: &[Event], found: impl Fn(&str) -> Vec<Ref>) -> Vec<Said> {
+    events
+        .iter()
+        .zip(report_echoes(events))
+        .map(|(event, echo)| {
+            let text = event.text.as_deref().unwrap_or_default();
+            match (echo, spoken(event)) {
+                (true, _) => Said::Echo,
+                (false, false) => Said::Quiet,
+                (false, true) => Said::Spoken {
+                    full: markdown(text),
+                    short: folded(text).map(|short| markdown(&short)),
+                    refs: found(text),
+                },
+            }
+        })
+        .collect()
+}
+
+fn folded(text: &str) -> Option<String> {
+    let long = text.lines().nth(FOLD_LINES).is_some() || text.chars().nth(FOLD_CHARS).is_some();
+    long.then(|| {
+        let head = text.lines().take(FOLD_LINES).collect::<Vec<_>>().join("\n");
+        let shown: String = head.chars().take(FOLD_CHARS).collect();
+        format!("{}…", shown.trim_end())
+    })
+}
 
 pub(super) fn page(boardy: &Boardy, theme: &Theme, wide: Pixels, cx: &mut Context<Boardy>) -> Div {
     let Place::Ticket(id) = &boardy.place else {
@@ -345,13 +388,8 @@ fn body(boardy: &Boardy, opened: &Opened, theme: &Theme, cx: &mut Context<Boardy
                 .answer
                 .events
                 .iter()
-                .zip(&opened.said)
-                .zip(&opened.said_refs)
                 .enumerate()
-                .map(|(at, ((event, said), refs))| {
-                    let refs = mentions(&format!("said-{at}"), refs, boardy, theme, cx);
-                    activity(at, event, said.as_deref(), refs, theme)
-                }),
+                .filter_map(|(at, event)| activity(at, event, opened, boardy, theme, cx)),
         )
         .child(
             Composer::new("boardy-comment", boardy.composer.clone()).on_send(cx.listener(
@@ -515,58 +553,232 @@ fn linked(ticket: &Row, theme: &Theme, cx: &Context<Boardy>) -> AnyElement {
         .into_any_element()
 }
 
+struct Writer {
+    name: String,
+    color: Rgba,
+    sub_agent: bool,
+}
+
+pub(super) fn runners(events: &[Event]) -> Vec<Option<String>> {
+    let named = |event: &Event| {
+        matches!(event.kind, Kind::Spawned | Kind::Reported)
+            .then(|| event.agent.clone())
+            .flatten()
+    };
+    let mut later = None;
+    let mut after: Vec<Option<String>> = events
+        .iter()
+        .rev()
+        .map(|event| {
+            later = named(event).or(later.take());
+            later.clone()
+        })
+        .collect();
+    after.reverse();
+    let mut before = None;
+    events
+        .iter()
+        .zip(after)
+        .map(|(event, after)| {
+            before = named(event).or(before.take());
+            before.clone().or(after)
+        })
+        .collect()
+}
+
+fn sub_agent_name(name: &str, event: &Event, ran: Option<&str>) -> String {
+    match Speaker::of(name) {
+        Speaker::Named if name != event.ticket => name.to_owned(),
+        Speaker::Named | Speaker::Agent | Speaker::Lead | Speaker::Unknown => {
+            ran.map_or_else(|| format!("sub-agent on {}", event.ticket), str::to_owned)
+        }
+    }
+}
+
+fn writer(event: &Event, ran: Option<&str>, theme: &Theme) -> Writer {
+    let named = |name: &str, color: Rgba, sub_agent: bool| Writer {
+        name: name.to_owned(),
+        color,
+        sub_agent,
+    };
+    let sub_agent = |name: &str| {
+        let name = sub_agent_name(name, event, ran);
+        named(&name, tone(&name, theme), true)
+    };
+    if let Some(author) = &event.author {
+        let name = author.name.as_str();
+        return match &author.kind {
+            AuthorKind::Person => named(PERSON, theme.color(ColorToken::StatusAccent), false),
+            AuthorKind::ClaudeCode => named(name, theme.color(ColorToken::StatusWarn), false),
+            AuthorKind::Lead => named(name, theme.color(ColorToken::Trace), false),
+            AuthorKind::SubAgent => sub_agent(name),
+            AuthorKind::Hook | AuthorKind::Unknown(_) => {
+                named(name, ink(theme, CAPTION_TEXT), false)
+            }
+        };
+    }
+    let actor = event.actor.as_deref().unwrap_or_default();
+    match Speaker::of(actor) {
+        Speaker::Unknown if actor.is_empty() => named(
+            event.agent.as_deref().unwrap_or("unknown"),
+            ink(theme, CAPTION_TEXT),
+            false,
+        ),
+        Speaker::Unknown => named(actor, ink(theme, CAPTION_TEXT), false),
+        Speaker::Lead => named("orchestrator", theme.color(ColorToken::StatusWarn), false),
+        Speaker::Agent => sub_agent(event.agent.as_deref().unwrap_or(actor)),
+        Speaker::Named => named(actor, tone(actor, theme), false),
+    }
+}
+
+fn conversation(event: &Event) -> bool {
+    match event.kind {
+        Kind::Spawned | Kind::Messaged | Kind::Asked | Kind::Answered | Kind::Reported => true,
+        Kind::Created
+        | Kind::Moved
+        | Kind::Commented
+        | Kind::Rule
+        | Kind::Waiting
+        | Kind::Requested
+        | Kind::Accepted
+        | Kind::RequestDropped
+        | Kind::Handed
+        | Kind::Widened
+        | Kind::Managers
+        | Kind::Assigned
+        | Kind::Hook
+        | Kind::HookFailed
+        | Kind::Unknown(_) => false,
+    }
+}
+
 fn activity(
     at: usize,
     event: &Event,
-    said: Option<&[desk_ui::components::chat::Block]>,
-    refs: Option<Div>,
+    opened: &Opened,
+    boardy: &Boardy,
     theme: &Theme,
-) -> Div {
-    let actor = event.actor.as_deref().unwrap_or_default();
-    let (name, color) = match Speaker::of(actor) {
-        Speaker::Unknown => ("unknown".to_owned(), ink(theme, CAPTION_TEXT)),
-        Speaker::Lead => (
-            "orchestrator".to_owned(),
-            theme.color(ColorToken::StatusWarn),
-        ),
-        Speaker::Agent => {
-            let name = event.agent.clone().unwrap_or_else(|| "agent".to_owned());
-            let color = tone(&name, theme);
-            (name, color)
-        }
-        Speaker::Named => (actor.to_owned(), tone(actor, theme)),
-    };
+    cx: &Context<Boardy>,
+) -> Option<Div> {
+    let ran = opened.ran.get(at).and_then(Option::as_deref);
+    let open = opened.unfolded.contains(&at);
+    let writer = writer(event, ran, theme);
+    let name = &writer.name;
     let when = age(&event.at, Utc::now());
-    let face = disc(&name.get(..1).unwrap_or_default().to_uppercase(), color);
-    let Some(said) = said.filter(|_| spoken(event)) else {
-        return div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .text_size(px(FONT_SMALL))
-            .text_color(ink(theme, CAPTION_TEXT))
-            .child(face)
-            .child(format!("{name} {} · {when}", did(event)));
+    let face = disc(
+        &name.get(..1).unwrap_or_default().to_uppercase(),
+        writer.color,
+    );
+    let (full, short, refs) = match opened.said.get(at)? {
+        Said::Echo => return None,
+        Said::Quiet => {
+            return Some(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_size(px(FONT_SMALL))
+                    .text_color(ink(theme, CAPTION_TEXT))
+                    .child(face)
+                    .child(format!("{name} {} · {when}", did(event))),
+            );
+        }
+        Said::Spoken { full, short, refs } => (full, short, refs),
     };
-    div().flex().gap_2().child(face).child(
-        div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .p_3()
-            .rounded(px(BUBBLE_RADIUS))
-            .bg(ink(theme, BUBBLE_FILL))
-            .child(note(format!("{name} {} · {when}", did(event)), theme))
-            .child(document(
-                SharedString::from(format!("said-{at}")),
-                said,
-                &[],
+    let talking = conversation(event);
+    let heading = match event
+        .agent
+        .as_deref()
+        .filter(|agent| talking && agent != name)
+    {
+        Some(agent) => format!("{name} → {agent} · {} · {when}", did(event)),
+        None => format!("{name} {} · {when}", did(event)),
+    };
+    let shown = match short {
+        Some(short) if !open => short,
+        Some(_) | None => full,
+    };
+    let fold = short.as_ref().map(|_| {
+        let label = if open { "Show less" } else { "Show all" };
+        button(
+            SharedString::from(format!("boardy-fold-{at}")),
+            label,
+            None,
+            ButtonKind::Text,
+            theme,
+        )
+        .on_click(
+            cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                if let Some(opened) = boardy.opened.as_mut()
+                    && !opened.unfolded.remove(&at)
+                {
+                    opened.unfolded.insert(at);
+                }
+                cx.notify();
+            }),
+        )
+    });
+    let trace = event
+        .author
+        .as_ref()
+        .and_then(|author| author.trace.clone())
+        .map(|trace| command(at, trace, theme));
+    let bubble = div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .p_3()
+        .rounded(px(BUBBLE_RADIUS))
+        .bg(ink(theme, BUBBLE_FILL))
+        .child(note(heading, theme))
+        .child(document(
+            SharedString::from(format!("said-{at}")),
+            shown,
+            &[],
+            theme,
+        ))
+        .children(fold)
+        .children(mentions(&format!("said-{at}"), refs, boardy, theme, cx))
+        .children(trace);
+    let row = div().flex().gap_2().child(face).child(bubble);
+    Some(match (talking, writer.sub_agent) {
+        (true, true) => row.flex_row_reverse().pl(px(REPLY_INDENT)),
+        (true, false) => row.pr(px(REPLY_INDENT)),
+        (false, _) => row,
+    })
+}
+
+fn command(at: usize, trace: String, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_1()
+        .min_w_0()
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .font_family(theme.word(WordToken::ShapeMono))
+                .text_size(px(FONT_SMALL))
+                .text_color(ink(theme, T2))
+                .child(trace.clone()),
+        )
+        .child(
+            button(
+                SharedString::from(format!("boardy-trace-{at}")),
+                "Copy",
+                Some(Glyph::Copy),
+                ButtonKind::Text,
                 theme,
-            ))
-            .children(refs),
-    )
+            )
+            .on_click(move |_, _, cx| {
+                eprintln!("desk: boardy copied the trace command {trace}");
+                cx.write_to_clipboard(ClipboardItem::new_string(trace.clone()));
+            }),
+        )
 }
 
 fn tone(name: &str, theme: &Theme) -> Rgba {

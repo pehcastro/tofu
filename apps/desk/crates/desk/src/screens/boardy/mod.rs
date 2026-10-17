@@ -5,7 +5,7 @@ mod sidebar;
 mod ticket;
 mod views;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -85,9 +85,10 @@ struct Opened {
     answer: GetAnswer,
     body: Vec<Block>,
     acceptance: Vec<Block>,
-    said: Vec<Option<Vec<Block>>>,
+    said: Vec<ticket::Said>,
+    ran: Vec<Option<String>>,
+    unfolded: BTreeSet<usize>,
     body_refs: Vec<refs::Ref>,
-    said_refs: Vec<Vec<refs::Ref>>,
     owned: Vec<(String, Option<refs::To>)>,
 }
 
@@ -545,6 +546,12 @@ impl Boardy {
                     answer.ticket.id,
                     answer.events.len()
                 );
+                let unfolded = boardy
+                    .opened
+                    .take()
+                    .filter(|held| held.answer.ticket.id == answer.ticket.id)
+                    .map(|held| held.unfolded)
+                    .unwrap_or_default();
                 let ticket = &answer.ticket;
                 let boards: Vec<&str> =
                     boardy.store.boards.iter().map(|b| b.key.as_str()).collect();
@@ -552,25 +559,14 @@ impl Boardy {
                 let found = |text: &str| refs::refs(text, &ticket.id, &boards, root, &ticket.owns);
                 let body = format!("{}\n\n{}", ticket.problem, ticket.scope);
                 let acceptance = ticket.acceptance.last().map_or("", String::as_str);
-                let spoken: Vec<Option<&str>> = answer
-                    .events
-                    .iter()
-                    .map(|event| {
-                        desk_core::boardy::spoken(event)
-                            .then(|| event.text.as_deref().unwrap_or_default())
-                    })
-                    .collect();
                 let mut body_refs = found(&body);
                 let more: Vec<refs::Ref> = found(acceptance)
                     .into_iter()
                     .filter(|one| !body_refs.iter().any(|held| held.label == one.label))
                     .collect();
                 body_refs.extend(more);
-                let said = spoken.iter().map(|said| said.map(markdown)).collect();
-                let said_refs = spoken
-                    .iter()
-                    .map(|said| said.map(found).unwrap_or_default())
-                    .collect();
+                let said = ticket::said(&answer.events, found);
+                let ran = ticket::runners(&answer.events);
                 let owned = ticket
                     .owns
                     .iter()
@@ -584,8 +580,9 @@ impl Boardy {
                     body,
                     acceptance,
                     said,
+                    ran,
+                    unfolded,
                     body_refs,
-                    said_refs,
                     owned,
                     answer,
                 });

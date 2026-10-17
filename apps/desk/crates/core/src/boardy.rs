@@ -11,6 +11,7 @@ pub const ALL_VIEW: &str = "all";
 const BOARDY: &str = "boardy";
 const OFF: &str = "off";
 const PERSON: &str = "person";
+const REPORT_ECHO: &str = "report:";
 const SESSION_ID_LEN: usize = 36;
 const SESSION_ID_DASHES: [usize; 4] = [8, 13, 18, 23];
 
@@ -160,6 +161,32 @@ pub fn spoken(event: &Event) -> bool {
         | BoardyEventKind::HookFailed
         | BoardyEventKind::Unknown(_) => false,
     }
+}
+
+pub fn report_echoes(events: &[Event]) -> Vec<bool> {
+    let mut reported: Option<&str> = None;
+    events
+        .iter()
+        .map(|event| {
+            let text = event.text.as_deref().map(str::trim);
+            match event.kind {
+                BoardyEventKind::Reported => {
+                    reported = text;
+                    false
+                }
+                BoardyEventKind::Commented => {
+                    let echo = text
+                        .and_then(|text| text.strip_prefix(REPORT_ECHO))
+                        .is_some_and(|rest| reported == Some(rest.trim()));
+                    if echo {
+                        reported = None;
+                    }
+                    echo
+                }
+                _ => false,
+            }
+        })
+        .collect()
 }
 
 pub fn row(ticket: Ticket) -> Row {
