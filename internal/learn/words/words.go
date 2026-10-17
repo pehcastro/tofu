@@ -11,6 +11,7 @@ import (
 const (
 	StrongSharedWords = 3
 	SharedOfShorter   = 3
+	AgreeingClauses   = 2
 	TellingFloor      = 3
 	TellingShare      = 10
 	ShortMessageWords = 30
@@ -22,6 +23,7 @@ const (
 var (
 	corrected   = sys.LazyRegexp(`(?i)\b(?:again|i said|i asked|i told|as i said|lol|you should|your job|yourself|where is|never asked|can't i just|you can just|not verified|nothing i asked)\b|\bwhy\b[^.!?\n]*\?`)
 	sentenceEnd = sys.LazyRegexp(`[.?!]+\s+|\n+`)
+	clauseEnd   = sys.LazyRegexp(`[.?!,;:()]+\s*|\s+(?:and|then|but|so)\s+|\n+`)
 	tokens      = sys.LazyRegexp(`[\pL\pN']+`)
 )
 
@@ -37,6 +39,8 @@ func Profane(text string) bool {
 }
 
 func Corrects(text string) bool { return corrected().MatchString(text) }
+
+func Clauses(text string) []string { return clauseEnd().Split(text, -1) }
 
 func Stems(text string) []string {
 	var stems []string
@@ -68,6 +72,7 @@ type Unit struct {
 	Said  int
 	Text  string
 	Stems []string
+	spans [][]string
 }
 
 func Units(said []string) []Unit {
@@ -133,16 +138,20 @@ func Themes(units []Unit, rare map[string]bool) []Theme {
 	var corrections, remarks []Unit
 	for _, u := range units {
 		if Corrects(u.Text) {
+			clauses := Clauses(u.Text)
+			for i := range max(1, len(clauses)-AgreeingClauses+1) {
+				u.spans = append(u.spans, Stems(strings.Join(clauses[i:min(len(clauses), i+AgreeingClauses)], " ")))
+			}
 			corrections = append(corrections, u)
 			continue
 		}
 		remarks = append(remarks, u)
 	}
 	var themes []Theme
-	for _, group := range groupsOf(corrections, nil) {
+	for _, group := range groupsOf(corrections, agreed) {
 		themes = append(themes, Theme{Corrects: true, Units: group})
 	}
-	for _, group := range groupsOf(remarks, rare) {
+	for _, group := range groupsOf(remarks, func(a, b Unit) int { return Alike(a.Stems, b.Stems, rare) }) {
 		themes = append(themes, Theme{Units: group})
 	}
 	return themes
@@ -165,7 +174,17 @@ func Candidates(earlier []string, said string) []int {
 	return picked[:min(len(picked), RepeatCandidates)]
 }
 
-func groupsOf(units []Unit, rare map[string]bool) [][]Unit {
+func agreed(a, b Unit) int {
+	most := 0
+	for _, ours := range a.spans {
+		for _, theirs := range b.spans {
+			most = max(most, Alike(ours, theirs, nil))
+		}
+	}
+	return most
+}
+
+func groupsOf(units []Unit, alike func(a, b Unit) int) [][]Unit {
 	var groups [][]Unit
 	for _, u := range units {
 		best, most := -1, 0
@@ -174,7 +193,7 @@ func groupsOf(units []Unit, rare map[string]bool) [][]Unit {
 				continue
 			}
 			for _, member := range group {
-				if n := Alike(u.Stems, member.Stems, rare); n > most {
+				if n := alike(u, member); n > most {
 					best, most = g, n
 				}
 			}

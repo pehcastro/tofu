@@ -17,7 +17,6 @@ import (
 var (
 	askedPerson = sys.LazyRegexp(`(?i)(decision for you|your call|you need to decide|until you decide|what i need from you|tell me (if|when|which|whether)|should i (start|do|go|build)|do you want|want me to|let me know|still open for you|\?\s*$)`)
 	turnEnded   = sys.LazyRegexp(`(?i)\byou should be the one\b|\bwhy (?:u |you )?(?:idle|stopp?ed|stop|waiting|ask)\b|\bcan't i just\b|\byou can just\b|\byour job\b|\bkeep working\b`)
-	clauseEnd   = sys.LazyRegexp(`[.?!,;:()]+\s*|\s+(?:and|then|but|so)\s+|\n+`)
 	directing   = sys.LazyRegexp(`(?i)\b(?:yourself|you should|your job|you can just|i want|must)\b`)
 	toTheLead   = strings.NewReplacer(" yourself ", " itself ", " you are ", " the lead is ", " you're ", " the lead is ", " your ", " the lead's ", " you ", " the lead ", " u ", " the lead ", " lol ", " ", " pls ", " ", " please ", " ", " ok ", " ")
 )
@@ -130,7 +129,7 @@ func findingOf(group []words.Unit, said []Said, rare map[string]bool, sent reque
 func directive(f Finding) string {
 	best, score := "", -1
 	for _, q := range f.Quotes {
-		for _, clause := range clauseEnd().Split(q.Text, -1) {
+		for _, clause := range words.Clauses(q.Text) {
 			points := words.Shared(words.Stems(clause), f.words, nil)
 			if directing().MatchString(clause) {
 				points += SharedTellingWords
