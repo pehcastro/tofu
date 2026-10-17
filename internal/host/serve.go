@@ -110,7 +110,11 @@ func Serve(cfg ServeConfig) error {
 	}
 	s.stopCommand()
 	lanes := s.tracked()
-	s.stopTurns(slices.DeleteFunc(slices.Clone(lanes), func(l *lane) bool { return l.host.heldBy() != nil })...)
+	ended := StopAsked{By: s.asker("its connection"), Why: "the connection ended, so tofu serve exits", Everything: true}
+	if err != nil {
+		ended.Why += ": " + err.Error()
+	}
+	s.stopTurns(ended, slices.DeleteFunc(slices.Clone(lanes), func(l *lane) bool { return l.host.heldBy() != nil })...)
 	for _, l := range lanes {
 		l.halt()
 	}
@@ -496,11 +500,17 @@ func (s *server) stop(p TurnParams) (any, error) {
 	stopping := running && (p.Turn == "" || p.Turn == turn)
 	switch {
 	case stopping && p.Lead:
-		l.host.StopLead()
+		l.host.StopLead(StopAsked{By: s.asker("turn.stop with lead")})
+	case stopping && p.Everything:
+		l.host.Stop(StopAsked{By: s.asker("turn.stop with everything"), Why: "the client asked to stop every running sub-agent", Everything: true})
 	case stopping:
-		l.host.Stop()
+		l.host.Stop(StopAsked{By: s.asker("turn.stop")})
 	}
 	return Ack{OK: stopping || !running && s.stopCommand()}, nil
+}
+
+func (s *server) asker(method string) string {
+	return "serve client " + cmp.Or(s.client, "unnamed") + ", " + method
 }
 
 func (s *server) stopCommand() bool {
@@ -571,7 +581,11 @@ func (s *server) shellKill(p ShellParams) (any, error) {
 	if s.Shells == nil {
 		return nil, &Refusal{Code: CodeRefused, Message: noShellRegistry}
 	}
-	return Ack{OK: true}, s.Shells.Kill(p.Shell)
+	err := s.Shells.Kill(p.Shell)
+	if err == nil {
+		s.focus().host.traceStop(session.Stop{Kind: session.ShellKill, By: s.asker("shell.kill"), Took: []string{p.Shell}})
+	}
+	return Ack{OK: true}, err
 }
 
 func endedWhileHeld(one shell.Shell) string {
@@ -711,7 +725,7 @@ func (s *server) answered(id, result json.RawMessage) error {
 	answered, stands := true, false
 	switch {
 	case answer.Decision == Cancelled:
-		l.host.Stop()
+		l.host.Stop(StopAsked{By: s.asker("approval " + approval + " answered cancelled"), Why: "the person cancelled the ask about " + asked.Tool})
 	case asked.Tool == turn.RememberToolName:
 		answered = l.host.AnswerMemory(approval, keptAs(answer.Decision))
 	default:

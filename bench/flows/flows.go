@@ -33,6 +33,7 @@ var flows = []flow{
 	{6, "a sub-agent waiting on the lead past a shortened cap keeps running", true, capSkipsWaits},
 	{7, "450 settled sub-agents fold and one opens by search", true, foldAndSearch},
 	{8, "10,000 kept shells: memory under 300 MB for 3 min, a report reaches the lead, ctrl+c quits within 3 s", false, keptShellsQuit},
+	{9, "a sub-agent resumed by message outlives the lead's turn, a person message, a cancelled ask, esc once and a cron fire", true, resumedSurvives},
 }
 
 var clockOnScreen = regexp.MustCompile(`(?m)(?:spawning|running) \[&sub-1\][^\n]*?  ((?:\d+h )?(?:\d+m )?\d+s)\s*[│┃]?\s*$`)
@@ -198,6 +199,19 @@ func foldAndSearch(s session) (string, error) {
 		return "", fmt.Errorf("the search for mission%d opened no report of sub-%d", searchedOf, searchedOf)
 	}
 	return folded + "; search opened: " + opened, nil
+}
+
+func resumedSurvives(s session) (string, error) {
+	out, err := s.drive("9-survive", "", 2*time.Minute)
+	if err != nil {
+		return "", err
+	}
+	for _, mark := range []string{"DEAD  0", "WAITING  0"} {
+		if lineWith(out, mark) == "" {
+			return "", fmt.Errorf("after the cancelled ask, esc and the cron fire the sub-agents screen says %s, %s, %s, want %s", lineWith(out, "ACTIVE  "), lineWith(out, "WAITING  "), lineWith(out, "DEAD  "), mark)
+		}
+	}
+	return "after the cancelled ask, esc and the cron fire: " + lineWith(out, "ACTIVE  ") + ", " + lineWith(out, "WAITING  ") + ", " + lineWith(out, "DEAD  "), nil
 }
 
 func crowdCassette(dir string) (string, error) {

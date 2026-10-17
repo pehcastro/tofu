@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -66,6 +67,43 @@ type TracedMemory struct {
 	Model   string    `json:"model,omitempty"`
 	Usage   Usage     `json:"usage"`
 	CostUSD float64   `json:"cost_usd"`
+}
+
+type StopKind string
+
+const (
+	StopLead  StopKind = "lead stop"
+	StopTurn  StopKind = "turn stop"
+	TurnEnd   StopKind = "turn end"
+	HostClose StopKind = "close"
+	ShellKill StopKind = "shell kill"
+)
+
+type Stop struct {
+	Kind StopKind `json:"kind"`
+	By   string   `json:"by"`
+	Why  string   `json:"why,omitempty"`
+	Took []string `json:"took,omitempty"`
+	Kept []string `json:"kept,omitempty"`
+}
+
+type StopBody struct {
+	NoticeBody
+	Stop *Stop `json:"stop,omitempty"`
+}
+
+func (s Stop) Said() string {
+	said := string(s.Kind) + " by " + s.By
+	if s.Why != "" {
+		said += ": " + s.Why
+	}
+	if len(s.Took) > 0 {
+		said += "; took " + strings.Join(s.Took, ", ")
+	}
+	if len(s.Kept) > 0 {
+		said += "; kept running " + strings.Join(s.Kept, ", ")
+	}
+	return said
 }
 
 type Traced struct {

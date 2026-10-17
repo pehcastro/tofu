@@ -155,15 +155,32 @@ func traceAgentRows(timeline traceTimeline) []cli.Row {
 func traceStopRows(stops map[string][]traceRow) []cli.Row {
 	turns := slices.Collect(maps.Keys(stops))
 	slices.SortFunc(turns, func(a, b string) int { return stops[a][0].At.Compare(stops[b][0].At) })
+	var asking []traceRow
+	for _, group := range stops {
+		asking = append(asking, slices.DeleteFunc(slices.Clone(group), func(row traceRow) bool { return row.Asked == "" })...)
+	}
 	stopped := make([]cli.Row, len(turns))
 	for i, turnID := range turns {
-		var who []string
-		for _, row := range stops[turnID] {
-			if !slices.Contains(who, row.who()) {
+		group := stops[turnID]
+		var who, asked []string
+		for _, row := range group {
+			if row.Asked == "" && !slices.Contains(who, row.who()) {
 				who = append(who, row.who())
 			}
 		}
-		stopped[i] = cli.Row{Mark: cli.Warn, Cells: []string{stops[turnID][0].At.Format(time.TimeOnly), cmp.Or(turnID, "no turn")}, Detail: "stopped " + strings.Join(who, ", ") + " · who asked is not recorded"}
+		for _, row := range asking {
+			if !row.At.Before(group[0].At) && !row.At.After(group[len(group)-1].At) && !slices.Contains(asked, row.Asked) {
+				asked = append(asked, row.Asked)
+			}
+		}
+		said := "no stop row names who asked"
+		if len(asked) > 0 {
+			said = "asked by " + strings.Join(asked, "; ")
+		}
+		if len(who) > 0 {
+			said = "stopped " + strings.Join(who, ", ") + " · " + said
+		}
+		stopped[i] = cli.Row{Mark: cli.Warn, Cells: []string{group[0].At.Format(time.TimeOnly), cmp.Or(turnID, "no turn")}, Detail: said}
 	}
 	return stopped
 }

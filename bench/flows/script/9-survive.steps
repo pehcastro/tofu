@@ -1,0 +1,17 @@
+type run the alpha worker
+key enter
+wait FIRSTWAIT
+wait Ask tofu
+type resume the worker and check on it
+key enter
+wait LEADWAITS
+type how is it going
+key enter
+wait write wants
+key 5
+wait stopping the turn
+key esc
+wait CRONLEAD
+key alt+2
+wait SUBWORKING
+screen

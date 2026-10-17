@@ -2860,7 +2860,7 @@ func TestStoppingTheLeadMidTurnLeavesItsSubAgentRunningToItsReport(t *testing.T)
 	case <-time.After(5 * time.Second):
 		t.Fatal("the lead never asked a second time")
 	}
-	live.StopLead()
+	live.StopLead(host.StopAsked{By: "the test"})
 	<-firstClose
 	close(model.subAgentGo)
 	<-ran

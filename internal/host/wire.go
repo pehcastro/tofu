@@ -946,9 +946,10 @@ type TurnSteerParams struct {
 }
 
 type TurnParams struct {
-	Session string `json:"session"`
-	Turn    string `json:"turn"`
-	Lead    bool   `json:"lead,omitempty"`
+	Session    string `json:"session"`
+	Turn       string `json:"turn"`
+	Lead       bool   `json:"lead,omitempty"`
+	Everything bool   `json:"everything,omitempty"`
 }
 
 type SteerResult struct {

@@ -58,6 +58,7 @@ type followAsk struct {
 	Images   []pendingImage `json:",omitempty"`
 	Command  string         `json:",omitempty"`
 	Stopped  bool           `json:",omitempty"`
+	Stop     StopAsked      `json:",omitzero"`
 }
 
 type followReply struct {
@@ -319,9 +320,9 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: Origin{Kind: OriginPerson}})
 		reply.OK = h.Send(pick, ask.Text)
 	case followStop:
-		h.Stop()
+		h.Stop(ask.Stop)
 	case followStopLead:
-		h.StopLead()
+		h.StopLead(ask.Stop)
 	case followAnswer:
 		reply.OK = h.Answer(ask.Asked, ask.Answer)
 	case followAnswerAsk:
@@ -551,6 +552,7 @@ func (h *Host) endedWith(f *following) {
 func (h *Host) tookOver(f *following, id string, took time.Duration, ran bool, reloaded error) {
 	if ran {
 		h.endedWith(f)
+		h.traceStop(session.Stop{Kind: session.TurnEnd, By: "the holder, process " + strconv.Itoa(f.holder.PID), Why: "it exited or crashed with the turn running, and process " + strconv.Itoa(os.Getpid()) + " took the session over"})
 	}
 	out := h.emitter()
 	out.emit(Event{Kind: EventNote, Text: "process " + strconv.Itoa(f.holder.PID) + " let go of session " + id + ", so this tofu holds it now and runs what you type (took " + took.Round(time.Millisecond).String() + ")"})

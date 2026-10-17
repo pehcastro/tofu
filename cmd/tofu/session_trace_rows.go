@@ -23,6 +23,8 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		sent[exchange.Request], at[exchange.Request] = exchange, exchange.At
 	}
 	var rows []traceRow
+	var causes []stopCause
+	var unfinished []int
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
@@ -70,6 +72,10 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			row.Kind = cmp.Or(map[string]traceKind{"bash": kindShell, "shell": kindShell, "cron": kindCron}[call.Tool], kindCall)
 			row.ID, row.State, row.Text = event.Call, "unanswered", call.Tool+" "+oneLine(string(call.Args))
 			calls[event.Call], asked[event.Call] = len(rows), call
+			var message struct{ To, Do string }
+			if call.Tool == "message" && json.Unmarshal(call.Args, &message) == nil && (message.Do == "kill" || message.Do == "stop") {
+				causes = append(causes, stopCause{row: len(rows), took: []string{message.To}})
+			}
 		case session.EventToolResult:
 			var result traceResult
 			_ = json.Unmarshal(event.Body, &result)
@@ -126,6 +132,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			row.Kind, row.State, row.Text = kindSpawn, ended.Status, traced("ended "+ended.Status, spent(ended.CostUSD))
 			if ended.Status != subagent.Finished.String() {
 				row.Kind, row.Outcome = kindStop, traceStopped
+				unfinished = append(unfinished, len(rows))
 			}
 		case session.EventReport:
 			var report session.ReportBody
@@ -153,11 +160,17 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			_ = json.Unmarshal(event.Body, &read)
 			row.Kind, row.Text, row.Outcome = kindRead, traced(read.Tool+" "+read.Source, read.Span, sized(read.Bytes), read.Error), traceProblem(false, read.Error)
 		case session.EventNotice:
-			var notice session.NoticeBody
+			var notice session.StopBody
 			_ = json.Unmarshal(event.Body, &notice)
 			row.Kind, row.Text = kindNotice, oneLine(notice.Text)
 			spawnOf, timed := strings.CutPrefix(notice.Text, "spawn of ")
 			switch {
+			case notice.Stop != nil:
+				row.Kind, row.State, row.Asked = kindStop, string(notice.Stop.Kind), notice.Stop.By
+				if notice.Stop.Kind != session.TurnEnd {
+					row.Outcome = traceStopped
+				}
+				causes = append(causes, stopCause{row: len(rows), took: notice.Stop.Took})
 			case strings.HasPrefix(notice.Text, "startup took"):
 				row.Kind = kindStartup
 			case strings.HasPrefix(notice.Text, "[memory#"):
@@ -177,6 +190,9 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		}
 		rows = append(rows, row)
 	}
+	for _, at := range unfinished {
+		rows[at].Text = traced(rows[at].Text, becauseOf(rows, causes, at))
+	}
 	for _, exchange := range exchanges {
 		if _, unrecorded := sent[exchange.Request]; unrecorded && exchange.Error != "" {
 			rows = append(rows, traceRow{At: exchange.At, Kind: kindRequest, Agent: exchange.Agent, Turn: exchange.Turn, ID: exchange.Request,
@@ -188,6 +204,36 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			Text: "read " + strconv.Itoa(cut.Read) + " of " + strconv.Itoa(cut.Cached) + " cached, " + cut.Gap + " after " + cut.After + ", first difference: " + cut.Differs})
 	}
 	return rows
+}
+
+type stopCause struct {
+	row  int
+	took []string
+}
+
+func becauseOf(rows []traceRow, causes []stopCause, at int) string {
+	agent := rows[at].Agent
+	for i := len(causes) - 1; i >= 0; i-- {
+		cause := rows[causes[i].row]
+		if causes[i].row > at || !slices.Contains(causes[i].took, agent) {
+			continue
+		}
+		if cause.Kind == kindCall {
+			cause.Text = cause.who() + " called " + cause.Text
+		}
+		return "because of " + cause.Text + " (row " + cause.ID + ")"
+	}
+	for i := at - 1; i >= 0; i-- {
+		if rows[i].Agent != agent || rows[i].Outcome == "" {
+			continue
+		}
+		said := "after " + rows[i].Text + " (row " + rows[i].ID + ")"
+		if rows[i].Outcome == traceStopped {
+			said += ", and no stop row names who asked"
+		}
+		return said
+	}
+	return "no row before it says why"
 }
 
 func traced(parts ...string) string {

@@ -43,7 +43,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 		}
 	}()
 	defer s.Host.Close()
-	defer context.AfterFunc(ctx, s.Stop)()
+	defer context.AfterFunc(ctx, func() { s.Stop(host.StopAsked{By: "the test cancelling its context", Everything: true}) })()
 	for event := range s.Events() {
 		switch event.Kind {
 		case host.EventTurnStarted:

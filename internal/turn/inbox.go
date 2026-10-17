@@ -645,6 +645,31 @@ func (b *Inbox) adopt(held *heldSubAgent) {
 	}
 }
 
+func (b *Inbox) Running() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var running []string
+	for id, held := range b.held {
+		if held.running {
+			running = append(running, id)
+		}
+	}
+	slices.Sort(running)
+	return running
+}
+
+func (b *Inbox) Record(id string, event session.Event, body any) (bool, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for log := range b.logs {
+		if log.ID() == id {
+			_, err := log.Append(event, body)
+			return true, err
+		}
+	}
+	return false, nil
+}
+
 func (b *Inbox) find(to string) (*heldSubAgent, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

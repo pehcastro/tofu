@@ -63,6 +63,7 @@ type traceRow struct {
 	ID         string       `json:"id,omitempty"`
 	State      string       `json:"state,omitempty"`
 	Outcome    traceOutcome `json:"outcome,omitempty"`
+	Asked      string       `json:"asked_by,omitempty"`
 	Text       string       `json:"text"`
 	RecordedIn string       `json:"recorded_in,omitempty"`
 }

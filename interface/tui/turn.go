@@ -286,16 +286,17 @@ func (a *App) turnEventID() string {
 }
 
 func (a *App) interrupt() tea.Cmd {
-	if a.stopOverdue() {
-		if a.options.Host.Cancelled() {
-			return tea.Quit
-		}
-		a.stopEverything()
-		return nil
+	if a.stopOverdue() && a.options.Host.Cancelled() {
+		a.options.Host.ClosingBy(a.askedBy("ctrl+c while a stop hung").By)
+		return tea.Quit
 	}
 	subAgentsRun := a.status.Agents > 0
 	if a.busy && subAgentsRun && (!a.leading || a.view.Stopping) {
 		a.askToStopSubAgents()
+		return nil
+	}
+	if a.stopOverdue() {
+		a.stopEverythingAs(a.askedBy("ctrl+c over " + strconv.Itoa(konst.StopSubAgentsMillis/1000) + " s after a stop"))
 		return nil
 	}
 	if a.view.Stopping {
@@ -306,11 +307,14 @@ func (a *App) interrupt() tea.Cmd {
 	switch {
 	case !a.busy:
 		if withinQuitWindow {
+			if a.options.Host != nil {
+				a.options.Host.ClosingBy(a.askedBy("ctrl+c twice to quit").By)
+			}
 			return tea.Quit
 		}
 		a.view.Append(session.Entry{Kind: session.Note, Body: quitAgainNote})
 	case subAgentsRun, a.view.LettingToolsFinish, a.running == 0 || len(a.view.Spawning) > 0 || a.view.TakesAnswerDigits():
-		a.stopTurn()
+		a.stopTurnAs(a.askedBy("ctrl+c"))
 	default:
 		a.view.LettingToolsFinish = true
 		a.noteStop(stoppingModel + a.queueTail())
@@ -334,18 +338,25 @@ func (a *App) stopOverdue() bool {
 	return a.busy && a.view.Stopping && a.options.Now().Sub(a.pressedAt) >= konst.StopSubAgentsMillis*time.Millisecond
 }
 
-func (a *App) stopTurn() {
-	if a.stopOverdue() && !a.options.Host.Cancelled() {
-		a.stopEverything()
-	}
+func (a *App) stopTurn() { a.stopTurnAs(a.askedBy("esc")) }
+
+func (a *App) stopTurnAs(asked host.StopAsked) {
 	if a.view.Stopping {
 		return
 	}
 	if a.status.Agents > 0 {
-		a.stopLead()
+		a.stopLead(asked)
 		return
 	}
-	a.stopEverything()
+	a.stopEverythingAs(asked)
+}
+
+func (a *App) askedBy(key string) host.StopAsked {
+	screen := "settings"
+	if names := tabNames(); int(a.current) < len(names) {
+		screen = names[a.current]
+	}
+	return host.StopAsked{By: "the person, " + key + " on the " + screen + " screen"}
 }
 
 func (a *App) askToStopSubAgents() {
@@ -354,26 +365,30 @@ func (a *App) askToStopSubAgents() {
 		return
 	}
 	a.view.AskToStop(0, time.Time{})
-	a.stopEverything()
+	asked := a.askedBy("ctrl+c twice")
+	asked.Why, asked.Everything = "the person confirmed stopping every running sub-agent", true
+	a.stopEverythingAs(asked)
 }
 
-func (a *App) stopEverything() {
+func (a *App) stopEverything() { a.stopEverythingAs(a.askedBy("the cancel choice of an ask")) }
+
+func (a *App) stopEverythingAs(asked host.StopAsked) {
 	note := stillStoppingNote
 	if !a.view.Stopping {
 		a.pressedAt, note = a.options.Now(), stoppingNote
 	}
 	a.view.LettingToolsFinish, a.view.Stopping = false, true
-	a.options.Host.Stop()
+	a.options.Host.Stop(asked)
 	a.dropSteering()
 	a.noteStop(note + a.queueTail())
 }
 
-func (a *App) stopLead() {
+func (a *App) stopLead(asked host.StopAsked) {
 	if !a.leading {
 		return
 	}
 	a.view.LettingToolsFinish, a.view.Stopping, a.pressedAt = false, true, a.options.Now()
-	a.options.Host.StopLead()
+	a.options.Host.StopLead(asked)
 	a.noteStop(stoppingNote + a.queueTail())
 }
 
@@ -703,7 +718,7 @@ func (a *App) answered(event Event, at time.Time) {
 	a.rememberedByTheLead(event.Detail)
 	a.running = max(a.running-1, 0)
 	if a.view.LettingToolsFinish && a.running == 0 {
-		a.stopTurn()
+		a.stopTurnAs(a.askedBy("ctrl+c, once the running tools finished"))
 	}
 }
 

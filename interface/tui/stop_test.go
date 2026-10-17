@@ -73,26 +73,24 @@ func quits(cmd tea.Cmd) bool {
 	return quit
 }
 
-func TestStopEscFewSecondsIntoAStopTheTurnIgnoresStopsEverything(t *testing.T) {
+func TestStopEscFewSecondsIntoALeadStopTheTurnIgnoresLeavesTheSubAgentsRunning(t *testing.T) {
 	app, clock, cancelled := stuckLead(t)
 	esc := tea.KeyPressMsg{Code: tea.KeyEscape}
 
 	app.Update(esc)
 	clock.pass(time.Second)
 	app.Update(esc)
-	select {
-	case <-cancelled:
-		t.Fatal("an esc one second into the lead's stop stopped everything")
-	default:
-	}
-	drawn(t, app, "esc, then esc one second later: the lead is stopping and the turn has not ended")
 	clock.pass(3 * time.Second)
 	app.Update(esc)
-	drawn(t, app, "esc four seconds into the stop")
+	screen := ansi.Strip(app.View().Content)
+	drawn(t, app, "esc, esc one second later, esc four seconds into the lead's stop")
 	select {
 	case <-cancelled:
-	case <-time.After(2 * time.Second):
-		t.Fatal("an esc four seconds into a stop the turn ignored did not stop everything")
+		t.Fatal("an esc four seconds into a lead stop the turn ignored stopped everything, want only the lead stopped")
+	case <-time.After(500 * time.Millisecond):
+	}
+	if !strings.Contains(screen, "agents (1)") || !strings.Contains(screen, "stopping the turn") {
+		t.Fatal("after the third esc the screen no longer shows the lead stopping beside its running sub-agent")
 	}
 }
 
@@ -118,23 +116,36 @@ func TestLinkARestoredSubAgentNeverRelabelsANewSpawn(t *testing.T) {
 	}
 }
 
-func TestStopCtrlCTwiceAfterAStopTheTurnIgnoresQuits(t *testing.T) {
+func TestStopCtrlCFourSecondsIntoALeadStopAsksBeforeItStopsEverything(t *testing.T) {
 	app, clock, cancelled := stuckLead(t)
 	ctrlC := tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	clock.pass(4 * time.Second)
 	if quits(app.update(ctrlC)) {
-		t.Fatal("the first ctrl+c after a stop the turn ignored quit, want it to stop everything first")
+		t.Fatal("the first ctrl+c four seconds into a lead stop quit, want it to ask first")
 	}
+	screen := ansi.Strip(app.View().Content)
 	drawn(t, app, "esc, then ctrl+c four seconds later")
 	select {
 	case <-cancelled:
+		t.Fatal("the first ctrl+c four seconds into a lead stop stopped everything without asking")
+	case <-time.After(500 * time.Millisecond):
+	}
+	if !strings.Contains(screen, "press Ctrl+C again to confirm") {
+		t.Fatal("the first ctrl+c four seconds into a lead stop did not ask to stop the sub-agents")
+	}
+	if quits(app.update(ctrlC)) {
+		t.Fatal("the confirming ctrl+c quit, want it to stop everything")
+	}
+	drawn(t, app, "the confirming ctrl+c")
+	select {
+	case <-cancelled:
 	case <-time.After(2 * time.Second):
-		t.Fatal("the first ctrl+c four seconds into a stop the turn ignored did not stop everything")
+		t.Fatal("the confirming ctrl+c did not stop everything")
 	}
 	if !quits(app.update(ctrlC)) {
-		drawn(t, app, "the second ctrl+c")
-		t.Fatal("the second ctrl+c with the turn still running after stop everything did not quit")
+		drawn(t, app, "a third ctrl+c")
+		t.Fatal("a ctrl+c with the turn still running after stop everything did not quit")
 	}
 }

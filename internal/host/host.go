@@ -103,6 +103,8 @@ type Host struct {
 	running   bool
 	stopped   bool
 	cancelled bool
+	stopBy    string
+	closeBy   string
 	cancel    context.CancelFunc
 	turnOver  chan struct{}
 	pick      Pick
@@ -253,21 +255,38 @@ func (h *Host) begin(pick Pick, task string, origin Origin) {
 	h.dropCheckIn()
 	ctx, cancel := context.WithCancel(turn.WithLeadCheckIn(context.Background(), h.keepCheckIn))
 	turnOver := make(chan struct{})
-	h.running, h.stopped, h.cancelled, h.cancel, h.turn, h.turnOver = true, false, false, cancel, turn.NewID(h.now()), turnOver
+	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, turn.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin}
 	safe.Go(h.report, "turn", func() {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
 		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: origin})
-		_ = safe.Call(func(p safe.Panic) { out.emit(Event{Kind: EventFailure, Text: p.Saved(h.stateDir())}) }, "turn", func() error {
+		crashed := ""
+		_ = safe.Call(func(p safe.Panic) {
+			crashed = p.Saved(h.stateDir())
+			out.emit(Event{Kind: EventFailure, Text: crashed})
+		}, "turn", func() error {
 			h.play(ctx, pick, task, live)
 			return nil
 		})
 		cancel()
+		h.traceStop(h.ending(crashed))
 		h.ended(out)
 		h.armCheckIn()
 	})
+}
+
+func (h *Host) ending(crashed string) session.Stop {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	switch {
+	case crashed != "":
+		return session.Stop{Kind: session.TurnEnd, By: "a crash", Why: crashed}
+	case h.stopBy != "":
+		return session.Stop{Kind: session.TurnEnd, By: h.stopBy, Why: "it was stopped"}
+	}
+	return session.Stop{Kind: session.TurnEnd, By: "the turn itself", Why: "the lead finished and no sub-agent was running"}
 }
 
 func (h *Host) Turn() (string, bool) {
@@ -311,17 +330,74 @@ func (h *Host) Remembered(note string) {
 	h.inbox.Remembered(note)
 }
 
-func (h *Host) Stop() {
+type StopAsked struct {
+	By         string
+	Why        string
+	Everything bool
+}
+
+func (asked StopAsked) followed() StopAsked {
+	asked.By = "follower pid " + strconv.Itoa(os.Getpid()) + ", " + asked.By
+	return asked
+}
+
+func (h *Host) Stop(asked StopAsked) {
 	if f := h.following.Load(); f != nil {
-		f.ask(followAsk{Op: followStop})
+		f.ask(followAsk{Op: followStop, Stop: asked.followed()})
 		return
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.cancel != nil {
-		h.stopped, h.cancelled = true, true
-		h.cancel()
+	cancel, running := h.cancel, h.inbox.Running()
+	everything := cancel != nil && (asked.Everything || len(running) == 0)
+	if everything {
+		h.stopped, h.cancelled, h.stopBy = true, true, asked.By
 	}
+	h.mu.Unlock()
+	switch {
+	case cancel == nil:
+	case everything:
+		h.traceStop(session.Stop{Kind: session.StopTurn, By: asked.By, Why: asked.Why, Took: append([]string{"the lead"}, running...)})
+		cancel()
+	default:
+		if asked.Why != "" {
+			asked.Why += "; "
+		}
+		asked.Why += "it did not ask to stop everything, so only the lead stops"
+		h.StopLead(asked)
+	}
+}
+
+func (h *Host) traceStop(stop session.Stop) {
+	h.mu.Lock()
+	id, turnID, inbox := h.id, h.turn, h.inbox
+	h.mu.Unlock()
+	if id == "" {
+		return
+	}
+	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: stop.Said()}, Stop: &stop}
+	written, err := inbox.Record(id, event, body)
+	if !written && err == nil {
+		err = appendStop(h.dir, id, event, body)
+	}
+	if err != nil {
+		h.note("the trace row for " + stop.Said() + " was not written: " + err.Error())
+	}
+}
+
+func appendStop(dir, id string, event session.Event, body session.StopBody) error {
+	store, err := session.OpenIn(dir)
+	if err != nil {
+		return err
+	}
+	if _, err := store.Header(id); err != nil {
+		return nil
+	}
+	log, err := store.Open(session.Header{ID: id})
+	if err != nil {
+		return err
+	}
+	_, err = log.Append(event, body)
+	return errors.Join(err, log.Close())
 }
 
 func (h *Host) Cancelled() bool {
@@ -330,19 +406,22 @@ func (h *Host) Cancelled() bool {
 	return h.cancelled
 }
 
-func (h *Host) StopLead() {
+func (h *Host) StopLead(asked StopAsked) {
 	if f := h.following.Load(); f != nil {
-		f.ask(followAsk{Op: followStopLead})
+		f.ask(followAsk{Op: followStopLead, Stop: asked.followed()})
 		return
 	}
 	h.mu.Lock()
 	h.stopped = true
-	inbox := h.inbox
+	inbox, turnRuns := h.inbox, h.running
 	h.mu.Unlock()
 	inbox.StopLead()
 	select {
 	case h.stopLead <- struct{}{}:
 	default:
+	}
+	if turnRuns {
+		h.traceStop(session.Stop{Kind: session.StopLead, By: asked.By, Why: asked.Why, Took: []string{"the lead's request, its waits and its calls"}, Kept: inbox.Running()})
 	}
 }
 
@@ -371,6 +450,12 @@ func (h *Host) AnswerAsk(id string, answer Answer) (answered, stands bool) {
 
 func (h *Host) Standing() []StandingAnswer { return h.asks.standingNow() }
 
+func (h *Host) ClosingBy(by string) {
+	h.mu.Lock()
+	h.closeBy = by
+	h.mu.Unlock()
+}
+
 func (h *Host) Close() {
 	h.mu.Lock()
 	if !h.closed {
@@ -381,12 +466,19 @@ func (h *Host) Close() {
 	if h.ticking != nil {
 		h.ticking.Stop()
 	}
-	if h.cancel != nil {
-		h.cancel()
+	cancel, closing := h.cancel, h.closing()
+	if cancel != nil {
+		h.stopBy = closing.By
 	}
 	h.settled = append(h.settled, h.inbox.CancelCompactions())
-	turnOver, settled := h.turnOver, h.settled
+	turnOver, settled, holding := h.turnOver, h.settled, h.heldID != ""
 	h.mu.Unlock()
+	if holding {
+		h.traceStop(closing)
+	}
+	if cancel != nil {
+		cancel()
+	}
 	givenUp, stop := context.WithTimeout(context.Background(), konst.HostCloseWaitMillis*time.Millisecond)
 	defer stop()
 	for turnOver != nil {
@@ -407,6 +499,22 @@ func (h *Host) Close() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.letGo()
+}
+
+func (h *Host) closing() session.Stop {
+	pid := strconv.Itoa(os.Getpid())
+	closing := session.Stop{Kind: session.HostClose, By: h.closeBy, Why: "process " + pid + " quit"}
+	switch {
+	case h.closeBy != "":
+	case h.heldID != "" && os.Getenv(HolderVariable) == h.heldID:
+		closing.By, closing.Why = "the holder, process "+pid, "holder grace, no client attached"
+	default:
+		closing.By, closing.Why = "process "+pid, "its window or tofu serve closed the session"
+	}
+	if h.cancel != nil {
+		closing.Took = append([]string{"the lead"}, h.inbox.Running()...)
+	}
+	return closing
 }
 
 func (h *Host) deliver(event Event) {

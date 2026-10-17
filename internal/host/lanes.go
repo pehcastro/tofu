@@ -234,7 +234,7 @@ func (s *server) closeSession(p SessionCloseParams) (any, error) {
 		return nil, &Refusal{Code: CodeRefused, Message: "session " + named + " is the only one open here: open another before closing it"}
 	case l.running() && !p.Stop:
 		return nil, &Refusal{Code: CodeRefused, Message: "a turn is running in session " + named + ": wait for it to end, or close it with stop"}
-	case !s.stopTurns(l):
+	case !s.stopTurns(StopAsked{By: s.asker("session.close with stop"), Why: "the session was closed", Everything: true}, l):
 		return nil, &Refusal{Code: CodeRefused, Message: "the turn in session " + named + " did not stop in time, so the session stays open"}
 	}
 	l.halt()
@@ -250,10 +250,10 @@ func (s *server) closeSession(p SessionCloseParams) (any, error) {
 	return Ack{OK: true}, nil
 }
 
-func (s *server) stopTurns(lanes ...*lane) bool {
+func (s *server) stopTurns(asked StopAsked, lanes ...*lane) bool {
 	for _, l := range lanes {
 		if l.running() {
-			l.host.Stop()
+			l.host.Stop(asked)
 		}
 	}
 	gaveUp := time.Now().Add(konst.ServeStopMillis * time.Millisecond)
