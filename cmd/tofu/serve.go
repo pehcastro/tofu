@@ -108,6 +108,10 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
+	clock, err := driveClock(deck)
+	if err != nil {
+		return serveFail(errOut, err)
+	}
 	kept, err := quota.NewPoller(nil, time.Now, nil, recordQuotaReading)
 	if err != nil {
 		return serveFail(errOut, err)
@@ -140,7 +144,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	var projectTurn sync.Mutex
 	spawn := func() (*host.Host, func()) {
 		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs, places: places}
-		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn, Detached: true})
+		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn, Detached: true, Now: clock})
 		for _, trouble := range troubles {
 			say(trouble)
 		}

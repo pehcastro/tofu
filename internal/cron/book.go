@@ -24,7 +24,10 @@ const (
 	Agent  By = "agent"
 )
 
-const idPrefix = "c"
+const (
+	idPrefix    = "c"
+	expiredWord = "expired "
+)
 
 var (
 	ErrNoReason    = errors.New("a change to a cron job needs a reason")
@@ -263,8 +266,9 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 		after.Paused = *change.Paused
 	}
 	stretch := personExpiry(*job).Add(konst.CronExpiryHours * time.Hour)
+	expired := strings.HasPrefix(job.Ended, expiredWord)
 	switch {
-	case job.Ended != "":
+	case job.Ended != "" && !expired:
 		return Job{}, fmt.Errorf("%s ended (%s): delete it and make a new one", id, job.Ended)
 	case reason == "":
 		return Job{}, ErrNoReason
@@ -274,6 +278,8 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 		return Job{}, errAgentCheck
 	case by == Agent && after.Expires.After(stretch):
 		return Job{}, fmt.Errorf("an agent stretches an expiry at most %dh past the person's, to %s: ask the person for more (rule cron_edits)", konst.CronExpiryHours, stretch.Format(time.DateTime))
+	case !after.Expires.After(now):
+		return Job{}, fmt.Errorf("%s expired %s: give it a later expiry to renew it", id, after.Expires.Format(time.DateTime))
 	}
 	schedule, err := valid(after, now)
 	if err != nil {
@@ -281,9 +287,10 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 	}
 	after.Schedule = schedule.Text
 	job.Versions = append(job.Versions, Version{N: len(job.Versions) + 1, At: now, By: by, Reason: reason, Spec: after})
-	if after.Schedule != before.Schedule || before.Paused && !after.Paused {
+	if expired || after.Schedule != before.Schedule || before.Paused && !after.Paused {
 		job.Next = schedule.Next(now)
 	}
+	job.Ended = ""
 	b.changed()
 	return *job, b.save()
 }
@@ -365,7 +372,7 @@ func (b *Book) Due(ctx context.Context, now time.Time, moment Moment) []Fire {
 		switch {
 		case !job.Live() || job.waiting:
 		case now.After(spec.Expires):
-			job.Ended = "expired " + spec.Expires.Format(time.DateTime)
+			job.Ended = expiredWord + spec.Expires.Format(time.DateTime)
 			fires = append(fires, Fire{ID: job.ID, Line: job.endedLine()})
 		case moment == TurnEnded && afterTurn, moment == Tick && !afterTurn && !job.Next.IsZero() && !now.Before(job.Next):
 			job.waiting = true

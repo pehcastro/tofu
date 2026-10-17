@@ -645,11 +645,15 @@ func runTurn(opts runOpts, selected models.Model, built []turn.Tool, plan *tools
 	return exitOK
 }
 
-func runEnvironment(opts runOpts) (environment, written, instructions, notice string) {
+func runEnvironment(opts runOpts, now func() time.Time) (environment, written, instructions, notice string) {
+	today := time.Now()
+	if now != nil {
+		today = now()
+	}
 	if opts.shell.Resolved() {
-		environment = turn.EnvironmentFromShell(opts.dir, time.Now(), opts.shell)
+		environment = turn.EnvironmentFromShell(opts.dir, today, opts.shell)
 	} else {
-		environment = turn.Environment(opts.dir, time.Now())
+		environment = turn.Environment(opts.dir, today)
 	}
 	if opts.noInstructions {
 		return environment, "", "off by request, and " + turn.InstructionsOff, ""
@@ -709,7 +713,7 @@ func composeRun(opts runOpts, built []turn.Tool, run runtime) (composedRun, erro
 	} else {
 		found <- subagent.Found{}
 	}
-	environment, files, instructions, notice := runEnvironment(opts)
+	environment, files, instructions, notice := runEnvironment(opts, run.now)
 	say(notice)
 	run.startup.step("instructions and environment")
 	remembered := ""

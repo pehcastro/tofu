@@ -66,6 +66,10 @@ func holderVerb(args []string, errOut io.Writer) int {
 	if err != nil {
 		return failed(err)
 	}
+	clock, err := driveClock(deck)
+	if err != nil {
+		return failed(err)
+	}
 	open := openAppWire
 	if deck != nil {
 		open = driveWire(deck)
@@ -89,7 +93,7 @@ func holderVerb(args []string, errOut io.Writer) int {
 		return failed(err)
 	}
 	engine := &appEngine{dir: dir, open: open, tabs: launch.tabs, places: places}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded})
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, Now: clock})
 	for _, trouble := range troubles {
 		say(trouble)
 	}

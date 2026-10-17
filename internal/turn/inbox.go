@@ -947,6 +947,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		config.Inbox.stopped, config.Inbox.led = false, true
 		config.Inbox.mu.Unlock()
 		config.Task += boardNotifies(config.Board)
+		config.Environment = Redated(config.Environment, config.Now)
 		row, err := Run(ctx, config)
 		ended(row, err)
 		failed = append(failed, err)

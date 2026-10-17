@@ -141,12 +141,19 @@ stopped while it is in flight draws nothing at all, as it would on a live wire.
 TOFU_DRIVE_CASSETTE names the cassette when --cassette does not. Without one no
 wire opens at all and a turn fails saying so, so a driven run reaches no network.
 
+TOFU_DRIVE_CLOCK starts the session's clock at a local time, such as
+2026-10-17T23:59:58, and runs it on from there, so a driven run crosses midnight
+in seconds. It moves the date the model is told and the cron book, and it is
+read only beside a cassette, here and in the holder and the server a cassette
+run starts.
+
 A turn that fails before its wire opens never says cooked for, so wait cooked for
 sits until --timeout. Wait for the failure text instead, or for opens no live wire.
 `
 
 const (
 	cassetteVariable   = "TOFU_DRIVE_CASSETTE"
+	clockVariable      = "TOFU_DRIVE_CLOCK"
 	cassetteBuild      = "cassette"
 	envOpen            = "<env>"
 	envClose           = "</env>"
@@ -237,6 +244,19 @@ func callerName(name string) string {
 func subAgentNumber(agent string) bool {
 	number, err := strconv.Atoi(strings.TrimPrefix(agent, subAgentCaller))
 	return strings.HasPrefix(agent, subAgentCaller) && err == nil && number > 0
+}
+
+func driveClock(deck *cassette) (func() time.Time, error) {
+	from := os.Getenv(clockVariable)
+	if deck == nil || from == "" {
+		return nil, nil
+	}
+	start, err := time.ParseInLocation(time.DateOnly+"T"+time.TimeOnly, from, time.Local)
+	if err != nil {
+		return nil, fmt.Errorf("%s %q is not a local time such as 2026-10-17T23:59:58", clockVariable, from)
+	}
+	began := time.Now()
+	return func() time.Time { return start.Add(time.Since(began)) }, nil
 }
 
 func readCassette(path string) (*cassette, error) {
@@ -433,7 +453,7 @@ func (c *cassette) environment() string {
 	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for _, message := range c.last.Messages {
+	for _, message := range slices.Backward(c.last.Messages) {
 		open := strings.Index(message.Content, envOpen)
 		closing := strings.Index(message.Content, envClose)
 		if open >= 0 && closing > open {
@@ -513,7 +533,7 @@ func readQuotas(path string, held heldStore) (func() []frame.Quota, error) {
 	}, nil
 }
 
-func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) *tui.App {
+func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held heldStore, quotas func() []frame.Quota) *tui.App {
 	shown := cassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -542,6 +562,7 @@ func drivenApp(dir string, deck *cassette, plan drivePlan, launch appLaunch, hel
 			return sys.Clipboard{Kind: sys.ClipboardFiles, Files: []string{plan.clipboard}}, nil
 		},
 		quota: quotas,
+		now:   clock,
 	}
 	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
@@ -752,6 +773,10 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return driveFail(errOut, err)
 	}
+	clock, err := driveClock(deck)
+	if err != nil {
+		return driveFail(errOut, err)
+	}
 	held := holdStore()
 	defer held.close()
 	quotas, err := readQuotas(plan.quota, held)
@@ -764,7 +789,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	driver := filmstrip.Drive(drivenApp(dir, deck, plan, launch, held, quotas), plan.width, plan.height, crashDir(dir))
+	driver := filmstrip.Drive(drivenApp(dir, deck, clock, plan, launch, held, quotas), plan.width, plan.height, crashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
 	defer func() {

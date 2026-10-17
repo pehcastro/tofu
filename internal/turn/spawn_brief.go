@@ -37,7 +37,7 @@ func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task
 	case definition.Name != "":
 		system += "\n\n" + agentPart(definition).Text
 	}
-	return system, strings.TrimSpace(environment + "\n\n" + holdingWords(owns)), nil
+	return system, Redated(strings.TrimSpace(environment+"\n\n"+holdingWords(owns)), inherited.Now), nil
 }
 
 func holdingWords(owns []string) string {

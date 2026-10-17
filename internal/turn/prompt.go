@@ -87,12 +87,25 @@ func EnvironmentFromShell(dir string, now time.Time, shell RunShell) string {
 	return environmentBlock(dir, now, &shell)
 }
 
+const todaysDate = "today's date: "
+
+func Redated(environment string, clock func() time.Time) string {
+	before, dated, found := strings.Cut(environment, todaysDate)
+	if !found || len(dated) < len(time.DateOnly) {
+		return environment
+	}
+	if clock == nil {
+		clock = time.Now
+	}
+	return before + todaysDate + clock().Format(time.DateOnly) + dated[len(time.DateOnly):]
+}
+
 func environmentBlock(dir string, now time.Time, shell *RunShell) string {
 	lines := []string{
 		"<env>",
 		"working directory: " + absolute(dir),
 		"platform: " + sys.OS() + "/" + sys.Arch(),
-		"today's date: " + now.Format(time.DateOnly),
+		todaysDate + now.Format(time.DateOnly),
 	}
 	if branch := gitBranch(dir); branch != "" {
 		lines = append(lines, "git repository: yes", "git branch: "+branch)
