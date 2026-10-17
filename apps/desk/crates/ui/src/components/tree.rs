@@ -870,6 +870,16 @@ impl FileTree {
         self.reshow();
     }
 
+    pub fn forget(&mut self, paths: &[SharedString], cx: &mut Context<Self>) {
+        let gone =
+            |path: &SharedString| paths.iter().any(|dead| path == dead || inside(path, dead));
+        self.rows.retain(|row| !gone(&row.path));
+        self.selected.retain(|path| !gone(path));
+        self.expanded.retain(|path| !gone(path));
+        self.reshow();
+        cx.notify();
+    }
+
     pub fn open_folders(&self) -> Vec<SharedString> {
         self.expanded.iter().cloned().collect()
     }
@@ -1096,10 +1106,10 @@ impl FileTree {
             .gap(px(TREE_GAP))
             .pl(px(ROW_PAD_X + row.depth as f32 * INDENT))
             .pr(px(ROW_PAD_X))
-            .rounded(px(RADIUS_CHIP))
+            .when(!picked, |line| line.rounded(px(RADIUS_CHIP)))
             .when(fill > 0.0, |line| line.bg(ink(theme, fill)))
-            .when(ignored, |line| line.opacity(IGNORED_FADE).italic())
-            .when(reveal < 1.0, |line| line.opacity(reveal))
+            .when(ignored, |line| line.italic())
+            .opacity(if ignored { IGNORED_FADE } else { 1.0 } * reveal)
             .child(Self::icon(row, open))
             .child(git_name(row.name.clone(), named, theme).flex_1())
             .children(row.rolled.filter(|_| folder).map(|git| {
