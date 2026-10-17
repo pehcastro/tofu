@@ -19,8 +19,8 @@ exit 0
       },
       {
         "topic": "boardy-rules",
-        "title": "Boardy managers, triage, hand and board rules",
-        "summary": "who may change a ticket on a boardy board, how other sessions ask through triage, how a ticket moves boards, and rules that stop a move or wait for the person"
+        "title": "Boardy managers, triage, hand and board hooks",
+        "summary": "who may change a ticket on a boardy board, how other sessions ask through triage, how a ticket moves boards, and hooks that check, nudge or act before and after any board event"
       },
       {
         "topic": "boardy-views",

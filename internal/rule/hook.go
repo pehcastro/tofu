@@ -134,33 +134,30 @@ func LoadHooks(dir string) ([]Hook, error) {
 		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
 		}
-		file := filepath.Join(dir, entry.Name())
-		data, readErr := os.ReadFile(file)
-		if readErr != nil {
-			return nil, readErr
-		}
-		if declared(data, "when") != "" {
-			h, parseErr := parseHook(data, file)
-			if parseErr != nil {
-				return nil, parseErr
-			}
+		h, on, loadErr := loadHook(filepath.Join(dir, entry.Name()))
+		if on && loadErr == nil {
 			hooks = append(hooks, h)
-			continue
 		}
-		r, parseErr := parseFile(data, file)
-		if parseErr != nil {
-			return nil, parseErr
-		}
-		if r.Mode == ModeOff {
-			continue
-		}
-		h, convertErr := r.boardHook()
-		if convertErr != nil {
-			return nil, convertErr
-		}
-		hooks = append(hooks, h)
+		err = errors.Join(err, loadErr)
 	}
 	return hooks, err
+}
+
+func loadHook(file string) (Hook, bool, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return Hook{}, false, err
+	}
+	if declared(data, "when") != "" {
+		h, err := ParseHook(data, file)
+		return h, true, err
+	}
+	r, err := parseFile(data, file)
+	if err != nil || r.Mode == ModeOff {
+		return Hook{}, false, err
+	}
+	h, err := r.boardHook()
+	return h, true, err
 }
 
 func (r Rule) boardHook() (Hook, error) {
@@ -180,7 +177,7 @@ func (r Rule) boardHook() (Hook, error) {
 	return h, nil
 }
 
-func parseHook(data []byte, file string) (Hook, error) {
+func ParseHook(data []byte, file string) (Hook, error) {
 	h := Hook{File: file}
 	underIf := false
 	err := scanKV(data, file, func(key, value string, line int) error {

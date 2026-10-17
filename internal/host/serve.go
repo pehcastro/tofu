@@ -99,6 +99,7 @@ func Serve(cfg ServeConfig) error {
 	watch("serve shells", s.watchShells)
 	watch("serve quota", s.pollQuota)
 	watch("serve boardy", s.watchBoardy)
+	watch("serve boardy hooks", s.tickBoardy)
 	watch("serve settings", s.watchSettings)
 	safe.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
 	var err error

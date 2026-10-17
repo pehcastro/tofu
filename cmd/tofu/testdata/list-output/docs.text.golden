@@ -21,8 +21,8 @@ asking  how the lead puts a decision to you with options and a recommended
   one, what auto and ask do with it, and when it cannot ask
 
 boardy-rules  who may change a ticket on a boardy board, how other sessions
-  ask through triage, how a ticket moves boards, and rules that stop a move or
-  wait for the person
+  ask through triage, how a ticket moves boards, and hooks that check, nudge or
+  act before and after any board event
   let a session change tickets on the board
     → tofu boardy manager add <session>
   see what other sessions asked the board for

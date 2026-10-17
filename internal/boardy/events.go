@@ -24,7 +24,7 @@ const (
 )
 
 func (EventKind) Enum() []string {
-	return enum(Created, Moved, Commented, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Reported)
+	return enum(Created, Moved, Commented, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Reported, HookChanged, HookFailed)
 }
 
 type Event struct {

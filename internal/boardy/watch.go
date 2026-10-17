@@ -20,20 +20,41 @@ type fileStamp struct {
 }
 
 type Watcher struct {
-	boards string
-	seen   map[string]fileStamp
+	boards, user string
+	seen         map[string]fileStamp
 }
 
 func NewWatcher(boards string) *Watcher {
-	return &Watcher{boards: boards, seen: stamps(boards)}
+	user, _ := userHooksDir()
+	w := &Watcher{boards: boards, user: user}
+	w.seen = w.stamps()
+	return w
+}
+
+func (w *Watcher) stamps() map[string]fileStamp {
+	found := stamps(w.boards, "")
+	maps.Copy(found, stamps(w.user, filepath.ToSlash(w.user)+"/"))
+	return found
 }
 
 func (w *Watcher) Scan() []Changed {
-	now := stamps(w.boards)
+	now := w.stamps()
+	var keys []string
+	for path := range now {
+		if board, _, nested := strings.Cut(path, "/"); nested && boardKey().MatchString(board) && !slices.Contains(keys, board) {
+			keys = append(keys, board)
+		}
+	}
 	byBoard := map[string][]string{}
 	note := func(path string) {
 		board, _, _ := strings.Cut(path, "/")
-		byBoard[board] = append(byBoard[board], path)
+		if !strings.HasPrefix(path, RulesDirName+"/") && !strings.HasPrefix(path, filepath.ToSlash(w.user)+"/") {
+			byBoard[board] = append(byBoard[board], path)
+			return
+		}
+		for _, key := range keys {
+			byBoard[key] = append(byBoard[key], path)
+		}
 	}
 	for path, stamp := range now {
 		if before, ok := w.seen[path]; !ok || before != stamp {
@@ -68,9 +89,9 @@ func (w *Watcher) Watch(quit <-chan struct{}, every time.Duration, send func(Cha
 	}
 }
 
-func stamps(boards string) map[string]fileStamp {
+func stamps(root, prefix string) map[string]fileStamp {
 	found := map[string]fileStamp{}
-	_ = filepath.WalkDir(boards, func(path string, entry fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err == nil && entry.IsDir() && entry.Name() == locksDirName {
 			return fs.SkipDir
 		}
@@ -81,11 +102,11 @@ func stamps(boards string) map[string]fileStamp {
 		if err != nil {
 			return nil
 		}
-		relative, err := filepath.Rel(boards, path)
+		relative, err := filepath.Rel(root, path)
 		if err != nil {
 			return nil
 		}
-		found[filepath.ToSlash(relative)] = fileStamp{size: info.Size(), modified: info.ModTime()}
+		found[prefix+filepath.ToSlash(relative)] = fileStamp{size: info.Size(), modified: info.ModTime()}
 		return nil
 	})
 	return found

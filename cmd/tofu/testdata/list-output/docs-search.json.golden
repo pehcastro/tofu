@@ -29,10 +29,6 @@ exit 0
         "do": "tofu docs asking"
       },
       {
-        "text": "Boardy managers, triage, hand and board rules",
-        "do": "tofu docs boardy-rules"
-      },
-      {
         "text": "Boardy views, reports, epics and sprints",
         "do": "tofu docs boardy-views"
       },
@@ -247,6 +243,10 @@ exit 0
       {
         "text": "check a commit message the way the git hook does",
         "do": "tofu guard git commit-msg .git/COMMIT_EDITMSG"
+      },
+      {
+        "text": "Boardy managers, triage, hand and board hooks",
+        "do": "tofu docs boardy-rules"
       },
       {
         "text": "Files tofu reads and writes",

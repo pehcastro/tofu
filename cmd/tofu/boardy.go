@@ -19,7 +19,7 @@ import (
 	"tofu/internal/rule"
 )
 
-const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|view|audit|report|epic|sprint|ask|catchup [--json]"
+const boardyUsage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|view|audit|report|epic|sprint|ask|catchup [--json]"
 
 func boardyUsageOf(subcommand string) string {
 	switch subcommand {
@@ -47,6 +47,8 @@ func boardyUsageOf(subcommand string) string {
 		return "tofu boardy tick [--board KEY] [--json]"
 	case "fire":
 		return "tofu boardy fire agent.spawn|agent.report|lead.attach [ticket] [--board KEY] [--when before|after] [--as name] [--json]"
+	case "rule":
+		return boardyRuleUsage
 	}
 	return cmp.Or(boardyManageUsage(subcommand), boardyViewUsageOf(subcommand), boardyDecideUsage(subcommand))
 }
@@ -114,6 +116,8 @@ func (call boardyCall) run(subcommand string) int {
 		return call.tick()
 	case "fire":
 		return call.fire()
+	case "rule":
+		return call.rule()
 	case "view":
 		return call.view()
 	case "audit":
@@ -189,6 +193,9 @@ func (c boardyCall) init() int {
 	}
 	board, err := c.store.Init(c.flags["key"], c.flags["name"])
 	if err != nil {
+		return c.o.fail(err)
+	}
+	if err := c.store.WriteStarterHooks(board.Key); err != nil {
 		return c.o.fail(err)
 	}
 	return c.o.done(true, board, func(page cli.Page) []string {

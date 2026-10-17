@@ -17,7 +17,7 @@ const (
 )
 
 func boardyRequests() []method {
-	return []method{
+	return append([]method{
 		{name: boardyPrefix + "boards", params: NoParams{}, result: boardy.BoardsAnswer{}},
 		{name: boardyPrefix + "list", params: boardy.ListRequest{}, result: boardy.ListAnswer{}},
 		{name: boardyPrefix + "get", params: boardy.GetRequest{}, result: boardy.GetAnswer{}},
@@ -34,7 +34,7 @@ func boardyRequests() []method {
 		{name: boardyPrefix + "answer", params: boardy.AnswerRequest{}, result: boardy.TicketAnswer{}},
 		{name: boardyPrefix + "plan", params: boardy.PlanRequest{}, result: boardy.PlanAnswer{}},
 		{name: boardyPrefix + "init", params: boardy.InitRequest{}, result: boardy.BoardsAnswer{}},
-	}
+	}, boardyRuleRequests()...)
 }
 
 func (s *server) boardyAPI() (boardy.API, error) {
@@ -94,7 +94,7 @@ func (s *server) boardy(method string, raw json.RawMessage) (any, error) {
 	case boardyPrefix + "init":
 		return handle(raw, answered(api.Init))
 	}
-	return nil, &Refusal{Code: CodeNoMethod, Message: "no method " + method}
+	return boardyRule(api, method, raw)
 }
 
 func (s *server) watchBoardy(quit <-chan struct{}) {

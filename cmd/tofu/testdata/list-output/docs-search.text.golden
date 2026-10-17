@@ -12,8 +12,6 @@ Docs · "change the colours"                                           67 matche
     → tofu docs agents
   When the lead asks you
     → tofu docs asking
-  Boardy managers, triage, hand and board rules
-    → tofu docs boardy-rules
   Boardy views, reports, epics and sprints
     → tofu docs boardy-views
   Boardy, a ticket board in files
@@ -122,6 +120,8 @@ Docs · "change the colours"                                           67 matche
     → ctrl+p in the app, type part of it, then enter
   check a commit message the way the git hook does
     → tofu guard git commit-msg .git/COMMIT_EDITMSG
+  Boardy managers, triage, hand and board hooks
+    → tofu docs boardy-rules
   Files tofu reads and writes
     → tofu docs files
   Instruction files
