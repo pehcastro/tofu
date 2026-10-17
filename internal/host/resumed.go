@@ -65,7 +65,7 @@ func resumedChat(carry Carry, dir string) []Event {
 		keys = &loaded
 	}
 	mask := keys.Redact
-	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}}
+	lead := &resumedLead{calls: map[string]*recordedCall{}, origins: map[string]string{}, worked: map[string][]session.Event{}, runs: map[string]session.AgentRun{}}
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn = lead.turn
 		chat = append(chat, redacted(event, mask))
@@ -73,9 +73,8 @@ func resumedChat(carry Carry, dir string) []Event {
 	labelled := Event{Kind: EventSession, Text: carry.Name, ID: carry.Session, Root: carry.Session}
 	if store, err := carry.reading(dir); err == nil {
 		lead.read(store, carry.Session)
-		lead.runs = recordedRuns(store, carry.Session)
-		store.ForgetRead()
 		labelled = labelledAs(store, labelled)
+		store.ForgetRead()
 	}
 	lead.watch.emit(labelled)
 	for _, message := range carry.Messages {
@@ -117,16 +116,13 @@ func resumedChat(carry Carry, dir string) []Event {
 }
 
 func (l *resumedLead) read(store *session.Store, id string) {
-	header, err := store.Header(id)
-	if err != nil {
-		return
-	}
-	lineage, _ := store.Ancestors(id)
-	slices.Reverse(lineage)
-	for _, from := range append(lineage, header) {
-		events, _ := store.Events(from.ID)
-		for _, event := range events {
+	lineage, _ := store.Lineage(id)
+	for _, generation := range lineage {
+		for _, event := range generation.Events {
 			l.note(event)
+		}
+		for _, run := range generation.Header.Agents {
+			l.runs[run.Agent] = run
 		}
 	}
 }

@@ -52,6 +52,9 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (Result, er
 			return Result{}, fmt.Errorf("subagents: arguments are not the expected shape: %w", err)
 		}
 	}
+	if err := t.recall(args.Name); err != nil {
+		return Result{}, fmt.Errorf("subagents refused: %w", err)
+	}
 	switch args.Show {
 	case "":
 	case showRead:

@@ -85,6 +85,9 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		return Result{}, fmt.Errorf("message: arguments are not the expected shape: %w", err)
 	}
 	t := m.orchestrator
+	if err := t.recall(args.To); err != nil {
+		return Result{}, fmt.Errorf("message refused: %w", err)
+	}
 	if args.Stop {
 		args.Do = doStop
 	}

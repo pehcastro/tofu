@@ -21,6 +21,7 @@ const listChangeFork = "fork"
 type recordedSession struct {
 	id     string
 	events []session.Event
+	unread []session.AgentRun
 }
 
 type recordedSubAgent struct {
@@ -38,20 +39,28 @@ type recordedSubAgent struct {
 	reportedAt  time.Time
 	undelivered bool
 	recent      bool
+	fromHeader  bool
 }
 
 func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, inbox *Inbox) error {
-	chain, err := sessionChain(store, id)
+	lineage, err := store.Lineage(id)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	runs := recordedSubAgents(chain)
+	runs := recordedSubAgents(sessionChain(lineage))
 	stopErr := endStoppedByTheRestart(store, runs)
-	store.ForgetRead()
+	roster.RecallWith(spawnedIn(store, lineage))
 	for _, run := range runs {
 		agentID, restored := run.agent.ID, run.agent
 		restored.State, restored.Report = run.state, run.report
-		roster.Restore(restored)
+		if run.fromHeader {
+			roster.RestoreFromHeader(restored)
+		} else {
+			roster.Restore(restored)
+		}
 		roster.Stepped(agentID, run.steps, run.active, run.calls...)
 		if !run.byLead {
 			continue
@@ -67,11 +76,14 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 func readBack(store *session.Store, id, agentID string) func() ([]llm.Message, error) {
 	return func() ([]llm.Message, error) {
 		once := store.ReadOnce()
-		chain, err := sessionChain(once, id)
+		lineage, err := once.LineageNaming(id, agentID)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
 		if err != nil {
 			return nil, err
 		}
-		return subAgentHistory(once, chain, agentID)
+		return subAgentHistory(once, sessionChain(lineage), agentID)
 	}
 }
 
@@ -89,6 +101,7 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 			failed = append(failed, err)
 			continue
 		}
+		store.Unread(run.in)
 		trace := spawnTrace{site: spawnSite{log: log}}
 		if !run.recent {
 			failed = append(failed, trace.end(run.agent.ID, subagent.Parked), log.Close())
@@ -107,10 +120,52 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 	return errors.Join(failed...)
 }
 
+func spawnedIn(store *session.Store, lineage []session.Generation) func() []subagent.SubAgent {
+	return func() []subagent.SubAgent {
+		var spawned []subagent.SubAgent
+		for _, generation := range lineage {
+			if !generation.Unread {
+				continue
+			}
+			events, _ := store.Spawns(generation.Header.ID)
+			for _, event := range events {
+				var body session.SpawnBody
+				if json.Unmarshal(event.Body, &body) == nil {
+					spawned = append(spawned, subagent.SubAgent{ID: body.Agent, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket})
+				}
+			}
+		}
+		return spawned
+	}
+}
+
+func (t *SpawnTool) recall(id string) error {
+	if !t.roster.Partial(id) || t.base.Sessions == nil {
+		return nil
+	}
+	lineage, err := t.base.Sessions.ReadOnce().LineageNaming(t.base.Session, id)
+	if err != nil {
+		return fmt.Errorf("%s's record did not read back: %w", id, err)
+	}
+	runs := recordedSubAgents(sessionChain(lineage))
+	at := slices.IndexFunc(runs, func(run *recordedSubAgent) bool { return run.agent.ID == id })
+	if at < 0 {
+		return nil
+	}
+	recorded := runs[at].agent
+	t.roster.Recall(recorded)
+	if held, _ := t.Inbox.find(id); held != nil {
+		held.agent.Ticket, held.agent.Mission, held.agent.Brief, held.agent.Owns, held.agent.Regranted = recorded.Ticket, recorded.Mission, recorded.Brief, recorded.Owns, recorded.Regranted
+		held.boundary = subagent.NewBoundary(id, "", recorded.Owns)
+		held.trace.mission, held.trace.owns, held.trace.ticket = recorded.Mission, recorded.Owns, recorded.Ticket
+	}
+	return nil
+}
+
 func restoredHeld(agent subagent.SubAgent, depth int, reload func() ([]llm.Message, error)) *heldSubAgent {
 	return &heldSubAgent{agent: agent, restored: true, reload: reload, inbox: NewInbox(),
 		boundary: subagent.NewBoundary(agent.ID, "", agent.Owns),
-		trace:    spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: agent.Owns, depth: depth}}
+		trace:    spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: agent.Owns, ticket: agent.Ticket, depth: depth}}
 }
 
 func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
@@ -118,6 +173,18 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 	ran, briefs, regrants := map[string]*recordedSubAgent{}, map[string]string{}, map[string]messageArgs{}
 	var leadIdle, lastTurnFrom time.Time
 	for _, recorded := range chain {
+		for _, run := range recorded.unread {
+			if ran[run.Agent] != nil {
+				continue
+			}
+			state, _ := endedAs(run.Status)
+			ran[run.Agent] = &recordedSubAgent{in: recorded.id, call: run.SpawnCall, byLead: run.ParentAgent == "", depth: run.Depth, state: state, ended: true, fromHeader: true, active: run.StartedAt,
+				agent: subagent.SubAgent{ID: run.Agent, Agent: run.Definition, Model: run.Model, Started: run.StartedAt}}
+			if run.EndedAt != nil {
+				ran[run.Agent].active = *run.EndedAt
+			}
+			order = append(order, ran[run.Agent])
+		}
 		var leadReports []string
 		reportEvents := false
 		for _, event := range recorded.events {
@@ -216,24 +283,15 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	return nil
 }
 
-func sessionChain(store *session.Store, id string) ([]recordedSession, error) {
-	var chain []recordedSession
-	for at := id; at != "" && !slices.ContainsFunc(chain, func(seen recordedSession) bool { return seen.id == at }); {
-		events, err := store.Events(at)
-		if errors.Is(err, fs.ErrNotExist) {
-			break
+func sessionChain(lineage []session.Generation) []recordedSession {
+	chain := make([]recordedSession, len(lineage))
+	for i, generation := range lineage {
+		chain[i] = recordedSession{id: generation.Header.ID, events: generation.Events}
+		if generation.Unread {
+			chain[i].unread = generation.Header.Agents
 		}
-		if err != nil {
-			return nil, err
-		}
-		header, err := store.Header(at)
-		if err != nil {
-			return nil, err
-		}
-		chain = append([]recordedSession{{id: at, events: events}}, chain...)
-		at = header.Parent
 	}
-	return chain, nil
+	return chain
 }
 
 func endedAs(status string) (subagent.State, bool) {

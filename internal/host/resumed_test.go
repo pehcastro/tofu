@@ -64,7 +64,9 @@ func TestAResumedChatDrawsEachSubAgentReportAsAReportAndNeverAsSomethingThePerso
 	asked := func(content, origin string) recordedEvent {
 		return recordedEvent{session.Event{At: forked.Add(5 * time.Minute), Kind: session.EventMessage}, session.MessageBody{Role: session.RoleUser, Content: content, Origin: origin}}
 	}
-	recordSession(t, store, session.Header{ID: parent, At: forked.Add(-time.Hour), ForkedInto: child},
+	ended := forked.Add(-time.Minute)
+	recordSession(t, store, session.Header{ID: parent, At: forked.Add(-time.Hour), ForkedInto: child,
+		Agents: []session.AgentRun{{Agent: "research-1", Definition: "research", SpawnCall: "call-1", Status: roster.Finished.String(), StartedAt: forked.Add(-time.Hour), EndedAt: &ended}}},
 		append(spawnedBy("call-1", "research-1", "read the frame loop", forked.Add(-time.Hour)),
 			reported("research-1", roster.Finished, early, forked.Add(-time.Minute)))...)
 	recordSession(t, store, session.Header{ID: child, At: forked, CarriedFrom: &session.Carried{Session: parent}},

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"tofu/internal/safe"
 	"tofu/internal/sys"
@@ -313,6 +314,116 @@ func (s *Store) Ancestors(id string) ([]Header, error) {
 	return chain, err
 }
 
+type Generation struct {
+	Header Header
+	Events []Event
+	Unread bool
+}
+
+const agentsTracedSince = 4
+
+func (s *Store) Lineage(id string) ([]Generation, error) {
+	head, err := s.Events(id)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	named := namesIn(head)
+	return s.lineage(id, func(header Header) bool {
+		return header.Schema < agentsTracedSince || slices.ContainsFunc(header.Agents, func(run AgentRun) bool {
+			return run.EndedAt == nil || named[run.Agent] || named[run.SpawnCall]
+		})
+	})
+}
+
+func (s *Store) LineageNaming(id, name string) ([]Generation, error) {
+	lineage, err := s.lineage(id, func(header Header) bool { return header.Schema < agentsTracedSince })
+	if err != nil {
+		return nil, err
+	}
+	for i := range lineage {
+		generation := &lineage[i]
+		if !generation.Unread {
+			continue
+		}
+		raw, err := s.readFile(s.EventsPath(generation.Header.ID))
+		if errors.Is(err, fs.ErrNotExist) || err == nil && !bytes.Contains(raw, []byte(name)) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if generation.Events, err = parseEvents(raw, generation.Header.ID); err != nil {
+			return nil, err
+		}
+		generation.Unread = false
+	}
+	return lineage, nil
+}
+
+func (s *Store) lineage(id string, needed func(Header) bool) ([]Generation, error) {
+	head, err := s.read(id)
+	if err != nil {
+		return nil, err
+	}
+	ancestors, err := s.Ancestors(id)
+	if err != nil {
+		return nil, err
+	}
+	var lineage []Generation
+	for _, header := range slices.Backward(append([]Header{head}, ancestors...)) {
+		generation := Generation{Header: header, Unread: true}
+		if header.ID == id || needed(header) {
+			events, err := s.Events(header.ID)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return nil, err
+			}
+			generation.Events, generation.Unread = events, err != nil
+		}
+		lineage = append(lineage, generation)
+	}
+	return lineage, nil
+}
+
+func namesIn(events []Event) map[string]bool {
+	named := map[string]bool{}
+	notInAName := func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("-_.", r)
+	}
+	note := func(text string) {
+		for _, word := range strings.FieldsFunc(text, notInAName) {
+			named[word], named[strings.TrimRight(word, ".")] = true, true
+		}
+	}
+	for _, event := range events {
+		note(event.Agent + " " + event.Call)
+		decoder := json.NewDecoder(bytes.NewReader(event.Body))
+		for token, err := decoder.Token(); err == nil; token, err = decoder.Token() {
+			if text, isText := token.(string); isText {
+				note(text)
+			}
+		}
+	}
+	delete(named, "")
+	return named
+}
+
+func (s *Store) Unread(id string) { delete(s.parsed, id) }
+
+func (s *Store) Spawns(id string) ([]Event, error) {
+	raw, err := s.readFile(s.EventsPath(id))
+	if err != nil {
+		return nil, err
+	}
+	var spawns []Event
+	for line := range bytes.Lines(raw) {
+		var event Event
+		if bytes.Contains(line, []byte(`"kind":"`+EventSpawn+`"`)) && json.Unmarshal(line, &event) == nil && event.Kind == EventSpawn {
+			spawns = append(spawns, event)
+		}
+	}
+	return spawns, nil
+}
+
 func (s *Store) holding(handle string) (string, string) {
 	id, part, _ := strings.Cut(handle, TurnMark)
 	if _, err := s.read(id); part != "" || err == nil {
@@ -473,8 +584,16 @@ func (s *Store) Side(id string) (Header, bool, error) {
 	if err != nil {
 		return Header{}, false, err
 	}
-	chain, err := s.Ancestors(id)
-	for _, generation := range append([]Header{header}, chain...) {
+	chain := []Header{header}
+	root, err := s.read(header.Root)
+	if header.Generation > 0 && err == nil {
+		chain = append(chain, root)
+	} else {
+		var ancestors []Header
+		ancestors, err = s.Ancestors(id)
+		chain = append(chain, ancestors...)
+	}
+	for _, generation := range chain {
 		if generation.Kind == KindSide {
 			return generation, true, nil
 		}

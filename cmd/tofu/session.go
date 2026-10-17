@@ -83,7 +83,7 @@ func sessionOperands(subcommand string) (string, int, bool) {
 	switch subcommand {
 	case "list":
 		return "", 0, true
-	case "info", "trace", "reads", "resume":
+	case "info", "reads", "resume":
 		return "<name|id>", 1, true
 	case "rename":
 		return "<name|id> <new name>", 2, true
@@ -109,6 +109,9 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 			return o.usage(err)
 		}
 		return sessionReport(o, func(store *session.Store) (sessionBranchReport, error) { return sessionBranch(store, ask) }, sessionBranchLines)
+	}
+	if args[0] == "trace" {
+		return sessionTraceVerb(o, args[1:], now)
 	}
 	if args[0] == "find" {
 		o.verb, o.usageLine = "session find", sessionFindUsage
@@ -161,12 +164,6 @@ func sessionVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 		}
 		row.Expired = lifetime.Expired(row.lastAt, now)
 		return o.done(true, row, func(page cli.Page) []string { return sessionInfoLines(page, row, now) })
-	case "trace":
-		report, err := sessionTrace(store, handles[0])
-		if err != nil {
-			return o.fail(err)
-		}
-		return o.done(true, report, func(page cli.Page) []string { return sessionTraceLines(page, report) })
 	case "reads":
 		report, err := sessionReads(store, handles[0])
 		if err != nil {
@@ -229,7 +226,7 @@ func verbArgs(args []string) ([]string, bool, error) {
 }
 
 func startResumed(o verbOutput, carry sessionResume, in io.Reader) int {
-	if o.asJSON || carry.Busy != nil {
+	if o.asJSON {
 		return o.done(carry.Busy == nil, carry, func(page cli.Page) []string { return busyResumeLines(page, carry) })
 	}
 	return appVerb(in, o.out, o.errOut, carry)

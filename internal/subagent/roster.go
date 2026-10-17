@@ -119,8 +119,52 @@ func (e CollisionError) Error() string {
 }
 
 type Roster struct {
-	held   sync.Mutex
-	agents []SubAgent
+	held      sync.Mutex
+	agents    []SubAgent
+	partial   map[string]bool
+	recalling sync.Once
+	recall    func() []SubAgent
+}
+
+func (r *Roster) RestoreFromHeader(agent SubAgent) {
+	r.Restore(agent)
+	r.held.Lock()
+	defer r.held.Unlock()
+	if r.partial == nil {
+		r.partial = map[string]bool{}
+	}
+	r.partial[agent.ID] = true
+}
+
+func (r *Roster) RecallWith(recall func() []SubAgent) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	r.recall = recall
+}
+
+func (r *Roster) Partial(id string) bool {
+	r.held.Lock()
+	defer r.held.Unlock()
+	return r.partial[id]
+}
+
+func (r *Roster) recalled() {
+	r.recalling.Do(func() {
+		r.held.Lock()
+		recall := r.recall
+		r.held.Unlock()
+		if recall == nil {
+			return
+		}
+		recorded := recall()
+		r.held.Lock()
+		defer r.held.Unlock()
+		for _, spawned := range recorded {
+			if at := r.index(spawned.ID); at >= 0 && r.partial[spawned.ID] && r.agents[at].Mission == "" {
+				r.agents[at].Ticket, r.agents[at].Mission, r.agents[at].Owns = spawned.Ticket, spawned.Mission, spawned.Owns
+			}
+		}
+	})
 }
 
 func (r *Roster) Hold(agent SubAgent) error {
@@ -174,6 +218,16 @@ func (r *Roster) Restore(agent SubAgent) {
 	defer r.held.Unlock()
 	agent.Released, agent.Active, agent.Round = true, agent.Started, 1
 	r.agents = append(r.agents, agent)
+}
+
+func (r *Roster) Recall(recorded SubAgent) {
+	r.held.Lock()
+	defer r.held.Unlock()
+	if at := r.index(recorded.ID); at >= 0 {
+		agent := &r.agents[at]
+		agent.Ticket, agent.Mission, agent.Brief, agent.Owns, agent.Regranted = recorded.Ticket, recorded.Mission, recorded.Brief, recorded.Owns, recorded.Regranted
+	}
+	delete(r.partial, recorded.ID)
 }
 
 func (r *Roster) index(id string) int {
@@ -287,6 +341,7 @@ func (r *Roster) Reached(id string, state State, report string) {
 }
 
 func (r *Roster) SubAgents() []SubAgent {
+	r.recalled()
 	r.held.Lock()
 	defer r.held.Unlock()
 	read := slices.Clone(r.agents)
