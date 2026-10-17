@@ -14,10 +14,11 @@ use desk_core::git::{Against, Git, GitBinary, GitError, Hunk};
 use desk_core::home::Home;
 use desk_core::symbols::{Index, Symbol, indexed};
 use desk_core::syntax::Language;
+use desk_ui::component::{control, icon};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{Header, inner_card, shell};
 use desk_ui::components::code::{GutterMark, LineMarks, Marks};
-use desk_ui::components::code_editor::{CodeEditor, Highlight, Jump, open_phase};
+use desk_ui::components::code_editor::{Asked, CodeEditor, Highlight, Jump, Way, open_phase};
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::form::TextInput;
 use desk_ui::components::glyph::Glyph;
@@ -27,19 +28,22 @@ use desk_ui::components::overlay::{MenuItem, context_menu};
 use desk_ui::components::sheet::Sheet;
 use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::components::title_bar::Github;
+use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::components::tree::{
     Draft, EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
     TreeSpot, picked_pack,
 };
 use desk_ui::components::vim::Vim;
+use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
 use desk_ui::motion::reduced_motion;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, AnyView, App, AppContext, ClipboardItem, Context, Entity, Focusable, KeyDownEvent,
-    MouseButton, Pixels, Point, Render, SharedString, Subscription, Task, Window, canvas, div,
-    prelude::*, px, relative,
+    AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, ClipboardItem, Context, CursorStyle,
+    Entity, Focusable, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
+    Render, SharedString, Subscription, Task, Window, canvas, div, prelude::*, px, relative,
 };
+use std::cell::Cell;
 
 use crate::modules::chat::Find;
 use crate::title_bar::{ask_github, github};
@@ -54,10 +58,19 @@ const SIDE_SHARE: f32 = 0.26;
 const SIDE_LEAST: f32 = 180.0;
 const SIDE_MOST: f32 = 320.0;
 const PATH_HEIGHT: f32 = 30.0;
+const SPLIT_BUTTON: f32 = 22.0;
+const SPLIT_GLYPH_W: f32 = 14.0;
+const SPLIT_GLYPH_H: f32 = 12.0;
+const SPLIT_GLYPH_RADIUS: f32 = 3.0;
 const BAR_GAP: f32 = 8.0;
+const CLOSE_ICON: f32 = 12.0;
+const PANE_LEAST: f32 = 240.0;
+const DIVIDER_HIT: f32 = 4.0;
+const SPLIT_SHARE: f32 = 0.5;
 const UNSAVED_BODY: &str = "Your changes are lost if you close without saving.";
 const KEYMAP_FILE: &str = "keymap.json";
 const SETTINGS_FILE: &str = "settings.json";
+const GUIDES_KEY: &str = "editor.guides";
 const CACHE_TAG: &str = "CACHEDIR.TAG";
 const GIT_DIR: &str = ".git";
 const MB: f64 = 1024.0 * 1024.0;
@@ -261,6 +274,9 @@ pub struct Editor {
     preview: Option<PathBuf>,
     side: Side,
     aside: Option<Pane>,
+    share: f32,
+    dividing: bool,
+    span: Rc<Cell<Bounds<Pixels>>>,
     opening: Option<Opening>,
     peeked: Option<(PathBuf, Instant)>,
     asking: Option<Asking>,
@@ -271,8 +287,10 @@ pub struct Editor {
     menu: TreeMenu,
     keymap: Rc<Keymap>,
     vim: bool,
+    guides: bool,
     symbols: Option<Arc<Index>>,
     back: Vec<Spot>,
+    ahead: Vec<Spot>,
     choosing: Option<(Spot, Vec<Symbol>)>,
     choices_at: Option<Point<Pixels>>,
     _tree: Subscription,
@@ -298,6 +316,9 @@ impl Editor {
             preview: None,
             side: Side::Left,
             aside: None,
+            share: SPLIT_SHARE,
+            dividing: false,
+            span: Rc::default(),
             opening: None,
             peeked: None,
             asking: None,
@@ -324,8 +345,12 @@ impl Editor {
             vim: home
                 .as_ref()
                 .is_ok_and(|home| Vim::enabled(&home.config.join(SETTINGS_FILE))),
+            guides: home
+                .as_ref()
+                .is_ok_and(|home| switched_on(&home.config.join(SETTINGS_FILE), GUIDES_KEY)),
             symbols: None,
             back: Vec::new(),
+            ahead: Vec::new(),
             choosing: None,
             choices_at: None,
             _pack: cx.observe_global::<PickedPack>(Self::repack),
@@ -388,6 +413,7 @@ impl Editor {
         self.side = Side::Left;
         self.asking = None;
         self.back.clear();
+        self.ahead.clear();
         self.start_watching(cx);
         self.refresh(cx);
         self.index(cx);
@@ -538,10 +564,8 @@ impl Editor {
 
     fn jumped(&mut self, jump: Jump, window: &mut Window, cx: &mut Context<Self>) {
         match jump {
-            Jump::Definition { name, at, row, col } => {
-                self.definition(&name, at, (row, col), window, cx)
-            }
-            Jump::Back => self.back(window, cx),
+            Jump::Definition(asked) => self.definition(asked, window, cx),
+            Jump::Travel { way, row, col } => self.travel(way, (row, col), window, cx),
         }
     }
 
@@ -553,14 +577,15 @@ impl Editor {
         format!("{path}:{}", row + 1)
     }
 
-    fn definition(
-        &mut self,
-        name: &str,
-        at: Point<Pixels>,
-        (row, col): (usize, usize),
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn definition(&mut self, asked: Asked, window: &mut Window, cx: &mut Context<Self>) {
+        let Asked {
+            name,
+            at,
+            row,
+            col,
+            here,
+            since,
+        } = asked;
         let Some(page) = self.pages.get(self.active) else {
             return;
         };
@@ -570,7 +595,8 @@ impl Editor {
             col,
         };
         let found: Vec<Symbol> = match (&self.symbols, Language::from_path(&page.path)) {
-            (Some(index), Some(language)) => index.definitions(name, language).cloned().collect(),
+            _ if !here.is_empty() => here,
+            (Some(index), Some(language)) => index.definitions(&name, language).cloned().collect(),
             _ => Vec::new(),
         };
         if found.len() > 1 {
@@ -586,10 +612,11 @@ impl Editor {
             "desk: editor definition {name} -> {}",
             self.shown(&symbol.path, symbol.row)
         );
-        self.go_to(from, &symbol, window, cx);
+        self.go_to(from, &symbol, since, window, cx);
     }
 
     fn choose(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let since = Instant::now();
         let Some((from, symbol)) = self
             .choosing
             .take()
@@ -602,19 +629,48 @@ impl Editor {
             symbol.name,
             self.shown(&symbol.path, symbol.row)
         );
-        self.go_to(from, &symbol, window, cx);
+        self.go_to(from, &symbol, since, window, cx);
     }
 
-    fn go_to(&mut self, from: Spot, symbol: &Symbol, window: &mut Window, cx: &mut Context<Self>) {
+    fn go_to(
+        &mut self,
+        from: Spot,
+        symbol: &Symbol,
+        since: Instant,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.back.push(from);
+        self.ahead.clear();
         self.land(&symbol.path, symbol.row, symbol.col, window, cx);
+        let ms = since.elapsed().as_secs_f64() * 1000.0;
+        eprintln!("desk: editor goto: {ms:.2}ms");
     }
 
-    fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(Spot { path, row, col }) = self.back.pop() else {
-            return eprintln!("desk: editor back to nothing");
+    fn travel(
+        &mut self,
+        way: Way,
+        (row, col): (usize, usize),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(page) = self.pages.get(self.active) else {
+            return;
         };
-        eprintln!("desk: editor back to {}", self.shown(&path, row));
+        let here = Spot {
+            path: page.path.clone(),
+            row,
+            col,
+        };
+        let (word, from, to) = match way {
+            Way::Back => ("back", &mut self.back, &mut self.ahead),
+            Way::Forward => ("forward", &mut self.ahead, &mut self.back),
+        };
+        let Some(Spot { path, row, col }) = from.pop() else {
+            return eprintln!("desk: editor {word} to nothing");
+        };
+        to.push(here);
+        eprintln!("desk: editor {word} to {}", self.shown(&path, row));
         self.land(&path, row, col, window, cx);
     }
 
@@ -659,6 +715,59 @@ impl Editor {
         self.swap_panes();
         eprintln!("desk: editor split, the right pane takes the next open");
         cx.notify();
+    }
+
+    fn unsplit(&mut self, cx: &mut Context<Self>) {
+        if self.side == Side::Right {
+            self.swap_panes();
+        }
+        let Some(right) = self.aside.take() else {
+            return;
+        };
+        let edited: Vec<Page> = right
+            .pages
+            .into_iter()
+            .filter(|page| {
+                let dirty = page
+                    .code
+                    .as_ref()
+                    .map_or(page.dirty, |code| code.read(cx).buffer().is_dirty());
+                dirty && !self.pages.iter().any(|left| left.path == page.path)
+            })
+            .collect();
+        eprintln!(
+            "desk: editor split closed, {} edited pages move left",
+            edited.len()
+        );
+        self.pages.extend(edited);
+        self.side = Side::Left;
+        self.dividing = false;
+        self.asking = None;
+        self.rewatch(cx);
+        self.focus_changed(cx);
+        self.follow(cx);
+        cx.notify();
+    }
+
+    fn divide(&mut self, event: &MouseMoveEvent, cx: &mut Context<Self>) {
+        if !self.dividing {
+            return;
+        }
+        if event.pressed_button != Some(MouseButton::Left) {
+            self.dividing = false;
+            return;
+        }
+        let span = self.span.get();
+        let width = span.size.width.as_f32();
+        if width < 2.0 * PANE_LEAST + DIVIDER_HIT {
+            return;
+        }
+        let least = PANE_LEAST / width;
+        let share = ((event.position.x - span.origin.x).as_f32() / width).clamp(least, 1.0 - least);
+        if share != self.share {
+            self.share = share;
+            cx.notify();
+        }
     }
 
     fn preview_at(&self) -> Option<usize> {
@@ -1342,27 +1451,34 @@ impl Editor {
         cx.notify();
         let full: Vec<PathBuf> = paths.iter().map(|path| self.full(path)).collect();
         let started = Instant::now();
-        let sent = full.clone();
+        let gone = |page: &Page| full.iter().any(|path| page.path.starts_with(path));
+        for _ in 0..2 {
+            while let Some(at) = self.pages.iter().position(gone) {
+                self.drop_page(at, cx);
+            }
+            self.swap_panes();
+        }
+        let shown: Vec<SharedString> = paths.iter().cloned().map(SharedString::from).collect();
+        self.folder
+            .tree
+            .update(cx, |tree, cx| tree.forget(&shown, cx));
+        eprintln!(
+            "desk: editor deleted {} entries in {} ms",
+            full.len(),
+            started.elapsed().as_millis()
+        );
         let moved = cx
             .background_executor()
-            .spawn(async move { send_to_recycle_bin(&sent) });
+            .spawn(async move { send_to_recycle_bin(&full).map(|()| full.len()) });
         cx.spawn(async move |this, cx| {
             let moved = moved.await;
             let done = this.update(cx, |editor, cx| {
                 match moved {
-                    Ok(()) => eprintln!(
-                        "desk: editor tree: recycled {} items in {} ms: {paths:?}",
-                        full.len(),
+                    Ok(count) => eprintln!(
+                        "desk: editor tree: recycled {count} items in {} ms: {paths:?}",
                         started.elapsed().as_millis()
                     ),
                     Err(error) => eprintln!("desk: editor tree: delete failed: {error}"),
-                }
-                let gone = |page: &Page| full.iter().any(|path| page.path.starts_with(path));
-                for _ in 0..2 {
-                    while let Some(at) = editor.pages.iter().position(&gone) {
-                        editor.drop_page(at, cx);
-                    }
-                    editor.swap_panes();
                 }
                 editor.refresh(cx);
             });
@@ -1927,7 +2043,78 @@ impl Editor {
             .into_any_element()
     }
 
-    fn tabs(&self, pane: Shown, side: Side, cx: &mut Context<Self>) -> AnyElement {
+    fn pane_button(
+        &self,
+        (id, label, tip): (&'static str, &'static str, &'static str),
+        face: AnyElement,
+        act: fn(&mut Self, &mut Window, &mut Context<Self>),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = ActiveTheme::theme(cx);
+        let target = control(id, label, &theme)
+            .size(px(SPLIT_BUTTON))
+            .rounded(px(SPLIT_GLYPH_RADIUS))
+            .child(face)
+            .on_click(cx.listener(move |editor, _: &ClickEvent, window, cx| {
+                eprintln!("desk: editor {id} button");
+                act(editor, window, cx);
+            }));
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .px_1()
+            .child(tooltip(
+                format!("{id}-tip"),
+                target,
+                Edge::Frame,
+                tip,
+                &theme,
+                window,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    fn split_button(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let ink = ActiveTheme::theme(cx).color(ColorToken::TextIcon);
+        let glyph = div()
+            .flex()
+            .justify_center()
+            .w(px(SPLIT_GLYPH_W))
+            .h(px(SPLIT_GLYPH_H))
+            .border_1()
+            .border_color(ink)
+            .rounded(px(SPLIT_GLYPH_RADIUS))
+            .child(div().w(px(1.0)).h_full().bg(ink));
+        self.pane_button(
+            ("editor-split", "Split right", "Split right (Ctrl+\\)"),
+            glyph.into_any_element(),
+            Self::split,
+            window,
+            cx,
+        )
+    }
+
+    fn unsplit_button(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let ink = ActiveTheme::theme(cx).color(ColorToken::TextIcon);
+        self.pane_button(
+            ("editor-unsplit", "Close split", "Close split"),
+            icon(Icon::Close, CLOSE_ICON, ink).into_any_element(),
+            |editor, _, cx| editor.unsplit(cx),
+            window,
+            cx,
+        )
+    }
+
+    fn tabs(
+        &self,
+        pane: Shown,
+        side: Side,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let (pages, active, preview) = pane;
         let theme = ActiveTheme::theme(cx);
         let tabs: Vec<Tab> = pages
@@ -1950,41 +2137,51 @@ impl Editor {
         let preview_at =
             preview.and_then(|preview| pages.iter().position(|page| page.path == *preview));
         let (editor, pinner) = (cx.weak_entity(), cx.weak_entity());
+        let button = match (self.aside.is_some(), side) {
+            (false, _) => Some(self.split_button(window, cx)),
+            (true, Side::Right) => Some(self.unsplit_button(window, cx)),
+            (true, Side::Left) => None,
+        };
         div()
+            .flex()
             .flex_none()
+            .items_center()
             .min_w_0()
             .child(
-                connected_tabs(
-                    side.tabs_id(),
-                    &tabs,
-                    active,
-                    tabs.len().max(1),
-                    &theme,
-                    move |event, window, cx| {
-                        let done = editor.update(cx, |editor, cx| {
-                            editor.focus_side(side, window, cx);
-                            match event {
-                                TabEvent::Select(at) => editor.select_page(*at, window, cx),
-                                TabEvent::Close(at) => editor.close(*at, cx),
-                                TabEvent::New => {}
+                div().flex_1().min_w_0().child(
+                    connected_tabs(
+                        side.tabs_id(),
+                        &tabs,
+                        active,
+                        tabs.len().max(1),
+                        &theme,
+                        move |event, window, cx| {
+                            let done = editor.update(cx, |editor, cx| {
+                                editor.focus_side(side, window, cx);
+                                match event {
+                                    TabEvent::Select(at) => editor.select_page(*at, window, cx),
+                                    TabEvent::Close(at) => editor.close(*at, cx),
+                                    TabEvent::New => {}
+                                }
+                            });
+                            if let Err(error) = done {
+                                eprintln!("desk: editor is gone before its tab event: {error}");
                             }
+                        },
+                    )
+                    .images(images)
+                    .preview(preview_at, move |at, window, cx| {
+                        let done = pinner.update(cx, |editor, cx| {
+                            editor.focus_side(side, window, cx);
+                            editor.pin(at, cx);
                         });
                         if let Err(error) = done {
-                            eprintln!("desk: editor is gone before its tab event: {error}");
+                            eprintln!("desk: editor is gone before its tab pinned: {error}");
                         }
-                    },
-                )
-                .images(images)
-                .preview(preview_at, move |at, window, cx| {
-                    let done = pinner.update(cx, |editor, cx| {
-                        editor.focus_side(side, window, cx);
-                        editor.pin(at, cx);
-                    });
-                    if let Err(error) = done {
-                        eprintln!("desk: editor is gone before its tab pinned: {error}");
-                    }
-                }),
+                    }),
+                ),
             )
+            .children(button)
             .into_any_element()
     }
 
@@ -2043,11 +2240,58 @@ impl Editor {
             .on_pick(cx.listener(|editor, at: &usize, window, cx| editor.choose(*at, window, cx)))
     }
 
+    fn divided(
+        &self,
+        panes: Vec<AnyElement>,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let [left, right] = match <[AnyElement; 2]>::try_from(panes) {
+            Ok(pair) => pair,
+            Err(one) => return one,
+        };
+        let line = theme.color(ColorToken::Separator);
+        let lit = theme.color(ColorToken::FocusRing);
+        let divider = div()
+            .id("editor-divider")
+            .group("editor-divider")
+            .flex()
+            .flex_none()
+            .justify_center()
+            .w(px(DIVIDER_HIT))
+            .h_full()
+            .cursor(CursorStyle::ResizeLeftRight)
+            .child(
+                div()
+                    .w(px(1.0))
+                    .h_full()
+                    .bg(line)
+                    .group_hover("editor-divider", move |mark| mark.bg(lit)),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|editor, _: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    editor.dividing = true;
+                }),
+            );
+        let wrap = |pane: AnyElement| div().flex().min_w(px(PANE_LEAST)).min_h_0().child(pane);
+        vec![
+            wrap(left)
+                .flex_none()
+                .w(relative(self.share))
+                .into_any_element(),
+            divider.into_any_element(),
+            wrap(right).flex_1().into_any_element(),
+        ]
+    }
+
     fn pane(
         &self,
         pane: Shown,
         side: Side,
         opening: Option<Opening>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = ActiveTheme::theme(cx);
@@ -2073,16 +2317,12 @@ impl Editor {
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .when(self.aside.is_some() && side == Side::Right, |pane| {
-                pane.border_l_1()
-                    .border_color(theme.color(ColorToken::Separator))
-            })
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |editor, _, window, cx| editor.focus_side(side, window, cx)),
             )
-            .when(!pages.is_empty(), |main| {
-                main.child(self.tabs(pane, side, cx))
+            .when(!pages.is_empty() || side == Side::Right, |main| {
+                main.child(self.tabs(pane, side, window, cx))
             })
             .when(side == self.side, |main| main.children(self.bar(cx)))
             .child(
@@ -2136,7 +2376,7 @@ fn code_area(page: Option<&Page>, theme: &Theme) -> AnyElement {
 }
 
 impl Render for Editor {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
         let asked = self.menu.asked.take();
         let painted = canvas(
@@ -2192,23 +2432,37 @@ impl Render for Editor {
                 .is_some_and(|page| page.path == opening.path)
         });
         let focused = (self.pages.as_slice(), self.active, self.preview.as_ref());
-        let focused = self.pane(focused, self.side, opening, cx);
+        let focused = self.pane(focused, self.side, opening, window, cx);
         let aside = self.aside.as_ref().map(|aside| {
             let shown = (aside.pages.as_slice(), aside.active, aside.preview.as_ref());
-            self.pane(shown, self.side.other(), None, cx)
+            self.pane(shown, self.side.other(), None, window, cx)
         });
         let panes = match (self.side, aside) {
             (_, None) => vec![focused],
             (Side::Left, Some(aside)) => vec![focused, aside],
             (Side::Right, Some(aside)) => vec![aside, focused],
         };
+        let span = self.span.clone();
         let main = div()
             .flex()
             .flex_row()
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .children(panes)
+            .relative()
+            .on_mouse_move(
+                cx.listener(|editor, event: &MouseMoveEvent, _, cx| editor.divide(event, cx)),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|editor, _, _, _| editor.dividing = false),
+            )
+            .child(
+                canvas(move |bounds, _, _| span.set(bounds), |_, (), _, _| {})
+                    .absolute()
+                    .size_full(),
+            )
+            .children(self.divided(panes, &theme, cx))
             .child(self.choices_menu(cx));
         let asking = self.asking.is_some();
         shell(
@@ -2665,6 +2919,7 @@ fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened 
     let mut editor = editor
         .keymap(owner.keymap.clone())
         .vim(owner.vim)
+        .guides(owner.guides)
         .on_jump(on_jump);
     editor.set_symbols(owner.symbols.clone());
     let editor = editor.on_save(move |buffer, _, _| {
@@ -2685,6 +2940,31 @@ fn file_editor(path: &Path, owner: &Editor, cx: &mut Context<Editor>) -> Opened 
         editor.colour_rest(cx);
         editor
     }))
+}
+
+fn switched_on(file: &Path, key: &str) -> bool {
+    let shown = file.display();
+    let read = match fs::read_to_string(file) {
+        Ok(text) => serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&text)
+            .map(|settings| settings.get(key).cloned())
+            .map_err(|error| error.to_string()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    };
+    let on = match read {
+        Ok(None) => false,
+        Ok(Some(serde_json::Value::Bool(on))) => on,
+        Ok(Some(other)) => {
+            eprintln!("desk: settings {shown} refused {key} {other}, not true or false");
+            false
+        }
+        Err(error) => {
+            eprintln!("desk: settings {shown} could not be read, {key} stays off: {error}");
+            false
+        }
+    };
+    eprintln!("desk: {key} {}", if on { "on" } else { "off" });
+    on
 }
 
 fn content_hash(text: &str) -> u64 {

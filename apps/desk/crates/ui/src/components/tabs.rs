@@ -830,7 +830,7 @@ fn mark(
                         .size(px(DIRTY_DOT))
                         .rounded_full()
                         .bg(ink(theme, T1))
-                        .opacity(1.0 - look.reveal),
+                        .when(look.reveal > 0.0, |dot| dot.invisible()),
                 )
                 .child(
                     close(ix, look, theme, (ask.clone(), stop))
@@ -910,7 +910,7 @@ fn tab_frame(
         stop,
     } = pick;
     let pin = pin.cloned();
-    let look = match chosen {
+    let look = match chosen && tab.mark == TabMark::Close {
         true => Look {
             reveal: 1.0,
             ..look
@@ -944,7 +944,11 @@ fn tab_frame(
         })
         .when_some(fold, |content, fold| content.w(fold.width).flex_none());
     let (press, menu) = (press.cloned(), menu.cloned());
-    let grown = px(CLOSE_BOX * look.reveal);
+    let growth = match tab.mark {
+        TabMark::Close => CLOSE_BOX * look.reveal,
+        TabMark::Pinned | TabMark::Locked | TabMark::Dirty => 0.0,
+    };
+    let grown = px(growth);
     let frame = div().id((id.clone(), ix));
     let frame = if stop {
         named_stop(frame, format!("tab-{ix}"), theme)
@@ -956,7 +960,7 @@ fn tab_frame(
         .items_center()
         .min_w(px(TAB_MIN_WIDTH) + grown)
         .max_w(px(TAB_MAX_WIDTH) + grown)
-        .flex_shrink(natural / (natural + CLOSE_BOX * look.reveal))
+        .flex_shrink(natural / (natural + growth))
         .when_some(press, |tab, press| {
             tab.on_mouse_down(MouseButton::Left, move |event, window, cx| {
                 press(ix, event.position, window, cx)
