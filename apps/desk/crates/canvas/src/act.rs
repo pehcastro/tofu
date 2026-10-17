@@ -25,9 +25,15 @@ pub enum Act {
     Fit,
 }
 
+#[derive(Clone, Copy)]
+enum Placement {
+    Pointer(Point<Pixels>),
+    ViewCentre,
+}
+
 pub enum Ask {
     Menu { at: Point<Pixels>, shape: bool },
-    Image(Image),
+    Image { image: Image, at: Point<Pixels> },
 }
 
 fn groups(element: &Element) -> Vec<String> {
@@ -179,7 +185,10 @@ impl Canvas {
             ClipboardEntry::String(_) | ClipboardEntry::ExternalPaths(_) => None,
         });
         match image {
-            Some(image) => cx.emit(Ask::Image(image)),
+            Some(image) => cx.emit(Ask::Image {
+                image,
+                at: window.mouse_position(),
+            }),
             None => eprintln!("desk: draw: the clipboard holds no shapes and no image"),
         }
         Ok(())
@@ -270,18 +279,49 @@ impl Canvas {
         self.scene.apply(ops)
     }
 
-    pub fn insert_image(
+    pub fn insert_image_at_pointer(
+        &mut self,
+        file: &str,
+        size: (f64, f64),
+        at: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        self.insert_image(file, size, Placement::Pointer(at), cx);
+    }
+
+    pub fn insert_image_at_view_centre(
+        &mut self,
+        file: &str,
+        size: (f64, f64),
+        cx: &mut Context<Self>,
+    ) {
+        self.insert_image(file, size, Placement::ViewCentre, cx);
+    }
+
+    fn insert_image(
         &mut self,
         file: &str,
         (width, height): (f64, f64),
+        placement: Placement,
         cx: &mut Context<Self>,
     ) {
         let scale = (IMAGE_LONGEST / width.max(height).max(1.0)).min(1.0);
         let size = (width * scale, height * scale);
-        let middle = self.view.scene(
-            self.bounds.origin,
-            self.pointer.unwrap_or(self.bounds.center()),
-        );
+        let (spot, place) = match placement {
+            Placement::Pointer(at) => {
+                let inside = self.bounds.contains(&at);
+                eprintln!(
+                    "desk: draw paste pointer {at:?} canvas bounds {:?} inside {inside}",
+                    self.bounds
+                );
+                match inside {
+                    true => (at, "pointer"),
+                    false => (self.bounds.center(), "view centre"),
+                }
+            }
+            Placement::ViewCentre => (self.bounds.center(), "view centre"),
+        };
+        let middle = self.view.scene(self.bounds.origin, spot);
         let corner = (middle.0 - size.0 / 2.0, middle.1 - size.1 / 2.0);
         let element = create::image(&mut self.mint, file, corner, size);
         let id = element.id.clone();
@@ -291,7 +331,10 @@ impl Canvas {
         };
         match self.scene.apply(vec![added]) {
             Ok(()) => {
-                eprintln!("desk: draw image {id} {file} {:.0}x{:.0}", size.0, size.1);
+                eprintln!(
+                    "desk: draw image {id} {file} {:.0}x{:.0} at {place} ({:.0}, {:.0})",
+                    size.0, size.1, middle.0, middle.1
+                );
                 self.selected = vec![id];
             }
             Err(error) => self.fail(&error),

@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::Path;
 
-use gpui::{Context, Image, ImageFormat, PathPromptOptions, Window};
+use desk_canvas::Canvas;
+use gpui::{Context, Image, ImageFormat, PathPromptOptions, Pixels, Point, Window};
 
 use super::{Draw, write};
 
@@ -38,14 +39,32 @@ fn format_of(path: &Path) -> Option<ImageFormat> {
 }
 
 impl Draw {
-    pub(super) fn paste_image(&mut self, image: &Image, cx: &mut Context<Self>) {
-        if let Err(error) = self.keep_image(image, cx) {
+    pub(super) fn paste_image(&mut self, image: &Image, at: Point<Pixels>, cx: &mut Context<Self>) {
+        self.land_image(
+            image,
+            |canvas, file, size, cx| canvas.insert_image_at_pointer(file, size, at, cx),
+            cx,
+        );
+    }
+
+    fn land_image(
+        &mut self,
+        image: &Image,
+        insert: impl FnOnce(&mut Canvas, &str, (f64, f64), &mut Context<Canvas>),
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(error) = self.keep_image(image, insert, cx) {
             self.fail(format!("image paste: {error}"));
             cx.notify();
         }
     }
 
-    fn keep_image(&mut self, image: &Image, cx: &mut Context<Self>) -> Result<(), String> {
+    fn keep_image(
+        &mut self,
+        image: &Image,
+        insert: impl FnOnce(&mut Canvas, &str, (f64, f64), &mut Context<Canvas>),
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
         let folder = self.folder.clone()?;
         let stored = format!("{:016x}.{}", image.id, extension(image.format));
         let path = folder.join(IMAGES).join(&stored);
@@ -62,7 +81,7 @@ impl Draw {
             f64::from(pixels.height.0.max(1)),
         );
         self.canvas
-            .update(cx, |canvas, cx| canvas.insert_image(&file, size, cx));
+            .update(cx, |canvas, cx| insert(canvas, &file, size, cx));
         self.save(cx);
         Ok(())
     }
@@ -101,7 +120,11 @@ impl Draw {
             });
             let landed = match read.await {
                 Ok(bytes) => draw.update(cx, |draw, cx| {
-                    draw.paste_image(&Image::from_bytes(format, bytes), cx)
+                    draw.land_image(
+                        &Image::from_bytes(format, bytes),
+                        Canvas::insert_image_at_view_centre,
+                        cx,
+                    )
                 }),
                 Err(error) => draw.update(cx, |draw, cx| {
                     draw.fail(format!("{}: {error}", path.display()));

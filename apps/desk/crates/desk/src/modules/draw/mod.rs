@@ -466,7 +466,7 @@ impl Draw {
                 draw.context = Some((*at, *shape));
                 cx.notify();
             }
-            Ask::Image(image) => draw.paste_image(image, cx),
+            Ask::Image { image, at } => draw.paste_image(image, *at, cx),
         })
         .detach();
         let folder = folder();
