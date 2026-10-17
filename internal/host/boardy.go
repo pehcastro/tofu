@@ -20,6 +20,7 @@ func boardyRequests() []method {
 	return append([]method{
 		{name: boardyPrefix + "boards", params: NoParams{}, result: boardy.BoardsAnswer{}},
 		{name: boardyPrefix + "list", params: boardy.ListRequest{}, result: boardy.ListAnswer{}},
+		{name: boardyPrefix + "rows", params: boardy.ListRequest{}, result: boardy.RowsAnswer{}},
 		{name: boardyPrefix + "get", params: boardy.GetRequest{}, result: boardy.GetAnswer{}},
 		{name: boardyPrefix + "events", params: boardy.EventsRequest{}, result: boardy.EventsAnswer{}},
 		{name: boardyPrefix + "report", params: boardy.ReportRequest{}, result: boardy.ReportAnswer{}},
@@ -65,6 +66,8 @@ func (s *server) boardy(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, func(NoParams) (any, error) { return api.Boards() })
 	case boardyPrefix + "list":
 		return handle(raw, answered(api.List))
+	case boardyPrefix + "rows":
+		return handle(raw, answered(api.Rows))
 	case boardyPrefix + "get":
 		return handle(raw, answered(api.Get))
 	case boardyPrefix + "events":

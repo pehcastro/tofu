@@ -91,6 +91,39 @@ func (a API) List(request ListRequest) (ListAnswer, error) {
 	return ListAnswer{Board: key, View: view, Sprint: active.ID, Groups: groups, Words: a.Words}, err
 }
 
+type Row struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Status    Status    `json:"status"`
+	Priority  Priority  `json:"priority"`
+	Epic      string    `json:"epic,omitempty"`
+	Sprint    string    `json:"sprint,omitempty"`
+	Assignee  string    `json:"assignee,omitempty"`
+	Labels    []string  `json:"labels,omitempty"`
+	Questions int       `json:"questions,omitempty"`
+	Created   time.Time `json:"created"`
+	Updated   time.Time `json:"updated"`
+}
+
+type RowsAnswer struct {
+	Board  string `json:"board"`
+	Sprint string `json:"sprint,omitempty"`
+	Rows   []Row  `json:"rows"`
+	Words  Words  `json:"words"`
+}
+
+func (a API) Rows(request ListRequest) (RowsAnswer, error) {
+	listed, err := a.List(request)
+	answer := RowsAnswer{Board: listed.Board, Sprint: listed.Sprint, Rows: []Row{}, Words: a.Words}
+	for _, group := range listed.Groups {
+		for _, t := range group.Tickets {
+			answer.Rows = append(answer.Rows, Row{ID: t.ID, Title: t.Title, Status: t.Status, Priority: t.Priority, Epic: t.Epic, Sprint: t.Sprint,
+				Assignee: t.Assignee, Labels: t.Labels, Questions: len(t.Questions), Created: t.Created, Updated: t.Updated})
+		}
+	}
+	return answer, err
+}
+
 type PlanRequest struct {
 	Board string `json:"board"`
 }
