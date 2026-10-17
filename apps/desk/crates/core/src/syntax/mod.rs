@@ -81,7 +81,10 @@ struct Layer {
     source: Source,
     tree: Tree,
     bytes: Range<usize>,
+    combined: bool,
 }
+
+const EVERYWHERE: Range<usize> = 0..usize::MAX;
 
 struct Paint {
     depth: u8,
@@ -128,7 +131,7 @@ impl Syntax {
             layers: Vec::new(),
             chunks: RefCell::default(),
         };
-        syntax.inject()?;
+        syntax.inject(EVERYWHERE)?;
         Ok(syntax)
     }
 
@@ -137,6 +140,7 @@ impl Syntax {
         if applied.is_empty() {
             return Ok(());
         }
+        let mut edited: Option<Range<usize>> = None;
         for Applied { chars, text } in &applied {
             let len = self.rope.len_chars();
             if chars.start > chars.end || chars.end > len {
@@ -161,14 +165,31 @@ impl Syntax {
                 new_end_position: point(&self.rope, new_end_byte),
             };
             self.tree.edit(&edit);
-            for layer in &mut self.layers {
+            for layer in self
+                .layers
+                .iter_mut()
+                .filter(|layer| layer.bytes.end >= start_byte)
+            {
                 layer.tree.edit(&edit);
+                layer.bytes = shifted(&layer.bytes, &edit);
             }
+            edited = Some(match edited {
+                Some(before) => {
+                    let before = shifted(&before, &edit);
+                    before.start.min(start_byte)..before.end.max(new_end_byte)
+                }
+                None => start_byte..new_end_byte,
+            });
         }
         self.rope = buffer.rope().clone();
         self.chunks.get_mut().clear();
-        self.tree = parse(&mut self.parser, &self.rope, Some(&self.tree))?;
-        self.inject()
+        let tree = parse(&mut self.parser, &self.rope, Some(&self.tree))?;
+        let mut dirty = edited.unwrap_or_default();
+        for range in self.tree.changed_ranges(&tree) {
+            dirty = dirty.start.min(range.start_byte)..dirty.end.max(range.end_byte);
+        }
+        self.tree = tree;
+        self.inject(widened(&dirty))
     }
 
     pub fn report(&self) -> String {
@@ -206,17 +227,46 @@ impl Syntax {
             .find(|grammar| grammar.source == source)
     }
 
-    fn inject(&mut self) -> Result<(), SyntaxError> {
+    fn inject(&mut self, touched: Range<usize>) -> Result<(), SyntaxError> {
         let Some(root) = self.grammars.first() else {
             return Ok(());
         };
-        let found = injections(root, &self.tree, &self.rope);
-        let mut old: HashMap<(Source, Vec<tree_sitter::Range>), Tree> =
-            std::mem::take(&mut self.layers)
-                .into_iter()
-                .map(|layer| ((layer.source, layer.tree.included_ranges()), layer.tree))
-                .collect();
-        for (source, ranges) in found {
+        let touches = |touched: &Range<usize>, bytes: &Range<usize>| match bytes.is_empty() {
+            true => touched.contains(&bytes.start) || touched.end == bytes.start,
+            false => bytes.start < touched.end && touched.start < bytes.end,
+        };
+        let mut touched = touched;
+        let found = loop {
+            let (found, reach) = injections(root, &self.tree, &self.rope, &touched);
+            if touched == EVERYWHERE {
+                break found;
+            }
+            let combined = found.iter().any(|injection| injection.combined)
+                || self
+                    .layers
+                    .iter()
+                    .any(|layer| layer.combined && touches(&touched, &layer.bytes));
+            touched = match (combined, reach == touched) {
+                (true, _) => EVERYWHERE,
+                (false, true) => break found,
+                (false, false) => reach,
+            };
+        };
+        let (stale, kept): (Vec<Layer>, Vec<Layer>) = std::mem::take(&mut self.layers)
+            .into_iter()
+            .partition(|layer| touches(&touched, &layer.bytes));
+        let mut old: HashMap<(Source, Vec<tree_sitter::Range>), Tree> = stale
+            .into_iter()
+            .map(|layer| ((layer.source, layer.tree.included_ranges()), layer.tree))
+            .collect();
+        self.layers = kept;
+        for Injection {
+            source,
+            ranges,
+            combined,
+            ..
+        } in found
+        {
             if self.grammar(source).is_none() {
                 self.grammars.push(Grammar::new(source)?);
             }
@@ -240,6 +290,7 @@ impl Syntax {
                 source,
                 tree,
                 bytes,
+                combined,
             });
         }
         Ok(())
@@ -391,16 +442,40 @@ impl Syntax {
     }
 }
 
-type Injection = (Source, Vec<tree_sitter::Range>);
+struct Injection {
+    source: Source,
+    ranges: Vec<tree_sitter::Range>,
+    combined: bool,
+}
 
-fn injections(grammar: &Grammar, tree: &Tree, rope: &Rope) -> Vec<Injection> {
+fn widened(bytes: &Range<usize>) -> Range<usize> {
+    bytes.start.saturating_sub(1)..bytes.end.saturating_add(1)
+}
+
+fn shifted(bytes: &Range<usize>, edit: &InputEdit) -> Range<usize> {
+    let moved = |byte: usize| match byte {
+        byte if byte <= edit.start_byte => byte,
+        byte if byte >= edit.old_end_byte => byte - edit.old_end_byte + edit.new_end_byte,
+        _ => edit.new_end_byte,
+    };
+    moved(bytes.start)..moved(bytes.end)
+}
+
+fn injections(
+    grammar: &Grammar,
+    tree: &Tree,
+    rope: &Rope,
+    touched: &Range<usize>,
+) -> (Vec<Injection>, Range<usize>) {
+    let mut reach = touched.clone();
     let Some(query) = &grammar.injections else {
-        return Vec::new();
+        return (Vec::new(), reach);
     };
     let content = query.capture_index_for_name("injection.content");
     let named = query.capture_index_for_name("injection.language");
     let text = |node: Node| rope.byte_slice(node.byte_range()).to_string();
     let mut cursor = QueryCursor::new();
+    cursor.set_byte_range(widened(touched));
     let mut matches = cursor.matches(query, tree.root_node(), |node: Node| {
         rope.byte_slice(node.byte_range())
             .chunks()
@@ -409,6 +484,10 @@ fn injections(grammar: &Grammar, tree: &Tree, rope: &Rope) -> Vec<Injection> {
     let mut combined: Vec<(usize, Source, Vec<tree_sitter::Range>)> = Vec::new();
     let mut single = Vec::new();
     while let Some(found) = matches.next() {
+        for capture in found.captures {
+            let bytes = capture.node.byte_range();
+            reach = reach.start.min(bytes.start)..reach.end.max(bytes.end);
+        }
         let settings = query.property_settings(found.pattern_index);
         let set = |key: &str| settings.iter().find(|setting| &*setting.key == key);
         let language = set("injection.language")
@@ -434,7 +513,11 @@ fn injections(grammar: &Grammar, tree: &Tree, rope: &Rope) -> Vec<Injection> {
             continue;
         }
         if set("injection.combined").is_none() {
-            single.push((source, ranges));
+            single.push(Injection {
+                source,
+                ranges,
+                combined: false,
+            });
             continue;
         }
         match combined
@@ -448,9 +531,13 @@ fn injections(grammar: &Grammar, tree: &Tree, rope: &Rope) -> Vec<Injection> {
     single.extend(combined.into_iter().map(|(_, source, mut ranges)| {
         ranges.sort_by_key(|range| range.start_byte);
         ranges.dedup_by(|next, kept| next.start_byte < kept.end_byte);
-        (source, ranges)
+        Injection {
+            source,
+            ranges,
+            combined: true,
+        }
     }));
-    single
+    (single, reach)
 }
 
 fn content_ranges(node: Node, whole: bool) -> Vec<tree_sitter::Range> {
