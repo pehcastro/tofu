@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -103,7 +105,12 @@ type searchDialog struct{ palette.Search }
 func (a *App) searchDialog() *searchDialog {
 	a.refreshSettingsRows()
 	folded := sync.OnceValue(func() []feed.Event { return a.readBack(slices.Collect(maps.Keys(a.hidden()))) })
-	return &searchDialog{palette.NewSearch("Search", "Screens, agents and events · enter opens", func(query string) []palette.Result { return a.find(query, folded) })}
+	return &searchDialog{palette.NewSearch("Search", "Screens, agents and events · enter opens", func(query string) []palette.Result {
+		if query == "" {
+			return a.find(query, nil)
+		}
+		return a.find(query, folded())
+	})}
 }
 
 func (d *searchDialog) over(a *App, base string) string { return d.Over(base, a.width, a.height) }
@@ -147,7 +154,19 @@ func contains(text, query string) bool { return strings.Contains(strings.ToLower
 
 func settingLabel(row settings.Row) string { return row.Category + " / " + row.Label }
 
-func (a *App) find(query string, folded func() []feed.Event) []palette.Result {
+func lowerBytes(text []byte) []byte {
+	for at, letter := range text {
+		switch {
+		case letter >= utf8.RuneSelf:
+			return bytes.ToLower(text)
+		case 'A' <= letter && letter <= 'Z':
+			text[at] = letter + 'a' - 'A'
+		}
+	}
+	return text
+}
+
+func (a *App) find(query string, folded []feed.Event) []palette.Result {
 	var results []palette.Result
 	for index, name := range append(tabNames(), "settings") {
 		if contains(name, query) {
@@ -162,13 +181,20 @@ func (a *App) find(query string, folded func() []feed.Event) []palette.Result {
 	if query == "" {
 		return results
 	}
-	thinkingShown := a.flag(isettings.ShowThinking)
-	for _, events := range [][]feed.Event{a.happened, folded()} {
+	thinkingShown, needle := a.flag(isettings.ShowThinking), []byte(query)
+	var lowered []byte
+	for _, events := range [][]feed.Event{a.happened, folded} {
 		for index := len(events) - 1; index >= 0; index-- {
 			event := events[index]
-			label := event.Kind.String() + "  " + event.Title + "  " + event.Body
-			if (thinkingShown || event.Kind != feed.KindThinking) && contains(label, query) {
-				results = append(results, palette.Result{Label: label, Reference: "[" + event.Kind.String() + "#" + event.ID + "]"})
+			if !thinkingShown && event.Kind == feed.KindThinking {
+				continue
+			}
+			lowered = lowered[:0]
+			for _, part := range []string{event.Kind.String(), "  ", event.Title, "  ", event.Body} {
+				lowered = append(lowered, part...)
+			}
+			if bytes.Contains(lowerBytes(lowered), needle) {
+				results = append(results, palette.Result{Label: event.Kind.String() + "  " + event.Title + "  " + event.Body, Reference: "[" + event.Kind.String() + "#" + event.ID + "]"})
 			}
 		}
 	}
