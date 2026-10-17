@@ -22,6 +22,7 @@ import (
 
 const (
 	quoteOpenMark   = "[quote"
+	toolOpenMark    = "[tool"
 	agentOpenMark   = "[&"
 	quoteCloseMark  = "]"
 	quoteShortRunes = 6
@@ -125,7 +126,7 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 
 func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	trimmed := strings.TrimSpace(ref)
-	hash := strings.TrimSuffix(strings.TrimPrefix(trimmed, quoteOpenMark), quoteCloseMark)
+	hash, _ := quoteHash(trimmed)
 	find, refOf := quotedIn, QuoteRef
 	if agent, named := strings.CutPrefix(trimmed, agentOpenMark); named {
 		hash, find = strings.TrimSuffix(agent, quoteCloseMark), quotedAgent
@@ -164,6 +165,16 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 		}
 	}
 	return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
+}
+
+func quoteHash(ref string) (string, bool) {
+	trimmed := strings.TrimSuffix(strings.TrimSpace(ref), quoteCloseMark)
+	for _, open := range []string{quoteOpenMark, toolOpenMark} {
+		if hash, marked := strings.CutPrefix(trimmed, open); marked {
+			return hash, true
+		}
+	}
+	return trimmed, strings.HasPrefix(trimmed, "#")
 }
 
 func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {

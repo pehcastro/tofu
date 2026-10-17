@@ -905,7 +905,7 @@ func runConfig(opts runOpts, built []turn.Tool, run runtime) (turn.Config, *turn
 			}
 			return run.memory.model(dir, run.orchestrator).compactor(ask), func() {}
 		}}
-		asking = append(asking, zoom, tools.Recall{Zoom: zoom})
+		asking = append(asking, zoom, tools.Recall{Zoom: zoom, Sessions: run.sessions, Session: sessionID})
 	}
 	if opts.noSubAgents || opts.toolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
