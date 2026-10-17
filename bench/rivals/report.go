@@ -3,16 +3,348 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
 
+const (
+	settingShipped     = "shipped"
+	settingRival       = "rival"
+	thinkingSummarized = "summarized"
+	thinkingOmitted    = "omitted"
+)
+
+const wallTime = "wall time"
+
 var kinds = []string{"read", "edit", "write", "search", "bash", "spawn", "other"}
+
+type measure struct {
+	name, unit, better, worse string
+	digits                    int
+	higherWins                bool
+	value                     func(row) (float64, bool)
+}
+
+func always(value func(row) float64) func(row) (float64, bool) {
+	return func(r row) (float64, bool) { return value(r), true }
+}
+
+var measures = []measure{
+	{"quality", "points", "higher", "lower", 0, true, always(func(r row) float64 { got, _ := r.Score.quality(); return float64(got) })},
+	{wallTime, "s", "faster", "slower", 1, false, always(func(r row) float64 { return seconds(r.WallMS) })},
+	{"CPU time", "s", "less", "more", 1, false, always(func(r row) float64 { return seconds(r.Tree.CPUMS) })},
+	{"peak memory", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakTreeRSS)) })},
+	{"model requests", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Requests) })},
+	{"total input", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.in()) })},
+	{"fresh input", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.FreshIn) })},
+	{"cache write", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.CacheWrite) })},
+	{"output", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.Out) })},
+	{"memory model calls", "", "fewer", "more", 0, false, func(r row) (float64, bool) { return float64(r.Auxiliary), r.Batch != "" }},
+	{"failed tool calls", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(failedCalls(r)) })},
+	{"tool time", "s", "less", "more", 1, false, always(toolSeconds)},
+	{"time to first token", "s", "less", "more", 1, false, firstTokenSeconds},
+	{"edit call p50", "ms", "less", "more", 0, false, editMedian},
+}
+
+func toolSeconds(r row) float64 {
+	var total int64
+	for _, c := range r.Calls {
+		total += max(c.MS, 0)
+	}
+	return seconds(total)
+}
+
+func firstTokenSeconds(r row) (float64, bool) {
+	var total int64
+	for _, timed := range r.Timed {
+		total += timed.FirstMS
+	}
+	return seconds(total), len(r.Timed) > 0
+}
+
+func editMedian(r row) (float64, bool) {
+	var times []float64
+	for _, c := range r.Calls {
+		if c.Kind == "edit" && c.MS >= 0 {
+			times = append(times, float64(c.MS))
+		}
+	}
+	if len(times) == 0 {
+		return 0, false
+	}
+	return median(times), true
+}
+
+type stat struct {
+	mid, low, high float64
+	files          []string
+}
+
+func statOf(rows []row, m measure) (stat, bool) {
+	var values []float64
+	var files []string
+	for _, r := range rows {
+		if v, ok := m.value(r); ok {
+			values, files = append(values, v), append(files, r.file())
+		}
+	}
+	if len(values) == 0 {
+		return stat{}, false
+	}
+	return stat{median(values), slices.Min(values), slices.Max(values), files}, true
+}
+
+type outcome string
+
+const (
+	won        outcome = "win"
+	tied       outcome = "tie"
+	lost       outcome = "loss"
+	unrecorded outcome = "not recorded"
+)
+
+type duel struct {
+	m           measure
+	tofu, rival stat
+	result      outcome
+	before      outcome
+}
+
+func judge(m measure, tofu, rival stat) outcome {
+	tofuLower := tofu.high < rival.low
+	switch {
+	case !tofuLower && tofu.low <= rival.high:
+		return tied
+	case tofuLower != m.higherWins:
+		return won
+	}
+	return lost
+}
+
+func (d duel) tofuAhead() bool {
+	return (d.tofu.mid < d.rival.mid) != d.m.higherWins
+}
+
+func (d duel) ratio() (float64, bool) {
+	low, high := min(d.tofu.mid, d.rival.mid), max(d.tofu.mid, d.rival.mid)
+	return high / low, low > 0
+}
+
+func (d duel) howMuch() string {
+	if d.tofu.mid == d.rival.mid {
+		return "level"
+	}
+	word := d.m.worse
+	if d.tofuAhead() {
+		word = d.m.better
+	}
+	if r, ok := d.ratio(); ok {
+		return ratioText(r) + " " + word
+	}
+	return d.m.figure(math.Abs(d.tofu.mid-d.rival.mid)) + " " + word
+}
+
+func ratioText(r float64) string {
+	if r >= 10 {
+		return fmt.Sprintf("%.0fx", r)
+	}
+	return fmt.Sprintf("%.1fx", r)
+}
+
+func (d duel) difference() string {
+	gap := d.tofu.mid - d.rival.mid
+	sign := "+"
+	if gap < 0 {
+		sign = "-"
+	}
+	return strings.TrimSpace(sign + d.m.figure(math.Abs(gap)) + " " + d.m.unit)
+}
+
+func (m measure) figure(v float64) string {
+	digits := m.digits
+	if digits == 0 && v != math.Trunc(v) {
+		digits = 1
+	}
+	text := strconv.FormatFloat(v, 'f', digits, 64)
+	whole, fraction, _ := strings.Cut(text, ".")
+	for i := len(whole) - 3; i > 0 && whole[i-1] != '-'; i -= 3 {
+		whole = whole[:i] + "," + whole[i:]
+	}
+	if fraction != "" {
+		whole += "." + fraction
+	}
+	return whole
+}
+
+func (m measure) spread(s stat) string {
+	if s.low == s.high {
+		return m.figure(s.mid)
+	}
+	return fmt.Sprintf("%s [%s to %s]", m.figure(s.mid), m.figure(s.low), m.figure(s.high))
+}
+
+func (m measure) label() string {
+	if m.unit == "" || m.unit == "points" || m.unit == "tokens" {
+		return m.name
+	}
+	return m.name + ", " + m.unit
+}
+
+type matchup struct {
+	rival arm
+	model string
+	duels []duel
+}
+
+func (p matchup) title() string {
+	return fmt.Sprintf("tofu against %s on %s", toolName(p.rival.Tool), p.model)
+}
+
+func (p matchup) count(o outcome) int {
+	n := 0
+	for _, d := range p.duels {
+		if d.result == o {
+			n++
+		}
+	}
+	return n
+}
+
+func (p matchup) wall() duel {
+	return p.duels[slices.IndexFunc(p.duels, func(d duel) bool { return d.m.name == wallTime })]
+}
+
+func (p matchup) biggestWins(n int) []duel {
+	wins := slices.DeleteFunc(slices.Clone(p.duels), func(d duel) bool { _, ok := d.ratio(); return d.result != won || !ok || d.m.name == wallTime })
+	slices.SortFunc(wins, func(x, y duel) int { a, _ := x.ratio(); b, _ := y.ratio(); return cmp.Compare(b, a) })
+	return wins[:min(n, len(wins))]
+}
+
+func toolName(tool string) string {
+	switch tool {
+	case "claude":
+		return "Claude Code"
+	case "tofu", "omp", "codex":
+		return tool
+	}
+	panic("unknown tool " + tool)
+}
+
+type report struct {
+	batch, since string
+	now, then    map[string][]row
+	present      []arm
+	matchups     []matchup
+	setAside     []row
+	method       string
+}
+
+func (r report) days() string {
+	var dates []string
+	for _, a := range r.present {
+		for _, one := range r.now[a.Name] {
+			dates = append(dates, one.Date)
+		}
+	}
+	slices.Sort(dates)
+	return dates[0] + " to " + dates[len(dates)-1][11:]
+}
+
+func (r report) runs() int {
+	n := 0
+	for _, rows := range r.now {
+		n += len(rows)
+	}
+	return n
+}
+
+func writeReport(args []string) error {
+	flags := flag.NewFlagSet("report", flag.ContinueOnError)
+	batch := flags.String("batch", "", "folder under runs whose rows make the report, every arm in it one row of each table")
+	since := flags.String("since", "2026-10-13", "day of the rows directly under runs, with no setting, that the change columns compare against")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *batch == "" {
+		return errors.New("report needs -batch")
+	}
+	now, err := readRows(filepath.Join(here(), "runs", *batch, "*.json"))
+	if err != nil {
+		return err
+	}
+	earlier, err := readRows(filepath.Join(here(), "runs", "*.json"))
+	if err != nil {
+		return err
+	}
+	earlier = slices.DeleteFunc(earlier, func(r row) bool { return r.Setting != "" || !strings.HasPrefix(r.Date, *since) })
+	setAside, err := readRows(filepath.Join(here(), "runs", *batch, "discarded", "*.json"))
+	if err != nil {
+		return err
+	}
+	method, err := os.ReadFile(filepath.Join(here(), "judgement.md"))
+	if err != nil {
+		return err
+	}
+	rep := report{batch: *batch, since: *since, now: byArm(now), then: byArm(earlier), setAside: setAside, method: string(method)}
+	rep.present = present(rep.now)
+	rep.matchups = matchups(rep)
+	appendix, err := appendixMarkdown(rep)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(here(), "report.md"), []byte(renderMarkdown(rep)+appendix), 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(here(), "report.html"), []byte(renderPage(rep, appendix)), 0o644)
+}
+
+func byArm(rows []row) map[string][]row {
+	grouped := map[string][]row{}
+	for _, r := range rows {
+		grouped[r.Arm] = append(grouped[r.Arm], r)
+	}
+	return grouped
+}
+
+func matchups(rep report) []matchup {
+	var out []matchup
+	for _, mine := range rep.present {
+		for _, theirs := range rep.present {
+			if mine.Tool != "tofu" || theirs.Tool == "tofu" || rep.now[mine.Name][0].Model != rep.now[theirs.Name][0].Model {
+				continue
+			}
+			p := matchup{rival: theirs, model: rep.now[mine.Name][0].Model}
+			for _, m := range measures {
+				tofu, okTofu := statOf(rep.now[mine.Name], m)
+				rival, okRival := statOf(rep.now[theirs.Name], m)
+				if !okTofu || !okRival {
+					continue
+				}
+				d := duel{m: m, tofu: tofu, rival: rival, result: judge(m, tofu, rival), before: unrecorded}
+				tofuThen, okTofu := statOf(rep.then[mine.Name], m)
+				rivalThen, okRival := statOf(rep.then[theirs.Name], m)
+				if okTofu && okRival {
+					d.before = judge(m, tofuThen, rivalThen)
+				}
+				p.duels = append(p.duels, d)
+			}
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (r row) file() string {
+	return path.Join("runs", r.Batch, r.Task, r.name()+".json")
+}
 
 func readRows(pattern string) ([]row, error) {
 	paths, err := filepath.Glob(pattern)
@@ -34,57 +366,8 @@ func readRows(pattern string) ([]row, error) {
 	return rows, nil
 }
 
-func writeReport(args []string) error {
-	flags := flag.NewFlagSet("report", flag.ContinueOnError)
-	batch := flags.String("batch", "", "folder under runs whose rows alone make the report, every setting in it one arm; empty is runs itself with its settings and task tables")
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-	rows, err := readRows(filepath.Join(here(), "runs", *batch, "*.json"))
-	if err != nil {
-		return err
-	}
-	byArm, bySetting := map[string][]row{}, map[string][]row{}
-	for _, r := range rows {
-		if r.Setting != "" && *batch == "" {
-			bySetting[r.Arm] = append(bySetting[r.Arm], r)
-			continue
-		}
-		byArm[r.Arm] = append(byArm[r.Arm], r)
-	}
-	judgement, err := os.ReadFile(filepath.Join(here(), "judgement.md"))
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	var b strings.Builder
-	b.Write(judgement)
-	conditions(&b, byArm)
-	runsTable(&b, byArm)
-	turnTable(&b, byArm)
-	wallTable(&b, byArm)
-	toolTable(&b, byArm)
-	if *batch == "" {
-		settingTable(&b, bySetting)
-		if err := taskTables(&b); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(filepath.Join(here(), "report.md"), []byte(b.String()), 0o644)
-}
-
 func present(byArm map[string][]row) []arm {
 	return slices.DeleteFunc(slices.Clone(arms), func(a arm) bool { return len(byArm[a.Name]) == 0 })
-}
-
-func conditions(b *strings.Builder, byArm map[string][]row) {
-	fmt.Fprintf(b, "\n## Conditions\n\nProcess tree: %s.\n\n", treeMethod)
-	b.WriteString("| arm | tool version | asked for | every model the responses reported | credential | posture | machine | dates |\n|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(byArm) {
-		rows := byArm[a.Name]
-		first, last := rows[0], rows[len(rows)-1]
-		fmt.Fprintf(b, "| %s | %s | %s | %s | %s | %s | %s | %s to %s |\n", a.Name, distinct(rows, row.build), first.AskedModel, distinct(rows, func(r row) string { return strings.Join(r.Models, ", ") }),
-			distinct(rows, func(r row) string { return r.Credential }), first.Posture, first.Machine, first.Date, last.Date)
-	}
 }
 
 func (r row) build() string {
@@ -102,233 +385,6 @@ func distinct(rows []row, field func(row) string) string {
 		}
 	}
 	return strings.Join(seen, "; ")
-}
-
-func runsTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MiB | peak commit MiB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(byArm) {
-		for _, r := range byArm[a.Name] {
-			fmt.Fprintf(b, "| %s | %d | %d | %.1f | %.1f | %.0f | %.0f | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | +%d/-%d | %s |\n",
-				r.Arm, r.Rep, r.ExitCode, seconds(r.WallMS), seconds(r.Tree.CPUMS), megabytes(r.Tree.PeakTreeRSS), megabytes(r.Tree.PeakCommit), r.Tree.Processes,
-				r.Requests, r.Tokens.FreshIn, r.Tokens.CacheRead, r.Tokens.CacheWrite, r.Tokens.Out, len(r.Calls), failedCalls(r), r.Retried,
-				r.Score.hiddenPassed(), r.Score.rubricPassed(), r.Score.Added, r.Score.Deleted, r.notes())
-		}
-	}
-}
-
-func turnTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Turn against turn\n\nMedian of the runs, with the lowest and highest in brackets. Total in is fresh plus cache read plus cache write.\n\n| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MiB | conversation requests | total in | fresh in | out | calls | failed | retried | lines changed |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(byArm) {
-		rows := byArm[a.Name]
-		column := func(value func(row) float64) string { return spread(rows, value) }
-		fmt.Fprintf(b, "| %s | %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", a.Name, len(rows),
-			column(func(r row) float64 { return float64(r.Score.hiddenPassed() + r.Score.rubricPassed()) }),
-			column(func(r row) float64 { return seconds(r.WallMS) }),
-			column(func(r row) float64 { return seconds(r.Tree.CPUMS) }),
-			column(func(r row) float64 { return megabytes(r.Tree.PeakTreeRSS) }),
-			column(func(r row) float64 { return float64(r.Requests) }),
-			column(func(r row) float64 { return float64(r.Tokens.in()) }),
-			column(func(r row) float64 { return float64(r.Tokens.FreshIn) }),
-			column(func(r row) float64 { return float64(r.Tokens.Out) }),
-			column(func(r row) float64 { return float64(len(r.Calls)) }),
-			column(func(r row) float64 { return float64(failedCalls(r)) }),
-			column(func(r row) float64 { return float64(r.Retried) }),
-			column(func(r row) float64 { return float64(r.Score.Added + r.Score.Deleted) }))
-	}
-}
-
-func wallTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Where the wall time goes\n\nOne row per run whose transcript times each model request: tofu from `tofu session request`, codex from its rollout file. Model wait is every request from sent to its last byte, split at the first token; for codex the first token is the first finished output item, so its share is an upper bound. Own work is the time between requests that no tool call covers; it goes below zero when a tool starts before its request finishes streaming. Outside is the wall clock before the first request and after the last.\n\n| arm | rep | wall s | requests | model wait s | to first token s | after first token s | tools s | own work s | outside s |\n|---|---|---|---|---|---|---|---|---|---|\n")
-	var pooled []string
-	for _, a := range present(byArm) {
-		var times []requestTime
-		for _, r := range byArm[a.Name] {
-			if len(r.Timed) == 0 {
-				continue
-			}
-			times = append(times, r.Timed...)
-			var model, first, tools int64
-			for _, timed := range r.Timed {
-				model, first = model+timed.MS, first+timed.FirstMS
-			}
-			for _, c := range r.Calls {
-				tools += max(c.MS, 0)
-			}
-			last := r.Timed[len(r.Timed)-1]
-			span := last.AtMS + last.MS
-			fmt.Fprintf(b, "| %s | %d | %.1f | %d | %.1f | %.1f | %.1f | %.1f | %.1f | %.1f |\n", r.Arm, r.Rep, seconds(r.WallMS), len(r.Timed), seconds(model), seconds(first),
-				seconds(model-first), seconds(tools), seconds(span-model-tools), seconds(r.WallMS-span))
-		}
-		if len(times) > 1 {
-			fixed, perToken := fitRequests(times)
-			pooled = append(pooled, fmt.Sprintf("| %s | %d | %.1f | %.1f |", a.Name, len(times), fixed/1000, perToken))
-		}
-	}
-	b.WriteString("\nEvery timed request of an arm pooled, fitted as a fixed wait plus a time per output token, least squares.\n\n| arm | requests | fixed s per request | ms per output token |\n|---|---|---|---|\n")
-	b.WriteString(strings.Join(pooled, "\n") + "\n")
-}
-
-func fitRequests(times []requestTime) (float64, float64) {
-	var sumOut, sumMS float64
-	for _, timed := range times {
-		sumOut, sumMS = sumOut+float64(timed.Out), sumMS+float64(timed.MS)
-	}
-	meanOut, meanMS := sumOut/float64(len(times)), sumMS/float64(len(times))
-	var covariance, variance float64
-	for _, timed := range times {
-		covariance += (float64(timed.Out) - meanOut) * (float64(timed.MS) - meanMS)
-		variance += (float64(timed.Out) - meanOut) * (float64(timed.Out) - meanOut)
-	}
-	slope := covariance / variance
-	return meanMS - slope*meanOut, slope
-}
-
-func toolTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Tool against tool\n\nEvery call of the three runs pooled. Calls per run is the median. Time is from the tool's own transcript: tofu reports each call's duration itself, the other three are timed here from the moment the call event reached stdout to the moment its result did. An untimed call is one whose start the transcript did not show.\n\n| arm | kind | calls per run | p50 ms | p95 ms | max ms | failed | untimed |\n|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(byArm) {
-		rows := byArm[a.Name]
-		for _, kind := range kinds {
-			var perRun []float64
-			var times []int64
-			failed, untimed := 0, 0
-			for _, r := range rows {
-				n := 0
-				for _, c := range r.Calls {
-					if c.Kind != kind {
-						continue
-					}
-					n++
-					if c.Failed {
-						failed++
-					}
-					if c.MS < 0 {
-						untimed++
-						continue
-					}
-					times = append(times, c.MS)
-				}
-				perRun = append(perRun, float64(n))
-			}
-			if slices.Max(perRun) == 0 {
-				continue
-			}
-			slices.Sort(times)
-			fmt.Fprintf(b, "| %s | %s | %s | %s | %s | %s | %d | %d |\n", a.Name, kind, trim(median(perRun)), rank(times, 0.5), rank(times, 0.95), rank(times, 1), failed, untimed)
-		}
-	}
-}
-
-const (
-	settingShipped     = "shipped"
-	settingRival       = "rival"
-	thinkingSummarized = "summarized"
-	thinkingOmitted    = "omitted"
-)
-
-var settingMeasures = []func(row) float64{
-	func(r row) float64 { return seconds(r.WallMS) },
-	func(r row) float64 { return float64(r.Requests) },
-	func(r row) float64 { return float64(r.Tokens.in()) },
-	func(r row) float64 { return float64(r.Tokens.Out) },
-	func(r row) float64 { return float64(r.Tokens.Reasoning) },
-	func(r row) float64 { return float64(r.Score.hiddenPassed() + r.Score.rubricPassed()) },
-}
-
-func settingTable(b *strings.Builder, bySetting map[string][]row) {
-	if len(bySetting) == 0 {
-		return
-	}
-	b.WriteString("\n## Shipped thinking setting against the rival's\n\nOne row per run, alternating. Shipped is tofu as built; rival is the same commit sending what the rival on that wire sends. Thinking sent is read from the first request body tofu recorded. Total in is fresh plus cache read plus cache write; reasoning is the wire's own count and is part of out.\n\n| arm | setting | rep | date | thinking sent | wall s | conversation requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(bySetting) {
-		for _, r := range slices.SortedFunc(slices.Values(bySetting[a.Name]), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
-			fmt.Fprintf(b, "| %s | %s | %d | %s | `%s` | %.1f | %d | %d | %d | %d | %d |\n", r.Arm, r.Setting, r.Rep, r.Date, r.ThinkingSent, seconds(r.WallMS), r.Requests,
-				r.Tokens.in(), r.Tokens.Out, r.Tokens.Reasoning, r.Score.hiddenPassed()+r.Score.rubricPassed())
-		}
-	}
-	b.WriteString("\nMedians per setting, and what shipped costs over rival in percent of the rival's median.\n\n| arm | setting | runs | wall s | conversation requests | total in | out | reasoning | quality of 10 |\n|---|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(bySetting) {
-		shipped, rival := settingMedians(b, a.Name, settingShipped, bySetting[a.Name]), settingMedians(b, a.Name, settingRival, bySetting[a.Name])
-		if len(shipped) == 0 || len(rival) == 0 {
-			continue
-		}
-		cells := []string{a.Name, "shipped over rival", ""}
-		for i := range settingMeasures {
-			cells = append(cells, percentOver(shipped[i], rival[i]))
-		}
-		b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
-	}
-}
-
-func settingMedians(b *strings.Builder, armName, setting string, rows []row) []float64 {
-	chosen := slices.DeleteFunc(slices.Clone(rows), func(r row) bool { return r.Setting != setting })
-	if len(chosen) == 0 {
-		return nil
-	}
-	cells := []string{armName, setting, fmt.Sprint(len(chosen))}
-	var medians []float64
-	for _, measure := range settingMeasures {
-		cells = append(cells, spread(chosen, measure))
-		medians = append(medians, median(valuesOf(chosen, measure)))
-	}
-	b.WriteString("| " + strings.Join(cells, " | ") + " |\n")
-	return medians
-}
-
-func percentOver(shipped, rival float64) string {
-	if rival == 0 {
-		return "no rival value"
-	}
-	return fmt.Sprintf("%+.1f%%", (shipped-rival)/rival*100)
-}
-
-func taskTables(b *strings.Builder) error {
-	names, err := taskNames()
-	if err != nil {
-		return err
-	}
-	for _, name := range names {
-		rows, err := readRows(filepath.Join(here(), "runs", name, "*.json"))
-		if err != nil {
-			return err
-		}
-		if len(rows) > 0 {
-			taskTable(b, name, rows)
-		}
-	}
-	return nil
-}
-
-func taskTable(b *strings.Builder, name string, rows []row) {
-	byArm := map[string][]row{}
-	for _, r := range rows {
-		byArm[r.Arm] = append(byArm[r.Arm], r)
-	}
-	_, outOf := rows[0].Score.quality()
-	fmt.Fprintf(b, "\n## Task %s\n\nPrompt, rubric and seed in `testdata/tasks/%s`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Conversation requests count every model call of the conversation and of every sub-agent; memory or judge calls are the calls outside it, tofu's memory model and omp's auto-thinking judge, counted apart and with their tokens in the token columns too. Sub-agents is the count the tool's own transcript reports.\n\n", name, name)
-	b.WriteString("| arm | tool version | runs | quality of " + fmt.Sprint(outOf) + " | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MiB | failed calls | sub-agents |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
-	for _, a := range present(byArm) {
-		armRows := byArm[a.Name]
-		column := func(value func(row) float64) string { return spread(armRows, value) }
-		fmt.Fprintf(b, "| %s | %s | %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", a.Name, distinct(armRows, row.build), len(armRows),
-			column(func(r row) float64 { got, _ := r.Score.quality(); return float64(got) }),
-			column(func(r row) float64 { return float64(r.Requests) }),
-			column(func(r row) float64 { return float64(r.Auxiliary) }),
-			column(func(r row) float64 { return float64(r.Tokens.FreshIn) }),
-			column(func(r row) float64 { return float64(r.Tokens.CacheRead) }),
-			column(func(r row) float64 { return float64(r.Tokens.CacheWrite) }),
-			column(func(r row) float64 { return float64(r.Tokens.in()) }),
-			column(func(r row) float64 { return float64(r.Tokens.Out) }),
-			column(func(r row) float64 { return seconds(r.WallMS) }),
-			column(func(r row) float64 { return megabytes(r.Tree.PeakTreeRSS) }),
-			column(func(r row) float64 { return float64(failedCalls(r)) }),
-			column(func(r row) float64 { return float64(r.Agents) }))
-	}
-	b.WriteString("\n| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MiB | calls | failed | sub-agents | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
-	for _, r := range slices.SortedFunc(slices.Values(rows), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
-		got, _ := r.Score.quality()
-		fmt.Fprintf(b, "| %s | %d | %s | %s | %d | %d | %d | %d | %d | %d | %.1f | %.0f | %d | %d | %d | %s |\n", r.Arm, r.Rep, r.Date, strings.Join(r.Models, ", "), got, r.Requests, r.Auxiliary, r.Tokens.in(), r.Tokens.CacheRead,
-			r.Tokens.Out, seconds(r.WallMS), megabytes(r.Tree.PeakTreeRSS), len(r.Calls), failedCalls(r), r.Agents, r.notes())
-	}
 }
 
 func (r row) notes() string {

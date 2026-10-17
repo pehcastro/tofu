@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>bench rivals: tofu 0.5.15-rc7 against Claude Code, omp and codex</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#17181a;--muted:#6b6f76;--line:#e4e4e0;--track:#efefeb;
+--tofu:#0f9d76;--rival:#8a8f98;--then:#c9ccd1;--win:#e3f5ec;--win-ink:#0b7a5b;--loss:#fbe7e6;--loss-ink:#b3261e;--tie:#eef0f3;--tie-ink:#4a5059;
+--s1:#0f9d76;--s2:#6cc9a9;--s3:#f2a65a;--s4:#9aa3ff;--s5:#c9ccd1;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1012;--panel:#17191c;--ink:#ecedee;--muted:#9a9ea6;--line:#2a2d32;--track:#22252a;
+--tofu:#34d3a4;--rival:#7d838c;--then:#3b3f46;--win:#12342a;--win-ink:#5fe0b6;--loss:#3a1a19;--loss-ink:#ff8a80;--tie:#23262b;--tie-ink:#b8bcc3;
+--s1:#34d3a4;--s2:#1f8a6a;--s3:#d98c3f;--s4:#7c86f0;--s5:#4a4f57}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:28px;line-height:1.2;margin:4px 0 8px;letter-spacing:-.01em}
+h2{font-size:19px;margin:40px 0 14px}
+h3{font-size:15px;margin:0 0 6px}
+p{margin:0 0 10px}
+code{font:12.5px ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--track);padding:1px 5px;border-radius:5px}
+.eyebrow{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.06em}
+.lede{color:var(--muted);max-width:760px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.big{font-size:38px;font-weight:700;line-height:1;color:var(--tofu);letter-spacing:-.02em}
+.word{font-weight:600;margin:4px 0 8px}
+.small{color:var(--muted);font-size:13px}
+.panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:14px}
+.wtl{display:flex;height:26px;border-radius:8px;overflow:hidden;margin:10px 0 14px;font-size:12px;font-weight:600}
+.wtl span{display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden}
+.w{background:var(--win);color:var(--win-ink)}.t{background:var(--tie);color:var(--tie-ink)}.l{background:var(--loss);color:var(--loss-ink)}
+.duel{padding:8px 0;border-top:1px solid var(--line)}
+.duel-head{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:4px}
+.pill{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.bar{display:grid;grid-template-columns:70px 1fr 92px;gap:8px;align-items:center;font-size:12px;margin:2px 0}
+.bar .num{text-align:right;font-variant-numeric:tabular-nums}
+.who{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track{position:relative;height:10px;background:var(--track);border-radius:5px}
+.fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+.range{position:absolute;top:4px;height:2px;background:var(--ink);opacity:.45}
+.tofu{background:var(--tofu)}.rival{background:var(--rival)}.then{background:var(--then)}
+.stack{display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--track)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin:8px 0 12px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;margin:0 0 14px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+details{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin:12px 0}
+details[open]{padding-bottom:16px}
+summary{cursor:pointer;font-weight:600}
+details .scroll{background:var(--bg)}
+@media (max-width:560px){main{padding:20px 12px 48px}h1{font-size:23px}.big{font-size:32px}.bar{grid-template-columns:56px 1fr 78px}}
+</style></head><body><main>
+<header><p class="eyebrow">bench rivals · batch 0.5.15-rc7</p><h1>bench rivals: tofu 0.5.15-rc7 against Claude Code, omp and codex</h1><p class="lede">15 live runs, 2026-10-17 01:52 to 02:08, from <code>runs/0.5.15-rc7</code>, against the runs of 2026-10-13 directly under <code>runs/</code>. A measure is a win or a loss only when the two spreads do not meet; otherwise it is a tie.</p></header>
+<h2>Where tofu wins</h2><div class="cards">
+<div class="card" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json
+runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><div class="big">1.3x</div><div class="word">faster</div><div>wall time</div><div class="small">tofu 66.1 s, codex 83.4 s</div><div class="small">gpt-5.6-sol against codex</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json
+runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><div class="big">368x</div><div class="word">less</div><div>edit call p50</div><div class="small">tofu 5 ms, codex 1,842.5 ms</div><div class="small">gpt-5.6-sol against codex</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json
+runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><div class="big">21x</div><div class="word">less</div><div>edit call p50</div><div class="small">tofu 6 ms, omp 126.5 ms</div><div class="small">claude-sonnet-5-5 against omp</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json
+runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><div class="big">2.8x</div><div class="word">less</div><div>peak memory</div><div class="small">tofu 281 MiB, omp 789 MiB</div><div class="small">claude-sonnet-5-5 against omp</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json
+runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><div class="big">2.1x</div><div class="word">less</div><div>peak memory</div><div class="small">tofu 281 MiB, Claude Code 592 MiB</div><div class="small">claude-sonnet-5-5 against Claude Code</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json
+runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><div class="big">2.1x</div><div class="word">less</div><div>CPU time</div><div class="small">tofu 29.3 s, codex 60.2 s</div><div class="small">gpt-5.6-sol against codex</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json
+runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><div class="big">2.0x</div><div class="word">less</div><div>tool time</div><div class="small">tofu 11.0 s, codex 21.9 s</div><div class="small">gpt-5.6-sol against codex</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json
+runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><div class="big">1.6x</div><div class="word">less</div><div>peak memory</div><div class="small">tofu 304 MiB, codex 496 MiB</div><div class="small">gpt-5.6-sol against codex</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json
+runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><div class="big">1.6x</div><div class="word">fewer</div><div>total input</div><div class="small">tofu 78,985 tokens, codex 126,689 tokens</div><div class="small">gpt-5.6-sol against codex</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json
+runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><div class="big">1.6x</div><div class="word">less</div><div>CPU time</div><div class="small">tofu 30.4 s, Claude Code 48.5 s</div><div class="small">claude-sonnet-5-5 against Claude Code</div></div>
+<div class="card" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json
+runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><div class="big">1.3x</div><div class="word">fewer</div><div>cache write</div><div class="small">tofu 5,675 tokens, Claude Code 7,616 tokens</div><div class="small">claude-sonnet-5-5 against Claude Code</div></div>
+</div>
+<h2>Scoreboard</h2><p class="small">Bars are medians; the thin line is the lowest to highest run.</p><div class="panels">
+<div class="panel"><h3>tofu against Claude Code on claude-sonnet-5-5</h3><div class="wtl"><span class="w" style="flex:3">3 wins</span><span class="t" style="flex:6">6 ties</span><span class="l" style="flex:3">3 losses</span></div>
+<div class="duel"><div class="duel-head"><span>quality</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">10</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">10</span></div></div>
+<div class="duel"><div class="duel-head"><span>wall time, s</span><span class="pill t">1.2x slower</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:70.6%"></div><div class="range" style="left:58.1%;width:41.9%"></div></div><span class="num">37.7</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:59.6%"></div><div class="range" style="left:57.3%;width:14.0%"></div></div><span class="num">31.8</span></div></div>
+<div class="duel"><div class="duel-head"><span>CPU time, s</span><span class="pill w">1.6x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:51.5%"></div><div class="range" style="left:44.8%;width:34.6%"></div></div><span class="num">30.4</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:82.1%"></div><div class="range" style="left:81.3%;width:18.7%"></div></div><span class="num">48.5</span></div></div>
+<div class="duel"><div class="duel-head"><span>peak memory, MiB</span><span class="pill w">2.1x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:45.0%"></div><div class="range" style="left:44.1%;width:3.5%"></div></div><span class="num">281</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:94.9%"></div><div class="range" style="left:92.5%;width:7.5%"></div></div><span class="num">592</span></div></div>
+<div class="duel"><div class="duel-head"><span>model requests</span><span class="pill t">1.7x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:80.0%;width:20.0%"></div></div><span class="num">5</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:60.0%"></div><div class="range" style="left:60.0%;width:20.0%"></div></div><span class="num">3</span></div></div>
+<div class="duel"><div class="duel-head"><span>total input</span><span class="pill t">1.1x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:79.0%"></div><div class="range" style="left:63.9%;width:15.6%"></div></div><span class="num">75,837</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:74.5%"></div><div class="range" style="left:74.3%;width:25.7%"></div></div><span class="num">71,443</span></div></div>
+<div class="duel"><div class="duel-head"><span>fresh input</span><span class="pill l">464x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:66.7%"></div><div class="range" style="left:66.5%;width:33.5%"></div></div><span class="num">2,784</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:0.1%"></div><div class="range" style="left:0.1%;width:0.0%"></div></div><span class="num">6</span></div></div>
+<div class="duel"><div class="duel-head"><span>cache write</span><span class="pill w">1.3x fewer</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:64.3%"></div><div class="range" style="left:63.4%;width:4.4%"></div></div><span class="num">5,675</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:86.3%"></div><div class="range" style="left:85.7%;width:14.3%"></div></div><span class="num">7,616</span></div></div>
+<div class="duel"><div class="duel-head"><span>output</span><span class="pill l">1.7x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:96.5%"></div><div class="range" style="left:92.0%;width:8.0%"></div></div><span class="num">2,892</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:58.3%"></div><div class="range" style="left:57.8%;width:12.0%"></div></div><span class="num">1,747</span></div></div>
+<div class="duel"><div class="duel-head"><span>memory model calls</span><span class="pill l">3 more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:75.0%"></div><div class="range" style="left:75.0%;width:25.0%"></div></div><span class="num">3</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>failed tool calls</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:0.0%"></div><div class="range" style="left:0.0%;width:100.0%"></div></div><span class="num">0</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>tool time, s</span><span class="pill t">1.5x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:36.8%"></div><div class="range" style="left:29.3%;width:70.7%"></div></div><span class="num">11.7</span></div><div class="bar" title="runs/0.5.15-rc7/claude-sonnet-1.json
+runs/0.5.15-rc7/claude-sonnet-2.json
+runs/0.5.15-rc7/claude-sonnet-3.json"><span class="who">Claude Code</span><div class="track"><div class="fill rival" style="width:54.6%"></div><div class="range" style="left:54.3%;width:13.1%"></div></div><span class="num">17.4</span></div></div>
+</div>
+<div class="panel"><h3>tofu against omp on claude-sonnet-5-5</h3><div class="wtl"><span class="w" style="flex:2">2 wins</span><span class="t" style="flex:8">8 ties</span><span class="l" style="flex:3">3 losses</span></div>
+<div class="duel"><div class="duel-head"><span>quality</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">10</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">10</span></div></div>
+<div class="duel"><div class="duel-head"><span>wall time, s</span><span class="pill t">1.1x slower</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:70.6%"></div><div class="range" style="left:58.1%;width:41.9%"></div></div><span class="num">37.7</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:63.2%"></div><div class="range" style="left:59.2%;width:30.2%"></div></div><span class="num">33.8</span></div></div>
+<div class="duel"><div class="duel-head"><span>CPU time, s</span><span class="pill t">1.7x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:55.2%"></div><div class="range" style="left:48.1%;width:37.2%"></div></div><span class="num">30.4</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:94.9%"></div><div class="range" style="left:82.3%;width:17.7%"></div></div><span class="num">52.2</span></div></div>
+<div class="duel"><div class="duel-head"><span>peak memory, MiB</span><span class="pill w">2.8x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:34.0%"></div><div class="range" style="left:33.3%;width:2.7%"></div></div><span class="num">281</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:95.5%"></div><div class="range" style="left:87.4%;width:12.6%"></div></div><span class="num">789</span></div></div>
+<div class="duel"><div class="duel-head"><span>model requests</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:80.0%;width:20.0%"></div></div><span class="num">5</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:100.0%"></div><div class="range" style="left:80.0%;width:20.0%"></div></div><span class="num">5</span></div></div>
+<div class="duel"><div class="duel-head"><span>total input</span><span class="pill t">1.2x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:99.4%"></div><div class="range" style="left:80.3%;width:19.7%"></div></div><span class="num">75,837</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:85.6%"></div><div class="range" style="left:71.8%;width:21.1%"></div></div><span class="num">65,280</span></div></div>
+<div class="duel"><div class="duel-head"><span>fresh input</span><span class="pill l">232x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:66.7%"></div><div class="range" style="left:66.5%;width:33.5%"></div></div><span class="num">2,784</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:0.3%"></div><div class="range" style="left:0.2%;width:0.0%"></div></div><span class="num">12</span></div></div>
+<div class="duel"><div class="duel-head"><span>cache write</span><span class="pill t">1.1x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:34.7%"></div><div class="range" style="left:34.1%;width:2.4%"></div></div><span class="num">5,675</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:31.0%"></div><div class="range" style="left:17.7%;width:82.3%"></div></div><span class="num">5,080</span></div></div>
+<div class="duel"><div class="duel-head"><span>output</span><span class="pill l">1.2x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:96.5%"></div><div class="range" style="left:92.0%;width:8.0%"></div></div><span class="num">2,892</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:81.2%"></div><div class="range" style="left:43.6%;width:39.4%"></div></div><span class="num">2,435</span></div></div>
+<div class="duel"><div class="duel-head"><span>memory model calls</span><span class="pill l">3 more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:75.0%"></div><div class="range" style="left:75.0%;width:25.0%"></div></div><span class="num">3</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>failed tool calls</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:0.0%"></div><div class="range" style="left:0.0%;width:100.0%"></div></div><span class="num">0</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>tool time, s</span><span class="pill t">1.2x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:36.8%"></div><div class="range" style="left:29.3%;width:70.7%"></div></div><span class="num">11.7</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-2.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:45.5%"></div><div class="range" style="left:37.4%;width:12.9%"></div></div><span class="num">14.5</span></div></div>
+<div class="duel"><div class="duel-head"><span>edit call p50, ms</span><span class="pill w">21x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-2.json
+runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:4.4%"></div><div class="range" style="left:3.6%;width:3.3%"></div></div><span class="num">6</span></div><div class="bar" title="runs/0.5.15-rc7/omp-sonnet-1.json
+runs/0.5.15-rc7/omp-sonnet-3.json"><span class="who">omp</span><div class="track"><div class="fill rival" style="width:92.3%"></div><div class="range" style="left:84.7%;width:15.3%"></div></div><span class="num">126.5</span></div></div>
+</div>
+<div class="panel"><h3>tofu against codex on gpt-5.6-sol</h3><div class="wtl"><span class="w" style="flex:6">6 wins</span><span class="t" style="flex:6">6 ties</span><span class="l" style="flex:2">2 losses</span></div>
+<div class="duel"><div class="duel-head"><span>quality</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">10</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">10</span></div></div>
+<div class="duel"><div class="duel-head"><span>wall time, s</span><span class="pill w">1.3x faster</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:74.0%"></div><div class="range" style="left:59.2%;width:14.9%"></div></div><span class="num">66.1</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:93.4%"></div><div class="range" style="left:78.2%;width:21.8%"></div></div><span class="num">83.4</span></div></div>
+<div class="duel"><div class="duel-head"><span>CPU time, s</span><span class="pill w">2.1x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:41.5%"></div><div class="range" style="left:36.8%;width:8.0%"></div></div><span class="num">29.3</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:85.2%"></div><div class="range" style="left:84.2%;width:15.8%"></div></div><span class="num">60.2</span></div></div>
+<div class="duel"><div class="duel-head"><span>peak memory, MiB</span><span class="pill w">1.6x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:57.6%"></div><div class="range" style="left:57.6%;width:0.6%"></div></div><span class="num">304</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:93.9%"></div><div class="range" style="left:87.5%;width:12.5%"></div></div><span class="num">496</span></div></div>
+<div class="duel"><div class="duel-head"><span>model requests</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:87.5%"></div><div class="range" style="left:87.5%;width:12.5%"></div></div><span class="num">7</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:87.5%"></div><div class="range" style="left:87.5%;width:0.0%"></div></div><span class="num">7</span></div></div>
+<div class="duel"><div class="duel-head"><span>total input</span><span class="pill w">1.6x fewer</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:60.1%"></div><div class="range" style="left:59.3%;width:9.6%"></div></div><span class="num">78,985</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:96.3%"></div><div class="range" style="left:94.7%;width:5.3%"></div></div><span class="num">126,689</span></div></div>
+<div class="duel"><div class="duel-head"><span>fresh input</span><span class="pill l">2.7x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:59.4%;width:40.6%"></div></div><span class="num">28,897</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:36.9%"></div><div class="range" style="left:35.8%;width:6.5%"></div></div><span class="num">10,677</span></div></div>
+<div class="duel"><div class="duel-head"><span>cache write</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>output</span><span class="pill t">1.2x fewer</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:68.6%"></div><div class="range" style="left:65.9%;width:12.5%"></div></div><span class="num">3,488</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:83.4%"></div><div class="range" style="left:65.6%;width:34.4%"></div></div><span class="num">4,238</span></div></div>
+<div class="duel"><div class="duel-head"><span>memory model calls</span><span class="pill l">3 more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:100.0%"></div><div class="range" style="left:100.0%;width:0.0%"></div></div><span class="num">3</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>failed tool calls</span><span class="pill t">level</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:0.0%"></div><div class="range" style="left:0.0%;width:0.0%"></div></div><span class="num">0</span></div></div>
+<div class="duel"><div class="duel-head"><span>tool time, s</span><span class="pill w">2.0x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:41.1%"></div><div class="range" style="left:36.2%;width:6.9%"></div></div><span class="num">11.0</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:81.8%"></div><div class="range" style="left:81.4%;width:18.6%"></div></div><span class="num">21.9</span></div></div>
+<div class="duel"><div class="duel-head"><span>time to first token, s</span><span class="pill t">1.6x more</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:99.0%"></div><div class="range" style="left:68.5%;width:31.5%"></div></div><span class="num">40.4</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:61.3%"></div><div class="range" style="left:58.3%;width:26.9%"></div></div><span class="num">25.0</span></div></div>
+<div class="duel"><div class="duel-head"><span>edit call p50, ms</span><span class="pill w">368x less</span></div><div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json
+runs/0.5.15-rc7/tofu-gpt-omitted-2.json
+runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu</span><div class="track"><div class="fill tofu" style="width:0.2%"></div><div class="range" style="left:0.1%;width:0.3%"></div></div><span class="num">5</span></div><div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json
+runs/0.5.15-rc7/codex-gpt-2.json
+runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex</span><div class="track"><div class="fill rival" style="width:64.4%"></div><div class="range" style="left:26.2%;width:73.8%"></div></div><span class="num">1,842.5</span></div></div>
+</div>
+</div>
+<h2>Change since 2026-10-13</h2><div class="legend"><span><i class="then"></i>2026-10-13</span><span><i class="tofu"></i>now, tofu</span><span><i class="rival"></i>now, rival</span></div><div class="panels">
+<div class="panel"><h3>wall time, s</h3><div class="duel"><div class="duel-head"><span>tofu-sonnet</span><span class="small">63.1 → 37.7, -40%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:19.4%"></div></div><span class="num">63.1</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:11.6%"></div></div><span class="num">37.7</span></div></div><div class="duel"><div class="duel-head"><span>claude-sonnet</span><span class="small">50.5 → 31.8, -37%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:15.5%"></div></div><span class="num">50.5</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:9.8%"></div></div><span class="num">31.8</span></div></div><div class="duel"><div class="duel-head"><span>omp-sonnet</span><span class="small">38.7 → 33.8, -13%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:11.9%"></div></div><span class="num">38.7</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:10.4%"></div></div><span class="num">33.8</span></div></div><div class="duel"><div class="duel-head"><span>tofu-gpt</span><span class="small">325.8 → 66.1, -80%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:100.0%"></div></div><span class="num">325.8</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:20.3%"></div></div><span class="num">66.1</span></div></div><div class="duel"><div class="duel-head"><span>codex-gpt</span><span class="small">110.8 → 83.4, -25%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:34.0%"></div></div><span class="num">110.8</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:25.6%"></div></div><span class="num">83.4</span></div></div></div>
+<div class="panel"><h3>total input</h3><div class="duel"><div class="duel-head"><span>tofu-sonnet</span><span class="small">234,241 → 75,837, -68%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:47.4%"></div></div><span class="num">234,241</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:15.3%"></div></div><span class="num">75,837</span></div></div><div class="duel"><div class="duel-head"><span>claude-sonnet</span><span class="small">151,458 → 71,443, -53%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:30.6%"></div></div><span class="num">151,458</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:14.5%"></div></div><span class="num">71,443</span></div></div><div class="duel"><div class="duel-head"><span>omp-sonnet</span><span class="small">54,983 → 65,280, +19%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:11.1%"></div></div><span class="num">54,983</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:13.2%"></div></div><span class="num">65,280</span></div></div><div class="duel"><div class="duel-head"><span>tofu-gpt</span><span class="small">494,279 → 78,985, -84%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:100.0%"></div></div><span class="num">494,279</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:16.0%"></div></div><span class="num">78,985</span></div></div><div class="duel"><div class="duel-head"><span>codex-gpt</span><span class="small">125,052 → 126,689, +1%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:25.3%"></div></div><span class="num">125,052</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:25.6%"></div></div><span class="num">126,689</span></div></div></div>
+<div class="panel"><h3>output</h3><div class="duel"><div class="duel-head"><span>tofu-sonnet</span><span class="small">3,874 → 2,892, -25%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:46.1%"></div></div><span class="num">3,874</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:34.4%"></div></div><span class="num">2,892</span></div></div><div class="duel"><div class="duel-head"><span>claude-sonnet</span><span class="small">4,316 → 1,747, -60%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:51.4%"></div></div><span class="num">4,316</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:20.8%"></div></div><span class="num">1,747</span></div></div><div class="duel"><div class="duel-head"><span>omp-sonnet</span><span class="small">1,854 → 2,435, +31%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:22.1%"></div></div><span class="num">1,854</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:29.0%"></div></div><span class="num">2,435</span></div></div><div class="duel"><div class="duel-head"><span>tofu-gpt</span><span class="small">8,401 → 3,488, -58%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:100.0%"></div></div><span class="num">8,401</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:41.5%"></div></div><span class="num">3,488</span></div></div><div class="duel"><div class="duel-head"><span>codex-gpt</span><span class="small">4,447 → 4,238, -5%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:52.9%"></div></div><span class="num">4,447</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:50.4%"></div></div><span class="num">4,238</span></div></div></div>
+<div class="panel"><h3>model requests</h3><div class="duel"><div class="duel-head"><span>tofu-sonnet</span><span class="small">11 → 5, -55%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:40.7%"></div></div><span class="num">11</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:18.5%"></div></div><span class="num">5</span></div></div><div class="duel"><div class="duel-head"><span>claude-sonnet</span><span class="small">6 → 3, -50%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:22.2%"></div></div><span class="num">6</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:11.1%"></div></div><span class="num">3</span></div></div><div class="duel"><div class="duel-head"><span>omp-sonnet</span><span class="small">4 → 5, +25%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:14.8%"></div></div><span class="num">4</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:18.5%"></div></div><span class="num">5</span></div></div><div class="duel"><div class="duel-head"><span>tofu-gpt</span><span class="small">27 → 7, -74%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:100.0%"></div></div><span class="num">27</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:25.9%"></div></div><span class="num">7</span></div></div><div class="duel"><div class="duel-head"><span>codex-gpt</span><span class="small">7 → 7, +0%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:25.9%"></div></div><span class="num">7</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:25.9%"></div></div><span class="num">7</span></div></div></div>
+<div class="panel"><h3>peak memory, MiB</h3><div class="duel"><div class="duel-head"><span>tofu-sonnet</span><span class="small">393 → 281, -28%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:45.1%"></div></div><span class="num">393</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:32.2%"></div></div><span class="num">281</span></div></div><div class="duel"><div class="duel-head"><span>claude-sonnet</span><span class="small">616 → 592, -4%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:70.6%"></div></div><span class="num">616</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:67.9%"></div></div><span class="num">592</span></div></div><div class="duel"><div class="duel-head"><span>omp-sonnet</span><span class="small">872 → 789, -10%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:100.0%"></div></div><span class="num">872</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:90.5%"></div></div><span class="num">789</span></div></div><div class="duel"><div class="duel-head"><span>tofu-gpt</span><span class="small">393 → 304, -23%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:45.1%"></div></div><span class="num">393</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:34.9%"></div></div><span class="num">304</span></div></div><div class="duel"><div class="duel-head"><span>codex-gpt</span><span class="small">543 → 496, -9%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:62.3%"></div></div><span class="num">543</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:56.9%"></div></div><span class="num">496</span></div></div></div>
+<div class="panel"><h3>CPU time, s</h3><div class="duel"><div class="duel-head"><span>tofu-sonnet</span><span class="small">53.0 → 30.4, -43%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:78.9%"></div></div><span class="num">53.0</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:45.3%"></div></div><span class="num">30.4</span></div></div><div class="duel"><div class="duel-head"><span>claude-sonnet</span><span class="small">57.5 → 48.5, -16%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:85.7%"></div></div><span class="num">57.5</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:72.2%"></div></div><span class="num">48.5</span></div></div><div class="duel"><div class="duel-head"><span>omp-sonnet</span><span class="small">55.5 → 52.2, -6%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:82.7%"></div></div><span class="num">55.5</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:77.8%"></div></div><span class="num">52.2</span></div></div><div class="duel"><div class="duel-head"><span>tofu-gpt</span><span class="small">55.8 → 29.3, -47%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:83.2%"></div></div><span class="num">55.8</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill tofu" style="width:43.7%"></div></div><span class="num">29.3</span></div></div><div class="duel"><div class="duel-head"><span>codex-gpt</span><span class="small">67.1 → 60.2, -10%</span></div><div class="bar"><span class="who">10-13</span><div class="track"><div class="fill then" style="width:100.0%"></div></div><span class="num">67.1</span></div><div class="bar"><span class="who">now</span><div class="track"><div class="fill rival" style="width:89.8%"></div></div><span class="num">60.2</span></div></div></div>
+</div>
+<h2>Where the wall time goes</h2><div class="legend"><span><i style="background:var(--s1)"></i>to first token</span><span><i style="background:var(--s2)"></i>after first token</span><span><i style="background:var(--s3)"></i>tools</span><span><i style="background:var(--s4)"></i>own work</span><span><i style="background:var(--s5)"></i>outside</span></div><div class="panel">
+<div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-1.json"><span class="who">tofu-sonnet 1</span><div class="stack"><span style="width:4.3%;background:var(--s1)" title="to first token 3.9 s"></span><span style="width:13.1%;background:var(--s2)" title="after first token 11.7 s"></span><span style="width:35.8%;background:var(--s3)" title="tools 31.9 s"></span><span style="width:0.0%;background:var(--s4)" title="own work 0.0 s"></span><span style="width:6.7%;background:var(--s5)" title="outside 5.9 s"></span></div><span class="num">53.4 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-2.json"><span class="who">tofu-sonnet 2</span><div class="stack"><span style="width:7.3%;background:var(--s1)" title="to first token 6.5 s"></span><span style="width:12.5%;background:var(--s2)" title="after first token 11.1 s"></span><span style="width:13.2%;background:var(--s3)" title="tools 11.7 s"></span><span style="width:0.0%;background:var(--s4)" title="own work 0.0 s"></span><span style="width:9.3%;background:var(--s5)" title="outside 8.3 s"></span></div><span class="num">37.7 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/tofu-sonnet-omitted-3.json"><span class="who">tofu-sonnet 3</span><div class="stack"><span style="width:5.5%;background:var(--s1)" title="to first token 4.9 s"></span><span style="width:12.5%;background:var(--s2)" title="after first token 11.1 s"></span><span style="width:10.5%;background:var(--s3)" title="tools 9.3 s"></span><span style="width:0.0%;background:var(--s4)" title="own work -0.0 s"></span><span style="width:6.4%;background:var(--s5)" title="outside 5.7 s"></span></div><span class="num">31.0 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-1.json"><span class="who">tofu-gpt 1</span><div class="stack"><span style="width:31.3%;background:var(--s1)" title="to first token 28.0 s"></span><span style="width:9.8%;background:var(--s2)" title="after first token 8.7 s"></span><span style="width:10.9%;background:var(--s3)" title="tools 9.7 s"></span><span style="width:0.1%;background:var(--s4)" title="own work 0.1 s"></span><span style="width:7.1%;background:var(--s5)" title="outside 6.4 s"></span></div><span class="num">52.8 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-2.json"><span class="who">tofu-gpt 2</span><div class="stack"><span style="width:45.3%;background:var(--s1)" title="to first token 40.4 s"></span><span style="width:8.9%;background:var(--s2)" title="after first token 8.0 s"></span><span style="width:12.9%;background:var(--s3)" title="tools 11.5 s"></span><span style="width:0.1%;background:var(--s4)" title="own work 0.1 s"></span><span style="width:6.8%;background:var(--s5)" title="outside 6.1 s"></span></div><span class="num">66.1 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/tofu-gpt-omitted-3.json"><span class="who">tofu-gpt 3</span><div class="stack"><span style="width:45.7%;background:var(--s1)" title="to first token 40.8 s"></span><span style="width:8.8%;background:var(--s2)" title="after first token 7.8 s"></span><span style="width:12.3%;background:var(--s3)" title="tools 11.0 s"></span><span style="width:0.1%;background:var(--s4)" title="own work 0.1 s"></span><span style="width:7.1%;background:var(--s5)" title="outside 6.3 s"></span></div><span class="num">66.1 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/codex-gpt-1.json"><span class="who">codex-gpt 1</span><div class="stack"><span style="width:26.6%;background:var(--s1)" title="to first token 23.8 s"></span><span style="width:29.1%;background:var(--s2)" title="after first token 26.0 s"></span><span style="width:30.0%;background:var(--s3)" title="tools 26.8 s"></span><span style="width:3.2%;background:var(--s4)" title="own work 2.9 s"></span><span style="width:4.4%;background:var(--s5)" title="outside 4.0 s"></span></div><span class="num">83.4 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/codex-gpt-2.json"><span class="who">codex-gpt 2</span><div class="stack"><span style="width:38.9%;background:var(--s1)" title="to first token 34.7 s"></span><span style="width:30.4%;background:var(--s2)" title="after first token 27.1 s"></span><span style="width:24.5%;background:var(--s3)" title="tools 21.9 s"></span><span style="width:2.6%;background:var(--s4)" title="own work 2.3 s"></span><span style="width:3.5%;background:var(--s5)" title="outside 3.1 s"></span></div><span class="num">89.2 s</span></div>
+<div class="bar" title="runs/0.5.15-rc7/codex-gpt-3.json"><span class="who">codex-gpt 3</span><div class="stack"><span style="width:28.0%;background:var(--s1)" title="to first token 25.0 s"></span><span style="width:20.0%;background:var(--s2)" title="after first token 17.8 s"></span><span style="width:24.4%;background:var(--s3)" title="tools 21.8 s"></span><span style="width:2.4%;background:var(--s4)" title="own work 2.1 s"></span><span style="width:3.4%;background:var(--s5)" title="outside 3.0 s"></span></div><span class="num">69.8 s</span></div>
+<p class="small">Claude Code and omp do not time their requests, so only tofu and codex have a split.</p></div>
+<h2>Where tofu loses</h2>
+<div class="scroll"><table><thead><tr><th>pairing</th><th>measure</th><th>tofu</th><th>rival</th><th>tofu is</th><th>difference</th><th>on 2026-10-13</th></tr></thead><tbody>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>fresh input</td><td>2,784 [2,778 to 4,177]</td><td>6 [6 to 8]</td><td>464x more</td><td>+2,778 tokens</td><td>loss</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>output</td><td>2,892 [2,758 to 2,997]</td><td>1,747 [1,733 to 2,092]</td><td>1.7x more</td><td>+1,145 tokens</td><td>tie</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>memory model calls</td><td>3 [3 to 4]</td><td>0</td><td>3 more</td><td>+3</td><td>not recorded</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>fresh input</td><td>2,784 [2,778 to 4,177]</td><td>12 [10 to 12]</td><td>232x more</td><td>+2,772 tokens</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>output</td><td>2,892 [2,758 to 2,997]</td><td>2,435 [1,308 to 2,490]</td><td>1.2x more</td><td>+457 tokens</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>memory model calls</td><td>3 [3 to 4]</td><td>0</td><td>3 more</td><td>+3</td><td>not recorded</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>fresh input</td><td>28,897 [17,161 to 28,900]</td><td>10,677 [10,337 to 12,213]</td><td>2.7x more</td><td>+18,220 tokens</td><td>tie</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>memory model calls</td><td>3</td><td>0</td><td>3 more</td><td>+3</td><td>not recorded</td></tr>
+</tbody></table></div>
+<h2>Where it is a tie</h2>
+<div class="scroll"><table><thead><tr><th>pairing</th><th>measure</th><th>tofu</th><th>rival</th><th>tofu is</th><th>difference</th><th>on 2026-10-13</th></tr></thead><tbody>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>quality</td><td>10</td><td>10</td><td>level</td><td>+0 points</td><td>tie</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>wall time, s</td><td>37.7 [31.0 to 53.4]</td><td>31.8 [30.6 to 38.1]</td><td>1.2x slower</td><td>+5.9 s</td><td>loss</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>model requests</td><td>5 [4 to 5]</td><td>3 [3 to 4]</td><td>1.7x more</td><td>+2</td><td>loss</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>total input</td><td>75,837 [61,308 to 76,306]</td><td>71,443 [71,244 to 95,937]</td><td>1.1x more</td><td>+4,394 tokens</td><td>loss</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>failed tool calls</td><td>0 [0 to 1]</td><td>0</td><td>level</td><td>+0</td><td>loss</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>tool time, s</td><td>11.7 [9.3 to 31.9]</td><td>17.4 [17.3 to 21.5]</td><td>1.5x less</td><td>-5.7 s</td><td>tie</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>quality</td><td>10</td><td>10</td><td>level</td><td>+0 points</td><td>tie</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>wall time, s</td><td>37.7 [31.0 to 53.4]</td><td>33.8 [31.6 to 47.8]</td><td>1.1x slower</td><td>+3.9 s</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>CPU time, s</td><td>30.4 [26.5 to 46.9]</td><td>52.2 [45.2 to 55.0]</td><td>1.7x less</td><td>-21.8 s</td><td>tie</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>model requests</td><td>5 [4 to 5]</td><td>5 [4 to 5]</td><td>level</td><td>+0</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>total input</td><td>75,837 [61,308 to 76,306]</td><td>65,280 [54,782 to 70,848]</td><td>1.2x more</td><td>+10,557 tokens</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>cache write</td><td>5,675 [5,589 to 5,980]</td><td>5,080 [2,904 to 16,377]</td><td>1.1x more</td><td>+595 tokens</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>failed tool calls</td><td>0 [0 to 1]</td><td>0</td><td>level</td><td>+0</td><td>loss</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>tool time, s</td><td>11.7 [9.3 to 31.9]</td><td>14.5 [11.9 to 16.0]</td><td>1.2x less</td><td>-2.8 s</td><td>loss</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>quality</td><td>10</td><td>10</td><td>level</td><td>+0 points</td><td>tie</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>model requests</td><td>7 [7 to 8]</td><td>7</td><td>level</td><td>+0</td><td>loss</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>cache write</td><td>0</td><td>0</td><td>level</td><td>+0 tokens</td><td>tie</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>output</td><td>3,488 [3,351 to 3,987]</td><td>4,238 [3,333 to 5,082]</td><td>1.2x fewer</td><td>-750 tokens</td><td>tie</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>failed tool calls</td><td>0</td><td>0</td><td>level</td><td>+0</td><td>tie</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>time to first token, s</td><td>40.4 [28.0 to 40.8]</td><td>25.0 [23.8 to 34.7]</td><td>1.6x more</td><td>+15.4 s</td><td>loss</td></tr>
+</tbody></table></div>
+<details><summary>Every win as a table</summary><h2>Where tofu wins</h2>
+<div class="scroll"><table><thead><tr><th>pairing</th><th>measure</th><th>tofu</th><th>rival</th><th>tofu is</th><th>difference</th><th>on 2026-10-13</th></tr></thead><tbody>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>CPU time, s</td><td>30.4 [26.5 to 46.9]</td><td>48.5 [48.0 to 59.0]</td><td>1.6x less</td><td>-18.1 s</td><td>tie</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>peak memory, MiB</td><td>281 [275 to 297]</td><td>592 [577 to 624]</td><td>2.1x less</td><td>-311 MiB</td><td>win</td></tr>
+<tr><td>Claude Code, claude-sonnet-5-5</td><td>cache write</td><td>5,675 [5,589 to 5,980]</td><td>7,616 [7,559 to 8,821]</td><td>1.3x fewer</td><td>-1,941 tokens</td><td>tie</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>peak memory, MiB</td><td>281 [275 to 297]</td><td>789 [722 to 826]</td><td>2.8x less</td><td>-508 MiB</td><td>win</td></tr>
+<tr><td>omp, claude-sonnet-5-5</td><td>edit call p50, ms</td><td>6 [5 to 9.5]</td><td>126.5 [116 to 137]</td><td>21x less</td><td>-120.5 ms</td><td>win</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>wall time, s</td><td>66.1 [52.8 to 66.1]</td><td>83.4 [69.8 to 89.2]</td><td>1.3x faster</td><td>-17.3 s</td><td>tie</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>CPU time, s</td><td>29.3 [26.0 to 31.6]</td><td>60.2 [59.5 to 70.7]</td><td>2.1x less</td><td>-30.9 s</td><td>win</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>peak memory, MiB</td><td>304 [304 to 307]</td><td>496 [462 to 528]</td><td>1.6x less</td><td>-192 MiB</td><td>win</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>total input</td><td>78,985 [77,921 to 90,596]</td><td>126,689 [124,597 to 131,509]</td><td>1.6x fewer</td><td>-47,704 tokens</td><td>loss</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>tool time, s</td><td>11.0 [9.7 to 11.5]</td><td>21.9 [21.8 to 26.8]</td><td>2.0x less</td><td>-10.9 s</td><td>win</td></tr>
+<tr><td>codex, gpt-5.6-sol</td><td>edit call p50, ms</td><td>5 [2.5 to 10]</td><td>1,842.5 [749 to 2,863]</td><td>368x less</td><td>-1,837.5 ms</td><td>win</td></tr>
+</tbody></table></div>
+</details>
+<details><summary>Medians per arm, with spread</summary><h2>Medians per arm, lowest to highest in brackets</h2>
+<div class="scroll"><table><thead><tr><th>arm</th><th>runs</th><th>quality</th><th>wall time, s</th><th>CPU time, s</th><th>peak memory, MiB</th><th>model requests</th><th>total input</th><th>fresh input</th><th>cache write</th><th>output</th><th>memory model calls</th><th>failed tool calls</th><th>tool time, s</th><th>time to first token, s</th><th>edit call p50, ms</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>3</td><td>10</td><td>37.7 [31.0 to 53.4]</td><td>30.4 [26.5 to 46.9]</td><td>281 [275 to 297]</td><td>5 [4 to 5]</td><td>75,837 [61,308 to 76,306]</td><td>2,784 [2,778 to 4,177]</td><td>5,675 [5,589 to 5,980]</td><td>2,892 [2,758 to 2,997]</td><td>3 [3 to 4]</td><td>0 [0 to 1]</td><td>11.7 [9.3 to 31.9]</td><td>4.9 [3.9 to 6.5]</td><td>6 [5 to 9.5]</td></tr>
+<tr><td>claude-sonnet</td><td>3</td><td>10</td><td>31.8 [30.6 to 38.1]</td><td>48.5 [48.0 to 59.0]</td><td>592 [577 to 624]</td><td>3 [3 to 4]</td><td>71,443 [71,244 to 95,937]</td><td>6 [6 to 8]</td><td>7,616 [7,559 to 8,821]</td><td>1,747 [1,733 to 2,092]</td><td>0</td><td>0</td><td>17.4 [17.3 to 21.5]</td><td>not recorded</td><td>not recorded</td></tr>
+<tr><td>omp-sonnet</td><td>3</td><td>10</td><td>33.8 [31.6 to 47.8]</td><td>52.2 [45.2 to 55.0]</td><td>789 [722 to 826]</td><td>5 [4 to 5]</td><td>65,280 [54,782 to 70,848]</td><td>12 [10 to 12]</td><td>5,080 [2,904 to 16,377]</td><td>2,435 [1,308 to 2,490]</td><td>0</td><td>0</td><td>14.5 [11.9 to 16.0]</td><td>not recorded</td><td>126.5 [116 to 137]</td></tr>
+<tr><td>tofu-gpt</td><td>3</td><td>10</td><td>66.1 [52.8 to 66.1]</td><td>29.3 [26.0 to 31.6]</td><td>304 [304 to 307]</td><td>7 [7 to 8]</td><td>78,985 [77,921 to 90,596]</td><td>28,897 [17,161 to 28,900]</td><td>0</td><td>3,488 [3,351 to 3,987]</td><td>3</td><td>0</td><td>11.0 [9.7 to 11.5]</td><td>40.4 [28.0 to 40.8]</td><td>5 [2.5 to 10]</td></tr>
+<tr><td>codex-gpt</td><td>3</td><td>10</td><td>83.4 [69.8 to 89.2]</td><td>60.2 [59.5 to 70.7]</td><td>496 [462 to 528]</td><td>7</td><td>126,689 [124,597 to 131,509]</td><td>10,677 [10,337 to 12,213]</td><td>0</td><td>4,238 [3,333 to 5,082]</td><td>0</td><td>0</td><td>21.9 [21.8 to 26.8]</td><td>25.0 [23.8 to 34.7]</td><td>1,842.5 [749 to 2,863]</td></tr>
+</tbody></table></div>
+</details>
+<details><summary>Method, parity and conditions</summary><h2>Method</h2>
+<div class="scroll"><table><thead><tr><th>item</th><th>what it is</th></tr></thead><tbody>
+<tr><td>task</td><td>one small Go package, <code>testdata/seed</code>, and one prompt, <code>testdata/prompt.txt</code>: a bug, a feature, a rename, a question and a new file</td></tr>
+<tr><td>quality</td><td>hidden tests from <code>testdata/hidden</code> plus the rubric in <code>score.go</code>: visible tests, gofmt, go vet, the old name gone, no stray files</td></tr>
+<tr><td>verdict</td><td>a win or a loss only when the lowest to highest spreads of the two arms do not meet; otherwise a tie</td></tr>
+<tr><td>order</td><td>one run at a time behind the rival slot, on the owner&#39;s subscriptions, no money</td></tr>
+<tr><td>network</td><td>this bench needs the network and spends subscription quota; the report itself reads only <code>runs/</code></td></tr>
+<tr><td>rerun</td><td><code>go run ./bench/rivals run -arm &lt;arm&gt; -rep &lt;n&gt; -setting omitted -batch &lt;batch&gt; -slot &lt;dir&gt;</code>, then <code>go run ./bench/rivals report -batch &lt;batch&gt;</code></td></tr>
+</tbody></table></div>
+<h2>Parity</h2>
+<p>Read off the rival&#39;s own stdout or rollout of the first run of each arm; the models and the thinking tofu sent are in the conditions table.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>effort, and how it was set</th><th>thinking summary, and what shows it</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>medium, <code>--effort medium</code></td><td>none, <code>--thinking-summary omitted</code></td></tr>
+<tr><td>claude-sonnet</td><td>medium, <code>--effort medium</code></td><td>none: Claude Code sends <code>display</code> only when <code>showThinkingSummaries</code> is set, it is not, and its thinking came back empty</td></tr>
+<tr><td>omp-sonnet</td><td>medium, <code>--thinking medium</code></td><td>none: <code>omitThinking: true</code> in <code>testdata/omp-overlay.yml</code>, and its thinking came back empty</td></tr>
+<tr><td>tofu-gpt</td><td>medium, <code>--effort medium</code></td><td>none, <code>--thinking-summary omitted</code></td></tr>
+<tr><td>codex-gpt</td><td>medium, <code>-c model_reasoning_effort=&#34;medium&#34;</code></td><td>none: the rollout <code>turn_context</code> says <code>summary: none</code></td></tr>
+</tbody></table></div>
+<h2>Caveats</h2>
+<div class="scroll"><table><thead><tr><th>measure</th><th>caveat</th></tr></thead><tbody>
+<tr><td>memory model calls</td><td>counted only in batch runs; the earlier runs did not record them</td></tr>
+<tr><td>time to first token</td><td>codex&#39;s first token is its first finished output item, so its figure is an upper bound</td></tr>
+<tr><td>tool time</td><td>tofu times each call itself; Claude Code, omp and codex are timed from the call event on stdout to its result</td></tr>
+<tr><td>edit call p50</td><td>the median edit call of each run; Claude Code edits through bash, so it has no edit row</td></tr>
+</tbody></table></div>
+<h2>Conditions</h2>
+<div class="scroll"><table><thead><tr><th>arm</th><th>build on 2026-10-13</th><th>build now</th><th>models the responses reported</th><th>thinking sent</th><th>sub-agents</th><th>credential</th><th>machine</th><th>dates</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>version   0.5.13-fix1+dev commit not recorded</td><td>0.5.15-rc7 commit 9fa88559</td><td>claude-sonnet-5-5, claude-haiku-4-5-20251001</td><td>thinking {&#34;type&#34;:&#34;adaptive&#34;}</td><td>0</td><td>tofu&#39;s own claude-sub login, spend subscription windows 5h and 7d, no money</td><td>windows/amd64, 32 logical CPUs</td><td>2026-10-17 01:52 to 2026-10-17 02:05</td></tr>
+<tr><td>claude-sonnet</td><td>2.1.296 (Claude Code)</td><td>2.1.301 (Claude Code)</td><td>claude-sonnet-5-5</td><td>not read</td><td>0</td><td>apiKeySource none</td><td>windows/amd64, 32 logical CPUs</td><td>2026-10-17 01:53 to 2026-10-17 02:05</td></tr>
+<tr><td>omp-sonnet</td><td>omp/18.3.2</td><td>omp/18.3.2</td><td>claude-sonnet-5-5</td><td>not read</td><td>0</td><td>provider anthropic through omp&#39;s own login, credential 3</td><td>windows/amd64, 32 logical CPUs</td><td>2026-10-17 01:55 to 2026-10-17 02:06</td></tr>
+<tr><td>tofu-gpt</td><td>version   0.5.13-fix1+dev commit not recorded</td><td>0.5.15-rc7 commit 9fa88559</td><td>gpt-5.6-sol, claude-haiku-4-5-20251001</td><td>reasoning {&#34;context&#34;:&#34;all_turns&#34;,&#34;effort&#34;:&#34;medium&#34;}</td><td>0</td><td>tofu&#39;s own codex-sub login, spend subscription windows 5h and 7d, no money</td><td>windows/amd64, 32 logical CPUs</td><td>2026-10-17 01:56 to 2026-10-17 02:07</td></tr>
+<tr><td>codex-gpt</td><td>codex-cli 0.155.1</td><td>codex-cli 0.155.1</td><td>gpt-5.6-sol</td><td>not read</td><td>0</td><td>Logged in using ChatGPT</td><td>windows/amd64, 32 logical CPUs</td><td>2026-10-17 01:57 to 2026-10-17 02:08</td></tr>
+</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>arm</th><th>posture</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>--wire anthropic --gate shadow --no-instructions, a fresh HOME per run holding a copy of the owner&#39;s claude-sub login, scratch project folder</td></tr>
+<tr><td>claude-sonnet</td><td>--permission-mode bypassPermissions --safe-mode</td></tr>
+<tr><td>omp-sonnet</td><td>--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay</td></tr>
+<tr><td>tofu-gpt</td><td>--wire codex --gate shadow --no-instructions, a fresh HOME per run holding a copy of the owner&#39;s codex-sub login, scratch project folder</td></tr>
+<tr><td>codex-gpt</td><td>--sandbox workspace-write with the Go cache added, --ignore-rules</td></tr>
+</tbody></table></div>
+<h2>Runs that fell short or were set aside</h2>
+<div class="scroll"><table><thead><tr><th>run file</th><th>arm</th><th>date</th><th>exit</th><th>quality</th><th>notes</th></tr></thead><tbody>
+<tr><td><code>runs/tofu-sonnet-2.json</code></td><td>tofu-sonnet</td><td>2026-10-13 16:40</td><td>0</td><td>9 of 10</td><td>turn outcome stopped; 1 sub-agents</td></tr>
+<tr><td><code>runs/tofu-gpt-2.json</code></td><td>tofu-gpt</td><td>2026-10-13 17:05</td><td>0</td><td>4 of 10</td><td>turn outcome stopped; hidden bug: hidden_bug_test.go:19: Page(5 items, 3, 2) = &#34;&#34;, want &#34;e&#34;; hidden feature: .\hidden_feature_test.go:10:16: inv.Remove undefined (type *Inventory has no field or method Remove); hidden rename: .\hidden_rename_test.go:10:14: c.Subtotal undefined (type Cart has no field or method Subtotal); hidden search: hidden_search_test.go:12: open ANSWER.txt: The system cannot find the file specified.; hidden newfile: .\hidden_newfile_test.go:15:12: undefined: ExportCSV</td></tr>
+<tr><td><code>runs/0.5.15-rc7/discarded/tofu-sonnet-omitted-1.json</code></td><td>tofu-sonnet</td><td>2026-10-17 01:36</td><td>0</td><td>9 of 10</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped; stray: rtk/history.db</td></tr>
+</tbody></table></div>
+</details>
+<details><summary>Appendix: every run, every call, other tasks</summary><h2>Appendix</h2>
+<p>Every table below is printed from the run files as they are.</p>
+<p>Process tree: a Windows job object holds the whole process tree from its first instruction: CPU is the job&#39;s total user plus kernel time, peak tree RSS is the largest sum of every live member&#39;s working set sampled every 250 ms, peak commit is the job&#39;s PeakJobMemoryUsed.</p>
+<h3>Every run</h3>
+<div class="scroll"><table><thead><tr><th>arm</th><th>rep</th><th>exit</th><th>wall s</th><th>CPU s</th><th>peak tree RSS MiB</th><th>peak commit MiB</th><th>processes</th><th>conversation requests</th><th>fresh in</th><th>cache read</th><th>cache write</th><th>out</th><th>calls</th><th>failed</th><th>retried</th><th>hidden of 5</th><th>rubric of 5</th><th>lines +/-</th><th>notes</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>1</td><td>0</td><td>53.4</td><td>46.9</td><td>275</td><td>338</td><td>382</td><td>5</td><td>2778</td><td>67079</td><td>5980</td><td>2892</td><td>12</td><td>1</td><td>1</td><td>5</td><td>5</td><td>+41/-6</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped</td></tr>
+<tr><td>tofu-sonnet</td><td>2</td><td>0</td><td>37.7</td><td>30.4</td><td>297</td><td>333</td><td>280</td><td>4</td><td>4177</td><td>51542</td><td>5589</td><td>2997</td><td>11</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+85/-6</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped</td></tr>
+<tr><td>tofu-sonnet</td><td>3</td><td>0</td><td>31.0</td><td>26.5</td><td>281</td><td>333</td><td>284</td><td>5</td><td>2784</td><td>67847</td><td>5675</td><td>2758</td><td>11</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+85/-6</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped</td></tr>
+<tr><td>claude-sonnet</td><td>1</td><td>0</td><td>38.1</td><td>59.0</td><td>592</td><td>1028</td><td>599</td><td>3</td><td>6</td><td>62616</td><td>8821</td><td>2092</td><td>2</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+85/-6</td><td></td></tr>
+<tr><td>claude-sonnet</td><td>2</td><td>0</td><td>30.6</td><td>48.0</td><td>624</td><td>1034</td><td>516</td><td>3</td><td>6</td><td>63622</td><td>7616</td><td>1747</td><td>2</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+82/-6</td><td></td></tr>
+<tr><td>claude-sonnet</td><td>3</td><td>0</td><td>31.8</td><td>48.5</td><td>577</td><td>911</td><td>521</td><td>4</td><td>8</td><td>88370</td><td>7559</td><td>1733</td><td>3</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+82/-6</td><td></td></tr>
+<tr><td>omp-sonnet</td><td>1</td><td>0</td><td>47.8</td><td>52.2</td><td>826</td><td>1447</td><td>298</td><td>5</td><td>12</td><td>54459</td><td>16377</td><td>2490</td><td>10</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+85/-6</td><td></td></tr>
+<tr><td>omp-sonnet</td><td>2</td><td>0</td><td>33.8</td><td>55.0</td><td>789</td><td>1437</td><td>390</td><td>5</td><td>12</td><td>62364</td><td>2904</td><td>1308</td><td>4</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+41/-6</td><td></td></tr>
+<tr><td>omp-sonnet</td><td>3</td><td>0</td><td>31.6</td><td>45.2</td><td>722</td><td>1357</td><td>293</td><td>4</td><td>10</td><td>49692</td><td>5080</td><td>2435</td><td>10</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+85/-6</td><td></td></tr>
+<tr><td>tofu-gpt</td><td>1</td><td>0</td><td>52.8</td><td>26.0</td><td>304</td><td>333</td><td>288</td><td>7</td><td>28897</td><td>49024</td><td>0</td><td>3351</td><td>19</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+103/-6</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped</td></tr>
+<tr><td>tofu-gpt</td><td>2</td><td>0</td><td>66.1</td><td>31.6</td><td>307</td><td>334</td><td>288</td><td>8</td><td>28900</td><td>61696</td><td>0</td><td>3488</td><td>20</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+100/-6</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped</td></tr>
+<tr><td>tofu-gpt</td><td>3</td><td>0</td><td>66.1</td><td>29.3</td><td>304</td><td>331</td><td>288</td><td>7</td><td>17161</td><td>61824</td><td>0</td><td>3987</td><td>19</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+104/-6</td><td>setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted; turn outcome stopped</td></tr>
+<tr><td>codex-gpt</td><td>1</td><td>0</td><td>83.4</td><td>70.7</td><td>496</td><td>593</td><td>510</td><td>7</td><td>10677</td><td>113920</td><td>0</td><td>4238</td><td>6</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+130/-8</td><td></td></tr>
+<tr><td>codex-gpt</td><td>2</td><td>0</td><td>89.2</td><td>59.5</td><td>462</td><td>589</td><td>499</td><td>7</td><td>12213</td><td>119296</td><td>0</td><td>5082</td><td>7</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+109/-6</td><td></td></tr>
+<tr><td>codex-gpt</td><td>3</td><td>0</td><td>69.8</td><td>60.2</td><td>528</td><td>594</td><td>485</td><td>7</td><td>10337</td><td>116352</td><td>0</td><td>3333</td><td>6</td><td>0</td><td>0</td><td>5</td><td>5</td><td>+93/-7</td><td></td></tr>
+</tbody></table></div>
+<h3>Where the wall time goes</h3>
+<p>One row per run whose transcript times each model request: tofu from <code>tofu session request</code>, codex from its rollout file, where the first token is the first finished output item and so an upper bound. Own work is the time between requests that no tool call covers, and outside is the wall clock before the first request and after the last.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>rep</th><th>wall s</th><th>requests</th><th>model wait s</th><th>to first token s</th><th>after first token s</th><th>tools s</th><th>own work s</th><th>outside s</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>1</td><td>53.4</td><td>5</td><td>15.6</td><td>3.9</td><td>11.7</td><td>31.9</td><td>0.0</td><td>5.9</td></tr>
+<tr><td>tofu-sonnet</td><td>2</td><td>37.7</td><td>4</td><td>17.7</td><td>6.5</td><td>11.1</td><td>11.7</td><td>0.0</td><td>8.3</td></tr>
+<tr><td>tofu-sonnet</td><td>3</td><td>31.0</td><td>5</td><td>16.0</td><td>4.9</td><td>11.1</td><td>9.3</td><td>-0.0</td><td>5.7</td></tr>
+<tr><td>tofu-gpt</td><td>1</td><td>52.8</td><td>7</td><td>36.7</td><td>28.0</td><td>8.7</td><td>9.7</td><td>0.1</td><td>6.4</td></tr>
+<tr><td>tofu-gpt</td><td>2</td><td>66.1</td><td>8</td><td>48.4</td><td>40.4</td><td>8.0</td><td>11.5</td><td>0.1</td><td>6.1</td></tr>
+<tr><td>tofu-gpt</td><td>3</td><td>66.1</td><td>7</td><td>48.6</td><td>40.8</td><td>7.8</td><td>11.0</td><td>0.1</td><td>6.3</td></tr>
+<tr><td>codex-gpt</td><td>1</td><td>83.4</td><td>7</td><td>49.8</td><td>23.8</td><td>26.0</td><td>26.8</td><td>2.9</td><td>4.0</td></tr>
+<tr><td>codex-gpt</td><td>2</td><td>89.2</td><td>7</td><td>61.9</td><td>34.7</td><td>27.1</td><td>21.9</td><td>2.3</td><td>3.1</td></tr>
+<tr><td>codex-gpt</td><td>3</td><td>69.8</td><td>7</td><td>42.8</td><td>25.0</td><td>17.8</td><td>21.8</td><td>2.1</td><td>3.0</td></tr>
+</tbody></table></div>
+<p>Every timed request of an arm pooled, fitted as a fixed wait plus a time per output token, least squares.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>requests</th><th>fixed s per request</th><th>ms per output token</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>14</td><td>1.2</td><td>4.4</td></tr>
+<tr><td>tofu-gpt</td><td>22</td><td>1.7</td><td>10.0</td></tr>
+<tr><td>codex-gpt</td><td>21</td><td>1.0</td><td>10.5</td></tr>
+</tbody></table></div>
+<h3>Tool against tool</h3>
+<p>Every call of the runs pooled; calls per run is the median. tofu reports each call&#39;s duration itself, the other three are timed here from the call event on stdout to its result.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>kind</th><th>calls per run</th><th>p50 ms</th><th>p95 ms</th><th>max ms</th><th>failed</th><th>untimed</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>read</td><td>4</td><td>12</td><td>17</td><td>17</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-sonnet</td><td>edit</td><td>1</td><td>6</td><td>11</td><td>11</td><td>1</td><td>0</td></tr>
+<tr><td>tofu-sonnet</td><td>write</td><td>3</td><td>2</td><td>4</td><td>4</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-sonnet</td><td>search</td><td>2</td><td>3</td><td>15</td><td>15</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-sonnet</td><td>bash</td><td>1</td><td>9280</td><td>29287</td><td>29287</td><td>0</td><td>0</td></tr>
+<tr><td>claude-sonnet</td><td>bash</td><td>2</td><td>4283</td><td>17223</td><td>17223</td><td>0</td><td>0</td></tr>
+<tr><td>omp-sonnet</td><td>read</td><td>3</td><td>32</td><td>75</td><td>75</td><td>0</td><td>0</td></tr>
+<tr><td>omp-sonnet</td><td>edit</td><td>1</td><td>116</td><td>137</td><td>137</td><td>0</td><td>0</td></tr>
+<tr><td>omp-sonnet</td><td>write</td><td>3</td><td>13</td><td>90</td><td>90</td><td>0</td><td>0</td></tr>
+<tr><td>omp-sonnet</td><td>search</td><td>2</td><td>77</td><td>135</td><td>135</td><td>0</td><td>0</td></tr>
+<tr><td>omp-sonnet</td><td>bash</td><td>1</td><td>11479</td><td>14812</td><td>14812</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-gpt</td><td>read</td><td>8</td><td>1</td><td>2</td><td>2</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-gpt</td><td>edit</td><td>1</td><td>4</td><td>10</td><td>10</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-gpt</td><td>write</td><td>3</td><td>1</td><td>2</td><td>2</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-gpt</td><td>search</td><td>3</td><td>2</td><td>16</td><td>16</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-gpt</td><td>bash</td><td>2</td><td>69</td><td>11413</td><td>11413</td><td>0</td><td>0</td></tr>
+<tr><td>tofu-gpt</td><td>other</td><td>2</td><td>2</td><td>31</td><td>31</td><td>0</td><td>0</td></tr>
+<tr><td>codex-gpt</td><td>edit</td><td>2</td><td>850</td><td>4876</td><td>4876</td><td>0</td><td>0</td></tr>
+<tr><td>codex-gpt</td><td>bash</td><td>4</td><td>1752</td><td>13306</td><td>13306</td><td>0</td><td>0</td></tr>
+</tbody></table></div>
+<h3>Task bigread, from <code>runs/bigread</code></h3>
+<p>Prompt, rubric and seed in <code>testdata/tasks/bigread</code>. Memory or judge calls are the calls outside the conversation, tofu&#39;s memory model and omp&#39;s auto-thinking judge.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>tool version</th><th>runs</th><th>quality of 6</th><th>conversation requests</th><th>memory or judge calls</th><th>fresh in</th><th>cache read</th><th>cache write</th><th>total in</th><th>out</th><th>wall s</th><th>peak tree RSS MiB</th><th>failed calls</th><th>sub-agents</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>0.5.14 commit b0e2401d</td><td>3</td><td>6 [6 to 6]</td><td>6 [6 to 6]</td><td>3 [3 to 3]</td><td>5110 [5023 to 5149]</td><td>120510 [120299 to 121263]</td><td>3101 [3081 to 3445]</td><td>128721 [128403 to 129857]</td><td>1063 [966 to 1085]</td><td>21.5 [20.8 to 22.8]</td><td>57.5 [53.3 to 70.3]</td><td>0 [0 to 0]</td><td>0 [0 to 0]</td></tr>
+<tr><td>omp-sonnet</td><td>omp/18.3.2</td><td>3</td><td>6 [6 to 6]</td><td>7 [7 to 7]</td><td>0 [0 to 0]</td><td>16 [16 to 16]</td><td>91850 [91078 to 91884]</td><td>4649 [4246 to 4662]</td><td>96528 [95340 to 96549]</td><td>982 [980 to 1041]</td><td>22.6 [20.4 to 23.2]</td><td>537.6 [531.9 to 541.7]</td><td>0 [0 to 0]</td><td>0 [0 to 0]</td></tr>
+</tbody></table></div>
+<h3>Task longedit, from <code>runs/longedit</code></h3>
+<p>Prompt, rubric and seed in <code>testdata/tasks/longedit</code>. Memory or judge calls are the calls outside the conversation, tofu&#39;s memory model and omp&#39;s auto-thinking judge.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>tool version</th><th>runs</th><th>quality of 10</th><th>conversation requests</th><th>memory or judge calls</th><th>fresh in</th><th>cache read</th><th>cache write</th><th>total in</th><th>out</th><th>wall s</th><th>peak tree RSS MiB</th><th>failed calls</th><th>sub-agents</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>0.5.14 commit b0e2401d</td><td>3</td><td>10 [10 to 10]</td><td>16 [12 to 18]</td><td>8 [7 to 9]</td><td>11296 [10118 to 13413]</td><td>418778 [277977 to 466108]</td><td>45990 [35919 to 52822]</td><td>478181 [340917 to 513323]</td><td>14937 [13270 to 19335]</td><td>146.4 [143.5 to 167.5]</td><td>347.1 [344.3 to 347.5]</td><td>14 [6 to 23]</td><td>1 [1 to 1]</td></tr>
+<tr><td>omp-sonnet</td><td>omp/18.3.2</td><td>3</td><td>10 [10 to 10]</td><td>7 [6 to 7]</td><td>0 [0 to 0]</td><td>16 [14 to 16]</td><td>114697 [93075 to 114726]</td><td>11505 [9727 to 12016]</td><td>126247 [102816 to 126729]</td><td>6185 [4197 to 6210]</td><td>91.4 [80.6 to 116.6]</td><td>778.2 [762.9 to 886.6]</td><td>0 [0 to 0]</td><td>0 [0 to 0]</td></tr>
+</tbody></table></div>
+<h3>Task subagents, from <code>runs/subagents</code></h3>
+<p>Prompt, rubric and seed in <code>testdata/tasks/subagents</code>. Memory or judge calls are the calls outside the conversation, tofu&#39;s memory model and omp&#39;s auto-thinking judge.</p>
+<div class="scroll"><table><thead><tr><th>arm</th><th>tool version</th><th>runs</th><th>quality of 6</th><th>conversation requests</th><th>memory or judge calls</th><th>fresh in</th><th>cache read</th><th>cache write</th><th>total in</th><th>out</th><th>wall s</th><th>peak tree RSS MiB</th><th>failed calls</th><th>sub-agents</th></tr></thead><tbody>
+<tr><td>tofu-sonnet</td><td>0.5.14 commit b0e2401d</td><td>3</td><td>6 [6 to 6]</td><td>26 [25 to 27]</td><td>8 [7 to 9]</td><td>17252 [17114 to 23695]</td><td>321872 [311789 to 349454]</td><td>21765 [20898 to 26301]</td><td>365425 [350668 to 394047]</td><td>6965 [6374 to 7001]</td><td>74.0 [71.9 to 80.1]</td><td>362.5 [353.6 to 367.8]</td><td>0 [0 to 1]</td><td>6 [6 to 6]</td></tr>
+<tr><td>omp-sonnet</td><td>omp/18.3.2</td><td>3</td><td>6 [6 to 6]</td><td>31 [30 to 46]</td><td>6 [0 to 7]</td><td>2839 [76 to 2895]</td><td>387604 [266793 to 574561]</td><td>65005 [57744 to 123356]</td><td>455504 [324613 to 700756]</td><td>14501 [7325 to 21323]</td><td>82.9 [80.3 to 124.6]</td><td>1080.0 [1046.2 to 1154.8]</td><td>4 [3 to 9]</td><td>6 [6 to 7]</td></tr>
+</tbody></table></div>
+</details>
+</main></body></html>
