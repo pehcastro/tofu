@@ -96,11 +96,14 @@ impl Store {
         self.session(session).cron = Some(state);
     }
 
-    pub fn shells_now(&mut self, state: &SessionState) -> Result<(), ModelError> {
-        match self.sessions.get_mut(&state.session) {
-            Some(session) => session.shells_now(&state.shells),
-            None => Ok(()),
+    pub fn state_now(&mut self, state: &SessionState) -> Result<(), ModelError> {
+        let Some(session) = self.sessions.get_mut(&state.session) else {
+            return Ok(());
+        };
+        if let Some(turn) = state.turn.as_ref().filter(|_| state.running) {
+            session.running_now(turn);
         }
+        session.shells_now(&state.shells)
     }
 
     fn apply(&mut self, event: &Event) -> Result<(), ModelError> {
@@ -151,6 +154,7 @@ impl Store {
                 line: line.clone(),
                 reason: reason.clone(),
             }),
+            Event::Exited(_) => Ok(()),
         }
     }
 
@@ -183,6 +187,7 @@ fn session_of(notification: &Notification) -> Result<Option<&str>, ModelError> {
         N::Status(e) => &e.session,
         N::MessageCompleted(e) | N::MessageDelta(e) | N::ThinkingDelta(e) => &e.session,
         N::TurnSteered(e) => &e.session,
+        N::TurnSteerQueued(e) => &e.session,
         N::SessionListed(e) => &e.session,
         N::SessionSettings(e) => &e.session,
         N::MessageUser(e) => &e.session,
@@ -193,7 +198,9 @@ fn session_of(notification: &Notification) -> Result<Option<&str>, ModelError> {
         N::SessionForked(e) => &e.session,
         N::SessionUpdated(e) => &e.session,
         N::ShellExited(e) => &e.session,
+        N::ShellHolder(e) => &e.session,
         N::ShellOutput(e) => &e.session,
+        N::ShellRaw(e) => &e.session,
         N::ShellStarted(e) => &e.session,
         N::ToolCompleted(e) => &e.session,
         N::ToolStarted(e) => &e.session,

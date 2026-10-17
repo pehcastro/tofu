@@ -20,14 +20,12 @@ pub fn status(state: &AgentState) -> AgentStatus {
     }
 }
 
-pub fn shown(member: &Member) -> Option<Agent> {
-    Some(Agent {
-        kind: AgentKind::ALL
-            .into_iter()
-            .find(|kind| kind.name() == member.kind)?,
-        instance: u32::try_from(member.number).ok()?,
+pub fn shown(member: &Member) -> Agent {
+    Agent {
+        kind: AgentKind::named(&member.kind),
+        instance: u32::try_from(member.number).unwrap_or_default(),
         status: status(&member.state),
-    })
+    }
 }
 
 pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
@@ -39,9 +37,7 @@ pub fn board(session: &Session, runs: &[AgentRun]) -> AgentBoard {
     let mut lines = Vec::new();
     let mut events = Vec::new();
     for (id, member) in &session.agents {
-        let Some(agent) = shown(member) else {
-            continue;
-        };
+        let agent = shown(member);
         let tools: Vec<(&String, &Tool)> = session
             .tools
             .iter()

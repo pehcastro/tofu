@@ -175,10 +175,13 @@ pub enum AgentKind {
     Qa,
     Browser,
     PyDev,
+    RustDev,
+    RustDesigner,
+    Other(char),
 }
 
 impl AgentKind {
-    pub const ALL: [AgentKind; 7] = [
+    pub const ALL: [AgentKind; 9] = [
         AgentKind::GoDev,
         AgentKind::TsDev,
         AgentKind::Explore,
@@ -186,7 +189,18 @@ impl AgentKind {
         AgentKind::Qa,
         AgentKind::Browser,
         AgentKind::PyDev,
+        AgentKind::RustDev,
+        AgentKind::RustDesigner,
     ];
+
+    pub fn named(name: &str) -> AgentKind {
+        AgentKind::ALL
+            .into_iter()
+            .find(|kind| kind.name() == name)
+            .unwrap_or_else(|| {
+                AgentKind::Other(name.chars().next().map_or('?', |c| c.to_ascii_uppercase()))
+            })
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -197,18 +211,24 @@ impl AgentKind {
             AgentKind::Qa => "qa",
             AgentKind::Browser => "browser",
             AgentKind::PyDev => "py-dev",
+            AgentKind::RustDev => "rust-dev",
+            AgentKind::RustDesigner => "rust-designer",
+            AgentKind::Other(_) => "agent",
         }
     }
 
-    fn initial(self) -> &'static str {
+    fn initial(self) -> SharedString {
         match self {
-            AgentKind::GoDev => "G",
-            AgentKind::TsDev => "T",
-            AgentKind::Explore => "E",
-            AgentKind::Research => "R",
-            AgentKind::Qa => "Q",
-            AgentKind::Browser => "B",
-            AgentKind::PyDev => "P",
+            AgentKind::GoDev => "G".into(),
+            AgentKind::TsDev => "T".into(),
+            AgentKind::Explore => "E".into(),
+            AgentKind::Research => "R".into(),
+            AgentKind::Qa => "Q".into(),
+            AgentKind::Browser => "B".into(),
+            AgentKind::PyDev => "P".into(),
+            AgentKind::RustDev => "R".into(),
+            AgentKind::RustDesigner => "D".into(),
+            AgentKind::Other(initial) => initial.to_string().into(),
         }
     }
 
@@ -221,6 +241,9 @@ impl AgentKind {
             AgentKind::Qa => ColorToken::AgentsQa,
             AgentKind::Browser => ColorToken::AgentsBrowser,
             AgentKind::PyDev => ColorToken::AgentsPyDev,
+            AgentKind::RustDev => ColorToken::AgentsRustDev,
+            AgentKind::RustDesigner => ColorToken::AgentsRustDesigner,
+            AgentKind::Other(_) => ColorToken::TextMuted,
         })
     }
 }

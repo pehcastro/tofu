@@ -130,7 +130,9 @@ const STATES: [AgentStatus; 12] = [
 
 fn doing_now(kind: AgentKind) -> &'static str {
     match kind {
-        AgentKind::GoDev => "editing store/sqlite.go",
+        AgentKind::GoDev | AgentKind::RustDev | AgentKind::RustDesigner | AgentKind::Other(_) => {
+            "editing store/sqlite.go"
+        }
         AgentKind::TsDev => "editing web/Header.tsx",
         AgentKind::Explore => "grep Store.All( in notes/",
         AgentKind::Research => "reading sqlite.org/wal.html",
@@ -145,7 +147,13 @@ fn question(kind: AgentKind) -> Option<&'static str> {
         AgentKind::GoDev => Some("Keep the JSON store as a read only fallback for one release?"),
         AgentKind::Explore => Some("Which env file wins, .env or .env.local?"),
         AgentKind::Qa => Some("Run the e2e suite against SQLite or the JSON store?"),
-        AgentKind::TsDev | AgentKind::Research | AgentKind::Browser | AgentKind::PyDev => None,
+        AgentKind::TsDev
+        | AgentKind::Research
+        | AgentKind::Browser
+        | AgentKind::PyDev
+        | AgentKind::RustDev
+        | AgentKind::RustDesigner
+        | AgentKind::Other(_) => None,
     }
 }
 
@@ -157,13 +165,18 @@ fn failure(kind: AgentKind) -> &'static str {
         AgentKind::PyDev => "python scripts/seed.py exited 1: no such table: notes",
         AgentKind::Qa => "playwright: undo restores the row timed out after 30s",
         AgentKind::Explore => "stopped: the search ran past its budget",
-        AgentKind::TsDev | AgentKind::Research | AgentKind::Browser => "exited 1",
+        AgentKind::TsDev
+        | AgentKind::Research
+        | AgentKind::Browser
+        | AgentKind::RustDev
+        | AgentKind::RustDesigner
+        | AgentKind::Other(_) => "exited 1",
     }
 }
 
 fn thinking(kind: AgentKind) -> &'static str {
     match kind {
-        AgentKind::GoDev => {
+        AgentKind::GoDev | AgentKind::RustDev | AgentKind::RustDesigner | AgentKind::Other(_) => {
             "The interface has Remove; callers use it in three places. Renaming to Delete keeps the soft delete meaning clear. Count must skip deleted rows or the badge lies again, so it reads deleted_at, not a separate flag."
         }
         AgentKind::TsDev => {
@@ -376,7 +389,7 @@ fn events(seed: &Seed) -> Vec<AgentEvent> {
                 step(1.0),
             );
         }
-        AgentKind::GoDev => {
+        AgentKind::GoDev | AgentKind::RustDev | AgentKind::RustDesigner | AgentKind::Other(_) => {
             then(
                 AgentStep::Read {
                     path: "store/store.go".into(),

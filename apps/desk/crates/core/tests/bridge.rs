@@ -72,7 +72,7 @@ fn a_turn_replayed_from_a_cassette_arrives_typed_and_ends_finished() -> Result<(
             Event::Unreadable { line, reason } => {
                 return Err(format!("unreadable line {line}: {reason}").into());
             }
-            Event::Notification(_) | Event::Request { .. } => {}
+            Event::Notification(_) | Event::Request { .. } | Event::Exited(_) => {}
         }
     };
     assert_eq!(done.turn, sent.turn);

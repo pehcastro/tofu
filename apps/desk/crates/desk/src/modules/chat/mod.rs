@@ -13,15 +13,16 @@ use std::time::{Duration, Instant};
 use std::{env, fs, iter, slice, thread};
 
 use desk_core::bridge::{Bridge, BridgeError, Event, Exit, serve_command};
-use desk_core::model::{PersonAsk, PersonKind, Role, Statuses, Store};
+use desk_core::model::{ModelError, PersonAsk, PersonKind, Role, Statuses, Store};
 use desk_core::protocol::turn::{PersonQuestion, PersonReply};
 use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalRequest, ContextReport, CredentialReport, CronCommandParams,
     Decision, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification,
-    PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionInfo,
-    SessionListParams, SessionOpenParams, SessionOpenResult, SessionParams, SessionRenameParams,
-    SessionSetParams, SessionState, SessionTrace, ShellParams, StatusListParams, TurnCompleted,
-    TurnParams, TurnSendParams, TurnSteerParams, request, subagent,
+    PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionHistory,
+    SessionHistoryParams, SessionInfo, SessionListParams, SessionOpenParams, SessionOpenResult,
+    SessionParams, SessionRenameParams, SessionSetParams, SessionState, SessionTrace, ShellParams,
+    StatusListParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request,
+    subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
@@ -62,6 +63,9 @@ const COLUMN_TOP: f32 = 16.0;
 const DOCK_GAP: f32 = 8.0;
 const DOCK_INSET: f32 = 16.0;
 const OTHER: &str = "Type your own answer";
+const HISTORY_PAGE: i64 = 200;
+const WORKING: &str = "working";
+const UNSENT: &str = "desk-unsent";
 const YES_NO: [&str; 2] = ["yes", "no"];
 const DECISIONS: [Decision; 3] = [
     Decision::AllowOnce,
@@ -95,6 +99,13 @@ struct Slot {
 enum Asked {
     Approval,
     Question(Box<PersonAsk>),
+}
+
+struct History {
+    session: String,
+    asked: Instant,
+    lines: Vec<Notification>,
+    live: Vec<Notification>,
 }
 
 struct Card {
@@ -144,6 +155,9 @@ pub struct Chat {
     _files: Option<Task<()>>,
     _signed: Option<Task<()>>,
     reopening: Option<Instant>,
+    history: Option<History>,
+    painting: Option<(String, Instant)>,
+    unsent: Vec<String>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
 }
@@ -169,6 +183,10 @@ impl EventEmitter<Touched> for Chat {}
 pub struct SettingsMoved;
 
 impl EventEmitter<SettingsMoved> for Chat {}
+
+pub struct BoardyMoved(pub String);
+
+impl EventEmitter<BoardyMoved> for Chat {}
 
 #[derive(Clone)]
 pub struct TofuStopped {
@@ -451,6 +469,9 @@ impl Chat {
             _files: None,
             _signed: None,
             reopening: None,
+            history: None,
+            painting: None,
+            unsent: Vec::new(),
             _drain: None,
             _flash: None,
         }
@@ -498,17 +519,118 @@ impl Chat {
         }
     }
 
-    fn opened(&mut self, opened: SessionOpenResult, cx: &mut Context<Self>) {
-        self.store
-            .update(cx, |store, _| store.trace = Answer::default());
+    fn opened(&mut self, opened: SessionOpenResult, asked: Instant, cx: &mut Context<Self>) {
+        self.store.update(cx, |store, _| {
+            store.trace = Answer::default();
+            store.sessions.entry(opened.session.clone()).or_default();
+        });
+        self.painting = Some((opened.session.clone(), asked));
         if opened.fresh {
             self.ledger = Some((opened.session.clone(), Some(0)));
         } else {
             self.ask_ledger(opened.session.clone(), cx);
             self.want_trace(cx);
+            self.history = Some(History {
+                session: opened.session.clone(),
+                asked,
+                lines: Vec::new(),
+                live: Vec::new(),
+            });
+            self.ask_history(None, cx);
         }
         self.ask_cron(opened.session.clone(), cx);
         self.set_opening(Opening::Open(opened.session), cx);
+    }
+
+    fn ask_history(&mut self, before: Option<i64>, cx: &mut Context<Self>) {
+        let Some(history) = &self.history else {
+            return;
+        };
+        let session = history.session.clone();
+        let params = SessionHistoryParams {
+            session: session.clone(),
+            limit: Some(before.unwrap_or(HISTORY_PAGE)),
+            before,
+        };
+        self.request::<request::SessionHistory>(&params, cx, move |chat, page, cx| {
+            chat.paged(&session, page, cx);
+        });
+    }
+
+    fn paged(
+        &mut self,
+        session: &str,
+        page: Result<SessionHistory, String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(history) = self.history.as_mut().filter(|h| h.session == session) else {
+            return;
+        };
+        let page = match page {
+            Ok(page) => page,
+            Err(error) => {
+                self.history = None;
+                return self.fail(format!("session.history {session}: {error}"), cx);
+            }
+        };
+        let mut lines = Vec::with_capacity(page.lines.len() + history.lines.len());
+        for line in page.lines {
+            match Notification::parse(&line.method, line.params) {
+                Ok(notification) => lines.push(notification),
+                Err(error) => eprintln!("desk: session.history {}: {error}", line.method),
+            }
+        }
+        lines.append(&mut history.lines);
+        history.lines = lines;
+        let refused = self.replay(cx);
+        if page.first > 0 {
+            return self.ask_history(Some(page.first), cx);
+        }
+        if let Some(history) = self.history.take() {
+            eprintln!(
+                "desk: session {session} history landed {} items in {} ms, {refused} refused",
+                history.lines.len(),
+                history.asked.elapsed().as_millis()
+            );
+        }
+    }
+
+    fn replay(&mut self, cx: &mut Context<Self>) -> usize {
+        let Some(history) = &self.history else {
+            return 0;
+        };
+        let id = history.session.clone();
+        let events: Vec<Event> = history
+            .lines
+            .iter()
+            .chain(
+                history
+                    .live
+                    .iter()
+                    .filter(|live| !history.lines.contains(live)),
+            )
+            .cloned()
+            .map(Event::Notification)
+            .collect();
+        self.store.update(cx, |store, _| {
+            store
+                .sessions
+                .entry(id.clone())
+                .or_default()
+                .reset_transcript();
+        });
+        self.orders.remove(&id);
+        self.clear_view(cx);
+        let refused = events
+            .iter()
+            .filter(|event| self.absorb(event, cx).is_err())
+            .count();
+        for (at, text) in self.unsent.clone().iter().enumerate() {
+            self.queue(&id, "", &format!("{UNSENT}-{at}"), text, cx);
+        }
+        self.store.update(cx, |_, cx| cx.notify());
+        self.refresh(cx);
+        refused
     }
 
     fn want_trace(&mut self, cx: &mut Context<Self>) {
@@ -523,6 +645,10 @@ impl Chat {
             Opening::Open(id) => Some(id),
             Opening::Closed | Opening::Pending => None,
         }
+    }
+
+    pub fn project(&self) -> &str {
+        &self.project
     }
 
     pub fn busy(&self, cx: &App) -> bool {
@@ -546,13 +672,17 @@ impl Chat {
             None => self.restart(cx),
         }
         self.problem = None;
+        self.history = None;
+        self.unsent.clear();
         self.set_opening(Opening::Pending, cx);
         let params = SessionOpenParams {
             asking: Some(self.asking.clone()),
             session,
+            replay: Some(0),
             ..SessionOpenParams::default()
         };
-        self.call::<request::SessionOpen>(&params, cx, |chat, opened, cx| {
+        let asked = Instant::now();
+        self.call::<request::SessionOpen>(&params, cx, move |chat, opened, cx| {
             eprintln!(
                 "desk: session {} opened, fresh {}",
                 opened.session, opened.fresh
@@ -565,7 +695,7 @@ impl Chat {
                 );
             }
             chat.ask_shells(cx);
-            chat.opened(opened, cx);
+            chat.opened(opened, asked, cx);
             chat.refresh(cx);
             chat.relist(cx);
             chat.reread_context(cx);
@@ -776,8 +906,12 @@ impl Chat {
     }
 
     fn forget_view(&mut self, cx: &mut Context<Self>) {
-        self.slots.clear();
         self.set_opening(Opening::Closed, cx);
+        self.clear_view(cx);
+    }
+
+    fn clear_view(&mut self, cx: &mut Context<Self>) {
+        self.slots.clear();
         self.items = Rc::default();
         self.transcript.reset(0);
         cx.emit(Spliced::Cleared);
@@ -800,25 +934,15 @@ impl Chat {
         });
     }
 
-    fn apply(&mut self, event: &Event, cx: &mut Context<Self>) {
-        let applied = self.store.update(cx, |store, _| {
+    fn absorb(&mut self, event: &Event, cx: &mut Context<Self>) -> Result<(), ModelError> {
+        let before = self.store.update(cx, |store, _| {
             let before: Vec<(String, usize)> = store
                 .sessions
                 .iter()
                 .map(|(id, session)| (id.clone(), session.messages.len()))
                 .collect();
             store.apply_batch(slice::from_ref(event)).map(|()| before)
-        });
-        let before = match applied {
-            Ok(before) => before,
-            Err(error) if matches!(event, Event::Notification(Notification::Status(_))) => {
-                return self.fail(
-                    format!("tofu sent a status the desk cannot read: {error}"),
-                    cx,
-                );
-            }
-            Err(error) => return eprintln!("desk: the store refused an event from tofu: {error}"),
-        };
+        })?;
         for (id, session) in &self.store.read(cx).sessions {
             let was = before
                 .iter()
@@ -827,7 +951,36 @@ impl Chat {
             let order = self.orders.entry(id.clone()).or_default();
             order.extend((was..session.messages.len()).map(Entry::Message));
         }
-        let (session, entry) = match event {
+        if let Event::Notification(notification) = event
+            && let Some((session, entry)) = items::entry(notification)
+        {
+            self.orders
+                .entry(session.to_owned())
+                .or_default()
+                .push(entry);
+        }
+        Ok(())
+    }
+
+    fn apply(&mut self, event: &Event, cx: &mut Context<Self>) {
+        if let (Some(history), Event::Notification(notification)) = (&mut self.history, event) {
+            history.live.push(notification.clone());
+        }
+        match self.absorb(event, cx) {
+            Ok(()) => {}
+            Err(error) if matches!(event, Event::Notification(Notification::Status(_))) => {
+                return self.fail(
+                    format!("tofu sent a status the desk cannot read: {error}"),
+                    cx,
+                );
+            }
+            Err(error) => eprintln!("desk: the store refused an event from tofu: {error}"),
+        }
+        self.react(event, cx);
+    }
+
+    fn react(&mut self, event: &Event, cx: &mut Context<Self>) {
+        match event {
             Event::Notification(Notification::TurnStarted(started)) => {
                 eprintln!("desk: turn {} started", started.turn);
                 self.awaiting_delta
@@ -835,20 +988,14 @@ impl Chat {
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
-                (&started.session, Entry::Task(started.turn.clone()))
             }
             Event::Notification(Notification::SessionUpdated(_)) => {
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
-                return;
-            }
-            Event::Notification(Notification::ToolStarted(started)) => {
-                (&started.session, Entry::Tool(started.item.clone()))
             }
             Event::Notification(Notification::AgentStarted(started)) => {
                 eprintln!("desk: tofu sent AgentStarted({started:?})");
-                (&started.session, Entry::Agent(started.instance.clone()))
             }
             Event::Notification(Notification::TurnCompleted(completed)) => {
                 self.said(completed, cx);
@@ -859,54 +1006,48 @@ impl Chat {
                     if self.store.read(cx).trace.read.is_none() {
                         self.want_trace(cx);
                     }
+                    self.flush(completed.session.clone(), cx);
                 }
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
-                (&completed.session, Entry::Done(completed.turn.clone()))
             }
-            Event::Notification(Notification::ShellStarted(started)) => {
-                return eprintln!(
-                    "desk: session {} shell {} started pid {}: {}",
-                    started.session, started.shell, started.pid, started.command
-                );
-            }
-            Event::Notification(Notification::ShellExited(exited)) => {
-                return eprintln!(
-                    "desk: session {} shell {} exited code {:?} killed {}",
-                    exited.session, exited.shell, exited.exit_code, exited.killed
-                );
-            }
-            Event::Notification(Notification::ShellReady(ready)) => {
-                return eprintln!(
-                    "desk: session {} shell {} ready port {}",
-                    ready.session, ready.shell, ready.port
-                );
-            }
-            Event::Notification(Notification::TurnAccount(account)) => {
-                return eprintln!(
-                    "desk: session {} turn {} account {} {} {}",
-                    account.session,
-                    account.turn,
-                    account.source,
-                    account.account_id,
-                    account.model
-                );
-            }
-            Event::Notification(notification @ Notification::AccountState(_)) => {
+            Event::Notification(Notification::ShellStarted(started)) => eprintln!(
+                "desk: session {} shell {} started pid {}: {}",
+                started.session, started.shell, started.pid, started.command
+            ),
+            Event::Notification(Notification::ShellExited(exited)) => eprintln!(
+                "desk: session {} shell {} exited code {:?} killed {}",
+                exited.session, exited.shell, exited.exit_code, exited.killed
+            ),
+            Event::Notification(Notification::ShellReady(ready)) => eprintln!(
+                "desk: session {} shell {} ready port {}",
+                ready.session, ready.shell, ready.port
+            ),
+            Event::Notification(Notification::TurnAccount(account)) => eprintln!(
+                "desk: session {} turn {} account {} {} {}",
+                account.session, account.turn, account.source, account.account_id, account.model
+            ),
+            Event::Notification(
+                notification @ (Notification::AccountState(_) | Notification::QuotaUpdated(_)),
+            ) => {
                 self.accounts.notified();
-                return eprintln!("desk: tofu sent {notification:?}");
+                eprintln!("desk: tofu sent {notification:?}");
             }
             Event::Notification(Notification::FileEdit(edit)) => {
                 cx.set_global(EditedFile(PathBuf::from(&edit.path)));
-                return cx.emit(Touched);
+                cx.emit(Touched);
             }
             Event::Notification(Notification::SettingsChanged(changed)) => {
                 eprintln!(
                     "desk: settings.changed {:?} {} = {}",
                     changed.scope, changed.key, changed.value
                 );
-                return cx.emit(SettingsMoved);
+                cx.emit(SettingsMoved);
+            }
+            Event::Notification(Notification::BoardyChanged(changed)) => {
+                eprintln!("desk: boardy.changed {} {:?}", changed.board, changed.paths);
+                cx.emit(BoardyMoved(changed.board.clone()));
             }
             Event::Notification(Notification::SessionSettings(settings)) => {
                 eprintln!(
@@ -915,11 +1056,7 @@ impl Chat {
                     settings.pick.model.as_deref().unwrap_or("none")
                 );
                 self.pick = settings.pick.clone();
-                return self.fill_models(cx);
-            }
-            Event::Notification(notification @ Notification::QuotaUpdated(_)) => {
-                self.accounts.notified();
-                return eprintln!("desk: tofu sent {notification:?}");
+                self.fill_models(cx);
             }
             Event::Notification(
                 notification @ (Notification::ContextUpdated(_)
@@ -927,18 +1064,13 @@ impl Chat {
                 | Notification::CronUpdated(_)
                 | Notification::AgentEnded(_)
                 | Notification::UsageUpdated(_)),
-            ) => return eprintln!("desk: tofu sent {notification:?}"),
-            Event::Notification(Notification::Status(report)) => {
-                return eprintln!(
-                    "desk: status {} {}",
-                    report.item,
-                    String::from(report.state.clone())
-                );
-            }
-            Event::Request { request, .. } => {
-                eprintln!("desk: tofu asks {request:?}");
-                return;
-            }
+            ) => eprintln!("desk: tofu sent {notification:?}"),
+            Event::Notification(Notification::Status(report)) => eprintln!(
+                "desk: status {} {}",
+                report.item,
+                String::from(report.state.clone())
+            ),
+            Event::Request { request, .. } => eprintln!("desk: tofu asks {request:?}"),
             Event::Notification(Notification::MessageDelta(delta)) => {
                 if let Some(at) = self.awaiting_delta.remove(&delta.turn) {
                     eprintln!(
@@ -947,12 +1079,10 @@ impl Chat {
                         at.elapsed().as_millis()
                     );
                 }
-                return;
             }
-            Event::Exited(exit) => return self.exited(exit, cx),
-            Event::Notification(_) | Event::Unreadable { .. } => return,
-        };
-        self.orders.entry(session.clone()).or_default().push(entry);
+            Event::Exited(exit) => self.exited(exit, cx),
+            Event::Notification(_) | Event::Unreadable { .. } => {}
+        }
     }
 
     fn said(&self, completed: &TurnCompleted, cx: &App) {
@@ -989,6 +1119,17 @@ impl Chat {
             .iter()
             .find(|(_, turn)| turn.status.is_none())?;
         Some((id.clone(), turn.clone()))
+    }
+
+    fn doing(&self, cx: &App) -> String {
+        let store = self.store.read(cx);
+        store
+            .open_session()
+            .and_then(|session| {
+                let (_, turn) = session.turns.iter().find(|(_, t)| t.status.is_none())?;
+                items::doing(session, &turn.started_at)
+            })
+            .map_or_else(|| WORKING.to_owned(), |doing| format!("{WORKING}: {doing}"))
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
@@ -1132,7 +1273,7 @@ impl Chat {
                     state.pick.model.as_deref().unwrap_or("none"),
                     models.models.len()
                 );
-                chat.shells_now(&state, cx);
+                chat.state_now(&state, cx);
                 chat.pick = state.pick;
                 chat.listed(&models, cx);
             });
@@ -1146,14 +1287,14 @@ impl Chat {
                 state.session,
                 state.shells.len()
             );
-            chat.shells_now(&state, cx);
+            chat.state_now(&state, cx);
         });
     }
 
-    fn shells_now(&mut self, state: &SessionState, cx: &mut Context<Self>) {
+    fn state_now(&mut self, state: &SessionState, cx: &mut Context<Self>) {
         if let Err(error) = self.store.update(cx, |store, cx| {
             cx.notify();
-            store.shells_now(state)
+            store.state_now(state)
         }) {
             eprintln!("desk: the store refused session.state from tofu: {error}");
         }
@@ -1585,29 +1726,12 @@ impl Chat {
 
     fn post(&mut self, text: String, cx: &mut Context<Self>) {
         self.problem = None;
-        match (&self.opening, self.running(cx)) {
-            (_, Some((session, turn))) => {
-                let params = TurnSteerParams {
-                    expected_turn_id: turn,
-                    session,
-                    text,
-                };
-                self.call::<request::TurnSteer>(&params, cx, |_, _, _| {});
-            }
-            (Opening::Open(session), None) => {
-                let params = TurnSendParams {
-                    session: session.clone(),
-                    text,
-                    ..TurnSendParams::default()
-                };
-                self.call::<request::TurnSend>(&params, cx, |_, sent, _| {
-                    eprintln!("desk: turn {} sent", sent.turn);
-                });
-            }
-            (Opening::Pending, None) => {
+        match &self.opening {
+            Opening::Open(session) => self.deliver(session.clone(), text, false, cx),
+            Opening::Pending => {
                 self.fail("the session is still opening".to_owned(), cx);
             }
-            (Opening::Closed, None) => {
+            Opening::Closed => {
                 self.set_opening(Opening::Pending, cx);
                 let params = SessionOpenParams {
                     asking: Some(self.asking.clone()),
@@ -1620,13 +1744,109 @@ impl Chat {
                         opened.fresh,
                         String::from(chat.asking.clone())
                     );
-                    chat.opened(opened, cx);
+                    chat.opened(opened, Instant::now(), cx);
                     chat.relist(cx);
                     chat.post(text, cx);
                 });
             }
         }
         cx.notify();
+    }
+
+    fn deliver(&mut self, session: String, text: String, retried: bool, cx: &mut Context<Self>) {
+        self.call::<request::SessionState>(&NoParams {}, cx, move |chat, state, cx| {
+            chat.state_now(&state, cx);
+            let turn = state
+                .turn
+                .map(|turn| turn.id)
+                .or_else(|| chat.running(cx).map(|(_, turn)| turn));
+            match (state.running, turn) {
+                (true, Some(turn)) => chat.steer(session, turn, text, retried, cx),
+                (true, None) => chat.hold(&session, text, cx),
+                (false, _) => chat.start(session, text, retried, cx),
+            }
+        });
+    }
+
+    fn steer(
+        &mut self,
+        session: String,
+        turn: String,
+        text: String,
+        retried: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let params = TurnSteerParams {
+            expected_turn_id: turn,
+            session: session.clone(),
+            text: text.clone(),
+        };
+        self.request::<request::TurnSteer>(&params, cx, move |chat, steered, cx| match steered {
+            Ok(steered) => {
+                eprintln!("desk: steer {} queued on turn {}", steered.id, steered.turn);
+                chat.queue(&session, &steered.turn, &steered.id, &text, cx);
+            }
+            Err(error) if !retried => {
+                eprintln!("desk: turn.steer refused, asking again: {error}");
+                chat.deliver(session, text, true, cx);
+            }
+            Err(error) => {
+                eprintln!("desk: turn.steer refused twice, held until the turn ends: {error}");
+                chat.hold(&session, text, cx);
+            }
+        });
+    }
+
+    fn start(&mut self, session: String, text: String, retried: bool, cx: &mut Context<Self>) {
+        let params = TurnSendParams {
+            session: session.clone(),
+            text: text.clone(),
+            ..TurnSendParams::default()
+        };
+        self.request::<request::TurnSend>(&params, cx, move |chat, sent, cx| match sent {
+            Ok(sent) => eprintln!("desk: turn {} sent", sent.turn),
+            Err(error) if !retried => {
+                eprintln!("desk: turn.send refused, asking again: {error}");
+                chat.deliver(session, text, true, cx);
+            }
+            Err(error) => chat.fail(error, cx),
+        });
+    }
+
+    fn hold(&mut self, session: &str, text: String, cx: &mut Context<Self>) {
+        let item = format!("{UNSENT}-{}", self.unsent.len());
+        eprintln!("desk: {item} held until the turn ends");
+        self.queue(session, "", &item, &text, cx);
+        self.unsent.push(text);
+    }
+
+    fn flush(&mut self, session: String, cx: &mut Context<Self>) {
+        if self.unsent.is_empty() {
+            return;
+        }
+        let unsent = std::mem::take(&mut self.unsent);
+        self.store.update(cx, |store, cx| {
+            let open = store.sessions.entry(session.clone()).or_default();
+            (0..unsent.len()).for_each(|at| open.taken(&format!("{UNSENT}-{at}")));
+            cx.notify();
+        });
+        self.refresh(cx);
+        self.deliver(session, unsent.join("\n\n"), false, cx);
+    }
+
+    fn queue(&mut self, session: &str, turn: &str, item: &str, text: &str, cx: &mut Context<Self>) {
+        let grown = self.store.update(cx, |store, cx| {
+            cx.notify();
+            let open = store.sessions.entry(session.to_owned()).or_default();
+            let was = open.messages.len();
+            open.queue(turn, item, text);
+            was..open.messages.len()
+        });
+        self.orders
+            .entry(session.to_owned())
+            .or_default()
+            .extend(grown.map(Entry::Message));
+        self.refresh(cx);
     }
 
     fn stop(&mut self, cx: &mut Context<Self>) {
@@ -1886,6 +2106,14 @@ impl Render for Chat {
                 None => self.area.focus_handle(cx).focus(window, cx),
             }
         }
+        if !self.items.is_empty()
+            && let Some((session, asked)) = self.painting.take()
+        {
+            eprintln!(
+                "desk: session {session} first message painted in {} ms",
+                asked.elapsed().as_millis()
+            );
+        }
         let theme = ActiveTheme::theme(cx);
         let (items, hits, current) = (self.items.clone(), self.hits.clone(), self.current);
         let rows = transcript(
@@ -1918,7 +2146,11 @@ impl Render for Chat {
         let composer = Composer::new("chat-composer", self.area.clone())
             .content_width(px(CONTENT_WIDTH))
             .busy(self.running(cx).is_some())
-            .phase(if waiting { "waiting on you" } else { "working" })
+            .phase(if waiting {
+                "waiting on you".to_owned()
+            } else {
+                self.doing(cx)
+            })
             .model(self.models.clone())
             .effort(mode)
             .traces(self.chips())

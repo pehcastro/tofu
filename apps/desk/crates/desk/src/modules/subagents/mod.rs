@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use desk_core::model::{Session, Store};
 use desk_ui::components::agents::{AgentBoard, AgentScreen, AgentTile};
-use desk_ui::components::avatar::{Agent, AgentStatus};
+use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus};
 use desk_ui::components::glyph::Glyph;
 
 use super::chat::{Trace, mention};
@@ -101,9 +101,8 @@ fn mentioner(store: &Entity<Store>) -> impl Fn(&Agent, &mut Window, &mut App) + 
         let found = store.upgrade().and_then(|store| {
             let session = store.read(cx).open_session()?;
             let member = session.agents.values().find(|member| {
-                board::shown(member).is_some_and(|shown| {
-                    shown.kind == agent.kind && shown.instance == agent.instance
-                })
+                let shown = board::shown(member);
+                shown.kind == agent.kind && shown.instance == agent.instance
             })?;
             Some(Trace {
                 token: member.mention.clone()?,
@@ -140,7 +139,7 @@ impl Subagents {
     pub fn reveal(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let agent = session(self.store.read(cx))
             .and_then(|open| open.agents.get(id))
-            .and_then(board::shown);
+            .map(board::shown);
         agent.is_some_and(|agent| {
             self.tile
                 .update(cx, |tile, cx| tile.reveal(agent, window, cx))
@@ -171,13 +170,13 @@ impl Subagents {
                 .filter(|line| line.agent.status == status)
                 .count()
         });
-        let unshown = session
+        let unknown = session
             .agents
             .values()
-            .filter(|agent| board::shown(agent).is_none())
+            .filter(|agent| matches!(board::shown(agent).kind, AgentKind::Other(_)))
             .count();
         format!(
-            "Working {working} Asking {asking} Failed {failed} Finished {finished} of {}, {unshown} with no desk_ui kind",
+            "Working {working} Asking {asking} Failed {failed} Finished {finished} of {}, {unknown} with no desk_ui kind",
             session.agents.len()
         )
     }

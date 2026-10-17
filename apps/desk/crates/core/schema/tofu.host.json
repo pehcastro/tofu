@@ -4739,6 +4739,9 @@
         "fresh": {
           "type": "boolean"
         },
+        "heldBy": {
+          "$ref": "#/$defs/SessionHolder"
+        },
         "session": {
           "type": "string"
         }
@@ -5588,6 +5591,99 @@
       ],
       "type": "object"
     },
+    "ShellHeld": {
+      "additionalProperties": false,
+      "properties": {
+        "holder": {
+          "enum": [
+            "agent",
+            "person"
+          ],
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "holder",
+        "since"
+      ],
+      "type": "object"
+    },
+    "ShellHolderChanged": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "holder": {
+          "enum": [
+            "agent",
+            "person"
+          ],
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "shell",
+        "holder",
+        "since",
+        "note"
+      ],
+      "type": "object"
+    },
+    "ShellInputParams": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "contentEncoding": "base64",
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "data"
+      ],
+      "type": "object"
+    },
     "ShellListening": {
       "additionalProperties": false,
       "properties": {
@@ -5642,6 +5738,17 @@
         "exitCode": {
           "type": "integer"
         },
+        "heldSince": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "holder": {
+          "enum": [
+            "agent",
+            "person"
+          ],
+          "type": "string"
+        },
         "kept": {
           "enum": [
             "background",
@@ -5684,6 +5791,9 @@
             "killed"
           ],
           "type": "string"
+        },
+        "terminal": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -5753,6 +5863,49 @@
       ],
       "type": "object"
     },
+    "ShellRaw": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "data": {
+          "contentEncoding": "base64",
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "shell",
+        "offset",
+        "data"
+      ],
+      "type": "object"
+    },
     "ShellReadResult": {
       "additionalProperties": false,
       "properties": {
@@ -5774,6 +5927,21 @@
         "offset",
         "text",
         "next"
+      ],
+      "type": "object"
+    },
+    "ShellReleaseParams": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell"
       ],
       "type": "object"
     },
@@ -5805,6 +5973,26 @@
       ],
       "type": "object"
     },
+    "ShellSizeParams": {
+      "additionalProperties": false,
+      "properties": {
+        "cols": {
+          "type": "integer"
+        },
+        "rows": {
+          "type": "integer"
+        },
+        "shell": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "cols",
+        "rows"
+      ],
+      "type": "object"
+    },
     "ShellStarted": {
       "additionalProperties": false,
       "properties": {
@@ -5815,6 +6003,17 @@
           "type": "string"
         },
         "dir": {
+          "type": "string"
+        },
+        "heldSince": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "holder": {
+          "enum": [
+            "agent",
+            "person"
+          ],
           "type": "string"
         },
         "item": {
@@ -5861,6 +6060,9 @@
           "format": "date-time",
           "type": "string"
         },
+        "terminal": {
+          "type": "boolean"
+        },
         "turn": {
           "type": "string"
         }
@@ -5875,6 +6077,52 @@
         "pid",
         "startedAt",
         "dir"
+      ],
+      "type": "object"
+    },
+    "ShellTakenOver": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "integer"
+        },
+        "cols": {
+          "type": "integer"
+        },
+        "holder": {
+          "enum": [
+            "agent",
+            "person"
+          ],
+          "type": "string"
+        },
+        "next": {
+          "type": "integer"
+        },
+        "replay": {
+          "contentEncoding": "base64",
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shell",
+        "holder",
+        "since",
+        "cols",
+        "rows",
+        "base",
+        "next",
+        "replay"
       ],
       "type": "object"
     },
@@ -6099,6 +6347,40 @@
         "item",
         "seq",
         "state"
+      ],
+      "type": "object"
+    },
+    "SteerQueued": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "item": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "turn": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "turn",
+        "item",
+        "seq",
+        "text"
       ],
       "type": "object"
     },
@@ -7512,6 +7794,67 @@
       ],
       "type": "object"
     },
+    "boardy.AnswerRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "id",
+        "answer"
+      ],
+      "type": "object"
+    },
+    "boardy.AskedQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "type": "string"
+        },
+        "eli5": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "recommended": {
+          "type": "integer"
+        },
+        "ticket": {
+          "type": "string"
+        },
+        "tldr": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "id",
+        "tldr",
+        "eli5",
+        "options",
+        "recommended"
+      ],
+      "type": "object"
+    },
     "boardy.AssignRequest": {
       "additionalProperties": false,
       "properties": {
@@ -7770,12 +8113,16 @@
         },
         "next": {
           "type": "integer"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
         }
       },
       "required": [
         "board",
         "events",
-        "next"
+        "next",
+        "words"
       ],
       "type": "object"
     },
@@ -7854,12 +8201,16 @@
         },
         "ticket": {
           "$ref": "#/$defs/boardy.Ticket"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
         }
       },
       "required": [
         "ticket",
         "actual",
-        "events"
+        "events",
+        "words"
       ],
       "type": "object"
     },
@@ -7913,6 +8264,22 @@
       "required": [
         "id",
         "to"
+      ],
+      "type": "object"
+    },
+    "boardy.InitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name"
       ],
       "type": "object"
     },
@@ -8011,6 +8378,142 @@
       ],
       "type": "object"
     },
+    "boardy.PlanAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "epics": {
+          "items": {
+            "$ref": "#/$defs/boardy.PlannedEpic"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "milestones": {
+          "items": {
+            "$ref": "#/$defs/boardy.PlannedMilestone"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sprints": {
+          "items": {
+            "$ref": "#/$defs/boardy.PlannedSprint"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "views": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "epics",
+        "milestones",
+        "sprints",
+        "views",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.PlanRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "board"
+      ],
+      "type": "object"
+    },
+    "boardy.PlannedEpic": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "milestone": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "done"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status"
+      ],
+      "type": "object"
+    },
+    "boardy.PlannedMilestone": {
+      "additionalProperties": false,
+      "properties": {
+        "due": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "boardy.PlannedSprint": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "end": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "active"
+      ],
+      "type": "object"
+    },
     "boardy.Question": {
       "additionalProperties": false,
       "properties": {
@@ -8047,6 +8550,38 @@
         "recommend",
         "why"
       ],
+      "type": "object"
+    },
+    "boardy.QuestionsAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/boardy.AskedQuestion"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "questions",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.QuestionsRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        }
+      },
+      "required": [],
       "type": "object"
     },
     "boardy.ReportAnswer": {
@@ -8389,10 +8924,14 @@
       "properties": {
         "ticket": {
           "$ref": "#/$defs/boardy.Ticket"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
         }
       },
       "required": [
-        "ticket"
+        "ticket",
+        "words"
       ],
       "type": "object"
     },
@@ -8413,11 +8952,15 @@
             "array",
             "null"
           ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
         }
       },
       "required": [
         "board",
-        "requests"
+        "requests",
+        "words"
       ],
       "type": "object"
     },
@@ -9078,6 +9621,114 @@
             },
             "params": {
               "$ref": "#/$defs/ShellParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.takeover"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellSizeParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.input"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellInputParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.resize"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellSizeParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "shell.release"
+            },
+            "params": {
+              "$ref": "#/$defs/ShellReleaseParams"
             }
           },
           "required": [
@@ -10860,6 +11511,114 @@
             },
             "params": {
               "$ref": "#/$defs/boardy.TriageRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.questions"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.QuestionsRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.answer"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.AnswerRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.plan"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.PlanRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.init"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.InitRequest"
             }
           },
           "required": [
@@ -13358,6 +14117,26 @@
           "const": "2.0"
         },
         "method": {
+          "const": "turn.steerQueued"
+        },
+        "params": {
+          "$ref": "#/$defs/SteerQueued"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "message.user"
         },
         "params": {
@@ -13662,6 +14441,46 @@
         },
         "params": {
           "$ref": "#/$defs/ShellExited"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "shell.holder"
+        },
+        "params": {
+          "$ref": "#/$defs/ShellHolderChanged"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "shell.raw"
+        },
+        "params": {
+          "$ref": "#/$defs/ShellRaw"
         }
       },
       "required": [
@@ -14249,6 +15068,12 @@
               "$ref": "#/$defs/ShellReadResult"
             },
             {
+              "$ref": "#/$defs/ShellTakenOver"
+            },
+            {
+              "$ref": "#/$defs/ShellHeld"
+            },
+            {
               "$ref": "#/$defs/LabelResult"
             },
             {
@@ -14393,6 +15218,12 @@
               "$ref": "#/$defs/boardy.TriageAnswer"
             },
             {
+              "$ref": "#/$defs/boardy.QuestionsAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.PlanAnswer"
+            },
+            {
               "$ref": "#/$defs/sys.ScratchReport"
             },
             {
@@ -14434,6 +15265,54 @@
     }
   ],
   "title": "tofu.host/1, every line tofu serve --stdio writes; clientMessage is every line it reads",
+  "x-capabilities": [
+    "approvals",
+    "questions",
+    "resync",
+    "shells",
+    "queries",
+    "cron",
+    "rename",
+    "list",
+    "listed",
+    "state",
+    "set",
+    "wires",
+    "images",
+    "lead",
+    "unsteer",
+    "sendNow",
+    "run",
+    "compact",
+    "history",
+    "ledger",
+    "typed",
+    "memory",
+    "reload",
+    "hooks",
+    "learn",
+    "docs",
+    "changelog",
+    "update",
+    "doctor",
+    "setup",
+    "key",
+    "logout",
+    "info",
+    "find",
+    "trace",
+    "accounts",
+    "writes",
+    "status",
+    "mention",
+    "boards",
+    "side",
+    "commands",
+    "boardy",
+    "scratch",
+    "sessions",
+    "takeover"
+  ],
   "x-notifications": {
     "account.state": {
       "$ref": "#/$defs/AccountStateChanged"
@@ -14528,8 +15407,14 @@
     "shell.exited": {
       "$ref": "#/$defs/ShellExited"
     },
+    "shell.holder": {
+      "$ref": "#/$defs/ShellHolderChanged"
+    },
     "shell.output": {
       "$ref": "#/$defs/ShellOutput"
+    },
+    "shell.raw": {
+      "$ref": "#/$defs/ShellRaw"
     },
     "shell.ready": {
       "$ref": "#/$defs/ShellListening"
@@ -14557,6 +15442,9 @@
     },
     "turn.started": {
       "$ref": "#/$defs/TurnStarted"
+    },
+    "turn.steerQueued": {
+      "$ref": "#/$defs/SteerQueued"
     },
     "turn.steered": {
       "$ref": "#/$defs/Steered"
@@ -14588,6 +15476,14 @@
       },
       "result": {
         "$ref": "#/$defs/WriteReceipt"
+      }
+    },
+    "boardy.answer": {
+      "params": {
+        "$ref": "#/$defs/boardy.AnswerRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.TicketAnswer"
       }
     },
     "boardy.assign": {
@@ -14638,6 +15534,14 @@
         "$ref": "#/$defs/boardy.TicketAnswer"
       }
     },
+    "boardy.init": {
+      "params": {
+        "$ref": "#/$defs/boardy.InitRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.BoardsAnswer"
+      }
+    },
     "boardy.list": {
       "params": {
         "$ref": "#/$defs/boardy.ListRequest"
@@ -14660,6 +15564,22 @@
       },
       "result": {
         "$ref": "#/$defs/boardy.TicketAnswer"
+      }
+    },
+    "boardy.plan": {
+      "params": {
+        "$ref": "#/$defs/boardy.PlanRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.PlanAnswer"
+      }
+    },
+    "boardy.questions": {
+      "params": {
+        "$ref": "#/$defs/boardy.QuestionsRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.QuestionsAnswer"
       }
     },
     "boardy.report": {
@@ -15190,6 +16110,14 @@
         "$ref": "#/$defs/Setup"
       }
     },
+    "shell.input": {
+      "params": {
+        "$ref": "#/$defs/ShellInputParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "shell.kill": {
       "params": {
         "$ref": "#/$defs/ShellParams"
@@ -15206,12 +16134,36 @@
         "$ref": "#/$defs/ShellReadResult"
       }
     },
+    "shell.release": {
+      "params": {
+        "$ref": "#/$defs/ShellReleaseParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ShellHeld"
+      }
+    },
+    "shell.resize": {
+      "params": {
+        "$ref": "#/$defs/ShellSizeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "shell.run": {
       "params": {
         "$ref": "#/$defs/ShellRunParams"
       },
       "result": {
         "$ref": "#/$defs/ShellRunResult"
+      }
+    },
+    "shell.takeover": {
+      "params": {
+        "$ref": "#/$defs/ShellSizeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ShellTakenOver"
       }
     },
     "status.ack": {

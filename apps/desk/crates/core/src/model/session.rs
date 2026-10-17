@@ -4,8 +4,9 @@ use super::ModelError;
 use crate::protocol::{
     AccountStateChanged, AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit,
     FileEditOp, ModelPick, Notification, Origin, OriginKind, PlanStep, QuestionRequest,
-    QuotaWindow, RequestId, SessionForked, SettingsChanged, ShellKept, ShellNow, ShellNowState,
-    ShellReady, TurnAccount, TurnCompletedStatus, TurnDigest, UsageUpdated,
+    QuotaWindow, RequestId, RunningTurn, SessionForked, SettingsChanged, ShellHolder, ShellKept,
+    ShellNow, ShellNowState, ShellReady, TurnAccount, TurnCompletedStatus, TurnDigest,
+    UsageUpdated,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,6 +16,8 @@ pub enum Role {
     Assistant,
     Thinking,
     Steer,
+    Queued(String),
+    Taken,
     Note,
     Failure,
 }
@@ -87,6 +90,21 @@ pub struct Shell {
     pub ready: Option<ShellReady>,
     pub left_over: bool,
     pub mention: Option<String>,
+    pub terminal: bool,
+    pub holder: ShellHolder,
+    pub held_since: Option<String>,
+    pub raw: Option<Vec<(i64, String)>>,
+}
+
+fn holder(holder: Option<&ShellHolder>) -> Result<ShellHolder, ModelError> {
+    match holder {
+        None | Some(ShellHolder::Agent) => Ok(ShellHolder::Agent),
+        Some(ShellHolder::Person) => Ok(ShellHolder::Person),
+        Some(ShellHolder::Unknown(value)) => Err(ModelError::UnknownValue {
+            field: "shell holder",
+            value: value.clone(),
+        }),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,6 +237,10 @@ impl Session {
                     ready: None,
                     left_over: false,
                     mention: None,
+                    terminal: false,
+                    holder: ShellHolder::Agent,
+                    held_since: None,
+                    raw: None,
                 });
             match &later.state {
                 ShellNowState::Running => {}
@@ -243,8 +265,59 @@ impl Session {
             shell.ready.clone_from(&later.ready);
             shell.left_over = later.left_over.unwrap_or_default();
             shell.port = later.port.and_then(|port| u16::try_from(port).ok());
+            shell.terminal = later.terminal.unwrap_or_default();
+            shell.holder = holder(later.holder.as_ref())?;
+            shell.held_since.clone_from(&later.held_since);
         }
         Ok(())
+    }
+
+    pub fn reset_transcript(&mut self) {
+        self.messages.clear();
+        self.tools.clear();
+        self.agents.clear();
+        self.files.clear();
+        self.decisions.clear();
+        self.plan.clear();
+    }
+
+    pub(super) fn running_now(&mut self, turn: &RunningTurn) {
+        self.turns.entry(turn.id.clone()).or_insert_with(|| Turn {
+            task: turn.task.clone(),
+            origin: Origin {
+                job: None,
+                kind: OriginKind::Tofu,
+                name: None,
+                schedule: None,
+                source: None,
+            },
+            started_at: turn.started_at.clone(),
+            status: None,
+            worked_for_ms: 0,
+            account: None,
+            digest: None,
+        });
+    }
+
+    pub fn queue(&mut self, turn: &str, item: &str, text: &str) {
+        let queued = Role::Queued(item.to_owned());
+        if !self.messages.iter().any(|m| m.role == queued) {
+            self.say(turn, &None, queued, text, false);
+        }
+    }
+
+    pub fn taken(&mut self, item: &str) {
+        self.settle(item, Role::Taken);
+    }
+
+    fn settle(&mut self, item: &str, role: Role) -> bool {
+        let queued = Role::Queued(item.to_owned());
+        let Some(message) = self.messages.iter_mut().find(|m| m.role == queued) else {
+            return false;
+        };
+        message.role = role;
+        message.complete = true;
+        true
     }
 
     fn say(&mut self, turn: &str, agent: &Option<String>, role: Role, text: &str, complete: bool) {
@@ -356,7 +429,12 @@ impl Session {
                 let role = speaker(&e.origin)?;
                 self.say(&e.turn, &e.agent, role, &e.text, true);
             }
-            N::TurnSteered(e) => self.say(&e.turn, &e.agent, Role::Steer, &e.text, true),
+            N::TurnSteered(e) => {
+                if !self.settle(&e.item, Role::Steer) {
+                    self.say(&e.turn, &e.agent, Role::Steer, &e.text, true);
+                }
+            }
+            N::TurnSteerQueued(e) if e.agent.is_none() => self.queue(&e.turn, &e.item, &e.text),
             N::Note(e) => self.say(&e.turn, &e.agent, Role::Note, &e.text, true),
             N::Failure(e) => self.say(&e.turn, &e.agent, Role::Failure, &e.text, true),
             N::MessageStarted(e) => self.say(&e.turn, &e.agent, Role::Assistant, "", false),
@@ -500,8 +578,29 @@ impl Session {
                         ready: e.ready.clone(),
                         left_over: e.left_over.unwrap_or_default(),
                         mention: e.r#ref.clone(),
+                        terminal: e.terminal.unwrap_or_default(),
+                        holder: holder(e.holder.as_ref())?,
+                        held_since: e.held_since.clone(),
+                        raw: None,
                     },
                 );
+            }
+            N::ShellHolder(e) => {
+                let shell = self
+                    .shells
+                    .get_mut(&e.shell)
+                    .ok_or_else(|| orphan("shell.holder", &e.shell))?;
+                shell.holder = holder(Some(&e.holder))?;
+                shell.held_since = (shell.holder == ShellHolder::Person).then(|| e.since.clone());
+            }
+            N::ShellRaw(e) => {
+                let shell = self
+                    .shells
+                    .get_mut(&e.shell)
+                    .ok_or_else(|| orphan("shell.raw", &e.shell))?;
+                if let Some(raw) = &mut shell.raw {
+                    raw.push((e.offset, e.data.clone()));
+                }
             }
             N::ShellOutput(e) => {
                 let shell = self
@@ -544,7 +643,11 @@ impl Session {
                     .remove(&e.question)
                     .ok_or_else(|| orphan("question.resolved", &e.question))?;
             }
-            N::ItemPersisted(_) | N::SessionListed(_) | N::Status(_) | N::MemoryScoped(_) => {}
+            N::ItemPersisted(_)
+            | N::SessionListed(_)
+            | N::Status(_)
+            | N::MemoryScoped(_)
+            | N::TurnSteerQueued(_) => {}
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }

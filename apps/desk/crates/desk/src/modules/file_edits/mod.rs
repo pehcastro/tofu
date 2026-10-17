@@ -126,6 +126,7 @@ fn files(session: &Session) -> Vec<(EditedFile, EditMentions)> {
     let mut files: Vec<(i64, EditedFile, EditMentions)> = session
         .files
         .iter()
+        .filter(|(path, _)| !path.is_empty())
         .map(|(path, edits)| {
             let shown: Vec<FileEdit> = edits
                 .iter()

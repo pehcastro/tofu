@@ -53,6 +53,8 @@ tokens!(ColorToken {
     AgentsQa => "agents.qa",
     AgentsBrowser => "agents.browser",
     AgentsPyDev => "agents.py-dev",
+    AgentsRustDev => "agents.rust-dev",
+    AgentsRustDesigner => "agents.rust-designer",
     SyntaxKeyword => "syntax.keyword",
     SyntaxString => "syntax.string",
     SyntaxNumber => "syntax.number",

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use desk_core::model::{Role, Session};
-use desk_core::protocol::{AgentState, Origin, OriginKind};
+use desk_core::protocol::{AgentState, Notification, Origin, OriginKind};
 use desk_ui::components::chat::{
     self, Agent, AgentMark, Block, Marks, Streaming, Verdict, agent_row, command, cron_row, fail,
     foot, lead, note, you,
@@ -23,6 +23,7 @@ use super::mention::{Trace, mention, tool_glyph};
 const MENTION: &str = "Mention in chat";
 const FRAME_LOG: &str = "DESK_FRAME_LOG";
 const ARGUMENT_KEYS: [&str; 4] = ["command", "path", "pattern", "url"];
+const QUEUED: &str = "queued";
 
 #[derive(Clone, PartialEq)]
 pub enum Entry {
@@ -78,6 +79,29 @@ pub enum Item {
     Foot(SharedString),
 }
 
+pub fn entry(notification: &Notification) -> Option<(&str, Entry)> {
+    match notification {
+        Notification::TurnStarted(e) => Some((&e.session, Entry::Task(e.turn.clone()))),
+        Notification::ToolStarted(e) => Some((&e.session, Entry::Tool(e.item.clone()))),
+        Notification::AgentStarted(e) => Some((&e.session, Entry::Agent(e.instance.clone()))),
+        Notification::TurnCompleted(e) => Some((&e.session, Entry::Done(e.turn.clone()))),
+        _ => None,
+    }
+}
+
+pub fn doing(session: &Session, since: &str) -> Option<String> {
+    session
+        .tools
+        .values()
+        .filter(|tool| {
+            tool.output.is_none()
+                && tool.agent.is_none()
+                && tool.started_at.as_deref().is_some_and(|at| at >= since)
+        })
+        .max_by(|a, b| a.started_at.cmp(&b.started_at))
+        .map(|tool| format!("{} {}", tool.name, argument(&tool.args)))
+}
+
 pub fn settled(session: &Session, entry: &Entry) -> bool {
     match entry {
         Entry::Message(at) => session.messages.get(*at).is_none_or(|m| m.complete),
@@ -122,11 +146,15 @@ pub fn item(session: &Session, entry: &Entry, was: Option<&Item>) -> Option<Item
             let time = clock(session, &message.turn);
             match &message.role {
                 Role::User | Role::Steer => Some(Item::You { time, text }),
+                Role::Queued(_) => Some(Item::You {
+                    time: QUEUED.into(),
+                    text,
+                }),
                 Role::Cron { job, schedule } => Some(cron(session, job, schedule, &message.text)),
                 Role::Assistant if !text.is_empty() => {
                     Some(Item::Lead(said(time, text, message.complete, was)))
                 }
-                Role::Assistant | Role::Thinking => None,
+                Role::Assistant | Role::Thinking | Role::Taken => None,
                 Role::Note => Some(Item::Note(text)),
                 Role::Failure => Some(Item::Failure(text)),
             }

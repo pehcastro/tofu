@@ -41,7 +41,9 @@
       "research": "#e8c98a",
       "qa": "#f0a3b5",
       "browser": "#86d4d4",
-      "py-dev": "#c7d97a"
+      "py-dev": "#c7d97a",
+      "rust-dev": "#f0a77a",
+      "rust-designer": "#e89ad6"
     },
     "syntax": {
       "keyword": "#c9a7f5",
@@ -171,7 +173,9 @@
       "research": "#9a6a12",
       "qa": "#b8476a",
       "browser": "#1f8a8a",
-      "py-dev": "#6b7a12"
+      "py-dev": "#6b7a12",
+      "rust-dev": "#b0521f",
+      "rust-designer": "#a3368c"
     },
     "syntax": {
       "keyword": "#7a3fc4",

@@ -7,7 +7,7 @@ use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,23 @@ pub enum Event {
         line: String,
         reason: String,
     },
+    Exited(Exit),
+}
+
+#[derive(Clone, Debug)]
+pub struct Exit {
+    pub code: Option<i32>,
+    pub last: String,
+    pub closed: Instant,
+}
+
+impl fmt::Display for Exit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.code {
+            Some(code) => write!(f, "exit {code}"),
+            None => write!(f, "exit unknown"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -171,7 +188,7 @@ struct Incoming {
 }
 
 pub struct Bridge {
-    child: Child,
+    child: Arc<Mutex<Child>>,
     lines: flume::Sender<String>,
     waiting: Waiting,
     next: AtomicI64,
@@ -221,11 +238,18 @@ impl Bridge {
         thread::spawn(move || write_lines(stdin, &queued));
         let waiting: Waiting = Arc::new(Mutex::new(Some(HashMap::new())));
         let (sender, events) = flume::bounded(limits::BRIDGE_EVENT_QUEUE);
-        let routing = Arc::clone(&waiting);
-        thread::spawn(move || read_stdout(stdout, &routing, &sender));
         let log: Log = Arc::default();
         let kept = Arc::clone(&log);
-        thread::spawn(move || read_stderr(stderr, &kept));
+        let (drained, stderr_done) = flume::bounded::<()>(1);
+        thread::spawn(move || read_stderr(stderr, &kept, drained));
+        let child = Arc::new(Mutex::new(child));
+        let watch = Watch {
+            waiting: Arc::clone(&waiting),
+            child: Arc::clone(&child),
+            log: Arc::clone(&log),
+            stderr_done,
+        };
+        thread::spawn(move || read_stdout(stdout, &watch, &sender));
 
         let bridge = Bridge {
             child,
@@ -241,7 +265,7 @@ impl Bridge {
             .request::<request::Initialize>(&InitializeParams {
                 client: client.to_owned(),
                 versions: vec![needed.to_owned()],
-                capabilities: vec!["questions".to_owned()],
+                capabilities: vec!["questions".to_owned(), "takeover".to_owned()],
             })?
             .wait();
         let refused = |detail: String| BridgeError::Protocol {
@@ -309,20 +333,41 @@ impl Bridge {
     }
 
     pub fn pid(&self) -> u32 {
-        self.child.id()
+        lock(&self.child).id()
     }
 
-    pub fn stop(mut self) -> Result<ExitStatus, BridgeError> {
+    pub fn stop(self) -> Result<ExitStatus, BridgeError> {
         drop(self.lines);
-        let deadline = Instant::now() + limits::TOFU_STOP_GRACE;
-        while Instant::now() < deadline {
-            if let Some(status) = self.child.try_wait()? {
-                return Ok(status);
-            }
-            thread::sleep(limits::TOFU_STOP_POLL);
+        if let Some(status) = exited_within(&self.child, limits::TOFU_STOP_GRACE)? {
+            return Ok(status);
         }
-        self.child.kill()?;
-        Ok(self.child.wait()?)
+        let mut child = lock(&self.child);
+        child.kill()?;
+        Ok(child.wait()?)
+    }
+}
+
+struct Watch {
+    waiting: Waiting,
+    child: Arc<Mutex<Child>>,
+    log: Log,
+    stderr_done: flume::Receiver<()>,
+}
+
+fn lock(child: &Mutex<Child>) -> std::sync::MutexGuard<'_, Child> {
+    child.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn exited_within(child: &Mutex<Child>, grace: Duration) -> io::Result<Option<ExitStatus>> {
+    let deadline = Instant::now() + grace;
+    loop {
+        if let Some(status) = lock(child).try_wait()? {
+            return Ok(Some(status));
+        }
+        if Instant::now() >= deadline {
+            return Ok(None);
+        }
+        thread::sleep(limits::TOFU_STOP_POLL);
     }
 }
 
@@ -358,9 +403,9 @@ fn lossy_lines(reader: impl Read) -> impl Iterator<Item = String> {
     })
 }
 
-fn read_stdout(stdout: impl Read, waiting: &Waiting, events: &flume::Sender<Event>) {
+fn read_stdout(stdout: impl Read, watch: &Watch, events: &flume::Sender<Event>) {
     for line in lossy_lines(stdout) {
-        let event = match route(&line, waiting) {
+        let event = match route(&line, &watch.waiting) {
             Ok(None) => continue,
             Ok(Some(event)) => event,
             Err(reason) => Event::Unreadable { line, reason },
@@ -369,10 +414,37 @@ fn read_stdout(stdout: impl Read, waiting: &Waiting, events: &flume::Sender<Even
             break;
         }
     }
-    waiting
+    let closed = Instant::now();
+    watch
+        .waiting
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .take();
+    if let Err(flume::RecvTimeoutError::Timeout) =
+        watch.stderr_done.recv_timeout(limits::TOFU_STOP_GRACE)
+    {
+        eprintln!("desk: tofu closed its output but kept its log open");
+    }
+    let code = match exited_within(&watch.child, limits::TOFU_STOP_GRACE) {
+        Ok(status) => status.and_then(|status| status.code()),
+        Err(error) => {
+            eprintln!("desk: tofu's exit could not be read: {error}");
+            None
+        }
+    };
+    let last = watch
+        .log
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .back()
+        .cloned()
+        .unwrap_or_default();
+    if events
+        .send(Event::Exited(Exit { code, last, closed }))
+        .is_err()
+    {
+        eprintln!("desk: tofu stopped and nobody was listening");
+    }
 }
 
 fn route(line: &str, waiting: &Waiting) -> Result<Option<Event>, String> {
@@ -415,7 +487,7 @@ fn route(line: &str, waiting: &Waiting) -> Result<Option<Event>, String> {
     }
 }
 
-fn read_stderr(stderr: impl Read, log: &Log) {
+fn read_stderr(stderr: impl Read, log: &Log, drained: flume::Sender<()>) {
     for line in lossy_lines(stderr) {
         let mut log = log.lock().unwrap_or_else(PoisonError::into_inner);
         if log.len() == limits::TOFU_LOG_LINES {
@@ -423,4 +495,5 @@ fn read_stderr(stderr: impl Read, log: &Log) {
         }
         log.push_back(line);
     }
+    drop(drained);
 }
