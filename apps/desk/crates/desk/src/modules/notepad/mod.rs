@@ -9,14 +9,12 @@ use std::time::{Duration, Instant};
 
 use desk_core::home::Home;
 use desk_ui::component::{control, icon};
-use desk_ui::components::chat::{self, Block};
 use desk_ui::components::code_editor::CodeEditor;
 use desk_ui::components::empty::{EmptyAction, empty_state};
-use desk_ui::components::form::segmented;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::sheet::Sheet;
-use desk_ui::components::size::{FONT_BODY, FONT_SMALL, NUMBER_COLUMN, RADIUS_CHIP, T1};
+use desk_ui::components::size::{FONT_BODY, FONT_SMALL, RADIUS_CHIP, SEGMENTED_PAD, T1};
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -24,8 +22,8 @@ use desk_ui::metrics::ICON_SMALL;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, AnyView, App, AppContext, ClickEvent, Context, Div, Entity, FocusHandle, Focusable,
-    Global, KeyDownEvent, PathPromptOptions, Render, ScrollHandle, SharedString, Stateful,
-    Subscription, Task, WeakEntity, Window, canvas, div, prelude::*, px,
+    Global, KeyDownEvent, PathPromptOptions, Render, SharedString, Stateful, Subscription, Task,
+    WeakEntity, Window, canvas, div, prelude::*, px,
 };
 use serde_json::{Map, Value};
 
@@ -41,7 +39,8 @@ const OPEN_NOTE: &str = "open";
 const SETTINGS_FILE: &str = "settings.json";
 const ASK_KEY: &str = "notepad.ask_on_close";
 const SAVE_IDLE: Duration = Duration::from_millis(700);
-const MODES: [&str; 2] = ["Raw", "Rendered"];
+const RAW: &str = "Raw";
+const RENDERED: &str = "Rendered";
 const TOGGLE_KEY: &str = "e";
 const NEW_NOTE: &str = "New note";
 const OPEN_FILE: &str = "Open file...";
@@ -82,14 +81,7 @@ struct Page {
     saved: String,
     seen: String,
     dirty: bool,
-    view: View,
-    scroll: ScrollHandle,
     _edited: Subscription,
-}
-
-enum View {
-    Raw,
-    Rendered(Vec<Block>),
 }
 
 enum Next {
@@ -100,18 +92,6 @@ enum Next {
 enum Asking {
     Leave(Next),
     Delete(PathBuf),
-}
-
-fn rendered(editor: &Entity<CodeEditor>, cx: &App) -> View {
-    let started = Instant::now();
-    let text = editor.read(cx).buffer().text();
-    let blocks = chat::markdown(&text);
-    eprintln!(
-        "desk: notepad rendered {} bytes in {} ms",
-        text.len(),
-        started.elapsed().as_millis()
-    );
-    View::Rendered(blocks)
 }
 
 pub struct Notepad {
@@ -378,6 +358,10 @@ impl Notepad {
             None => String::new(),
         };
         let notepad = cx.weak_entity();
+        let live = path
+            .as_ref()
+            .is_some_and(|path| self.rendered.contains(path));
+        let numbers = self.numbers;
         let editor = cx.new(|cx| {
             let mut editor = editor.on_save(move |buffer, _, cx| {
                 let text = buffer.text();
@@ -387,25 +371,18 @@ impl Notepad {
                     .and_then(|saved| saved)
             });
             editor.colour_rest(cx);
+            editor.set_live(live, cx);
+            editor.set_gutter(numbers);
             editor
         });
         let edited = cx.observe(&editor, |notepad: &mut Notepad, _, cx| notepad.edited(cx));
         eprintln!("desk: notepad opened {}", shown.display());
-        let view = match path
-            .as_ref()
-            .is_some_and(|path| self.rendered.contains(path))
-        {
-            true => rendered(&editor, cx),
-            false => View::Raw,
-        };
         self.page = Some(Page {
             path,
             editor,
             dirty: text != saved,
             saved,
             seen: text,
-            view,
-            scroll: ScrollHandle::new(),
             _edited: edited,
         });
         self.problem = None;
@@ -589,26 +566,24 @@ impl Notepad {
     }
 
     fn set_view(&mut self, to_rendered: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(page) = &mut self.page else {
+        let Some(page) = &self.page else {
             return;
         };
-        if matches!(page.view, View::Rendered(_)) == to_rendered {
+        if page.editor.read(cx).live() == to_rendered {
             return;
         }
-        match to_rendered {
-            true => {
-                page.view = rendered(&page.editor, cx);
-                self.rendered.extend(page.path.clone());
-                window.focus(&self.focus, cx);
-            }
-            false => {
-                page.view = View::Raw;
-                if let Some(path) = &page.path {
-                    self.rendered.remove(path);
-                }
-                window.focus(&page.editor.focus_handle(cx), cx);
-            }
+        page.editor.update(cx, |editor, cx| {
+            editor.set_live(to_rendered, cx);
+            cx.notify();
+        });
+        if let Some(path) = &page.path {
+            match to_rendered {
+                true => self.rendered.insert(path.clone()),
+                false => self.rendered.remove(path),
+            };
         }
+        eprintln!("desk: notepad rendered {to_rendered}");
+        window.focus(&page.editor.focus_handle(cx), cx);
         self.remember();
         cx.notify();
     }
@@ -626,7 +601,7 @@ impl Notepad {
             return;
         }
         cx.stop_propagation();
-        let to_rendered = matches!(page.view, View::Raw);
+        let to_rendered = !page.editor.read(cx).live();
         self.set_view(to_rendered, window, cx);
     }
 
@@ -678,26 +653,41 @@ impl Notepad {
             true => format!("\u{2022} {}", self.title()),
             false => self.title(),
         };
-        let selected = match self.page.as_ref().map(|page| &page.view) {
-            Some(View::Rendered(_)) => 1,
-            _ => 0,
-        };
-        let this = cx.weak_entity();
-        let modes = segmented(
-            "notepad-mode",
-            &MODES,
-            selected,
-            theme,
-            move |at, window, cx| {
-                if this
-                    .update(cx, |notepad, cx| notepad.set_view(*at == 1, window, cx))
-                    .is_err()
-                {
-                    eprintln!("desk: notepad is gone");
-                }
-            },
-        );
+        let rendered = self
+            .page
+            .as_ref()
+            .is_some_and(|page| page.editor.read(cx).live());
         let mark = theme.color(ColorToken::TextIcon);
+        let raw = tool(
+            RAW,
+            glyph(Glyph::Code, ICON_SMALL, mark),
+            !rendered,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(
+            cx.listener(|notepad, _: &ClickEvent, window, cx| notepad.set_view(false, window, cx)),
+        );
+        let shaped = tool(
+            RENDERED,
+            glyph(Glyph::Book, ICON_SMALL, mark),
+            rendered,
+            theme,
+            window,
+            cx,
+        )
+        .on_click(
+            cx.listener(|notepad, _: &ClickEvent, window, cx| notepad.set_view(true, window, cx)),
+        );
+        let modes = div()
+            .flex()
+            .flex_none()
+            .p(px(SEGMENTED_PAD))
+            .rounded(px(RADIUS_CHIP + SEGMENTED_PAD))
+            .bg(theme.color(ColorToken::SegmentedFill))
+            .child(raw)
+            .child(shaped);
         let sidebar = tool(
             SIDEBAR,
             icon(Icon::Sidebar, ICON_SMALL, mark),
@@ -748,7 +738,14 @@ impl Notepad {
         )
         .on_click(cx.listener(|notepad, _: &ClickEvent, _, cx| {
             notepad.numbers = !notepad.numbers;
-            eprintln!("desk: notepad line numbers shown {}", notepad.numbers);
+            let shown = notepad.numbers;
+            if let Some(page) = &notepad.page {
+                page.editor.update(cx, |editor, cx| {
+                    editor.set_gutter(shown);
+                    cx.notify();
+                });
+            }
+            eprintln!("desk: notepad line numbers shown {shown}");
             cx.notify();
         }));
         let close = tool(
@@ -787,7 +784,7 @@ impl Notepad {
             )
             .child(numbers)
             .child(close)
-            .child(modes.flex_none())
+            .child(modes)
             .into_any_element()
     }
 
@@ -835,7 +832,6 @@ impl Notepad {
     }
 
     fn body(&self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let surface = theme.color(ColorToken::CardsInnerFill);
         match (&self.folder, &self.page) {
             (Err(error), _) => Self::empty("Notepad has no folder", error.clone(), &[], theme, cx),
             (Ok(_), None) => Self::empty(
@@ -845,44 +841,10 @@ impl Notepad {
                 theme,
                 cx,
             ),
-            (
-                Ok(_),
-                Some(Page {
-                    view: View::Rendered(blocks),
-                    scroll,
-                    ..
-                }),
-            ) => div()
-                .id("notepad-rendered")
-                .flex_1()
-                .min_h_0()
-                .min_w_0()
-                .p_3()
-                .overflow_y_scroll()
-                .track_scroll(scroll)
-                .on_mouse_down(
-                    gpui::MouseButton::Left,
-                    cx.listener(|notepad, _, window, cx| window.focus(&notepad.focus, cx)),
-                )
-                .child(chat::document("notepad-document", blocks, &[], theme))
-                .into_any_element(),
             (Ok(_), Some(Page { editor, .. })) => div()
-                .relative()
                 .flex_1()
                 .min_h_0()
                 .child(editor.clone())
-                .when(!self.numbers, |body| {
-                    body.child(
-                        div()
-                            .absolute()
-                            .top_0()
-                            .left_0()
-                            .h_full()
-                            .w(px(NUMBER_COLUMN))
-                            .bg(surface)
-                            .occlude(),
-                    )
-                })
                 .into_any_element(),
         }
     }
@@ -928,30 +890,27 @@ impl Notepad {
 impl Render for Notepad {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let raw = match &self.page {
-            Some(Page {
-                view: View::Raw,
-                editor,
-                ..
-            }) => Some(editor.focus_handle(cx)),
-            _ => None,
-        };
+        let editing = self.page.as_ref().map(|page| page.editor.focus_handle(cx));
         if std::mem::take(&mut self.focus_pending) {
-            window.focus(raw.as_ref().unwrap_or(&self.focus), cx);
+            window.focus(editing.as_ref().unwrap_or(&self.focus), cx);
         }
-        let opened = self.opened.take().filter(|_| raw.is_some()).map(|started| {
-            canvas(
-                |_, _, _| {},
-                move |_, (), _, _| {
-                    eprintln!(
-                        "desk: notepad open to caret {} ms",
-                        started.elapsed().as_millis()
-                    );
-                },
-            )
-            .absolute()
-            .size_0()
-        });
+        let opened = self
+            .opened
+            .take()
+            .filter(|_| editing.is_some())
+            .map(|started| {
+                canvas(
+                    |_, _, _| {},
+                    move |_, (), _, _| {
+                        eprintln!(
+                            "desk: notepad open to caret {} ms",
+                            started.elapsed().as_millis()
+                        );
+                    },
+                )
+                .absolute()
+                .size_0()
+            });
         let problem = self.problem.clone().map(|problem| {
             div()
                 .px_2()
@@ -997,12 +956,8 @@ impl Render for Notepad {
 impl Focusable for Notepad {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         match &self.page {
-            Some(Page {
-                view: View::Raw,
-                editor,
-                ..
-            }) => editor.focus_handle(cx),
-            _ => self.focus.clone(),
+            Some(page) => page.editor.focus_handle(cx),
+            None => self.focus.clone(),
         }
     }
 }

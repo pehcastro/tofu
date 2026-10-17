@@ -2,6 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fs;
+use std::hash::{DefaultHasher, Hasher};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -9,32 +10,35 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use desk_core::buffer::Buffer;
-use desk_core::symbols::Index;
+use desk_core::symbols::{Index, Outline, Symbol};
 use desk_core::syntax::{Kind, Language, Span, Syntax};
 use gpui::{
     AnyElement, App, Bounds, ClipboardItem, Context, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, KeyDownEvent, Keystroke, ModifiersChangedEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollStrategy,
-    SharedString, Task, UTF16Selection, UniformListScrollHandle, WeakEntity, Window, canvas, div,
-    fill, point, prelude::*, px, size,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, Task,
+    UTF16Selection, UniformListScrollHandle, WeakEntity, Window, canvas, div, fill, point,
+    prelude::*, px, size,
 };
 
 use crate::components::chat::fail;
 use crate::components::code::{
-    Blank, CodeLine, FoldMark, Guides, Marks, Stripe, TAB_STOP, Wrap, code_origin, code_place,
-    code_shape, code_view, wrap_width,
+    Blank, CodeLine, FoldMark, Guides, Heading, Heights, Marks, Stripe, TAB_STOP, Wrap,
+    code_origin, code_place, code_shape, code_view, reveal_row, wrap_width,
 };
 use crate::components::find::{FindBar, Matching, Replace, find_matching};
 use crate::components::form::{blinker, caret_shown};
 use crate::components::keymap::{Action, FocusedKeys, Host, Keymap, Motion, Resolved, Stroke};
 use crate::components::paint::ink;
-use crate::components::size::{CARET_WIDTH, CODE_LINE, NUMBER_COLUMN, NUMBER_PAD, T3};
+use crate::components::size::{CARET_WIDTH, NUMBER_COLUMN, NUMBER_PAD, T3};
 use crate::components::vim::{self, Mode, Vim};
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
 use desk_motion::tokens::EASE_OUT;
 
+mod markdown;
+
 const TAB: &str = "    ";
+const BARE_PAD: f32 = 12.0;
 const FAILURE_INSET: f32 = 12.0;
 const CURRENT_LINE: ColorToken = ColorToken::StateHover;
 pub const READ_ONLY_BYTES: u64 = 1024 * 1024;
@@ -83,6 +87,7 @@ const FIRST_SCREEN_LINES: usize = 128;
 const STRIPE_SOLID: Duration = Duration::from_secs(6);
 const STRIPE_FADE: Duration = Duration::from_secs(2);
 const STRIPE: ColorToken = ColorToken::StatusAccent;
+const OUTLINE_SETTLE: Duration = Duration::from_millis(300);
 
 struct Wrote {
     lines: Range<usize>,
@@ -149,19 +154,29 @@ impl PaintFrames {
     }
 }
 
-pub enum Jump {
-    Definition {
-        name: String,
-        at: Point<Pixels>,
-        row: usize,
-        col: usize,
-    },
-    Back,
+pub struct Asked {
+    pub name: String,
+    pub at: Point<Pixels>,
+    pub row: usize,
+    pub col: usize,
+    pub here: Vec<Symbol>,
+    pub since: Instant,
 }
 
-fn back_stroke(keys: &Keystroke) -> bool {
-    let held = keys.modifiers;
-    keys.key == "left" && held.alt && !held.control && !held.shift && !held.platform
+pub enum Way {
+    Back,
+    Forward,
+}
+
+pub enum Jump {
+    Definition(Asked),
+    Travel { way: Way, row: usize, col: usize },
+}
+
+enum Outlined {
+    Stale,
+    Building { _outlining: Task<()> },
+    Built(Outline),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -267,15 +282,19 @@ fn prose(path: &Path) -> bool {
 struct Drawn {
     text: String,
     starts: Vec<usize>,
+    heading: Heading,
 }
 
 impl Drawn {
-    fn new(line: &str) -> Self {
+    fn new(line: &str, hidden: &[Range<usize>]) -> Self {
         let mut text = String::new();
         let mut starts = Vec::new();
         let mut columns = 0;
-        for ch in cut(line, LONG_LINE_BYTES).chars() {
+        for (column, ch) in line.chars().enumerate() {
             starts.push(text.len());
+            if hidden.iter().any(|range| range.contains(&column)) {
+                continue;
+            }
             let width = match ch {
                 '\t' => TAB_STOP - columns % TAB_STOP,
                 _ => 1,
@@ -287,7 +306,11 @@ impl Drawn {
             columns += width;
         }
         starts.push(text.len());
-        Self { text, starts }
+        Self {
+            text,
+            starts,
+            heading: Heading::Body,
+        }
     }
 
     fn columns(&self) -> usize {
@@ -304,7 +327,11 @@ impl Drawn {
             Some(before) if byte - self.byte(before) < self.byte(after).saturating_sub(byte) => {
                 before
             }
-            _ => after.min(self.columns()),
+            _ => {
+                let landed = self.byte(after);
+                let last = self.starts.partition_point(|start| *start <= landed);
+                last.saturating_sub(1).max(after).min(self.columns())
+            }
         }
     }
 }
@@ -317,7 +344,7 @@ fn coloured_lines(buffer: &Buffer, spans: Vec<Span>, rows: Range<usize>) -> Vec<
         .map(|row| {
             let full = buffer.line(row).unwrap_or_default();
             long.push(full.len() > LONG_LINE_BYTES);
-            let drawn = Drawn::new(&full);
+            let drawn = Drawn::new(cut(&full, LONG_LINE_BYTES), &[]);
             let line = CodeLine {
                 text: drawn.text.clone().into(),
                 ..CodeLine::default()
@@ -492,6 +519,13 @@ pub struct CodeEditor {
     wrapping: bool,
     wrap: Rc<Wrap>,
     wrap_stale: bool,
+    wrap_reveal: Vec<usize>,
+    gutter: bool,
+    live: bool,
+    parsed: markdown::Parsed,
+    heights: Heights,
+    heights_stale: bool,
+    colour_stale: bool,
     frames: Option<Rc<RefCell<TypingFrames>>>,
     frames_flush: Option<Task<()>>,
     folds: BTreeMap<usize, usize>,
@@ -503,6 +537,8 @@ pub struct CodeEditor {
     vim: Option<Vim>,
     language: Option<Language>,
     symbols: Option<Arc<Index>>,
+    path: Option<Arc<Path>>,
+    outlined: Outlined,
     link: Option<Range<usize>>,
     on_jump: Option<OnJump>,
     guides: bool,
@@ -516,14 +552,14 @@ pub struct CodeEditor {
 struct TypingFrames {
     edited: Option<Instant>,
     intervals: Vec<f64>,
-    what: &'static str,
+    mode: &'static str,
 }
 
 impl TypingFrames {
-    fn mark(&mut self, what: &'static str) {
-        if what != self.what {
+    fn mark(&mut self, mode: &'static str) {
+        if mode != self.mode {
             self.report();
-            self.what = what;
+            self.mode = mode;
         }
         self.edited.get_or_insert_with(Instant::now);
     }
@@ -534,9 +570,9 @@ impl TypingFrames {
         if let (Some(median), Some(worst)) = (intervals.get(intervals.len() / 2), intervals.last())
         {
             eprintln!(
-                "desk: editor {} {} frames, median {median:.2} ms, worst {worst:.2} ms",
-                self.what,
-                intervals.len()
+                "desk: editor typing {} frames, median {median:.2} ms, worst {worst:.2} ms{}",
+                intervals.len(),
+                self.mode
             );
         }
     }
@@ -572,6 +608,13 @@ impl CodeEditor {
             wrapping: false,
             wrap: Rc::default(),
             wrap_stale: true,
+            wrap_reveal: Vec::new(),
+            gutter: true,
+            live: false,
+            parsed: markdown::Parsed::default(),
+            heights: Heights::default(),
+            heights_stale: true,
+            colour_stale: false,
             frames: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
             frames_flush: None,
             folds: BTreeMap::new(),
@@ -583,9 +626,11 @@ impl CodeEditor {
             vim: None,
             language: None,
             symbols: None,
+            path: None,
+            outlined: Outlined::Stale,
             link: None,
             on_jump: None,
-            guides: std::env::var_os("DESK_GUIDES").is_none_or(|on| on != "0"),
+            guides: false,
             active_guide: None,
             paints: std::env::var_os("DESK_FRAME_LOG").map(|_| Rc::default()),
             rest: None,
@@ -627,6 +672,7 @@ impl CodeEditor {
         open_phase("highlight", started);
         editor.wrapping = prose(path);
         editor.language = Language::from_path(path);
+        editor.path = Some(Arc::from(path));
         let extension = path.extension().and_then(|extension| extension.to_str());
         editor.comment = LINE_COMMENTS
             .iter()
@@ -731,6 +777,11 @@ impl CodeEditor {
         self
     }
 
+    pub fn guides(mut self, on: bool) -> Self {
+        self.guides = on;
+        self
+    }
+
     pub fn on_jump(mut self, jump: impl Fn(Jump, &mut Window, &mut App) + 'static) -> Self {
         self.on_jump = Some(Rc::new(jump));
         self
@@ -813,8 +864,7 @@ impl CodeEditor {
             self.vim_clamp();
         }
         if at_end {
-            self.scroll
-                .scroll_to_item(self.row_of(last), ScrollStrategy::Nearest);
+            reveal_row(&self.scroll, &self.heights, self.row_of(last));
         }
         let fade = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(STRIPE_SOLID).await;
@@ -835,7 +885,7 @@ impl CodeEditor {
         let last = self.buffer.line_count().saturating_sub(1);
         let offset = self.scroll.0.borrow().base_handle.offset().y;
         let seen = -offset + self.bounds.get().size.height;
-        caret_line == Some(last) || seen > px(CODE_LINE) * self.row_of(last) as f32
+        caret_line == Some(last) || seen > self.heights.top(self.row_of(last))
     }
 
     fn changed_since(&self, before: &CodeEditor) -> Range<usize> {
@@ -884,12 +934,100 @@ impl CodeEditor {
         Some(self.buffer.rope().get_slice(range)?.to_string())
     }
 
-    fn defined(&self, range: &Range<usize>) -> bool {
-        let (Some(index), Some(language)) = (&self.symbols, self.language) else {
+    fn outline_later(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        let rope = self.buffer.rope().clone();
+        let outlining = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(OUTLINE_SETTLE).await;
+            let built = cx
+                .background_executor()
+                .spawn(async move { Outline::build(&path, &rope.to_string()) })
+                .await;
+            let outline = built.unwrap_or_else(|error| {
+                eprintln!("desk: editor could not outline: {error}");
+                Outline::default()
+            });
+            if let Err(error) = this.update(cx, |editor, _| {
+                editor.outlined = Outlined::Built(outline);
+            }) {
+                eprintln!("desk: editor is gone before its outline: {error}");
+            }
+        });
+        self.outlined = Outlined::Building {
+            _outlining: outlining,
+        };
+    }
+
+    fn outline(&mut self) -> Option<&Outline> {
+        if !matches!(self.outlined, Outlined::Built(_)) {
+            let path = self.path.clone()?;
+            let built = Outline::build(&path, &self.buffer.text()).unwrap_or_else(|error| {
+                eprintln!("desk: editor could not outline: {error}");
+                Outline::default()
+            });
+            self.outlined = Outlined::Built(built);
+        }
+        match &self.outlined {
+            Outlined::Built(outline) => Some(outline),
+            Outlined::Stale | Outlined::Building { .. } => None,
+        }
+    }
+
+    fn named(&mut self, range: Range<usize>) -> Option<(String, (usize, usize), Vec<Symbol>)> {
+        self.language?;
+        let place = self.place(range.start)?;
+        let name = self.word(range)?;
+        let here = self.outline()?.definitions(&name, place);
+        Some((name, place, here))
+    }
+
+    fn defined(&mut self, range: Range<usize>) -> bool {
+        let Some((name, _, here)) = self.named(range) else {
             return false;
         };
-        self.word(range.clone())
-            .is_some_and(|name| index.definitions(&name, language).next().is_some())
+        let elsewhere = |index: &Index| {
+            self.language
+                .is_some_and(|language| index.definitions(&name, language).next().is_some())
+        };
+        !here.is_empty() || self.symbols.as_deref().is_some_and(elsewhere)
+    }
+
+    fn definition_jump(&mut self, at: usize, point: Point<Pixels>, since: Instant) -> Option<Jump> {
+        let range = self.word_at(at)?;
+        let (name, (row, col), here) = self.named(range)?;
+        Some(Jump::Definition(Asked {
+            name,
+            at: point,
+            row,
+            col,
+            here,
+            since,
+        }))
+    }
+
+    fn keyed_jump(&mut self, keys: &Keystroke, window: &Window, cx: &App) -> Option<Jump> {
+        self.on_jump.as_ref()?;
+        let held = keys.modifiers;
+        if held.control || held.shift || held.platform {
+            return None;
+        }
+        let head = self.carets.last()?.head;
+        let (row, col) = self.place(head)?;
+        let way = match (keys.key.as_str(), held.alt) {
+            ("left", true) => Way::Back,
+            ("right", true) => Way::Forward,
+            ("f12", false) => {
+                let since = Instant::now();
+                let (shown, x) = self.x_of(head, window, cx)?;
+                let origin = code_origin(self.bounds.get(), &self.scroll, &self.heights, shown);
+                let below = point(origin.x + x, origin.y + self.heights.height(shown));
+                return self.definition_jump(head, below, since);
+            }
+            _ => return None,
+        };
+        Some(Jump::Travel { way, row, col })
     }
 
     fn point_link(
@@ -899,11 +1037,11 @@ impl CodeEditor {
         window: &Window,
         cx: &mut Context<Self>,
     ) {
-        let link = (held && self.on_jump.is_some() && self.in_text(position))
+        let range = (held && self.on_jump.is_some() && self.in_text(position))
             .then(|| self.char_at_point(position, window, cx))
             .flatten()
-            .and_then(|at| self.word_at(at))
-            .filter(|range| self.defined(range));
+            .and_then(|at| self.word_at(at));
+        let link = range.filter(|range| self.defined(range.clone()));
         if link != self.link {
             self.link = link;
             cx.notify();
@@ -1172,7 +1310,129 @@ impl CodeEditor {
     }
 
     fn drawn(&self, line: usize) -> Drawn {
-        Drawn::new(&self.buffer.line(line).unwrap_or_default())
+        let full = self.buffer.line(line).unwrap_or_default();
+        let text = cut(&full, LONG_LINE_BYTES);
+        if !self.live {
+            return Drawn::new(text, &[]);
+        }
+        let found = self.parsed.line(text);
+        let hidden = match self.revealed(line) {
+            true => &[][..],
+            false => &found.markup,
+        };
+        Drawn {
+            heading: found.heading,
+            ..Drawn::new(text, hidden)
+        }
+    }
+
+    fn head_lines(&self) -> Vec<usize> {
+        self.carets
+            .iter()
+            .filter_map(|caret| self.buffer.char_to_line(caret.head).ok())
+            .collect()
+    }
+
+    fn revealed(&self, line: usize) -> bool {
+        self.carets
+            .iter()
+            .any(|caret| self.buffer.char_to_line(caret.head).ok() == Some(line))
+    }
+
+    fn live_lines(&self, rows: Range<usize>) -> Vec<(CodeLine, Drawn)> {
+        rows.map(|row| {
+            let full = self.buffer.line(row).unwrap_or_default();
+            let text = cut(&full, LONG_LINE_BYTES);
+            let found = self.parsed.line(text);
+            let revealed = self.revealed(row);
+            let hidden = match revealed {
+                true => &[][..],
+                false => &found.markup,
+            };
+            let drawn = Drawn {
+                heading: found.heading,
+                ..Drawn::new(text, hidden)
+            };
+            let bytes = |range: &Range<usize>| drawn.byte(range.start)..drawn.byte(range.end);
+            let markup = found
+                .markup
+                .iter()
+                .filter(|_| revealed)
+                .map(|range| (bytes(range), markdown::MARKUP));
+            let runs = found
+                .runs
+                .iter()
+                .map(|(range, token)| (bytes(range), *token))
+                .chain(markup)
+                .filter(|(range, _)| !range.is_empty())
+                .collect();
+            let line = CodeLine {
+                text: drawn.text.clone().into(),
+                runs,
+                heading: found.heading,
+                faces: found
+                    .faces
+                    .iter()
+                    .map(|(range, face)| (bytes(range), *face))
+                    .collect(),
+                ..CodeLine::default()
+            };
+            (line, drawn)
+        })
+        .collect()
+    }
+
+    pub fn set_gutter(&mut self, shown: bool) {
+        self.gutter = shown;
+        self.wrap_stale = true;
+    }
+
+    pub fn set_live(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.live = on;
+        self.wrap_stale = true;
+        self.heights_stale = true;
+        if on || !std::mem::take(&mut self.colour_stale) {
+            return;
+        }
+        match self.path.clone() {
+            Some(path) if matches!(self.syntax, Highlight::Tree(_)) || self.rest.is_some() => {
+                self.buffer.take_applied();
+                self.rest = Some(Rest {
+                    path: path.to_path_buf(),
+                    _colouring: None,
+                });
+                self.colour_rest(cx);
+            }
+            _ => self.colour_edits(),
+        }
+    }
+
+    fn remeasure(&mut self) {
+        if !self.heights_stale {
+            return;
+        }
+        self.heights_stale = false;
+        if !self.live {
+            self.heights = Heights::default();
+            return;
+        }
+        let lines = self.buffer.line_count();
+        self.parsed.trim(lines.saturating_mul(2));
+        let rope = self.buffer.rope();
+        let heading = |line: usize| {
+            rope.get_line(line)
+                .map_or(Heading::Body, |text| markdown::heading(text.chars()))
+        };
+        self.heights = match self.wrapped() {
+            Some(wrap) => Heights::measured(
+                (0..lines).flat_map(|line| std::iter::repeat_n(heading(line), wrap.pieces(line))),
+            ),
+            None => Heights::measured((0..self.row_count()).map(|row| heading(self.line_of(row)))),
+        };
+    }
+
+    pub fn live(&self) -> bool {
+        self.live
     }
 
     fn wrapped(&self) -> Option<&Wrap> {
@@ -1181,19 +1441,40 @@ impl CodeEditor {
 
     fn rewrap(&mut self, cx: &App) {
         let width = wrap_width(self.bounds.get());
-        let fresh = !self.wrap_stale && width == self.wrap.width();
+        let reveal = match self.live {
+            true => self.head_lines(),
+            false => Vec::new(),
+        };
+        let fresh = !self.wrap_stale && width == self.wrap.width() && reveal == self.wrap_reveal;
         if !self.wrapping || width <= px(0.0) || fresh {
             return;
         }
+        self.wrap_reveal = reveal;
         let started = Instant::now();
         let first = self.wrap.rows() == 0;
-        let texts = (0..self.buffer.line_count()).map(|line| self.drawn(line).text);
+        let keys = (0..self.buffer.line_count()).map(|line| self.wrap_key(line));
+        let text_of = |line: usize| {
+            let drawn = self.drawn(line);
+            (drawn.text, drawn.heading)
+        };
         let theme = ActiveTheme::theme(cx);
-        self.wrap = Rc::new(Wrap::new(&self.wrap, texts, width, &theme, cx));
+        self.wrap = Rc::new(Wrap::new(&self.wrap, keys, text_of, width, &theme, cx));
         self.wrap_stale = false;
+        self.heights_stale = true;
         if first {
             open_phase("wrap", started);
         }
+    }
+
+    fn wrap_key(&self, line: usize) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        let text = self.buffer.rope().get_line(line);
+        for chunk in text.iter().flat_map(|text| text.chunks()) {
+            hasher.write(chunk.as_bytes());
+        }
+        let revealed = self.live && self.wrap_reveal.contains(&line);
+        hasher.write_u8(u8::from(self.live) << 1 | u8::from(revealed));
+        hasher.finish()
     }
 
     fn toggle_wrap(&mut self) {
@@ -1217,6 +1498,7 @@ impl CodeEditor {
     }
 
     fn refold(&mut self) {
+        self.heights_stale = true;
         let folds = std::mem::take(&mut self.folds);
         self.folds = folds
             .into_keys()
@@ -1364,7 +1646,7 @@ impl CodeEditor {
     }
 
     fn hover(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
-        let (row, _) = code_place(self.bounds.get(), &self.scroll, position);
+        let (row, _) = code_place(self.bounds.get(), &self.scroll, &self.heights, position);
         let line = self.line_of(row);
         let chevron =
             Some(line).filter(|line| row < self.row_count() && self.foldable(*line).is_some());
@@ -1377,10 +1659,10 @@ impl CodeEditor {
     fn gutter_fold(&mut self, position: Point<Pixels>) -> bool {
         let area = self.bounds.get();
         let x = position.x - area.left();
-        if x < px(NUMBER_COLUMN - NUMBER_PAD) || x >= px(NUMBER_COLUMN) {
+        if !self.gutter || x < px(NUMBER_COLUMN - NUMBER_PAD) || x >= px(NUMBER_COLUMN) {
             return false;
         }
-        let (row, _) = code_place(area, &self.scroll, position);
+        let (row, _) = code_place(area, &self.scroll, &self.heights, position);
         let line = self.line_of(row);
         let foldable = self.folds.contains_key(&line) || self.foldable(line).is_some();
         if row >= self.row_count() || !foldable {
@@ -1521,10 +1803,7 @@ impl CodeEditor {
         }
     }
 
-    fn settle(&mut self, lines: usize) {
-        self.wrote = None;
-        self.wrap_stale = true;
-        self.link = None;
+    fn colour_edits(&mut self) {
         if let Some(rest) = self.rest.take() {
             self.buffer.take_applied();
             match Syntax::for_path(&rest.path, &self.buffer) {
@@ -1535,6 +1814,17 @@ impl CodeEditor {
         } else if let Highlight::Tree(syntax) = &mut self.syntax {
             let synced = syntax.sync(&mut self.buffer);
             self.report("Could not colour", synced);
+        }
+    }
+
+    fn settle(&mut self, lines: usize) {
+        self.wrote = None;
+        self.wrap_stale = true;
+        self.link = None;
+        self.outlined = Outlined::Stale;
+        match self.live {
+            true => self.colour_stale = true,
+            false => self.colour_edits(),
         }
         self.edited_since_found = !self.query.is_empty();
         self.carets = self
@@ -1578,7 +1868,11 @@ impl CodeEditor {
                 self.shift(&edits);
                 self.settle(lines);
                 if let Some(frames) = &self.frames {
-                    frames.borrow_mut().mark("typing");
+                    let mode = match self.live {
+                        true => ", rendered",
+                        false => "",
+                    };
+                    frames.borrow_mut().mark(mode);
                 }
             }
             Err(error) => self.report("Could not edit", Err(error)),
@@ -1712,7 +2006,7 @@ impl CodeEditor {
                 Some(wrap) => self.visual(caret.head, wrap).map_or(line, |(row, _)| row),
                 None => self.row_of(line),
             };
-            self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+            reveal_row(&self.scroll, &self.heights, row);
         }
     }
 
@@ -1754,11 +2048,13 @@ impl CodeEditor {
                 eprintln!("desk: editor chord {} is not bound", chord.join(" "));
                 return cx.stop_propagation();
             }
-            Resolved::Miss if back_stroke(keys) && self.on_jump.is_some() => {
-                self.leap(Jump::Back, window, cx);
+            Resolved::Miss => {
+                let Some(jump) = self.keyed_jump(keys, window, cx) else {
+                    return;
+                };
+                self.leap(jump, window, cx);
                 return cx.stop_propagation();
             }
-            Resolved::Miss => return,
         };
         if let Action::Host(host) = action
             && !window.is_action_available(host.action().as_ref(), cx)
@@ -2442,7 +2738,7 @@ impl CodeEditor {
     }
 
     fn char_at_point(&self, position: Point<Pixels>, window: &Window, cx: &App) -> Option<usize> {
-        let (row, x) = code_place(self.bounds.get(), &self.scroll, position);
+        let (row, x) = code_place(self.bounds.get(), &self.scroll, &self.heights, position);
         let wrap = self.wrapped();
         let (line, piece) = match wrap {
             Some(wrap) => wrap.locate(row.min(wrap.rows().saturating_sub(1))),
@@ -2459,7 +2755,8 @@ impl CodeEditor {
         };
         let shown: SharedString = text.get(within.clone())?.to_owned().into();
         let theme = ActiveTheme::theme(cx);
-        let mut byte = within.start + code_shape(shown, window, &theme).closest_index_for_x(x);
+        let mut byte =
+            within.start + code_shape(shown, drawn.heading, window, &theme).closest_index_for_x(x);
         if !last && byte >= within.end {
             byte = text
                 .get(..within.end)?
@@ -2484,7 +2781,7 @@ impl CodeEditor {
             None => (self.row_of(line), 0..text.len()),
         };
         let piece: SharedString = text.get(within.clone())?.to_owned().into();
-        let x = code_shape(piece, window, &ActiveTheme::theme(cx))
+        let x = code_shape(piece, drawn.heading, window, &ActiveTheme::theme(cx))
             .x_for_index(byte.saturating_sub(within.start));
         Some((row, x))
     }
@@ -2497,6 +2794,7 @@ impl CodeEditor {
     }
 
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let since = Instant::now();
         window.focus(&self.focus, cx);
         self.publish_keys(Vec::new(), cx);
         if self.gutter_fold(event.position) {
@@ -2508,12 +2806,11 @@ impl CodeEditor {
         };
         let held = event.modifiers;
         let follows = held.secondary() && !held.alt && !held.shift && self.in_text(event.position);
-        let jumps = follows && self.language.is_some() && self.on_jump.is_some();
-        let named = jumps.then(|| self.word_at(at)).flatten();
-        let picked = named.and_then(|range| Some((self.place(range.start)?, self.word(range)?)));
-        if let Some(((row, col), name)) = picked {
-            let at = event.position;
-            self.leap(Jump::Definition { name, at, row, col }, window, cx);
+        if follows
+            && self.on_jump.is_some()
+            && let Some(jump) = self.definition_jump(at, event.position, since)
+        {
+            self.leap(jump, window, cx);
             return cx.stop_propagation();
         }
         match self.carets.last_mut() {
@@ -2554,7 +2851,10 @@ impl CodeEditor {
     }
 
     fn rows(&self, rows: Range<usize>, caret_on: bool) -> Vec<CodeLine> {
-        let mut lines = coloured_lines(&self.buffer, self.syntax.spans(rows.clone()), rows.clone());
+        let mut lines = match self.live {
+            true => self.live_lines(rows.clone()),
+            false => coloured_lines(&self.buffer, self.syntax.spans(rows.clone()), rows.clone()),
+        };
         let current = self.found.get(self.current);
         let marking = !matches!(
             self.vim.as_ref().map(Vim::mode),
@@ -2764,10 +3064,10 @@ impl EntityInputHandler for CodeEditor {
         cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let (row, x) = self.x_of(self.chars(units).start, window, cx)?;
-        let origin = code_origin(element, &self.scroll, row);
+        let origin = code_origin(element, &self.scroll, &self.heights, row);
         Some(Bounds::new(
             point(origin.x + x, origin.y),
-            size(px(CARET_WIDTH), px(CODE_LINE)),
+            size(px(CARET_WIDTH), self.heights.height(row)),
         ))
     }
 
@@ -2797,7 +3097,11 @@ impl Render for CodeEditor {
             _ => {}
         }
         let shown = focused && caret_shown(self.since);
+        if matches!(self.outlined, Outlined::Stale) {
+            self.outline_later(cx);
+        }
         self.rewrap(cx);
+        self.remeasure();
         self.active_guide = self.guides.then(|| self.guide_block()).flatten();
         let paints = self.paints.clone();
         let painting = paints.clone().map(|paints| {
@@ -2823,6 +3127,7 @@ impl Render for CodeEditor {
         let link = self.link_line(window, cx);
         let link_ink = ActiveTheme::theme(cx).color(LINK);
         let scroll = self.scroll.clone();
+        let heights = self.heights.clone();
         let rows = code_view(
             "code-editor-rows",
             self.buffer.line_count(),
@@ -2841,7 +3146,8 @@ impl Render for CodeEditor {
         .wrap(self.wrapped().map(|_| self.wrap.clone()))
         .shown(self.shown_lines.clone())
         .marks(self.lit_marks(&entity.downgrade()))
-        .stripe(self.stripe(window));
+        .stripe(self.stripe(window))
+        .heights(self.heights.clone());
         let reloaded = self.wrote.as_mut().and_then(|wrote| wrote.unlogged.take());
         let failure = self.failure.clone().map(|(what, error)| {
             div()
@@ -2868,8 +3174,15 @@ impl Render for CodeEditor {
         });
         let editing = div()
             .id("code-editor")
-            .relative()
-            .size_full()
+            .map(|editing| match self.gutter {
+                true => editing.relative().size_full(),
+                false => editing
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .right_0()
+                    .left(px(BARE_PAD - NUMBER_COLUMN)),
+            })
             .track_focus(&self.focus)
             .map(|editing| match link {
                 Some(_) => editing.cursor_pointer(),
@@ -2901,9 +3214,9 @@ impl Render for CodeEditor {
                         }
                         bounds.set(area);
                         if let Some((row, from, to)) = link {
-                            let origin = code_origin(area, &scroll, row);
-                            let start =
-                                point(origin.x + from, origin.y + px(CODE_LINE - LINK_DROP));
+                            let origin = code_origin(area, &scroll, &heights, row);
+                            let drop = heights.height(row) - px(LINK_DROP);
+                            let start = point(origin.x + from, origin.y + drop);
                             if start.x >= area.left() + px(NUMBER_COLUMN) {
                                 let line = Bounds::new(start, size(to - from, px(LINK_THICKNESS)));
                                 window.paint_quad(fill(line, link_ink));
@@ -2941,6 +3254,7 @@ impl Render for CodeEditor {
         div()
             .relative()
             .size_full()
+            .when(!self.gutter, |view| view.overflow_hidden())
             .child(editing)
             .children(self.bar.clone())
     }

@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Axis, Bounds, ContentMask, Div, ElementId, Font, HighlightStyle, LineFragment,
-    ListHorizontalSizingBehavior, PathBuilder, Pixels, Point, Rgba, ScrollHandle, ShapedLine,
-    SharedString, StyledText, TextAlign, TextRun, UniformListScrollHandle, Window, canvas,
-    combine_highlights, div, fill, font, point, prelude::*, px, rgb_to_hsla, size, uniform_list,
+    AnyElement, App, Axis, Bounds, ContentMask, Div, ElementId, Font, FontStyle, FontWeight,
+    HighlightStyle, LineFragment, ListHorizontalSizingBehavior, PathBuilder, Pixels, Point, Rgba,
+    ScrollHandle, ScrollStrategy, ShapedLine, SharedString, StyledText, TextAlign, TextRun,
+    UniformListScrollHandle, Window, canvas, combine_highlights, div, fill, font, point,
+    prelude::*, px, rgb_to_hsla, size, uniform_list,
 };
 
 use crate::components::chip::{mono, tabular};
@@ -42,6 +42,12 @@ const BLANK_DOT: f32 = 2.0;
 const BLANK_INSET: f32 = 2.0;
 const BLANK_HEAD: f32 = 3.0;
 const BLANK_STROKE: f32 = 1.0;
+const HEADING_ONE: f32 = 1.4;
+const HEADING_TWO: f32 = 1.25;
+const HEADING_THREE: f32 = 1.12;
+const HEADING_ONE_ROWS: f32 = 1.6;
+const HEADING_TWO_ROWS: f32 = 1.4;
+const HEADING_THREE_ROWS: f32 = 1.2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Blank {
@@ -55,10 +61,67 @@ pub struct Guides {
     pub active: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Heading {
+    #[default]
+    Body,
+    One,
+    Two,
+    Three,
+    Minor,
+}
+
+impl Heading {
+    pub fn level(hashes: usize) -> Self {
+        match hashes {
+            0 => Heading::Body,
+            1 => Heading::One,
+            2 => Heading::Two,
+            3 => Heading::Three,
+            _ => Heading::Minor,
+        }
+    }
+
+    pub fn size(self) -> Pixels {
+        let scale = match self {
+            Heading::Body | Heading::Minor => 1.0,
+            Heading::One => HEADING_ONE,
+            Heading::Two => HEADING_TWO,
+            Heading::Three => HEADING_THREE,
+        };
+        px(FONT_BODY * scale)
+    }
+
+    pub fn height(self) -> Pixels {
+        let rows = match self {
+            Heading::Body | Heading::Minor => 1.0,
+            Heading::One => HEADING_ONE_ROWS,
+            Heading::Two => HEADING_TWO_ROWS,
+            Heading::Three => HEADING_THREE_ROWS,
+        };
+        px((CODE_LINE * rows).round())
+    }
+
+    fn font(self, theme: &Theme) -> Font {
+        match self {
+            Heading::Body => font(mono(theme)),
+            _ => font(mono(theme)).bold(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Face {
+    Bold,
+    Italic,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CodeLine {
     pub text: SharedString,
     pub runs: Highlight,
+    pub heading: Heading,
+    pub faces: Vec<(Range<usize>, Face)>,
     pub selected: Vec<Range<usize>>,
     pub carets: Vec<usize>,
     pub matches: Vec<Range<usize>>,
@@ -114,12 +177,6 @@ pub struct Wrap {
     starts: Vec<usize>,
 }
 
-fn line_key(text: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    text.hash(&mut hasher);
-    hasher.finish()
-}
-
 pub fn wrap_width(bounds: Bounds<Pixels>) -> Pixels {
     bounds.size.width - px(NUMBER_COLUMN + WRAP_MARGIN)
 }
@@ -127,7 +184,8 @@ pub fn wrap_width(bounds: Bounds<Pixels>) -> Pixels {
 impl Wrap {
     pub fn new(
         previous: &Wrap,
-        texts: impl Iterator<Item = String>,
+        keys: impl Iterator<Item = u64>,
+        text_of: impl Fn(usize) -> (String, Heading),
         width: Pixels,
         theme: &Theme,
         cx: &App,
@@ -140,16 +198,20 @@ impl Wrap {
                 .collect(),
             false => HashMap::new(),
         };
-        let mut wrapper = cx
-            .text_system()
-            .line_wrapper(font(mono(theme)), px(FONT_BODY));
+        let mut wrappers = HashMap::new();
         let mut starts = vec![0];
         let mut next = 0;
-        let lines = texts
-            .map(|text| {
-                let key = line_key(&text);
+        let lines = keys
+            .enumerate()
+            .map(|(line, key)| {
                 let breaks = known.get(&key).cloned().unwrap_or_else(|| {
-                    wrapper
+                    let (text, heading) = text_of(line);
+                    wrappers
+                        .entry(heading)
+                        .or_insert_with(|| {
+                            cx.text_system()
+                                .line_wrapper(heading.font(theme), heading.size())
+                        })
                         .wrap_line(&[LineFragment::text(&text)], width)
                         .map(|boundary| boundary.ix)
                         .collect()
@@ -212,6 +274,81 @@ impl Wrap {
 }
 
 #[derive(Clone, Default)]
+pub struct Heights(Option<Rc<[Pixels]>>);
+
+impl Heights {
+    pub fn measured(rows: impl Iterator<Item = Heading>) -> Self {
+        let tops = rows.scan(px(0.0), |top, heading| {
+            *top += heading.height();
+            Some(*top)
+        });
+        Heights(Some(std::iter::once(px(0.0)).chain(tops).collect()))
+    }
+
+    fn is_measured(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn top(&self, row: usize) -> Pixels {
+        let line = px(CODE_LINE);
+        let Some(tops) = &self.0 else {
+            return line * row as f32;
+        };
+        let last = tops.len().saturating_sub(1);
+        tops.get(row).copied().unwrap_or_else(|| {
+            tops.get(last).copied().unwrap_or_default() + line * row.saturating_sub(last) as f32
+        })
+    }
+
+    pub fn height(&self, row: usize) -> Pixels {
+        self.top(row + 1) - self.top(row)
+    }
+
+    fn row_at(&self, y: Pixels) -> usize {
+        let line = px(CODE_LINE);
+        let Some(tops) = &self.0 else {
+            return (y / line).floor().max(0.0) as usize;
+        };
+        let below = tops.partition_point(|top| *top <= y);
+        if below < tops.len() {
+            return below.saturating_sub(1);
+        }
+        let last = tops.len().saturating_sub(1);
+        let rest = y - tops.get(last).copied().unwrap_or_default();
+        last + (rest / line).floor().max(0.0) as usize
+    }
+
+    fn shown(&self, scrolled: Pixels, height: Pixels, count: usize) -> Range<usize> {
+        let first = self.row_at(scrolled);
+        let end = match self.0 {
+            Some(_) => self.row_at(scrolled + height) + 1,
+            None => first + (height / px(CODE_LINE)).ceil() as usize + 1,
+        };
+        first.min(count)..count.min(end)
+    }
+}
+
+pub fn reveal_row(scroll: &UniformListScrollHandle, heights: &Heights, row: usize) {
+    if !heights.is_measured() {
+        scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+        return;
+    }
+    let base = scroll.0.borrow().base_handle.clone();
+    let offset = base.offset();
+    let seen = -offset.y;
+    let view = base.bounds().size.height;
+    let (top, bottom) = (heights.top(row), heights.top(row + 1) + px(CODE_PAD_TOP));
+    let to = if top < seen {
+        top
+    } else if bottom > seen + view {
+        bottom - view
+    } else {
+        return;
+    };
+    base.set_offset(point(offset.x, -to.max(px(0.0))));
+}
+
+#[derive(Clone, Default)]
 struct RowMap {
     wrap: Option<Rc<Wrap>>,
     shown: Option<Rc<[usize]>>,
@@ -261,6 +398,12 @@ fn piece_of(line: &CodeLine, within: Range<usize>, last: bool) -> CodeLine {
             .iter()
             .filter_map(|(range, token)| Some((inside(range)?, *token)))
             .collect(),
+        heading: line.heading,
+        faces: line
+            .faces
+            .iter()
+            .filter_map(|(range, face)| Some((inside(range)?, *face)))
+            .collect(),
         selected: line.selected.iter().filter_map(inside).collect(),
         carets: line
             .carets
@@ -292,6 +435,7 @@ pub struct CodeView {
     marks: Rc<Marks>,
     stripe: Option<Stripe>,
     rows: RowMap,
+    heights: Heights,
 }
 
 pub fn code_view(
@@ -309,6 +453,7 @@ pub fn code_view(
         marks: Rc::default(),
         stripe: None,
         rows: RowMap::default(),
+        heights: Heights::default(),
     }
 }
 
@@ -337,16 +482,11 @@ impl CodeView {
         self.stripe = stripe;
         self
     }
-}
 
-fn shown_rows(bounds: Bounds<Pixels>, top: Pixels, count: usize) -> Range<usize> {
-    let first = (-top / px(CODE_LINE)).floor().max(0.0) as usize;
-    let shown = (bounds.size.height / px(CODE_LINE)).ceil() as usize + 1;
-    first.min(count)..count.min(first + shown)
-}
-
-fn row_top(bounds: Bounds<Pixels>, top: Pixels, row: usize) -> Pixels {
-    bounds.origin.y + top + px(CODE_LINE) * row as f32
+    pub fn heights(mut self, heights: Heights) -> Self {
+        self.heights = heights;
+        self
+    }
 }
 
 fn backgrounds(
@@ -354,6 +494,7 @@ fn backgrounds(
     stripe: Option<Stripe>,
     count: usize,
     rows: RowMap,
+    heights: Heights,
     base: ScrollHandle,
 ) -> impl IntoElement {
     canvas(
@@ -361,11 +502,11 @@ fn backgrounds(
         move |bounds, _, window, cx| {
             let theme = ActiveTheme::theme(cx);
             let top = px(CODE_PAD_TOP) + base.offset().y;
-            for row in shown_rows(bounds, top, count) {
+            for row in heights.shown(-top, bounds.size.height, count) {
                 let (line, _) = rows.line_at(row);
                 let area = Bounds::new(
-                    point(bounds.origin.x, row_top(bounds, top, row)),
-                    size(bounds.size.width, px(CODE_LINE)),
+                    point(bounds.origin.x, bounds.origin.y + top + heights.top(row)),
+                    size(bounds.size.width, heights.height(row)),
                 );
                 if let Some(token) = marks.get(&line).and_then(|mark| mark.background) {
                     window.paint_quad(fill(area, theme.color(token)));
@@ -388,12 +529,12 @@ fn paint_marks(
     mark: &LineMarks,
     first: bool,
     left: Pixels,
-    y: Pixels,
+    (y, height): (Pixels, Pixels),
     theme: &Theme,
     window: &mut Window,
 ) {
     if let Some(token) = mark.edge {
-        let edge = Bounds::new(point(left, y), size(px(EDGE_WIDTH), px(CODE_LINE)));
+        let edge = Bounds::new(point(left, y), size(px(EDGE_WIDTH), height));
         window.paint_quad(fill(edge, theme.color(token)));
     }
     match mark.gutter.filter(|_| first) {
@@ -401,13 +542,13 @@ fn paint_marks(
             let x = left + px(NUMBER_COLUMN - MARK_INSET - MARK_WIDTH);
             let bar = Bounds::new(
                 point(x, y + px(MARK_TOP)),
-                size(px(MARK_WIDTH), px(CODE_LINE - 2.0 * MARK_TOP)),
+                size(px(MARK_WIDTH), height - px(2.0 * MARK_TOP)),
             );
             window.paint_quad(fill(bar, theme.color(token)).corner_radii(px(MARK_RADIUS)));
         }
         Some(GutterMark::Removed(token)) => {
             let x = left + px(NUMBER_COLUMN - MARK_INSET - REMOVED_SIZE);
-            let top = y + px(CODE_LINE - REMOVED_SIZE / 2.0);
+            let top = y + height - px(REMOVED_SIZE / 2.0);
             let mut shape = PathBuilder::fill();
             shape.move_to(point(x, top));
             shape.line_to(point(x + px(REMOVED_SIZE), top + px(REMOVED_SIZE / 2.0)));
@@ -420,7 +561,7 @@ fn paint_marks(
         None => {}
     }
     if let Some(fold) = mark.fold.filter(|_| first) {
-        let (x, mid, half) = (left + px(FOLD_X), y + px(CODE_LINE / 2.0), px(FOLD_HALF));
+        let (x, mid, half) = (left + px(FOLD_X), y + height / 2.0, px(FOLD_HALF));
         let mut shape = PathBuilder::stroke(px(FOLD_STROKE));
         match fold {
             FoldMark::Open => {
@@ -443,29 +584,35 @@ fn paint_marks(
 pub fn code_origin(
     bounds: Bounds<Pixels>,
     scroll: &UniformListScrollHandle,
+    heights: &Heights,
     row: usize,
 ) -> Point<Pixels> {
     let offset = scroll.0.borrow().base_handle.offset();
     point(
         bounds.left() + px(NUMBER_COLUMN) + offset.x,
-        bounds.top() + px(CODE_PAD_TOP) + offset.y + px(CODE_LINE) * row as f32,
+        bounds.top() + px(CODE_PAD_TOP) + offset.y + heights.top(row),
     )
 }
 
 pub fn code_place(
     bounds: Bounds<Pixels>,
     scroll: &UniformListScrollHandle,
+    heights: &Heights,
     position: Point<Pixels>,
 ) -> (usize, Pixels) {
-    let origin = code_origin(bounds, scroll, 0);
-    let row = ((position.y - origin.y) / px(CODE_LINE)).floor().max(0.0) as usize;
-    (row, position.x - origin.x)
+    let origin = code_origin(bounds, scroll, heights, 0);
+    (heights.row_at(position.y - origin.y), position.x - origin.x)
 }
 
-pub fn code_shape(text: SharedString, window: &Window, theme: &Theme) -> ShapedLine {
+pub fn code_shape(
+    text: SharedString,
+    heading: Heading,
+    window: &Window,
+    theme: &Theme,
+) -> ShapedLine {
     let run = TextRun {
         len: text.len(),
-        font: font(mono(theme)),
+        font: heading.font(theme),
         color: rgb_to_hsla(ink(theme, T1)),
         background_color: None,
         underline: None,
@@ -474,7 +621,7 @@ pub fn code_shape(text: SharedString, window: &Window, theme: &Theme) -> ShapedL
     };
     window
         .text_system()
-        .shape_line(text, px(FONT_BODY), &[run], None)
+        .shape_line(text, heading.size(), &[run], None)
 }
 
 fn paint_blank(
@@ -511,7 +658,13 @@ fn paint_blank(
     }
 }
 
-fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &Theme) -> Div {
+fn code_row(
+    line: &CodeLine,
+    height: Pixels,
+    trailing: Option<&Trailing>,
+    cell: Pixels,
+    theme: &Theme,
+) -> Div {
     let runs = line.runs.iter().map(|(range, token)| {
         (
             range.clone(),
@@ -528,10 +681,23 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &
         ))),
         ..HighlightStyle::default()
     };
+    let faces = line.faces.iter().map(|(range, face)| {
+        let style = match face {
+            Face::Bold => HighlightStyle {
+                font_weight: Some(FontWeight::BOLD),
+                ..HighlightStyle::default()
+            },
+            Face::Italic => HighlightStyle {
+                font_style: Some(FontStyle::Italic),
+                ..HighlightStyle::default()
+            },
+        };
+        (range.clone(), style)
+    });
     let selected = line.selected.iter().map(|range| (range.clone(), selection));
     let found = match_highlights(&line.matches, line.current_match, theme);
     let text = StyledText::new(line.text.clone())
-        .with_highlights(combine_highlights(runs, selected.chain(found)));
+        .with_highlights(combine_highlights(runs.chain(faces), selected.chain(found)));
     let layout = text.layout().clone();
     let carets = line.carets.clone();
     let blanks = line.blanks.clone();
@@ -542,14 +708,18 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &
     let guide_ink = |share: f32| tint(border, (border.alpha * share).min(1.0));
     let (guide, active_guide) = (guide_ink(GUIDE_SHARE), guide_ink(ACTIVE_GUIDE_SHARE));
     let drawn = !carets.is_empty() || !blanks.is_empty() || guides.levels > 0;
+    let caret_height = px(CARET_HEIGHT) * (line.heading.size() / px(FONT_BODY));
     div()
         .flex()
         .items_center()
-        .h(px(CODE_LINE))
+        .h(height)
         .whitespace_nowrap()
         .font_family(mono(theme))
-        .text_size(px(FONT_BODY))
-        .line_height(px(CODE_LINE))
+        .text_size(line.heading.size())
+        .when(line.heading != Heading::Body, |row| {
+            row.font_weight(FontWeight::BOLD)
+        })
+        .line_height(height)
         .child(
             div()
                 .flex_none()
@@ -565,7 +735,7 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &
                                     let x = bounds.origin.x + cell * (level * TAB_STOP) as f32;
                                     let line = Bounds::new(
                                         point(x, bounds.origin.y),
-                                        size(px(GUIDE_WIDTH), px(CODE_LINE)),
+                                        size(px(GUIDE_WIDTH), height),
                                     );
                                     let shade = match guides.active == Some(level) {
                                         true => active_guide,
@@ -580,17 +750,17 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &
                                     ) else {
                                         continue;
                                     };
-                                    let mid = from.y + px(CODE_LINE / 2.0);
+                                    let mid = from.y + height / 2.0;
                                     paint_blank(*blank, from.x, to.x, mid, blank_ink, window);
                                 }
                                 for at in &carets {
                                     let Some(origin) = layout.position_for_index(*at) else {
                                         continue;
                                     };
-                                    let top = origin.y + px((CODE_LINE - CARET_HEIGHT) / 2.0);
+                                    let top = origin.y + (height - caret_height) / 2.0;
                                     let caret = Bounds::new(
                                         point(origin.x, top),
-                                        size(px(CARET_WIDTH), px(CARET_HEIGHT)),
+                                        size(px(CARET_WIDTH), caret_height),
                                     );
                                     window.paint_quad(fill(caret, color));
                                 }
@@ -606,74 +776,122 @@ fn code_row(line: &CodeLine, trailing: Option<&Trailing>, cell: Pixels, theme: &
         .children(trailing.map(|build| build(theme)))
 }
 
-fn wrapped_rows(
-    lines: &LineSource,
-    wrap: &Wrap,
-    marks: &Marks,
-    rows: Range<usize>,
-    cell: Pixels,
-    theme: &Theme,
-    cx: &mut App,
-) -> Vec<Div> {
-    let (Some(first), Some(last)) = (
-        rows.clone().next().map(|row| wrap.locate(row).0),
-        rows.clone().last().map(|row| wrap.locate(row).0),
-    ) else {
-        return Vec::new();
-    };
-    let drawn = lines(first..last + 1, cx);
-    rows.filter_map(|row| {
-        let (line, piece) = wrap.locate(row);
-        let code = drawn.get(line.checked_sub(first)?)?;
-        let last = piece + 1 == wrap.pieces(line);
-        let within = wrap.piece(line, piece, code.text.len());
-        let trailing = marks
-            .get(&line)
-            .and_then(|mark| mark.trailing.as_ref())
-            .filter(|_| last);
-        Some(code_row(
-            &piece_of(code, within, last),
-            trailing,
-            cell,
-            theme,
-        ))
-    })
-    .collect()
+struct RowSource {
+    lines: LineSource,
+    marks: Rc<Marks>,
+    rows: RowMap,
+    heights: Heights,
+}
+
+impl RowSource {
+    fn wrapped(
+        &self,
+        wrap: &Wrap,
+        rows: Range<usize>,
+        cell: Pixels,
+        theme: &Theme,
+        cx: &mut App,
+    ) -> Vec<Div> {
+        let (Some(first), Some(last)) = (
+            rows.clone().next().map(|row| wrap.locate(row).0),
+            rows.clone().last().map(|row| wrap.locate(row).0),
+        ) else {
+            return Vec::new();
+        };
+        let drawn = (self.lines)(first..last + 1, cx);
+        rows.filter_map(|row| {
+            let (line, piece) = wrap.locate(row);
+            let code = drawn.get(line.checked_sub(first)?)?;
+            let last = piece + 1 == wrap.pieces(line);
+            let within = wrap.piece(line, piece, code.text.len());
+            let trailing = self
+                .marks
+                .get(&line)
+                .and_then(|mark| mark.trailing.as_ref())
+                .filter(|_| last);
+            Some(code_row(
+                &piece_of(code, within, last),
+                self.heights.height(row),
+                trailing,
+                cell,
+                theme,
+            ))
+        })
+        .collect()
+    }
+
+    fn draw(&self, range: Range<usize>, window: &mut Window, cx: &mut App) -> Vec<Div> {
+        let theme = ActiveTheme::theme(cx);
+        let cell = code_shape(" ".into(), Heading::Body, window, &theme).width();
+        let (marks, heights) = (&self.marks, &self.heights);
+        if let Some(wrap) = &self.rows.wrap {
+            return self.wrapped(wrap, range, cell, &theme, cx);
+        }
+        (self.lines)(range.clone(), cx)
+            .iter()
+            .zip(range)
+            .map(|(line, row)| {
+                let trailing = marks
+                    .get(&self.rows.line_at(row).0)
+                    .and_then(|mark| mark.trailing.as_ref());
+                code_row(line, heights.height(row), trailing, cell, &theme)
+            })
+            .collect()
+    }
 }
 
 impl RenderOnce for CodeView {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let lines = self.lines;
-        let marks = self.marks.clone();
-        let rows = self.rows.clone();
-        let count = rows.count(self.count);
-        let list = uniform_list(self.id.clone(), count, move |range, window, cx| {
-            let theme = ActiveTheme::theme(cx);
-            let cell = code_shape(" ".into(), window, &theme).width();
-            if let Some(wrap) = &rows.wrap {
-                return wrapped_rows(&lines, wrap, &marks, range, cell, &theme, cx);
-            }
-            lines(range.clone(), cx)
-                .iter()
-                .zip(range)
-                .map(|(line, row)| {
-                    let trailing = marks
-                        .get(&rows.line_at(row).0)
-                        .and_then(|mark| mark.trailing.as_ref());
-                    code_row(line, trailing, cell, &theme)
-                })
-                .collect::<Vec<_>>()
-        })
-        .map(|list| match self.rows.wrap {
-            Some(_) => list.with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::FitList),
-            None => list
-                .with_width_from_item(Some(self.widest))
-                .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained),
-        })
-        .size_full()
-        .pt(px(CODE_PAD_TOP))
-        .track_scroll(&self.scroll);
+        let count = self.rows.count(self.count);
         let base = self.scroll.0.borrow().base_handle.clone();
+        let source = RowSource {
+            lines: self.lines,
+            marks: self.marks.clone(),
+            rows: self.rows.clone(),
+            heights: self.heights.clone(),
+        };
+        let list = match self.heights.is_measured() {
+            false => uniform_list(self.id.clone(), count, move |range, window, cx| {
+                source.draw(range, window, cx)
+            })
+            .map(|list| match self.rows.wrap {
+                Some(_) => {
+                    list.with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::FitList)
+                }
+                None => list
+                    .with_width_from_item(Some(self.widest))
+                    .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::Unconstrained),
+            })
+            .size_full()
+            .pt(px(CODE_PAD_TOP))
+            .track_scroll(&self.scroll)
+            .into_any_element(),
+            true => {
+                let heights = &self.heights;
+                let total = heights.top(count);
+                let most = (total + px(CODE_PAD_TOP) - base.bounds().size.height).max(px(0.0));
+                let seen = (-base.offset().y).min(most) - px(CODE_PAD_TOP);
+                let shown = heights.shown(seen, window.viewport_size().height, count);
+                let (above, below) = (heights.top(shown.start), total - heights.top(shown.end));
+                let drawn = source.draw(shown, window, cx);
+                div()
+                    .id(self.id.clone())
+                    .size_full()
+                    .pt(px(CODE_PAD_TOP))
+                    .flex()
+                    .flex_col()
+                    .items_start()
+                    .map(|list| match self.rows.wrap {
+                        Some(_) => list.overflow_y_scroll(),
+                        None => list.overflow_scroll(),
+                    })
+                    .track_scroll(&base)
+                    .child(div().flex_none().h(above))
+                    .children(drawn.into_iter().map(|row| row.flex_none()))
+                    .child(div().flex_none().h(below))
+                    .into_any_element()
+            }
+        };
         let bar = |axis: Axis| {
             scrollbar(SharedString::from(format!("{}-{axis:?}", self.id)), &base).axis(axis)
         };
@@ -686,6 +904,7 @@ impl RenderOnce for CodeView {
                     self.stripe.clone(),
                     count,
                     self.rows.clone(),
+                    self.heights.clone(),
                     base.clone(),
                 ))
             })
@@ -694,7 +913,7 @@ impl RenderOnce for CodeView {
                 count,
                 self.marks.clone(),
                 self.stripe,
-                self.rows.clone(),
+                (self.rows.clone(), self.heights.clone()),
                 base.clone(),
                 window,
                 cx,
@@ -710,7 +929,7 @@ fn gutter(
     count: usize,
     marks: Rc<Marks>,
     stripe: Option<Stripe>,
-    rows: RowMap,
+    (rows, heights): (RowMap, Heights),
     base: ScrollHandle,
     window: &mut Window,
     cx: &mut App,
@@ -733,7 +952,8 @@ fn gutter(
     let numbers = canvas(
         move |bounds, window, _| {
             let top = px(CODE_PAD_TOP) + base.offset().y;
-            shown_rows(bounds, top, count)
+            heights
+                .shown(-top, bounds.size.height, count)
                 .map(|row| {
                     let (line, first) = rows.line_at(row);
                     let shaped = first.then(|| {
@@ -746,7 +966,8 @@ fn gutter(
                             .text_system()
                             .shape_line(text, px(FONT_BODY), &[run], None)
                     });
-                    (line, first, row_top(bounds, top, row), shaped)
+                    let y = bounds.origin.y + top + heights.top(row);
+                    (line, first, (y, heights.height(row)), shaped)
                 })
                 .collect::<Vec<_>>()
         },
@@ -758,14 +979,14 @@ fn gutter(
                     ..ContentMask::default()
                 }),
                 |window| {
-                    for (line, first, y, shaped) in rows {
+                    for (line, first, (y, height), shaped) in rows {
                         if let Some(mark) = marks.get(&line) {
-                            paint_marks(mark, first, bounds.origin.x, y, &theme, window);
+                            paint_marks(mark, first, bounds.origin.x, (y, height), &theme, window);
                         }
                         if let Some(stripe) = stripe.as_ref().filter(|s| s.lines.contains(&line)) {
                             let bar = Bounds::new(
                                 point(bounds.origin.x, y),
-                                size(px(MARK_WIDTH), px(CODE_LINE)),
+                                size(px(MARK_WIDTH), height),
                             );
                             let mut colour = theme.color(stripe.token);
                             colour.alpha = stripe.opacity;
@@ -777,7 +998,7 @@ fn gutter(
                         let origin = point(bounds.origin.x, y);
                         let painted = shaped.paint(
                             origin,
-                            px(CODE_LINE),
+                            height,
                             TextAlign::Right,
                             Some(px(NUMBER_COLUMN - NUMBER_PAD)),
                             window,
