@@ -23,8 +23,8 @@ use desk_ui::motion::{Phase, Presence, reduced_motion};
 use desk_ui::theme::{ColorToken, NumberToken, Theme};
 use gpui::{
     AnyElement, ClickEvent, Context, Div, Entity, EntityId, EntityInputHandler, Focusable, Image,
-    KeyDownEvent, MouseDownEvent, Render, SharedString, Subscription, WeakEntity, Window, canvas,
-    deferred, div, img, prelude::*, px, relative,
+    KeyDownEvent, MouseDownEvent, Render, SharedString, StyleRefinement, Subscription, WeakEntity,
+    Window, canvas, deferred, div, img, prelude::*, px, relative,
 };
 
 use super::fixture::{
@@ -38,6 +38,7 @@ use super::terminal::TerminalPage;
 use crate::modules::chat::Chat;
 use crate::plugins;
 use crate::screens::frame;
+use crate::screens::work::split::{self, Spans, rooted, timed};
 
 const NAV_WIDTH: f32 = 247.0;
 const NAV_LEAST: f32 = 150.0;
@@ -95,7 +96,7 @@ pub struct Rows {
     showing: Rc<Cell<Option<Instant>>>,
     search: Option<(Entity<TextInput>, Subscription)>,
     query: String,
-    typed: Option<Instant>,
+    typed: Option<(Instant, Spans)>,
     index: Vec<Entry>,
 }
 
@@ -529,7 +530,7 @@ impl Rows {
             let query = input.read(cx).text().trim().to_lowercase();
             if query != rows.query {
                 rows.query = query;
-                rows.typed = Some(Instant::now());
+                rows.typed = Some((Instant::now(), split::watch(cx)));
                 cx.notify();
             }
         });
@@ -725,10 +726,7 @@ impl Rows {
             at += 1;
         }
         div()
-            .w(relative(NAV_SHARE))
-            .min_w(px(NAV_LEAST))
-            .max_w(px(NAV_WIDTH))
-            .flex_none()
+            .size_full()
             .flex()
             .flex_col()
             .py_2p5()
@@ -1105,15 +1103,21 @@ impl Render for Rows {
                 page.into_any_element()
             }
         };
-        if let Some(typed) = self.typed.take() {
+        if let Some((typed, spans)) = self.typed.take() {
             let query = self.query.clone();
             let waited = building.duration_since(typed).as_secs_f64() * 1000.0;
             let built = building.elapsed().as_secs_f64() * 1000.0;
-            window.on_next_frame(move |_, _| {
+            window.on_next_frame(move |_, cx| {
+                let shown = typed.elapsed().as_secs_f64() * 1000.0;
+                split::unwatch(cx);
                 eprintln!(
-                    "desk: settings: search \"{query}\" {count} matches in {:.2} ms (waited {waited:.2}, rows built {built:.2})",
-                    typed.elapsed().as_secs_f64() * 1000.0
-                )
+                    "desk: settings: search \"{query}\" {count} matches in {shown:.2} ms (waited {waited:.2}, rows built {built:.2})"
+                );
+                eprintln!(
+                    "desk: settings: search \"{query}\" frame ms after the keystroke: rows built {:.2}, {}, next frame {shown:.2}",
+                    waited + built,
+                    split::told(&spans, typed)
+                );
             });
         }
         let sheet = self
@@ -1121,7 +1125,7 @@ impl Render for Rows {
             .as_ref()
             .map(|(page, _)| page.clone())
             .and_then(|page| page.update(cx, |page, cx| page.consent_sheet(cx)));
-        let content = div().flex_1().min_w_0().flex().flex_col().child(
+        let content = div().size_full().flex().flex_col().child(
             ScrollArea::new("settings-content").child(
                 div()
                     .px(px(CONTENT_PAD_X))
@@ -1153,8 +1157,26 @@ impl Render for Rows {
                 .min_h_0()
                 .flex()
                 .relative()
-                .child(nav)
-                .child(content)
+                .child(timed(
+                    "settings nav",
+                    rooted(
+                        "settings nav",
+                        StyleRefinement::default()
+                            .w(relative(NAV_SHARE))
+                            .min_w(px(NAV_LEAST))
+                            .max_w(px(NAV_WIDTH))
+                            .flex_none(),
+                        nav,
+                    ),
+                ))
+                .child(timed(
+                    "settings page",
+                    rooted(
+                        "settings page",
+                        StyleRefinement::default().flex_1().min_w_0(),
+                        content,
+                    ),
+                ))
                 .children(sheet)
                 .child(first_frame),
         )

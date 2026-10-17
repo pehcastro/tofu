@@ -4,6 +4,7 @@ mod intro;
 mod keys;
 mod plugins;
 mod rows;
+mod stored;
 mod terminal;
 
 pub use rows::Rows;

@@ -32,6 +32,8 @@ use crate::screens::settings::Rows as SettingsScreen;
 #[cfg(all(feature = "screen-work", feature = "screen-usage"))]
 use crate::screens::usage::UsageScreen;
 #[cfg(feature = "screen-work")]
+use crate::screens::work::split::timed;
+#[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
 use crate::title_bar::{self, Bell, ask_github, github, title_bar};
@@ -88,18 +90,17 @@ use desk_ui::components::tree::OpenProject;
 #[cfg(feature = "screen-work")]
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
-#[cfg(feature = "screen-work")]
-use desk_ui::metrics::STATUS_BAR_HEIGHT;
 use desk_ui::metrics::{
-    TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
+    STATUS_BAR_HEIGHT, TEXT, TITLE_BAR_HEIGHT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT,
+    WINDOW_MIN_WIDTH, WINDOW_WIDTH,
 };
 use desk_ui::theme::{ColorToken, Mode, Theme, WordToken};
 #[cfg(feature = "screen-work")]
 use gpui::EntityInputHandler;
 use gpui::{
     AnyElement, AnyView, App, ClickEvent, Context, Entity, FocusHandle, IntoElement, KeyDownEvent,
-    Pixels, Render, SharedString, Size, Task, TitlebarOptions, Window, WindowBounds, WindowOptions,
-    div, prelude::*, px, size,
+    Pixels, Render, SharedString, Size, StyleRefinement, Task, TitlebarOptions, WeakEntity, Window,
+    WindowBounds, WindowOptions, div, prelude::*, px, size,
 };
 #[cfg(feature = "screen-work")]
 use gpui::{ClipboardItem, Focusable, Point};
@@ -295,7 +296,33 @@ struct ClosedScreen {
     at: Instant,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Part {
+    Title,
+    Sidebar,
+    Status,
+}
+
+struct Chrome {
+    desk: WeakEntity<Desk>,
+    part: Part,
+    _watch: [gpui::Subscription; 2],
+}
+
+impl Render for Chrome {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let part = self.part;
+        self.desk
+            .update(cx, |desk, cx| desk.chrome_body(part, cx))
+            .unwrap_or_else(|error| {
+                eprintln!("desk: chrome outlived the desk: {error}");
+                div().into_any_element()
+            })
+    }
+}
+
 pub struct Desk {
+    chrome: Vec<Entity<Chrome>>,
     sidebar_open: bool,
     toast: Option<Toast>,
     toasts: u64,
@@ -427,6 +454,11 @@ impl Shown {
         };
         Shown { name, body }
     }
+}
+
+#[cfg(not(feature = "screen-work"))]
+fn timed(_: &'static str, child: impl IntoElement) -> AnyElement {
+    child.into_any_element()
 }
 
 #[cfg(feature = "screen-work")]
@@ -804,6 +836,7 @@ impl Desk {
             expect(unused_mut, reason = "only the work screen adopts a project")
         )]
         let mut desk = Desk {
+            chrome: Vec::new(),
             sidebar_open: true,
             toast: None,
             toasts: 0,
@@ -1264,16 +1297,8 @@ impl Desk {
             reason = "only the work screen is fitted to the window"
         )
     )]
-    fn content(
-        &mut self,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> (Option<AnyElement>, AnyElement) {
-        #[cfg(feature = "screen-work")]
-        let tabs = self.strip(theme, cx);
-        #[cfg(not(feature = "screen-work"))]
-        let tabs = None;
-        let body = match &self.shown.body {
+    fn content(&mut self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
+        match &self.shown.body {
             #[cfg(feature = "screen-work")]
             Body::Work(work) => {
                 work.update(cx, |work, _| {
@@ -1301,14 +1326,12 @@ impl Desk {
                 .child(view.clone())
                 .into_any_element(),
             Body::Whole(view) => view.clone().into_any_element(),
-        };
-        (tabs, body)
+        }
     }
 
-    fn tiled(&self, content: AnyElement, cx: &mut Context<Self>) -> AnyElement {
-        let status = self.status(cx);
-        let cron = status.session_group.as_ref().map_or(0, |group| group.cron);
-        let cron_menu = self.cron_menu(cron, cx);
+    fn tiled(&mut self, content: AnyElement, cx: &mut Context<Self>) -> AnyElement {
+        let sidebar = self.sidebar_open.then(|| self.chrome(Part::Sidebar, cx));
+        let status = self.chrome(Part::Status, cx);
         div()
             .flex_1()
             .min_h_0()
@@ -1320,7 +1343,7 @@ impl Desk {
                     .min_h_0()
                     .flex()
                     .pr(px(GUTTER))
-                    .when(self.sidebar_open, |body| body.child(self.sidebar(cx)))
+                    .children(sidebar)
                     .when(!self.sidebar_open, |body| body.pl(px(GUTTER)))
                     .child(
                         div()
@@ -1332,15 +1355,88 @@ impl Desk {
                             .child(content),
                     ),
             )
-            .child(
+            .child(status)
+            .into_any_element()
+    }
+
+    fn chrome(&mut self, part: Part, cx: &mut Context<Self>) -> AnyElement {
+        let made = self.chrome.iter().find(|made| made.read(cx).part == part);
+        let made = match made {
+            Some(made) => made.clone(),
+            None => {
+                let desk = cx.entity();
+                let made = cx.new(|cx| Chrome {
+                    desk: desk.downgrade(),
+                    part,
+                    _watch: [
+                        cx.observe(&desk, |_, _, cx| cx.notify()),
+                        cx.observe_global::<ActiveTheme>(|_, cx| cx.notify()),
+                    ],
+                });
+                self.chrome.push(made.clone());
+                made
+            }
+        };
+        let (name, style) = match part {
+            Part::Title => (
+                "title bar",
+                StyleRefinement::default()
+                    .w_full()
+                    .h(px(TITLE_BAR_HEIGHT))
+                    .flex_none(),
+            ),
+            Part::Sidebar => (
+                "sidebar",
+                StyleRefinement::default()
+                    .w(px(SIDEBAR_COLUMN))
+                    .h_full()
+                    .flex_none(),
+            ),
+            Part::Status => (
+                "status bar",
+                StyleRefinement::default()
+                    .w_full()
+                    .h(px(STATUS_BAR_HEIGHT))
+                    .flex_none(),
+            ),
+        };
+        timed(name, made.cached(style)).into_any_element()
+    }
+
+    fn chrome_body(&mut self, part: Part, cx: &mut Context<Self>) -> AnyElement {
+        match part {
+            Part::Title => {
+                #[cfg(feature = "screen-work")]
+                let tabs = self.strip(&ActiveTheme::theme(cx), cx);
+                #[cfg(not(feature = "screen-work"))]
+                let tabs = None;
+                let whole = matches!(self.shown.body, Body::Whole(_));
+                title_bar(
+                    self.sidebar_open,
+                    self.tiles_x(),
+                    self.github.clone(),
+                    &self.bell,
+                    &self.marks,
+                    tabs,
+                    cx,
+                )
+                .when(whole, TitleBar::controls_only)
+                .into_any_element()
+            }
+            Part::Sidebar => self.sidebar(cx).into_any_element(),
+            Part::Status => {
+                let status = self.status(cx);
+                let cron = status.session_group.as_ref().map_or(0, |group| group.cron);
+                let cron_menu = self.cron_menu(cron, cx);
                 status_bar(&ActiveTheme::problems(cx), status, cx)
                     .cron_menu(cron_menu)
                     .branch_popover(
                         self.branch_open,
                         cx.listener(|desk, open: &bool, _, cx| desk.open_branch(*open, cx)),
-                    ),
-            )
-            .into_any_element()
+                    )
+                    .into_any_element()
+            }
+        }
     }
 
     pub fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1916,7 +2012,9 @@ impl Desk {
             cx.observe(&chat, |desk, _, cx| {
                 desk.track_running(cx);
                 desk.remember_state(cx);
+                cx.notify();
             }),
+            cx.observe(work, |_, _, cx| cx.notify()),
             cx.observe(&store, |desk, store, cx| {
                 for (id, session) in &store.read(cx).sessions {
                     desk.bell.gather(id, session);
@@ -2102,6 +2200,23 @@ impl Desk {
             .collect();
         for settings in views {
             settings.update(cx, |settings, cx| settings.reread(cx));
+        }
+    }
+
+    #[cfg(feature = "screen-boardy")]
+    fn open_ticket(
+        &mut self,
+        asked: &crate::screens::boardy::OpenTicket,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(why) = self.open_screen(BOARDY_SCREEN, window, cx) {
+            return eprintln!("desk: boardy: cannot open {}: {why}", asked.id);
+        }
+        if let Body::View(view) = &self.shown.body
+            && let Ok(boardy) = view.clone().downcast::<BoardyScreen>()
+        {
+            boardy.update(cx, |boardy, cx| boardy.open_ticket_at(&asked.id, cx));
         }
     }
 
@@ -2585,18 +2700,10 @@ impl Render for Desk {
                 ))
         });
         let whole = matches!(self.shown.body, Body::Whole(_));
-        let (tabs, content) = self.content(&theme, cx);
+        let content = self.content(&theme, cx);
+        let content = timed("screen", content).into_any_element();
         let sheet = self.switch_sheet(cx);
-        let bar = title_bar(
-            self.sidebar_open,
-            self.tiles_x(),
-            self.github.clone(),
-            &self.bell,
-            &self.marks,
-            tabs,
-            cx,
-        )
-        .when(whole, TitleBar::controls_only);
+        let bar = self.chrome(Part::Title, cx);
         let body = match whole {
             true => div()
                 .flex_1()
@@ -2614,7 +2721,10 @@ impl Render for Desk {
         let root = div();
         #[cfg(feature = "screen-work")]
         let root = root.on_action(cx.listener(Self::screen_menu));
-        root.size_full()
+        #[cfg(feature = "screen-boardy")]
+        let root = root.on_action(cx.listener(Self::open_ticket));
+        let root = root
+            .size_full()
             .relative()
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(Self::global_key))
@@ -2631,9 +2741,10 @@ impl Render for Desk {
             .text_color(theme.color(ColorToken::TextBase))
             .child(bar)
             .child(body)
-            .child(self.palette.clone())
+            .child(timed("palette", self.palette.clone()))
             .children(menu)
             .children(sheet)
-            .children(toast_layer)
+            .children(toast_layer);
+        timed("window", root)
     }
 }
