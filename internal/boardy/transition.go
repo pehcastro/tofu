@@ -22,10 +22,26 @@ func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error)
 	if err := m.Store.planned(key, ticket.Front); err != nil {
 		return Ticket{}, err
 	}
+	ticket.Acceptance = bulleted(ticket.Acceptance)
 	if m.role(board, actor) != RoleManager {
 		return m.request(key, ticket, actor)
 	}
 	return m.create(key, ticket, actor, "")
+}
+
+func bulleted(revisions []string) []string {
+	var out []string
+	for _, revision := range revisions {
+		lines := slices.DeleteFunc(strings.Split(revision, "\n"), func(line string) bool { return strings.TrimSpace(line) == "" })
+		if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, "- ") }) {
+			for i, line := range lines {
+				lines[i] = "- " + strings.TrimSpace(line)
+			}
+			revision = strings.Join(lines, "\n")
+		}
+		out = append(out, revision)
+	}
+	return out
 }
 
 func (m Managed) create(key string, ticket Ticket, actor, replaces string) (Ticket, error) {
