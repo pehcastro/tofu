@@ -110,7 +110,7 @@ func Serve(cfg ServeConfig) error {
 	}
 	s.stopCommand()
 	lanes := s.tracked()
-	s.stopTurns(lanes...)
+	s.stopTurns(slices.DeleteFunc(slices.Clone(lanes), func(l *lane) bool { return l.host.heldBy() != nil })...)
 	for _, l := range lanes {
 		l.halt()
 	}

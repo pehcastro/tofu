@@ -72,6 +72,8 @@ type Config struct {
 	Check       cron.Checker
 	Resumed     Carry
 	ProjectTurn *sync.Mutex
+	Detached    bool
+	Unrecorded  bool
 }
 
 type Host struct {
@@ -91,6 +93,7 @@ type Host struct {
 	turnLock *sync.Mutex
 	keys     func() keyMask
 	done     chan struct{}
+	detached bool
 
 	audience  atomic.Pointer[audience]
 	following atomic.Pointer[following]
@@ -135,8 +138,8 @@ type Host struct {
 }
 
 type pendingImage struct {
-	index int
-	path  string
+	Index int
+	Path  string
 }
 
 func New(cfg Config) (*Host, []string) {
@@ -157,6 +160,7 @@ func New(cfg Config) (*Host, []string) {
 		turnLock:    cfg.ProjectTurn,
 		keys:        sync.OnceValue(loadKeyMask),
 		done:        make(chan struct{}),
+		detached:    cfg.Detached,
 		id:          cfg.Resumed.Session,
 		started:     SourceStartup,
 		asks:        &asks{standing: map[string]Answer{}},
@@ -178,13 +182,15 @@ func New(cfg Config) (*Host, []string) {
 	if h.id == "" {
 		return h, troubles
 	}
-	h.started = SourceResumed
-	if h.readOnly = h.hold(h.id); h.readOnly != nil {
-		leader, err := h.dialHolder(h.id, h.readOnly)
-		if err != nil {
-			return h, append(troubles, h.readOnly.Error())
-		}
-		h.follow(leader, h.id)
+	if !cfg.Unrecorded {
+		h.started = SourceResumed
+	}
+	leader, err := h.holdOrFollow(h.id)
+	switch {
+	case err != nil:
+		h.readOnly = err
+		return h, append(troubles, err.Error())
+	case leader != nil:
 		return h, append(troubles, leader.note(h.id))
 	}
 	if err := h.loadCron(h.id); err != nil {
@@ -217,8 +223,21 @@ func (h *Host) Choose(pick Pick) {
 }
 
 func (h *Host) Send(pick Pick, task string) bool {
+	if h.detached && h.following.Load() == nil {
+		id := h.pendingID()
+		h.mu.Lock()
+		_, err := h.holdOrFollow(id)
+		h.mu.Unlock()
+		if err != nil {
+			h.note(err.Error())
+			return false
+		}
+	}
 	if f := h.following.Load(); f != nil {
-		return f.send(task)
+		h.mu.Lock()
+		images := h.takePending(task)
+		h.mu.Unlock()
+		return f.send(pick, task, images)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -274,12 +293,19 @@ func (h *Host) OpenFresh() (string, error) {
 		return "", err
 	}
 	id := h.pendingID()
+	if h.detached {
+		return id, nil
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return id, h.hold(id)
 }
 
 func (h *Host) Remembered(note string) {
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followRemember, Text: note})
+		return
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.inbox.Remembered(note)
@@ -421,16 +447,41 @@ func (h *Host) hold(id string) error {
 	if err != nil {
 		return err
 	}
+	if h.detached {
+		started := startHolder(h.dir, store, id)
+		if started == nil {
+			return cmp.Or(store.Busy(id), errNoHolder)
+		}
+		safe.Go(h.report, "holder note", func() { h.note(started.Error() + ", so this tofu runs the session itself") })
+	}
 	release, err := store.Hold(id)
 	if err != nil {
 		return err
 	}
+	moving := h.audience.Swap(nil)
 	h.letGo()
 	h.release, h.heldID = release, id
-	if release != nil {
-		h.openAudience(store, id)
+	switch {
+	case release != nil:
+		h.openAudience(store, id, moving)
+	case moving != nil:
+		moving.close()
 	}
 	return nil
+}
+
+func (h *Host) holdOrFollow(id string) (*following, error) {
+	refused := h.hold(id)
+	if refused == nil {
+		return nil, nil
+	}
+	leader, err := h.dialHolder(id, refused)
+	if err != nil {
+		return nil, refused
+	}
+	h.letGo()
+	h.follow(leader, id)
+	return leader, nil
 }
 
 func (h *Host) letGo() {
@@ -479,7 +530,7 @@ func (h *Host) carry(resumed Carry) error {
 		return nil
 	}
 	store, err := resumed.reading(h.dir)
-	if err == nil {
+	if err == nil && !h.detached && h.following.Load() == nil {
 		err = turn.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox)
 	}
 	if err != nil {
@@ -523,17 +574,14 @@ func (h *Host) Resume(carry Carry) ([]Event, error) {
 		h.mu.Unlock()
 		return nil, errTurnRunning
 	}
-	held := h.hold(carry.Session)
-	if held != nil {
-		leader, err := h.dialHolder(carry.Session, held)
-		if err != nil {
-			h.mu.Unlock()
-			return nil, held
-		}
-		h.letGo()
-		h.follow(leader, carry.Session)
+	leader, err := h.holdOrFollow(carry.Session)
+	if err != nil {
+		h.mu.Unlock()
+		return nil, err
 	}
-	h.readOnly = held
+	if leader == nil {
+		h.readOnly = nil
+	}
 	h.id, h.pending, h.started = carry.Session, nil, SourceResumed
 	restoreErr := h.carry(carry)
 	h.mu.Unlock()
@@ -561,12 +609,17 @@ func (h *Host) Compacted(into string, messages []llm.Message) error {
 	defer h.mu.Unlock()
 	h.dropCheckIn()
 	h.id, h.carried, h.prefix = into, messages, &turn.Prefix{}
-	return h.hold(into)
+	_, err := h.holdOrFollow(into)
+	return err
 }
 
 func (h *Host) Ran(command, output string, stopped bool) string {
 	redactor := sys.LoadKeyRedactor()
 	output = ansi.Strip(redactor.Redact(output))
+	if f := h.following.Load(); f != nil {
+		f.ask(followAsk{Op: followRan, Command: command, Text: output, Stopped: stopped})
+		return output
+	}
 	if !stopped {
 		h.mu.Lock()
 		h.ran = append(h.ran, redactor.Redact(ranPreface+command+"\n"+output))
@@ -611,28 +664,33 @@ func (h *Host) Attached(index int, name string, bytes int, format string) {
 	id := h.pendingID()
 	_ = store.AppendEvent(id, session.EventAttachment, session.Attachment{File: session.AttachmentPath(id, name), Bytes: bytes, Format: format})
 	h.mu.Lock()
-	h.pending = append(h.pending, pendingImage{index: index, path: filepath.Join(store.AttachmentDir(id), name)})
+	h.pending = append(h.pending, pendingImage{Index: index, Path: filepath.Join(store.AttachmentDir(id), name)})
 	h.mu.Unlock()
 }
 
-func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
-	h.mu.Lock()
+func (h *Host) takePending(task string) []pendingImage {
 	var wanted []pendingImage
 	h.pending = slices.DeleteFunc(h.pending, func(image pendingImage) bool {
-		taken := strings.Contains(task, ImageToken(image.index))
+		taken := strings.Contains(task, ImageToken(image.Index))
 		if taken {
 			wanted = append(wanted, image)
 		}
 		return taken
 	})
+	return wanted
+}
+
+func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
+	h.mu.Lock()
+	wanted := h.takePending(task)
 	h.mu.Unlock()
 	images := make([]llm.Image, 0, len(wanted))
 	for _, image := range wanted {
-		data, err := os.ReadFile(image.path)
+		data, err := os.ReadFile(image.Path)
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, llm.Image{MediaType: imageMediaType(image.path), Data: data})
+		images = append(images, llm.Image{MediaType: imageMediaType(image.Path), Data: data})
 	}
 	return images, nil
 }

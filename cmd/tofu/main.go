@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/interface/cli"
+	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/safe"
 	"tofu/internal/sys"
@@ -18,10 +19,11 @@ import (
 )
 
 const (
-	exitOK      = 0
-	exitVerdict = 1
-	exitUsage   = 2
-	profileFlag = "--profile"
+	exitOK           = 0
+	exitVerdict      = 1
+	exitUsage        = 2
+	profileFlag      = "--profile"
+	profiledVariable = "TOFU_PROFILED"
 )
 
 const usage = `tofu is a coding agent harness.
@@ -127,6 +129,10 @@ func main() {
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])
 	args, profiled := withoutProjectFlag(args, profileFlag)
+	if profiled {
+		_ = os.Setenv(profiledVariable, profileFlag)
+	}
+	profiled = profiled || len(args) > 0 && args[0] == host.HolderVerb && os.Getenv(profiledVariable) != ""
 	opensTheApp := len(args) == 0 || args[0] == "--continue"
 	if opensTheApp || args[0] == "migrate" {
 		copyLegacyStateDirs(os.Stderr)
@@ -250,6 +256,8 @@ func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 		return driveVerb(args[1:], in, out, errOut)
 	case "serve":
 		return serveVerb(args[1:], in, out, errOut)
+	case host.HolderVerb:
+		return holderVerb(args[1:], errOut)
 	case "run":
 		return runVerb(args[1:], out, errOut)
 	case "judge":

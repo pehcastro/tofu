@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -11,6 +12,16 @@ import (
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {
+	if f := h.following.Load(); f != nil {
+		reply := f.ask(followAsk{Op: followCron, Text: line})
+		switch {
+		case reply.ID == 0:
+			return cron.Reply{}, errHolderSilent
+		case reply.Failed != "":
+			return cron.Reply{}, errors.New(reply.Failed)
+		}
+		return reply.Cron, h.loadCron(h.ID())
+	}
 	h.mu.Lock()
 	readOnly, idle := h.readOnly, !h.running
 	h.mu.Unlock()

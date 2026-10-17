@@ -76,6 +76,7 @@ type appWiring struct {
 	clipboard func() (sys.Clipboard, error)
 	quota     func() []frame.Quota
 	reload    func(ctx context.Context, out io.Writer) int
+	detached  bool
 }
 
 type appLaunch struct {
@@ -119,7 +120,7 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wiring.open, quota: wiring.quota, tabs: launch.tabs, places: places}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted()})
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), Resumed: launch.resumed.hosted(), Detached: wiring.detached})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := gateKeyFrom(held.keys()); err != nil {
 		notes = append(notes, gateOffNote)
@@ -129,7 +130,12 @@ func appOptions(dir string, arms runOpts, wiring appWiring, launch appLaunch, he
 		live.Close()
 		engine.warm.Close()
 	}
-	*launch.endSession = func() []string { return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) }
+	*launch.endSession = func() []string {
+		if wiring.detached {
+			return nil
+		}
+		return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit)
+	}
 	settingsStore, _ := openSettings(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
 	opening := live.Opening(launch.resumed.hosted())
@@ -278,7 +284,7 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	stopRestoring := restoring(out, resumed)
 	held := holdStore()
 	defer held.close()
-	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload}
+	live := appWiring{open: openAppWire, wires: held.wires, blockers: held.requirements, quota: held.quota, reload: held.reload, detached: true}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
 	var keeperCrashed []string

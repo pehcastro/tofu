@@ -140,16 +140,13 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	var projectTurn sync.Mutex
 	spawn := func() (*host.Host, func()) {
 		engine := &appEngine{dir: dir, open: open, tabs: launch.tabs, places: places}
-		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn})
+		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: cronChecker(dir), ProjectTurn: &projectTurn, Detached: true})
 		for _, trouble := range troubles {
 			say(trouble)
 		}
 		return live, func() {
 			live.Close()
 			engine.warm.Close()
-			for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
-				say(warning)
-			}
 		}
 	}
 	live, release := spawn()
