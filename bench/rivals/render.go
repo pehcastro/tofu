@@ -18,7 +18,7 @@ func renderMarkdown(rep report) string {
 	for _, o := range []outcome{won, lost, tied} {
 		b.WriteString(verdictTable(rep, o))
 	}
-	b.WriteString(changeTable(rep) + mediansTable(rep) + setAsideTable(rep) + conditionsTable(rep))
+	b.WriteString(sideCostTable(rep) + changeTable(rep) + mediansTable(rep) + loadMarkdown(rep) + setAsideTable(rep) + conditionsTable(rep))
 	b.WriteString("\n" + rep.method)
 	return b.String()
 }
@@ -50,7 +50,7 @@ func (p matchup) headline() string {
 		who = toolName(p.rival.Tool) + " ahead"
 	}
 	wall := p.wall()
-	line := fmt.Sprintf("**%s**: %s, %d wins, %d losses, %d ties. Wall time is a %s, tofu %s at the median (%s s against %s s)", p.title(), who, wins, losses, ties, wall.result, wall.howMuch(),
+	line := fmt.Sprintf("**%s**: %s, %s, %s, %s. Wall time is a %s, tofu %s at the median (%s s against %s s)", p.title(), who, counted(wins, "win", "wins"), counted(losses, "loss", "losses"), counted(ties, "tie", "ties"), wall.result, wall.howMuch(),
 		wall.m.figure(wall.tofu.mid), wall.m.figure(wall.rival.mid))
 	var best []string
 	for _, d := range p.biggestWins(2) {
@@ -60,6 +60,13 @@ func (p matchup) headline() string {
 		line += "; biggest wins: " + strings.Join(best, ", ")
 	}
 	return line + "."
+}
+
+func counted(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }
 
 func verdictTable(rep report, o outcome) string {
@@ -72,6 +79,24 @@ func verdictTable(rep report, o outcome) string {
 				fmt.Fprintf(&b, "| %s, %s | %s | %s | %s | %s | %s | %s |\n", toolName(p.rival.Tool), p.model, d.m.label(), d.m.spread(d.tofu), d.m.spread(d.rival), d.howMuch(), d.difference(), d.before)
 			}
 		}
+	}
+	return b.String()
+}
+
+func sideCostTable(rep report) string {
+	var b strings.Builder
+	b.WriteString("\n## What tofu spends that the others do not\n\ntofu's memory model runs beside the conversation and no rival has one, so it is not a row above; its tokens are inside tofu's token totals.\n\n| arm | memory model calls per run | memory model |\n|---|---|---|\n")
+	calls := measure{"memory model calls", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Auxiliary) })}
+	for _, a := range rep.present {
+		rows := rep.now[a.Name]
+		if a.Tool != "tofu" {
+			continue
+		}
+		s, _ := statOf(rows, calls)
+		side := distinct(rows, func(r row) string {
+			return strings.Join(slices.DeleteFunc(slices.Clone(r.Models), func(m string) bool { return m == r.Model }), ", ")
+		})
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", a.Name, calls.spread(s), side)
 	}
 	return b.String()
 }

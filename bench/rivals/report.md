@@ -1,8 +1,8 @@
 # bench rivals: tofu 0.5.15-rc7 against Claude Code, omp and codex
 
-- **tofu against Claude Code on claude-sonnet-5-5**: level, 3 wins, 3 losses, 6 ties. Wall time is a tie, tofu 1.2x slower at the median (37.7 s against 31.8 s); biggest wins: peak memory 2.1x less, CPU time 1.6x less.
-- **tofu against omp on claude-sonnet-5-5**: omp ahead, 2 wins, 3 losses, 8 ties. Wall time is a tie, tofu 1.1x slower at the median (37.7 s against 33.8 s); biggest wins: edit call p50 21x less, peak memory 2.8x less.
-- **tofu against codex on gpt-5.6-sol**: tofu ahead, 6 wins, 2 losses, 6 ties. Wall time is a win, tofu 1.3x faster at the median (66.1 s against 83.4 s); biggest wins: edit call p50 368x less, CPU time 2.1x less.
+- **tofu against Claude Code on claude-sonnet-5-5**: tofu ahead, 5 wins, 2 losses, 6 ties. Wall time is a tie, tofu 1.2x slower at the median (37.7 s against 31.8 s); biggest wins: peak commit 3.1x less, peak memory 2.1x less.
+- **tofu against omp on claude-sonnet-5-5**: tofu ahead, 3 wins, 2 losses, 8 ties. Wall time is a tie, tofu 1.1x slower at the median (37.7 s against 33.8 s); biggest wins: peak commit 4.3x less, peak memory 2.8x less.
+- **tofu against codex on gpt-5.6-sol**: tofu ahead, 8 wins, 1 loss, 4 ties. Wall time is a win, tofu 1.3x faster at the median (66.1 s against 83.4 s); biggest wins: CPU time 2.1x less, tool time 2.0x less.
 
 15 live runs, 2026-10-17 01:52 to 02:08, from `runs/0.5.15-rc7`, against the runs of 2026-10-13 directly under `runs/`. A measure is a win or a loss only when the two spreads do not meet; otherwise it is a tie.
 
@@ -11,16 +11,21 @@
 | pairing | measure | tofu | rival | tofu is | difference | on 2026-10-13 |
 |---|---|---|---|---|---|---|
 | Claude Code, claude-sonnet-5-5 | CPU time, s | 30.4 [26.5 to 46.9] | 48.5 [48.0 to 59.0] | 1.6x less | -18.1 s | tie |
+| Claude Code, claude-sonnet-5-5 | CPU use, cores | 0.85 [0.80 to 0.88] | 1.55 [1.52 to 1.57] | 1.8x less | -0.70 cores | win |
 | Claude Code, claude-sonnet-5-5 | peak memory, MiB | 281 [275 to 297] | 592 [577 to 624] | 2.1x less | -311 MiB | win |
-| Claude Code, claude-sonnet-5-5 | cache write | 5,675 [5,589 to 5,980] | 7,616 [7,559 to 8,821] | 1.3x fewer | -1,941 tokens | tie |
+| Claude Code, claude-sonnet-5-5 | peak commit, MiB | 333 [333 to 338] | 1,028 [911 to 1,034] | 3.1x less | -695 MiB | win |
+| Claude Code, claude-sonnet-5-5 | processes started | 284 [280 to 382] | 521 [516 to 599] | 1.8x fewer | -237 | win |
+| omp, claude-sonnet-5-5 | CPU use, cores | 0.85 [0.80 to 0.88] | 1.43 [1.09 to 1.63] | 1.7x less | -0.58 cores | win |
 | omp, claude-sonnet-5-5 | peak memory, MiB | 281 [275 to 297] | 789 [722 to 826] | 2.8x less | -508 MiB | win |
-| omp, claude-sonnet-5-5 | edit call p50, ms | 6 [5 to 9.5] | 126.5 [116 to 137] | 21x less | -120.5 ms | win |
+| omp, claude-sonnet-5-5 | peak commit, MiB | 333 [333 to 338] | 1,437 [1,357 to 1,447] | 4.3x less | -1,104 MiB | win |
 | codex, gpt-5.6-sol | wall time, s | 66.1 [52.8 to 66.1] | 83.4 [69.8 to 89.2] | 1.3x faster | -17.3 s | tie |
 | codex, gpt-5.6-sol | CPU time, s | 29.3 [26.0 to 31.6] | 60.2 [59.5 to 70.7] | 2.1x less | -30.9 s | win |
+| codex, gpt-5.6-sol | CPU use, cores | 0.48 [0.44 to 0.49] | 0.85 [0.67 to 0.86] | 1.8x less | -0.37 cores | win |
 | codex, gpt-5.6-sol | peak memory, MiB | 304 [304 to 307] | 496 [462 to 528] | 1.6x less | -192 MiB | win |
+| codex, gpt-5.6-sol | peak commit, MiB | 333 [331 to 334] | 593 [589 to 594] | 1.8x less | -260 MiB | win |
+| codex, gpt-5.6-sol | processes started | 288 | 499 [485 to 510] | 1.7x fewer | -211 | tie |
 | codex, gpt-5.6-sol | total input | 78,985 [77,921 to 90,596] | 126,689 [124,597 to 131,509] | 1.6x fewer | -47,704 tokens | loss |
 | codex, gpt-5.6-sol | tool time, s | 11.0 [9.7 to 11.5] | 21.9 [21.8 to 26.8] | 2.0x less | -10.9 s | win |
-| codex, gpt-5.6-sol | edit call p50, ms | 5 [2.5 to 10] | 1,842.5 [749 to 2,863] | 368x less | -1,837.5 ms | win |
 
 ## Where tofu loses
 
@@ -28,12 +33,9 @@
 |---|---|---|---|---|---|---|
 | Claude Code, claude-sonnet-5-5 | fresh input | 2,784 [2,778 to 4,177] | 6 [6 to 8] | 464x more | +2,778 tokens | loss |
 | Claude Code, claude-sonnet-5-5 | output | 2,892 [2,758 to 2,997] | 1,747 [1,733 to 2,092] | 1.7x more | +1,145 tokens | tie |
-| Claude Code, claude-sonnet-5-5 | memory model calls | 3 [3 to 4] | 0 | 3 more | +3 | not recorded |
 | omp, claude-sonnet-5-5 | fresh input | 2,784 [2,778 to 4,177] | 12 [10 to 12] | 232x more | +2,772 tokens | loss |
 | omp, claude-sonnet-5-5 | output | 2,892 [2,758 to 2,997] | 2,435 [1,308 to 2,490] | 1.2x more | +457 tokens | loss |
-| omp, claude-sonnet-5-5 | memory model calls | 3 [3 to 4] | 0 | 3 more | +3 | not recorded |
 | codex, gpt-5.6-sol | fresh input | 28,897 [17,161 to 28,900] | 10,677 [10,337 to 12,213] | 2.7x more | +18,220 tokens | tie |
-| codex, gpt-5.6-sol | memory model calls | 3 | 0 | 3 more | +3 | not recorded |
 
 ## Where it is a tie
 
@@ -48,17 +50,24 @@
 | omp, claude-sonnet-5-5 | quality | 10 | 10 | level | +0 points | tie |
 | omp, claude-sonnet-5-5 | wall time, s | 37.7 [31.0 to 53.4] | 33.8 [31.6 to 47.8] | 1.1x slower | +3.9 s | loss |
 | omp, claude-sonnet-5-5 | CPU time, s | 30.4 [26.5 to 46.9] | 52.2 [45.2 to 55.0] | 1.7x less | -21.8 s | tie |
+| omp, claude-sonnet-5-5 | processes started | 284 [280 to 382] | 298 [293 to 390] | 1.0x fewer | -14 | loss |
 | omp, claude-sonnet-5-5 | model requests | 5 [4 to 5] | 5 [4 to 5] | level | +0 | loss |
 | omp, claude-sonnet-5-5 | total input | 75,837 [61,308 to 76,306] | 65,280 [54,782 to 70,848] | 1.2x more | +10,557 tokens | loss |
-| omp, claude-sonnet-5-5 | cache write | 5,675 [5,589 to 5,980] | 5,080 [2,904 to 16,377] | 1.1x more | +595 tokens | loss |
 | omp, claude-sonnet-5-5 | failed tool calls | 0 [0 to 1] | 0 | level | +0 | loss |
 | omp, claude-sonnet-5-5 | tool time, s | 11.7 [9.3 to 31.9] | 14.5 [11.9 to 16.0] | 1.2x less | -2.8 s | loss |
 | codex, gpt-5.6-sol | quality | 10 | 10 | level | +0 points | tie |
 | codex, gpt-5.6-sol | model requests | 7 [7 to 8] | 7 | level | +0 | loss |
-| codex, gpt-5.6-sol | cache write | 0 | 0 | level | +0 tokens | tie |
 | codex, gpt-5.6-sol | output | 3,488 [3,351 to 3,987] | 4,238 [3,333 to 5,082] | 1.2x fewer | -750 tokens | tie |
 | codex, gpt-5.6-sol | failed tool calls | 0 | 0 | level | +0 | tie |
-| codex, gpt-5.6-sol | time to first token, s | 40.4 [28.0 to 40.8] | 25.0 [23.8 to 34.7] | 1.6x more | +15.4 s | loss |
+
+## What tofu spends that the others do not
+
+tofu's memory model runs beside the conversation and no rival has one, so it is not a row above; its tokens are inside tofu's token totals.
+
+| arm | memory model calls per run | memory model |
+|---|---|---|
+| tofu-sonnet | 3 [3 to 4] | claude-haiku-4-5-20251001 |
+| tofu-gpt | 3 | claude-haiku-4-5-20251001 |
 
 ## Change since 2026-10-13, medians
 
@@ -67,27 +76,59 @@
 | quality | 10 → 10, +0% | 10 → 10, +0% | 10 → 10, +0% | 10 → 10, +0% | 10 → 10, +0% |
 | wall time, s | 63.1 → 37.7, -40% | 50.5 → 31.8, -37% | 38.7 → 33.8, -13% | 325.8 → 66.1, -80% | 110.8 → 83.4, -25% |
 | CPU time, s | 53.0 → 30.4, -43% | 57.5 → 48.5, -16% | 55.5 → 52.2, -6% | 55.8 → 29.3, -47% | 67.1 → 60.2, -10% |
+| CPU use, cores | 0.84 → 0.85, +2% | 1.07 → 1.55, +44% | 1.46 → 1.43, -2% | 0.18 → 0.48, +164% | 0.58 → 0.85, +46% |
 | peak memory, MiB | 393 → 281, -28% | 616 → 592, -4% | 872 → 789, -10% | 393 → 304, -23% | 543 → 496, -9% |
+| peak commit, MiB | 541 → 333, -38% | 1,017 → 1,028, +1% | 1,484 → 1,437, -3% | 535 → 333, -38% | 593 → 593, +0% |
+| processes started | 427 → 284, -33% | 572 → 521, -9% | 377 → 298, -21% | 477 → 288, -40% | 482 → 499, +4% |
 | model requests | 11 → 5, -55% | 6 → 3, -50% | 4 → 5, +25% | 27 → 7, -74% | 7 → 7, +0% |
 | total input | 234,241 → 75,837, -68% | 151,458 → 71,443, -53% | 54,983 → 65,280, +19% | 494,279 → 78,985, -84% | 125,052 → 126,689, +1% |
 | fresh input | 1,194 → 2,784, +133% | 12 → 6, -50% | 10 → 12, +20% | 83,143 → 28,897, -65% | 10,876 → 10,677, -2% |
-| cache write | 13,686 → 5,675, -59% | 11,783 → 7,616, -35% | 3,549 → 5,080, +43% | 0 → 0 | 0 → 0 |
 | output | 3,874 → 2,892, -25% | 4,316 → 1,747, -60% | 1,854 → 2,435, +31% | 8,401 → 3,488, -58% | 4,447 → 4,238, -5% |
-| memory model calls | not recorded → 3 | not recorded → 0 | not recorded → 0 | not recorded → 3 | not recorded → 0 |
 | failed tool calls | 4 → 0, -100% | 0 → 0 | 0 → 0 | 3 → 0, -100% | 0 → 0 |
 | tool time, s | 21.2 → 11.7, -45% | 19.9 → 17.4, -12% | 16.8 → 14.5, -14% | 19.3 → 11.0, -43% | 25.4 → 21.9, -14% |
-| time to first token, s | 22.5 → 4.9, -78% | not recorded | not recorded | 197.5 → 40.4, -80% | 38.3 → 25.0, -35% |
-| edit call p50, ms | 2.5 → 6, +140% | not recorded | 83 → 126.5, +52% | 1.8 → 5, +186% | 4,199 → 1,842.5, -56% |
 
 ## Medians per arm, lowest to highest in brackets
 
-| arm | runs | quality | wall time, s | CPU time, s | peak memory, MiB | model requests | total input | fresh input | cache write | output | memory model calls | failed tool calls | tool time, s | time to first token, s | edit call p50, ms |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| tofu-sonnet | 3 | 10 | 37.7 [31.0 to 53.4] | 30.4 [26.5 to 46.9] | 281 [275 to 297] | 5 [4 to 5] | 75,837 [61,308 to 76,306] | 2,784 [2,778 to 4,177] | 5,675 [5,589 to 5,980] | 2,892 [2,758 to 2,997] | 3 [3 to 4] | 0 [0 to 1] | 11.7 [9.3 to 31.9] | 4.9 [3.9 to 6.5] | 6 [5 to 9.5] |
-| claude-sonnet | 3 | 10 | 31.8 [30.6 to 38.1] | 48.5 [48.0 to 59.0] | 592 [577 to 624] | 3 [3 to 4] | 71,443 [71,244 to 95,937] | 6 [6 to 8] | 7,616 [7,559 to 8,821] | 1,747 [1,733 to 2,092] | 0 | 0 | 17.4 [17.3 to 21.5] | not recorded | not recorded |
-| omp-sonnet | 3 | 10 | 33.8 [31.6 to 47.8] | 52.2 [45.2 to 55.0] | 789 [722 to 826] | 5 [4 to 5] | 65,280 [54,782 to 70,848] | 12 [10 to 12] | 5,080 [2,904 to 16,377] | 2,435 [1,308 to 2,490] | 0 | 0 | 14.5 [11.9 to 16.0] | not recorded | 126.5 [116 to 137] |
-| tofu-gpt | 3 | 10 | 66.1 [52.8 to 66.1] | 29.3 [26.0 to 31.6] | 304 [304 to 307] | 7 [7 to 8] | 78,985 [77,921 to 90,596] | 28,897 [17,161 to 28,900] | 0 | 3,488 [3,351 to 3,987] | 3 | 0 | 11.0 [9.7 to 11.5] | 40.4 [28.0 to 40.8] | 5 [2.5 to 10] |
-| codex-gpt | 3 | 10 | 83.4 [69.8 to 89.2] | 60.2 [59.5 to 70.7] | 496 [462 to 528] | 7 | 126,689 [124,597 to 131,509] | 10,677 [10,337 to 12,213] | 0 | 4,238 [3,333 to 5,082] | 0 | 0 | 21.9 [21.8 to 26.8] | 25.0 [23.8 to 34.7] | 1,842.5 [749 to 2,863] |
+| arm | runs | quality | wall time, s | CPU time, s | CPU use, cores | peak memory, MiB | peak commit, MiB | processes started | model requests | total input | fresh input | output | failed tool calls | tool time, s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| tofu-sonnet | 3 | 10 | 37.7 [31.0 to 53.4] | 30.4 [26.5 to 46.9] | 0.85 [0.80 to 0.88] | 281 [275 to 297] | 333 [333 to 338] | 284 [280 to 382] | 5 [4 to 5] | 75,837 [61,308 to 76,306] | 2,784 [2,778 to 4,177] | 2,892 [2,758 to 2,997] | 0 [0 to 1] | 11.7 [9.3 to 31.9] |
+| claude-sonnet | 3 | 10 | 31.8 [30.6 to 38.1] | 48.5 [48.0 to 59.0] | 1.55 [1.52 to 1.57] | 592 [577 to 624] | 1,028 [911 to 1,034] | 521 [516 to 599] | 3 [3 to 4] | 71,443 [71,244 to 95,937] | 6 [6 to 8] | 1,747 [1,733 to 2,092] | 0 | 17.4 [17.3 to 21.5] |
+| omp-sonnet | 3 | 10 | 33.8 [31.6 to 47.8] | 52.2 [45.2 to 55.0] | 1.43 [1.09 to 1.63] | 789 [722 to 826] | 1,437 [1,357 to 1,447] | 298 [293 to 390] | 5 [4 to 5] | 65,280 [54,782 to 70,848] | 12 [10 to 12] | 2,435 [1,308 to 2,490] | 0 | 14.5 [11.9 to 16.0] |
+| tofu-gpt | 3 | 10 | 66.1 [52.8 to 66.1] | 29.3 [26.0 to 31.6] | 0.48 [0.44 to 0.49] | 304 [304 to 307] | 333 [331 to 334] | 288 | 7 [7 to 8] | 78,985 [77,921 to 90,596] | 28,897 [17,161 to 28,900] | 3,488 [3,351 to 3,987] | 0 | 11.0 [9.7 to 11.5] |
+| codex-gpt | 3 | 10 | 83.4 [69.8 to 89.2] | 60.2 [59.5 to 70.7] | 0.85 [0.67 to 0.86] | 496 [462 to 528] | 593 [589 to 594] | 499 [485 to 510] | 7 | 126,689 [124,597 to 131,509] | 10,677 [10,337 to 12,213] | 4,238 [3,333 to 5,082] | 0 | 21.9 [21.8 to 26.8] |
+
+## Load: memory and CPU as sub-agents are added
+
+From `bench/scale/results.jsonl`, live arm: one run per rung, each sub-agent reads one file and repeats its first line. MiB per sub-agent is the least squares slope over every rung.
+
+| tool | version | dates | rungs | peak RSS at 0, MiB | peak RSS at the top rung, MiB | MiB per sub-agent, peak | MiB per sub-agent, steady | peak commit at the top rung, MiB | CPU at the top rung, s | cores at the top rung |
+|---|---|---|---|---|---|---|---|---|---|---|
+| tofu, claude-sonnet-5-5 | 0.5.14 75d2b58b | 2026-10-14 | 0 to 10 sub-agents | 35 | 47 | 0.7 | 0.7 | 103 | 1.4 | 0.07 |
+| Claude Code, claude-sonnet-5-5 | not recorded | 2026-10-13 | 0 to 10 sub-agents | 227 | 292 | 4.3 | 4.7 | 395 | 4.8 | 0.24 |
+| omp, claude-sonnet-5-5 | not recorded | 2026-10-13 | 0 to 10 sub-agents | 543 | 876 | 20.9 | 4.8 | 1609 | 11.0 | 0.57 |
+| codex, gpt-5.6-sol | not recorded | 2026-10-13 | 0 to 10 sub-agents | 213 | 440 | 22.0 | 14.4 | 366 | 37.2 | 0.56 |
+
+### tofu with 10 and with 450 sub-agents in one session
+
+From `bench/longsession/results.jsonl`, arms head10 and head450, tofu 0.5.15-rc1 on anthropic messages from a local stub, no model, 2026-10-15: each cell is the median of the samples of that phase. Idle is the session open with nothing running; work is its sub-agents working.
+
+| sub-agents | phase | samples | working set MiB | private MiB | cores |
+|---|---|---|---|---|---|
+| 10 | idle | 10 | 43 | 68 | 0.000 |
+| 450 | idle | 10 | 112 | 139 | 0.000 |
+| 10 | work | 10 | 74 | 95 | 0.057 |
+| 450 | work | 10 | 286 | 310 | 0.072 |
+
+From 10 to 450 sub-agents the working set grows 0.16 MiB per sub-agent idle and 0.48 MiB working.
+
+### Memory per sub-agent on the subagents task
+
+From `runs/subagents`: peak tree RSS of a run divided by the sub-agents it started, on a real task with a live model, so the lead's own memory is spread across them.
+
+| arm | build | runs | sub-agents | peak memory, MiB | MiB per sub-agent |
+|---|---|---|---|---|---|
+| tofu-sonnet | 0.5.14 commit b0e2401d | 3 | 6 | 363 [354 to 368] | 60 [59 to 61] |
+| omp-sonnet | omp/18.3.2 | 3 | 6 [6 to 7] | 1,080 [1,046 to 1,155] | 180 [149 to 192] |
 
 ## Runs that fell short or were set aside
 
@@ -138,14 +179,26 @@ Read off the rival's own stdout or rollout of the first run of each arm; the mod
 | tofu-gpt | medium, `--effort medium` | none, `--thinking-summary omitted` |
 | codex-gpt | medium, `-c model_reasoning_effort="medium"` | none: the rollout `turn_context` says `summary: none` |
 
+## Fresh input, by source
+
+Fresh input is the prompt the provider served from no cache. Split per request from `tofu session trace` of each run's work folder and, for codex, the `last_token_usage` of its rollout; every total equals the run file's `fresh_in`.
+
+| source | tofu-sonnet runs 1, 2, 3 | tofu-gpt runs 1, 2, 3 | codex-gpt runs 1, 2, 3 | does it earn its cost |
+|---|---|---|---|---|
+| conversation, first request | 4, 4, 4 | 7,556, 7,556, 7,556 | 3,142, 4,142, 4,142 | Sonnet reads the prefix the previous run cached. On GPT tofu's prefix is cold every session while codex's first request reads 11,392 cached; a guess to test: `prompt_cache_key` is the session id, `internal/llm/wire/codex/request.go:159` |
+| conversation, messages new since the last request | 8, 6, 8 | 5,727, 5,970, 6,396 | 7,535, 8,071, 6,195 | yes: tool results the model has not seen yet, about what codex sends |
+| conversation, a later request with no cache read | 0, 0, 0 | 12,890 at step 7, 12,668 at step 6, 0 | 0, 0, 0 | no, waste: the instructions, tools and first message were byte-identical to the first request of the run, checked on run 1, and the request before it did read the cache, so the cause is not found in the body; needs a ticket |
+| memory model, claude-haiku-4-5 | 2,766, 4,167, 2,772 | 2,724, 2,706, 3,209 | none | tofu's own feature: three one-shot calls of about 900 tokens, none read from cache; whether memory pays is the memory bench's question, not this one |
+| total, the run file's fresh input | 2,778, 4,177, 2,784 | 28,897, 28,900, 17,161 | 10,677, 12,213, 10,337 | on Sonnet the conversation alone is 10 to 12, level with Claude Code's 6 and omp's 12 |
+
 ## Caveats
 
 | measure | caveat |
 |---|---|
-| memory model calls | counted only in batch runs; the earlier runs did not record them |
-| time to first token | codex's first token is its first finished output item, so its figure is an upper bound |
+| kept out of the comparison | memory model calls, time to first token, edit call p50 and cache write: not every arm can have them |
 | tool time | tofu times each call itself; Claude Code, omp and codex are timed from the call event on stdout to its result |
-| edit call p50 | the median edit call of each run; Claude Code edits through bash, so it has no edit row |
+| CPU use | CPU seconds of the whole process tree over wall seconds, so cores busy on average |
+| load | the load tables come from earlier benches, `bench/scale` and `bench/longsession`, on older builds; their dates are in the rows |
 
 ## Appendix
 

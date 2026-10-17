@@ -41,18 +41,21 @@ var measures = []measure{
 	{"quality", "points", "higher", "lower", 0, true, always(func(r row) float64 { got, _ := r.Score.quality(); return float64(got) })},
 	{wallTime, "s", "faster", "slower", 1, false, always(func(r row) float64 { return seconds(r.WallMS) })},
 	{"CPU time", "s", "less", "more", 1, false, always(func(r row) float64 { return seconds(r.Tree.CPUMS) })},
+	{"CPU use", "cores", "less", "more", 2, false, always(func(r row) float64 { return float64(r.Tree.CPUMS) / float64(r.WallMS) })},
 	{"peak memory", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakTreeRSS)) })},
+	{"peak commit", "MiB", "less", "more", 0, false, always(func(r row) float64 { return math.Round(megabytes(r.Tree.PeakCommit)) })},
+	{"processes started", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tree.Processes) })},
 	{"model requests", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Requests) })},
 	{"total input", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.in()) })},
 	{"fresh input", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.FreshIn) })},
-	{"cache write", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.CacheWrite) })},
 	{"output", "tokens", "fewer", "more", 0, false, always(func(r row) float64 { return float64(r.Tokens.Out) })},
-	{"memory model calls", "", "fewer", "more", 0, false, func(r row) (float64, bool) { return float64(r.Auxiliary), r.Batch != "" }},
 	{"failed tool calls", "", "fewer", "more", 0, false, always(func(r row) float64 { return float64(failedCalls(r)) })},
 	{"tool time", "s", "less", "more", 1, false, always(toolSeconds)},
-	{"time to first token", "s", "less", "more", 1, false, firstTokenSeconds},
-	{"edit call p50", "ms", "less", "more", 0, false, editMedian},
 }
+
+var perAgent = measure{"memory per sub-agent", "MiB", "less", "more", 0, false, func(r row) (float64, bool) {
+	return math.Round(megabytes(r.Tree.PeakTreeRSS) / float64(r.Agents)), r.Agents > 0
+}}
 
 func toolSeconds(r row) float64 {
 	var total int64
@@ -60,27 +63,6 @@ func toolSeconds(r row) float64 {
 		total += max(c.MS, 0)
 	}
 	return seconds(total)
-}
-
-func firstTokenSeconds(r row) (float64, bool) {
-	var total int64
-	for _, timed := range r.Timed {
-		total += timed.FirstMS
-	}
-	return seconds(total), len(r.Timed) > 0
-}
-
-func editMedian(r row) (float64, bool) {
-	var times []float64
-	for _, c := range r.Calls {
-		if c.Kind == "edit" && c.MS >= 0 {
-			times = append(times, float64(c.MS))
-		}
-	}
-	if len(times) == 0 {
-		return 0, false
-	}
-	return median(times), true
 }
 
 type stat struct {
@@ -241,6 +223,8 @@ func toolName(tool string) string {
 type report struct {
 	batch, since string
 	now, then    map[string][]row
+	subagents    map[string][]row
+	load         load
 	present      []arm
 	matchups     []matchup
 	setAside     []row
@@ -289,11 +273,19 @@ func writeReport(args []string) error {
 	if err != nil {
 		return err
 	}
+	subagents, err := readRows(filepath.Join(here(), "runs", "subagents", "*.json"))
+	if err != nil {
+		return err
+	}
 	method, err := os.ReadFile(filepath.Join(here(), "judgement.md"))
 	if err != nil {
 		return err
 	}
-	rep := report{batch: *batch, since: *since, now: byArm(now), then: byArm(earlier), setAside: setAside, method: string(method)}
+	machine, err := readLoad()
+	if err != nil {
+		return err
+	}
+	rep := report{batch: *batch, since: *since, now: byArm(now), then: byArm(earlier), subagents: byArm(subagents), load: machine, setAside: setAside, method: string(method)}
 	rep.present = present(rep.now)
 	rep.matchups = matchups(rep)
 	appendix, err := appendixMarkdown(rep)
