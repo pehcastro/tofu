@@ -40,17 +40,18 @@ func boardyIdentity(as string) (actor, person, lead string) {
 	if session := os.Getenv(boardySessionEnv); session != "" {
 		return session, "", ""
 	}
+	person = string(boardy.RolePerson)
 	claudeSession := os.Getenv(claudeCodeSessionEnv)
-	switch {
-	case claudeSession == "" && os.Getenv(claudeCodeEnv) == "":
-		actor = cmp.Or(as, string(boardy.RolePerson))
-		return actor, actor, ""
+	switch inClaudeCode := claudeSession != "" || os.Getenv(claudeCodeEnv) != ""; {
+	case !inClaudeCode && as == boardy.OrchestratorName:
+		return as, person, as
+	case !inClaudeCode:
+		return cmp.Or(as, person), person, ""
 	case as == "" || as == boardy.OrchestratorName:
 		actor = boardy.ClaudeCodeActor(claudeSession, "")
-		return actor, string(boardy.RolePerson), actor
+		return actor, person, actor
 	}
-	actor = boardy.ClaudeCodeActor(claudeSession, as)
-	return actor, actor, ""
+	return boardy.ClaudeCodeActor(claudeSession, as), person, ""
 }
 
 func (c boardyCall) manage(subcommand string) int {
