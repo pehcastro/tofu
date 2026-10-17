@@ -69,10 +69,8 @@ calibrated.
 
 With `--local`, or `learn` off, nothing is sent and messages group only
 on three or more shared words that carry meaning. It says it is the
-weaker mode, and classes come from code. Two corrections agree only when
-those words sit within two neighbouring clauses of each, and "again" marks
-a correction only when it speaks to the lead, so a one-off request to try
-again never becomes a rule.
+weaker mode, and classes come from code. Corrections agree only within
+neighbouring clauses, and "again" counts only when it speaks to the lead.
 
 ## Where it lives
 
