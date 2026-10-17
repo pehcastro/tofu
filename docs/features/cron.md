@@ -43,8 +43,9 @@ on time too, and a job keeps firing while one long turn runs.
 - **An expiry on every job.** A job without one expires after 24 hours.
 - **One process fires it.** A job runs in the holder of its session,
   whichever window made it, even a window that has sent nothing yet, and
-  fires once however many windows follow. Past midnight a fire sees the new
-  date.
+  fires once however many windows follow, and `tofu --continue` in another
+  window joins a session that holds only a job before it first fires. Past
+  midnight a fire sees the new date.
 - **A missed fire runs once.** After an hour busy or asleep, a 1-minute loop
   fires once, not sixty times.
 - **No overlap.** A job does not fire again while the turn it started runs.

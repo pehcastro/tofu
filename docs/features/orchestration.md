@@ -200,8 +200,8 @@ The **sub-agents** tab lists every agent by state, **Active**, **Waiting** or
 **Dead**, with the lead first, and the selected agent's thinking and tool
 calls on the right. **All activity** shows every agent at once. Sub-agents
 settled for over two hours fold into one row there and in the chat; a click,
-`enter`, `f` or a search opens them, and a search opens only the agent it
-found: at 450 folded sub-agents, opening one by search holds 18.5 MB where it
+`enter`, `f` or a search opens them, and a search or a call's reference
+opens only the agent it found: at 450 folded sub-agents, opening one by search holds 18.5 MB where it
 held 166.7 MB. At 450 sub-agents this keeps the app at about 150 MB and a
 chat frame at about 2 ms.
 

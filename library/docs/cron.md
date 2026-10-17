@@ -36,8 +36,9 @@ Limits: 10 open jobs a session, 50 fires a job, once a minute at most, an
 expiry after 24 hours unless you name one, and a check that runs at most
 60 seconds. Three fires in a row with the same answer end the job. A turn a
 job started cannot run `git push`. A job runs once, in the holder of its
-session, whichever window made it, and a fire past midnight sees the new
-date.
+session, whichever window made it; `tofu --continue` in another window
+joins a session that holds only a job before it first fires, and a fire
+past midnight sees the new date.
 
 ## Change it
 

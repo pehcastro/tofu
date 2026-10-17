@@ -10,6 +10,14 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc10-fix1 - 2026-10-17
+
+### Fixed
+
+- An agent named with `--as` logs, moves and asks on its own ticket again; 0.5.15-rc10 refused `tofu boardy log X --as go-dev` on a ticket assigned to `go-dev`.
+- A session that holds only a cron can be continued from a second terminal before the job first fires, and a window that only listed its jobs no longer shows up in `tofu session list` as an unreadable session.
+- Opening a folded sub-agent's call by its reference opens only that agent: 17.6 MB held where it was 190.4 MB with 450 folded.
+
 ## 0.5.15-rc10 - 2026-10-17
 
 A long night in one session: crons run where the session is held, the date moves at midnight, and a fork sends your words once.
