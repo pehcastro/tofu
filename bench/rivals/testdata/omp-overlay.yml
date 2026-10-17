@@ -1,6 +1,7 @@
 modelRoles:
   default: anthropic/claude-sonnet-5-5
   task: anthropic/claude-sonnet-5-5
+omitThinking: true
 disabledProviders:
   - agent-plugins
   - agents

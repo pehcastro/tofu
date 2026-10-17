@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -33,14 +34,19 @@ func readRows(pattern string) ([]row, error) {
 	return rows, nil
 }
 
-func writeReport([]string) error {
-	rows, err := readRows(filepath.Join(here(), "runs", "*.json"))
+func writeReport(args []string) error {
+	flags := flag.NewFlagSet("report", flag.ContinueOnError)
+	batch := flags.String("batch", "", "folder under runs whose rows alone make the report, every setting in it one arm; empty is runs itself with its settings and task tables")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	rows, err := readRows(filepath.Join(here(), "runs", *batch, "*.json"))
 	if err != nil {
 		return err
 	}
 	byArm, bySetting := map[string][]row{}, map[string][]row{}
 	for _, r := range rows {
-		if r.Setting != "" {
+		if r.Setting != "" && *batch == "" {
 			bySetting[r.Arm] = append(bySetting[r.Arm], r)
 			continue
 		}
@@ -57,9 +63,11 @@ func writeReport([]string) error {
 	turnTable(&b, byArm)
 	wallTable(&b, byArm)
 	toolTable(&b, byArm)
-	settingTable(&b, bySetting)
-	if err := taskTables(&b); err != nil {
-		return err
+	if *batch == "" {
+		settingTable(&b, bySetting)
+		if err := taskTables(&b); err != nil {
+			return err
+		}
 	}
 	return os.WriteFile(filepath.Join(here(), "report.md"), []byte(b.String()), 0o644)
 }
@@ -97,7 +105,7 @@ func distinct(rows []row, field func(row) string) string {
 }
 
 func runsTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MB | peak commit MB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Every run\n\n| arm | rep | exit | wall s | CPU s | peak tree RSS MiB | peak commit MiB | processes | conversation requests | fresh in | cache read | cache write | out | calls | failed | retried | hidden of 5 | rubric of 5 | lines +/- | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		for _, r := range byArm[a.Name] {
 			fmt.Fprintf(b, "| %s | %d | %d | %.1f | %.1f | %.0f | %.0f | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | +%d/-%d | %s |\n",
@@ -109,7 +117,7 @@ func runsTable(b *strings.Builder, byArm map[string][]row) {
 }
 
 func turnTable(b *strings.Builder, byArm map[string][]row) {
-	b.WriteString("\n## Turn against turn\n\nMedian of the runs, with the lowest and highest in brackets. Total in is fresh plus cache read plus cache write.\n\n| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MB | conversation requests | total in | fresh in | out | calls | failed | retried | lines changed |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Turn against turn\n\nMedian of the runs, with the lowest and highest in brackets. Total in is fresh plus cache read plus cache write.\n\n| arm | runs | quality of 10 | wall s | CPU s | peak tree RSS MiB | conversation requests | total in | fresh in | out | calls | failed | retried | lines changed |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		rows := byArm[a.Name]
 		column := func(value func(row) float64) string { return spread(rows, value) }
@@ -297,7 +305,7 @@ func taskTable(b *strings.Builder, name string, rows []row) {
 	}
 	_, outOf := rows[0].Score.quality()
 	fmt.Fprintf(b, "\n## Task %s\n\nPrompt, rubric and seed in `testdata/tasks/%s`. Median of the runs, lowest and highest in brackets. Total in is fresh plus cache read plus cache write. Conversation requests count every model call of the conversation and of every sub-agent; memory or judge calls are the calls outside it, tofu's memory model and omp's auto-thinking judge, counted apart and with their tokens in the token columns too. Sub-agents is the count the tool's own transcript reports.\n\n", name, name)
-	b.WriteString("| arm | tool version | runs | quality of " + fmt.Sprint(outOf) + " | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MB | failed calls | sub-agents |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| arm | tool version | runs | quality of " + fmt.Sprint(outOf) + " | conversation requests | memory or judge calls | fresh in | cache read | cache write | total in | out | wall s | peak tree RSS MiB | failed calls | sub-agents |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, a := range present(byArm) {
 		armRows := byArm[a.Name]
 		column := func(value func(row) float64) string { return spread(armRows, value) }
@@ -315,7 +323,7 @@ func taskTable(b *strings.Builder, name string, rows []row) {
 			column(func(r row) float64 { return float64(failedCalls(r)) }),
 			column(func(r row) float64 { return float64(r.Agents) }))
 	}
-	b.WriteString("\n| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MB | calls | failed | sub-agents | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n| arm | rep | date | models the responses reported | quality | conversation requests | memory or judge calls | total in | cache read | out | wall s | peak tree RSS MiB | calls | failed | sub-agents | notes |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range slices.SortedFunc(slices.Values(rows), func(x, y row) int { return cmp.Compare(x.Date, y.Date) }) {
 		got, _ := r.Score.quality()
 		fmt.Fprintf(b, "| %s | %d | %s | %s | %d | %d | %d | %d | %d | %d | %.1f | %.0f | %d | %d | %d | %s |\n", r.Arm, r.Rep, r.Date, strings.Join(r.Models, ", "), got, r.Requests, r.Auxiliary, r.Tokens.in(), r.Tokens.CacheRead,

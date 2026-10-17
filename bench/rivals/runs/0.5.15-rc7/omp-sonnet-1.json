@@ -1,0 +1,115 @@
+{
+  "arm": "omp-sonnet",
+  "rep": 1,
+  "batch": "0.5.15-rc7",
+  "tool": "omp",
+  "version": "omp/18.3.2",
+  "asked_model": "anthropic/claude-sonnet-5-5",
+  "model": "claude-sonnet-5-5",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "credential": "provider anthropic through omp's own login, credential 3",
+  "posture": "--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay",
+  "date": "2026-10-17 01:55",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 47784,
+  "tree": {
+    "cpu_ms": 52187,
+    "peak_tree_rss_bytes": 865677312,
+    "peak_commit_bytes": 1517019136,
+    "processes": 298,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 12,
+    "cache_read": 54459,
+    "cache_write": 16377,
+    "out": 2490
+  },
+  "requests": 5,
+  "calls": [
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 77,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "grep",
+      "ms": 135,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 75,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 27,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 32,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 137,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 13,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 13,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 90,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 13923,
+      "failed": false
+    }
+  ],
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 9,
+    "lines_added": 85,
+    "lines_deleted": 6
+  },
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\work\\omp-sonnet-1"
+}

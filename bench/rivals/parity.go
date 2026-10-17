@@ -18,7 +18,7 @@ type pairing struct {
 var parityPairs = []pairing{
 	{"tofu-sonnet at Claude Code's setting", "tofu-sonnet", thinkingOmitted},
 	{"Claude Code", "claude-sonnet", ""},
-	{"tofu-sonnet at omp's setting", "tofu-sonnet", thinkingSummarized},
+	{"tofu-sonnet at omp's setting", "tofu-sonnet", thinkingOmitted},
 	{"omp", "omp-sonnet", ""},
 	{"tofu-gpt at codex's setting", "tofu-gpt", thinkingOmitted},
 	{"codex", "codex-gpt", ""},

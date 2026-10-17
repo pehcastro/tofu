@@ -32,30 +32,34 @@ type runDirs struct {
 
 type arm struct {
 	Name, Tool, AskedModel, Posture string
-	argv                            func(d runDirs, prompt string) []string
+	argv                            func(d runDirs, setting, prompt string) []string
 }
 
 func tofuArm(name, model, wire string) arm {
-	return arm{Name: name, Tool: "tofu", AskedModel: model, Posture: "--wire " + wire + " --gate shadow --no-instructions, real home for the login, scratch project folder",
-		argv: func(d runDirs, prompt string) []string {
-			return []string{"tofu", "run", "--dir", d.repo, "--model", model, "--wire", wire, "--effort", "medium", "--gate", "shadow", "--no-instructions", prompt}
+	return arm{Name: name, Tool: "tofu", AskedModel: model, Posture: "--wire " + wire + " --gate shadow --no-instructions, a fresh HOME per run holding a copy of the owner's " + loginSource(model) + " login, scratch project folder",
+		argv: func(d runDirs, setting, prompt string) []string {
+			args := []string{"tofu", "run", "--dir", d.repo, "--model", model, "--wire", wire, "--effort", "medium", "--gate", "shadow", "--no-instructions"}
+			if setting == thinkingOmitted || setting == thinkingSummarized {
+				args = append(args, "--thinking-summary", setting)
+			}
+			return append(args, prompt)
 		}}
 }
 
 var arms = []arm{
 	tofuArm("tofu-sonnet", "claude-sub/claude-sonnet-5-5", "anthropic"),
 	{Name: "claude-sonnet", Tool: "claude", AskedModel: "claude-sonnet-5-5", Posture: "--permission-mode bypassPermissions --safe-mode",
-		argv: func(_ runDirs, prompt string) []string {
+		argv: func(_ runDirs, _, prompt string) []string {
 			return []string{"claude", "-p", prompt, "--model", "claude-sonnet-5-5", "--effort", "medium", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--safe-mode"}
 		}},
 	{Name: "omp-sonnet", Tool: "omp", AskedModel: "anthropic/claude-sonnet-5-5", Posture: "--auto-approve --no-rules --no-skills --no-extensions, foreign config providers off by --config overlay",
-		argv: func(d runDirs, prompt string) []string {
+		argv: func(d runDirs, _, prompt string) []string {
 			return []string{"omp", "-p", "--mode", "json", "--model", "anthropic/claude-sonnet-5-5", "--thinking", "medium", "--auto-approve", "--no-rules", "--no-skills", "--no-extensions", "--no-title",
 				"--config", filepath.Join(here(), "testdata", "omp-overlay.yml"), "--session-dir", d.sessions, "--cwd", d.repo, prompt}
 		}},
 	tofuArm("tofu-gpt", "codex-sub/gpt-5.6-sol", "codex"),
 	{Name: "codex-gpt", Tool: "codex", AskedModel: "gpt-5.6-sol", Posture: "--sandbox workspace-write with the Go cache added, --ignore-rules",
-		argv: func(d runDirs, prompt string) []string {
+		argv: func(d runDirs, _, prompt string) []string {
 			return []string{"codex", "exec", prompt, "-m", "gpt-5.6-sol", "-c", `model="gpt-5.6-sol"`, "-c", `model_reasoning_effort="medium"`, "--json", "--sandbox", "workspace-write",
 				"--add-dir", d.goDir, "--skip-git-repo-check", "--ignore-rules", "-C", d.repo}
 		}},
@@ -202,7 +206,7 @@ func runArm(args []string) error {
 	work := flags.String("work", filepath.Join(os.TempDir(), "tofu-rivals"), "scratch root")
 	limit := flags.Duration("limit", 20*time.Minute, "wall clock cap")
 	patience := flags.Duration("patience", 30*time.Minute, "how long to wait for the slot")
-	setting := flags.String("setting", "", "the build or setting under test: shipped, rival, or summarized, tofu's thinkingSummary as it resolves with no file in the measured repo")
+	setting := flags.String("setting", "", "the build or setting under test: shipped or rival name a build, summarized or omitted pass --thinking-summary to a tofu arm")
 	batch := flags.String("batch", "", "folder under runs for this batch of rows, so a rerun keeps the rows before it")
 	taskName := flags.String("task", "", "task folder under testdata/tasks; empty is the first task in testdata")
 	if err := flags.Parse(args); err != nil {
@@ -217,11 +221,9 @@ func runArm(args []string) error {
 		return errors.New("run needs -arm, -rep and -slot")
 	}
 	switch *setting {
-	case "", settingShipped, settingRival, thinkingSummarized:
-	case thinkingOmitted:
-		return errors.New("-setting omitted is refused: tofu run takes thinkingSummary only from .tofu/settings.json in the measured repo or from the global settings, a file in the repo is part of what the run sees, and tofu run has no flag for it yet")
+	case "", settingShipped, settingRival, thinkingSummarized, thinkingOmitted:
 	default:
-		return fmt.Errorf("-setting is %s, %s or %s, not %q", settingShipped, settingRival, thinkingSummarized, *setting)
+		return fmt.Errorf("-setting is %s, %s, %s or %s, not %q", settingShipped, settingRival, thinkingSummarized, thinkingOmitted, *setting)
 	}
 	chosen := arms[index]
 	for waited := time.Duration(0); os.Mkdir(*slot, 0o755) != nil; waited += 15 * time.Second {
@@ -240,14 +242,18 @@ func runArm(args []string) error {
 	}
 	env := goEnv(dirs)
 	if chosen.Tool == "tofu" {
-		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
-		if *setting == thinkingSummarized {
-			resolved := toolOutput(dirs.repo, env, "tofu", "settings", "get", "thinkingSummary")
-			if resolved != thinkingSummarized {
-				return fmt.Errorf("thinkingSummary resolves to %q in the run repo, not %s, and the bench writes no settings file", resolved, thinkingSummarized)
-			}
-			r.Notes = append(r.Notes, "setting: thinkingSummary "+resolved+", resolved with no settings file in the repo")
+		profile, err := freshHome(r.Work, loginSource(chosen.AskedModel))
+		if err != nil {
+			return err
 		}
+		env = append(env, profile...)
+		reload := exec.Command("tofu", "models", "reload")
+		reload.Dir, reload.Env = dirs.repo, env
+		if said, err := reload.CombinedOutput(); err != nil {
+			return fmt.Errorf("tofu models reload in the fresh home: %v: %s", err, said)
+		}
+		r.Version, r.Commit = tofuBuild(toolOutput(dirs.repo, env, chosen.Tool, "version"))
+		r.Notes = append(r.Notes, "setting: thinkingSummary resolves to "+toolOutput(dirs.repo, env, "tofu", "settings", "get", "thinkingSummary")+" in the fresh home, -setting "+cmp.Or(*setting, "unset"))
 	} else {
 		r.Version = firstLine(toolOutput(dirs.repo, env, chosen.Tool, "--version"))
 	}
@@ -346,7 +352,7 @@ type stamped struct {
 func drive(chosen arm, dirs runDirs, env []string, prompt string, limit time.Duration, r *row) ([]stamped, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
-	argv := chosen.argv(dirs, prompt)
+	argv := chosen.argv(dirs, r.Setting, prompt)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir, cmd.Env = dirs.repo, env
 	var stderr strings.Builder
