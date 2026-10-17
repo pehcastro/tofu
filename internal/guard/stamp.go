@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"tofu/internal/boardy"
+	"tofu/library/docs"
 )
 
 const (
@@ -45,6 +46,13 @@ func releaseRefusal(dir string) string {
 	var why []string
 	if outside := slices.DeleteFunc(gitLines(dir, "diff", "--cached", "--name-only", "HEAD"), releaseFile); len(outside) > 0 {
 		why = append(why, "these staged files are not release files, so the commit is not the stamped HEAD plus a version bump:\n  "+strings.Join(outside, "\n  "))
+	}
+	var broken []string
+	for _, page := range gitLines(dir, "diff", "--cached", "--name-only", "--diff-filter=d", "HEAD", "--", ":(glob)library/docs/*.md") {
+		broken = append(broken, docs.Broken(page, strings.Join(gitLines(dir, "show", ":"+page), "\n")+"\n")...)
+	}
+	if len(broken) > 0 {
+		why = append(why, "these staged docs pages break the docs contract:\n  "+strings.Join(broken, "\n  "))
 	}
 	if len(run) > 0 {
 		why = append(why, "HEAD's tree "+tree+" has no passing stamp; in a clean clone of HEAD, with TOFU_STAMP_DIR="+StampDir(dir)+", run:\n  "+strings.Join(run, "\n  "))
