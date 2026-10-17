@@ -1,6 +1,7 @@
 mod blame;
 mod kit;
 mod listing;
+mod surfaces;
 mod watch;
 
 use std::collections::BTreeSet;
@@ -49,6 +50,7 @@ use crate::modules::chat::Find;
 use crate::title_bar::{ask_github, github};
 use blame::{Blamed, Inline, Me};
 use listing::{Listing, states};
+use surfaces::Surfaces;
 use watch::Watched;
 
 const BLAME_IDLE: Duration = Duration::from_millis(500);
@@ -293,6 +295,7 @@ pub struct Editor {
     ahead: Vec<Spot>,
     choosing: Option<(Spot, Vec<Symbol>)>,
     choices_at: Option<Point<Pixels>>,
+    surfaces: Surfaces,
     _tree: Subscription,
     _pack: Subscription,
     _project: Subscription,
@@ -310,6 +313,7 @@ impl Editor {
         let home = Home::find();
         let mut editor = Editor {
             _tree: cx.subscribe_in(&folder.tree, window, Self::tree_event),
+            surfaces: Surfaces::new(window, cx),
             folder,
             pages: Vec::new(),
             active: 0,
@@ -805,7 +809,7 @@ impl Editor {
     ) {
         self.open_path(path.to_path_buf(), Open::Pinned, window, cx);
         if let Some(Page { code: Ok(code), .. }) = self.pages.get(self.active) {
-            code.update(cx, |code, cx| code.jump(row, col, cx));
+            jump_once_laid_out(code.clone(), (row, col), window, cx);
         }
     }
 
@@ -2492,9 +2496,15 @@ impl Render for Editor {
                 editor.step_page(false, window, cx)
             }),
         )
-        .on_action(|_: &host::GoToLine, _, _| no_surface("go_to_line"))
-        .on_action(|_: &host::QuickOpen, _, _| no_surface("quick_open"))
-        .on_action(|_: &host::FindInFiles, _, _| no_surface("find_in_files"))
+        .on_action(
+            cx.listener(|editor, _: &host::GoToLine, window, cx| editor.open_goto(window, cx)),
+        )
+        .on_action(
+            cx.listener(|editor, _: &host::QuickOpen, window, cx| editor.open_quick(window, cx)),
+        )
+        .on_action(
+            cx.listener(|editor, _: &host::FindInFiles, window, cx| editor.open_find(window, cx)),
+        )
         .child(
             inner_card(&theme)
                 .flex_1()
@@ -2504,6 +2514,7 @@ impl Render for Editor {
                 .child(main),
         )
         .children(self.alerts(cx))
+        .children(self.surfaces.palettes())
     }
 }
 
@@ -2844,8 +2855,18 @@ fn described(marks: &Marks) -> String {
     lines.join(", ")
 }
 
-fn no_surface(action: &str) {
-    eprintln!("desk: editor action {action} no surface yet");
+fn jump_once_laid_out(
+    code: Entity<CodeEditor>,
+    (row, col): (usize, usize),
+    window: &mut Window,
+    cx: &mut App,
+) {
+    code.update(cx, |code, cx| code.jump(row, col, cx));
+    window.on_next_frame(move |window, _| {
+        window.on_next_frame(move |_, cx| {
+            code.update(cx, |code, cx| code.jump(row, col, cx));
+        });
+    });
 }
 
 pub(crate) fn language(code: &CodeEditor) -> String {

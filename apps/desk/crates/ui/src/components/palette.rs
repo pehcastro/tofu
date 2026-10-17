@@ -71,6 +71,7 @@ pub struct PaletteDetail {
 pub type PaletteEntry = (PaletteItem, Option<PaletteDetail>);
 
 type OnPick = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
+type OnSubmit = Rc<dyn Fn(&str, &mut Window, &mut App)>;
 type OnClose = Rc<dyn Fn(&mut Window, &mut App)>;
 
 pub struct Palette {
@@ -78,10 +79,12 @@ pub struct Palette {
     marks: Vec<(SharedString, Glyph)>,
     field: Entity<TextArea>,
     query: String,
+    nothing: SharedString,
     highlighted: usize,
     open: bool,
     return_focus: Option<FocusHandle>,
     on_pick: Option<OnPick>,
+    on_submit: Option<OnSubmit>,
     on_close: Option<OnClose>,
     scroll: ScrollHandle,
     row_spans: Rc<RefCell<Vec<Bounds<Pixels>>>>,
@@ -103,12 +106,18 @@ impl Palette {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Palette> {
+        Self::worded(items, PLACEHOLDER.into(), NOTHING_FOUND.into(), window, cx)
+    }
+
+    pub fn worded(
+        items: Vec<PaletteEntry>,
+        placeholder: SharedString,
+        nothing: SharedString,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<Palette> {
         cx.new(|cx| {
-            let field = cx.new(|cx| {
-                TextArea::new(PLACEHOLDER.into(), window, cx)
-                    .bare()
-                    .max_lines(1)
-            });
+            let field = cx.new(|cx| TextArea::new(placeholder, window, cx).bare().max_lines(1));
             cx.observe(&field, |palette: &mut Palette, field, cx| {
                 let query = field.read(cx).text();
                 if query != palette.query {
@@ -124,10 +133,12 @@ impl Palette {
                 marks: Vec::new(),
                 field,
                 query: String::new(),
+                nothing,
                 highlighted: 0,
                 open: false,
                 return_focus: None,
                 on_pick: None,
+                on_submit: None,
                 on_close: None,
                 scroll: ScrollHandle::new(),
                 row_spans: Rc::default(),
@@ -147,12 +158,20 @@ impl Palette {
         &self.items
     }
 
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
     pub fn marks(&mut self, marks: Vec<(SharedString, Glyph)>) {
         self.marks = marks;
     }
 
     pub fn on_pick(&mut self, on_pick: impl Fn(&SharedString, &mut Window, &mut App) + 'static) {
         self.on_pick = Some(Rc::new(on_pick));
+    }
+
+    pub fn on_submit(&mut self, on_submit: impl Fn(&str, &mut Window, &mut App) + 'static) {
+        self.on_submit = Some(Rc::new(on_submit));
     }
 
     pub fn on_close(&mut self, on_close: impl Fn(&mut Window, &mut App) + 'static) {
@@ -199,6 +218,19 @@ impl Palette {
         }
     }
 
+    fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(on_submit) = self.on_submit.clone() else {
+            return;
+        };
+        let query = self.query.clone();
+        self.close(window, cx);
+        window.defer(cx, move |window, cx| on_submit(&query, window, cx));
+    }
+
+    fn prompt(&self) -> bool {
+        self.items.is_empty() && self.on_submit.is_some()
+    }
+
     fn matched(&self) -> Vec<&PaletteEntry> {
         let query = self.query.trim().to_lowercase();
         let found = |text: &SharedString| text.to_lowercase().contains(&query);
@@ -232,6 +264,7 @@ impl Palette {
             "up" if count > 0 => {
                 self.highlighted = self.highlighted.checked_sub(1).unwrap_or(count - 1)
             }
+            "enter" if count == 0 => self.submit(window, cx),
             "enter" => self.pick(self.highlighted, window, cx),
             "escape" => self.dismiss(window, cx),
             _ => return,
@@ -315,7 +348,7 @@ impl Palette {
                 .px(px(ROW_PAD_X))
                 .py(px(ROW_PAD_Y))
                 .text_color(ink(theme, T3))
-                .child(NOTHING_FOUND)
+                .child(self.nothing.clone())
                 .into_any_element();
         }
         let fill = ink(theme, HOVER);
@@ -387,18 +420,19 @@ impl Render for Palette {
                     .bg(ink(&theme, HOVER))
                     .child(self.field.clone()),
             )
-            .child(separator(&theme).mb(px(MENU_PAD)))
-            .child(
-                ScrollArea::new("palette-scroll")
-                    .max_h(PALETTE_LIST)
-                    .track(&self.scroll)
-                    .child(
-                        div()
-                            .px(px(MENU_PAD))
-                            .pb(px(MENU_PAD))
-                            .child(self.rows(&theme, cx)),
-                    ),
-            );
+            .when(!self.prompt(), |panel| {
+                panel.child(separator(&theme).mb(px(MENU_PAD))).child(
+                    ScrollArea::new("palette-scroll")
+                        .max_h(PALETTE_LIST)
+                        .track(&self.scroll)
+                        .child(
+                            div()
+                                .px(px(MENU_PAD))
+                                .pb(px(MENU_PAD))
+                                .child(self.rows(&theme, cx)),
+                        ),
+                )
+            });
         let viewport = window.viewport_size();
         let layer = div()
             .id("palette-layer")
