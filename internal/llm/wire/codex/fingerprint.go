@@ -3,18 +3,21 @@ package codex
 import "tofu/internal/llm"
 
 const (
-	SubscriptionBaseURL = "https://chatgpt.com/backend-api"
-	SubscriptionPath    = "/codex/responses"
-	KeyBaseURL          = "https://api.openai.com/v1"
-	KeyPath             = "/responses"
-	MetaBaseURL         = "https://api.meta.ai/v1"
-	ModelsPath          = "/models"
+	SubscriptionBaseURL   = "https://chatgpt.com/backend-api"
+	SubscriptionPath      = "/codex/responses"
+	SubscriptionSocketURL = "wss://chatgpt.com/backend-api/codex/responses"
+	SocketURLVariable     = "TOFU_CODEX_SOCKET_URL"
+	KeyBaseURL            = "https://api.openai.com/v1"
+	KeyPath               = "/responses"
+	MetaBaseURL           = "https://api.meta.ai/v1"
+	ModelsPath            = "/models"
 
 	CodexPackage             = "@openai/codex"
 	PinnedCodexClientVersion = "0.159.0"
 	Originator               = "tofu"
 	UserAgentPrefix          = "tofu/"
 	BetaResponsesSSE         = "responses=experimental"
+	BetaResponsesSocket      = "responses_websockets=2026-02-06"
 
 	JWTAuthClaim          = "https://api.openai.com/auth"
 	AccountClaim          = "chatgpt_account_id"

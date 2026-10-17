@@ -3,6 +3,7 @@ package codex
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -114,39 +115,43 @@ type streamState struct {
 	terminal    bool
 }
 
-func ReadStream(body io.Reader, onThinking func(string)) (result Result, err error) {
-	state := streamState{open: map[int]*openItem{}, onThinking: onThinking}
-	defer func() { err = llm.CutAfter(result.Content, err) }()
+func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data:") {
-			continue
+	return readEvents(func() ([]byte, error) {
+		for scanner.Scan() {
+			payload := strings.TrimSpace(strings.TrimPrefix(scanner.Text(), "data:"))
+			if strings.HasPrefix(scanner.Text(), "data:") && payload != "" && payload != "[DONE]" {
+				return []byte(payload), nil
+			}
 		}
-		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if payload == "" || payload == "[DONE]" {
-			continue
+		if err := scanner.Err(); err != nil {
+			return nil, transport.Fail("codex.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", llm.ErrStreamBroke, err), "reading the stream")
+		}
+		return nil, io.EOF
+	}, onThinking)
+}
+
+func readEvents(next func() ([]byte, error), onThinking func(string)) (result Result, err error) {
+	state := streamState{open: map[int]*openItem{}, onThinking: onThinking}
+	defer func() { err = llm.CutAfter(result.Content, err) }()
+	for !state.terminal {
+		payload, err := next()
+		if errors.Is(err, io.EOF) {
+			return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, llm.ErrStreamBroke,
+				"the codex stream drained before a terminal event, so the turn is truncated rather than complete")
+		}
+		if err != nil {
+			return state.finish(), err
 		}
 		var event streamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
+		if err := json.Unmarshal(payload, &event); err != nil {
 			return state.finish(), transport.Fail("codex.ReadStream", transport.KindInvalidAnswer, err,
 				"an event is not the expected object")
 		}
 		if err := state.handle(event); err != nil {
 			return state.finish(), err
 		}
-		if state.terminal {
-			break
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", llm.ErrStreamBroke, err), "reading the stream")
-	}
-	if !state.terminal {
-		return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, llm.ErrStreamBroke,
-			"the codex stream drained before a terminal event, so the turn is truncated rather than complete")
 	}
 	return state.finish(), nil
 }

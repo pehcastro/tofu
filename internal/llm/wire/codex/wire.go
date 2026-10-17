@@ -3,6 +3,7 @@ package codex
 import (
 	"cmp"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -36,6 +37,7 @@ type Wire struct {
 	windowID string
 	routing  sync.Mutex
 	routes   map[string]turnRoute
+	socket   socket
 }
 
 type turnRoute struct {
@@ -62,7 +64,7 @@ func New(config Config) (*Wire, error) {
 		return nil, err
 	}
 	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle),
-		threadID: threadID, windowID: windowID, routes: map[string]turnRoute{}}, nil
+		threadID: threadID, windowID: windowID, routes: map[string]turnRoute{}, socket: socket{url: socketURL()}}, nil
 }
 
 func (w *Wire) route(turn string) (turnRoute, error) {
@@ -186,6 +188,9 @@ func (w *Wire) send(ctx context.Context, request Request, token string) (Result,
 
 	sent := time.Now()
 	result, err := llm.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
+		if result, err := w.overSocket(ctx, dump, request.OnThinking); !errors.Is(err, errNoSocket) {
+			return result, err
+		}
 		return w.post(ctx, dump, request.OnThinking)
 	})
 	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)

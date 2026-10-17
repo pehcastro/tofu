@@ -1,0 +1,245 @@
+{
+  "arm": "tofu-gpt",
+  "rep": 2,
+  "setting": "omitted",
+  "batch": "tofu-1547-socket",
+  "tool": "tofu",
+  "version": "0.5.15-rc8+dev",
+  "commit": "802ff5e82d4918a6272c4ff9852760a9f08351b5-dirty",
+  "asked_model": "codex-sub/gpt-5.6-sol",
+  "model": "gpt-5.6-sol",
+  "models": [
+    "gpt-5.6-sol"
+  ],
+  "credential": "tofu's own codex-sub login, spend subscription windows 5h and 7d, no money",
+  "posture": "--wire codex --gate shadow --no-instructions, a fresh HOME per run holding a copy of the owner's codex-sub login, scratch project folder",
+  "date": "2026-10-17 10:54",
+  "machine": "windows/amd64, 32 logical CPUs",
+  "exit_code": 0,
+  "wall_ms": 75189,
+  "tree": {
+    "cpu_ms": 42234,
+    "peak_tree_rss_bytes": 410288128,
+    "peak_commit_bytes": 550440960,
+    "processes": 310,
+    "left_running_at_exit": 0
+  },
+  "tokens": {
+    "fresh_in": 29226,
+    "cache_read": 77184,
+    "cache_write": 0,
+    "out": 3973,
+    "reasoning": 1058
+  },
+  "requests": 9,
+  "calls": [
+    {
+      "kind": "other",
+      "name": "project_report",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "glob",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 0,
+      "failed": false
+    },
+    {
+      "kind": "read",
+      "name": "read",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 6,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 2,
+      "failed": false
+    },
+    {
+      "kind": "write",
+      "name": "write",
+      "ms": 1,
+      "failed": false
+    },
+    {
+      "kind": "edit",
+      "name": "edit",
+      "ms": 9,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 77,
+      "failed": false
+    },
+    {
+      "kind": "bash",
+      "name": "bash",
+      "ms": 11683,
+      "failed": false
+    },
+    {
+      "kind": "other",
+      "name": "tofu_lint_comments",
+      "ms": 25,
+      "failed": false
+    },
+    {
+      "kind": "search",
+      "name": "search",
+      "ms": 8,
+      "failed": false
+    }
+  ],
+  "timed_requests": [
+    {
+      "at_ms": 0,
+      "ms": 3848,
+      "first_ms": 3848,
+      "out": 162
+    },
+    {
+      "at_ms": 3856,
+      "ms": 3843,
+      "first_ms": 3843,
+      "out": 210
+    },
+    {
+      "at_ms": 7707,
+      "ms": 6305,
+      "first_ms": 6305,
+      "out": 248
+    },
+    {
+      "at_ms": 14018,
+      "ms": 17297,
+      "first_ms": 9447,
+      "out": 1414
+    },
+    {
+      "at_ms": 31324,
+      "ms": 3983,
+      "first_ms": 3983,
+      "out": 269
+    },
+    {
+      "at_ms": 35315,
+      "ms": 10153,
+      "first_ms": 3264,
+      "out": 926
+    },
+    {
+      "at_ms": 45481,
+      "ms": 4698,
+      "first_ms": 4325,
+      "out": 124
+    },
+    {
+      "at_ms": 50290,
+      "ms": 3007,
+      "first_ms": 3007,
+      "out": 101
+    },
+    {
+      "at_ms": 65064,
+      "ms": 9312,
+      "first_ms": 6533,
+      "out": 519
+    }
+  ],
+  "thinking_sent": "reasoning {\"context\":\"all_turns\",\"effort\":\"medium\"}",
+  "retried": 0,
+  "score": {
+    "hidden": {
+      "bug": true,
+      "feature": true,
+      "newfile": true,
+      "rename": true,
+      "search": true
+    },
+    "rubric": {
+      "go vet clean": true,
+      "gofmt clean": true,
+      "no stray files": true,
+      "old name gone": true,
+      "visible tests pass": true
+    },
+    "files_changed": 8,
+    "lines_added": 108,
+    "lines_deleted": 7
+  },
+  "notes": [
+    "setting: thinkingSummary resolves to summarized in the fresh home, -setting omitted",
+    "turn outcome stopped"
+  ],
+  "work": "C:\\Users\\Luiz\\AppData\\Local\\Temp\\claude\\F--localhost-ephem-sh-tofu\\ade52729-2164-44a1-b4b8-877a234f4893\\scratchpad\\socket\\tofu-gpt-omitted-2"
+}

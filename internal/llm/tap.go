@@ -52,9 +52,43 @@ type tapping struct {
 	base http.RoundTripper
 }
 
-func (r tapping) RoundTrip(request *http.Request) (*http.Response, error) {
-	tap, tapped := request.Context().Value(tapKey{}).(*Tap)
+type Note struct {
+	tap   *Tap
+	index int
+}
+
+func Record(ctx context.Context, attempt Attempt) Note {
+	tap, tapped := ctx.Value(tapKey{}).(*Tap)
 	if !tapped {
+		return Note{}
+	}
+	tap.mu.Lock()
+	defer tap.mu.Unlock()
+	tap.attempts = append(tap.attempts, attempt)
+	return Note{tap: tap, index: len(tap.attempts) - 1}
+}
+
+func (n Note) Change(change func(*Attempt)) {
+	if n.tap == nil {
+		return
+	}
+	n.tap.mu.Lock()
+	defer n.tap.mu.Unlock()
+	change(&n.tap.attempts[n.index])
+}
+
+func (n Note) Received(bytes int, err error) {
+	n.Change(func(attempt *Attempt) {
+		attempt.Received += int64(bytes)
+		attempt.StreamMS = time.Since(attempt.At).Milliseconds()
+		if err != nil && !errors.Is(err, io.EOF) {
+			attempt.Error = err.Error()
+		}
+	})
+}
+
+func (r tapping) RoundTrip(request *http.Request) (*http.Response, error) {
+	if _, tapped := request.Context().Value(tapKey{}).(*Tap); !tapped {
 		return r.base.RoundTrip(request)
 	}
 	attempt := Attempt{At: time.Now(), URL: request.URL.String()}
@@ -79,12 +113,9 @@ func (r tapping) RoundTrip(request *http.Request) (*http.Response, error) {
 			attempt.ErrorBody = readable(response.Header.Get("Content-Encoding"), raw)
 		}
 	}
-	tap.mu.Lock()
-	tap.attempts = append(tap.attempts, attempt)
-	index := len(tap.attempts) - 1
-	tap.mu.Unlock()
+	note := Record(request.Context(), attempt)
 	if response != nil && response.StatusCode < http.StatusBadRequest {
-		response.Body = &tappedBody{ReadCloser: response.Body, tap: tap, index: index, started: attempt.At}
+		response.Body = &tappedBody{ReadCloser: response.Body, note: note}
 	}
 	return response, err
 }
@@ -112,20 +143,11 @@ func readable(encoding string, raw []byte) string {
 
 type tappedBody struct {
 	io.ReadCloser
-	tap     *Tap
-	index   int
-	started time.Time
+	note Note
 }
 
 func (b *tappedBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
-	b.tap.mu.Lock()
-	defer b.tap.mu.Unlock()
-	attempt := &b.tap.attempts[b.index]
-	attempt.Received += int64(n)
-	attempt.StreamMS = time.Since(b.started).Milliseconds()
-	if err != nil && !errors.Is(err, io.EOF) {
-		attempt.Error = err.Error()
-	}
+	b.note.Received(n, err)
 	return n, err
 }
