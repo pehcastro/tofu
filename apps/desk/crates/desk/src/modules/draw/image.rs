@@ -68,6 +68,7 @@ impl Draw {
     }
 
     pub(super) fn insert_image_from_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        eprintln!("desk: draw insert image: the file dialog opens");
         let asked = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
@@ -93,6 +94,7 @@ impl Draw {
             let Some(format) = format_of(&path) else {
                 return eprintln!("desk: draw: {} is not an image", path.display());
             };
+            eprintln!("desk: draw insert image {}", path.display());
             let read = cx.background_executor().spawn({
                 let path = path.clone();
                 async move { fs::read(path) }

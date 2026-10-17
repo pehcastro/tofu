@@ -12,8 +12,8 @@ use desk_ui::theme::{ColorToken, Theme};
 use draw_doc::Look;
 use gpui::{
     AnyElement, ClickEvent, Context, Div, ElementId, Entity, EntityInputHandler, Focusable,
-    KeyDownEvent, MouseDownEvent, Rgba, SharedString, Stateful, Subscription, Window, anchored,
-    deferred, div, prelude::*, px,
+    KeyDownEvent, MouseButton, MouseDownEvent, Rgba, SharedString, Stateful, Subscription, Window,
+    anchored, deferred, div, prelude::*, px,
 };
 
 use super::export::Format;
@@ -625,13 +625,14 @@ impl Draw {
                             plain,
                             theme,
                         )
-                        .on_click(cx.listener(
-                            |draw, _: &ClickEvent, window, cx| {
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|draw, _: &MouseDownEvent, window, cx| {
                                 draw.more_open = false;
                                 draw.insert_image_from_file(window, cx);
                                 cx.notify();
-                            },
-                        )),
+                            }),
+                        ),
                     )
                     .child(separator(theme))
                     .children(tools),
