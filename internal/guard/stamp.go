@@ -1,12 +1,13 @@
 package guard
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"unicode"
 
 	"tofu/internal/boardy"
-	"tofu/library/docs"
+	"tofu/internal/konst"
 )
 
 const (
@@ -49,7 +50,7 @@ func releaseRefusal(dir string) string {
 	}
 	var broken []string
 	for _, page := range gitLines(dir, "diff", "--cached", "--name-only", "--diff-filter=d", "HEAD", "--", ":(glob)library/docs/*.md") {
-		broken = append(broken, docs.Broken(page, strings.Join(gitLines(dir, "show", ":"+page), "\n")+"\n")...)
+		broken = append(broken, DocsBroken(page, strings.Join(gitLines(dir, "show", ":"+page), "\n")+"\n")...)
 	}
 	if len(broken) > 0 {
 		why = append(why, "these staged docs pages break the docs contract:\n  "+strings.Join(broken, "\n  "))
@@ -61,6 +62,31 @@ func releaseRefusal(dir string) string {
 		return ""
 	}
 	return "release refused: " + strings.Join(why, "\nand ") + "\nA release is HEAD, stamped, plus only internal/konst/konst.go, CHANGELOG.md, library/changelog/, docs/ and library/docs/."
+}
+
+func DocsSections() []string {
+	return []string{"What it is", "Where it lives", "Change it", "Check it", "Undo it"}
+}
+
+func DocsBroken(name, source string) []string {
+	source = strings.ReplaceAll(source, "\r\n", "\n")
+	var broken []string
+	if lines := strings.Count(source, "\n"); lines < konst.DocsPageLinesMin || lines > konst.DocsPageLinesMax {
+		broken = append(broken, fmt.Sprintf("%s runs %d lines, and a page runs %d to %d", name, lines, konst.DocsPageLinesMin, konst.DocsPageLinesMax))
+	}
+	at := 0
+	for _, section := range DocsSections() {
+		found := strings.Index(source[at:], "\n## "+section+"\n")
+		if found < 0 {
+			broken = append(broken, fmt.Sprintf("%s has no ## %s after the sections before it", name, section))
+			break
+		}
+		at += found + 1
+	}
+	if strings.Contains(source, "TOFU-") {
+		broken = append(broken, name+" names a ticket")
+	}
+	return broken
 }
 
 func releaseFile(path string) bool {

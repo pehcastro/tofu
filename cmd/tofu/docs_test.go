@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"tofu/internal/guard"
 	"tofu/internal/settings"
 	"tofu/library/docs"
 )
@@ -69,7 +70,7 @@ func TestDocsEveryPageKeepsTheContract(t *testing.T) {
 			t.Errorf("tofu docs %s prints a raw markdown heading", page.Topic)
 		}
 		at := 0
-		for _, section := range docs.Sections() {
+		for _, section := range guard.DocsSections() {
 			found := strings.Index(printed[at:], "\n"+section+"\n")
 			if found < 0 {
 				t.Errorf("tofu docs %s has no %q after the sections before it", page.Topic, section)
@@ -82,7 +83,7 @@ func TestDocsEveryPageKeepsTheContract(t *testing.T) {
 			t.Errorf("the page for %s is not %s.md: %v", page.Topic, page.Topic, err)
 			continue
 		}
-		for _, broken := range docs.Broken(page.Topic+".md", string(source)) {
+		for _, broken := range guard.DocsBroken(page.Topic+".md", string(source)) {
 			t.Error(broken)
 		}
 		t.Logf("tofu docs %s: %d bytes, %s", page.Topic, len(printed), strings.SplitN(printed, "\n", 2)[0])
