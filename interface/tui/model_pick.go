@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"tofu/interface/tui/models"
 	"tofu/interface/tui/session"
@@ -26,7 +29,59 @@ const (
 	noWireToPick  = "no subscription is signed in, so there is no model to pick"
 	noWireForPick = " has no signed-in subscription or stored key, so the next turn keeps its model"
 	notSet        = "not set"
+	heldUnsigned  = " is the wire the session runs on, and it has no signed-in subscription here, so this tofu shows "
 )
+
+type pickPollMsg struct{}
+
+func (a *App) watchPick() tea.Cmd {
+	if a.options.Host == nil || a.pickWatching {
+		return nil
+	}
+	a.pickWatching = true
+	return tea.Tick(pickPoll, func(time.Time) tea.Msg { return pickPollMsg{} })
+}
+
+func (a *App) offerDefaultPick() {
+	if a.defaultOffered || a.options.Host == nil || a.wire == "" {
+		return
+	}
+	a.defaultOffered = true
+	if _, held := a.options.Host.Settings(); held.Wire == "" {
+		a.options.Host.Choose(a.pick())
+	}
+}
+
+func (a *App) pick() Pick { return Pick{Wire: a.wire, Model: a.picked, Effort: a.effort} }
+
+func (a *App) syncPick() {
+	if a.options.Host == nil {
+		return
+	}
+	if own := a.pick(); own != a.ownPick {
+		a.ownPick = own
+		a.options.Host.Choose(own)
+		return
+	}
+	_, held := a.options.Host.Settings()
+	if held == a.heldPick {
+		return
+	}
+	a.heldPick, a.effort = held, held.Effort
+	at := slices.IndexFunc(a.wires, func(wire Wire) bool { return wire.Name == held.Wire })
+	switch {
+	case at >= 0:
+		wire := a.wires[at]
+		model, _ := strings.CutPrefix(held.Model, wire.Provider+"/")
+		a.wire, a.provider, a.model, a.picked = wire.Name, wire.Provider, cmp.Or(model, wire.Model), ""
+		if model != "" {
+			a.picked = wire.Provider + "/" + model
+		}
+	case held.Wire != "":
+		a.notify(held.Wire + heldUnsigned + a.slug())
+	}
+	a.ownPick = a.pick()
+}
 
 func layeredModels(root string) func() (library.Library, error) {
 	return func() (library.Library, error) {

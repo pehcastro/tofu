@@ -197,6 +197,7 @@ const (
 	setupPoll     = time.Second
 	shellPoll     = 250 * time.Millisecond
 	shellPulses   = int(shellPoll / pulseInterval)
+	pickPoll      = 500 * time.Millisecond
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
 )
 
@@ -240,6 +241,10 @@ type App struct {
 	picked         string
 	chosen         resolvedModel
 	effort         llm.Effort
+	heldPick       Pick
+	ownPick        Pick
+	pickWatching   bool
+	defaultOffered bool
 	sessionName    string
 	sessionID      string
 	sessionRoot    string
@@ -384,6 +389,7 @@ func New(options Options) *App {
 	app.options.Resumed = nil
 	app.view.Stop()
 	app.readWires()
+	app.ownPick = app.pick()
 	app.flushFeed()
 	app.syncFeed()
 	return app
@@ -564,9 +570,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.feed.FoldAsked() {
 		a.toggleFold()
 	}
-	if a.options.Host != nil {
-		a.options.Host.Choose(Pick{Wire: a.wire, Model: a.picked, Effort: a.effort})
-	}
+	a.syncPick()
 	a.view.Activity = nil
 	if a.busy {
 		a.watchSubAgents()
@@ -582,7 +586,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	if size, resized := msg.(tea.WindowSizeMsg); resized {
 		a.resize(size.Width, size.Height)
 		cmd, _ := a.toFiles(msg)
-		return tea.Batch(cmd, a.fillLater())
+		return tea.Batch(cmd, a.fillLater(), a.watchPick())
 	}
 	if a.hostResult(msg) {
 		return nil
@@ -681,6 +685,10 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.pollShells()
 	case pickerReloadedMsg:
 		return a.pickerReloaded(string(msg))
+	case pickPollMsg:
+		a.pickWatching = false
+		a.offerDefaultPick()
+		return a.watchPick()
 	case noticeMsg:
 		if msg != "" {
 			a.notify(string(msg))
