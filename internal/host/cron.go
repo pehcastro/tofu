@@ -3,12 +3,14 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
 	"tofu/internal/cron"
 	"tofu/internal/konst"
 	"tofu/internal/safe"
+	"tofu/internal/session"
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {
@@ -34,6 +36,15 @@ func (h *Host) CronCommand(line string) (cron.Reply, error) {
 	reply, err := h.cron.Command(line, h.now())
 	if err != nil {
 		return reply, err
+	}
+	if id := h.ID(); id != "" && h.cron.Live() > 0 {
+		store, err := session.OpenIn(h.dir)
+		if err == nil {
+			err = h.recordHeader(store, id)
+		}
+		if err != nil {
+			return reply, fmt.Errorf("the cron is kept, and tofu --continue does not find the session until its first turn: %w", err)
+		}
 	}
 	if reply.CheckGoals && idle {
 		h.fireAfterTurn()

@@ -462,10 +462,15 @@ func (h *Host) label(store *session.Store, id string) (Event, bool) {
 	if id == "" {
 		return Event{}, false
 	}
-	if _, err := store.Header(id); err != nil {
-		_ = store.Write(session.Header{ID: id, Root: id, At: h.now()}, nil)
-	}
+	_ = h.recordHeader(store, id)
 	return labelledAs(store, Event{Kind: EventSession, ID: id, Root: id}), true
+}
+
+func (h *Host) recordHeader(store *session.Store, id string) error {
+	if _, err := store.Header(id); err == nil {
+		return nil
+	}
+	return store.Write(session.Header{ID: id, Root: id, At: h.now()}, nil)
 }
 
 func labelledAs(store *session.Store, labelled Event) Event {

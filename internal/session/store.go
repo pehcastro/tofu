@@ -552,6 +552,9 @@ func (s *Store) Listing() (Listing, error) {
 	var listing Listing
 	for _, id := range ids {
 		header, err := s.read(id)
+		if _, logged := os.Stat(s.EventsPath(id)); errors.Is(err, fs.ErrNotExist) && errors.Is(logged, fs.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			listing.Skipped = append(listing.Skipped, Skip{ID: id, Reason: err})
 			continue
