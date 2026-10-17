@@ -1477,6 +1477,7 @@ dependencies = [
  "desk_tiling",
  "desk_ui",
  "draw_doc",
+ "embed-resource",
  "flume",
  "gpui-ce",
  "gpui_ce_platform",
