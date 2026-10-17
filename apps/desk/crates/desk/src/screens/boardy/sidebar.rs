@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use desk_core::boardy::running;
-use desk_core::protocol::boardy::Ticket;
+use desk_core::protocol::boardy::Row;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::nav_sidebar::NavSidebar;
 use desk_ui::components::paint::tint;
@@ -59,8 +59,7 @@ pub(super) fn sidebar(boardy: &Boardy, cx: &mut Context<Boardy>) -> Div {
     for summary in &store.boards {
         let key = summary.key.clone();
         let tickets = store.tickets(&key);
-        let count =
-            |pick: fn(&Ticket) -> bool| tickets.iter().filter(|ticket| pick(ticket)).count();
+        let count = |pick: fn(&Row) -> bool| tickets.iter().filter(|ticket| pick(ticket)).count();
         let at = |section: Section| Place::Board(key.clone(), section);
         let on = |section: Section| boardy.place == at(section);
         let triage = boardy.triage.get(&key).map(Vec::len);
@@ -112,7 +111,7 @@ pub(super) fn sidebar(boardy: &Boardy, cx: &mut Context<Boardy>) -> Div {
         boards = boards.group(key.clone(), false, children);
     }
     let nav = nav.group(format!("Your {}s", words.board), false, boards);
-    let mut newest: Vec<&Ticket> = store
+    let mut newest: Vec<&Row> = store
         .boards
         .iter()
         .flat_map(|summary| store.tickets(&summary.key).iter().take(NEWEST))

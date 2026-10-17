@@ -1,34 +1,50 @@
 use chrono::Utc;
 use desk_core::boardy::{Speaker, spoken};
-use desk_core::protocol::BoardyEventKind as Kind;
-use desk_core::protocol::boardy::{Event, Ticket};
+use desk_core::protocol::boardy::{Event, Row, Ticket};
+use desk_core::protocol::{
+    BoardyEventKind as Kind, BoardyStatus as Status, BoardyTicketType as TicketType,
+};
+use desk_ui::components::avatar::{Agent, AgentKind, AgentStatus, AvatarSize, avatar};
 use desk_ui::components::breadcrumb::{OnCrumb, breadcrumb};
 use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::caption;
 use desk_ui::components::chat::document;
+use desk_ui::components::composer::Composer;
 use desk_ui::components::dot_chip::{dot_chip, icon_chip};
 use desk_ui::components::glyph::Glyph;
-use desk_ui::components::paint::ink;
+use desk_ui::components::hovercard::{Subject, hover, link_card, link_key};
+use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::priority_icon::priority_icon;
 use desk_ui::components::properties::properties_panel;
 use desk_ui::components::scroll::ScrollArea;
-use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, T1, T2};
+use desk_ui::components::size::{CAPTION_TEXT, FONT_SMALL, FONT_TITLE, HOVER, T1, T2};
 use desk_ui::components::status_icon::status_icon;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
-    AnyElement, App, ClickEvent, Context, CursorStyle, Div, Entity, FontWeight, MouseButton,
-    MouseMoveEvent, Pixels, Rgba, SharedString, Window, canvas, div, prelude::*, px, rgb_to_hsla,
+    AnyElement, App, Bounds, ClickEvent, Context, CursorStyle, Div, Entity, FontWeight,
+    MouseButton, MouseMoveEvent, Pixels, Rgba, SharedString, Window, canvas, div, prelude::*, px,
+    rgb_to_hsla,
 };
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Instant;
 
 use super::look::{self, age, day, disc, kit, noun};
+use super::refs::{Ref, To};
 use super::views::opener;
-use super::{Boardy, Opened, Place};
+use super::{Boardy, Opened, Place, Section};
 use crate::screens::frame::note;
 
 const PAD: f32 = 24.0;
+#[cfg(feature = "module-editor")]
+const EDITOR: &str = "editor";
+const SIDE_SHARE: f32 = 0.025;
+const SIDE_LEAST: f32 = 16.0;
+const SIDE_MOST: f32 = 40.0;
+const DIVIDER_GAP: f32 = 24.0;
+const PANEL_PAD: f32 = 16.0;
+const CHIP_RADIUS: f32 = 6.0;
+const CHIP_HEIGHT: f32 = 22.0;
 const COLUMN: f32 = 760.0;
 const PANEL: f32 = 280.0;
 const PANEL_LEAST: f32 = 220.0;
@@ -41,7 +57,7 @@ const ICON: f32 = 14.0;
 const BUBBLE_RADIUS: f32 = 10.0;
 const BUBBLE_FILL: f32 = 0.035;
 
-pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
+pub(super) fn page(boardy: &Boardy, theme: &Theme, wide: Pixels, cx: &mut Context<Boardy>) -> Div {
     let Place::Ticket(id) = &boardy.place else {
         return div();
     };
@@ -101,6 +117,7 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
             .child(top)
             .child(div().p(px(PAD)).child(note(said, theme)));
     };
+    let side = (f32::from(wide) * SIDE_SHARE).clamp(SIDE_LEAST, SIDE_MOST);
     div()
         .size_full()
         .flex()
@@ -115,7 +132,9 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
                         .w_full()
                         .flex()
                         .justify_center()
-                        .p(px(PAD))
+                        .py(px(PAD))
+                        .pl(px(side))
+                        .pr(px(side.max(DIVIDER_GAP)))
                         .child(body(boardy, opened, theme, cx)),
                 )
                 .into_any_element(),
@@ -123,6 +142,7 @@ pub(super) fn page(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> 
                 .child(
                     div()
                         .py(px(PAD))
+                        .pl(px(PANEL_PAD))
                         .pr(px(PAD))
                         .child(properties(boardy, opened, theme, cx)),
                 )
@@ -237,11 +257,11 @@ impl RenderOnce for Split {
 fn body(boardy: &Boardy, opened: &Opened, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
     let ticket = &opened.answer.ticket;
     let revisions = ticket.acceptance.len();
-    let subs: Vec<&Ticket> = boardy
+    let subs: Vec<&Row> = boardy
         .store
         .tickets(ticket.id.split_once('-').map_or("", |(board, _)| board))
         .iter()
-        .filter(|sub| sub.parent.as_deref() == Some(ticket.id.as_str()))
+        .filter(|sub| super::look::parent(&sub.id) == Some(ticket.id.as_str()))
         .collect();
     div()
         .w_full()
@@ -280,6 +300,7 @@ fn body(boardy: &Boardy, opened: &Opened, theme: &Theme, cx: &mut Context<Boardy
             &[],
             theme,
         ))
+        .children(mentions("body", &opened.body_refs, boardy, theme, cx))
         .children((!ticket.questions.is_empty()).then(|| {
             div()
                 .flex()
@@ -325,27 +346,162 @@ fn body(boardy: &Boardy, opened: &Opened, theme: &Theme, cx: &mut Context<Boardy
                 .events
                 .iter()
                 .zip(&opened.said)
+                .zip(&opened.said_refs)
                 .enumerate()
-                .map(|(at, (event, said))| activity(at, event, said.as_deref(), theme)),
+                .map(|(at, ((event, said), refs))| {
+                    let refs = mentions(&format!("said-{at}"), refs, boardy, theme, cx);
+                    activity(at, event, said.as_deref(), refs, theme)
+                }),
         )
         .child(
-            div()
-                .flex()
-                .items_end()
-                .gap_2()
-                .p_2()
-                .rounded(px(BUBBLE_RADIUS))
-                .bg(ink(theme, BUBBLE_FILL))
-                .child(div().flex_1().min_w_0().child(boardy.composer.clone()))
-                .child(note("Enter sends to boardy log", theme)),
+            Composer::new("boardy-comment", boardy.composer.clone()).on_send(cx.listener(
+                |boardy: &mut Boardy, text: &str, _, cx| boardy.comment(text.trim().to_owned(), cx),
+            )),
         )
+}
+
+fn mentions(
+    at: &str,
+    refs: &[Ref],
+    boardy: &Boardy,
+    theme: &Theme,
+    cx: &Context<Boardy>,
+) -> Option<Div> {
+    (!refs.is_empty()).then(|| {
+        div().flex().flex_wrap().gap_1p5().children(
+            refs.iter()
+                .enumerate()
+                .map(|(n, one)| mention(at, n, one, boardy, theme, cx)),
+        )
+    })
+}
+
+fn mention(
+    at: &str,
+    n: usize,
+    one: &Ref,
+    boardy: &Boardy,
+    theme: &Theme,
+    cx: &Context<Boardy>,
+) -> AnyElement {
+    let faint = ink(theme, T2);
+    let mark = match &one.to {
+        To::Ticket(id) => match boardy.store.find(id).and_then(|ticket| kit(&ticket.status)) {
+            Some(status) => status_icon(status, px(ICON)).into_any_element(),
+            None => glyph(Glyph::Link, ICON, faint).into_any_element(),
+        },
+        To::File(_) => glyph(Glyph::File, ICON, faint).into_any_element(),
+        To::Folder(_) => glyph(Glyph::Folder, ICON, faint).into_any_element(),
+        To::Image(_) => glyph(Glyph::Image, ICON, faint).into_any_element(),
+    };
+    let hovered = ink(theme, HOVER);
+    let to = one.to.clone();
+    let chip = div()
+        .id(SharedString::from(format!("ref-{at}-{n}")))
+        .relative()
+        .flex()
+        .items_center()
+        .gap_1()
+        .h(px(CHIP_HEIGHT))
+        .px_1p5()
+        .rounded(px(CHIP_RADIUS))
+        .bg(ink(theme, BUBBLE_FILL))
+        .hover(move |style| style.bg(hovered))
+        .cursor_pointer()
+        .text_size(px(FONT_SMALL))
+        .text_color(ink(theme, T1))
+        .child(mark)
+        .child(one.label.clone())
+        .on_click(
+            cx.listener(move |boardy: &mut Boardy, _: &ClickEvent, window, cx| {
+                boardy.follow(to.clone(), window, cx);
+            }),
+        );
+    let To::Image(path) = &one.to else {
+        return chip.into_any_element();
+    };
+    let key = link_key(&one.label, n);
+    let held = Rc::new(Cell::new(Bounds::default()));
+    let measured = held.clone();
+    let subject = Subject::File(path.clone());
+    chip.child(
+        canvas(move |bounds, _, _| measured.set(bounds), |_, (), _, _| {})
+            .absolute()
+            .size_full(),
+    )
+    .on_hover(move |over: &bool, window, cx| {
+        hover(key, over.then(|| (subject.clone(), held.get())), window, cx);
+    })
+    .child(link_card(key))
+    .into_any_element()
+}
+
+impl Boardy {
+    #[cfg(feature = "module-editor")]
+    fn follow(&mut self, to: To, window: &mut Window, cx: &mut Context<Self>) {
+        let (path, folder) = match to {
+            To::Ticket(id) => {
+                self.open_ticket(id, cx);
+                return cx.notify();
+            }
+            To::File(path) => (path, false),
+            To::Image(path) => (path.to_path_buf(), false),
+            To::Folder(path) => (path, true),
+        };
+        let Some(Some(desk)) = window.root::<crate::desk::Desk>() else {
+            return self.say(
+                "boardy is not inside the desk, so it cannot open the editor".to_owned(),
+                cx,
+            );
+        };
+        eprintln!("desk: boardy opens {} in the editor", path.display());
+        let me = cx.weak_entity();
+        window.defer(cx, move |window, cx| {
+            let opened = desk.update(cx, |desk, cx| {
+                desk.open_screen(EDITOR, window, cx)?;
+                let editor = desk
+                    .editor()
+                    .ok_or_else(|| "the editor screen holds no editor".to_owned())?;
+                editor.update(cx, |editor, cx| match folder {
+                    true => editor
+                        .reveal_in_tree(&path, cx)
+                        .then_some(())
+                        .ok_or_else(|| {
+                            format!("{} is outside the editor's folder", path.display())
+                        }),
+                    false => {
+                        editor.land(&path, 0, 0, window, cx);
+                        Ok(())
+                    }
+                })
+            });
+            if let Err(error) = opened
+                && let Err(gone) = me.update(cx, |boardy, cx| boardy.say(error, cx))
+            {
+                eprintln!("desk: boardy closed before the editor refused: {gone}");
+            }
+        });
+    }
+
+    #[cfg(not(feature = "module-editor"))]
+    fn follow(&mut self, to: To, _: &mut Window, cx: &mut Context<Self>) {
+        match to {
+            To::Ticket(id) => {
+                self.open_ticket(id, cx);
+                cx.notify();
+            }
+            To::File(_) | To::Folder(_) | To::Image(_) => {
+                self.say("this desk was built without the editor".to_owned(), cx);
+            }
+        }
+    }
 }
 
 fn section(title: String, theme: &Theme) -> Div {
     div().pt_2().child(caption(title, theme))
 }
 
-fn linked(ticket: &Ticket, theme: &Theme, cx: &Context<Boardy>) -> AnyElement {
+fn linked(ticket: &Row, theme: &Theme, cx: &Context<Boardy>) -> AnyElement {
     div()
         .id(SharedString::from(format!("link-{}", ticket.id)))
         .flex()
@@ -363,20 +519,22 @@ fn activity(
     at: usize,
     event: &Event,
     said: Option<&[desk_ui::components::chat::Block]>,
+    refs: Option<Div>,
     theme: &Theme,
 ) -> Div {
     let actor = event.actor.as_deref().unwrap_or_default();
-    let speaker = Speaker::of(actor);
-    let (name, color) = match speaker {
-        Speaker::You => ("you".to_owned(), theme.color(ColorToken::StatusAccent)),
+    let (name, color) = match Speaker::of(actor) {
+        Speaker::Unknown => ("unknown".to_owned(), ink(theme, CAPTION_TEXT)),
         Speaker::Lead => (
             "orchestrator".to_owned(),
             theme.color(ColorToken::StatusWarn),
         ),
-        Speaker::Agent => (
-            event.agent.clone().unwrap_or_else(|| "agent".to_owned()),
-            theme.color(ColorToken::GitAdded),
-        ),
+        Speaker::Agent => {
+            let name = event.agent.clone().unwrap_or_else(|| "agent".to_owned());
+            let color = tone(&name, theme);
+            (name, color)
+        }
+        Speaker::Named => (actor.to_owned(), tone(actor, theme)),
     };
     let when = age(&event.at, Utc::now());
     let face = disc(&name.get(..1).unwrap_or_default().to_uppercase(), color);
@@ -406,8 +564,13 @@ fn activity(
                 said,
                 &[],
                 theme,
-            )),
+            ))
+            .children(refs),
     )
+}
+
+fn tone(name: &str, theme: &Theme) -> Rgba {
+    AgentKind::named(name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-')).color(theme)
 }
 
 fn did(event: &Event) -> String {
@@ -423,6 +586,9 @@ fn did(event: &Event) -> String {
         Kind::Answered => "answered".to_owned(),
         Kind::Spawned => "spawned an agent".to_owned(),
         Kind::Reported => "reported".to_owned(),
+        Kind::Messaged => "sent a message".to_owned(),
+        Kind::Hook => format!("ran a hook: {text}"),
+        Kind::HookFailed => format!("a hook failed: {text}"),
         Kind::Assigned => format!("assigned it to {text}"),
         Kind::Rule | Kind::Waiting => format!("ran a rule: {text}"),
         Kind::Requested => format!("requested {text}"),
@@ -444,7 +610,18 @@ fn properties(
     let ticket = &opened.answer.ticket;
     let actual = &opened.answer.actual;
     let words = &boardy.store.words;
-    let text = |value: String| div().child(value).into_any_element();
+    let faint = ink(theme, T2);
+    let line = |mark: AnyElement, value: String| {
+        div()
+            .flex()
+            .items_center()
+            .gap_1p5()
+            .min_w_0()
+            .child(mark)
+            .child(div().min_w_0().truncate().child(value))
+            .into_any_element()
+    };
+    let marked = |of: Glyph, value: String| line(glyph(of, ICON, faint).into_any_element(), value);
     let aimed = ticket.id.clone();
     let status = div()
         .id("boardy-status")
@@ -500,40 +677,67 @@ fn properties(
             [
                 ("Status".into(), status),
                 ("Priority".into(), priority),
-                ("Type".into(), text(String::from(ticket.r#type.clone()))),
                 (
-                    "Assignee".into(),
-                    text(
-                        ticket
-                            .assignee
-                            .clone()
-                            .unwrap_or_else(|| "nobody".to_owned()),
+                    "Type".into(),
+                    marked(
+                        kind_glyph(&ticket.r#type),
+                        String::from(ticket.r#type.clone()),
                     ),
                 ),
+                ("Assignee".into(), assignee(ticket, theme, line)),
                 (
                     noun(&words.epic, false).into(),
                     match &ticket.epic {
-                        Some(epic) => icon_chip(Glyph::Epic, epic.clone()).into_any_element(),
-                        None => note("none", theme).into_any_element(),
+                        Some(epic) => {
+                            let board = ticket
+                                .id
+                                .split_once('-')
+                                .map_or("", |(board, _)| board)
+                                .to_owned();
+                            div()
+                                .id("boardy-epic")
+                                .cursor_pointer()
+                                .child(icon_chip(Glyph::Epic, epic.clone()))
+                                .on_click(cx.listener(
+                                    move |boardy: &mut Boardy, _: &ClickEvent, _, cx| {
+                                        boardy.go(Place::Board(board.clone(), Section::Epics), cx);
+                                    },
+                                ))
+                                .into_any_element()
+                        }
+                        None => marked(Glyph::Epic, "none".to_owned()),
                     },
                 ),
                 (
                     noun(&words.sprint, false).into(),
-                    text(ticket.sprint.clone().unwrap_or_else(|| "none".to_owned())),
+                    marked(
+                        Glyph::Sprint,
+                        ticket.sprint.clone().unwrap_or_else(|| "none".to_owned()),
+                    ),
                 ),
                 (
                     noun(&words.points, false).into(),
-                    text(
+                    marked(
+                        Glyph::Gauge,
                         ticket
                             .points
                             .map_or_else(|| "none".to_owned(), |points| points.to_string()),
                     ),
                 ),
-                ("Created".into(), text(day(&ticket.created))),
-                ("Updated".into(), text(day(&ticket.updated))),
+                (
+                    "Created".into(),
+                    marked(Glyph::FileAdd, day(&ticket.created)),
+                ),
+                (
+                    "Updated".into(),
+                    marked(Glyph::Pencil, day(&ticket.updated)),
+                ),
                 (
                     "Worked".into(),
-                    text(format!("{} rounds, {} min", actual.rounds, actual.minutes)),
+                    marked(
+                        Glyph::Cron,
+                        format!("{} rounds, {} min", actual.rounds, actual.minutes),
+                    ),
                 ),
             ],
         )
@@ -544,7 +748,9 @@ fn properties(
                 div()
                     .flex()
                     .flex_wrap()
+                    .items_center()
                     .gap_1()
+                    .child(glyph(Glyph::Label, ICON, faint))
                     .children(
                         ticket
                             .labels
@@ -560,15 +766,86 @@ fn properties(
         .section("Related", relations)
         .section(
             "Owns",
-            ticket
-                .owns
+            opened
+                .owned
                 .iter()
-                .map(|glob| {
-                    (
-                        SharedString::default(),
-                        note(glob.clone(), theme).into_any_element(),
-                    )
+                .enumerate()
+                .map(|(n, (glob, to))| {
+                    let shown = match to {
+                        Some(to) => mention(
+                            "owns",
+                            n,
+                            &Ref {
+                                label: glob.clone(),
+                                to: to.clone(),
+                            },
+                            boardy,
+                            theme,
+                            cx,
+                        ),
+                        None => marked(Glyph::File, glob.clone()),
+                    };
+                    (SharedString::default(), shown)
                 })
                 .collect::<Vec<_>>(),
         )
+}
+
+fn kind_glyph(kind: &TicketType) -> Glyph {
+    match kind {
+        TicketType::Story => Glyph::Book,
+        TicketType::Task => Glyph::Check,
+        TicketType::Bug => Glyph::Bug,
+        TicketType::Subtask => Glyph::Branch,
+        TicketType::Unknown(_) => Glyph::File,
+    }
+}
+
+fn assignee(
+    ticket: &Ticket,
+    theme: &Theme,
+    line: impl Fn(AnyElement, String) -> AnyElement,
+) -> AnyElement {
+    let Some(who) = ticket.assignee.clone() else {
+        return line(
+            glyph(Glyph::Person, ICON, ink(theme, T2)).into_any_element(),
+            "nobody".to_owned(),
+        );
+    };
+    if who.contains('/') {
+        return line(
+            glyph(Glyph::Agents, ICON, ink(theme, T2)).into_any_element(),
+            "sub-agent".to_owned(),
+        );
+    }
+    let status = match ticket.status {
+        Status::Doing => Some(AgentStatus::Working),
+        Status::Done => Some(AgentStatus::Finished),
+        Status::NeedsDecision => Some(AgentStatus::Asking),
+        Status::Blocked => Some(AgentStatus::Failed),
+        Status::Triage
+        | Status::Backlog
+        | Status::Todo
+        | Status::Review
+        | Status::Dropped
+        | Status::Unknown(_) => None,
+    };
+    let mark = match status {
+        Some(status) => {
+            let agent = Agent {
+                kind: AgentKind::named(
+                    who.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-'),
+                ),
+                instance: 0,
+                status,
+            };
+            avatar("boardy-assignee", &agent, AvatarSize::Feed, theme).into_any_element()
+        }
+        None => disc(
+            &who.get(..1).unwrap_or_default().to_uppercase(),
+            tone(&who, theme),
+        )
+        .into_any_element(),
+    };
+    line(mark, who)
 }

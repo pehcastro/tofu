@@ -5,8 +5,8 @@ use std::time::Instant;
 use chrono::Utc;
 use desk_core::boardy::{BoardyStore, COLUMNS, Flow, running, wants_attention};
 use desk_core::protocol::BoardyPlannedEpicStatus;
-use desk_core::protocol::BoardyTicketStatus as Status;
-use desk_core::protocol::boardy::{Aging, AskedQuestion, PlanAnswer, PlannedEpic, Ticket};
+use desk_core::protocol::BoardyStatus as Status;
+use desk_core::protocol::boardy::{Aging, AskedQuestion, PlanAnswer, PlannedEpic, Row};
 use desk_ui::component::{control, icon_button};
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::board::{ColumnHeader, board_card, board_column};
@@ -62,7 +62,7 @@ pub(super) struct Spot {
 pub(super) struct Group<'a> {
     pub status: Option<Status>,
     pub title: String,
-    pub tickets: Vec<&'a Ticket>,
+    pub tickets: Vec<&'a Row>,
     spots: Vec<Spot>,
     pub folded: bool,
 }
@@ -80,7 +80,7 @@ pub(super) enum Line {
     },
 }
 
-fn held<'a>(store: &'a BoardyStore, only: Option<&str>) -> Vec<(Spot, &'a Ticket)> {
+fn held<'a>(store: &'a BoardyStore, only: Option<&str>) -> Vec<(Spot, &'a Row)> {
     store
         .boards
         .iter()
@@ -96,12 +96,12 @@ fn held<'a>(store: &'a BoardyStore, only: Option<&str>) -> Vec<(Spot, &'a Ticket
         .collect()
 }
 
-fn ticket_at(store: &BoardyStore, spot: Spot) -> Option<&Ticket> {
+fn ticket_at(store: &BoardyStore, spot: Spot) -> Option<&Row> {
     let summary = store.boards.get(spot.board)?;
     store.tickets(&summary.key).get(spot.index)
 }
 
-fn by_status<'a>(boardy: &Boardy, held: &[(Spot, &'a Ticket)]) -> Vec<Group<'a>> {
+fn by_status<'a>(boardy: &Boardy, held: &[(Spot, &'a Row)]) -> Vec<Group<'a>> {
     COLUMNS
         .iter()
         .map(|status| {
@@ -123,9 +123,9 @@ fn by_status<'a>(boardy: &Boardy, held: &[(Spot, &'a Ticket)]) -> Vec<Group<'a>>
 }
 
 fn by_plan<'a>(
-    held: Vec<(Spot, &'a Ticket)>,
+    held: Vec<(Spot, &'a Row)>,
     planned: Vec<(String, String)>,
-    name: fn(&Ticket) -> Option<&str>,
+    name: fn(&Row) -> Option<&str>,
     none: &str,
 ) -> Vec<Group<'a>> {
     let mut keyed: Vec<(Option<String>, Group<'a>)> = planned
@@ -222,7 +222,7 @@ pub(super) fn groups(boardy: &Boardy) -> Vec<Group<'_>> {
         Place::CatchUp => {
             let (spots, tickets) = held(store, None)
                 .into_iter()
-                .filter(|(_, ticket)| !ticket.questions.is_empty())
+                .filter(|(_, ticket)| ticket.questions.unwrap_or_default() > 0)
                 .unzip();
             vec![Group {
                 status: None,
@@ -356,6 +356,8 @@ fn layout_toggle(boardy: &Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Di
         .child(shown(Layout::Board, "Board"))
 }
 
+const SKELETON_LINES: usize = 8;
+
 pub(super) fn main(boardy: &mut Boardy, theme: &Theme, cx: &mut Context<Boardy>) -> Div {
     let started = Instant::now();
     let words = boardy.store.words.clone();
@@ -390,7 +392,22 @@ pub(super) fn main(boardy: &mut Boardy, theme: &Theme, cx: &mut Context<Boardy>)
         .failed
         .clone()
         .map(|failed| div().px(px(PAD_X)).pb_2().child(note(failed, theme)));
+    let waiting = match &boardy.place {
+        Place::Board(key, Section::Triage) => !boardy.triage.contains_key(key),
+        Place::Board(key, Section::Milestones) => !boardy.plans.contains_key(key),
+        Place::Board(key, _) => !boardy.store.read(key),
+        _ => false,
+    };
     let body = match (&boardy.place, boardy.layout) {
+        _ if waiting => div()
+            .p(px(PAD_X))
+            .child(desk_ui::components::skeleton::skeleton_lines(
+                "boardy-loading",
+                SKELETON_LINES,
+                theme,
+                cx,
+            ))
+            .into_any_element(),
         (Place::Board(key, Section::Triage), _) => triage(boardy, &key.clone(), theme, cx),
         (Place::Board(key, Section::Milestones), _) => milestones(boardy, key, theme),
         (Place::Board(key, Section::Tickets), Layout::Board) => {
@@ -434,12 +451,16 @@ fn list(
 ) -> AnyElement {
     let lines = lines(boardy);
     if lines.is_empty() {
-        let said = match &boardy.place {
-            Place::Board(key, _) if !boardy.store.read(key) => "Reading the board",
-            _ => "Nothing here",
-        };
-        return empty_state("boardy-empty", said, None, &[], &[], theme, |_, _, _| {})
-            .into_any_element();
+        return empty_state(
+            "boardy-empty",
+            "Nothing here",
+            None,
+            &[],
+            &[],
+            theme,
+            |_, _, _| {},
+        )
+        .into_any_element();
     }
     if boardy.follow {
         boardy.follow = false;
@@ -567,7 +588,7 @@ fn line_row(boardy: &Boardy, line: &Line, theme: &Theme, cx: &mut Context<Boardy
     }
 }
 
-fn chips(ticket: &Ticket, theme: &Theme) -> Vec<AnyElement> {
+fn chips(ticket: &Row, theme: &Theme) -> Vec<AnyElement> {
     let label = rgb_to_hsla(theme.color(ColorToken::StatusAccent));
     ticket
         .epic
@@ -580,14 +601,16 @@ fn chips(ticket: &Ticket, theme: &Theme) -> Vec<AnyElement> {
                 .map(|name| dot_chip(name.clone(), label).into_any_element()),
         )
         .chain(
-            (!ticket.questions.is_empty())
-                .then(|| icon_chip(Glyph::Attention, format!("{} open", ticket.questions.len())))
+            ticket
+                .questions
+                .filter(|open| *open > 0)
+                .map(|open| icon_chip(Glyph::Attention, format!("{open} open")))
                 .map(IntoElement::into_any_element),
         )
         .collect()
 }
 
-fn who(ticket: &Ticket, theme: &Theme) -> Option<Div> {
+fn who(ticket: &Row, theme: &Theme) -> Option<Div> {
     let assignee = ticket.assignee.as_deref().filter(|who| !who.is_empty())?;
     let letter = assignee
         .chars()
@@ -631,12 +654,7 @@ pub(super) fn opener(
     })
 }
 
-fn ticket_row(
-    ticket: &Ticket,
-    selected: bool,
-    theme: &Theme,
-    cx: &mut Context<Boardy>,
-) -> AnyElement {
+fn ticket_row(ticket: &Row, selected: bool, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {
     let mut row = issue_row(ElementId::Name(ticket.id.clone().into()))
         .ticket(ticket.id.clone())
         .age(age(&ticket.created, Utc::now()))
@@ -665,7 +683,7 @@ fn ticket_row(
 }
 
 fn columns(boardy: &Boardy, key: &str, cx: &mut Context<Boardy>) -> impl IntoElement {
-    let shown: Vec<(Status, Vec<&Ticket>)> = boardy
+    let shown: Vec<(Status, Vec<&Row>)> = boardy
         .store
         .columns(key)
         .into_iter()
@@ -742,7 +760,7 @@ fn columns(boardy: &Boardy, key: &str, cx: &mut Context<Boardy>) -> impl IntoEle
 
 fn card(
     boardy: &Boardy,
-    ticket: &Ticket,
+    ticket: &Row,
     selected: bool,
     theme: &Theme,
     cx: &mut Context<Boardy>,
@@ -754,7 +772,7 @@ fn card(
                 .flex()
                 .gap_1()
                 .child(ticket.id.clone())
-                .children(ticket.parent.clone().map(|parent| format!("› {parent}"))),
+                .children(look::parent(&ticket.id).map(|parent| format!("› {parent}"))),
         )
         .title(ticket.title.clone())
         .chips(

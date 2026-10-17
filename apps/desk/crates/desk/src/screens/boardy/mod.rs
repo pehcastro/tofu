@@ -1,5 +1,6 @@
 mod create;
 mod look;
+mod refs;
 mod sidebar;
 mod ticket;
 mod views;
@@ -16,11 +17,11 @@ use desk_core::protocol::boardy::{
     ReportRequest, Request as Asked, TriageRequest,
 };
 use desk_core::protocol::request::{
-    BoardyAnswer, BoardyBoards, BoardyGet, BoardyInit, BoardyList, BoardyLog, BoardyMove,
-    BoardyPlan, BoardyQuestions, BoardyReport, BoardyTriage,
+    BoardyAnswer, BoardyBoards, BoardyGet, BoardyInit, BoardyLog, BoardyMove, BoardyPlan,
+    BoardyQuestions, BoardyReport, BoardyRows, BoardyTriage,
 };
 use desk_core::protocol::{
-    BoardyTicketStatus as Status, BoardyTo, BoardyTriageRequestAction, NoParams, Request,
+    BoardyStatus as Status, BoardyTo, BoardyTriageRequestAction, NoParams, Request,
 };
 use desk_motion::tokens::{PANEL_IN_MS, PANEL_OUT_MS};
 use desk_motion::{FlipTracker, Presence};
@@ -43,6 +44,13 @@ const NEWEST: usize = 5;
 const DROPPED: &str = "dropped from the desk";
 const SCROLL_WINDOW_MS: u128 = 150;
 const MS_PER_SECOND: f64 = 1000.0;
+const COMMENT_LINES: usize = 8;
+
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = boardy, no_json)]
+pub struct OpenTicket {
+    pub id: SharedString,
+}
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
     load_fonts(cx)?;
@@ -78,6 +86,9 @@ struct Opened {
     body: Vec<Block>,
     acceptance: Vec<Block>,
     said: Vec<Option<Vec<Block>>>,
+    body_refs: Vec<refs::Ref>,
+    said_refs: Vec<Vec<refs::Ref>>,
+    owned: Vec<(String, Option<refs::To>)>,
 }
 
 pub struct Boardy {
@@ -116,7 +127,10 @@ pub struct Boardy {
     follow: bool,
     list: UniformListScrollHandle,
     board_scroll: ScrollHandle,
+    queue: Vec<String>,
+    listing: Option<String>,
     started: Instant,
+    drawn: bool,
     painted: bool,
     wheel: Option<Instant>,
     _toast: Option<Task<()>>,
@@ -126,12 +140,15 @@ impl Boardy {
     fn new(asked: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let weak = cx.weak_entity();
         let composer = cx.new(|cx| {
-            TextArea::new("Leave a comment".into(), window, cx).on_submit(move |text, _, cx| {
-                let text = text.trim().to_owned();
-                if let Err(error) = weak.update(cx, |boardy, cx| boardy.comment(text, cx)) {
-                    eprintln!("desk: boardy closed before the comment was sent: {error}");
-                }
-            })
+            TextArea::new("Leave a comment".into(), window, cx)
+                .bare()
+                .max_lines(COMMENT_LINES)
+                .on_submit(move |text, _, cx| {
+                    let text = text.trim().to_owned();
+                    if let Err(error) = weak.update(cx, |boardy, cx| boardy.comment(text, cx)) {
+                        eprintln!("desk: boardy closed before the comment was sent: {error}");
+                    }
+                })
         });
         Boardy {
             tofu: None,
@@ -169,7 +186,10 @@ impl Boardy {
             follow: false,
             list: UniformListScrollHandle::new(),
             board_scroll: ScrollHandle::new(),
+            queue: Vec::new(),
+            listing: None,
             started: Instant::now(),
+            drawn: false,
             painted: false,
             wheel: None,
             _toast: None,
@@ -177,6 +197,9 @@ impl Boardy {
     }
 
     pub fn read_from(&mut self, chat: &Entity<Chat>, gate: Gate, cx: &mut Context<Self>) {
+        self.started = Instant::now();
+        self.drawn = false;
+        self.painted = false;
         let same = self
             .tofu
             .as_ref()
@@ -249,11 +272,39 @@ impl Boardy {
                 .or_else(|| keys.first().cloned())
         });
         let first = open.or(landing.flatten());
-        if let Some(first) = first {
-            self.place = Place::Board(first, Section::Tickets);
+        if let Some(first) = &first {
+            self.place = Place::Board(first.clone(), Section::Tickets);
         }
-        for key in keys {
-            self.fetch_board(key, cx);
+        self.queue = keys;
+        let visible = self.visible_board().or(first);
+        if let Some(visible) = visible {
+            self.queue.retain(|key| *key != visible);
+            self.queue.insert(0, visible);
+        }
+        self.pump(cx);
+    }
+
+    fn visible_board(&self) -> Option<String> {
+        match &self.place {
+            Place::Board(key, _) => Some(key.clone()),
+            Place::Ticket(id) => id.split_once('-').map(|(key, _)| key.to_owned()),
+            Place::CatchUp | Place::Attention => None,
+        }
+    }
+
+    fn pump(&mut self, cx: &mut Context<Self>) {
+        if self.listing.is_some() || self.queue.is_empty() {
+            return;
+        }
+        let key = self.queue.remove(0);
+        self.listing = Some(key.clone());
+        self.fetch_board(key, cx);
+    }
+
+    fn listed(&mut self, key: &str, cx: &mut Context<Self>) {
+        if self.listing.as_deref() == Some(key) {
+            self.listing = None;
+            self.pump(cx);
         }
     }
 
@@ -319,9 +370,16 @@ impl Boardy {
             filter: None,
         };
         let listed = key.clone();
-        self.send::<BoardyList>(list, cx, move |boardy, reply, cx| {
+        self.send::<BoardyRows>(list, cx, move |boardy, reply, cx| {
             let first = !boardy.store.read(&listed);
-            match reply.map(|answer| boardy.store.list_landed(answer)) {
+            if !boardy.painted {
+                eprintln!(
+                    "desk: boardy: open {listed} first list {:.2}ms",
+                    boardy.started.elapsed().as_secs_f64() * MS_PER_SECOND
+                );
+            }
+            boardy.listed(&listed, cx);
+            match reply.map(|answer| boardy.store.rows_landed(answer)) {
                 Ok(Ok(())) if first => boardy.land_selection(),
                 Ok(Ok(())) => eprintln!(
                     "desk: boardy {listed} refetched, board scroll x {:.1}, list scroll y {:.1}",
@@ -354,8 +412,10 @@ impl Boardy {
         let triage = TriageRequest {
             action: BoardyTriageRequestAction::List,
             board: Some(key),
+            epic: None,
             reason: None,
             request: None,
+            sprint: None,
         };
         self.send::<BoardyTriage>(triage, cx, |boardy, reply, _| match reply {
             Ok(answer) => {
@@ -375,6 +435,8 @@ impl Boardy {
             board: Some(board.clone()),
             reason: (!accept).then(|| DROPPED.to_owned()),
             request: Some(request),
+            epic: None,
+            sprint: None,
         };
         self.send::<BoardyTriage>(params, cx, move |boardy, reply, cx| match reply {
             Ok(_) => boardy.fetch_board(board, cx),
@@ -445,8 +507,21 @@ impl Boardy {
 
     fn go(&mut self, place: Place, cx: &mut Context<Self>) {
         eprintln!("desk: boardy shows {place:?}");
+        if let Place::Board(key, _) = &place
+            && !self.store.read(key)
+            && self.listing.as_ref() != Some(key)
+        {
+            self.queue.retain(|held| held != key);
+            self.queue.insert(0, key.clone());
+            self.pump(cx);
+        }
         self.place = place;
         self.at = 0;
+        cx.notify();
+    }
+
+    pub fn open_ticket_at(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.open_ticket(id.to_owned(), cx);
         cx.notify();
     }
 
@@ -470,22 +545,48 @@ impl Boardy {
                     answer.ticket.id,
                     answer.events.len()
                 );
+                let ticket = &answer.ticket;
+                let boards: Vec<&str> =
+                    boardy.store.boards.iter().map(|b| b.key.as_str()).collect();
+                let root = std::path::Path::new(&boardy.project);
+                let found = |text: &str| refs::refs(text, &ticket.id, &boards, root, &ticket.owns);
+                let body = format!("{}\n\n{}", ticket.problem, ticket.scope);
+                let acceptance = ticket.acceptance.last().map_or("", String::as_str);
+                let spoken: Vec<Option<&str>> = answer
+                    .events
+                    .iter()
+                    .map(|event| {
+                        desk_core::boardy::spoken(event)
+                            .then(|| event.text.as_deref().unwrap_or_default())
+                    })
+                    .collect();
+                let mut body_refs = found(&body);
+                let more: Vec<refs::Ref> = found(acceptance)
+                    .into_iter()
+                    .filter(|one| !body_refs.iter().any(|held| held.label == one.label))
+                    .collect();
+                body_refs.extend(more);
+                let said = spoken.iter().map(|said| said.map(markdown)).collect();
+                let said_refs = spoken
+                    .iter()
+                    .map(|said| said.map(found).unwrap_or_default())
+                    .collect();
+                let owned = ticket
+                    .owns
+                    .iter()
+                    .map(|glob| {
+                        let dir = glob.trim_end_matches(['*', '/']);
+                        (glob.clone(), refs::target(dir, root, &[]))
+                    })
+                    .collect();
+                let (body, acceptance) = (markdown(&body), markdown(acceptance));
                 boardy.opened = Some(Opened {
-                    body: markdown(&format!(
-                        "{}\n\n{}",
-                        answer.ticket.problem, answer.ticket.scope
-                    )),
-                    acceptance: markdown(
-                        answer.ticket.acceptance.last().map_or("", String::as_str),
-                    ),
-                    said: answer
-                        .events
-                        .iter()
-                        .map(|event| {
-                            desk_core::boardy::spoken(event)
-                                .then(|| markdown(event.text.as_deref().unwrap_or_default()))
-                        })
-                        .collect(),
+                    body,
+                    acceptance,
+                    said,
+                    body_refs,
+                    said_refs,
+                    owned,
                     answer,
                 });
             }
@@ -713,6 +814,8 @@ impl Boardy {
         if first {
             self.painted = true;
         }
+        let drew = !self.drawn;
+        self.drawn = true;
         let opened = self.started;
         let scrolling = self
             .wheel
@@ -721,9 +824,15 @@ impl Boardy {
         canvas(
             |_, _, _| {},
             move |_, (), _, _| {
+                if drew {
+                    eprintln!(
+                        "desk: boardy: open first paint {:.2}ms",
+                        opened.elapsed().as_secs_f64() * MS_PER_SECOND
+                    );
+                }
                 if first {
                     eprintln!(
-                        "desk: boardy: open {:.2}ms",
+                        "desk: boardy: open first list painted {:.2}ms",
                         opened.elapsed().as_secs_f64() * MS_PER_SECOND
                     );
                 }
@@ -753,7 +862,9 @@ impl Render for Boardy {
             self.draft = None;
         }
         let body = match &self.place {
-            Place::Ticket(_) => ticket::page(self, &theme, cx).into_any_element(),
+            Place::Ticket(_) => {
+                ticket::page(self, &theme, window.viewport_size().width, cx).into_any_element()
+            }
             Place::CatchUp => views::catch_up(self, &theme, cx).into_any_element(),
             Place::Attention | Place::Board(..) => views::main(self, &theme, cx).into_any_element(),
         };

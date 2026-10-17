@@ -4,7 +4,7 @@ use std::time::Instant;
 use desk_core::boardy::{BoardyStore, COLUMNS};
 use desk_core::protocol::boardy::{CreateRequest, Ticket};
 use desk_core::protocol::request::BoardyCreate;
-use desk_core::protocol::{BoardyTicketPriority, BoardyTicketStatus as Status, BoardyTicketType};
+use desk_core::protocol::{BoardyPriority, BoardyStatus as Status, BoardyTicketType};
 use desk_motion::Phase;
 use desk_ui::component::icon_button;
 use desk_ui::components::button::{ButtonKind, button};
@@ -45,12 +45,12 @@ const ABOUT_LINES: usize = 10;
 const SCRIM: f32 = 0.35;
 const SHADOW_Y: f32 = 16.0;
 const SHADOW_BLUR: f32 = 24.0;
-const PRIORITIES: [BoardyTicketPriority; 5] = [
-    BoardyTicketPriority::P0,
-    BoardyTicketPriority::P1,
-    BoardyTicketPriority::P2,
-    BoardyTicketPriority::P3,
-    BoardyTicketPriority::P4,
+const PRIORITIES: [BoardyPriority; 5] = [
+    BoardyPriority::P0,
+    BoardyPriority::P1,
+    BoardyPriority::P2,
+    BoardyPriority::P3,
+    BoardyPriority::P4,
 ];
 
 #[derive(Clone, Copy)]
@@ -78,7 +78,7 @@ pub(super) struct Draft {
     board: String,
     epic_word: String,
     status: Status,
-    priority: BoardyTicketPriority,
+    priority: BoardyPriority,
     assignee: Option<String>,
     epic: Option<String>,
     labels: Vec<String>,
@@ -195,7 +195,7 @@ impl Draft {
             board,
             epic_word: words.epic.clone(),
             status,
-            priority: BoardyTicketPriority::P2,
+            priority: BoardyPriority::P2,
             assignee: None,
             epic: None,
             labels: Vec::new(),

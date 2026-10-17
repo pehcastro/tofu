@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use desk_core::protocol::{BoardyTicketPriority, BoardyTicketStatus as Status};
+use desk_core::protocol::{BoardyPriority, BoardyStatus as Status};
 use desk_ui::components::priority_icon::Priority;
 use desk_ui::components::status_icon::TicketStatus;
 use gpui::{Div, FontWeight, Rgba, div, prelude::*, px};
@@ -35,15 +35,21 @@ pub fn label(status: &Status) -> &str {
     }
 }
 
-pub fn priority(priority: &BoardyTicketPriority) -> Option<Priority> {
+pub fn priority(priority: &BoardyPriority) -> Option<Priority> {
     Some(match priority {
-        BoardyTicketPriority::P0 => Priority::P0,
-        BoardyTicketPriority::P1 => Priority::P1,
-        BoardyTicketPriority::P2 => Priority::P2,
-        BoardyTicketPriority::P3 => Priority::P3,
-        BoardyTicketPriority::P4 => Priority::P4,
-        BoardyTicketPriority::Unknown(_) => return None,
+        BoardyPriority::P0 => Priority::P0,
+        BoardyPriority::P1 => Priority::P1,
+        BoardyPriority::P2 => Priority::P2,
+        BoardyPriority::P3 => Priority::P3,
+        BoardyPriority::P4 => Priority::P4,
+        BoardyPriority::Unknown(_) => return None,
     })
+}
+
+pub fn parent(id: &str) -> Option<&str> {
+    id.rsplit_once('-')
+        .map(|(head, _)| head)
+        .filter(|head| head.contains('-'))
 }
 
 pub fn disc(letter: &str, color: Rgba) -> Div {

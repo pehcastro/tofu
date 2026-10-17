@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::protocol::boardy::{BoardSummary, BoardsAnswer, Event, ListAnswer, Ticket, Words};
-use crate::protocol::{BoardyEventKind, BoardyTicketStatus as Status};
+use crate::protocol::boardy::{BoardSummary, BoardsAnswer, Event, Row, RowsAnswer, Ticket, Words};
+use crate::protocol::{BoardyEventKind, BoardyStatus as Status};
 use crate::settings::{Settings, Value};
 
 pub const MANAGEMENT: &str = "projectManagement";
@@ -11,6 +11,8 @@ pub const ALL_VIEW: &str = "all";
 const BOARDY: &str = "boardy";
 const OFF: &str = "off";
 const PERSON: &str = "person";
+const SESSION_ID_LEN: usize = 36;
+const SESSION_ID_DASHES: [usize; 4] = [8, 13, 18, 23];
 
 pub const COLUMNS: [Status; 9] = [
     Status::Triage,
@@ -105,21 +107,34 @@ impl std::error::Error for BoardyError {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Speaker {
-    You,
+    Unknown,
     Lead,
     Agent,
+    Named,
 }
 
 impl Speaker {
     pub fn of(actor: &str) -> Speaker {
-        if actor == PERSON {
-            Speaker::You
+        if actor.is_empty() || actor == PERSON {
+            Speaker::Unknown
         } else if actor.contains('/') {
             Speaker::Agent
-        } else {
+        } else if session_id(actor) {
             Speaker::Lead
+        } else {
+            Speaker::Named
         }
     }
+}
+
+fn session_id(actor: &str) -> bool {
+    actor.len() == SESSION_ID_LEN
+        && actor
+            .char_indices()
+            .all(|(at, c)| match SESSION_ID_DASHES.contains(&at) {
+                true => c == '-',
+                false => c.is_ascii_hexdigit(),
+            })
 }
 
 pub fn spoken(event: &Event) -> bool {
@@ -128,7 +143,8 @@ pub fn spoken(event: &Event) -> bool {
         | BoardyEventKind::Asked
         | BoardyEventKind::Answered
         | BoardyEventKind::Spawned
-        | BoardyEventKind::Reported => !event.text.as_deref().unwrap_or_default().is_empty(),
+        | BoardyEventKind::Reported
+        | BoardyEventKind::Messaged => !event.text.as_deref().unwrap_or_default().is_empty(),
         BoardyEventKind::Created
         | BoardyEventKind::Moved
         | BoardyEventKind::Rule
@@ -140,19 +156,37 @@ pub fn spoken(event: &Event) -> bool {
         | BoardyEventKind::Widened
         | BoardyEventKind::Managers
         | BoardyEventKind::Assigned
+        | BoardyEventKind::Hook
+        | BoardyEventKind::HookFailed
         | BoardyEventKind::Unknown(_) => false,
     }
 }
 
-pub fn wants_attention(ticket: &Ticket) -> bool {
-    !ticket.questions.is_empty()
+pub fn row(ticket: Ticket) -> Row {
+    Row {
+        id: ticket.id,
+        title: ticket.title,
+        status: ticket.status,
+        priority: ticket.priority,
+        epic: ticket.epic,
+        sprint: ticket.sprint,
+        assignee: ticket.assignee,
+        labels: ticket.labels,
+        questions: i64::try_from(ticket.questions.len()).ok(),
+        created: ticket.created,
+        updated: ticket.updated,
+    }
+}
+
+pub fn wants_attention(ticket: &Row) -> bool {
+    ticket.questions.unwrap_or_default() > 0
         || matches!(
             ticket.status,
             Status::NeedsDecision | Status::Blocked | Status::Review | Status::Triage
         )
 }
 
-pub fn running(ticket: &Ticket) -> bool {
+pub fn running(ticket: &Row) -> bool {
     ticket.status == Status::Doing
         && ticket
             .assignee
@@ -164,7 +198,7 @@ pub fn running(ticket: &Ticket) -> bool {
 pub struct BoardyStore {
     pub boards: Vec<BoardSummary>,
     pub words: Words,
-    tickets: BTreeMap<String, Vec<Ticket>>,
+    tickets: BTreeMap<String, Vec<Row>>,
 }
 
 impl BoardyStore {
@@ -177,12 +211,8 @@ impl BoardyStore {
         self.words = answer.words;
     }
 
-    pub fn list_landed(&mut self, answer: ListAnswer) -> Result<(), BoardyError> {
-        let mut tickets: Vec<Ticket> = answer
-            .groups
-            .into_iter()
-            .flat_map(|group| group.tickets)
-            .collect();
+    pub fn rows_landed(&mut self, answer: RowsAnswer) -> Result<(), BoardyError> {
+        let mut tickets = answer.rows;
         if let Some(unknown) = tickets.iter().find_map(|ticket| match &ticket.status {
             Status::Unknown(raw) => Some(raw.clone()),
             _ => None,
@@ -202,7 +232,7 @@ impl BoardyStore {
             .flat_map(|tickets| tickets.iter_mut())
             .find(|held| held.id == ticket.id);
         if let Some(held) = found {
-            *held = ticket;
+            *held = row(ticket);
         }
     }
 
@@ -210,18 +240,18 @@ impl BoardyStore {
         self.tickets.contains_key(board)
     }
 
-    pub fn tickets(&self, board: &str) -> &[Ticket] {
+    pub fn tickets(&self, board: &str) -> &[Row] {
         self.tickets.get(board).map_or(&[], Vec::as_slice)
     }
 
-    pub fn find(&self, id: &str) -> Option<&Ticket> {
+    pub fn find(&self, id: &str) -> Option<&Row> {
         self.tickets
             .values()
             .flatten()
             .find(|ticket| ticket.id == id)
     }
 
-    pub fn columns(&self, board: &str) -> Vec<(Status, Vec<&Ticket>)> {
+    pub fn columns(&self, board: &str) -> Vec<(Status, Vec<&Row>)> {
         let tickets = self.tickets(board);
         COLUMNS
             .iter()
@@ -235,7 +265,7 @@ impl BoardyStore {
             .collect()
     }
 
-    pub fn attention(&self) -> Vec<&Ticket> {
+    pub fn attention(&self) -> Vec<&Row> {
         self.tickets
             .values()
             .flatten()
@@ -243,8 +273,8 @@ impl BoardyStore {
             .collect()
     }
 
-    pub fn newest(&self, count: usize) -> Vec<&Ticket> {
-        let mut all: Vec<&Ticket> = self.tickets.values().flatten().collect();
+    pub fn newest(&self, count: usize) -> Vec<&Row> {
+        let mut all: Vec<&Row> = self.tickets.values().flatten().collect();
         all.sort_by(|a, b| b.created.cmp(&a.created));
         all.truncate(count);
         all

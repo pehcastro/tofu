@@ -7225,6 +7225,9 @@
     "TurnParams": {
       "additionalProperties": false,
       "properties": {
+        "everything": {
+          "type": "boolean"
+        },
         "lead": {
           "type": "boolean"
         },
@@ -7244,6 +7247,9 @@
     "TurnResult": {
       "additionalProperties": false,
       "properties": {
+        "steered": {
+          "type": "string"
+        },
         "turn": {
           "type": "string"
         }
@@ -7257,6 +7263,9 @@
       "additionalProperties": false,
       "properties": {
         "effort": {
+          "type": "string"
+        },
+        "expectedTurnId": {
           "type": "string"
         },
         "images": {
@@ -7771,6 +7780,31 @@
       ],
       "type": "object"
     },
+    "boardy.AgeBucket": {
+      "additionalProperties": false,
+      "properties": {
+        "from_days": {
+          "type": "integer"
+        },
+        "tickets": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "to_days": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from_days",
+        "tickets"
+      ],
+      "type": "object"
+    },
     "boardy.Aging": {
       "additionalProperties": false,
       "properties": {
@@ -7868,6 +7902,133 @@
       "required": [
         "id",
         "assignee"
+      ],
+      "type": "object"
+    },
+    "boardy.AuditAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_unasked": {
+          "items": {
+            "$ref": "#/$defs/boardy.Aging"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "board": {
+          "type": "string"
+        },
+        "duplicates": {
+          "items": {
+            "$ref": "#/$defs/boardy.Duplicate"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "lag": {
+          "$ref": "#/$defs/boardy.Lag"
+        },
+        "live": {
+          "type": "integer"
+        },
+        "review": {
+          "items": {
+            "$ref": "#/$defs/boardy.AgeBucket"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "stale_todo": {
+          "items": {
+            "$ref": "#/$defs/boardy.Aging"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "tickets": {
+          "type": "integer"
+        },
+        "unacted": {
+          "items": {
+            "$ref": "#/$defs/boardy.Unacted"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "unplanned": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "board",
+        "tickets",
+        "live",
+        "review",
+        "unacted",
+        "unplanned",
+        "duplicates",
+        "blocked_unasked",
+        "stale_todo",
+        "lag",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.AuditRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.Author": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "person",
+            "claude-code",
+            "lead",
+            "sub-agent",
+            "hook"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "trace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
       ],
       "type": "object"
     },
@@ -8005,6 +8166,27 @@
       ],
       "type": "object"
     },
+    "boardy.Duplicate": {
+      "additionalProperties": false,
+      "properties": {
+        "tickets": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "title_overlap": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "tickets",
+        "title_overlap"
+      ],
+      "type": "object"
+    },
     "boardy.Event": {
       "additionalProperties": false,
       "properties": {
@@ -8017,6 +8199,9 @@
         "at": {
           "format": "date-time",
           "type": "string"
+        },
+        "author": {
+          "$ref": "#/$defs/boardy.Author"
         },
         "call": {
           "type": "string"
@@ -8061,7 +8246,10 @@
             "asked",
             "answered",
             "spawned",
-            "reported"
+            "messaged",
+            "reported",
+            "hook",
+            "hook-failed"
           ],
           "type": "string"
         },
@@ -8267,6 +8455,60 @@
       ],
       "type": "object"
     },
+    "boardy.HookRow": {
+      "additionalProperties": false,
+      "properties": {
+        "arg": {
+          "type": "string"
+        },
+        "do": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "last_fired": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "on": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "board",
+            "project",
+            "user"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "then": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string"
+        },
+        "when": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope",
+        "file",
+        "when",
+        "on",
+        "trigger",
+        "do"
+      ],
+      "type": "object"
+    },
     "boardy.InitRequest": {
       "additionalProperties": false,
       "properties": {
@@ -8280,6 +8522,56 @@
       "required": [
         "key",
         "name"
+      ],
+      "type": "object"
+    },
+    "boardy.Lag": {
+      "additionalProperties": false,
+      "properties": {
+        "median_minutes": {
+          "type": "integer"
+        },
+        "reports": {
+          "type": "integer"
+        },
+        "slow_minutes": {
+          "type": "integer"
+        },
+        "slow_percentile": {
+          "type": "integer"
+        },
+        "slowest": {
+          "items": {
+            "$ref": "#/$defs/boardy.Lagged"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "reports",
+        "median_minutes",
+        "slow_percentile",
+        "slow_minutes",
+        "slowest"
+      ],
+      "type": "object"
+    },
+    "boardy.Lagged": {
+      "additionalProperties": false,
+      "properties": {
+        "minutes": {
+          "type": "integer"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "minutes"
       ],
       "type": "object"
     },
@@ -8709,6 +9001,320 @@
       ],
       "type": "object"
     },
+    "boardy.Row": {
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "type": "string"
+        },
+        "created": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "epic": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3",
+            "P4"
+          ],
+          "type": "string"
+        },
+        "questions": {
+          "type": "integer"
+        },
+        "sprint": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked",
+            "needs-decision"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "priority",
+        "created",
+        "updated"
+      ],
+      "type": "object"
+    },
+    "boardy.RowsAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/boardy.Row"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sprint": {
+          "type": "string"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "board",
+        "rows",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.RuleAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "hook": {
+          "$ref": "#/$defs/boardy.HookRow"
+        },
+        "source": {
+          "type": "string"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "board",
+        "hook",
+        "source",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.RulePutRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "board",
+            "project",
+            "user"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "boardy.RuleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "board",
+            "project",
+            "user"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "boardy.RuleTestAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "fails": {
+          "type": "boolean"
+        },
+        "holds": {
+          "type": "boolean"
+        },
+        "hook": {
+          "$ref": "#/$defs/boardy.HookRow"
+        },
+        "then": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked",
+            "needs-decision"
+          ],
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string"
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "hook",
+        "holds",
+        "fails",
+        "blocks",
+        "verdict",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.RuleTestRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "board",
+            "project",
+            "user"
+          ],
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked",
+            "needs-decision"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.RulesAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "hooks": {
+          "items": {
+            "$ref": "#/$defs/boardy.HookRow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "invalid": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "words": {
+          "$ref": "#/$defs/boardy.Words"
+        }
+      },
+      "required": [
+        "board",
+        "hooks",
+        "invalid",
+        "words"
+      ],
+      "type": "object"
+    },
+    "boardy.RulesRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
     "boardy.Tally": {
       "additionalProperties": false,
       "properties": {
@@ -8978,15 +9584,44 @@
         "board": {
           "type": "string"
         },
+        "epic": {
+          "type": "string"
+        },
         "reason": {
           "type": "string"
         },
         "request": {
           "type": "string"
+        },
+        "sprint": {
+          "type": "string"
         }
       },
       "required": [
         "action"
+      ],
+      "type": "object"
+    },
+    "boardy.Unacted": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "at"
       ],
       "type": "object"
     },
@@ -11291,6 +11926,33 @@
               "const": "2.0"
             },
             "method": {
+              "const": "boardy.rows"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.ListRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "boardy.get"
             },
             "params": {
@@ -11349,6 +12011,33 @@
             },
             "params": {
               "$ref": "#/$defs/boardy.ReportRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.audit"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.AuditRequest"
             }
           },
           "required": [
@@ -11619,6 +12308,141 @@
             },
             "params": {
               "$ref": "#/$defs/boardy.InitRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.rules"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.RulesRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.rule.get"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.RuleRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.rule.put"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.RulePutRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.rule.remove"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.RuleRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.rule.test"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.RuleTestRequest"
             }
           },
           "required": [
@@ -15203,6 +16027,9 @@
               "$ref": "#/$defs/boardy.ListAnswer"
             },
             {
+              "$ref": "#/$defs/boardy.RowsAnswer"
+            },
+            {
               "$ref": "#/$defs/boardy.GetAnswer"
             },
             {
@@ -15210,6 +16037,9 @@
             },
             {
               "$ref": "#/$defs/boardy.ReportAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.AuditAnswer"
             },
             {
               "$ref": "#/$defs/boardy.TicketAnswer"
@@ -15222,6 +16052,15 @@
             },
             {
               "$ref": "#/$defs/boardy.PlanAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.RulesAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.RuleAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.RuleTestAnswer"
             },
             {
               "$ref": "#/$defs/sys.ScratchReport"
@@ -15494,6 +16333,14 @@
         "$ref": "#/$defs/boardy.TicketAnswer"
       }
     },
+    "boardy.audit": {
+      "params": {
+        "$ref": "#/$defs/boardy.AuditRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.AuditAnswer"
+      }
+    },
     "boardy.boards": {
       "params": {
         "$ref": "#/$defs/NoParams"
@@ -15588,6 +16435,54 @@
       },
       "result": {
         "$ref": "#/$defs/boardy.ReportAnswer"
+      }
+    },
+    "boardy.rows": {
+      "params": {
+        "$ref": "#/$defs/boardy.ListRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.RowsAnswer"
+      }
+    },
+    "boardy.rule.get": {
+      "params": {
+        "$ref": "#/$defs/boardy.RuleRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.RuleAnswer"
+      }
+    },
+    "boardy.rule.put": {
+      "params": {
+        "$ref": "#/$defs/boardy.RulePutRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.RuleAnswer"
+      }
+    },
+    "boardy.rule.remove": {
+      "params": {
+        "$ref": "#/$defs/boardy.RuleRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.RuleAnswer"
+      }
+    },
+    "boardy.rule.test": {
+      "params": {
+        "$ref": "#/$defs/boardy.RuleTestRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.RuleTestAnswer"
+      }
+    },
+    "boardy.rules": {
+      "params": {
+        "$ref": "#/$defs/boardy.RulesRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.RulesAnswer"
       }
     },
     "boardy.triage": {
