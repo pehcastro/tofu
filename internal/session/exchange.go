@@ -21,6 +21,8 @@ const (
 	blobsName     = "blobs.jsonl"
 	blobHashBytes = 16
 	blobHashField = `{"hash":"`
+	recordEnd     = '}'
+	cutMark       = "!\n"
 )
 
 type BodyPart struct {
@@ -82,7 +84,7 @@ func (l *Log) keep(raw []byte) (string, error) {
 	if l.blobs[hash] {
 		return hash, nil
 	}
-	if err := l.appendLine(blobsName, slices.Concat([]byte(blobHashField+hash+`","body":`), masked, []byte("}"))); err != nil {
+	if err := l.appendLine(blobsName, slices.Concat([]byte(blobHashField+hash+`","body":`), masked, []byte{recordEnd})); err != nil {
 		return "", err
 	}
 	l.blobs[hash] = true
@@ -142,15 +144,27 @@ func (l *Log) Exchanged(exchange Exchange) error {
 }
 
 func (l *Log) appendLine(name string, line []byte) error {
+	line = append(line, '\n')
 	file, open := l.side[name]
 	if !open {
 		var err error
-		if file, err = os.OpenFile(filepath.Join(l.store.Dir(l.header.ID), name), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err != nil {
+		if file, err = os.OpenFile(filepath.Join(l.store.Dir(l.header.ID), name), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644); err != nil {
 			return err
+		}
+		info, err := file.Stat()
+		end := []byte{'\n'}
+		if err == nil && info.Size() > 0 {
+			_, err = file.ReadAt(end, info.Size()-1)
+		}
+		if err != nil {
+			return errors.Join(err, file.Close())
+		}
+		if end[0] != '\n' {
+			line = slices.Concat([]byte(cutMark), line)
 		}
 		l.side[name] = file
 	}
-	_, err := file.Write(append(line, '\n'))
+	_, err := file.Write(line)
 	return err
 }
 
@@ -177,7 +191,7 @@ func eachLine(path string, read func(line []byte) error) error {
 			return nil
 		}
 		raw = rest
-		if trimmed := bytes.TrimSpace(line); len(trimmed) > 0 {
+		if trimmed := bytes.TrimSpace(line); bytes.HasSuffix(trimmed, []byte{recordEnd}) {
 			if readErr := read(trimmed); readErr != nil {
 				return fmt.Errorf("%s: %w", filepath.Base(path), readErr)
 			}
@@ -274,16 +288,20 @@ func (s *Store) blobHashes(id string) (map[string]bool, error) {
 		trimmed := bytes.TrimSpace(head)
 		rest, opens := bytes.CutPrefix(trimmed, []byte(blobHashField))
 		hash, _, closes := bytes.Cut(rest, []byte(`"`))
-		key, blank := string(hash), len(trimmed) == 0
+		key, ended := string(hash), bytes.HasSuffix(trimmed, []byte{recordEnd})
 		for errors.Is(err, bufio.ErrBufferFull) {
-			_, err = reader.ReadSlice('\n')
+			var more []byte
+			more, err = reader.ReadSlice('\n')
+			if more = bytes.TrimSpace(more); len(more) > 0 {
+				ended = more[len(more)-1] == recordEnd
+			}
 		}
 		switch {
 		case errors.Is(err, io.EOF):
 			return hashes, nil
 		case err != nil:
 			return nil, err
-		case blank:
+		case !ended:
 		case !opens || !closes:
 			return nil, fmt.Errorf("%s: a line does not open with its hash", blobsName)
 		default:
