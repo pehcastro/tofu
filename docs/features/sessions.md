@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-10-16
+updated: 2026-10-17
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -147,12 +147,29 @@ tofu session find brisk-amber-heron --tool bash
 finds every call across every generation, and `--command`, `--file`,
 `--text`, `--agent`, `--since` and `--until` narrow it, together.
 
+```sh
+tofu session trace brisk-amber-heron
+tofu session trace brisk-amber-heron --since 1h --agent research-2
+tofu session trace brisk-amber-heron --from 04:10 --to 04:12 --kind stop,error
+```
+
+The first prints a summary: lead turns and how they ended, each sub-agent
+with its state, calls and last report, errors by kind, every stop with what
+it took down, and the commands that drill in. On a generation of 4,758
+events it is 44 lines where the full listing is 19,161, and it answers in
+0.7 s where the full listing takes 6 s. A filter lists the rows behind it,
+one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
+`04:10`, or a date and time), `--agent` (a name, or `lead`), `--turn`,
+`--grep`, `--last N`, and `--kind` with any of `turn`, `stop`, `error`,
+`spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
+`shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `read`, `startup`,
+`notice` and `attachment`. `--wide` prints each row whole, and `--full`
+prints every request, call, hook and message section. A sub-agent that kept
+writing to the session before a continue shows with the session it was
+recorded in.
+
 `tofu session info <name>` prints one session with its model, cost,
-context budget and the error it ended on, `tofu session trace <name>` every
-request, message, tool call, hook run, message tofu added, fork and
-failure, and on a continued session the sub-agents that kept working in
-the session before it, with a failed command's reason taken from its first
-failure line, such as `exit 1: --- FAIL: TestAdd`, `tofu session
-request <name> <request id>` one request exactly as it was sent with its
-response or error body, and `tofu session reads <name>` every file it read.
-Each takes `--json`.
+context budget and the error it ended on, `tofu session request <name>
+<request id>` one request exactly as it was sent with its response or error
+body, and `tofu session reads <name>` every file it read. Each takes
+`--json`, and `tofu session trace --json` with a filter prints the same rows.

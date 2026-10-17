@@ -101,10 +101,9 @@ error, and the command that continues it. `tofu session reads <name|id>` lists e
 
     tofu session trace <name|id>
 
-lists every request, message with its `[message#id]`, tool call with its arguments, gate verdict and
-hooks, each message tofu added, each fork, compaction and resume, and each turn that ended in an
-error. `tofu session request <name|id> <request id>` prints one request exactly as sent, each wire
-attempt, and the response.
+prints a summary: lead turns and how they ended, each sub-agent with its state, calls and last report, errors by kind, every stop with what it took down, and the commands that drill in.
+`--since 1h`, `--from 04:10 --to 04:20`, `--agent <name>` or `lead`, `--turn <id>`, `--kind stop,error,gate` (a wrong kind names them all), `--grep <text>` and `--last 20` list the rows behind it, one line each, and combine; `--wide` prints each row whole, `--full` every request, call, hook and message, and `--json` the same rows.
+`tofu session request <name|id> <request id>` prints one request exactly as sent, each wire attempt, and the response.
 
     tofu context
     tofu shells list
