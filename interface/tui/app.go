@@ -444,11 +444,11 @@ func Run(options Options) error {
 		programOptions = append(programOptions, tea.WithOutput(conhostOutput{os.Stdout}))
 	}
 	program := tea.NewProgram(New(options), programOptions...)
-	hangup := make(chan os.Signal, 1)
+	hangup, root := make(chan os.Signal, 1), options.Root
 	signal.Notify(hangup, syscall.SIGHUP)
 	unheard := func(p safe.Panic) {
 		signal.Stop(hangup)
-		state, err := sys.ProjectStateDirAt(options.Root)
+		state, err := sys.ProjectStateDirAt(root)
 		if err != nil {
 			state = os.TempDir()
 		}
