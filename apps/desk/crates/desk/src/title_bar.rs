@@ -9,7 +9,7 @@ use desk_core::protocol::{AgentState, OriginKind, TurnCompletedStatus};
 use desk_ui::components::agents::ago;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::title_bar::{
-    Github, GithubUser, Notice, Title, TitleBar, TitlePick, WindowKeys,
+    Github, GithubUser, Marks, Notice, Title, TitleBar, TitlePick, WindowKeys,
 };
 use gpui::{AnyElement, Context, Image, ImageFormat, SharedString};
 
@@ -20,6 +20,16 @@ const SECONDS_PER_MINUTE: f32 = 60.0;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const AVATAR_FETCH_SECONDS: &str = "10";
 const AVATAR_PIXELS: u32 = 96;
+const CAT_ON_DARK: &[u8] = include_bytes!("../assets/brand/cat-on-dark.png");
+const CAT_ON_LIGHT: &[u8] = include_bytes!("../assets/brand/cat-on-light.png");
+
+pub fn marks() -> Marks {
+    let mark = |bytes: &[u8]| Arc::new(Image::from_bytes(ImageFormat::Png, bytes.to_vec())).into();
+    Marks {
+        on_dark: mark(CAT_ON_DARK),
+        on_light: mark(CAT_ON_LIGHT),
+    }
+}
 
 #[derive(Clone, Copy)]
 enum Raise {
@@ -308,6 +318,7 @@ pub fn title_bar(
     tabs_x: f32,
     github: Github,
     bell: &Bell,
+    marks: &Marks,
     tabs: Option<AnyElement>,
     cx: &mut Context<Desk>,
 ) -> TitleBar {
@@ -331,6 +342,8 @@ pub fn title_bar(
             TitlePick::NewWorkspace => desk.tell(Control::NewWorkspace, cx),
             TitlePick::NoticesRead => desk.read_notices(cx),
             TitlePick::Notice(ix) => desk.open_notice(*ix, cx),
+            TitlePick::Theme => desk.toggle_theme(window, cx),
         }),
     )
+    .marks(marks.clone())
 }

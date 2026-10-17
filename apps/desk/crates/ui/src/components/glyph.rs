@@ -2,7 +2,9 @@ use std::borrow::Cow;
 
 use gpui::SharedString;
 
+use crate::components::priority_icon::Priority;
 use crate::components::size::{RING_STROKE, SPIN_SIZES};
+use crate::components::status_icon::TicketStatus;
 
 macro_rules! stroked {
     ($body:literal) => {
@@ -62,10 +64,23 @@ pub enum Glyph {
     ExpandAll,
     CollapseAll,
     Trash,
+    Inbox,
+    Filter,
+    Display,
+    Ellipsis,
+    Label,
+    Milestone,
+    Sprint,
+    Epic,
+    Attention,
+    Catchup,
+    Image,
+    Sun,
+    Moon,
 }
 
 impl Glyph {
-    const ALL: [Glyph; 46] = [
+    const ALL: [Glyph; 59] = [
         Glyph::Pin,
         Glyph::Lock,
         Glyph::Check,
@@ -112,6 +127,19 @@ impl Glyph {
         Glyph::ExpandAll,
         Glyph::CollapseAll,
         Glyph::Trash,
+        Glyph::Inbox,
+        Glyph::Filter,
+        Glyph::Display,
+        Glyph::Ellipsis,
+        Glyph::Label,
+        Glyph::Milestone,
+        Glyph::Sprint,
+        Glyph::Epic,
+        Glyph::Attention,
+        Glyph::Catchup,
+        Glyph::Image,
+        Glyph::Sun,
+        Glyph::Moon,
     ];
 
     pub const WORKSPACE: [(&'static str, Glyph); 12] = [
@@ -184,6 +212,19 @@ impl Glyph {
             Glyph::ExpandAll => "glyphs/expand-all.svg",
             Glyph::CollapseAll => "glyphs/collapse-all.svg",
             Glyph::Trash => "glyphs/trash.svg",
+            Glyph::Inbox => "glyphs/inbox.svg",
+            Glyph::Filter => "glyphs/filter.svg",
+            Glyph::Display => "glyphs/display.svg",
+            Glyph::Ellipsis => "glyphs/ellipsis.svg",
+            Glyph::Label => "glyphs/label.svg",
+            Glyph::Milestone => "glyphs/milestone.svg",
+            Glyph::Sprint => "glyphs/sprint.svg",
+            Glyph::Epic => "glyphs/epic.svg",
+            Glyph::Attention => "glyphs/attention.svg",
+            Glyph::Catchup => "glyphs/catchup.svg",
+            Glyph::Image => "glyphs/image.svg",
+            Glyph::Sun => "glyphs/sun.svg",
+            Glyph::Moon => "glyphs/moon.svg",
         }
     }
 
@@ -259,6 +300,41 @@ impl Glyph {
             Glyph::Trash => stroked!(
                 r#"<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 11.5A2.5 2.5 0 0 0 9.5 21h5a2.5 2.5 0 0 0 2.5-2.5L18 7"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/>"#
             ),
+            Glyph::Inbox => stroked!(
+                r#"<path d="M4 13.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4.5"/><path d="M4 13.5 6.4 5.5A2 2 0 0 1 8.3 4h7.4a2 2 0 0 1 1.9 1.5l2.4 8h-4.5l-1 2.5h-5l-1-2.5z"/>"#
+            ),
+            Glyph::Filter => stroked!(r#"<path d="M4 7h16M7 12h10M10 17h4"/>"#),
+            Glyph::Display => stroked!(
+                r#"<path d="M4 8h8M18 8h2M4 16h2M12 16h8"/><circle cx="15" cy="8" r="2.5"/><circle cx="9" cy="16" r="2.5"/>"#
+            ),
+            Glyph::Ellipsis => stroked!(
+                r#"<circle cx="6" cy="12" r="1.25" fill="currentColor"/><circle cx="12" cy="12" r="1.25" fill="currentColor"/><circle cx="18" cy="12" r="1.25" fill="currentColor"/>"#
+            ),
+            Glyph::Label => stroked!(
+                r#"<path d="M3.5 11.6V5.5a2 2 0 0 1 2-2h6.1a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8l-6.1 6.1a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4z"/><circle cx="8.5" cy="8.5" r="1.5"/>"#
+            ),
+            Glyph::Milestone => stroked!(
+                r#"<path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/><path d="M12 9 15 12 12 15 9 12z" fill="currentColor"/>"#
+            ),
+            Glyph::Sprint => stroked!(
+                r#"<path d="M19.5 12a7.5 7.5 0 0 1-13.4 4.6M4.5 12a7.5 7.5 0 0 1 13.4-4.6"/><path d="M18.5 3.5v4h-4M5.5 20.5v-4h4"/>"#
+            ),
+            Glyph::Epic => stroked!(
+                r#"<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>"#
+            ),
+            Glyph::Attention => stroked!(
+                r#"<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5"/><circle cx="12" cy="16" r="1" fill="currentColor"/>"#
+            ),
+            Glyph::Catchup => stroked!(
+                r#"<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 3.5v3.7h3.7"/><path d="M12 8v4l2.5 2.5"/>"#
+            ),
+            Glyph::Image => stroked!(
+                r#"<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.75"/><path d="m20.5 16-4.5-4.5L6 19.5"/>"#
+            ),
+            Glyph::Sun => stroked!(
+                r#"<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>"#
+            ),
+            Glyph::Moon => stroked!(r#"<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>"#),
         }
     }
 
@@ -276,7 +352,11 @@ impl Glyph {
                 Cow::Owned(spinner_svg(size).into_bytes()),
             )
         });
-        glyphs.chain(marks).collect()
+        glyphs
+            .chain(marks)
+            .chain(TicketStatus::entries())
+            .chain(Priority::entries())
+            .collect()
     }
 }
 

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use desk_core::control::Control;
 use gpui::{
     AnyElement, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, ImageSource,
-    KeyContext, SharedString, Stateful, Window, WindowControlArea, div, prelude::*, px,
+    KeyContext, SharedString, Stateful, Window, WindowControlArea, div, img, prelude::*, px,
 };
 
 use crate::component::{control, icon, icon_button};
@@ -20,13 +20,17 @@ use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{
-    CAPTION_WIDTH, CONTROL, ICON_SMALL, RADIUS_CAPTION, RADIUS_TAB, SIDEBAR_CLOSED_WIDTH,
-    TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
+    CAPTION_WIDTH, CONTROL, ICON, ICON_SMALL, RADIUS_CAPTION, RADIUS_CONTROL, RADIUS_TAB,
+    SIDEBAR_CLOSED_WIDTH, TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
 };
-use crate::theme::{ColorToken, Theme};
+use crate::theme::{ColorToken, Mode, Theme};
 
 const TITLE_GAP: f32 = 4.0;
 const PRODUCT_NAME: &str = "tofu";
+const MARK_HEIGHT: f32 = 18.0;
+const MARK_WIDTH: f32 = 17.0;
+const TO_LIGHT: &str = "Switch to light theme";
+const TO_DARK: &str = "Switch to dark theme";
 const BELL_DOT: f32 = 6.0;
 const BELL_DOT_INSET: f32 = 6.0;
 const POP_OFFSET: f32 = 4.0;
@@ -70,6 +74,7 @@ pub enum TitlePick {
     Palette,
     Notice(usize),
     NoticesRead,
+    Theme,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -141,6 +146,12 @@ pub struct Title {
     pub tabs_x: f32,
 }
 
+#[derive(Clone)]
+pub struct Marks {
+    pub on_dark: ImageSource,
+    pub on_light: ImageSource,
+}
+
 type OnPick = Rc<dyn Fn(&TitlePick, &mut Window, &mut App)>;
 
 #[derive(IntoElement)]
@@ -150,6 +161,7 @@ pub struct TitleBar {
     tabs: Option<AnyElement>,
     on_pick: OnPick,
     controls_only: bool,
+    marks: Option<Marks>,
 }
 
 impl TitleBar {
@@ -165,7 +177,13 @@ impl TitleBar {
             tabs,
             on_pick: Rc::new(on_pick),
             controls_only: false,
+            marks: None,
         }
+    }
+
+    pub fn marks(mut self, marks: Marks) -> Self {
+        self.marks = Some(marks);
+        self
     }
 
     pub fn controls_only(mut self) -> Self {
@@ -432,11 +450,19 @@ fn captions(keys: WindowKeys, maximized: bool, theme: &Theme) -> impl IntoElemen
         .child(Caption::Close.button(keys, theme))
 }
 
-fn product_name(theme: &Theme) -> Div {
-    div()
-        .font_weight(FontWeight::BOLD)
-        .text_color(theme.color(ColorToken::TextName))
-        .child(PRODUCT_NAME)
+fn product_name(marks: Option<&Marks>, theme: &Theme) -> Div {
+    let name = div().flex().items_center();
+    let Some(marks) = marks else {
+        return name
+            .font_weight(FontWeight::BOLD)
+            .text_color(theme.color(ColorToken::TextName))
+            .child(PRODUCT_NAME);
+    };
+    let mark = match theme.mode() {
+        Mode::Dark => marks.on_dark.clone(),
+        Mode::Light => marks.on_light.clone(),
+    };
+    name.child(img(mark).w(px(MARK_WIDTH)).h(px(MARK_HEIGHT)))
 }
 
 impl RenderOnce for TitleBar {
@@ -457,7 +483,7 @@ impl RenderOnce for TitleBar {
             .then(|| captions(self.title.keys, window.is_maximized(), &theme));
         if self.controls_only {
             return bar
-                .child(product_name(&theme).flex_1().pl_4())
+                .child(product_name(self.marks.as_ref(), &theme).flex_1().pl_4())
                 .children(controls);
         }
         let tab = theme.color(ColorToken::TextTab);
@@ -558,6 +584,24 @@ impl RenderOnce for TitleBar {
             window,
             cx,
         );
+        let (theme_glyph, theme_tip) = match theme.mode() {
+            Mode::Dark => (Glyph::Sun, TO_LIGHT),
+            Mode::Light => (Glyph::Moon, TO_DARK),
+        };
+        let switch_theme = tooltip(
+            "title-theme-tip",
+            named_stop(control("theme", theme_tip, &theme), "theme", &theme)
+                .occlude()
+                .size(px(CONTROL))
+                .rounded(px(RADIUS_CONTROL))
+                .child(glyph(theme_glyph, ICON, theme.color(ColorToken::TextIcon)))
+                .on_click(self.picked(TitlePick::Theme)),
+            Edge::Frame,
+            theme_tip,
+            &theme,
+            window,
+            cx,
+        );
         let account_tip = title
             .github
             .tip()
@@ -606,7 +650,7 @@ impl RenderOnce for TitleBar {
                     .on_click(self.picked(TitlePick::Sidebar)),
                 )
                 .when(title.sidebar_open, |name| {
-                    name.child(product_name(&theme).pl_1p5())
+                    name.child(product_name(self.marks.as_ref(), &theme).pl_1p5())
                 }),
         )
         .child(tabs)
@@ -630,6 +674,7 @@ impl RenderOnce for TitleBar {
             )
             .on_click(self.picked(TitlePick::Palette)),
         )
+        .child(switch_theme)
         .child(
             Popover::new("title-bell-pop", bell)
                 .open(shown == Some(TitlePop::Notifications))

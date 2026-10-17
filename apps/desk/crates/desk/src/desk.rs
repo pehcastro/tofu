@@ -8,6 +8,7 @@ use crate::modules::chat::Find;
 use crate::modules::chat::SettingsMoved;
 #[cfg(feature = "screen-work")]
 use crate::modules::chat::{Chat, Listed, TofuStopped, Touched};
+use crate::pick;
 #[cfg(feature = "screen-work")]
 use crate::project::{self, Head, Picked};
 #[cfg(all(feature = "screen-work", feature = "screen-accounts"))]
@@ -33,7 +34,7 @@ use crate::screens::usage::UsageScreen;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
-use crate::title_bar::{Bell, ask_github, github, title_bar};
+use crate::title_bar::{self, Bell, ask_github, github, title_bar};
 #[cfg(feature = "screen-work")]
 use desk_core::boardy::Gate;
 use desk_core::control::{Control, TELL_BADGE};
@@ -81,7 +82,7 @@ use desk_ui::components::status_bar::{Accounts, Status};
 use desk_ui::components::tabs::{ScreenTabMenu, Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tiling_board::Reopened;
-use desk_ui::components::title_bar::{Github, TitleBar};
+use desk_ui::components::title_bar::{Github, Marks, TitleBar};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tree::OpenProject;
 #[cfg(feature = "screen-work")]
@@ -92,7 +93,7 @@ use desk_ui::metrics::STATUS_BAR_HEIGHT;
 use desk_ui::metrics::{
     TEXT, TOAST_BOTTOM, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
 };
-use desk_ui::theme::{ColorToken, Theme, WordToken};
+use desk_ui::theme::{ColorToken, Mode, Theme, WordToken};
 #[cfg(feature = "screen-work")]
 use gpui::EntityInputHandler;
 use gpui::{
@@ -305,6 +306,7 @@ pub struct Desk {
     palette: Entity<Palette>,
     focus: FocusHandle,
     bell: Bell,
+    marks: Marks,
     github: Github,
     #[cfg(feature = "screen-work")]
     projects: Projects,
@@ -812,6 +814,7 @@ impl Desk {
             palette,
             focus: cx.focus_handle(),
             bell: Bell::default(),
+            marks: title_bar::marks(),
             github: Github::Asking,
             #[cfg(feature = "screen-work")]
             projects: Projects::default(),
@@ -1338,6 +1341,32 @@ impl Desk {
                     ),
             )
             .into_any_element()
+    }
+
+    pub fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let since = std::time::Instant::now();
+        let mode = match ActiveTheme::mode(cx) {
+            Mode::Dark => Mode::Light,
+            Mode::Light => Mode::Dark,
+        };
+        let toggled = pick::chosen().and_then(|chosen| {
+            pick::set_mode(&chosen.theme, Some(mode), cx)?;
+            #[cfg(feature = "screen-theme")]
+            pick::save(&chosen.theme, ActiveTheme::mode(cx))?;
+            Ok(())
+        });
+        if let Err(error) = toggled {
+            eprintln!("desk: theme toggle: {error}");
+            return;
+        }
+        let label = mode.label();
+        window.on_next_frame(move |_, _| {
+            eprintln!(
+                "desk: theme toggled to {label} in {} ms",
+                since.elapsed().as_millis()
+            );
+        });
+        cx.notify();
     }
 
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
@@ -2563,6 +2592,7 @@ impl Render for Desk {
             self.tiles_x(),
             self.github.clone(),
             &self.bell,
+            &self.marks,
             tabs,
             cx,
         )
