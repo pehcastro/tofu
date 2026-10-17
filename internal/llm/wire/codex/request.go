@@ -34,6 +34,7 @@ type Request struct {
 	ServiceTier      string
 	PromptCacheKey   string
 	Identity         Identity
+	Turn             string
 	TurnState        string
 	MaxOutputTokens  int
 	Sampling         Sampling

@@ -1113,6 +1113,7 @@ func (c codexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	}
 
 	result, _, err := c.wire.Ask(ctx, codex.Request{
+		Turn:             request.Turn,
 		Instructions:     strings.Join(instructions, "\n\n"),
 		Messages:         messages,
 		Tools:            request.Tools,

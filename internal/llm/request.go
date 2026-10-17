@@ -135,6 +135,7 @@ func (c ToolChoice) OpenAIValue() string {
 }
 
 type Request struct {
+	Turn       string
 	Messages   []Message
 	Tools      []Tool
 	ToolChoice ToolChoice

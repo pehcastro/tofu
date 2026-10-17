@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/konst"
@@ -29,8 +30,17 @@ type Config struct {
 }
 
 type Wire struct {
-	config Config
-	http   *http.Client
+	config   Config
+	http     *http.Client
+	threadID string
+	windowID string
+	routing  sync.Mutex
+	routes   map[string]turnRoute
+}
+
+type turnRoute struct {
+	id    string
+	state string
 }
 
 func New(config Config) (*Wire, error) {
@@ -43,7 +53,44 @@ func New(config Config) (*Wire, error) {
 	if config.StreamIdle <= 0 {
 		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
 	}
-	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle)}, nil
+	threadID, err := randomUUID()
+	if err != nil {
+		return nil, err
+	}
+	windowID, err := randomUUID()
+	if err != nil {
+		return nil, err
+	}
+	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle),
+		threadID: threadID, windowID: windowID, routes: map[string]turnRoute{}}, nil
+}
+
+func (w *Wire) route(turn string) (turnRoute, error) {
+	if turn == "" {
+		return turnRoute{}, nil
+	}
+	w.routing.Lock()
+	defer w.routing.Unlock()
+	if known, ok := w.routes[turn]; ok {
+		return known, nil
+	}
+	id, err := randomUUID()
+	if err != nil {
+		return turnRoute{}, err
+	}
+	w.routes[turn] = turnRoute{id: id}
+	return w.routes[turn], nil
+}
+
+func (w *Wire) keepTurnState(turn, state string) {
+	if turn == "" || state == "" {
+		return
+	}
+	w.routing.Lock()
+	defer w.routing.Unlock()
+	if known := w.routes[turn]; known.state == "" {
+		w.routes[turn] = turnRoute{id: known.id, state: state}
+	}
 }
 
 type Dump struct {
@@ -56,6 +103,14 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	request.Model = cmp.Or(request.Model, w.config.Model)
 	request.Identity.InstallationID = cmp.Or(request.Identity.InstallationID, w.config.InstallationID)
 	request.Identity.SessionID = cmp.Or(request.Identity.SessionID, w.config.SessionID)
+	request.Identity.ThreadID = cmp.Or(request.Identity.ThreadID, w.threadID)
+	request.Identity.WindowID = cmp.Or(request.Identity.WindowID, w.windowID)
+	route, err := w.route(request.Turn)
+	if err != nil {
+		return Result{}, Dump{}, err
+	}
+	request.Identity.TurnID = cmp.Or(request.Identity.TurnID, route.id)
+	request.TurnState = cmp.Or(request.TurnState, route.state)
 	identity, err := request.Identity.filled()
 	if err != nil {
 		return Result{}, Dump{}, err
@@ -75,6 +130,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	if renewed != "" {
 		result, dump, err = w.send(ctx, request, renewed)
 	}
+	w.keepTurnState(request.Turn, result.TurnState)
 	if refused := request.RefusedControls(); len(refused) > 0 {
 		result.Warnings = append([]string{
 			"the codex backend refuses these and they were dropped: " + strings.Join(refused, ", "),

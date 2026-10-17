@@ -425,6 +425,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	var lastAttempts []llm.Attempt
 	ask := func(ctx context.Context, why string, request llm.Request) (llm.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
+		request.Turn = row.ID
 		if tokens := sentTokens(request.Messages); tokens > budget.Ceiling() {
 			err := fmt.Errorf("this request is about %d tokens, past the %d token ceiling after the trim and the fork, so it was not sent", tokens, budget.Ceiling())
 			recorded.exchange(id, why, config.Wire, request, started, nil, llm.Decision{}, err)
