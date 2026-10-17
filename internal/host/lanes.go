@@ -18,6 +18,7 @@ type lane struct {
 	host    *Host
 	release func()
 	items   *items
+	replay  []HistoryLine
 	pending map[string]ApprovalRequest
 	asked   map[string]QuestionRequest
 	status  *statusFeed
@@ -142,7 +143,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 			return nil, busy(err)
 		}
 		s.mu.Lock()
-		l.items.session = id
+		l.items.session, l.replay = id, []HistoryLine{}
 		s.mu.Unlock()
 		return SessionOpenResult{Session: id, Fresh: true}, nil
 	}
@@ -163,12 +164,13 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		}
 	}
 	read := newItems(carry.Session)
-	lines := newest(read.all(chat), p.Replay)
+	lines := read.all(chat)
+	replay := freeze(lines)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	maps.Copy(read.logged, l.items.logged)
-	*l.items = read
-	for _, line := range lines {
+	*l.items, l.replay = read, replay
+	for _, line := range newest(lines, p.Replay) {
 		s.box.push(line)
 	}
 	return SessionOpenResult{Session: carry.Session}, nil
@@ -183,14 +185,35 @@ func (s *server) refocus(l *lane, p SessionOpenParams) (any, error) {
 		l.host.SetAsking(p.Asking)
 	}
 	read := newItems(carry.Session)
-	lines := newest(read.all(resumedChat(carry, s.Host.dir)), p.Replay)
+	lines := read.all(resumedChat(carry, s.Host.dir))
+	replay := freeze(lines)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.focusOn(l)
-	for _, line := range lines {
+	if l.items.session == carry.Session {
+		l.replay = replay
+	}
+	for _, line := range newest(lines, p.Replay) {
 		s.box.push(line)
 	}
 	return SessionOpenResult{Session: carry.Session}, nil
+}
+
+func (s *server) rebuild(l *lane) {
+	s.mu.Lock()
+	session, since := l.items.session, len(l.replay)
+	s.mu.Unlock()
+	carry, err := s.Carry(session)
+	if err != nil {
+		return
+	}
+	read := newItems(carry.Session)
+	replay := freeze(read.all(l.host.Opening(carry)))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if l.items.session == carry.Session && len(l.replay) == since {
+		l.replay = replay
+	}
 }
 
 func newest(lines []outgoing, replay *int) []outgoing {

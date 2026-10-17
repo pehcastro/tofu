@@ -330,21 +330,41 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 	if p.Limit < 1 {
 		return nil, &Refusal{Code: CodeBadParams, Message: "limit is the number of lines a page holds, at least 1"}
 	}
-	carry, err := s.Carry(p.Session)
-	if err != nil {
-		return nil, err
+	s.mu.Lock()
+	lanes := s.tracked()
+	var lines []HistoryLine
+	if at := slices.IndexFunc(lanes, func(l *lane) bool { return l.items.session == p.Session }); at >= 0 {
+		lines = lanes[at].replay
 	}
-	read := newItems(carry.Session)
-	lines := read.all(resumedChat(carry, s.Host.dir))
+	s.mu.Unlock()
+	session := p.Session
+	if lines == nil {
+		carry, err := s.Carry(p.Session)
+		if err != nil {
+			return nil, err
+		}
+		read := newItems(carry.Session)
+		lines, session = freeze(read.all(resumedChat(carry, s.Host.dir))), carry.Session
+	}
 	end := len(lines)
 	if p.Before != nil {
 		end = min(max(*p.Before, 0), end)
 	}
-	page := SessionHistory{Session: carry.Session, First: max(end-p.Limit, 0), Total: len(lines), Lines: []HistoryLine{}}
-	for _, line := range lines[page.First:end] {
-		page.Lines = append(page.Lines, HistoryLine{Method: line.msg.Method, Params: line.msg.Params})
+	first := max(end-p.Limit, 0)
+	return SessionHistory{Session: session, First: first, Total: len(lines), Lines: lines[first:end]}, nil
+}
+
+func freeze(lines []outgoing) []HistoryLine {
+	frozen := []HistoryLine{}
+	for _, line := range lines {
+		var written bytes.Buffer
+		encoder := json.NewEncoder(&written)
+		encoder.SetEscapeHTML(false)
+		if encoder.Encode(line.msg.Params) == nil {
+			frozen = append(frozen, HistoryLine{Method: line.msg.Method, Params: json.RawMessage(bytes.TrimSpace(written.Bytes()))})
+		}
 	}
-	return page, nil
+	return frozen
 }
 
 func (s *server) compact(p SessionParams) (any, error) {
@@ -367,10 +387,11 @@ func (s *server) compact(p SessionParams) (any, error) {
 		labelled = labelledAs(store, labelled)
 	}
 	s.mu.Lock()
-	named.items.session = compacted.Into
+	named.items.session, named.replay = compacted.Into, nil
 	s.box.push(sessionUpdated(named.items.identity("", compacted.Into), labelled))
 	s.mu.Unlock()
 	safe.Go(s.report, "serve list", func() { s.listed(named) })
+	s.rebuild(named)
 	return compacted, nil
 }
 
@@ -764,6 +785,7 @@ func (s *server) publish(event Event) {
 		safe.Go(s.report, "serve quota", s.quota)
 		safe.Go(s.report, "serve list", func() { s.listed(l) })
 		safe.Go(s.report, "serve turn ended", func() { s.turnEnded(l, ended) })
+		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
 	case EventTurnStarted, EventForkEnd:
 		safe.Go(s.report, "serve list", func() { s.listed(l) })
 	case EventAccount:
@@ -771,7 +793,16 @@ func (s *server) publish(event Event) {
 			safe.Go(s.report, "serve quota", s.quota)
 		}
 	}
-	for _, out := range l.items.translate(event, time.Now()) {
+	was := l.items.session
+	lines := l.items.translate(event, time.Now())
+	if l.items.session != was {
+		l.replay = nil
+		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
+	}
+	for _, out := range lines {
+		if l.replay != nil && out.merge == "" && out.msg.Method != "message.delta" {
+			l.replay = append(l.replay, freeze([]outgoing{out})...)
+		}
 		s.box.push(out)
 	}
 	l.status.follow(event)
