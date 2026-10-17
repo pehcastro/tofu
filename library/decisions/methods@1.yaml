@@ -7,6 +7,10 @@ methods:
     method: judged
     why: jev keeps 27 of 34 planted needles against the free arm's 18, 1.50x, at equal bytes saved
     cost: a median $0.000540 a session, p95 $0.005454, worst $0.011070 over 110 recorded sessions, and p50 361 ms, p95 524 ms, worst 722 ms on 13 real shell_sift ledger decisions
+  board_epic:
+    method: judged
+    why: jev picks the epic a new ticket belongs to from the board's open epics, or none, on a fresh board driven through tofu boardy init; a word match cannot tell two epics that share words
+    cost: one jev request per ticket created without an epic, 263 ms in the driven run
   person_repeat:
     method: judged
     why: jev catches 7 of 14 hand-labelled repeats with 2 false notes over 13 generations of one long session, against 1 of 14 with 3 false for the local stem matcher
