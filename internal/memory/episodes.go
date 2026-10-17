@@ -53,7 +53,7 @@ func KeepEpisode(project string, item memtree.Item) error {
 	return errors.Join(store.Append(item), store.Close())
 }
 
-func EpisodeView(project string, budget int, compact memtree.Compact) (string, memtree.Built, error) {
+func EpisodeView(project string, budget int, saidElsewhere []string, compact memtree.Compact) (string, memtree.Built, error) {
 	store, err := openEpisodes(project)
 	if err != nil {
 		return "", memtree.Built{}, err
@@ -67,7 +67,7 @@ func EpisodeView(project string, budget int, compact memtree.Compact) (string, m
 	if err == nil {
 		err = store.Advance(budget, budget/2)
 	}
-	return fitted(store.View(), budget), built, errors.Join(err, store.Close())
+	return fitted(store.View(saidElsewhere...), budget), built, errors.Join(err, store.Close())
 }
 
 func fitted(view string, budget int) string {

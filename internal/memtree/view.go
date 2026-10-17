@@ -31,10 +31,15 @@ func (s *Store) size(lines []Ref) int {
 	return total
 }
 
-func (s *Store) View() string {
+func (s *Store) View(saidElsewhere ...string) string {
 	var view strings.Builder
 	for _, ref := range s.view.Lines {
-		view.WriteString(s.line(ref) + "\n")
+		heldElsewhere := ref.Level == 0 && s.items[ref.Index].Kind == KindPerson && slices.ContainsFunc(saidElsewhere, func(said string) bool {
+			return strings.TrimSpace(said) == strings.TrimSpace(s.items[ref.Index].Text)
+		})
+		if !heldElsewhere {
+			view.WriteString(s.line(ref) + "\n")
+		}
 	}
 	return view.String()
 }

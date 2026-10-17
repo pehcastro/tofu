@@ -89,10 +89,10 @@ func (z *Zoom) open(log string, reading func(*memtree.Store) ([]string, error)) 
 	return lines, err
 }
 
-func (z *Zoom) Episodes(budget int) (string, error) {
+func (z *Zoom) Episodes(budget int, saidElsewhere []string) (string, error) {
 	z.held.Lock()
 	defer z.held.Unlock()
-	view, _, err := memory.EpisodeView(z.Project, budget, nil)
+	view, _, err := memory.EpisodeView(z.Project, budget, saidElsewhere, nil)
 	return view, err
 }
 
@@ -163,7 +163,7 @@ func (z *Zoom) Compact(ctx context.Context, ask turn.RecordedAsk) error {
 	}
 	z.held.Lock()
 	defer z.held.Unlock()
-	_, built, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, answered)
+	_, built, err := memory.EpisodeView(z.Project, konst.MemtreeViewBytes, nil, answered)
 	failed := slices.DeleteFunc(built.Failed, func(err error) bool { return errors.Is(err, errAskedWithTheLogClosed) })
 	if err == nil && len(failed) > 0 {
 		err = fmt.Errorf("%d of %d episode summaries failed and are tried after the next turn, the first: %w", len(failed), len(answers), failed[0])

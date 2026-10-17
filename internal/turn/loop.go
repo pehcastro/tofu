@@ -330,7 +330,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	episodesCarried := konst.MemtreeViewBytes
-	episodesFor := func(sized recall.Budget, head []llm.Message) string {
+	episodesFor := func(sized recall.Budget, head []llm.Message, saidElsewhere []string) string {
 		config.Inbox.compacted()
 		room := (sized.Bands.Target() - sized.Tokens(artifacts.preview, historyOf(head))) * artifacts.preview.BytesPerThousandTokens / 1000
 		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, episodesCarried)
@@ -338,7 +338,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			episodesCarried = 0
 			return ""
 		}
-		view, err := keeper.Episodes(allowed)
+		view, err := keeper.Episodes(allowed, saidElsewhere)
 		if err != nil {
 			row.Warnings = append(row.Warnings, "the episode view is not carried: "+err.Error())
 		}
@@ -350,7 +350,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		carried, view = withoutMemoryViews(carried), config.MemoryMessage()
 	}
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
-		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, view)))
+		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, view), nil))
 	}
 	messages = slices.Concat(messages, carried, view)
 	concluding, taken := "", ""
@@ -502,7 +502,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		unreported := budget.Reported(0, recall.Occupancy{})
 		if keeper != nil {
 			begun = withoutEpisodes(begun)
-			begun = withEpisodes(begun, episodesFor(unreported, begun))
+			begun = withEpisodes(begun, episodesFor(unreported, begun, fork.Carry.Said))
 			carryState(fork, begun, "", row.Session)
 			fork.TokensAfter = unreported.Tokens(artifacts.preview, historyOf(begun))
 			return begun, ""

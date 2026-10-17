@@ -1039,7 +1039,7 @@ func dryRunBody(opts runOpts, selected models.Model, config turn.Config) ([]byte
 	tools := config.Tools.Definitions()
 	messages := config.MemoryMessage()
 	if dir := cmp.Or(opts.dir, "."); opts.agent == "" && episodesOn(dir) {
-		view, _, err := memory.EpisodeView(dir, konst.MemtreeViewBytes, nil)
+		view, _, err := memory.EpisodeView(dir, konst.MemtreeViewBytes, nil, nil)
 		if err != nil {
 			return nil, err
 		}

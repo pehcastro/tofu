@@ -31,7 +31,7 @@ const (
 type RecordedAsk func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error)
 
 type episodeKeeper interface {
-	Episodes(budget int) (string, error)
+	Episodes(budget int, saidElsewhere []string) (string, error)
 	Keep(kind, text string) error
 	Compact(ctx context.Context, ask RecordedAsk) error
 }
