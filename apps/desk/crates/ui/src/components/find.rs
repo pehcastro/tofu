@@ -1,28 +1,36 @@
 use std::ops::Range;
 use std::rc::Rc;
 
+use std::f32::consts::PI;
+
 use gpui::{
-    App, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, HighlightStyle, KeyDownEvent,
-    SharedString, Window, div, prelude::*, px, rgb_to_hsla,
+    AnyElement, App, ClickEvent, Context, Div, ElementId, Entity, FocusHandle, Focusable,
+    HighlightStyle, KeyBinding, KeyDownEvent, MouseButton, SharedString, Transformation, Window,
+    actions, div, prelude::*, px, radians, rgb_to_hsla,
 };
 
-use crate::components::button::{ButtonKind, button};
-use crate::components::card::header_action;
-use crate::components::chip::{kbd, tabular};
+use crate::component::{control, icon};
+use crate::components::chip::tabular;
 use crate::components::code_editor::{Class, class};
 use crate::components::form::TextArea;
+use crate::components::glyph::Glyph;
 use crate::components::overlay::menu_surface;
-use crate::components::paint::{ink, tint};
+use crate::components::paint::{glyph, ink, tint};
 use crate::components::scroll::ScrollArea;
 use crate::components::size::{
-    FIELD, FONT_SMALL, HOVER, MENU_GAP, MENU_PAD, RADIUS_POP, ROW_ON, ROW_PAD_X, T1, T2, T3,
+    FIELD, FIELD_PAD, FONT_SMALL, HOVER, MENU_GAP, MENU_PAD, RADIUS_CHIP_SMALL, RADIUS_POP,
+    RADIUS_ROW, ROW_ON, ROW_PAD_X, T1, T2, T3,
 };
+use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
+use crate::metrics::ICON_SMALL;
 use crate::theme::{ColorToken, Theme};
 
-const FIND_FIELD: f32 = 180.0;
-const COUNT_WIDTH: f32 = 72.0;
+const PANEL_WIDTH: f32 = 340.0;
+const SMALL_BUTTON: f32 = 24.0;
+const SMALL_PAD: f32 = 6.0;
+const COUNT_WIDTH: f32 = 76.0;
 const RESULTS_HEIGHT: f32 = 360.0;
 const RESULTS_WIDTH: f32 = 640.0;
 const MATCH_TINT: f32 = 0.22;
@@ -30,6 +38,9 @@ const CURRENT_TINT: f32 = 0.6;
 const PLACEHOLDER: &str = "Find";
 const NO_MATCHES: &str = "no matches";
 const REPLACE_PLACEHOLDER: &str = "Replace";
+const KEY_CONTEXT: &str = "FindBar";
+
+actions!(find, [NextField, PrevField]);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Matching {
@@ -213,6 +224,18 @@ pub struct FindBar {
 
 impl FindBar {
     pub fn new(window: &mut Window, cx: &mut App) -> Entity<FindBar> {
+        let unbound = cx
+            .key_bindings()
+            .borrow()
+            .bindings_for_action(&NextField)
+            .next()
+            .is_none();
+        if unbound {
+            cx.bind_keys([
+                KeyBinding::new("tab", NextField, Some(KEY_CONTEXT)),
+                KeyBinding::new("shift-tab", PrevField, Some(KEY_CONTEXT)),
+            ]);
+        }
         cx.new(|cx| {
             let field = cx.new(|cx| {
                 TextArea::new(PLACEHOLDER.into(), window, cx)
@@ -385,6 +408,15 @@ impl FindBar {
         cx.stop_propagation();
     }
 
+    fn focus_field(&mut self, replacing: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(replace) = &self.replace else {
+            return;
+        };
+        let to = if replacing { replace } else { &self.field };
+        let handle = to.read(cx).focus_handle(cx);
+        window.focus(&handle, cx);
+    }
+
     fn count(&self) -> SharedString {
         match (self.query.is_empty(), self.total) {
             (true, _) => SharedString::default(),
@@ -395,7 +427,7 @@ impl FindBar {
 }
 
 impl Render for FindBar {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.open {
             return div().into_any_element();
         }
@@ -415,116 +447,176 @@ impl Render for FindBar {
                     self.on_pick.as_ref().map(|_| pick),
                 ))
         });
-        let row = div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(MENU_GAP))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .w(px(FIND_FIELD))
-                    .h(px(FIELD))
-                    .px(px(ROW_PAD_X))
-                    .child(self.field.clone()),
-            )
-            .child(
-                div()
-                    .w(px(COUNT_WIDTH))
-                    .flex_none()
-                    .text_size(px(FONT_SMALL))
-                    .font_features(tabular())
-                    .text_color(ink(&theme, T3))
-                    .child(self.count()),
-            )
-            .when(self.on_replace.is_some(), |row| {
-                let lit = ink(&theme, ROW_ON);
-                let (case, whole) = (self.matching.case, self.matching.whole);
-                row.child(
-                    button("find-case", "Aa", None, ButtonKind::Text, &theme)
-                        .when(case, |toggle| toggle.bg(lit))
-                        .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| {
-                            bar.toggle(|on| on.case = !on.case, window, cx);
-                        })),
-                )
-                .child(
-                    button("find-whole", "Word", None, ButtonKind::Text, &theme)
-                        .when(whole, |toggle| toggle.bg(lit))
-                        .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| {
-                            bar.toggle(|on| on.whole = !on.whole, window, cx);
-                        })),
-                )
-            })
-            .child(
-                button("find-previous", "Previous", None, ButtonKind::Text, &theme)
-                    .child(kbd("Shift Enter", &theme))
-                    .on_click(
-                        cx.listener(|bar, _: &ClickEvent, window, cx| bar.previous(window, cx)),
-                    ),
-            )
-            .child(
-                button("find-next", "Next", None, ButtonKind::Text, &theme)
-                    .child(kbd("Enter", &theme))
-                    .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| bar.next(window, cx))),
-            )
-            .child(
-                header_action("find-close", Icon::Close, "Close", &theme).on_click(
-                    cx.listener(|bar, _: &ClickEvent, window, cx| bar.dismiss(window, cx)),
-                ),
-            );
-        let replacing = self.replace.clone().map(|field| {
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(MENU_GAP))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .w(px(FIND_FIELD))
-                        .h(px(FIELD))
-                        .px(px(ROW_PAD_X))
-                        .child(field),
-                )
-                .child(
-                    button("find-replace", "Replace", None, ButtonKind::Text, &theme)
-                        .child(kbd("Enter", &theme))
-                        .on_click(cx.listener(|bar, _: &ClickEvent, window, cx| {
-                            bar.replace(Replace::Current, window, cx);
-                        })),
-                )
-                .child(
-                    button(
-                        "find-replace-all",
-                        "Replace all",
-                        None,
-                        ButtonKind::Text,
-                        &theme,
-                    )
-                    .child(kbd("Ctrl Alt Enter", &theme))
-                    .on_click(cx.listener(
-                        |bar, _: &ClickEvent, window, cx| {
-                            bar.replace(Replace::All, window, cx);
-                        },
-                    )),
-                )
-        });
+        let dim = ink(&theme, T2);
+        let mut row = div().flex().flex_row().items_center().gap(px(MENU_GAP));
+        if self.on_replace.is_some() {
+            let (case, whole) = (self.matching.case, self.matching.whole);
+            let flip_case = cx.listener(|bar, _: &ClickEvent, window, cx| {
+                bar.toggle(|on| on.case = !on.case, window, cx);
+            });
+            let flip_whole = cx.listener(|bar, _: &ClickEvent, window, cx| {
+                bar.toggle(|on| on.whole = !on.whole, window, cx);
+            });
+            row = row
+                .child(small(
+                    ("find-case", "Match case (Alt+C)"),
+                    "Aa",
+                    case,
+                    flip_case,
+                    &theme,
+                    window,
+                    cx,
+                ))
+                .child(small(
+                    ("find-whole", "Whole word (Alt+W)"),
+                    "ab",
+                    whole,
+                    flip_whole,
+                    &theme,
+                    window,
+                    cx,
+                ));
+        }
+        let count = div()
+            .flex_1()
+            .min_w(px(COUNT_WIDTH))
+            .whitespace_nowrap()
+            .px(px(SMALL_PAD))
+            .text_size(px(FONT_SMALL))
+            .font_features(tabular())
+            .text_color(ink(&theme, T3))
+            .child(self.count());
+        let up = glyph(Glyph::Chevron, ICON_SMALL, dim)
+            .with_transformation(Transformation::rotate(radians(PI)));
+        let previous = cx.listener(|bar, _: &ClickEvent, window, cx| bar.previous(window, cx));
+        let next = cx.listener(|bar, _: &ClickEvent, window, cx| bar.next(window, cx));
+        row = row
+            .child(count)
+            .child(small(
+                ("find-previous", "Previous match (Shift+Enter)"),
+                up,
+                false,
+                previous,
+                &theme,
+                window,
+                cx,
+            ))
+            .child(small(
+                ("find-next", "Next match (Enter)"),
+                glyph(Glyph::Chevron, ICON_SMALL, dim),
+                false,
+                next,
+                &theme,
+                window,
+                cx,
+            ));
+        if self.replace.is_some() {
+            let one = cx.listener(|bar, _: &ClickEvent, window, cx| {
+                bar.replace(Replace::Current, window, cx);
+            });
+            let all = cx.listener(|bar, _: &ClickEvent, window, cx| {
+                bar.replace(Replace::All, window, cx);
+            });
+            row = row
+                .child(small(
+                    ("find-replace", "Replace this match (Enter in Replace)"),
+                    "Replace",
+                    false,
+                    one,
+                    &theme,
+                    window,
+                    cx,
+                ))
+                .child(small(
+                    ("find-replace-all", "Replace every match (Ctrl+Alt+Enter)"),
+                    "Replace all",
+                    false,
+                    all,
+                    &theme,
+                    window,
+                    cx,
+                ));
+        }
+        let close = cx.listener(|bar, _: &ClickEvent, window, cx| bar.dismiss(window, cx));
+        let row = row.child(small(
+            ("find-close", "Close (Escape)"),
+            icon(Icon::Close, ICON_SMALL, dim),
+            false,
+            close,
+            &theme,
+            window,
+            cx,
+        ));
+        let listing = results.is_some();
         menu_surface(&theme)
             .id("find-bar")
             .absolute()
             .top(px(MENU_PAD))
             .right(px(MENU_PAD))
+            .map(|panel| match listing {
+                true => panel.w(px(RESULTS_WIDTH)),
+                false => panel.min_w(px(PANEL_WIDTH)),
+            })
             .flex_col()
             .gap(px(MENU_GAP))
             .p(px(MENU_PAD))
             .rounded(px(RADIUS_POP))
+            .key_context(KEY_CONTEXT)
             .capture_key_down(cx.listener(Self::key))
-            .when(results.is_some(), |bar| bar.w(px(RESULTS_WIDTH)))
+            .on_action(cx.listener(|bar, _: &NextField, window, cx| {
+                bar.focus_field(true, window, cx);
+            }))
+            .on_action(cx.listener(|bar, _: &PrevField, window, cx| {
+                bar.focus_field(false, window, cx);
+            }))
+            .child(field_box(self.field.clone(), &theme, cx))
+            .children(
+                self.replace
+                    .clone()
+                    .map(|field| field_box(field, &theme, cx)),
+            )
             .child(row)
-            .children(replacing)
             .children(results)
             .into_any_element()
     }
+}
+
+fn field_box(field: Entity<TextArea>, theme: &Theme, cx: &App) -> Div {
+    let handle = field.read(cx).focus_handle(cx);
+    div()
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            window.focus(&handle, cx);
+        })
+        .flex()
+        .items_center()
+        .w_0()
+        .min_w_full()
+        .h(px(FIELD))
+        .px(px(FIELD_PAD))
+        .rounded(px(RADIUS_ROW))
+        .bg(theme.color(ColorToken::FieldFill))
+        .child(field)
+}
+
+fn small(
+    (id, tip): (&'static str, &'static str),
+    face: impl IntoElement,
+    lit: bool,
+    press: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    let target = control(id, tip, theme)
+        .h(px(SMALL_BUTTON))
+        .min_w(px(SMALL_BUTTON))
+        .px(px(SMALL_PAD))
+        .rounded(px(RADIUS_CHIP_SMALL))
+        .text_size(px(FONT_SMALL))
+        .text_color(ink(theme, T2))
+        .when(lit, |toggle| toggle.bg(ink(theme, ROW_ON)))
+        .child(face)
+        .on_click(press);
+    let key = ElementId::Name(format!("{id}-tip").into());
+    tooltip(key, target, Edge::Frame, tip, theme, window, cx).into_any_element()
 }
