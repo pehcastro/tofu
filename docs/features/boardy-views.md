@@ -40,7 +40,11 @@ tofu boardy sprint start S1
 ```
 
 A ticket names its epic and sprint in its front matter (`epic: E1`,
-`sprint: S1`). A due, start or end is a day, `2026-11-01` in the file and
+`sprint: S1`), set with `tofu boardy new --epic E1 --sprint S1` or `tofu
+boardy set DEMO-1 --epic E1 --sprint S1`. `tofu boardy audit` names what is
+wrong with a board, with ticket ids: old reviews, reports nobody acted on,
+tickets with no epic or sprint, likely duplicates, blocked tickets with no
+question, stale todo, and the lead's time from a report to a move. A due, start or end is a day, `2026-11-01` in the file and
 over `tofu serve`, so it reads as the same day in every time zone.
 
 Look at it:
@@ -100,6 +104,7 @@ list|accept|drop}`, and the notification `boardy.changed {board, paths}`.
 | `boardy.answer {ticket, id, answer}` | applies one answer as `tofu boardy catchup --answers` does, and moves the ticket out of needs-decision when no question is left |
 | `boardy.plan {board}` | epics, milestones, sprints and view names |
 | `boardy.init {key, name}` | makes a board, as `tofu boardy init` |
+| `boardy.audit {board}` | what `tofu boardy audit` prints, as data |
 
 Every answer carries `words`: with `boardFlow` set to `linear` they read
 issue, team, project, cycle and estimate, in the way of Linear's

@@ -23,7 +23,9 @@ every doing ticket on every board of the project.
 
 **The board's habits are data, not memory.** A check a lead runs by hand on
 every ticket becomes a hook, so it runs the same way for every session,
-and the person can read, test and remove it.
+and the person can read, test and remove it. The lead writes these itself
+with its `board_rule` tool when you correct how the board runs twice, and
+says so in one line.
 
 ## A hook
 
@@ -109,4 +111,4 @@ TOFU hooks · 4 hooks
 - A board rule file in the library rule shape, with `on:` and the `command` or `person_approves` checker, still loads as a before hook.
 - `board.toml` sets two checks with no file: `log_to_review = 200` refuses a move to review with a shorter Log, and `scope_cites = ["docs/research/"]` refuses a create or widen whose Scope names none of them.
 - `tofu boardy check move DEMO-7 --to doing` runs every check a move runs, hooks included, and writes nothing.
-- Inside a session `TOFU_SESSION` names the actor. The lead acts for the person; a sub-agent, `<session>/<ticket>`, never does. Outside a session the command line is the person, named by `--as`.
+- Inside a session `TOFU_SESSION` names the actor. The lead acts as the lead, never as the person, and manages a board with no managers; a sub-agent, `<session>/<ticket>`, never does. Outside a session the command line is the person, named by `--as`.

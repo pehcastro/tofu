@@ -71,8 +71,14 @@ is done or dropped. There is one level: `DEMO-1-1-1` is not an id.
     tofu boardy report --since 7d
     tofu boardy epic list
     tofu boardy sprint list
+    tofu boardy audit
+    tofu boardy set DEMO-1 --epic E --sprint S
 
-Every subcommand takes `--board KEY` and `--json`.
+`audit` names what is wrong with a board, with ticket ids: review age,
+reports nobody acted on, tickets with no epic or sprint, likely duplicates,
+blocked tickets with no question, stale todo, and how long the lead takes
+from a report to a move. Serve: `boardy.audit {board}`. Every subcommand
+takes `--board KEY` and `--json`.
 
 Over `tofu serve`, capability `boardy`: `boardy.boards`, `boardy.list
 {board, view, filter}`, `boardy.get {id}` with the ticket's thread (a

@@ -10,6 +10,23 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc7 - 2026-10-17
+
+A board runs itself: hooks enforce how work moves, the lead plans with epics and sprints, and an audit says what is wrong.
+
+### Added
+
+- Board hooks: a YAML file in a board's `rules/`, the project's, or `~/.tofu/boardy/rules` fires `before` or `after` any board event (`ticket.create`, `ticket.move`, `ticket.assign`, `epic.create`, `sprint.close`, `triage.accept`, `question.answer`, `agent.report`, `lead.attach`, `schedule`), checks fields, a command, Jev or the sub-agent's contract, and refuses, nudges, asks you or records; an `after` hook can create, move, assign, log, notify or set. `tofu boardy rule list|show|add|edit|remove|test` and serve `boardy.rules` and `boardy.rule.*` manage them.
+- `tofu boardy init` writes starter hooks: every ticket has an epic, Jev suggests one from the open epics, review needs evidence for each acceptance line, a sub-agent's ticket left in doing moves to review with its report, and a review waiting over 2 hours tells the lead.
+- The lead has `board_rule`, `epic`, `sprint`, `milestone` and `triage` tools, `ticket_create` takes an epic and a sprint, and `ticket_ask` opens a real question. When you correct how the board is run twice, the lead adds a hook that does it and says so in one line.
+- `tofu boardy audit` names what is wrong with a board, with ticket ids; serve `boardy.audit`.
+- `tofu boardy set ID --epic E --sprint S`, and `--epic` and `--sprint` on `tofu boardy new`.
+
+### Changed
+
+- On a board with no managers the lead acts as the lead, not as you, so a hook that waits for you makes it wait.
+- A session file cut by a crash gets its next record on a new line, and the cut line is skipped.
+
 ## 0.5.15-rc6-fix1 - 2026-10-16
 
 ### Changed

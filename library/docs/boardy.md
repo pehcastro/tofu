@@ -71,9 +71,8 @@ ticket-shaped word in the brief. The spawn and the report, with the files
 the sub-agent wrote, land on the ticket's thread, and so does a
 `ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket.
 
-The lead's session must manage the board: `tofu boardy manager add
-<session>`. A session's `tofu boardy` calls act as the session named in
-`TOFU_SESSION`.
+With no managers the lead manages the board as the lead, never as you, with
+`board_rule`, `epic`, `sprint`, `milestone`, `triage`, and `epic` and `sprint` on `ticket_create`.
 
 The rules `board_lead` and `board_sub_agent` ship off and switch on with
 the setting in a project that has a board. With it `off`, or with no board
