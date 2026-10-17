@@ -413,15 +413,18 @@ func (h *Host) StopLead(asked StopAsked) {
 	}
 	h.mu.Lock()
 	h.stopped = true
-	inbox, turnRuns := h.inbox, h.running
+	inbox, turnRuns, kept := h.inbox, h.running, h.inbox.Running()
+	if turnRuns && len(kept) == 0 {
+		h.stopBy = asked.By
+	}
 	h.mu.Unlock()
+	if turnRuns {
+		h.traceStop(session.Stop{Kind: session.StopLead, By: asked.By, Why: asked.Why, Took: []string{"the lead's request, its waits and its calls"}, Kept: kept})
+	}
 	inbox.StopLead()
 	select {
 	case h.stopLead <- struct{}{}:
 	default:
-	}
-	if turnRuns {
-		h.traceStop(session.Stop{Kind: session.StopLead, By: asked.By, Why: asked.Why, Took: []string{"the lead's request, its waits and its calls"}, Kept: inbox.Running()})
 	}
 }
 
