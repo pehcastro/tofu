@@ -68,7 +68,7 @@ func (m Managed) Move(id string, to Status, reason, actor string) (Ticket, error
 	if err != nil {
 		return ticket, err
 	}
-	if err := m.mayMove(m.role(board, actor), ticket, to, actor); err != nil {
+	if err := m.mayMove(m.role(board, actor), ticket, to, actor); err != nil || ticket.Status == to {
 		return ticket, err
 	}
 	return m.move(board, ticket, to, reason, actor, 0)
@@ -224,6 +224,9 @@ func (m Managed) ticketOnBoard(id string) (Ticket, Board, error) {
 }
 
 func (m Managed) mayMove(role Role, ticket Ticket, to Status, actor string) error {
+	if ticket.Status == to {
+		return nil
+	}
 	switch role {
 	case RoleManager:
 		return nil

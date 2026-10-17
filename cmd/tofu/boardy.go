@@ -488,8 +488,13 @@ func (c boardyCall) move() int {
 	if err != nil {
 		return c.o.usage(err)
 	}
+	before, _ := c.store.Get(c.args[0])
 	ticket, err := c.managed.Move(c.args[0], to, c.flags["reason"], c.actor)
-	return c.receipt(ticket, err, cli.Changed, ticket.ID+" is "+string(ticket.Status))
+	is := " is "
+	if before.Status == to {
+		is = " is already "
+	}
+	return c.receipt(ticket, err, cli.Changed, ticket.ID+is+string(ticket.Status))
 }
 
 func (c boardyCall) log() int {
