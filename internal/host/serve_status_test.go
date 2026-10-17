@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"tofu/internal/cron"
+	"tofu/internal/session"
 	roster "tofu/internal/subagent"
+	"tofu/internal/turn"
 )
 
 type wireLine struct {
@@ -93,6 +95,20 @@ func servingHost(t *testing.T, h *Host, project string, cfg ServeConfig) *wireCl
 			}
 		}
 	}()
+	if cfg.Carry == nil {
+		cfg.Carry = func(id string) (Carry, error) {
+			store, err := session.OpenIn(project)
+			if err != nil {
+				return Carry{}, err
+			}
+			events, err := store.Body(id)
+			if err != nil {
+				return Carry{}, err
+			}
+			messages, err := turn.ConversationFrom(events)
+			return Carry{Session: id, Messages: messages, Store: store}, err
+		}
+	}
 	served := make(chan error, 1)
 	go func() {
 		cfg.Host, cfg.Dir, cfg.In, cfg.Out = h, project, clientIn, clientOut

@@ -71,15 +71,7 @@ func TestEveryRefTheWireHandsOutResolvesToItsItem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	carry := func(id string) (Carry, error) {
-		events, err := store.Body(id)
-		if err != nil {
-			return Carry{}, err
-		}
-		messages, err := turn.ConversationFrom(events)
-		return Carry{Session: id, Messages: messages, Store: store}, err
-	}
-	c := servingHost(t, h, project, ServeConfig{Carry: carry})
+	c := servingHost(t, h, project, ServeConfig{})
 	var refs []handedRef
 	answered := func(id string, into any) {
 		line := c.until(func(line wireLine) bool {
