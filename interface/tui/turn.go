@@ -147,9 +147,7 @@ func idPrefix(task string) (string, bool) {
 }
 
 func (a *App) jumpToID(typed string) {
-	at := a.reach(func(event feed.Event) bool {
-		return strings.HasPrefix(event.ID, typed) || strings.HasSuffix(event.ID, typed)
-	})
+	at := a.reach(func(id string) bool { return strings.HasPrefix(id, typed) || strings.HasSuffix(id, typed) })
 	if at < 0 {
 		a.view.Append(session.Entry{Kind: session.Note, Body: "nothing in sub-agents carries the id #" + typed})
 		return
@@ -159,21 +157,33 @@ func (a *App) jumpToID(typed string) {
 	a.feed.Focus(a.happened[at].ID)
 }
 
-func (a *App) reach(matches func(feed.Event) bool) int {
-	at := slices.IndexFunc(a.happened, matches)
-	if at >= 0 || len(a.hidden()) == 0 {
+func (a *App) reach(matches func(id string) bool) int {
+	shown := func(event feed.Event) bool { return matches(event.ID) }
+	if at := slices.IndexFunc(a.happened, shown); at >= 0 || len(a.hidden()) == 0 || a.options.Host == nil {
 		return at
 	}
-	back := a.readBack(slices.Collect(maps.Keys(a.hidden())))
-	if at = slices.IndexFunc(back, matches); at < 0 {
-		return at
+	actor := ""
+	err := a.options.Host.SubAgentEvents(slices.Collect(maps.Keys(a.hidden())), func(event Event) bool {
+		switch event.Kind {
+		case EventThinking, EventToolCall, EventToolResult:
+			if matches(a.shortOf(event.ID)) {
+				actor = event.Agent
+			}
+		}
+		return actor == ""
+	})
+	if err != nil {
+		a.notify(readBackFailed + err.Error())
 	}
-	a.unfoldFor(back[at].Actor)
-	return slices.IndexFunc(a.happened, matches)
+	if actor == "" {
+		return -1
+	}
+	a.unfoldFor(actor)
+	return slices.IndexFunc(a.happened, shown)
 }
 
 func (a *App) reachedAt(id string) int {
-	return a.reach(func(event feed.Event) bool { return event.ID == id })
+	return a.reach(func(shown string) bool { return shown == id })
 }
 
 func (a *App) steer(task string) {
@@ -837,13 +847,9 @@ func (a *App) readBack(names []string) []feed.Event {
 	if a.options.Host == nil || len(names) == 0 {
 		return nil
 	}
-	logged, err := a.options.Host.SubAgentEvents(names)
-	if err != nil {
-		a.notify(readBackFailed + err.Error())
-	}
 	var back []feed.Event
 	index := map[string]int{}
-	for _, event := range logged {
+	err := a.options.Host.SubAgentEvents(names, func(event Event) bool {
 		var held *feed.Event
 		if found, read := index[event.ID]; read {
 			held = &back[found]
@@ -859,14 +865,19 @@ func (a *App) readBack(names []string) []feed.Event {
 		case EventToolResult:
 			made, _, _ = a.finished(held, event, at)
 		default:
-			continue
+			return true
 		}
 		if held != nil {
 			*held = made
-			continue
+			return true
 		}
 		index[event.ID] = len(back)
 		back = append(back, made)
+		return true
+	})
+	if err != nil {
+		a.notify(readBackFailed + err.Error())
+		return nil
 	}
 	return back
 }

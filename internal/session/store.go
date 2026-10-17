@@ -1,11 +1,13 @@
 package session
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -536,11 +538,75 @@ func parseEvents(raw []byte, id string) ([]Event, error) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
-		var event Event
-		if err := json.Unmarshal(line, &event); err != nil {
-			return nil, fmt.Errorf("session: line %d of the events of %s does not parse: %w", len(events)+1, id, err)
+		event, err := parseEvent(line, id, len(events)+1)
+		if err != nil {
+			return nil, err
 		}
 		events = append(events, event)
+	}
+}
+
+func parseEvent(line []byte, id string, number int) (Event, error) {
+	var event Event
+	if err := json.Unmarshal(line, &event); err != nil {
+		return Event{}, fmt.Errorf("session: line %d of the events of %s does not parse: %w", number, id, err)
+	}
+	return event, nil
+}
+
+func (s *Store) EachEvent(id string, wanted func(agent string) bool, visit func(Event) bool) error {
+	if err := namesOneSession(id); err != nil {
+		return err
+	}
+	if events, read := s.parsed[id]; read || s.legacy(id) {
+		if !read {
+			var err error
+			if events, err = s.legacyEvents(id); err != nil {
+				return err
+			}
+		}
+		for _, event := range events {
+			if wanted(event.Agent) && !visit(event) {
+				return nil
+			}
+		}
+		return nil
+	}
+	file, err := os.Open(s.EventsPath(id))
+	if err != nil {
+		return fmt.Errorf("session: %s has no events: %w", id, err)
+	}
+	defer func() { _ = file.Close() }()
+	reader, line := bufio.NewReader(file), []byte(nil)
+	for number := 0; ; {
+		chunk, err := reader.ReadSlice('\n')
+		line = append(line[:0], chunk...)
+		for errors.Is(err, bufio.ErrBufferFull) {
+			chunk, err = reader.ReadSlice('\n')
+			line = append(line, chunk...)
+		}
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
+			return err
+		case len(bytes.TrimSpace(line)) == 0:
+			continue
+		}
+		number++
+		var agent struct {
+			Agent string `json:"agent"`
+		}
+		if json.Unmarshal(line, &agent) == nil && !wanted(agent.Agent) {
+			continue
+		}
+		event, err := parseEvent(line, id, number)
+		if err != nil {
+			return err
+		}
+		if !visit(event) {
+			return nil
+		}
 	}
 }
 
