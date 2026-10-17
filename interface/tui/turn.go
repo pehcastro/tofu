@@ -164,12 +164,12 @@ func (a *App) reach(matches func(feed.Event) bool) int {
 	if at >= 0 || len(a.hidden()) == 0 {
 		return at
 	}
-	a.toggleFold()
-	if at = slices.IndexFunc(a.happened, matches); at < 0 {
-		a.toggleFold()
+	back := a.readBack(slices.Collect(maps.Keys(a.hidden())))
+	if at = slices.IndexFunc(back, matches); at < 0 {
+		return at
 	}
-	a.syncFeed()
-	return at
+	a.unfoldFor(back[at].Actor)
+	return slices.IndexFunc(a.happened, matches)
 }
 
 func (a *App) reachedAt(id string) int {
