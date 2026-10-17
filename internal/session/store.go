@@ -10,10 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"tofu/internal/safe"
 	"tofu/internal/sys"
@@ -315,12 +315,23 @@ func (s *Store) Ancestors(id string) ([]Header, error) {
 }
 
 type Generation struct {
-	Header Header
-	Events []Event
-	Unread bool
+	Header  Header
+	Events  []Event
+	Unread  bool
+	readFor string
 }
 
-const agentsTracedSince = 4
+const (
+	agentsTracedSince = 4
+	lineageLogEnv     = "TOFU_LINEAGE_LOG"
+)
+
+func untraced(header Header) string {
+	if header.Schema < agentsTracedSince {
+		return "schema " + strconv.Itoa(header.Schema) + " lists no agents"
+	}
+	return ""
+}
 
 func (s *Store) Lineage(id string) ([]Generation, error) {
 	head, err := s.Events(id)
@@ -328,15 +339,25 @@ func (s *Store) Lineage(id string) ([]Generation, error) {
 		return nil, err
 	}
 	named := namesIn(head)
-	return s.lineage(id, func(header Header) bool {
-		return header.Schema < agentsTracedSince || slices.ContainsFunc(header.Agents, func(run AgentRun) bool {
-			return run.EndedAt == nil || named[run.Agent] || named[run.SpawnCall]
-		})
+	lineage, err := s.lineage(id, func(header Header) string {
+		for _, run := range header.Agents {
+			switch {
+			case run.EndedAt == nil:
+				return run.Agent + " has no end"
+			case named[run.Agent] || named[run.SpawnCall]:
+				return "the head names " + run.Agent
+			}
+		}
+		return untraced(header)
 	})
+	if err == nil {
+		logLineage(id, lineage)
+	}
+	return lineage, err
 }
 
 func (s *Store) LineageNaming(id, name string) ([]Generation, error) {
-	lineage, err := s.lineage(id, func(header Header) bool { return header.Schema < agentsTracedSince })
+	lineage, err := s.lineage(id, untraced)
 	if err != nil {
 		return nil, err
 	}
@@ -355,12 +376,13 @@ func (s *Store) LineageNaming(id, name string) ([]Generation, error) {
 		if generation.Events, err = parseEvents(raw, generation.Header.ID); err != nil {
 			return nil, err
 		}
-		generation.Unread = false
+		generation.Unread, generation.readFor = false, "its events name "+name
 	}
+	logLineage(id, lineage)
 	return lineage, nil
 }
 
-func (s *Store) lineage(id string, needed func(Header) bool) ([]Generation, error) {
+func (s *Store) lineage(id string, needed func(Header) string) ([]Generation, error) {
 	head, err := s.read(id)
 	if err != nil {
 		return nil, err
@@ -372,7 +394,10 @@ func (s *Store) lineage(id string, needed func(Header) bool) ([]Generation, erro
 	var lineage []Generation
 	for _, header := range slices.Backward(append([]Header{head}, ancestors...)) {
 		generation := Generation{Header: header, Unread: true}
-		if header.ID == id || needed(header) {
+		if header.ID != id {
+			generation.readFor = needed(header)
+		}
+		if header.ID == id || generation.readFor != "" {
 			events, err := s.Events(header.ID)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return nil, err
@@ -384,27 +409,21 @@ func (s *Store) lineage(id string, needed func(Header) bool) ([]Generation, erro
 	return lineage, nil
 }
 
-func namesIn(events []Event) map[string]bool {
-	named := map[string]bool{}
-	notInAName := func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("-_.", r)
+func logLineage(head string, lineage []Generation) {
+	path := os.Getenv(lineageLogEnv)
+	if path == "" {
+		return
 	}
-	note := func(text string) {
-		for _, word := range strings.FieldsFunc(text, notInAName) {
-			named[word], named[strings.TrimRight(word, ".")] = true, true
+	var lines strings.Builder
+	read := 0
+	for _, generation := range lineage {
+		if generation.readFor != "" {
+			read++
+			fmt.Fprintf(&lines, "lineage of %s: read %s, generation %d: %s\n", head, generation.Header.ID, generation.Header.Generation, generation.readFor)
 		}
 	}
-	for _, event := range events {
-		note(event.Agent + " " + event.Call)
-		decoder := json.NewDecoder(bytes.NewReader(event.Body))
-		for token, err := decoder.Token(); err == nil; token, err = decoder.Token() {
-			if text, isText := token.(string); isText {
-				note(text)
-			}
-		}
-	}
-	delete(named, "")
-	return named
+	fmt.Fprintf(&lines, "lineage of %s: read %d of %d older generations\n", head, read, len(lineage)-1)
+	_ = appendLines(path, []byte(lines.String()))
 }
 
 func (s *Store) Unread(id string) { delete(s.parsed, id) }

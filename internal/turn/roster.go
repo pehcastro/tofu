@@ -26,7 +26,7 @@ type recordedSession struct {
 
 type recordedSubAgent struct {
 	agent       subagent.SubAgent
-	in          string
+	lastIn      string
 	call        string
 	byLead      bool
 	depth       int
@@ -93,7 +93,7 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 		if run.ended {
 			continue
 		}
-		log, err := store.Open(session.Header{ID: run.in})
+		log, err := store.Open(session.Header{ID: run.lastIn})
 		if errors.As(err, &session.BusyError{}) {
 			continue
 		}
@@ -101,7 +101,7 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 			failed = append(failed, err)
 			continue
 		}
-		store.Unread(run.in)
+		store.Unread(run.lastIn)
 		trace := spawnTrace{site: spawnSite{log: log}}
 		if !run.recent {
 			failed = append(failed, trace.end(run.agent.ID, subagent.Parked), log.Close())
@@ -178,7 +178,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				continue
 			}
 			state, _ := endedAs(run.Status)
-			ran[run.Agent] = &recordedSubAgent{in: recorded.id, call: run.SpawnCall, byLead: run.ParentAgent == "", depth: run.Depth, state: state, ended: true, fromHeader: true, active: run.StartedAt,
+			ran[run.Agent] = &recordedSubAgent{lastIn: recorded.id, call: run.SpawnCall, byLead: run.ParentAgent == "", depth: run.Depth, state: state, ended: true, fromHeader: true, active: run.StartedAt,
 				agent: subagent.SubAgent{ID: run.Agent, Agent: run.Definition, Model: run.Model, Started: run.StartedAt}}
 			if run.EndedAt != nil {
 				ran[run.Agent].active = *run.EndedAt
@@ -189,13 +189,16 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 		reportEvents := false
 		for _, event := range recorded.events {
 			run := ran[event.Agent]
+			if run != nil {
+				run.lastIn = recorded.id
+			}
 			switch {
 			case event.Kind == session.EventSpawn:
 				var body session.SpawnBody
 				if json.Unmarshal(event.Body, &body) != nil || ran[body.Agent] != nil {
 					continue
 				}
-				ran[body.Agent] = &recordedSubAgent{in: recorded.id, call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagent.Parked, active: event.At,
+				ran[body.Agent] = &recordedSubAgent{lastIn: recorded.id, call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagent.Parked, active: event.At,
 					agent: subagent.SubAgent{ID: body.Agent, Agent: body.Definition, Model: body.Model, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket, Started: event.At}}
 				order = append(order, ran[body.Agent])
 			case event.Kind == session.EventToolCall:
