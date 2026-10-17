@@ -126,6 +126,14 @@ fn sentence_case(message: &str) -> String {
     }
 }
 
+const TURN_RUNNING: &str = "a turn is running";
+
+impl BridgeError {
+    pub fn turn_running(&self) -> bool {
+        matches!(self, BridgeError::Refused(refusal) if refusal.code == -32000 && refusal.message.starts_with(TURN_RUNNING))
+    }
+}
+
 impl std::error::Error for BridgeError {}
 
 impl From<io::Error> for BridgeError {

@@ -22,8 +22,7 @@ use desk_core::protocol::{
     PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionHistory,
     SessionHistoryParams, SessionInfo, SessionListParams, SessionOpenParams, SessionOpenResult,
     SessionParams, SessionRenameParams, SessionSetParams, SessionState, SessionTrace, ShellParams,
-    StatusListParams, TurnCompleted, TurnParams, TurnSendParams, TurnSteerParams, request,
-    subagent,
+    StatusListParams, TurnCompleted, TurnParams, TurnSendParams, request, subagent,
 };
 use desk_core::query::{Answer, FilledEmails, LEDGER_READ_LAST, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
@@ -68,7 +67,6 @@ const DOCK_INSET: f32 = 16.0;
 const OTHER: &str = "Type your own answer";
 const HISTORY_PAGE: i64 = 200;
 const WORKING: &str = "working";
-const UNSENT: &str = "desk-unsent";
 const ASKING_FIXED: &str =
     "the ask mode is set when a session opens; start a new session to change it";
 const FIXED_MODE: f32 = 0.5;
@@ -178,7 +176,6 @@ pub struct Chat {
     reopening: Option<Instant>,
     history: Option<History>,
     painting: Option<(String, Instant)>,
-    unsent: Vec<String>,
     head: Entity<SessionHead>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
@@ -494,7 +491,6 @@ impl Chat {
             reopening: None,
             history: None,
             painting: None,
-            unsent: Vec::new(),
             head,
             _drain: None,
             _flash: None,
@@ -656,9 +652,6 @@ impl Chat {
             .iter()
             .filter(|event| self.absorb(event, cx).is_err())
             .count();
-        for (at, text) in self.unsent.clone().iter().enumerate() {
-            self.queue(&id, "", &format!("{UNSENT}-{at}"), text, cx);
-        }
         self.store.update(cx, |_, cx| cx.notify());
         self.rebuild(cx);
         refused
@@ -745,7 +738,6 @@ impl Chat {
             None => self.restart(cx),
         }
         self.problem = None;
-        self.unsent.clear();
         self.set_opening(Opening::Pending, cx);
         let asked = Instant::now();
         self.painting = session.clone().map(|id| (id, asked));
@@ -1083,11 +1075,18 @@ impl Chat {
                     if self.store.read(cx).trace.read.is_none() {
                         self.want_trace(cx);
                     }
-                    self.flush(completed.session.clone(), cx);
                 }
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
+            }
+            Event::Notification(Notification::TurnSteerQueued(queued))
+                if queued.agent.is_none() =>
+            {
+                eprintln!("desk: chat steer queued {}", queued.item);
+            }
+            Event::Notification(Notification::TurnSteered(read)) if read.agent.is_none() => {
+                eprintln!("desk: chat steer read {}", read.item);
             }
             Event::Notification(Notification::ShellStarted(started)) => eprintln!(
                 "desk: session {} shell {} started pid {}: {}",
@@ -1837,7 +1836,7 @@ impl Chat {
     fn post(&mut self, text: String, cx: &mut Context<Self>) {
         self.problem = None;
         match &self.opening {
-            Opening::Open(session) => self.deliver(session.clone(), text, false, cx),
+            Opening::Open(session) => self.deliver(session.clone(), text, cx),
             Opening::Pending => {
                 self.fail("the session is still opening".to_owned(), cx);
             }
@@ -1863,105 +1862,19 @@ impl Chat {
         cx.notify();
     }
 
-    fn deliver(&mut self, session: String, text: String, retried: bool, cx: &mut Context<Self>) {
-        self.call::<request::SessionState>(&NoParams {}, cx, move |chat, state, cx| {
-            chat.state_now(&state, cx);
-            let turn = state
-                .turn
-                .map(|turn| turn.id)
-                .or_else(|| chat.running(cx).map(|(_, turn)| turn));
-            match (state.running, turn) {
-                (true, Some(turn)) => chat.steer(session, turn, text, retried, cx),
-                (true, None) => chat.hold(&session, text, cx),
-                (false, _) => chat.start(session, text, retried, cx),
-            }
-        });
-    }
-
-    fn steer(
-        &mut self,
-        session: String,
-        turn: String,
-        text: String,
-        retried: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let params = TurnSteerParams {
-            expected_turn_id: turn,
-            session: session.clone(),
-            text: text.clone(),
-        };
-        self.request::<request::TurnSteer>(&params, cx, move |chat, steered, cx| match steered {
-            Ok(steered) => {
-                eprintln!("desk: steer {} queued on turn {}", steered.id, steered.turn);
-                chat.queue(&session, &steered.turn, &steered.id, &text, cx);
-                chat.refresh(cx);
-            }
-            Err(error) if !retried => {
-                eprintln!("desk: turn.steer refused, asking again: {error}");
-                chat.deliver(session, text, true, cx);
-            }
-            Err(error) => {
-                eprintln!("desk: turn.steer refused twice, held until the turn ends: {error}");
-                chat.hold(&session, text, cx);
-            }
-        });
-    }
-
-    fn start(&mut self, session: String, text: String, retried: bool, cx: &mut Context<Self>) {
+    fn deliver(&mut self, session: String, text: String, cx: &mut Context<Self>) {
         let params = TurnSendParams {
-            session: session.clone(),
-            text: text.clone(),
+            session,
+            text,
             ..TurnSendParams::default()
         };
-        self.request_typed::<request::TurnSend>(&params, cx, move |chat, sent, cx| match sent {
-            Ok(sent) => eprintln!("desk: turn {} sent", sent.turn),
-            Err(error) if !retried => {
-                eprintln!("desk: turn.send refused, asking again: {error}");
-                chat.deliver(session, text, true, cx);
-            }
-            Err(error) if error.turn_running() => {
-                eprintln!("desk: turn.send refused twice, a turn runs: {error}");
-                chat.hold(&session, text, cx);
-            }
+        self.request_typed::<request::TurnSend>(&params, cx, |chat, sent, cx| match sent {
+            Ok(sent) => match sent.steered {
+                Some(steered) => eprintln!("desk: steer {steered} sent on turn {}", sent.turn),
+                None => eprintln!("desk: turn {} sent", sent.turn),
+            },
             Err(error) => chat.fail(error.to_string(), cx),
         });
-    }
-
-    fn hold(&mut self, session: &str, text: String, cx: &mut Context<Self>) {
-        let item = format!("{UNSENT}-{}", self.unsent.len());
-        eprintln!("desk: {item} held until the turn ends");
-        self.queue(session, "", &item, &text, cx);
-        self.unsent.push(text);
-        self.refresh(cx);
-    }
-
-    fn flush(&mut self, session: String, cx: &mut Context<Self>) {
-        if self.unsent.is_empty() {
-            return;
-        }
-        let unsent = std::mem::take(&mut self.unsent);
-        self.store.update(cx, |store, cx| {
-            let open = store.sessions.entry(session.clone()).or_default();
-            (0..unsent.len()).for_each(|at| open.taken(&format!("{UNSENT}-{at}")));
-            cx.notify();
-        });
-        self.refresh(cx);
-        self.deliver(session, unsent.join("\n\n"), false, cx);
-    }
-
-    fn queue(&mut self, session: &str, turn: &str, item: &str, text: &str, cx: &mut Context<Self>) {
-        let grown = self.store.update(cx, |store, cx| {
-            cx.notify();
-            let open = store.sessions.entry(session.to_owned()).or_default();
-            let was = open.messages.len();
-            open.queue(turn, item, text);
-            was..open.messages.len()
-        });
-        self.orders
-            .entry(session.to_owned())
-            .or_default()
-            .extend(grown.map(Entry::Message));
     }
 
     fn stop(&mut self, cx: &mut Context<Self>) {
