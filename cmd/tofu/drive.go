@@ -158,6 +158,7 @@ const (
 	orchestratorCaller = ""
 	subAgentCaller     = "c"
 	memoryViewSource   = "memory view"
+	episodeViewSource  = "episode view"
 	forkTaskSource     = "fork task"
 )
 
@@ -317,7 +318,7 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 		if message.Role == llm.RoleSystem && system == "" {
 			system = message.Content
 		}
-		if message.Role == llm.RoleUser && message.Origin.Source != memoryViewSource && !opened {
+		if message.Role == llm.RoleUser && message.Origin.Source != memoryViewSource && message.Origin.Source != episodeViewSource && !opened {
 			opening, opened = message, true
 		}
 	}

@@ -330,29 +330,29 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	episodesCarried := konst.MemtreeViewBytes
-	episodesFor := func(sized recall.Budget, head []llm.Message) []llm.Message {
+	episodesFor := func(sized recall.Budget, head []llm.Message) string {
 		config.Inbox.compacted()
 		room := (sized.Bands.Target() - sized.Tokens(artifacts.preview, historyOf(head))) * artifacts.preview.BytesPerThousandTokens / 1000
 		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, episodesCarried)
 		if allowed < konst.MemtreeLineBytes {
 			episodesCarried = 0
-			return head
+			return ""
 		}
 		view, err := keeper.Episodes(allowed)
 		if err != nil {
 			row.Warnings = append(row.Warnings, "the episode view is not carried: "+err.Error())
 		}
 		episodesCarried = len(view)
-		return withEpisodes(head, view)
+		return view
 	}
 	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool { return message.Origin.Source == SourceSpawnLine }), []llm.Message(nil)
 	if config.opensGeneration() {
 		carried, view = withoutMemoryViews(carried), config.MemoryMessage()
 	}
-	messages = slices.Concat(messages, carried, view)
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
-		messages = episodesFor(budget.Sending(artifacts.preview, string(schemas)), messages)
+		view = withEpisodes(view, episodesFor(budget.Sending(artifacts.preview, string(schemas)), slices.Concat(messages, view)))
 	}
+	messages = slices.Concat(messages, carried, view)
 	concluding, taken := "", ""
 	var lead *SpawnTool
 	for _, tool := range config.Tools.tools {
@@ -499,10 +499,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool) ([]llm.Message, string) {
 		begun = config.withFreshMemoryView(begun)
+		unreported := budget.Reported(0, recall.Occupancy{})
 		if keeper != nil {
-			begun = episodesFor(budget, withoutEpisodes(begun))
+			begun = withoutEpisodes(begun)
+			begun = withEpisodes(begun, episodesFor(unreported, begun))
 			carryState(fork, begun, "", row.Session)
-			fork.TokensAfter = budget.Tokens(artifacts.preview, historyOf(begun))
+			fork.TokensAfter = unreported.Tokens(artifacts.preview, historyOf(begun))
 			return begun, ""
 		}
 		asked := beforeFork
@@ -530,7 +532,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			state = runeSafeHead(strings.TrimSpace(decision.Content), konst.ForkStateBytes)
 		}
 		carryState(fork, begun, state, row.Session)
-		fork.TokensAfter = budget.Tokens(artifacts.preview, historyOf(begun))
+		fork.TokensAfter = unreported.Tokens(artifacts.preview, historyOf(begun))
 		return begun, missing
 	}
 	keep := func(step StepRow) {
