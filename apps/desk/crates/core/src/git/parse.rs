@@ -11,7 +11,7 @@ fn unreadable(what: &'static str, text: &str) -> GitError {
     }
 }
 
-fn mark(code: char, record: &str) -> Result<Mark, GitError> {
+pub fn mark(code: char, record: &str) -> Result<Mark, GitError> {
     match code {
         '.' => Ok(Mark::Unmodified),
         'M' => Ok(Mark::Modified),

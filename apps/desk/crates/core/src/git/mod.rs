@@ -1,11 +1,17 @@
 mod binary;
+mod client;
 mod fake;
 mod parse;
 
 use std::fmt;
 use std::io;
+use std::path::PathBuf;
 
 pub use binary::GitBinary;
+pub use client::{
+    Branch, Commit, CommitDetail, DiffOf, FileStat, Operation, PullHow, Ref, RefKind, Side, Stash,
+    UndoStep,
+};
 pub use fake::FakeGit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +106,11 @@ pub enum GitError {
         what: &'static str,
         text: String,
     },
+    Read {
+        path: PathBuf,
+        error: io::Error,
+    },
+    Idle,
 }
 
 impl fmt::Display for GitError {
@@ -116,6 +127,10 @@ impl fmt::Display for GitError {
                 )
             }
             GitError::Parse { what, text } => write!(f, "git printed an unreadable {what}: {text}"),
+            GitError::Read { path, error } => {
+                write!(f, "{} could not be read: {error}", path.display())
+            }
+            GitError::Idle => write!(f, "no merge, rebase, cherry-pick or revert is in progress"),
         }
     }
 }

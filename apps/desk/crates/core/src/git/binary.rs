@@ -39,6 +39,7 @@ fn run_in(
         .args(args)
         .current_dir(dir)
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_EDITOR", ":")
         .stdin(if input.is_some() {
             Stdio::piped()
         } else {
@@ -182,7 +183,7 @@ impl GitBinary {
         parse::drift(&self.run(&["status", "--porcelain=v2", "--branch", "-uno"], None)?)
     }
 
-    fn run(&self, args: &[&str], input: Option<&str>) -> Result<String, GitError> {
+    pub(super) fn run(&self, args: &[&str], input: Option<&str>) -> Result<String, GitError> {
         run_in(&self.program, &self.root, args, input)
     }
 
