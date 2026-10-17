@@ -12,7 +12,11 @@ import (
 	"tofu/internal/rule"
 )
 
-const boardySessionEnv = "TOFU_SESSION"
+const (
+	boardySessionEnv     = "TOFU_SESSION"
+	claudeCodeEnv        = "CLAUDECODE"
+	claudeCodeSessionEnv = "CLAUDE_CODE_SESSION_ID"
+)
 
 func boardyManageUsage(subcommand string) string {
 	switch subcommand {
@@ -32,12 +36,21 @@ func boardyManageUsage(subcommand string) string {
 	return ""
 }
 
-func boardyIdentity(as string) (actor, person string) {
+func boardyIdentity(as string) (actor, person, lead string) {
 	if session := os.Getenv(boardySessionEnv); session != "" {
-		return session, ""
+		return session, "", ""
 	}
-	actor = cmp.Or(as, "person")
-	return actor, actor
+	claudeSession := os.Getenv(claudeCodeSessionEnv)
+	switch {
+	case claudeSession == "" && os.Getenv(claudeCodeEnv) == "":
+		actor = cmp.Or(as, string(boardy.RolePerson))
+		return actor, actor, ""
+	case as == "" || as == boardy.OrchestratorName:
+		actor = boardy.ClaudeCodeActor(claudeSession, "")
+		return actor, string(boardy.RolePerson), actor
+	}
+	actor = boardy.ClaudeCodeActor(claudeSession, as)
+	return actor, actor, ""
 }
 
 func (c boardyCall) manage(subcommand string) int {

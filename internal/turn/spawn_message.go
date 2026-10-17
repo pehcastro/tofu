@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/boardy"
 	"tofu/internal/llm"
 	"tofu/internal/shell"
 	"tofu/internal/subagent"
@@ -135,12 +136,26 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (Result, erro
 		if strings.TrimSpace(args.Text) != "" {
 			held.inbox.post(args.Text)
 		}
+		answered += t.toThread(args.To, boardy.Answered, strings.TrimSpace(args.Answer+" "+args.Text))
 		return Result{Content: answered, Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
 	}
 	if strings.TrimSpace(args.Text) == "" {
 		return Result{}, errors.New("message: text is required unless do or answer is given")
 	}
-	return t.send(ctx, args.To, args.Text, args.From)
+	sent, err := t.send(ctx, args.To, args.Text, args.From)
+	if err == nil {
+		sent.Content += t.toThread(args.To, boardy.Messaged, args.Text)
+	}
+	return sent, err
+}
+
+func (t *SpawnTool) toThread(to string, kind boardy.EventKind, text string) string {
+	for _, agent := range t.roster.SubAgents() {
+		if agent.ID == to {
+			return t.onThread(agent.Ticket, boardy.Event{Kind: kind, Actor: t.base.Session, Author: t.speaker(), Agent: to, Text: text})
+		}
+	}
+	return ""
 }
 
 func answeredAsksOnly(calls []ToolCallRow) bool {

@@ -96,8 +96,8 @@ func boardyVerb(args []string, out, errOut io.Writer) int {
 	if err = errors.Join(err, flowErr); err != nil {
 		return o.fail(err)
 	}
-	actor, person := boardyIdentity(flags["as"])
-	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: person}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
+	actor, person, lead := boardyIdentity(flags["as"])
+	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: person, Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	sizes := store.EventSizes()
 	code := call.run(args[0])
 	for _, nudge := range store.NudgesSince(sizes) {
@@ -460,7 +460,14 @@ type boardyShown struct {
 }
 
 func threadLine(event boardy.Event) string {
-	line := event.At.Local().Format(time.DateTime) + " " + string(event.Kind) + " " + dash(cmp.Or(event.Agent, event.Actor))
+	who := cmp.Or(event.Agent, event.Actor)
+	if event.Author != nil {
+		who = event.Author.Name
+		if event.Agent != "" && event.Agent != who {
+			who += " to " + event.Agent
+		}
+	}
+	line := event.At.Local().Format(time.DateTime) + " " + string(event.Kind) + " " + dash(who)
 	if event.From != "" || event.To != "" {
 		line += " " + dash(string(event.From)) + " to " + string(event.To)
 	}

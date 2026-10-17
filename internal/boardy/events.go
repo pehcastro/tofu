@@ -20,11 +20,12 @@ const (
 	Moved     EventKind = "moved"
 	Commented EventKind = "commented"
 	Spawned   EventKind = "spawned"
+	Messaged  EventKind = "messaged"
 	Reported  EventKind = "reported"
 )
 
 func (EventKind) Enum() []string {
-	return enum(Created, Moved, Commented, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Reported, HookChanged, HookFailed)
+	return enum(Created, Moved, Commented, RuleFired, Waiting, Requested, Accepted, RequestDropped, Handed, Widened, ManagersChanged, Assigned, Asked, Answered, Spawned, Messaged, Reported, HookChanged, HookFailed)
 }
 
 type Event struct {
@@ -32,6 +33,7 @@ type Event struct {
 	Ticket  string    `json:"ticket"`
 	Kind    EventKind `json:"kind"`
 	Actor   string    `json:"actor,omitempty"`
+	Author  *Author   `json:"author,omitempty"`
 	From    Status    `json:"from,omitempty"`
 	To      Status    `json:"to,omitempty"`
 	Text    string    `json:"text,omitempty"`
@@ -66,6 +68,9 @@ func (s Store) Thread(id string) ([]Event, error) {
 
 func (s Store) Record(key string, event Event) error {
 	event.At = cmp.Or(event.At, time.Now().UTC().Truncate(time.Second))
+	if event.Author == nil && event.Actor != "" {
+		event.Author = s.authorOf(event.Actor)
+	}
 	line, err := json.Marshal(event)
 	if err != nil {
 		return err

@@ -483,7 +483,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (Result, error
 		return Result{}, fmt.Errorf("spawn: %w", err)
 	}
 	if args.Ticket != "" && t.base.Board != nil {
-		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Session: t.base.Session, Agent: subAgentID, Call: site.call, Text: agent.Mission}
+		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: t.speaker(), Session: t.base.Session, Agent: subAgentID, Call: site.call, Text: agent.Brief}
 		if err := t.base.Board.Store.RecordTicket(spawned); err != nil {
 			t.roster.Release(subAgentID)
 			return Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)
@@ -664,7 +664,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 		owned = append(owned, &SpawnTool{Review: t.Review, Methods: t.Methods, SubAgents: t.SubAgents, Limits: func() SubAgentLimits { return limits }, ChecksWork: t.ChecksWork, Project: t.Project, Inbox: held.inbox, Remembered: t.Remembered,
 			orchestratorID: held.agent.ID, depth: t.depth + 1, writesNothing: len(held.boundary.Owns()) == 0, base: t.base, roster: t.roster, tree: t.tree, built: t.built, writes: t.writes})
 	}
-	ask := askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}
+	ask := threadedAsk{askTool{orchestrator: t, asking: held.agent, conversation: site.conversation}}
 	subAgent := t.base
 	if subAgent.Plan != nil {
 		subAgent.Plan = plan.shown
@@ -774,7 +774,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	if agent.Ticket != "" && t.base.Board != nil {
 		said, _, _ := strings.Cut(strings.TrimSpace(report.Prose), "\n")
 		summary, _, _ := strings.Cut(contract.Block(), "\n")
-		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(said, report.State) + "; " + summary, Files: report.Wrote}
+		reported := boardy.Event{Ticket: agent.Ticket, Kind: boardy.Reported, Actor: t.ticketActor(agent.Ticket), Author: boardy.SubAgentAuthor(t.base.Session, agent.ID), Session: t.base.Session, Agent: agent.ID, Call: site.call, Text: cmp.Or(said, report.State) + "; " + summary, Files: report.Wrote}
 		if err := t.base.Board.Store.RecordTicket(reported); err != nil {
 			text += "\n\nthis report was not written to " + agent.Ticket + "'s thread: " + err.Error()
 		}
@@ -804,6 +804,41 @@ func (t *SpawnTool) reportedOnBoard(id, actor, report string) string {
 		said += "\n\na board hook after agent.report failed: " + err.Error()
 	}
 	return said + BoardNudges(board.Store, sizes)
+}
+
+func (t *SpawnTool) speaker() *boardy.Author {
+	if t.depth == 0 {
+		return boardy.LeadAuthor(t.base.Session)
+	}
+	return boardy.SubAgentAuthor(t.base.Session, t.orchestratorID)
+}
+
+func (t *SpawnTool) onThread(ticket string, event boardy.Event) string {
+	if ticket == "" || t.base.Board == nil {
+		return ""
+	}
+	event.Ticket = ticket
+	if err := t.base.Board.Store.RecordTicket(event); err != nil {
+		return "\n\nthis was not written to " + ticket + "'s thread: " + err.Error()
+	}
+	return ""
+}
+
+type threadedAsk struct{ askTool }
+
+func (a threadedAsk) Run(ctx context.Context, raw json.RawMessage) (Result, error) {
+	var args askArgs
+	t, ticket, id := a.orchestrator, a.asking.Ticket, a.asking.ID
+	if ticket == "" || t.base.Board == nil || json.Unmarshal(raw, &args) != nil {
+		return a.askTool.Run(ctx, raw)
+	}
+	asked := t.onThread(ticket, boardy.Event{Kind: boardy.Asked, Actor: t.ticketActor(ticket), Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id, Text: args.Question})
+	result, err := a.askTool.Run(ctx, raw)
+	if err != nil {
+		return result, err
+	}
+	result.Content += asked + t.onThread(ticket, boardy.Event{Kind: boardy.Answered, Actor: t.base.Session, Author: t.speaker(), Agent: id, Text: result.Content})
+	return result, nil
 }
 
 func (t *SpawnTool) ticketActor(ticket string) string {
