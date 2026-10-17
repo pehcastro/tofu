@@ -202,7 +202,7 @@ func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
 				return nil, fmt.Errorf("quote: the start of turn %s is recorded in a shape this build cannot read: %w", event.Turn, err)
 			}
 			hits = append(hits, Quoted{Event: event.Turn, Speaker: "you, starting a turn", Noun: "turn", Words: start.Task})
-		case event.Kind == session.EventToolCall && session.DrawnAs(event.ID, hash):
+		case event.Kind == session.EventToolCall && (session.DrawnAs(event.ID, hash) || event.Call == hash):
 			call, err := quotedCall(event, events)
 			if err != nil {
 				return nil, err

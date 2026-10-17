@@ -27,7 +27,7 @@ func (Recall) Definition() llm.Tool {
 		Name: "recall",
 		Description: "searches the raw items of a memory store with a regular expression and returns every item that matches, word for word, as store id+1|kind: text. " +
 			"store is episodes for the conversation, or a memory scope; left out, every store is searched. " +
-			"a regex that is a reference, [tool#abc12] or [quote#abc12] or #abc12, returns that recorded call or turn instead, from this session or any it was forked from. " + wholeBeforeYouAct,
+			"a regex that is a reference, [tool#abc12] or [quote#abc12] or #abc12, or the id of one of your own tool calls, returns that recorded call or turn instead, from this session or any it was forked from. " + wholeBeforeYouAct,
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -47,7 +47,10 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("recall: arguments are not the expected shape: %w", err)
 	}
-	if hash, named := quoteHash(args.Regex); named && r.Sessions != nil {
+	hash, named := quoteHash(args.Regex)
+	wireID := !named && !strings.ContainsAny(hash, " .*+?()[]{}|^$\\") && strings.Contains(hash, "_")
+	noCall := ""
+	if (named || wireID) && r.Sessions != nil {
 		found, err := ResolveQuote(r.Sessions, r.Session, args.Regex)
 		if err != nil {
 			return turn.Result{}, fmt.Errorf("recall: %w", err)
@@ -55,7 +58,8 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 		said := turn.Result{Command: "recall " + hash}
 		switch found.Outcome {
 		case QuoteNotFound:
-			said.Content = "no call or turn ends with " + hash + " in this session or any it was forked from"
+			noCall = "no call or turn ends with " + hash + " in this session or any it was forked from"
+			said.Content = noCall
 		case QuoteAmbiguous:
 			said.Content = "more than one item in " + found.Session + " ends with " + hash + ": give more of the id"
 		case QuoteItem:
@@ -64,7 +68,9 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 		default:
 			panic("recall: unknown outcome " + string(found.Outcome))
 		}
-		return said, nil
+		if !wireID || found.Outcome != QuoteNotFound {
+			return said, nil
+		}
 	}
 	logs, err := memory.Trees(r.Zoom.Project)
 	if err != nil {
@@ -90,7 +96,11 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 	}
 	command := "recall " + strconv.Quote(args.Regex)
 	if len(found) == 0 {
-		return turn.Result{Content: "nothing in " + strings.Join(searched, ", ") + " matches " + strconv.Quote(args.Regex), Command: command}, nil
+		missing := "nothing in " + strings.Join(searched, ", ") + " matches " + strconv.Quote(args.Regex)
+		if noCall != "" {
+			missing = noCall + ", and " + missing
+		}
+		return turn.Result{Content: missing, Command: command}, nil
 	}
 	return turn.Result{Content: strings.Join(found, "\n"), Command: command}, nil
 }
