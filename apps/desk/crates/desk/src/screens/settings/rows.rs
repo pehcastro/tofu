@@ -10,7 +10,7 @@ use desk_core::protocol::{self, NoParams, Request, SettingsReport, SettingsSetPa
 use desk_core::query::{Answer, QueryError, Read};
 use desk_core::settings::{self as wire, Settings, Value};
 use desk_ui::components::chip::flat_chip;
-use desk_ui::components::form::{TextInput, input, switch_bare};
+use desk_ui::components::form::{TextInput, switch_bare};
 use desk_ui::components::list::{HoverList, group_header, row};
 use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::paint::{ink, ms, presented, tint};
@@ -68,6 +68,11 @@ const CHOICE_ON: f32 = 0.12;
 const CHOICE_PILL_X: f32 = 10.0;
 const CHOICE_PILL_Y: f32 = 3.0;
 const CHOICE_PILL_RADIUS: f32 = 6.0;
+const SEARCH: &str = "Search settings";
+const NAV_DIM: f32 = 0.35;
+const STEM_LEAST: usize = 5;
+const STEM_SLACK: usize = 2;
+const SHOWN_MOST: usize = 24;
 const NO_TOFU: &str = "Settings reads tofu's settings from the tofu the work screen runs, and no work screen is open here.";
 
 pub struct Rows {
@@ -88,6 +93,50 @@ pub struct Rows {
     stored: Result<Stored, String>,
     opened: Option<Instant>,
     showing: Rc<Cell<Option<Instant>>>,
+    search: Option<(Entity<TextInput>, Subscription)>,
+    query: String,
+    typed: Option<Instant>,
+    index: Vec<Entry>,
+}
+
+struct Entry {
+    page: PageId,
+    hit: Hit,
+    text: String,
+    stems: Vec<String>,
+}
+
+impl Entry {
+    fn new(page: PageId, hit: Hit, texts: &[&str], key: &str) -> Self {
+        let mut stems: Vec<String> = Vec::new();
+        for letter in key.chars() {
+            match stems.last_mut() {
+                Some(stem) if !letter.is_uppercase() => stem.push(letter),
+                _ => stems.push(letter.to_lowercase().collect()),
+            }
+        }
+        stems.retain(|stem| stem.chars().count() >= STEM_LEAST);
+        Entry {
+            page,
+            hit,
+            text: texts.join("\n").to_lowercase(),
+            stems,
+        }
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        self.text.contains(query)
+            || self.stems.iter().any(|stem| {
+                query.starts_with(stem.as_str()) && query.len() <= stem.len() + STEM_SLACK
+            })
+    }
+}
+
+#[derive(Clone)]
+enum Hit {
+    Tofu(wire::Setting),
+    Desk(&'static Setting),
+    Plugin(&'static plugins::Plugin),
 }
 
 struct Field {
@@ -98,7 +147,7 @@ struct Field {
 
 impl Rows {
     pub fn new(theme: &Theme) -> Self {
-        Rows {
+        let mut rows = Rows {
             page: PageId::Tofu(FIRST_TOFU_PAGE.into()),
             scope: Scope::Project,
             flipped: HashMap::new(),
@@ -119,7 +168,13 @@ impl Rows {
             stored: Stored::load(),
             opened: None,
             showing: Rc::new(Cell::new(None)),
-        }
+            search: None,
+            query: String::new(),
+            typed: None,
+            index: Vec::new(),
+        };
+        rows.reindex();
+        rows
     }
 
     pub fn showing(&mut self) {
@@ -130,6 +185,7 @@ impl Rows {
         self.page = PageId::Plugins(None);
         self.plugins_page(cx)
             .update(cx, |page, cx| page.install_from(folder, cx));
+        self.reindex();
     }
 
     fn plugins_page(&mut self, cx: &mut Context<Self>) -> Entity<PluginsPage> {
@@ -228,6 +284,7 @@ impl Rows {
         }
         self.switching.clear();
         self.answer.answered(read);
+        self.reindex();
         cx.notify();
     }
 
@@ -268,30 +325,35 @@ impl Rows {
         cx.notify();
     }
 
-    fn flip(&mut self, key: &str, cx: &mut Context<Self>) {
-        if let PageId::Tofu(_) = self.page {
-            let on = self.switching.get(key).copied().or_else(|| {
-                let read = self.answer.read.as_ref()?;
-                match read.value.get(key)?.value {
-                    Value::Switch(on) => Some(on),
-                    Value::Number(_) | Value::Text(_) | Value::Choice(..) => None,
-                }
-            });
-            let Some(on) = on else {
-                return;
-            };
-            self.switching.insert(key.to_owned(), !on);
-            return self.write(key.to_owned(), (!on).to_string(), cx);
+    fn clicked(&mut self, page: &PageId, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        match page {
+            PageId::Tofu(_) => self.flip_tofu(key, cx),
+            PageId::Desk(_) => self.flip_desk(key, cx),
+            PageId::Plugins(_) => {
+                self.page = page.clone();
+                self.clear_search(window, cx);
+                cx.notify();
+            }
         }
-        let PageId::Desk(page) = self.page else {
+    }
+
+    fn flip_tofu(&mut self, key: &str, cx: &mut Context<Self>) {
+        let on = self.switching.get(key).copied().or_else(|| {
+            let read = self.answer.read.as_ref()?;
+            match read.value.get(key)?.value {
+                Value::Switch(on) => Some(on),
+                Value::Number(_) | Value::Text(_) | Value::Choice(..) => None,
+            }
+        });
+        let Some(on) = on else {
             return;
         };
-        let found = page
-            .page()
-            .groups
-            .iter()
-            .flat_map(|(_, settings)| settings.iter())
-            .find(|setting| setting.key == key);
+        self.switching.insert(key.to_owned(), !on);
+        self.write(key.to_owned(), (!on).to_string(), cx)
+    }
+
+    fn flip_desk(&mut self, key: &str, cx: &mut Context<Self>) {
+        let found = desk_settings().find(|setting| setting.key == key);
         let Some(setting) = found else {
             return;
         };
@@ -389,7 +451,7 @@ impl Rows {
                 switch_bare(SharedString::from(key.clone()), key.clone(), on, theme)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
-                        this.flip(&flipped, cx);
+                        this.flip_tofu(&flipped, cx);
                     }))
                     .into_any_element()
             }
@@ -458,7 +520,169 @@ impl Rows {
         }
     }
 
-    fn nav(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    fn search_box(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Entity<TextInput> {
+        if let Some((input, _)) = &self.search {
+            return input.clone();
+        }
+        let input = TextInput::new(SEARCH.into(), window, cx);
+        let changed = cx.observe(&input, |rows, input, cx| {
+            let query = input.read(cx).text().trim().to_lowercase();
+            if query != rows.query {
+                rows.query = query;
+                rows.typed = Some(Instant::now());
+                cx.notify();
+            }
+        });
+        self.search = Some((input.clone(), changed));
+        input
+    }
+
+    fn clear_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((input, _)) = &self.search else {
+            return;
+        };
+        let all = input.read(cx).text().encode_utf16().count();
+        input.update(cx, |input, cx| {
+            input.replace_text_in_range(Some(0..all), "", window, cx)
+        });
+    }
+
+    fn reindex(&mut self) {
+        let started = Instant::now();
+        let tofu = self
+            .answer
+            .read
+            .iter()
+            .flat_map(|read| read.value.categories.iter())
+            .flat_map(|category| {
+                category.settings.iter().map(|setting| {
+                    let mut texts = vec![setting.key.as_str()];
+                    if let Value::Choice(picked, choices) = &setting.value {
+                        texts.push(picked);
+                        texts.extend(choices.iter().map(String::as_str));
+                    }
+                    Entry::new(
+                        PageId::Tofu(category.name.clone().into()),
+                        Hit::Tofu(setting.clone()),
+                        &texts,
+                        &setting.key,
+                    )
+                })
+            });
+        let desk = DESK_NAV.1.iter().flat_map(|page| {
+            page.page()
+                .groups
+                .iter()
+                .flat_map(|(_, settings)| settings.iter())
+                .map(|setting| {
+                    Entry::new(
+                        PageId::Desk(*page),
+                        Hit::Desk(setting),
+                        &[setting.key, setting.name, setting.desc],
+                        setting.key,
+                    )
+                })
+        });
+        let installed = plugins::all().map(|plugin| {
+            Entry::new(
+                PageId::Plugins(Some(plugin.id.clone().into())),
+                Hit::Plugin(plugin),
+                &[&plugin.id, &plugin.name],
+                &plugin.id,
+            )
+        });
+        self.index = tofu.chain(desk).chain(installed).collect();
+        eprintln!(
+            "desk: settings: search index {} rows in {:.2} ms",
+            self.index.len(),
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+
+    fn hits(&self) -> Vec<(PageId, Vec<Hit>)> {
+        let mut found: Vec<(PageId, Vec<Hit>)> = Vec::new();
+        for entry in self.index.iter().filter(|entry| entry.matches(&self.query)) {
+            match found.last_mut() {
+                Some((page, hits)) if *page == entry.page => hits.push(entry.hit.clone()),
+                _ => found.push((entry.page.clone(), vec![entry.hit.clone()])),
+            }
+        }
+        found
+    }
+
+    fn search_page(
+        &mut self,
+        found: Vec<(PageId, Vec<Hit>)>,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if found.is_empty() {
+            let said = format!("No setting matches \"{}\".", self.query);
+            return page_title(SEARCH, Some(said.into()), theme).into_any_element();
+        }
+        let total: usize = found.iter().map(|(_, hits)| hits.len()).sum();
+        let mut left = SHOWN_MOST;
+        let mut shown: Vec<(PageId, Vec<Hit>)> = Vec::new();
+        for (page, mut hits) in found {
+            if left == 0 {
+                break;
+            }
+            hits.truncate(left);
+            left -= hits.len();
+            shown.push((page, hits));
+        }
+        let groups: Vec<(PageId, Vec<SettingRow>)> = shown
+            .into_iter()
+            .map(|(page, hits)| {
+                let rows = hits
+                    .into_iter()
+                    .map(|hit| match hit {
+                        Hit::Tofu(setting) => self.tofu_row(&setting, theme, window, cx),
+                        Hit::Desk(setting) => self.desk_row(setting, theme, window, cx),
+                        Hit::Plugin(plugin) => SettingRow {
+                            id: plugin.id.clone().into(),
+                            name: plugin.name.clone().into(),
+                            about: plugin.id.clone().into(),
+                            source: Source::Default,
+                            control: div().into_any_element(),
+                        },
+                    })
+                    .collect();
+                (page, rows)
+            })
+            .collect();
+        div()
+            .children(groups.into_iter().map(|(page, rows)| {
+                setting_group_clickable(
+                    page_name(&page),
+                    rows,
+                    cx.listener(move |this, key: &SharedString, window, cx| {
+                        this.clicked(&page, key, window, cx)
+                    }),
+                    theme,
+                )
+            }))
+            .children((total > SHOWN_MOST).then(|| {
+                frame::note(
+                    format!(
+                        "{} more match \"{}\". Type more to narrow.",
+                        total - SHOWN_MOST,
+                        self.query
+                    ),
+                    theme,
+                )
+            }))
+            .into_any_element()
+    }
+
+    fn nav(
+        &mut self,
+        lit: Option<&[PageId]>,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let mut list = HoverList::new("settings-nav", theme);
         let mut at = 0;
         let mut selected = None;
@@ -483,14 +707,17 @@ impl Rows {
                     selected = Some(at);
                 }
                 let name = page_name(&page);
+                let dim = lit.is_some_and(|lit| !lit.contains(&page));
                 list = list.item(
                     row(name.clone(), page == self.page, false, theme)
+                        .when(dim, |row| row.opacity(NAV_DIM))
                         .child(name)
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                             if this.page != page && matches!(page, PageId::Plugins(None)) {
                                 this.opened = Some(Instant::now());
                             }
                             this.page = page.clone();
+                            this.clear_search(window, cx);
                             cx.notify();
                         })),
                 );
@@ -510,15 +737,17 @@ impl Rows {
             .border_color(tint(theme.color(ColorToken::Shadow), NAV_RULE))
             .text_size(px(NAV_TEXT))
             .child(
-                input(
-                    "settings-search",
-                    "Search settings",
-                    SharedString::default(),
-                    false,
-                    theme,
-                )
-                .w_full()
-                .mb_2p5(),
+                div()
+                    .id("settings-search")
+                    .w_full()
+                    .mb_2p5()
+                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                        if event.keystroke.key == "escape" && !this.query.is_empty() {
+                            cx.stop_propagation();
+                            this.clear_search(window, cx);
+                        }
+                    }))
+                    .child(self.search_box(window, cx)),
             )
             .child(list.selected(selected))
     }
@@ -651,7 +880,7 @@ impl Rows {
                 switch_bare(setting.key, setting.name, on, theme)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
-                        this.flip(setting.key, cx);
+                        this.flip_desk(setting.key, cx);
                     }))
                     .into_any_element()
             }
@@ -663,7 +892,7 @@ impl Rows {
                 switch_bare(setting.key, setting.name, on, theme)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
-                        this.flip(setting.key, cx);
+                        this.flip_desk(setting.key, cx);
                     }))
                     .into_any_element()
             }
@@ -729,7 +958,7 @@ impl Rows {
                 setting_group_clickable(
                     label,
                     rows,
-                    cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
+                    cx.listener(|this, key: &SharedString, _, cx| this.flip_desk(key, cx)),
                     theme,
                 )
             }))
@@ -791,7 +1020,7 @@ impl Rows {
             .child(setting_group_clickable(
                 format!("{} keys", rows.len()),
                 rows,
-                cx.listener(|this, key: &SharedString, _, cx| this.flip(key, cx)),
+                cx.listener(|this, key: &SharedString, _, cx| this.flip_tofu(key, cx)),
                 theme,
             ))
             .into_any_element()
@@ -803,6 +1032,14 @@ impl Rows {
             eprintln!("desk: settings page {name} shows {count} rows");
         }
     }
+}
+
+fn desk_settings() -> impl Iterator<Item = &'static Setting> {
+    DESK_NAV
+        .1
+        .iter()
+        .flat_map(|page| page.page().groups.iter())
+        .flat_map(|(_, settings)| settings.iter())
 }
 
 fn page_name(page: &PageId) -> SharedString {
@@ -848,16 +1085,37 @@ impl Render for Rows {
             cx,
             |rows, scope, _| rows.scope = scope,
         );
-        let page_body = match self.page.clone() {
-            PageId::Desk(page) => self.desk_page(page, &theme, window, cx).into_any_element(),
-            PageId::Tofu(name) => self.tofu_page(&name, &theme, window, cx),
-            PageId::Plugins(shown) => {
+        let found = (!self.query.is_empty()).then(|| self.hits());
+        let lit: Option<Vec<PageId>> = found
+            .as_ref()
+            .map(|found| found.iter().map(|(page, _)| page.clone()).collect());
+        let count: usize = found.iter().flatten().map(|(_, hits)| hits.len()).sum();
+        let building = Instant::now();
+        let nav = self.nav(lit.as_deref(), &theme, window, cx);
+        let page_body = match (found, self.page.clone()) {
+            (Some(found), _) => self.search_page(found, &theme, window, cx),
+            (None, PageId::Desk(page)) => {
+                self.desk_page(page, &theme, window, cx).into_any_element()
+            }
+            (None, PageId::Tofu(name)) => self.tofu_page(&name, &theme, window, cx),
+            (None, PageId::Plugins(shown)) => {
                 let page = self.plugins_page(cx);
                 let opened = self.opened.take();
                 page.update(cx, |page, _| page.show(shown, opened));
                 page.into_any_element()
             }
         };
+        if let Some(typed) = self.typed.take() {
+            let query = self.query.clone();
+            let waited = building.duration_since(typed).as_secs_f64() * 1000.0;
+            let built = building.elapsed().as_secs_f64() * 1000.0;
+            window.on_next_frame(move |_, _| {
+                eprintln!(
+                    "desk: settings: search \"{query}\" {count} matches in {:.2} ms (waited {waited:.2}, rows built {built:.2})",
+                    typed.elapsed().as_secs_f64() * 1000.0
+                )
+            });
+        }
         let sheet = self
             .plugins
             .as_ref()
@@ -895,7 +1153,7 @@ impl Render for Rows {
                 .min_h_0()
                 .flex()
                 .relative()
-                .child(self.nav(&theme, cx))
+                .child(nav)
                 .child(content)
                 .children(sheet)
                 .child(first_frame),
