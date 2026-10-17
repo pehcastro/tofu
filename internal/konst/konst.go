@@ -488,4 +488,10 @@ const (
 	BoardTLDRRunesMost      = 120
 	BoardELI5LinesMost      = 3
 	BoardReadersMost        = 8
+	BoardHookDepthMost      = 3
+
+	BoardAuditFreshDays        = 1
+	BoardAuditStaleDays        = 7
+	BoardAuditSlowPercentile   = 90
+	BoardAuditDuplicateOverlap = 0.8
 )

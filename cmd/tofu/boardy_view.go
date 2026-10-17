@@ -20,6 +20,8 @@ func boardyViewUsageOf(subcommand string) string {
 		return "tofu boardy view [name] [--board KEY] [--epic E] [--label l] [--assignee name] [--as name] [--json]"
 	case "report":
 		return "tofu boardy report [--board KEY] [--since YYYY-MM-DD|Nd] [--json]"
+	case "audit":
+		return "tofu boardy audit [--board KEY] [--json]"
 	case "epic":
 		return "tofu boardy epic list|new <ID> <title> [--milestone M]|milestone <ID> <title> [--due YYYY-MM-DD|Nd]|done <ID> [--board KEY] [--json]"
 	case "sprint":

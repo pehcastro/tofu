@@ -23,6 +23,7 @@ func boardyRequests() []method {
 		{name: boardyPrefix + "get", params: boardy.GetRequest{}, result: boardy.GetAnswer{}},
 		{name: boardyPrefix + "events", params: boardy.EventsRequest{}, result: boardy.EventsAnswer{}},
 		{name: boardyPrefix + "report", params: boardy.ReportRequest{}, result: boardy.ReportAnswer{}},
+		{name: boardyPrefix + "audit", params: boardy.AuditRequest{}, result: boardy.AuditAnswer{}},
 		{name: boardyPrefix + "create", params: boardy.CreateRequest{}, result: boardy.TicketAnswer{}},
 		{name: boardyPrefix + "move", params: boardy.MoveRequest{}, result: boardy.TicketAnswer{}},
 		{name: boardyPrefix + "assign", params: boardy.AssignRequest{}, result: boardy.TicketAnswer{}},
@@ -70,6 +71,8 @@ func (s *server) boardy(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, answered(api.Events))
 	case boardyPrefix + "report":
 		return handle(raw, answered(api.Report))
+	case boardyPrefix + "audit":
+		return handle(raw, answered(api.Audit))
 	case boardyPrefix + "create":
 		return handle(raw, answered(api.Create))
 	case boardyPrefix + "move":
