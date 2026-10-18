@@ -6,10 +6,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/interface/cli"
 	"tofu/internal/host"
+	"tofu/internal/konst"
 	"tofu/internal/session"
 	"tofu/internal/widget"
 )
@@ -108,6 +110,15 @@ func sessionFamilyOf(store *session.Store, handle string) (sessionFamilyReport, 
 	for _, branch := range family.Branches {
 		report.Branches = append(report.Branches, generationHandle(families, branch))
 	}
+	paces, reading, turns := make([]generationPace, len(family.Generations)), sync.WaitGroup{}, make(chan struct{}, konst.SessionGenerationReads)
+	for at, header := range family.Generations {
+		turns <- struct{}{}
+		reading.Go(func() {
+			paces[at] = paceOf(store, header.ID)
+			<-turns
+		})
+	}
+	reading.Wait()
 	agents := map[string]int{}
 	for at, header := range family.Generations {
 		generation := familyGeneration{Generation: at + 1, Session: header.ID, Kind: header.ForkKind, At: header.At, EndedAt: header.EndedAt,
@@ -118,28 +129,10 @@ func sessionFamilyOf(store *session.Store, handle string) (sessionFamilyReport, 
 		if info, err := os.Stat(store.EventsPath(header.ID)); err == nil {
 			generation.Bytes = info.Size()
 		}
-		events, err := store.Events(header.ID)
-		if err != nil {
-			return sessionFamilyReport{}, err
+		if paces[at].err != nil {
+			return sessionFamilyReport{}, paces[at].err
 		}
-		began, last := map[string]time.Time{}, map[string]time.Time{}
-		for _, event := range events {
-			if event.Agent != "" || event.Turn == "" {
-				continue
-			}
-			if event.Kind == session.EventRequest || event.Kind == session.EventStep {
-				generation.Steps++
-			}
-			if first, seen := began[event.Turn]; !seen || event.At.Before(first) {
-				began[event.Turn] = event.At
-			}
-			if event.At.After(last[event.Turn]) {
-				last[event.Turn] = event.At
-			}
-		}
-		for turn, at := range began {
-			generation.ActiveMS += last[turn].Sub(at).Milliseconds()
-		}
+		generation.Steps, generation.ActiveMS = paces[at].steps, paces[at].activeMS
 		report.ActiveMS, report.CostUSD = report.ActiveMS+generation.ActiveMS, report.CostUSD+header.CostUSD
 		report.Generations = append(report.Generations, generation)
 		for _, run := range header.Agents {
@@ -159,6 +152,35 @@ func sessionFamilyOf(store *session.Store, handle string) (sessionFamilyReport, 
 		}
 	}
 	return report, nil
+}
+
+type generationPace struct {
+	steps    int
+	activeMS int64
+	err      error
+}
+
+func paceOf(store *session.Store, id string) generationPace {
+	var pace generationPace
+	began, last := map[string]time.Time{}, map[string]time.Time{}
+	pace.err = store.EachEventHead(id, func(event session.EventHead) {
+		if event.Agent != "" || event.Turn == "" {
+			return
+		}
+		if event.Kind == session.EventRequest || event.Kind == session.EventStep {
+			pace.steps++
+		}
+		if first, seen := began[event.Turn]; !seen || event.At.Before(first) {
+			began[event.Turn] = event.At
+		}
+		if event.At.After(last[event.Turn]) {
+			last[event.Turn] = event.At
+		}
+	})
+	for turn, at := range began {
+		pace.activeMS += last[turn].Sub(at).Milliseconds()
+	}
+	return pace
 }
 
 func sessionFamilyLines(page cli.Page, report sessionFamilyReport, now time.Time) []string {

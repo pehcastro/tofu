@@ -538,7 +538,7 @@ func parseEvents(raw []byte, id string) ([]Event, error) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
-		event, err := parseEvent(line, id, len(events)+1)
+		event, err := parseLine[Event](line, id, len(events)+1)
 		if err != nil {
 			return nil, err
 		}
@@ -546,15 +546,48 @@ func parseEvents(raw []byte, id string) ([]Event, error) {
 	}
 }
 
-func parseEvent(line []byte, id string, number int) (Event, error) {
-	var event Event
-	if err := json.Unmarshal(line, &event); err != nil {
-		return Event{}, fmt.Errorf("session: line %d of the events of %s does not parse: %w", number, id, err)
+func parseLine[T any](line []byte, id string, number int) (T, error) {
+	var parsed T
+	if err := json.Unmarshal(line, &parsed); err != nil {
+		return parsed, fmt.Errorf("session: line %d of the events of %s does not parse: %w", number, id, err)
 	}
-	return event, nil
+	return parsed, nil
+}
+
+type EventHead struct {
+	At    time.Time `json:"at"`
+	Turn  string    `json:"turn,omitempty"`
+	Agent string    `json:"agent,omitempty"`
+	Kind  EventKind `json:"kind"`
+}
+
+func (s *Store) EachEventHead(id string, visit func(EventHead)) error {
+	return s.scanEvents(id, func(event Event) bool {
+		visit(EventHead{At: event.At, Turn: event.Turn, Agent: event.Agent, Kind: event.Kind})
+		return true
+	}, func(line []byte, number int) (bool, error) {
+		head, err := parseLine[EventHead](line, id, number)
+		if err == nil {
+			visit(head)
+		}
+		return err == nil, err
+	})
 }
 
 func (s *Store) EachEvent(id string, wanted func(agent string) bool, visit func(Event) bool) error {
+	return s.scanEvents(id, func(event Event) bool { return !wanted(event.Agent) || visit(event) }, func(line []byte, number int) (bool, error) {
+		var agent struct {
+			Agent string `json:"agent"`
+		}
+		if json.Unmarshal(line, &agent) == nil && !wanted(agent.Agent) {
+			return true, nil
+		}
+		event, err := parseLine[Event](line, id, number)
+		return err == nil && visit(event), err
+	})
+}
+
+func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line []byte, number int) (bool, error)) error {
 	if err := namesOneSession(id); err != nil {
 		return err
 	}
@@ -566,7 +599,7 @@ func (s *Store) EachEvent(id string, wanted func(agent string) bool, visit func(
 			}
 		}
 		for _, event := range events {
-			if wanted(event.Agent) && !visit(event) {
+			if !held(event) {
 				return nil
 			}
 		}
@@ -594,18 +627,8 @@ func (s *Store) EachEvent(id string, wanted func(agent string) bool, visit func(
 			continue
 		}
 		number++
-		var agent struct {
-			Agent string `json:"agent"`
-		}
-		if json.Unmarshal(line, &agent) == nil && !wanted(agent.Agent) {
-			continue
-		}
-		event, err := parseEvent(line, id, number)
-		if err != nil {
+		if more, err := scanned(line, number); !more {
 			return err
-		}
-		if !visit(event) {
-			return nil
 		}
 	}
 }

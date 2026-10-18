@@ -11,6 +11,8 @@ const (
 
 const RecipeFailuresAside = 2
 
+const SessionGenerationReads = 4
+
 const RecipesPerTask = 2
 
 const (
