@@ -13,6 +13,7 @@ import (
 
 	"tofu/internal/hook"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/llm/wire/codex"
 	"tofu/internal/recall"
@@ -499,7 +500,7 @@ func (r *record) begin(row Row) {
 	if r == nil {
 		return
 	}
-	start := session.TurnStart{Task: row.Task, Wire: row.Wire, Spend: string(row.Spend), Account: row.Account}
+	start := session.TurnStart{Task: row.Task, Wire: row.Wire, Spend: string(row.Spend), Account: row.Account, Tofu: konst.Version}
 	if row.Budget != (recall.Budget{}) {
 		start.ContextCeiling, start.ContextTarget, start.AutoCompaction = row.Budget.CeilingTokens, row.Budget.Bands.Target(), row.Budget.Record()
 	}

@@ -2,17 +2,20 @@ package turn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
 	"time"
 
 	"tofu/internal/boardy"
+	"tofu/internal/konst"
 	"tofu/internal/llm"
 	"tofu/internal/recall"
 	"tofu/internal/session"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
+	"tofu/library/changelog"
 )
 
 type Model interface {
@@ -137,6 +140,28 @@ const (
 	TheTaskFollows           = "\n\n[the task]\n"
 	NotesAfterTheTask        = "\n\n[tofu's notes on this task, not the person's words]\n"
 )
+
+func (c Config) upgradeNote() string {
+	if c.Sessions == nil || c.Session == "" || c.SpawnedFrom != "" {
+		return ""
+	}
+	last := ""
+	_ = c.Sessions.EachEvent(c.Session, func(agent string) bool { return agent == "" }, func(event session.Event) bool {
+		var start session.TurnStart
+		if event.Kind == session.EventTurnStart && json.Unmarshal(event.Body, &start) == nil {
+			last = start.Tofu
+		}
+		return true
+	})
+	if last == "" || last == konst.Version {
+		return ""
+	}
+	changed := changelog.Between(changelog.Markdown, last, konst.Version, konst.UpgradeNoteBytes)
+	if changed == "" {
+		return ""
+	}
+	return "tofu was upgraded from " + last + " to " + konst.Version + " since this session's last turn. what changed, newest first:\n\n" + changed
+}
 
 func (c Config) FirstUserMessage(notes ...string) string {
 	first := c.Task

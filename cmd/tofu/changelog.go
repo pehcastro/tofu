@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/widget"
+	"tofu/library/changelog"
 )
 
 const (
@@ -20,18 +20,16 @@ const (
 	changelogAllFlag     = "--all"
 	changelogSeenFile    = "changelog-seen"
 	changelogSeenMode    = 0o600
-	changelogHeadingMark = "## "
 	changelogSectionMark = "### "
 	changelogBulletMark  = "- "
 	changelogFixMark     = "fix"
 )
 
 var (
-	changelogVersionLine = regexp.MustCompile(`^##\s+\[?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\]?`)
-	prereleaseRun        = sys.LazyRegexp(`\d+|\D+`)
-	markdownLink         = sys.LazyRegexp(`\[([^\]]*)\]\([^)]*\)`)
-	markdownBold         = sys.LazyRegexp(`\*\*([^*]+)\*\*`)
-	markdownCode         = sys.LazyRegexp("`([^`]*)`")
+	prereleaseRun = sys.LazyRegexp(`\d+|\D+`)
+	markdownLink  = sys.LazyRegexp(`\[([^\]]*)\]\([^)]*\)`)
+	markdownBold  = sys.LazyRegexp(`\*\*([^*]+)\*\*`)
+	markdownCode  = sys.LazyRegexp("`([^`]*)`")
 )
 
 type semver struct {
@@ -104,41 +102,7 @@ func parseSemver(text string) (semver, bool) {
 	return semver{major: major, minor: minor, patch: patch, prerelease: prerelease}, true
 }
 
-type changelogVersion = host.ChangelogVersion
-
-func parseChangelog(markdown string) []changelogVersion {
-	var versions []changelogVersion
-	var current changelogVersion
-	var body []string
-	open := false
-	flush := func() {
-		if open {
-			current.Body = strings.Trim(strings.Join(body, "\n"), "\n")
-			versions = append(versions, current)
-		}
-		open, body = false, nil
-	}
-	for _, line := range strings.Split(markdown, "\n") {
-		if !strings.HasPrefix(line, changelogHeadingMark) {
-			if open {
-				body = append(body, line)
-			}
-			continue
-		}
-		flush()
-		match := changelogVersionLine.FindStringSubmatch(line)
-		if match == nil {
-			continue
-		}
-		current = changelogVersion{
-			Version: match[1],
-			Heading: strings.TrimSpace(strings.TrimPrefix(line, changelogHeadingMark)),
-		}
-		open = true
-	}
-	flush()
-	return versions
-}
+type changelogVersion = changelog.Release
 
 func changelogSince(versions []changelogVersion, seen string) []changelogVersion {
 	last, known := parseSemver(seen)
@@ -251,9 +215,13 @@ func changelogVerb(args []string, markdown string, out, errOut io.Writer) int {
 			return o.usage(errors.New("unknown argument " + strconv.Quote(arg)))
 		}
 	}
-	versions := parseChangelog(markdown)
+	versions := changelog.Parse(markdown)
 	if o.asJSON {
-		return o.done(true, host.ChangelogReport{Versions: versions, Seen: changelogSeen()}, nil)
+		report := host.ChangelogReport{Seen: changelogSeen()}
+		for _, version := range versions {
+			report.Versions = append(report.Versions, host.ChangelogVersion(version))
+		}
+		return o.done(true, report, nil)
 	}
 	if all {
 		return o.done(true, nil, func(page cli.Page) []string { return changelogLines(page, true, "", versions) })

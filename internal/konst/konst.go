@@ -492,6 +492,7 @@ const (
 	AskPersonOptionsLeast   = 2
 	AskPersonOptionsMost    = 4
 	AskPersonHeaderRunes    = 30
+	UpgradeNoteBytes        = 6 << 10
 	AskPersonLabelWordsMost = 5
 	BoardTLDRRunesMost      = 120
 	BoardELI5LinesMost      = 3

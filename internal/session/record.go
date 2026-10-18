@@ -72,6 +72,7 @@ type TurnStart struct {
 	ContextCeiling int    `json:"context_ceiling,omitempty"`
 	ContextTarget  int    `json:"context_target,omitempty"`
 	AutoCompaction string `json:"auto_compaction,omitempty"`
+	Tofu           string `json:"tofu,omitempty"`
 }
 
 type CallBody struct {

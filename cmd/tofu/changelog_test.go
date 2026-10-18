@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ func headingsIn(text string) []string {
 
 func currentHeading(t *testing.T) string {
 	t.Helper()
-	for _, version := range parseChangelog(changelog.Markdown) {
+	for _, version := range changelog.Parse(changelog.Markdown) {
 		if version.Version == konst.Version {
 			return strings.Replace(version.Heading, " - ", " · ", 1)
 		}
@@ -55,10 +56,10 @@ func TestTheEmbeddedChangelogIsTheFileAtTheRootByteForByte(t *testing.T) {
 }
 
 func TestEveryVersionInTheFileIsParsedAndCarriesItsOwnHeading(t *testing.T) {
-	versions := parseChangelog(changelog.Markdown)
+	versions := changelog.Parse(changelog.Markdown)
 	headers := 0
 	for _, line := range strings.Split(changelog.Markdown, "\n") {
-		if changelogVersionLine.MatchString(line) {
+		if regexp.MustCompile(`^##\s+\[?\d+\.\d+\.\d+`).MatchString(line) {
 			headers++
 		}
 	}
@@ -76,10 +77,10 @@ func TestEveryVersionInTheFileIsParsedAndCarriesItsOwnHeading(t *testing.T) {
 }
 
 func TestAHeadingThatIsNotAVersionIsNotFiledUnderThePreviousVersion(t *testing.T) {
-	versions := parseChangelog(changelog.Markdown)
+	versions := changelog.Parse(changelog.Markdown)
 	for _, version := range versions {
 		for _, line := range strings.Split(version.Body, "\n") {
-			if strings.HasPrefix(line, changelogHeadingMark) {
+			if strings.HasPrefix(line, changelog.HeadingMark) {
 				t.Fatalf("version %s carries the heading %q in its body", version.Version, line)
 			}
 		}
@@ -89,7 +90,7 @@ func TestAHeadingThatIsNotAVersionIsNotFiledUnderThePreviousVersion(t *testing.T
 	}
 
 	written := "# Changelog\n\nprose nobody versioned\n\n## 0.2.0 - 2026-09-18\n\nthe record\n\n## How to read this file\n\nnewest first\n\n## 0.1.0 - 2026-09-18\n\nthe first one\n"
-	parsed := parseChangelog(written)
+	parsed := changelog.Parse(written)
 	if len(parsed) != 2 {
 		t.Fatalf("want 2 versions from the written file, got %d", len(parsed))
 	}
@@ -125,7 +126,7 @@ func TestChangelogOrdersByNumbersThenPrereleaseWithItsDigitsAsNumbers(t *testing
 	}
 
 	written := "## 0.5.0-rc-fix2 - 2026-09-27\n\nsecond\n\n## 0.5.0-rc-fix1 - 2026-09-26\n\nfirst\n\n## 0.4.19 - 2026-09-25\n\nold\n"
-	parsed := parseChangelog(written)
+	parsed := changelog.Parse(written)
 	var names []string
 	for _, version := range parsed {
 		names = append(names, version.Version)
@@ -163,8 +164,8 @@ func TestTheJSONFormCarriesOneObjectPerVersion(t *testing.T) {
 		t.Fatalf("the json does not parse: %v\n%s", err, out.String())
 	}
 	versions := envelope.Data.Versions
-	if len(versions) != len(parseChangelog(changelog.Markdown)) {
-		t.Fatalf("the json carries %d objects and the file has %d versions", len(versions), len(parseChangelog(changelog.Markdown)))
+	if len(versions) != len(changelog.Parse(changelog.Markdown)) {
+		t.Fatalf("the json carries %d objects and the file has %d versions", len(versions), len(changelog.Parse(changelog.Markdown)))
 	}
 	for _, version := range versions {
 		if version.Version == "" || version.Heading == "" || version.Body == "" {
@@ -176,7 +177,7 @@ func TestTheJSONFormCarriesOneObjectPerVersion(t *testing.T) {
 func TestTheRenderedFormWrapsToTheWidthAndCarriesNoRawMarkdown(t *testing.T) {
 	const width = konst.ProseWidthChars
 	page := cli.Detect(&bytes.Buffer{}, nil)
-	for _, line := range changelogLines(page, true, "", parseChangelog(changelog.Markdown)) {
+	for _, line := range changelogLines(page, true, "", changelog.Parse(changelog.Markdown)) {
 		if widget.Cells(line) > width {
 			t.Fatalf("a line is %d cells wide at width %d:\n%s", widget.Cells(line), width, line)
 		}
@@ -190,7 +191,7 @@ func TestTheRenderedFormWrapsToTheWidthAndCarriesNoRawMarkdown(t *testing.T) {
 
 func TestMarkdownIsUnwrappedRatherThanDropped(t *testing.T) {
 	written := "## 0.1.0 - 2026-09-18\n\n### Added\n\n- **breaking:** `tofu why` reads the [ledger](../internal/judge/ledger)\n"
-	body := strings.Join(changelogBody(parseChangelog(written)[0].Body, konst.ProseWidthChars), "\n")
+	body := strings.Join(changelogBody(changelog.Parse(written)[0].Body, konst.ProseWidthChars), "\n")
 	for _, kept := range []string{"Added", "breaking:", "tofu why", "ledger"} {
 		if !strings.Contains(body, kept) {
 			t.Fatalf("%q was dropped rather than unwrapped:\n%s", kept, body)
@@ -242,7 +243,7 @@ func TestAllPrintsEveryVersionAndDoesNotRecordAnything(t *testing.T) {
 		t.Fatalf("tofu changelog --all exited %d: %s", code, errOut.String())
 	}
 	var want []string
-	for _, version := range parseChangelog(changelog.Markdown) {
+	for _, version := range changelog.Parse(changelog.Markdown) {
 		want = append(want, strings.Replace(version.Heading, " - ", " · ", 1))
 	}
 	if !slices.Equal(headingsIn(out.String()), want) {

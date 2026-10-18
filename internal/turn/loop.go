@@ -219,6 +219,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: config.System, Tools: usedTools}
 
+	upgraded := config.upgradeNote()
 	recorded, err = openRecord(config, row)
 	if err != nil {
 		return Row{}, err
@@ -387,7 +388,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if strings.Contains(config.TaskOrigin.Source, sourceReport) {
 		boardLine = lead.boardLine(config.Task)
 	}
-	first := config.FirstUserMessage(concluding+taken, hookContext, boardLine)
+	first := config.FirstUserMessage(concluding+taken, hookContext, boardLine, upgraded)
 	taskOrigin, taskSource := config.TaskOrigin, sourceTask
 	if config.SpawnedFrom != "" {
 		taskSource = sourceBrief
