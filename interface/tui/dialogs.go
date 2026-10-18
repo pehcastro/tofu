@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
+	"weak"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -104,12 +105,16 @@ type searchDialog struct{ palette.Search }
 
 func (a *App) searchDialog() *searchDialog {
 	a.refreshSettingsRows()
-	folded := sync.OnceValue(func() []feed.Event { return a.readBack(slices.Collect(maps.Keys(a.hidden()))) })
+	folded := sync.OnceValue(func() *[]feed.Event {
+		read := a.readBack(slices.Collect(maps.Keys(a.hidden())))
+		a.searchedFolded = weak.Make(&read)
+		return &read
+	})
 	return &searchDialog{palette.NewSearch("Search", "Screens, agents and events · enter opens", func(query string) []palette.Result {
 		if query == "" {
 			return a.find(query, nil)
 		}
-		return a.find(query, folded())
+		return a.find(query, *folded())
 	})}
 }
 
@@ -134,8 +139,16 @@ func (a *App) found(choice palette.SearchChoice) tea.Cmd {
 		ref := choice.Result.Reference
 		actor, _, isAgent := agentOf(ref)
 		if _, id := pointer.SplitReference(ref); !isAgent {
-			if at := a.reachedAt(strings.TrimPrefix(id, "#")); at >= 0 {
-				actor = a.happened[at].Actor
+			named := func(event feed.Event) bool { return event.ID == strings.TrimPrefix(id, "#") }
+			held := [][]feed.Event{a.happened}
+			if read := a.searchedFolded.Value(); read != nil {
+				held = append(held, *read)
+			}
+			for _, events := range held {
+				if at := slices.IndexFunc(events, named); at >= 0 {
+					actor = events[at].Actor
+					break
+				}
 			}
 		}
 		a.unfoldFor(actor)

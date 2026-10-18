@@ -81,8 +81,12 @@ func (a *App) shownID(full string) string {
 }
 
 func (a *App) shortOf(full string) string {
+	shown := a.shownID(full)
+	if at := a.happenedAt(shown); at < 0 || a.happened[at].FullID == full {
+		return shown
+	}
 	runes, base := []rune(full), short(full)
-	for length := len([]rune(a.shownID(full))); length < len(runes); length++ {
+	for length := len([]rune(shown)) + 1; length < len(runes); length++ {
 		id := string(runes[len(runes)-length:])
 		if at := a.happenedAt(id); at < 0 || a.happened[at].FullID == full {
 			if id != base {
@@ -872,6 +876,9 @@ func (a *App) readBack(names []string) []feed.Event {
 			return true
 		}
 		index[event.ID] = len(back)
+		if len(back) == cap(back) {
+			back = slices.Grow(back, len(back)+1)
+		}
 		back = append(back, made)
 		return true
 	})

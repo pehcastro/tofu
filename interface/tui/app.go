@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"weak"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -229,6 +230,7 @@ type App struct {
 	shortcuts      map[string]string
 	prompts        *isession.PromptHistory
 	dialogs        []dialog
+	searchedFolded weak.Pointer[[]feed.Event]
 	intro          intro
 	status         frame.Status
 	noticeAt       int
