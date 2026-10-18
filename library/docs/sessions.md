@@ -87,7 +87,7 @@ handle, age, steps, state and task. A session that cannot be read goes under `un
 
 prints the family: when it started, how long it was worked on (each turn from its first event to its
 last), and each generation with how it began, its steps, active time and size, its branches and
-sub-agents.
+sub-agents, in about 0.7 s on 80 generations.
 
     tofu session find <name|id> --tool bash
 

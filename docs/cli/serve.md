@@ -16,7 +16,8 @@ standard input stops it.
 **Everything the app shows is on the wire.** A frontend draws the same conversation, sub-agents,
 shells, approvals and quota the terminal app does, from typed events rather than screen text: a turn
 ends with `status` `finished`, `stopped` or `failed`, a tool reports its exit code, bytes and
-duration as numbers, and a file edit carries its hunks.
+duration as numbers, and a file edit carries its hunks, from the lead or a sub-agent, an
+appended write included.
 
 **Every item can be pointed at.** Each event carries a `ref`, the token `Ctrl+R` types for that
 item, and `mention.resolve` turns a `ref` back into the item, its speaker and its first line.

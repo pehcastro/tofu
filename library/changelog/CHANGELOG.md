@@ -10,6 +10,13 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12-fix2 - 2026-10-18
+
+### Fixed
+
+- A sub-agent's edits stream `file.edit` again, so the desk's File edits tile and the terminal's edits pane show them; 0.5.15-rc12-fix1 dropped them. An appended write now streams `file.edit` with the appended lines as an added hunk, from the lead and from a sub-agent.
+- `tofu session NAME` on an 80-generation session answers in about 0.7 s where it took 2 s, with the same output: it reads each generation's event heads, four at a time, instead of parsing every event in full.
+
 ## 0.5.15-rc12-fix1 - 2026-10-18
 
 ### Fixed

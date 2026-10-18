@@ -36,7 +36,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
   running turn, read as `person`
 - `cron.updated` and `query.cron`: `live`, `goals` and each job's `id`, `schedule`, `prompt`, `paused`, `next`
   and `ended`; a fire that starts a turn shows in its `origin` alone, one joining a running turn sends a `note`
-- `tool.started`, `tool.completed` and `file.edit` by a sub-agent carry its
+- `tool.started`, `tool.completed` and `file.edit` (an append as an added hunk) by a sub-agent carry its
   `agent` and `instance`, live and replayed, with their real `turn` and item
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
   `turn.steered`: the lead read a message sent mid-turn, until then queued
