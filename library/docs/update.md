@@ -10,7 +10,9 @@ verbs: update, version, settings
 tofu asks GitHub for the latest release of github.com/pehcastro/tofu. When
 that release is newer than the tofu on disk, it downloads the archive for
 your system, checks its SHA-256 against the release's `checksums.txt`, and
-puts the new tofu where the old one was.
+puts the new tofu where the old one was. The lead's next turn in an open
+session reads the changelog sections since its last turn's version, up to
+6 KiB.
 
 The app does this by itself. It looks up the release in the background,
 never before the first screen, at most once an hour across every open

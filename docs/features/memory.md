@@ -39,7 +39,9 @@ a salt kept in the repository, never the email itself. Another author's
 message that says `remember`. The lead can offer one short rule, quoting
 words you typed, on a card such as `[&orchestrator] wants to add a
 project-global memory`. Jev suggests the scope on the card, `tab` changes
-it, and nothing is written before you pick. A rule that names something of
+it, and nothing is written before you pick. A rule that says the same as one
+already kept is refused with that entry named, unless the lead passes
+`replaces <id>` to put it in that entry's place or `keep_both` to keep both. A rule that names something of
 yours is never offered for `project-local`, which every teammate reads.
 
 **A scope never refuses a write.** Each scope has a view budget, 8 KB, or

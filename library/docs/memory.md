@@ -21,7 +21,7 @@ the code does not say) or `reference` (where something outside lives).
 Memory is not for what a rule, `AGENTS.md` or `CLAUDE.md` already says,
 nor for the task in front of you. The conversation is kept too, as episodes: your words, the lead's
 answers and sub-agent reports, never tool output; their view follows memory, sized to the room the context
-leaves, through every fork, and the lead opens it with `zoom` and `recall`; `recall [tool#id]` returns that call's record from this session or any it was forked from. A fork writes the view fresh and leaves out your words the fork already carries, so each is sent once; a resume keeps the view it had, so its cache holds. `tofu settings set episodes off` keeps none.
+leaves, through every fork, and the lead opens it with `zoom` and `recall`; `recall [tool#id]`, or the id of one of its own calls, returns that call's record from this session or any it was forked from. A fork writes the view fresh and leaves out your words the fork already carries, so each is sent once; a resume keeps the view it had, so its cache holds. `tofu settings set episodes off` keeps none.
 
 ## Where it lives
 
@@ -67,7 +67,8 @@ one line, at most 160 bytes, naming no one. Its card, `[&orchestrator] wants to 
 project-global memory`, takes `1` yes, `2` no, `3` always, `esc` no, and `tab` switches to
 `user-global`. Nothing is written before you pick. Always turns `autoMemory` on, and later rules are
 kept at once in the scope the lead named, except `project-local`, which always asks. `tofu settings
-set memory false` sends no memory and removes the tool.
+set memory false` sends no memory and removes the tool. A rule Jev judges the same as a kept one is
+refused with that entry named; `replaces <id>` or `keep_both` lets it through.
 `tofu learn apply <n> --scope <scope>` keeps a finding where you say.
 
 ## Check it

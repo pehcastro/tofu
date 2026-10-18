@@ -10,6 +10,24 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12 - 2026-10-18
+
+The lead knows what changed and what it already keeps.
+
+### Added
+
+- After an upgrade, the lead's first request in a session carries the changelog sections between the version its last turn ran on and this one, capped at 6 KiB, in the turn's first message so the cached prompt holds. Each turn start now records the tofu version; a session from before this gets no note.
+
+### Changed
+
+- `remember` refuses a rule that says the same as one already kept and names it; `replaces <id>` puts the new one in its place and `keep_both` keeps both. Jev decides "the same", and a Jev failure never blocks a memory.
+- `recall` takes the id of one of the lead's own tool calls, the id it already sees, as well as a `[tool#…]` reference.
+- Search over folded sub-agents opens a found call from the read it already did: from ctrl+k to the found event it allocates 658 MB where rc11 took 1.26 GB.
+
+### Fixed
+
+- A session opened in `tofu serve` after another no longer carries the other session's items.
+
 ## 0.5.15-rc11 - 2026-10-17
 
 Old work is cheap to reach: recall finds a call by its id, and search over hundreds of folded sub-agents stops reading them all.

@@ -69,7 +69,9 @@ tofu settings set autoUpdate false
 ```
 
 `tofu update` installs the latest release now, whatever the setting.
-`tofu changelog` then prints what changed since the version you last read.
+`tofu changelog` then prints what changed since the version you last read,
+and the lead's next turn in an open session reads the same sections, up to
+6 KiB, so it knows what changed without you telling it.
 
 ```
 tofu update

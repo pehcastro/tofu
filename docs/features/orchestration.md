@@ -203,7 +203,7 @@ settled for over two hours fold into one row there and in the chat; a click,
 `enter`, `f` or a search opens them, and a search or a call's reference
 opens only the agent it found: at 450 folded sub-agents, opening one by search holds 18.5 MB where it
 held 166.7 MB, and the search itself streams the session file, allocating
-1.26 GB where it took 4.64 GB. At 450 sub-agents this keeps the app at about 150 MB and a
+658 MB where it took 4.64 GB. At 450 sub-agents this keeps the app at about 150 MB and a
 chat frame at about 2 ms.
 
 The lead keeps its slots filled. Each report it gets ends with a board line,
