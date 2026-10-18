@@ -295,13 +295,16 @@ func (a *watcher) result(message llm.Message, asker string) {
 	if reply, asked := answerOf(message.Content); asked {
 		result.Text = reply
 	}
-	if !result.Failed {
-		if strings.HasPrefix(message.Content, unifiedDiffHeader) {
-			result.Diff = message.Content
-		}
-		if strings.HasPrefix(message.Content, createdFilePrefix) {
-			result.Created = created
-		}
+	body := turn.WithoutToolRef(message.Content)
+	first, appended, appends := turn.AppendedLines(body)
+	switch {
+	case result.Failed:
+	case strings.HasPrefix(body, unifiedDiffHeader):
+		result.Diff = body
+	case strings.HasPrefix(body, createdFilePrefix):
+		result.Created = created
+	case appends:
+		result.Diff = appendedDiff(first, appended)
 	}
 	a.marks.Unlock()
 	ended := byteSize(message.ToolResultBytes)

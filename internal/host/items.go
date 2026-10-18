@@ -309,6 +309,10 @@ func createdHunk(content string) Hunk {
 	return hunk
 }
 
+func appendedDiff(first int, lines []string) string {
+	return fmt.Sprintf(hunkHeader, first-1, 0, first, len(lines)) + "\n+" + strings.Join(lines, "\n+")
+}
+
 func hunksOf(diff string) []Hunk {
 	var hunks []Hunk
 	kinds := map[byte]LineKind{' ': LineContext, '-': LineRemoved, '+': LineAdded}

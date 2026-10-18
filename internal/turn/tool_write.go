@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"tofu/internal/konst"
@@ -149,11 +150,41 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	t.ledger.Rewrote(args.Path, []byte(after), change)
 	first := strings.Count(lead, "\n") + 1
 	lines := strings.Split(strings.TrimSuffix(added, "\n"), "\n")
-	shown := fmt.Sprintf("appended %d lines to %s, lines %d-%d:", len(lines), args.Path, first, first+len(lines)-1)
+	shown := fmt.Sprintf(appendedHead+"%d lines to %s"+appendedSpan, len(lines), args.Path, first, first+len(lines)-1)
 	for i, line := range lines {
 		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
 	}
 	return Result{Content: t.checkers.Typechecked(ctx, resolved, shown), Command: args.Path}, nil
+}
+
+const (
+	appendedHead = "appended "
+	appendedMark = ", lines "
+	appendedSpan = appendedMark + "%d-%d:"
+)
+
+func AppendedLines(result string) (first int, lines []string, appended bool) {
+	head, rows, _ := strings.Cut(result, "\n")
+	at := strings.LastIndex(head, appendedMark)
+	var last int
+	if !strings.HasPrefix(head, appendedHead) || at < 0 {
+		return 0, nil, false
+	}
+	if _, err := fmt.Sscanf(head[at:], appendedSpan, &first, &last); err != nil {
+		return 0, nil, false
+	}
+	numbered := strings.Split(rows, "\n")
+	if len(numbered) < last-first+1 {
+		return 0, nil, false
+	}
+	for i := range last - first + 1 {
+		text, found := strings.CutPrefix(numbered[i], strconv.Itoa(first+i)+"\t")
+		if !found {
+			return 0, nil, false
+		}
+		lines = append(lines, text)
+	}
+	return first, lines, true
 }
 
 var (
