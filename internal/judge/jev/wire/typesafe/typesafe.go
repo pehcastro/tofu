@@ -2,9 +2,13 @@ package typesafe
 
 import (
 	"strings"
+	"time"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire"
+	"tofu/internal/konst"
+	"tofu/internal/sys"
+	"tofu/internal/transport"
 )
 
 const (
@@ -30,6 +34,23 @@ func Model() (string, error) {
 		return Alias, err
 	}
 	return strings.TrimPrefix(pin.Model, openRouterVendor) + patchZero, nil
+}
+
+func Judge() (*jev.Client, error) {
+	key, err := jev.KeyFor(sys.CredentialFileName, jev.TypeSafeVariable)
+	if err != nil {
+		return nil, err
+	}
+	wire, err := New(Config{Key: key, Transport: transport.Config{
+		AttemptTimeout: konst.JudgeTimeoutMillis * time.Millisecond,
+		Retries:        konst.JudgeRetries,
+		Backoff:        konst.JudgeBackoffMillis * time.Millisecond,
+		Concurrency:    1,
+	}})
+	if err != nil {
+		return nil, err
+	}
+	return jev.NewClient(jev.Config{Wire: wire})
 }
 
 func New(config Config) (*Wire, error) {

@@ -1,7 +1,6 @@
 package repeat
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,16 +8,12 @@ import (
 	"io/fs"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
-	"tofu/internal/konst"
-	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/library/questions"
 )
 
@@ -84,20 +79,7 @@ func New(project, log string) (*Judge, error) {
 	if thresholds.Repeats, err = thresholdIn(questions.Files(), repeatsName+"_at:"); err != nil {
 		return nil, err
 	}
-	key, err := jev.KeyFor(sys.CredentialFileName, jev.TypeSafeVariable)
-	if err != nil {
-		return nil, err
-	}
-	wire, err := typesafe.New(typesafe.Config{Key: key, Transport: transport.Config{
-		AttemptTimeout: konst.JudgeTimeoutMillis * time.Millisecond,
-		Retries:        konst.JudgeRetries,
-		Backoff:        konst.JudgeBackoffMillis * time.Millisecond,
-		Concurrency:    1,
-	}})
-	if err != nil {
-		return nil, err
-	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := typesafe.Judge()
 	if err != nil {
 		return nil, err
 	}
@@ -167,15 +149,10 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier) (in
 		_, unwritten := j.ledger.Append(row)
 		return -1, errors.Join(err, unwritten)
 	}
-	row.Build, row.Model, row.RequestID = decision.Build, decision.Alias, cmp.Or(decision.RequestID, decision.TransportID)
-	row.LatencyMS, row.Cost = decision.Latency.Milliseconds(), decision.Usage.Cost
+	decision.Record(&row, request.Questions, j.set.QuestionsVersion)
 	scores := make([]float64, len(state.Earlier))
-	for i, asked := range request.Questions {
-		answer := decision.Answers[asked.ID].Noul
-		row.Answers = append(row.Answers, ledger.Answer{Question: asked.ID, Wording: j.set.QuestionsVersion, Kind: ledger.AnswerNoul, Noul: answer})
-		if i > 0 {
-			scores[i-1] = answer
-		}
+	for i, answer := range row.Answers[1:] {
+		scores[i] = answer.Noul
 	}
 	best, value := Decide(row.Answers[0].Noul, scores, j.thresholds)
 	row.Reason.Value = value

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -65,16 +64,7 @@ func (j *ScopeJudge) judge(ctx context.Context, entry memory.Entry, project stri
 		row.Reason.ModeReason = &failed
 		return scopeJudgement{row: row, refusesLocal: true}
 	}
-	row.Build, row.Model, row.RequestID = decision.Build, decision.Alias, decision.RequestID
-	row.LatencyMS, row.Cost = decision.Latency.Milliseconds(), decision.Usage.Cost
-	for _, q := range j.Set.Questions {
-		answer := decision.Answers[q.Name]
-		recorded := ledger.Answer{Question: q.Name, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerNoul, Noul: answer.Noul}
-		if q.Kind == question.KindChoice {
-			recorded = ledger.Answer{Question: q.Name, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: answer.Choice, Dist: distOf(answer.Probabilities)}
-		}
-		row.Answers = append(row.Answers, recorded)
-	}
+	decision.Record(&row, asked, j.Set.QuestionsVersion)
 	private := decision.Answers[state.MemoryNamesPrivateQuestion].Noul
 	row.Reason.Value, row.Reason.Threshold = private, 1-private
 	judged := scopeJudgement{row: row, refusesLocal: state.RefusesProjectLocal(private, true)}
@@ -239,12 +229,4 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	}
 	r.Inbox.Remembered(entry.Saved())
 	return turn.Result{Content: entry.Saved(), Command: entry.Ref()}, nil
-}
-
-func distOf(probabilities map[string]float64) []ledger.Slice {
-	dist := make([]ledger.Slice, 0, len(probabilities))
-	for _, option := range slices.Sorted(maps.Keys(probabilities)) {
-		dist = append(dist, ledger.Slice{Option: option, P: probabilities[option]})
-	}
-	return dist
 }

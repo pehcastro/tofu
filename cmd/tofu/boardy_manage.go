@@ -10,10 +10,10 @@ import (
 	"tofu/interface/cli"
 	"tofu/internal/boardy"
 	"tofu/internal/rule"
+	"tofu/internal/subagent"
 )
 
 const (
-	boardySessionEnv     = "TOFU_SESSION"
 	claudeCodeEnv        = "CLAUDECODE"
 	claudeCodeSessionEnv = "CLAUDE_CODE_SESSION_ID"
 )
@@ -37,7 +37,7 @@ func boardyManageUsage(subcommand string) string {
 }
 
 func boardyIdentity(as string) (actor, person, lead string) {
-	if session := os.Getenv(boardySessionEnv); session != "" {
+	if session := os.Getenv(subagent.SessionEnv); session != "" {
 		return session, "", ""
 	}
 	person = string(boardy.RolePerson)

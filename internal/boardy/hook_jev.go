@@ -1,23 +1,18 @@
 package boardy
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/jev/wire/typesafe"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/question"
-	"tofu/internal/konst"
 	"tofu/internal/sys"
-	"tofu/internal/transport"
 	"tofu/library/questions"
 )
 
@@ -98,7 +93,11 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	if err != nil {
 		return "", err.Error()
 	}
-	decision, err := askTypeSafe(jev.Request{State: state, Questions: []jev.Question{request}})
+	client, err := typesafe.Judge()
+	var decision jev.Decision
+	if err == nil {
+		decision, err = client.Ask(context.Background(), jev.Request{State: state, Questions: []jev.Question{request}})
+	}
 	answer := decision.Answers[asked.Name]
 	p := answer.Probabilities[answer.Choice]
 	var said string
@@ -107,13 +106,8 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 		row.Reason.ModeReason = &said
 	} else {
 		said = fmt.Sprintf("Jev chose %s at %.2f, and %s sets it at %.2f or above", answer.Choice, p, ref, threshold)
-		row.Build, row.Model, row.RequestID = decision.Build, decision.Alias, cmp.Or(decision.RequestID, decision.TransportID)
-		row.LatencyMS, row.Cost, row.Reason.Value = decision.Latency.Milliseconds(), decision.Usage.Cost, p
-		dist := make([]ledger.Slice, 0, len(answer.Probabilities))
-		for _, option := range slices.Sorted(maps.Keys(answer.Probabilities)) {
-			dist = append(dist, ledger.Slice{Option: option, P: answer.Probabilities[option]})
-		}
-		row.Answers = []ledger.Answer{{Question: asked.Name, Wording: set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: answer.Choice, Dist: dist}}
+		decision.Record(&row, []jev.Question{request}, set.QuestionsVersion)
+		row.Reason.Value = p
 		if answer.Choice != asked.Escape && p >= threshold {
 			row.Verdict = ledger.VerdictAllow
 		}
@@ -125,25 +119,4 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 		return "", said
 	}
 	return answer.Choice, said
-}
-
-func askTypeSafe(request jev.Request) (jev.Decision, error) {
-	key, err := jev.KeyFor(sys.CredentialFileName, jev.TypeSafeVariable)
-	if err != nil {
-		return jev.Decision{}, err
-	}
-	wire, err := typesafe.New(typesafe.Config{Key: key, Transport: transport.Config{
-		AttemptTimeout: konst.JudgeTimeoutMillis * time.Millisecond,
-		Retries:        konst.JudgeRetries,
-		Backoff:        konst.JudgeBackoffMillis * time.Millisecond,
-		Concurrency:    1,
-	}})
-	if err != nil {
-		return jev.Decision{}, err
-	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
-	if err != nil {
-		return jev.Decision{}, err
-	}
-	return client.Ask(context.Background(), request)
 }

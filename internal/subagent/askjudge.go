@@ -3,8 +3,6 @@ package subagent
 import (
 	"context"
 	"encoding/json"
-	"maps"
-	"slices"
 
 	"tofu/internal/judge/jev"
 	"tofu/internal/judge/ledger"
@@ -51,12 +49,7 @@ func (j AskJudge) Record(ctx context.Context, state AskState) (string, error) {
 			row.Verdict = ledger.VerdictAllow
 		}
 		row.Reason.Value = determined.Noul
-		row.Build, row.Model, row.RequestID = decision.Build, decision.Alias, decision.RequestID
-		row.LatencyMS, row.Cost = decision.Latency.Milliseconds(), decision.Usage.Cost
-		row.Answers = []ledger.Answer{
-			{Question: ActionQuestion, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: action.Choice, Dist: distOf(action.Probabilities)},
-			{Question: DeterminedQuestion, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerNoul, Noul: determined.Noul},
-		}
+		decision.Record(&row, asked, j.Set.QuestionsVersion)
 	}
 	written, err := j.Ledger.Append(row)
 	return written.ID, err
@@ -64,12 +57,4 @@ func (j AskJudge) Record(ctx context.Context, state AskState) (string, error) {
 
 func (j AskJudge) Answered(id, outcome string) error {
 	return j.Ledger.Backfill(id, ledger.Outcome{Kind: OutcomeKindAskAnswer, Detail: outcome})
-}
-
-func distOf(probabilities map[string]float64) []ledger.Slice {
-	dist := make([]ledger.Slice, 0, len(probabilities))
-	for _, option := range slices.Sorted(maps.Keys(probabilities)) {
-		dist = append(dist, ledger.Slice{Option: option, P: probabilities[option]})
-	}
-	return dist
 }

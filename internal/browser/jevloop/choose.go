@@ -3,7 +3,6 @@ package jevloop
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -138,7 +137,7 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	if err != nil {
 		return Choice{}, err
 	}
-	if err := j.record(body, hash, decision); err != nil {
+	if err := j.record(body, hash, request.Questions, decision); err != nil {
 		return Choice{}, fmt.Errorf("the decision was not logged, so it does not run: %w", err)
 	}
 	op, err := browser.ParseOp(decision.Answers[operationQuestion].Choice)
@@ -156,25 +155,13 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	return choice, nil
 }
 
-func (j Jev) record(body []byte, hash string, decision jev.Decision) error {
+func (j Jev) record(body []byte, hash string, asked []jev.Question, decision jev.Decision) error {
 	if j.Ledger == nil {
 		return nil
 	}
-	answers := make([]ledger.Answer, 0, len(decision.Answers))
-	for _, id := range slices.Sorted(maps.Keys(decision.Answers)) {
-		answer := decision.Answers[id]
-		dist := make([]ledger.Slice, 0, len(answer.Probabilities))
-		for _, option := range slices.Sorted(maps.Keys(answer.Probabilities)) {
-			dist = append(dist, ledger.Slice{Option: option, P: answer.Probabilities[option]})
-		}
-		answers = append(answers, ledger.Answer{Question: id, Wording: j.Set.QuestionsVersion, Kind: ledger.AnswerChoice, Choice: answer.Choice, Dist: dist})
-	}
-	_, err := j.Ledger.Append(ledger.Row{
-		Point: j.Set.Name, Questions: j.Set.Name, Version: j.Set.QuestionsVersion,
-		Build: decision.Build, Model: decision.Alias, RequestID: decision.RequestID,
-		StateHash: hash, StateBuilder: stateBuilder, State: body, Answers: answers,
-		LatencyMS: decision.Latency.Milliseconds(), Cost: decision.Usage.Cost,
-	})
+	row := ledger.Row{Point: j.Set.Name, Questions: j.Set.Name, Version: j.Set.QuestionsVersion, StateHash: hash, StateBuilder: stateBuilder, State: body}
+	decision.Record(&row, slices.SortedFunc(slices.Values(asked), func(a, b jev.Question) int { return strings.Compare(a.ID, b.ID) }), j.Set.QuestionsVersion)
+	_, err := j.Ledger.Append(row)
 	return err
 }
 
