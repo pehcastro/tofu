@@ -10,6 +10,12 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.15-rc12-fix1 - 2026-10-18
+
+### Fixed
+
+- Each tool result opens with its reference, `[tool#9f046f]`, so the lead can `recall` an earlier result by name; 0.5.15-rc12 said the lead could use its own call id, and on a real run it never did. A result costs 15 bytes more and keeps its bytes once sent, a repeated read points at the first read's reference, and an empty `recall` says what it needs.
+
 ## 0.5.15-rc12 - 2026-10-18
 
 The lead knows what changed and what it already keeps.
