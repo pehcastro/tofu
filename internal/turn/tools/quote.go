@@ -21,11 +21,10 @@ import (
 )
 
 const (
-	quoteOpenMark   = "[quote"
-	toolOpenMark    = "[tool"
-	agentOpenMark   = "[&"
-	quoteCloseMark  = "]"
-	quoteShortRunes = 6
+	quoteOpenMark  = "[quote"
+	toolOpenMark   = "[tool"
+	agentOpenMark  = "[&"
+	quoteCloseMark = "]"
 )
 
 type QuoteOutcome string
@@ -36,7 +35,7 @@ const (
 	QuoteAmbiguous QuoteOutcome = "ambiguous"
 )
 
-var ErrQuoteNoID = errors.New("quote: id is required, and it is the reference the person wrote or the short id inside it")
+var ErrQuoteNoID = errors.New("id is required, and it is the reference the person wrote or the short id inside it")
 
 type Quoted struct {
 	Outcome QuoteOutcome
@@ -49,13 +48,7 @@ type Quoted struct {
 	Words   string
 }
 
-func ShortID(id string) string {
-	if id == "" {
-		return ""
-	}
-	runes := []rune(id)
-	return "#" + string(runes[max(len(runes)-quoteShortRunes, 0):])
-}
+func ShortID(id string) string { return turn.ShortID(id) }
 
 func SaidEventID(talk session.Conversation, index int) string {
 	return cmp.Or(talk.Said[index].Event, session.EventIDFor(talk.Session, "step:"+strconv.Itoa(index)))
@@ -109,7 +102,7 @@ func (q Quote) Run(_ context.Context, raw json.RawMessage) (turn.Result, error) 
 	}
 	found, err := ResolveQuote(q.store, q.session, args.ID)
 	if err != nil {
-		return turn.Result{}, err
+		return turn.Result{}, fmt.Errorf("quote: %w", err)
 	}
 	switch found.Outcome {
 	case QuoteNotFound:
@@ -136,7 +129,7 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 		return Quoted{}, ErrQuoteNoID
 	}
 	if store == nil || recorded == "" {
-		return Quoted{}, errors.New("quote: this turn is recording no session, so there is nothing to quote")
+		return Quoted{}, errors.New("this turn is recording no session, so there is nothing to look up")
 	}
 	newest, err := store.Header(recorded)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -146,11 +139,11 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 		newest, err = store.Header(newest.ForkedInto)
 	}
 	if err != nil {
-		return Quoted{}, fmt.Errorf("quote: %w", err)
+		return Quoted{}, err
 	}
 	ancestors, err := store.Ancestors(newest.ID)
 	if err != nil {
-		return Quoted{}, fmt.Errorf("quote: %w", err)
+		return Quoted{}, err
 	}
 	for _, header := range append([]session.Header{newest}, ancestors...) {
 		hits, err := find(store, header.ID, hash)
@@ -180,11 +173,11 @@ func quoteHash(ref string) (string, bool) {
 func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
 	events, err := store.Events(recorded)
 	if err != nil {
-		return nil, fmt.Errorf("quote: %w", err)
+		return nil, err
 	}
 	talk, err := store.Conversation(recorded)
 	if err != nil {
-		return nil, fmt.Errorf("quote: %w", err)
+		return nil, err
 	}
 	var hits []Quoted
 	for index, said := range talk.Said {
@@ -199,7 +192,7 @@ func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
 		case event.Kind == session.EventTurnStart && event.Agent == "" && session.DrawnAs(event.Turn, hash):
 			var start session.TurnStart
 			if err := json.Unmarshal(event.Body, &start); err != nil {
-				return nil, fmt.Errorf("quote: the start of turn %s is recorded in a shape this build cannot read: %w", event.Turn, err)
+				return nil, fmt.Errorf("thestart of turn %s is recorded in a shape this build cannot read: %w", event.Turn, err)
 			}
 			hits = append(hits, Quoted{Event: event.Turn, Speaker: "you, starting a turn", Noun: "turn", Words: start.Task})
 		case event.Kind == session.EventToolCall && (session.DrawnAs(event.ID, hash) || event.Call == hash):
@@ -216,7 +209,7 @@ func quotedIn(store *session.Store, recorded, hash string) ([]Quoted, error) {
 func quotedAgent(store *session.Store, recorded, name string) ([]Quoted, error) {
 	events, err := store.Events(recorded)
 	if err != nil {
-		return nil, fmt.Errorf("quote: %w", err)
+		return nil, err
 	}
 	var hits []Quoted
 	for _, event := range events {
@@ -225,7 +218,7 @@ func quotedAgent(store *session.Store, recorded, name string) ([]Quoted, error) 
 		}
 		var spawned session.SpawnBody
 		if err := json.Unmarshal(event.Body, &spawned); err != nil {
-			return nil, fmt.Errorf("quote: the spawn %s is recorded in a shape this build cannot read: %w", event.ID, err)
+			return nil, fmt.Errorf("thespawn %s is recorded in a shape this build cannot read: %w", event.ID, err)
 		}
 		if spawned.Agent != name {
 			continue
@@ -245,7 +238,7 @@ func quotedAgent(store *session.Store, recorded, name string) ([]Quoted, error) 
 func quotedCall(call session.Event, events []session.Event) (Quoted, error) {
 	var asked session.CallBody
 	if err := json.Unmarshal(call.Body, &asked); err != nil {
-		return Quoted{}, fmt.Errorf("quote: the call %s is recorded in a shape this build cannot read: %w", call.ID, err)
+		return Quoted{}, fmt.Errorf("thecall %s is recorded in a shape this build cannot read: %w", call.ID, err)
 	}
 	speaker := "a call to " + asked.Tool
 	if call.Agent != "" {
@@ -260,7 +253,7 @@ func quotedCall(call session.Event, events []session.Event) (Quoted, error) {
 	} else {
 		var result session.ResultBody
 		if err := json.Unmarshal(events[answered].Body, &result); err != nil {
-			return Quoted{}, fmt.Errorf("quote: the result of call %s is recorded in a shape this build cannot read: %w", call.ID, err)
+			return Quoted{}, fmt.Errorf("theresult of call %s is recorded in a shape this build cannot read: %w", call.ID, err)
 		}
 		words += "it " + cmp.Or(result.ToolOutcome, session.ToolOutcomeRan) + " and returned:\n" + cmp.Or(result.Content, result.Error)
 	}

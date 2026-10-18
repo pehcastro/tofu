@@ -410,6 +410,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				session.EventIDFor(origin, call.ID), step.id, row.author())
 			callRow.Refused = true
 			step.ToolCalls, results[call.ID] = append(step.ToolCalls, callRow), callRow
+			resultMessage.Content = withToolRef(callRow.ID, resultMessage.Content)
 			messages = append(messages, resultMessage)
 		}
 	}
@@ -1047,17 +1048,24 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					running.Wait()
 				}
 				leadStop = waveEnded()
+				shown := make([]llm.Message, 0, len(answers))
 				for i := range answers {
+					pointer := false
 					if memoHits[i] {
-						answers[i].Content, answers[i].Images = pointAtCopy(answers[i], messages, answers[:i]), nil
-						rows[i].RenderedBytes = len(answers[i].Content)
+						answers[i].Content, pointer = pointAtCopy(answers[i], messages, shown)
+						answers[i].Images, rows[i].RenderedBytes = nil, len(answers[i].Content)
 					}
+					sent := answers[i]
+					if !pointer {
+						sent.Content = withToolRef(rows[i].ID, sent.Content)
+					}
+					shown = append(shown, sent)
 				}
 				stepRow.ToolCalls = append(stepRow.ToolCalls, rows...)
 				for i, gated := range wave {
 					results[gated.call.ID] = rows[i]
 				}
-				messages = append(messages, answers...)
+				messages = append(messages, shown...)
 				flush()
 				if config.ToolResult != nil {
 					for _, answered := range answers {

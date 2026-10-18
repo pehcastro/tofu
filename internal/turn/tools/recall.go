@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -48,6 +49,9 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (turn.Result, error)
 		return turn.Result{}, fmt.Errorf("recall: arguments are not the expected shape: %w", err)
 	}
 	hash, named := quoteHash(args.Regex)
+	if strings.Trim(hash, "# ") == "" {
+		return turn.Result{}, errors.New("recall: give a regex to search the memory stores, or a reference such as [tool#abc12] or a call id to read that call")
+	}
 	wireID := !named && !strings.ContainsAny(hash, " .*+?()[]{}|^$\\") && strings.Contains(hash, "_")
 	noCall := ""
 	if (named || wireID) && r.Sessions != nil {

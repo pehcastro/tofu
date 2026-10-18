@@ -95,7 +95,7 @@ func TestASubAgentPastItsWallClockFinishesItsStepAndAnswersOnceRetired(t *testin
 	if !strings.Contains(report, OutcomeRetiredWallClockCap.String()) || !strings.Contains(report, "\n> slept once; the build is not started") {
 		t.Errorf("the report does not carry the wall clock outcome and the last answer")
 	}
-	if tool := model.requests[1].Messages[len(model.requests[1].Messages)-2]; tool.Role != llm.RoleTool || tool.Content != "slept" {
+	if tool := model.requests[1].Messages[len(model.requests[1].Messages)-2]; tool.Role != llm.RoleTool || WithoutToolRef(tool.Content) != "slept" {
 		t.Errorf("the step running when the clock passed did not finish: %+v", tool)
 	}
 }

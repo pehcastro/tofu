@@ -90,7 +90,7 @@ func toolResults(messages []llm.Message) []string {
 	var results []string
 	for _, message := range messages {
 		if message.Role == llm.RoleTool {
-			results = append(results, message.Content)
+			results = append(results, WithoutToolRef(message.Content))
 		}
 	}
 	return results

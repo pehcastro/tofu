@@ -78,7 +78,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 		if message.Role == llm.RoleAssistant {
 			step++
 		}
-		entry := recall.Entry{Step: step, Text: message.Content, Images: len(message.Images)}
+		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images)}
 		if task, found := TaskIn(message.Content); found && message.Role == llm.RoleUser && (message.Origin.Source == "" || SaidByThePerson(message.Origin.Source)) {
 			entry.Said = task
 		}
@@ -135,7 +135,7 @@ func (g ShrinkGate) admit(preview recall.Config, messages []llm.Message, due []d
 	case ShrinkWhenPaid:
 		savedBytes := 0
 		for _, page := range due {
-			text := messages[page.at].Content
+			text := WithoutToolRef(messages[page.at].Content)
 			savedBytes += len(text) - len(shrunkPage(text, page.header, page.note, page.after, ""))
 		}
 		saved := savedBytes * 1000 / preview.BytesPerThousandTokens
@@ -155,7 +155,7 @@ func ShrinkPages(store *recall.Store, preview recall.Config, messages []llm.Mess
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
-		if name := calls[message.ToolCallID].Name; message.Role == llm.RoleTool && (name == "browser_observe" || name == "browser_act") && !strings.HasPrefix(message.Content, "error: ") {
+		if name := calls[message.ToolCallID].Name; message.Role == llm.RoleTool && (name == "browser_observe" || name == "browser_act") && !strings.HasPrefix(WithoutToolRef(message.Content), "error: ") {
 			pages = append(pages, i)
 			if shrunkHandle(message.Content) == "" {
 				whole++
@@ -168,7 +168,7 @@ func ShrinkPages(store *recall.Store, preview recall.Config, messages []llm.Mess
 	header := ""
 	var due []duePage
 	for _, i := range pages {
-		text, call := messages[i].Content, calls[messages[i].ToolCallID]
+		text, call := WithoutToolRef(messages[i].Content), calls[messages[i].ToolCallID]
 		header = cmp.Or(pageHeader(text), header)
 		if shrunkHandle(text) != "" {
 			continue
@@ -180,12 +180,13 @@ func ShrinkPages(store *recall.Store, preview recall.Config, messages []llm.Mess
 		due = append(due, duePage{at: i, tool: call.Name, header: header, note: noteOf(call), after: noteAfter(messages[i+1:])})
 	}
 	for _, page := range gate.admit(preview, messages, due) {
-		text := messages[page.at].Content
+		ref := toolRefLine(messages[page.at].Content)
+		text := strings.TrimPrefix(messages[page.at].Content, ref)
 		handle, err := heldHandle(store, text)
 		if err != nil {
 			return fmt.Errorf("the %s result that a newer page replaced could not be held whole: %w", page.tool, err)
 		}
-		messages[page.at].Content = shrunkPage(text, page.header, page.note, page.after, handle)
+		messages[page.at].Content = ref + shrunkPage(text, page.header, page.note, page.after, handle)
 	}
 	return nil
 }
@@ -319,10 +320,11 @@ func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, f
 			continue
 		}
 		tool := names[message.ToolCallID]
-		note, handle, err := shrunkNote(artifacts, tool, message.Content, cause)
+		note, handle, err := shrunkNote(artifacts, tool, WithoutToolRef(message.Content), cause)
 		if err != nil {
 			return overflowShrink{}, err
 		}
+		note = toolRefLine(message.Content) + note
 		freed := artifacts.preview.MessageTokens(message.Content) - artifacts.preview.MessageTokens(note)
 		estimate -= freed
 		shrink.drops = append(shrink.drops, recall.Drop{Step: step, Tool: tool, Handle: handle, Bytes: len(message.Content), TokensFreed: freed, Reason: recall.DroppedAged})

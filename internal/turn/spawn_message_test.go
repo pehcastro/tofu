@@ -24,7 +24,7 @@ func answerTo(t *testing.T, model *crew, call string) string {
 	for _, request := range model.requests(leadKey) {
 		for _, message := range request.Messages {
 			if message.Role == llm.RoleTool && message.ToolCallID == call {
-				return message.Content
+				return WithoutToolRef(message.Content)
 			}
 		}
 	}

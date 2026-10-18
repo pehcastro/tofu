@@ -186,7 +186,7 @@ func callOf(event session.Event) llm.ToolCall {
 func resultOf(event session.Event) llm.Message {
 	var result session.ResultBody
 	_ = json.Unmarshal(event.Body, &result)
-	message := llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: result.Content, ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode}
+	message := llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: turn.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode}
 	switch result.ToolOutcome {
 	case "":
 		message.ToolOutcome = llm.ToolOutcomeUnset

@@ -371,7 +371,7 @@ func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *tes
 	led := startLead(context.Background(), lead, nil)
 	waitFor(t, "the lead's spawn turn to end", func() bool { return len(led.turns()) == 1 })
 	held := led.turns()[0].Conversation
-	if result := held[len(held)-1]; result.ToolCallID != "call-spawn" || !strings.HasPrefix(result.Content, "sub-1 is running") || model.answered(usersRoute) != 0 {
+	if result := held[len(held)-1]; result.ToolCallID != "call-spawn" || !strings.HasPrefix(WithoutToolRef(result.Content), "sub-1 is running") || model.answered(usersRoute) != 0 {
 		t.Fatalf("the lead's spawn turn ends on %q with the sub-agent answered %d times, want the spawn result while it runs",
 			result.Content, model.answered(usersRoute))
 	}

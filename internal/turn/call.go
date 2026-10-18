@@ -1,11 +1,13 @@
 package turn
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/internal/hook"
@@ -38,15 +40,45 @@ const theToolWasAbortedAndPrintedNothing = "this call was cancelled elsewhere in
 
 const aRepeatRunsAgainNothing = "cached: the same call earlier in this turn, and nothing written since, so it was not run again\n"
 
-func pointAtCopy(answer llm.Message, held ...[]llm.Message) string {
+const (
+	toolRefOpen  = "[tool"
+	shortIDRunes = 6
+)
+
+func ShortID(id string) string {
+	if id == "" {
+		return ""
+	}
+	runes := []rune(id)
+	return "#" + string(runes[max(len(runes)-shortIDRunes, 0):])
+}
+
+func withToolRef(callEvent, content string) string {
+	if callEvent == "" {
+		return content
+	}
+	return toolRefOpen + ShortID(callEvent) + "]\n" + content
+}
+
+func toolRefLine(content string) string {
+	if line, _, found := strings.Cut(content, "\n"); found && strings.HasPrefix(line, toolRefOpen+"#") && strings.HasSuffix(line, "]") {
+		return line + "\n"
+	}
+	return ""
+}
+
+func WithoutToolRef(content string) string { return strings.TrimPrefix(content, toolRefLine(content)) }
+
+func pointAtCopy(answer llm.Message, held ...[]llm.Message) (string, bool) {
 	for _, messages := range held {
 		for _, message := range messages {
-			if message.Role == llm.RoleTool && (message.Content == answer.Content || message.Content == aRepeatRunsAgainNothing+answer.Content) {
-				return "unchanged: the same call as " + message.ToolCallID + " earlier in this turn, with nothing written since, so its result above is this result word for word"
+			if content := WithoutToolRef(message.Content); message.Role == llm.RoleTool && (content == answer.Content || content == aRepeatRunsAgainNothing+answer.Content) {
+				named := cmp.Or(strings.TrimSpace(toolRefLine(message.Content)), message.ToolCallID)
+				return "unchanged: the same call as " + named + " earlier in this turn, with nothing written since, so its result above is this result word for word", true
 			}
 		}
 	}
-	return aRepeatRunsAgainNothing + answer.Content
+	return aRepeatRunsAgainNothing + answer.Content, false
 }
 
 type gatedCall struct {

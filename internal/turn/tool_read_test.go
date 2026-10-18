@@ -123,8 +123,8 @@ func readOf(id string) llm.ToolCall {
 }
 
 type sentAs struct {
-	whole     string
-	pointedAt string
+	whole   string
+	pointed bool
 }
 
 func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
@@ -138,10 +138,10 @@ func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
 	}{
 		{"a repeat in a later step", replayedRead{"call-1": first, "call-2": repeat},
 			[]llm.Decision{toolCallDecision(readOf("call-1")), toolCallDecision(readOf("call-2")), messageDecision()},
-			[]sentAs{{whole: file}, {pointedAt: "call-1"}}},
+			[]sentAs{{whole: file}, {pointed: true}}},
 		{"a repeat in the same parallel wave", replayedRead{"call-1": first, "call-2": repeat},
 			[]llm.Decision{toolCallDecision(readOf("call-1"), readOf("call-2")), messageDecision()},
-			[]sentAs{{whole: file}, {pointedAt: "call-1"}}},
+			[]sentAs{{whole: file}, {pointed: true}}},
 		{"a repeat whose copy this history never held", replayedRead{"call-1": repeat},
 			[]llm.Decision{toolCallDecision(readOf("call-1")), messageDecision()},
 			[]sentAs{{whole: file}}},
@@ -157,10 +157,11 @@ func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var sent []string
+			var sent, refs []string
 			for _, message := range model.requests[len(model.requests)-1].Messages {
 				if message.Role == llm.RoleTool {
-					sent = append(sent, message.Content)
+					sent = append(sent, WithoutToolRef(message.Content))
+					refs = append(refs, strings.TrimSpace(toolRefLine(message.Content)))
 				}
 			}
 			if len(sent) != len(row.want) {
@@ -170,8 +171,8 @@ func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
 				if want.whole != "" && !strings.HasSuffix(sent[i], want.whole) {
 					t.Errorf("result %d is %q, want it to end with the whole text", i+1, sent[i])
 				}
-				if want.pointedAt != "" && (strings.Contains(sent[i], "\n") || !strings.Contains(sent[i], want.pointedAt)) {
-					t.Errorf("result %d is %q, want one line naming %s", i+1, sent[i], want.pointedAt)
+				if want.pointed && (strings.Contains(sent[i], "\n") || refs[i] != "" || !strings.Contains(sent[i], refs[0])) {
+					t.Errorf("result %d is %q under ref %q, want one line with no ref of its own naming %s, the ref of result 1", i+1, sent[i], refs[i], refs[0])
 				}
 			}
 		})

@@ -122,8 +122,11 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 			answers = append(answers, message.Content)
 		}
 	}
-	if len(answers) != 2 || strings.Contains(answers[1], "\n") || !strings.Contains(answers[1], "call-1") {
-		t.Fatalf("the second answer is not one line pointing at the first read, call-1: %q", answers)
+	if len(answers) != 2 {
+		t.Fatalf("the turn holds %d tool answers, want the two reads: %q", len(answers), answers)
+	}
+	if ref, _, _ := strings.Cut(answers[0], "\n"); !strings.HasPrefix(ref, "[tool#") || strings.Contains(answers[1], "\n") || !strings.Contains(answers[1], ref) {
+		t.Fatalf("the second answer is not one line pointing at the first read by its ref: %q", answers)
 	}
 	t.Logf("the file was deleted between the two reads and the second answered %d bytes: %q", second.ResultBytes, answers[1])
 }

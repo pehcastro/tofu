@@ -257,13 +257,13 @@ func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
 		digest.Held = append(digest.Held, held)
 		return
 	}
-	edited := TurnFile{Path: called.Path, Agent: event.Agent}
+	edited, body := TurnFile{Path: called.Path, Agent: event.Agent}, turn.WithoutToolRef(said.Content)
 	switch {
 	case edited.Path == "" || said.ToolOutcome == session.ToolOutcomeFailed:
 		return
-	case strings.HasPrefix(said.Content, unifiedDiffHeader):
+	case strings.HasPrefix(body, unifiedDiffHeader):
 		edited.Op = EditModify
-		for _, hunk := range hunksOf(said.Content) {
+		for _, hunk := range hunksOf(body) {
 			for _, line := range hunk.Lines {
 				switch line.Kind {
 				case LineAdded:
@@ -276,7 +276,7 @@ func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
 				}
 			}
 		}
-	case strings.HasPrefix(said.Content, createdFilePrefix):
+	case strings.HasPrefix(body, createdFilePrefix):
 		edited.Op, edited.Added = EditCreate, lineCount(called.Content)
 	default:
 		return
