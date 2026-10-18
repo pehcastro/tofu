@@ -147,7 +147,7 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 		}
 		l.asks(p.Asking)
 		s.mu.Lock()
-		l.items.session, l.replay = id, []HistoryLine{}
+		*l.items, l.replay = newItems(id), []HistoryLine{}
 		s.mu.Unlock()
 		return SessionOpenResult{Session: id, Fresh: true}, nil
 	}
@@ -174,7 +174,9 @@ func (s *server) openOn(l *lane, p SessionOpenParams) (any, error) {
 	read := newItems(carry.Session)
 	lines := read.all(chat)
 	replay := freeze(lines)
-	maps.Copy(read.logged, l.items.logged)
+	if l.items.session == carry.Session {
+		maps.Copy(read.logged, l.items.logged)
+	}
 	*l.items, l.replay = read, replay
 	for _, line := range newest(lines, p.Replay) {
 		s.box.push(line)
