@@ -34,6 +34,10 @@ methods:
     method: judged
     why: in shadow. jev picks the scope on every remember candidate and the card preselects it, the person's pick is the label in the ledger, and a names_private yes refuses project local. nothing is measured yet, 4 probe candidates picked the expected scope on one run
     cost: not measured. one jev call a remember candidate, which is rare in a session; the shadow rows carry cost and latency
+  memory_same:
+    method: judged
+    why: a word match cannot tell two rules that say one thing in other words from two that share a subject; on 8 hand-labelled pairs the same pairs shared 2 to 5 content words and the different ones 0 to 4, while jev gave the same pairs 0.27 to 0.56 and the different ones 0.05 to 0.16. same_at 0.25 is provisional on those 8 pairs
+    cost: one jev request a remember call that is not a replace or keep_both, 239 to 297 ms on two entries in the driven run, cost reported 0
   ask:
     method: unwired
     why: jev is right on 4 of 7 recorded moments against the ownership check's 3, 1.33x, measured on the wording before it named the lead, and no cost a session can be produced. ask_person now writes an ask row in shadow for every question the lead puts to the person, and the code asks now until those rows are labelled

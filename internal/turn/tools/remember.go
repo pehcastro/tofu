@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -22,10 +23,14 @@ import (
 	"tofu/internal/session"
 	"tofu/internal/sys"
 	"tofu/internal/turn"
+	"tofu/library/questions"
 )
 
 const (
 	OutcomeKindMemoryScope = "memory-scope"
+	memorySameName         = "same"
+	memorySameRef          = "memory_same@1"
+	memorySameBuilder      = "memory_same_state@1"
 	refusedLocal           = "refused project local: every teammate reads it, and it names something of the person's, or Jev could not say it does not. offer it as user-local or project-global instead"
 )
 
@@ -90,6 +95,71 @@ func (j *ScopeJudge) label(row, pick string) error {
 	return j.Ledger.Backfill(row, ledger.Outcome{Kind: OutcomeKindMemoryScope, Detail: pick})
 }
 
+func (j *ScopeJudge) duplicate(ctx context.Context, candidate string, kept []memory.Entry, project string) (int, error) {
+	if len(kept) == 0 {
+		return -1, nil
+	}
+	if j == nil {
+		return -1, errors.New("no jev")
+	}
+	layers, err := question.Layers(questions.Files(), project)
+	if err != nil {
+		return -1, err
+	}
+	set, fields, err := question.Resolve(memorySameRef, layers)
+	if err != nil {
+		return -1, err
+	}
+	asked, found := set.Question(memorySameName)
+	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+memorySameName+"_at" })
+	if !found || at < 0 {
+		return -1, fmt.Errorf("%s names no %s question or no thresholds.%s_at", memorySameRef, memorySameName, memorySameName)
+	}
+	threshold, err := strconv.ParseFloat(fields[at].Value, 64)
+	if err != nil {
+		return -1, err
+	}
+	type existing struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	asking := struct {
+		Candidate string     `json:"candidate"`
+		Existing  []existing `json:"existing"`
+	}{Candidate: candidate}
+	rubric := asked.ToJev()
+	var each []jev.Question
+	for i, e := range kept {
+		asking.Existing = append(asking.Existing, existing{ID: e.ID, Text: e.Text})
+		each = append(each, jev.Question{ID: memorySameName + "_" + strconv.Itoa(i), Kind: jev.QuestionNoul, Instructions: rubric.Instructions + " The existing rule is existing[" + strconv.Itoa(i) + "].", True: rubric.True, False: rubric.False})
+	}
+	body, err := json.Marshal(asking)
+	if err != nil {
+		return -1, err
+	}
+	row := ledger.Row{Point: set.Name, Questions: set.Name, Version: set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: memorySameBuilder, State: body, Verdict: ledger.VerdictAllow,
+		Reason: &ledger.Reason{Comparison: ">= " + fields[at].Value, Threshold: threshold, Mode: ledger.ModeEnforced}}
+	decision, err := j.Client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: each})
+	if err != nil {
+		failed := "jev could not answer, so the person is asked: " + err.Error()
+		row.Verdict, row.Reason.ModeReason = ledger.VerdictAsk, &failed
+		_, unwritten := j.Ledger.Append(row)
+		return -1, errors.Join(err, unwritten)
+	}
+	decision.Record(&row, each, set.QuestionsVersion)
+	same := -1
+	for i, answer := range row.Answers {
+		if answer.Noul >= threshold && (same < 0 || answer.Noul > row.Answers[same].Noul) {
+			same = i
+		}
+	}
+	if same >= 0 {
+		row.Verdict, row.Reason.Question, row.Reason.Value = ledger.VerdictDeny, each[same].ID, row.Answers[same].Noul
+	}
+	_, err = j.Ledger.Append(row)
+	return same, err
+}
+
 type MemoryOffer struct {
 	Statement string
 	Said      string
@@ -135,7 +205,8 @@ func (Remember) Definition() llm.Tool {
 			"said must be their own words, copied exactly from a message they typed in this conversation; anything else is refused. " +
 			"statement is the rule itself and nothing else: one line, at most " + strconv.Itoa(konst.MemoryRuleBytes) + " bytes, imperative or declarative, naming no one: no name, no the person, the user, he or she, such as: " +
 			"Desk UI primitives are widened to fit a new need; never build a parallel copy in a caller. a longer statement, a second line, or one that names the person is refused with the reason. " +
-			"the person answers yes, no, or always, and picks one of the four scopes on the card; nothing is kept before a yes. scope says where it belongs: user-global the person everywhere, project-global this project in the person's home, user-local the person in this repository, project-local the team in this repository. without scope a person entry goes to user-global, a project or reference entry to project-global",
+			"the person answers yes, no, or always, and picks one of the four scopes on the card; nothing is kept before a yes. scope says where it belongs: user-global the person everywhere, project-global this project in the person's home, user-local the person in this repository, project-local the team in this repository. without scope a person entry goes to user-global, a project or reference entry to project-global. " +
+			"a statement that says the same as an entry already kept is refused with that entry's id: call again with replaces set to that id to put this one in its place, or with keep_both true when the two really differ",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -143,6 +214,8 @@ func (Remember) Definition() llm.Tool {
 				"said":      map[string]any{"type": "string", "description": "the person's exact words this comes from"},
 				"kind":      map[string]any{"type": "string", "enum": []string{string(memory.KindPerson), string(memory.KindProject), string(memory.KindReference)}},
 				"scope":     map[string]any{"type": "string", "enum": []string{string(memory.UserLocal), string(memory.ProjectLocal), string(memory.Project), string(memory.Global)}},
+				"replaces":  map[string]any{"type": "string", "description": "the id of the entry this one takes the place of, as a refusal named it"},
+				"keep_both": map[string]any{"type": "boolean", "description": "keep this entry beside the one a refusal named, because the two differ"},
 			},
 			"required": []string{"statement", "said", "kind"},
 		},
@@ -155,6 +228,8 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		Said      string       `json:"said"`
 		Kind      memory.Kind  `json:"kind"`
 		Scope     memory.Scope `json:"scope"`
+		Replaces  string       `json:"replaces"`
+		KeepBoth  bool         `json:"keep_both"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return turn.Result{}, fmt.Errorf("remember: arguments are not the expected shape: %w", err)
@@ -177,9 +252,26 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 	if family, err := r.Store.Identity(r.Session); err == nil {
 		entry.Session = family.Family
 	}
+	shelves, err := memory.Open(r.Project)
+	if err != nil {
+		return turn.Result{}, fmt.Errorf("remember: %w", err)
+	}
+	kept := shelves.All()
+	replaced := slices.IndexFunc(kept, func(e memory.Entry) bool { return e.ID == args.Replaces })
+	unsure := false
+	switch {
+	case args.Replaces != "" && replaced < 0:
+		return turn.Result{}, fmt.Errorf("remember: no memory entry is %s, so nothing replaces it", args.Replaces)
+	case args.Replaces == "" && !args.KeepBoth:
+		same, err := r.Judge.duplicate(ctx, rule, kept, r.Project)
+		if same >= 0 {
+			return turn.Result{Content: fmt.Sprintf("refused: this says the same as %s %q. call remember again with replaces %q to put this one in its place, or with keep_both true if the two differ", kept[same].Ref(), kept[same].Text, kept[same].ID)}, nil
+		}
+		unsure = err != nil
+	}
 	judged := r.Judge.judge(ctx, entry, r.Project)
 	refused := entry.Scope == memory.ProjectLocal && judged.refusesLocal
-	asks := !r.Auto() || entry.Scope == memory.ProjectLocal
+	asks := !r.Auto() || entry.Scope == memory.ProjectLocal || unsure
 	verdict := ledger.VerdictAllow
 	switch {
 	case refused:
@@ -217,12 +309,17 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (turn.Result, er
 		}
 		entry.Scope = picked
 	}
-	shelves, err := memory.Open(r.Project)
-	if err != nil {
+	var swapped string
+	if replaced >= 0 && kept[replaced].Scope == entry.Scope {
+		swapped = kept[replaced].ID
+	}
+	if entry, err = shelves.Add(entry, swapped); err != nil {
 		return turn.Result{}, fmt.Errorf("remember: %w", err)
 	}
-	if entry, err = shelves.Add(entry, ""); err != nil {
-		return turn.Result{}, fmt.Errorf("remember: %w", err)
+	if replaced >= 0 && swapped == "" {
+		if _, err := shelves.Remove(kept[replaced].Scope, kept[replaced].ID); err != nil {
+			return turn.Result{}, fmt.Errorf("remember: kept %s but %s is still there: %w", entry.ID, kept[replaced].ID, err)
+		}
 	}
 	if told, telling := ctx.Value(memoryKeptKey{}).(func(MemoryKept)); telling && !asks {
 		told(MemoryKept{Statement: entry.Text, Offered: cmp.Or(judged.pick, entry.Scope), Kept: entry.Scope})

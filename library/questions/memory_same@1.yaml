@@ -1,0 +1,35 @@
+name: memory_same
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by remember before a new memory entry is kept. state.candidate is the
+  rule about to be kept and state.existing holds the entries already kept, each
+  with its id. internal/turn/tools/remember.go asks same once for each existing
+  entry in one request, naming it existing[i]. remember refuses the candidate
+  and names the entry when the highest same answer is at or above same_at,
+  unless the call says replaces with that id or keep_both. same_at rests on 8
+  hand-labelled pairs and is a provisional prior, not a calibration.
+
+thresholds:
+  same_at: 0.25
+
+state:
+  - candidate
+  - existing
+
+questions:
+  same:
+    type: noul
+    instructions: >-
+      A coding agent keeps short standing rules in memory and is about to keep
+      candidate. Decide whether keeping it would keep one existing rule twice:
+      it asks the agent for the same behaviour as that existing rule, worded
+      differently, narrower or broader, so one of the two is enough.
+    criteria:
+      true: >-
+        candidate asks for the same behaviour as the existing rule, so keeping
+        both says one thing twice.
+      false: >-
+        candidate asks for a different behaviour, even where the two share a
+        subject or words.
