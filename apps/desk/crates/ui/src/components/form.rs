@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use desk_motion::tokens::{PRESS, TOGGLE};
 use gpui::{
-    App, Bounds, ClipboardItem, Context, Div, ElementId, ElementInputHandler, Entity,
+    App, Bounds, ClipboardItem, Context, Corners, Div, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, FontWeight, HighlightStyle, KeyDownEvent,
     Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
     ScrollHandle, SharedString, Stateful, StyledText, Subscription, Task, TextLayout,
@@ -12,8 +12,9 @@ use gpui::{
     prelude::*, px, rgb_to_hsla, size,
 };
 
+use crate::components::list::HoverList;
 use crate::components::overlay::{ContextMenu, actions, context_menu};
-use crate::components::paint::{arrowed, focus_ring, ink, pressed, pressed_by, tint};
+use crate::components::paint::{arrowed, focus_ring, ink, pressed_by, tint};
 use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
@@ -106,11 +107,13 @@ fn segment_group(
     let count = options.len();
     let stepper = on_change.clone();
     let backdrop = theme.color(ColorToken::SegmentedFill);
+    let on = theme.color(ColorToken::SegmentedOn);
     let bright = ink(theme, T1);
+    let corners = Corners::all(px(RADIUS_CHIP - SEGMENTED_PAD));
     let segments = options.iter().enumerate().map(|(ix, option)| {
         let on_change = on_change.clone();
         let chosen = ix == selected;
-        let segment = div()
+        div()
             .id((id, ix))
             .aria_label(*option)
             .px(px(SEGMENT_PAD_X))
@@ -122,15 +125,24 @@ fn segment_group(
             .text_color(ink(theme, if chosen { T1 } else { DIM_TEXT }))
             .map(|segment| {
                 if chosen {
-                    segment.bg(theme.color(ColorToken::SegmentedOn))
+                    segment.bg(on)
                 } else {
                     segment.hover(move |style| style.text_color(bright))
                 }
             })
             .on_click(move |_, window, cx| on_change(&ix, window, cx))
-            .child(*option);
-        pressed(segment, backdrop)
+            .child(*option)
     });
+    let glided = HoverList::within(
+        SharedString::from(format!("{id}-glide")),
+        div().flex().items_center(),
+        tint(on, on.alpha * 0.5),
+        corners,
+        theme,
+    )
+    .backdrop(backdrop)
+    .selected(Some(selected))
+    .items(segments);
     focus_ring(div().id(id), theme)
         .flex()
         .flex_none()
@@ -146,7 +158,7 @@ fn segment_group(
                 }
             }
         })
-        .children(segments)
+        .child(glided)
 }
 
 pub fn switch(

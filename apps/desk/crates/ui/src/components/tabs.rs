@@ -16,7 +16,7 @@ use crate::component::icon;
 use crate::components::chip::badge;
 use crate::components::glyph::Glyph;
 use crate::components::overlay::Popover;
-use crate::components::paint::{arrowed, glyph, ink, ms, pressed, ring};
+use crate::components::paint::{arrowed, glyph, ink, ms, pressed, ring, tint};
 use crate::components::size::{
     BADGE_PAD_X, BADGE_PAD_Y, CAPTION_TEXT, CLOSE_BOX, DIM_TEXT, FONT_BADGE, FONT_BODY, FONT_SMALL,
     FONT_TAB, HOVER, HTAB_ON, NEW_TAB, RADIUS_ROW, RADIUS_TAB, ROW_PAD_X, ROW_PAD_Y, SCREEN_ON,
@@ -250,6 +250,7 @@ struct Frame {
 struct Motion {
     bounds: Vec<Bounds<Pixels>>,
     pointer: Option<Point<Pixels>>,
+    hover: Glide,
     marker: Glide,
     marked: Option<(SharedString, Bounds<Pixels>)>,
     closing: Option<Closing>,
@@ -325,6 +326,7 @@ impl Motion {
             strip_focus,
             bounds: Vec::new(),
             pointer: None,
+            hover: Glide::new(GlideKind::Eased),
             marker: Glide::new(GlideKind::Eased),
             marked: None,
             closing: None,
@@ -549,7 +551,16 @@ impl Motion {
             (Some((_, bounds)), None) => self.marker = settled(*bounds, now),
         }
         self.marked = target;
-        before != self.spot(slots)
+        let spot = self.spot(slots);
+        let lit = spot
+            .filter(|spot| Some(spot.at) != chosen)
+            .and_then(|spot| self.bounds.get(spot.at).copied());
+        self.hover.set_reduced(reduced);
+        match lit {
+            Some(bounds) => self.hover.retarget(bounds, now),
+            None => self.hover.hide(now),
+        }
+        before != spot
     }
 
     fn frame(
@@ -1717,6 +1728,7 @@ impl RenderOnce for TabStrip {
             }
         };
         let (painter, marker_id) = (state.clone(), id.clone());
+        let glide_fill = ink(&theme, HOVER);
         let (mover, felt, flow) = (state.clone(), slots.clone(), tabs.len());
         let bars = canvas(
             move |bounds, _, cx| width.record(bounds.size.width, cx),
@@ -1748,13 +1760,22 @@ impl RenderOnce for TabStrip {
                         pointed(at, window, cx);
                     }
                 });
-                let (marker, moving) = painter.update(cx, |motion, _| {
-                    motion.paint_marker(&marker_id, Instant::now())
+                let now = Instant::now();
+                let (hover, gliding, (marker, moving)) = painter.update(cx, |motion, _| {
+                    (
+                        motion.hover.sample(now),
+                        motion.hover.moving(),
+                        motion.paint_marker(&marker_id, now),
+                    )
                 });
+                if let Some((bounds, shade)) = hover {
+                    let shaded = tint(glide_fill, glide_fill.alpha * shade);
+                    window.paint_quad(gpui::fill(bounds, shaded).corner_radii(corners));
+                }
                 if let Some(bounds) = marker {
                     window.paint_quad(gpui::fill(bounds, lit).corner_radii(corners));
                 }
-                if moving {
+                if moving || gliding {
                     window.request_animation_frame();
                 }
             },
