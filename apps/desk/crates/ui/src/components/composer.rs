@@ -36,6 +36,7 @@ const ATTACH: f32 = 26.0;
 const ATTACH_ONE_LINE: f32 = 28.0;
 const ONE_LINE_PAD: f32 = 6.0;
 const ONE_LINE_GAP: f32 = 4.0;
+const ONE_LINE_FIELD_MIN: f32 = 240.0;
 const GROWN_GAP: f32 = 10.0;
 const ROW_GAP: f32 = 6.0;
 const CHIP_TEXT: f32 = 0.85;
@@ -108,6 +109,7 @@ const CLOCK: &str = r#"<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/>"#
 const WORKING: &str = "working";
 
 const CHIPS_SHOWN: usize = 3;
+const FILE_CHIP_MAX: f32 = 260.0;
 const MENU_SHADE: f32 = 1.0;
 
 type OnText = Rc<dyn Fn(&str, &mut Window, &mut App)>;
@@ -395,7 +397,9 @@ impl RenderOnce for Composer {
             ComposerVariant::Grown => true,
         };
         let size = if grown { ATTACH } else { ATTACH_ONE_LINE };
-        let attach = attach("composer-attach", size, self.on_attach, &theme);
+        let attach = self
+            .on_attach
+            .map(|on_attach| attach("composer-attach", size, Some(on_attach), &theme));
         let action = send(
             &self.area,
             (typed || !self.traces.is_empty()) && !self.held,
@@ -419,20 +423,36 @@ impl RenderOnce for Composer {
             .children(self.effort);
         let on_remove = self.on_remove;
         let on_remove_trace = self.on_remove_trace;
-        let files = self.files.into_iter().enumerate().map(|(ix, name)| {
-            let on_remove = on_remove.clone();
-            file_chip(
-                glyph(Glyph::File, ICON_SMALL, ink(&theme, T2)),
-                name,
-                &theme,
-            )
-            .child(
-                remove_x(("composer-file-x", ix), ink(&theme, T3), &theme)
-                    .when_some(on_remove, |x, on_remove| {
-                        x.on_click(move |_, window, cx| on_remove(ix, window, cx))
-                    }),
-            )
-        });
+        let files: Vec<Stateful<Div>> = self
+            .files
+            .into_iter()
+            .enumerate()
+            .map(|(ix, name)| {
+                let on_remove = on_remove.clone();
+                let chip = file_chip(
+                    glyph(Glyph::File, ICON_SMALL, ink(&theme, T2)),
+                    name.clone(),
+                    &theme,
+                )
+                .max_w(px(FILE_CHIP_MAX))
+                .id(("composer-file", ix))
+                .child(
+                    remove_x(("composer-file-x", ix), ink(&theme, T3), &theme)
+                        .when_some(on_remove, |x, on_remove| {
+                            x.on_click(move |_, window, cx| on_remove(ix, window, cx))
+                        }),
+                );
+                tooltip(
+                    ("composer-file-tip", ix),
+                    chip,
+                    Edge::Frame,
+                    name,
+                    &theme,
+                    window,
+                    cx,
+                )
+            })
+            .collect();
         let shown = self.traces.len().min(CHIPS_SHOWN);
         let mut traces: Vec<AnyElement> = self
             .traces
@@ -479,18 +499,23 @@ impl RenderOnce for Composer {
                         .flex()
                         .items_center()
                         .gap(px(ROW_GAP))
-                        .child(attach)
+                        .children(attach)
                         .child(div().flex_1())
                         .child(pickers)
                         .child(action),
                 )
         } else {
             shell
+                .flex_wrap()
                 .items_center()
                 .gap(px(ONE_LINE_GAP))
                 .p(px(ONE_LINE_PAD))
-                .child(attach)
-                .child(field.pl(px(ONE_LINE_GAP / 2.0)))
+                .children(attach)
+                .child(
+                    field
+                        .min_w(px(ONE_LINE_FIELD_MIN))
+                        .pl(px(ONE_LINE_GAP / 2.0)),
+                )
                 .child(pickers)
                 .child(action)
         };
@@ -613,19 +638,16 @@ fn trace_chip(
             }
         },
     );
-    match &chip.broken {
-        None => body.into_any_element(),
-        Some(why) => tooltip(
-            ElementId::Name(format!("{id}-tip-{ix}").into()),
-            body.id(ElementId::Name(format!("{id}-chip-{ix}").into())),
-            Edge::Frame,
-            why.clone(),
-            theme,
-            window,
-            cx,
-        )
-        .into_any_element(),
-    }
+    tooltip(
+        ElementId::Name(format!("{id}-tip-{ix}").into()),
+        body.id(ElementId::Name(format!("{id}-chip-{ix}").into())),
+        Edge::Frame,
+        chip.broken.clone().unwrap_or_else(|| chip.label.clone()),
+        theme,
+        window,
+        cx,
+    )
+    .into_any_element()
 }
 
 fn more_chips(

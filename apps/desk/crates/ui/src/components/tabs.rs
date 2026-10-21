@@ -872,6 +872,7 @@ fn link(tab: &Tab, image: Option<&Arc<Image>>, font: f32, theme: &Theme, color: 
         .items_center()
         .gap(px(TAB_GAP))
         .min_w_0()
+        .overflow_hidden()
         .pl(px(TAB_PAD_LEFT))
         .pr(px(TAB_PAD_LINK))
         .text_size(px(font))
@@ -883,7 +884,10 @@ fn link(tab: &Tab, image: Option<&Arc<Image>>, font: f32, theme: &Theme, color: 
         )
         .children(lead)
         .child(div().min_w_0().truncate().child(tab.label.clone()))
-        .children(tab.count.map(|count| badge(count.to_string(), theme)))
+        .children(
+            tab.count
+                .map(|count| badge(count.to_string(), theme).flex_none()),
+        )
 }
 
 fn tab_frame(
