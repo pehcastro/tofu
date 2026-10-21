@@ -276,6 +276,15 @@ impl Span {
         at
     }
 
+    fn vertical(&self, lines: f32) -> usize {
+        let head = self.head();
+        let Some(at) = self.layout.position_for_index(head) else {
+            return head;
+        };
+        let height = self.layout.line_height();
+        self.index_at(point(at.x, at.y + height * (0.5 + lines)))
+    }
+
     fn navigate(&mut self, key: &str, modifiers: &Modifiers) -> bool {
         let collapse = !modifiers.shift && !self.range.is_empty();
         let to = match (modifiers.secondary(), key) {
@@ -285,6 +294,10 @@ impl Span {
             (false, "right") => self.next(self.head()),
             (false, "home") => 0,
             (false, "end") => self.text.len(),
+            (true, "home") => 0,
+            (true, "end") => self.text.len(),
+            (false, "up") => self.vertical(-1.0),
+            (false, "down") => self.vertical(1.0),
             (true, "a") => {
                 self.select(0, false);
                 self.text.len()
