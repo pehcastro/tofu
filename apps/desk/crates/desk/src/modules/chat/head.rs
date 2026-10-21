@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use desk_core::model::Store;
+use desk_core::sessions::SessionRow;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::paint::{glyph, ink};
 use desk_ui::components::size::{FONT_SMALL, HOVER, RADIUS_CHIP, T2, T3, TRACE};
@@ -15,10 +16,20 @@ use gpui::{
 const TICK: Duration = Duration::from_secs(1);
 const COPY: &str = "Copy the session name";
 const FORKS: &str = "forks in this session's line";
+const OPENING: &str = "Opening session";
+const PENDING: &str = "--";
+const DURATION_WIDTH: f32 = 48.0;
 
 pub struct SessionHead {
     store: Entity<Store>,
+    row: Option<SessionRow>,
     _tick: Task<()>,
+}
+
+struct Known {
+    handle: String,
+    generations: Option<i64>,
+    at: String,
 }
 
 impl SessionHead {
@@ -27,7 +38,7 @@ impl SessionHead {
             loop {
                 cx.background_executor().timer(TICK).await;
                 let ticked = this.update(cx, |head, cx| {
-                    if head.store.read(cx).info.read.is_some() {
+                    if head.row.is_some() || head.store.read(cx).info.read.is_some() {
                         cx.notify();
                     }
                 });
@@ -36,7 +47,32 @@ impl SessionHead {
                 }
             }
         });
-        SessionHead { store, _tick: tick }
+        SessionHead {
+            store,
+            row: None,
+            _tick: tick,
+        }
+    }
+
+    pub fn show(&mut self, row: SessionRow, cx: &mut Context<Self>) {
+        self.row = Some(row);
+        cx.notify();
+    }
+
+    fn known(&self, store: &Store) -> Option<Known> {
+        match (&store.info.read, &self.row) {
+            (Some(read), _) => Some(Known {
+                handle: read.value.handle.clone(),
+                generations: read.value.generations,
+                at: read.value.at.clone(),
+            }),
+            (None, Some(row)) => Some(Known {
+                handle: row.handle.clone(),
+                generations: row.generations,
+                at: row.at.clone(),
+            }),
+            (None, None) => None,
+        }
     }
 }
 
@@ -54,17 +90,27 @@ fn took(since: &str) -> Option<String> {
 impl Render for SessionHead {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = ActiveTheme::theme(cx);
-        let Some(info) = self
-            .store
-            .read(cx)
-            .info
-            .read
+        let store = self.store.read(cx);
+        let info = self.known(store);
+        let name = info
             .as_ref()
-            .map(|read| read.value.clone())
-        else {
-            return div();
+            .map(|info| info.handle.clone())
+            .or_else(|| store.open.clone());
+        let title = match &name {
+            Some(name) => div().child(name.clone()),
+            None => div().text_color(ink(&theme, T3)).child(OPENING),
         };
-        let name = info.handle.clone();
+        let dim = ink(&theme, T3);
+        let forks_text = info.as_ref().map_or_else(
+            || PENDING.to_owned(),
+            |info| {
+                info.generations
+                    .map_or(0, |line| line.saturating_sub(1).max(0))
+                    .to_string()
+            },
+        );
+        let took_text = info.as_ref().and_then(|info| took(&info.at));
+        let pending = info.is_none();
         let hover = ink(&theme, HOVER);
         let copy = div()
             .id("chat-head-copy")
@@ -74,11 +120,13 @@ impl Render for SessionHead {
             .justify_center()
             .size(px(TRACE))
             .rounded(px(RADIUS_CHIP))
-            .cursor_pointer()
-            .hover(move |style| style.bg(hover))
-            .on_click(move |_, _, cx| {
-                eprintln!("desk: chat head copied session name {name}");
-                cx.write_to_clipboard(ClipboardItem::new_string(name.clone()));
+            .when_some(name, |copy, name| {
+                copy.cursor_pointer()
+                    .hover(move |style| style.bg(hover))
+                    .on_click(move |_, _, cx| {
+                        eprintln!("desk: session head copied {name}");
+                        cx.write_to_clipboard(ClipboardItem::new_string(name.clone()));
+                    })
             })
             .child(glyph(Glyph::Copy, ICON_SMALL, ink(&theme, T3)));
         let forks = div()
@@ -88,17 +136,21 @@ impl Render for SessionHead {
             .gap_1()
             .child(glyph(Glyph::Fork, ICON_SMALL, ink(&theme, T3)))
             .child(
-                info.generations
-                    .map_or(0, |line| line.saturating_sub(1).max(0))
-                    .to_string(),
+                div()
+                    .when(pending, |count| count.text_color(dim))
+                    .child(forks_text),
             );
+        let duration = div()
+            .min_w(px(DURATION_WIDTH))
+            .when(pending, |duration| duration.text_color(dim))
+            .child(took_text.unwrap_or_else(|| PENDING.to_owned()));
         div()
             .flex()
             .items_center()
             .gap_2()
             .text_size(px(FONT_SMALL))
             .text_color(ink(&theme, T2))
-            .child(info.handle.clone())
+            .child(title)
             .child(tooltip(
                 "chat-head-copy-tip",
                 copy,
@@ -117,6 +169,6 @@ impl Render for SessionHead {
                 window,
                 cx,
             ))
-            .children(took(&info.at))
+            .child(duration)
     }
 }

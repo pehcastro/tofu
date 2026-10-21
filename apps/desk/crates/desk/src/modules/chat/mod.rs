@@ -742,6 +742,14 @@ impl Chat {
             None => self.restart(cx),
         }
         self.problem = None;
+        if let Some(row) = self
+            .rows
+            .iter()
+            .find(|row| Some(&row.id) == session.as_ref())
+        {
+            let row = row.clone();
+            self.head.update(cx, |head, cx| head.show(row, cx));
+        }
         self.set_opening(Opening::Pending, cx);
         let asked = Instant::now();
         self.painting = session.clone().map(|id| (id, asked));
