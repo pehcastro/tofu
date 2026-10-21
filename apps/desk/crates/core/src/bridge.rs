@@ -4,7 +4,7 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::marker::PhantomData;
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -215,6 +215,7 @@ pub struct Bridge {
     next: AtomicI64,
     events: flume::Receiver<Event>,
     log: Log,
+    stopping: Arc<AtomicBool>,
     #[cfg(windows)]
     _job: win32job::Job,
 }
@@ -264,11 +265,13 @@ impl Bridge {
         let (drained, stderr_done) = flume::bounded::<()>(1);
         thread::spawn(move || read_stderr(stderr, &kept, drained));
         let child = Arc::new(Mutex::new(child));
+        let stopping = Arc::new(AtomicBool::new(false));
         let watch = Watch {
             waiting: Arc::clone(&waiting),
             child: Arc::clone(&child),
             log: Arc::clone(&log),
             stderr_done,
+            stopping: Arc::clone(&stopping),
         };
         thread::spawn(move || read_stdout(stdout, &watch, &sender));
 
@@ -279,6 +282,7 @@ impl Bridge {
             next: AtomicI64::new(1),
             events,
             log,
+            stopping,
             #[cfg(windows)]
             _job: job,
         };
@@ -358,6 +362,7 @@ impl Bridge {
     }
 
     pub fn stop(self) -> Result<ExitStatus, BridgeError> {
+        self.stopping.store(true, Ordering::Release);
         drop(self.lines);
         if let Some(status) = exited_within(&self.child, limits::TOFU_STOP_GRACE)? {
             return Ok(status);
@@ -373,6 +378,7 @@ struct Watch {
     child: Arc<Mutex<Child>>,
     log: Log,
     stderr_done: flume::Receiver<()>,
+    stopping: Arc<AtomicBool>,
 }
 
 fn lock(child: &Mutex<Child>) -> std::sync::MutexGuard<'_, Child> {
@@ -463,6 +469,7 @@ fn read_stdout(stdout: impl Read, watch: &Watch, events: &flume::Sender<Event>) 
     if events
         .send(Event::Exited(Exit { code, last, closed }))
         .is_err()
+        && !watch.stopping.load(Ordering::Acquire)
     {
         eprintln!("desk: tofu stopped and nobody was listening");
     }

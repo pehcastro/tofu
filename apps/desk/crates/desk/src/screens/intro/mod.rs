@@ -57,6 +57,7 @@ enum Stage {
     Home,
     Opening { text: String, at: Instant },
     Chat,
+    Resuming(String),
 }
 
 struct Tofu {
@@ -65,7 +66,7 @@ struct Tofu {
     _watch: [Subscription; 2],
 }
 
-struct Intro {
+pub struct Intro {
     backdrop: Entity<Backdrop>,
     folders: Vec<PathBuf>,
     project: usize,
@@ -295,6 +296,21 @@ impl Intro {
         self.effort = None;
         self.rows.clear();
         self.ready = false;
+    }
+
+    pub fn left(&self) -> bool {
+        !matches!(self.stage, Stage::Home)
+    }
+
+    pub fn chat(&self) -> &Entity<Chat> {
+        &self.tofu.chat
+    }
+
+    pub fn resuming(&self) -> Option<(PathBuf, String)> {
+        match &self.stage {
+            Stage::Resuming(session) => Some((self.folder().to_owned(), session.clone())),
+            Stage::Home | Stage::Opening { .. } | Stage::Chat => None,
+        }
     }
 
     fn listed(&mut self, chat: &Entity<Chat>, cx: &mut Context<Self>) {
@@ -542,12 +558,8 @@ impl Intro {
                         row(("session", index))
                             .items_start()
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                this.stage = Stage::Chat;
+                                this.stage = Stage::Resuming(id.clone());
                                 this.menu = Menu::Closed;
-                                let id = id.clone();
-                                this.tofu
-                                    .chat
-                                    .update(cx, |chat, cx| chat.open_session(Some(id), cx));
                                 cx.notify();
                             }))
                             .child(
@@ -785,7 +797,7 @@ impl Render for Intro {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.stage {
             Stage::Home => self.home(window, cx),
-            Stage::Opening { .. } | Stage::Chat => div()
+            Stage::Opening { .. } | Stage::Chat | Stage::Resuming(_) => div()
                 .size_full()
                 .bg(hex(SURFACE))
                 .child(self.tofu.chat.clone())

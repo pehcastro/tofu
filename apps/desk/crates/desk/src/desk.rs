@@ -374,6 +374,7 @@ struct Projects {
     refused: Option<Option<SharedString>>,
     restored: bool,
     restoring: Option<String>,
+    resumed: Option<String>,
     named: Option<SharedString>,
     written: Option<project::Remembered>,
     stopped: Option<TofuStopped>,
@@ -895,7 +896,10 @@ impl Desk {
         if let Body::Whole(view) = &desk.shown.body
             && let Ok(intro) = view.clone().downcast::<crate::screens::intro::Intro>()
         {
-            cx.observe(&intro, |_, _, cx| cx.notify()).detach();
+            cx.observe_in(&intro, window, |desk, _, window, cx| {
+                desk.leave_intro(window, cx)
+            })
+            .detach();
         }
         desk.focus_shown(window, cx);
         cx.spawn(async move |this, cx| {
@@ -1003,18 +1007,44 @@ impl Desk {
     }
 
     #[cfg(feature = "screen-intro")]
-    fn leave_intro(&mut self, cx: &App) {
+    #[cfg_attr(
+        not(feature = "screen-work"),
+        expect(unused_variables, reason = "only the work screen resumes a session")
+    )]
+    fn leave_intro(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Body::Whole(view) = &self.shown.body else {
             return;
         };
-        let left = view
-            .clone()
-            .downcast::<crate::screens::intro::Intro>()
-            .is_ok_and(|intro| intro.read(cx).left());
-        if left {
-            self.shown.body = Body::View(view.clone());
-            eprintln!("desk: intro left for work, chrome back");
+        let Ok(intro) = view.clone().downcast::<crate::screens::intro::Intro>() else {
+            return;
+        };
+        if !intro.read(cx).left() {
+            return;
         }
+        #[cfg(feature = "screen-work")]
+        if let Some((folder, session)) = intro.read(cx).resuming() {
+            eprintln!("desk: intro resumes {session} in {}", folder.display());
+            let from = intro.read(cx).chat().clone();
+            self.projects.named = None;
+            self.switch_now(folder, window, cx);
+            self.parked
+                .retain(|parked| !matches!(parked.body, Body::Whole(_)));
+            self.tabbed.retain(|name| !WHOLE_SCREENS.contains(name));
+            if let Some(work) = self.work() {
+                let chat = work.read(cx).chat().clone();
+                let handed = from.update(cx, |from, cx| {
+                    chat.update(cx, |chat, cx| chat.take_tofu(from, cx))
+                });
+                eprintln!("desk: intro tofu handed to work {handed}");
+            }
+            self.projects.restoring = Some(session.clone());
+            self.projects.resumed = Some(session);
+            self.restore_session(cx);
+            return cx.notify();
+        }
+        self.shown.body = Body::View(view.clone());
+        eprintln!("desk: intro left for work, chrome back");
+        cx.notify();
     }
 
     fn focus_shown(&self, window: &mut Window, cx: &mut App) {
@@ -1873,17 +1903,26 @@ impl Desk {
             })
             .collect();
         self.tabbed = tabbed;
-        self.projects.restoring = saved.session.clone();
+        let resumed = self.projects.resumed.take();
+        if resumed.is_none() {
+            self.projects.restoring = saved.session.clone();
+        }
         self.projects.restored = true;
         eprintln!(
             "desk: restore: screens [{}] focus {} session {}",
             self.tabbed.join(", "),
             saved.focus,
-            saved.session.as_deref().unwrap_or("none")
+            self.projects.restoring.as_deref().unwrap_or("none")
         );
-        match &named {
-            Some(name) => eprintln!("desk: restore kept, --screen {name} focused"),
-            None => {
+        match (&named, &resumed) {
+            (_, Some(session)) => {
+                eprintln!("desk: restore kept the resumed session {session} and the work screen");
+                if self.shown.name != WORK_SCREEN {
+                    self.show(WORK_SCREEN, window, cx);
+                }
+            }
+            (Some(name), None) => eprintln!("desk: restore kept, --screen {name} focused"),
+            (None, None) => {
                 let focus = self
                     .tabbed
                     .iter()
@@ -2097,6 +2136,7 @@ impl Desk {
         }
         self.projects.restored = false;
         self.projects.restoring = None;
+        self.projects.resumed = None;
         self.projects.written = None;
         self.projects.stopped = None;
         let reading = folder.clone();
@@ -2764,8 +2804,6 @@ impl Render for Desk {
                     }),
                 ))
         });
-        #[cfg(feature = "screen-intro")]
-        self.leave_intro(cx);
         let whole = matches!(self.shown.body, Body::Whole(_));
         let content = self.content(&theme, cx);
         let content = timed("screen", content).into_any_element();

@@ -760,6 +760,7 @@ impl Chat {
         self.history = session.clone().map(|id| History::new(id, asked));
         self.ask_history(None, cx);
         let wanted = session.clone().unwrap_or_default();
+        eprintln!("desk: session.open asked for {wanted}");
         let params = SessionOpenParams {
             asking: Some(self.asking.clone()),
             session,
@@ -786,10 +787,11 @@ impl Chat {
                 }
             };
             eprintln!(
-                "desk: session attach {} held by {}, fresh {}",
+                "desk: session attach {} held by {}, fresh {}, in {} ms",
                 opened.session,
                 holder(opened.held_by.as_ref()),
-                opened.fresh
+                opened.fresh,
+                asked.elapsed().as_millis()
             );
             if let Some(at) = chat.reopening.take() {
                 eprintln!(
@@ -920,7 +922,11 @@ impl Chat {
         let (sender, opened) = flume::bounded::<Opened>(1);
         thread::spawn(move || {
             let bridge = Bridge::open(serve_command(&tofu(), &project), CLIENT, PROTOCOL);
-            sender.send(bridge).ok();
+            if let Err(flume::SendError(Ok((unwanted, _)))) = sender.send(bridge)
+                && let Err(error) = unwanted.stop()
+            {
+                eprintln!("desk: an unwanted tofu did not stop: {error}");
+            }
         });
         self.link = Link::Starting;
         self._drain = Some(cx.spawn(async move |this, cx| {
@@ -938,16 +944,31 @@ impl Chat {
                 })
                 .ok()
                 .flatten();
-            let Some(events) = events else {
-                return;
-            };
-            while let Ok(first) = events.recv_async().await {
-                let batch: Vec<Event> = iter::once(first).chain(events.try_iter()).collect();
-                if this.update(cx, |chat, cx| chat.take(&batch, cx)).is_err() {
-                    return;
-                }
+            if let Some(events) = events {
+                drain(this, events, cx).await;
             }
         }));
+    }
+
+    pub fn take_tofu(&mut self, from: &mut Chat, cx: &mut Context<Self>) -> bool {
+        let Link::Ready(bridge) = std::mem::replace(&mut from.link, Link::Gone) else {
+            return false;
+        };
+        from._drain = None;
+        eprintln!(
+            "desk: tofu pid {} handed over in {}",
+            bridge.pid(),
+            from.project
+        );
+        let events = bridge.events().clone();
+        self.project = from.project.clone();
+        self.link = Link::Ready(bridge);
+        self._drain = Some(cx.spawn(async move |this, cx| drain(this, events, cx).await));
+        self.relist(cx);
+        self.ask_models(cx);
+        self.ask_due(cx);
+        cx.notify();
+        true
     }
 
     pub fn reconnect(&mut self, session: Option<String>, cx: &mut Context<Self>) {
@@ -2055,10 +2076,7 @@ impl Chat {
             Ok(Step::Feed(event)) => self.take(&[event], cx),
             Ok(Step::Restart) => self.restart(cx),
             Ok(Step::Report) => cx.quit(),
-            Err(error) => {
-                eprintln!("desk: the cassette has a bad line: {error}");
-                cx.quit();
-            }
+            Err(error) => eprintln!("desk: the cassette has a bad line, skipped: {error}"),
         }
     }
 }
@@ -2165,6 +2183,19 @@ fn agents_said(definitions: &[subagent::Definition]) -> String {
         .map(|definition| definition.name.as_str())
         .collect();
     format!("{} agents [{}]", names.len(), names.join(", "))
+}
+
+async fn drain(
+    this: gpui::WeakEntity<Chat>,
+    events: flume::Receiver<Event>,
+    cx: &mut gpui::AsyncApp,
+) {
+    while let Ok(first) = events.recv_async().await {
+        let batch: Vec<Event> = iter::once(first).chain(events.try_iter()).collect();
+        if this.update(cx, |chat, cx| chat.take(&batch, cx)).is_err() {
+            return;
+        }
+    }
 }
 
 impl Drop for Chat {
