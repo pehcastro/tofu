@@ -173,8 +173,8 @@ func fixture(args []string) error {
 }
 
 type cassetteTool struct {
-	Name string            `json:"name"`
-	Args map[string]string `json:"args"`
+	Name string `json:"name"`
+	Args any    `json:"args"`
 }
 
 type cassetteReply struct {
@@ -202,7 +202,9 @@ func cassette(args []string) error {
 			caller := fmt.Sprintf("c%d", k)
 			replies = append(replies,
 				cassetteReply{Agent: caller, Text: "reading it", Tools: []cassetteTool{{Name: "read", Args: map[string]string{"path": file}}}},
-				cassetteReply{Agent: caller, Text: answers[k-1]})
+				cassetteReply{Agent: caller, Text: answers[k-1], Tools: []cassetteTool{{Name: "finish", Args: map[string]any{
+					"verdict": "done", "summary": answers[k-1], "files": []any{}, "checks": []any{}, "findings": []any{},
+					"confidence": map[string]string{"level": "high", "reason": "it read the file"}}}}})
 		}
 		for range agents + 1 {
 			replies = append(replies, cassetteReply{Text: all})

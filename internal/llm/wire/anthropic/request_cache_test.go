@@ -51,10 +51,18 @@ func (s *capturedServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 	events := textEvents()
-	if reply == "read" {
+	switch reply {
+	case "read":
 		events = toolUseEvents(map[string]any{"read": map[string]string{"path": "API_SPEC.md"}})
+	case turn.FinishToolName:
+		events = finishEvents()
 	}
 	stream(w, events)
+}
+
+func finishEvents() []string {
+	return toolUseEvents(map[string]any{turn.FinishToolName: map[string]any{"verdict": "done", "summary": "done", "files": []any{}, "checks": []any{}, "findings": []any{},
+		"confidence": map[string]string{"level": "high", "reason": "the fixture says so"}}})
 }
 
 func textEvents() []string {
@@ -235,7 +243,7 @@ func assertCachedPrefixCarriesOver(t *testing.T, cached, next []cachedPiece) {
 }
 
 func TestSiblingSubAgentsFromOneDefinitionShareTheCachedPrefix(t *testing.T) {
-	base, server := sessionConfig(t)
+	base, server := sessionConfig(t, turn.FinishToolName, turn.FinishToolName)
 	definition := subagent.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagent.RunsModel,
 		Instructions: "you write typescript for bun and hono"}
 	spawn := turn.NewSpawnTool("turn-test", base, &subagent.Roster{})
@@ -354,6 +362,7 @@ func (s *leadAndSubAgentServer) ServeHTTP(w http.ResponseWriter, r *http.Request
 	switch {
 	case strings.Contains(string(body), subAgentInstructions):
 		s.sub = append(s.sub, body)
+		events = finishEvents()
 		if first {
 			events = toolUseEvents(map[string]any{"read": map[string]string{"path": "API_SPEC.md"}})
 		}
