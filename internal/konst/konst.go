@@ -500,6 +500,7 @@ const (
 	BoardELI5LinesMost      = 3
 	BoardReadersMost        = 8
 	BoardHookDepthMost      = 3
+	LeadCheckInReviewsMost  = 10
 
 	BoardAuditFreshDays        = 1
 	BoardAuditStaleDays        = 7

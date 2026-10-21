@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/boardy"
+	"tofu/internal/konst"
 	"tofu/internal/subagent"
 	"tofu/internal/sys"
 )
@@ -213,7 +214,7 @@ func (t *SpawnTool) work() (leadWork, bool) {
 		keys = append(keys, ticket.Board())
 	}
 	if len(work.status) == 0 {
-		return leadWork{}, false
+		return work, false
 	}
 	slices.Sort(work.review)
 	work.free = freeTodo(store, keys)
@@ -253,9 +254,44 @@ func (w leadWork) open() bool {
 	return w.running < w.limit && len(w.free) > 0 || len(w.review) > 0
 }
 
-func (w leadWork) asks(opening string) string {
+func (w leadWork) checkInDue(held bool, reviews []boardy.Front) bool {
+	return w.running == 0 && (held && w.open() || len(reviews) > 0)
+}
+
+func (w leadWork) asks(opening, review string) string {
 	return fmt.Sprintf("%s with %d of %d sub-agents running, free todo %s and review %s: close each review, done or back to doing with the failing lines, "+
-		"and spawn free todo up to the limit in this reply, or say in one line why not.", opening, w.running, w.limit, listed(w.free), listed(w.review))
+		"and spawn free todo up to the limit in this reply, or say in one line why not.", opening, w.running, w.limit, listed(w.free), review)
+}
+
+func (t *SpawnTool) boardReviews() []boardy.Front {
+	if t == nil || t.base.Board == nil {
+		return nil
+	}
+	store := t.base.Board.Store
+	boards, _ := store.Boards()
+	var reviews []boardy.Front
+	for _, fronts := range keptFronts(store, boards) {
+		for _, kept := range fronts {
+			if kept.Front.Status == boardy.Review {
+				reviews = append(reviews, kept.Front)
+			}
+		}
+	}
+	slices.SortFunc(reviews, func(a, b boardy.Front) int { return cmp.Or(a.Updated.Compare(b.Updated), cmp.Compare(a.ID, b.ID)) })
+	return reviews
+}
+
+func waitingReviews(reviews []boardy.Front, now time.Time) string {
+	shown := reviews[:min(len(reviews), konst.LeadCheckInReviewsMost)]
+	waiting := make([]string, len(shown))
+	for i, one := range shown {
+		waiting[i] = fmt.Sprintf("%s (%s since last change)", one.ID, now.Sub(one.Updated).Round(time.Minute))
+	}
+	said := listed(waiting)
+	if more := len(reviews) - len(shown); more > 0 {
+		said += fmt.Sprintf(", and %d more in review", more)
+	}
+	return said
 }
 
 func listed(ids []string) string {
@@ -273,16 +309,17 @@ func WithLeadCheckIn(ctx context.Context, arm func(*LeadCheckIn)) context.Contex
 	return context.WithValue(ctx, leadCheckInKey{}, arm)
 }
 
-func (t *SpawnTool) leadCheckIn(work leadWork) *LeadCheckIn {
+func (t *SpawnTool) leadCheckIn(work leadWork, held bool) *LeadCheckIn {
 	every := t.limits().CheckIn
-	if every <= 0 || work.running > 0 || !work.open() {
+	if every <= 0 || !work.checkInDue(held, t.boardReviews()) {
 		return nil
 	}
 	return &LeadCheckIn{Every: every, Due: func() (string, bool) {
 		due, held := t.work()
-		if !held || due.running > 0 || !due.open() {
+		reviews := t.boardReviews()
+		if !due.checkInDue(held, reviews) {
 			return "", false
 		}
-		return due.asks(leadCheckInOpening), true
+		return due.asks(leadCheckInOpening, waitingReviews(reviews, t.clock())), true
 	}}
 }
