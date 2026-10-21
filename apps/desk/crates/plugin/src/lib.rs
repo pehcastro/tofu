@@ -5,13 +5,13 @@ mod ladder;
 mod manifest;
 mod scan;
 
+use flume::{Receiver, Sender, TryRecvError};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -845,11 +845,11 @@ impl Plugin {
     fn spawn(mut instance: Instance, commands: Vec<Descriptor>) -> Result<Self, Error> {
         let id = instance.id.clone();
         let folder = instance.store.data().folder.clone();
-        let (jobs, inbox) = mpsc::channel::<Job>();
+        let (jobs, inbox) = flume::unbounded::<Job>();
         thread::Builder::new()
             .name(format!("plugin {id}"))
             .spawn(move || {
-                for job in inbox {
+                for job in inbox.iter() {
                     job(&mut instance);
                 }
             })
@@ -881,7 +881,7 @@ impl Plugin {
         &self,
         run: impl FnOnce(&mut Instance) -> Result<T, Error> + Send + 'static,
     ) -> Pending<T> {
-        let (tx, reply) = mpsc::channel();
+        let (tx, reply) = flume::unbounded();
         let job: Job = Box::new(move |instance| {
             if let Err(unread) = tx.send(run(instance)) {
                 drop(unread);

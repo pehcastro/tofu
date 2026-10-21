@@ -1582,6 +1582,7 @@ dependencies = [
 name = "desk_plugin"
 version = "0.3.0"
 dependencies = [
+ "flume",
  "serde",
  "serde_json",
  "sha2 0.10.9",

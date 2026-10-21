@@ -2,7 +2,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -74,13 +73,13 @@ pub struct GuestView {
     shown: Range<u64>,
     guest_time: Duration,
     opened: Option<Instant>,
-    asks: Option<mpsc::Sender<Ask>>,
+    asks: Option<flume::Sender<Ask>>,
     _replies: Task<()>,
 }
 
 pub fn mount(entry: &'static Plugin, guest: &'static Guest, cx: &mut App) -> AnyView {
     cx.new(|cx| {
-        let (asks, waiting) = mpsc::channel();
+        let (asks, waiting) = flume::unbounded();
         let (answers, replies) = flume::unbounded();
         let waiter = thread::Builder::new()
             .name(format!("plugin {} waiter", entry.id))
@@ -128,8 +127,8 @@ pub fn mount(entry: &'static Plugin, guest: &'static Guest, cx: &mut App) -> Any
     .into()
 }
 
-fn wait(asks: &mpsc::Receiver<Ask>, replies: &flume::Sender<Reply>) {
-    for ask in asks {
+fn wait(asks: &flume::Receiver<Ask>, replies: &flume::Sender<Reply>) {
+    for ask in asks.iter() {
         let reply = match ask {
             Ask::View(pending) => Reply::View(pending.wait()),
             Ask::Rows(range, asked, pending) => {
