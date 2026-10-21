@@ -19,14 +19,25 @@ func (m Managed) Create(key string, ticket Ticket, actor string) (Ticket, error)
 	if err != nil {
 		return Ticket{}, err
 	}
+	if m.role(board, actor) != RoleManager {
+		return m.Request(key, ticket, actor)
+	}
 	if err := m.Store.planned(key, ticket.Front); err != nil {
 		return Ticket{}, err
 	}
 	ticket.Acceptance = bulleted(ticket.Acceptance)
-	if m.role(board, actor) != RoleManager {
-		return m.request(key, ticket, actor)
-	}
 	return m.create(key, ticket, actor, "")
+}
+
+func (m Managed) Request(key string, ticket Ticket, actor string) (Ticket, error) {
+	if _, err := m.Store.Board(key); err != nil {
+		return Ticket{}, err
+	}
+	if err := m.Store.planned(key, ticket.Front); err != nil {
+		return Ticket{}, err
+	}
+	ticket.Acceptance = bulleted(ticket.Acceptance)
+	return m.request(key, ticket, actor)
 }
 
 func bulleted(revisions []string) []string {

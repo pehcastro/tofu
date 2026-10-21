@@ -162,7 +162,11 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (turn.Result, er
 		case ticketRequest, ticketCreate:
 			command = string(t.verb) + " " + args.Board
 			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope, Acceptance: []string{args.Acceptance}}
-			if ticket, err = t.board.Create(args.Board, draft, t.actor); ticket.ID == "" {
+			file := t.board.Create
+			if t.verb == ticketRequest {
+				file = t.board.Request
+			}
+			if ticket, err = file(args.Board, draft, t.actor); ticket.ID == "" {
 				said = ticket.Reason
 			} else {
 				said = "created " + ticket.ID + ", " + string(ticket.Status)
